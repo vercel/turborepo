@@ -128,6 +128,18 @@ pub struct RunCache {
     errors_only_show_hash: bool,
 }
 
+/// Task-specific context used to create cache operations.
+pub struct TaskCacheContext<'task, 'package> {
+    /// Fully resolved task configuration.
+    pub task_definition: &'task TaskDefinition,
+    /// Package identity and directory used to validate and locate outputs.
+    pub package_context: &'task PackageTaskContext<'package>,
+    /// Identity of the task being cached.
+    pub task_id: TaskId<'static>,
+    /// Hash produced for this task execution.
+    pub hash: &'task str,
+}
+
 /// Trait used to output cache information to user
 impl RunCache {
     pub fn new(
@@ -160,12 +172,14 @@ impl RunCache {
 
     pub fn task_cache(
         self: &Arc<Self>,
-        // TODO: Group these in a struct
-        task_definition: &TaskDefinition,
-        package_context: &PackageTaskContext<'_>,
-        task_id: TaskId<'static>,
-        hash: &str,
+        context: TaskCacheContext<'_, '_>,
     ) -> Result<TaskCache, Error> {
+        let TaskCacheContext {
+            task_definition,
+            package_context,
+            task_id,
+            hash,
+        } = context;
         if package_context.repository_root() != self.repo_root.as_ref() {
             return Err(Error::ContextRepositoryRootMismatch {
                 context_root: package_context.repository_root().to_owned(),
@@ -1004,7 +1018,7 @@ mod test {
     };
     use turborepo_ui::ColorConfig;
 
-    use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache};
+    use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache, TaskCacheContext};
 
     fn local_cache_opts(repo_root: &AbsoluteSystemPathBuf) -> CacheOpts {
         CacheOpts {
@@ -1112,12 +1126,12 @@ mod test {
         let definition = TaskDefinition::default();
 
         let root = cache
-            .task_cache(
-                &definition,
-                &graph.package_task_context(&PackageName::Root).unwrap(),
-                TaskId::new("//", "build"),
-                "root-hash",
-            )
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph.package_task_context(&PackageName::Root).unwrap(),
+                task_id: TaskId::new("//", "build"),
+                hash: "root-hash",
+            })
             .unwrap();
         assert_eq!(
             root.log_file_path,
@@ -1125,14 +1139,14 @@ mod test {
         );
         let app_task = TaskId::from_static("app".to_string(), "build#variant".to_string());
         let app = cache
-            .task_cache(
-                &definition,
-                &graph
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
                     .package_task_context(&PackageName::from("app"))
                     .unwrap(),
-                app_task.clone(),
-                "app-hash",
-            )
+                task_id: app_task.clone(),
+                hash: "app-hash",
+            })
             .unwrap();
         assert_eq!(
             app.log_file_path,
@@ -1147,25 +1161,25 @@ mod test {
         );
         assert_eq!(app.task_id, app_task);
         assert!(matches!(
-            cache.task_cache(
-                &definition,
-                &graph.package_task_context(&PackageName::Root).unwrap(),
-                TaskId::new("app", "build"),
-                "hash",
-            ),
+            cache.task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph.package_task_context(&PackageName::Root).unwrap(),
+                task_id: TaskId::new("app", "build"),
+                hash: "hash",
+            }),
             Err(super::Error::TaskPackageMismatch { .. })
         ));
 
         assert!(
             cache
-                .task_cache(
-                    &definition,
-                    &graph
+                .task_cache(TaskCacheContext {
+                    task_definition: &definition,
+                    package_context: &graph
                         .package_task_context(&PackageName::from("app"))
                         .unwrap(),
-                    TaskId::new("app", "build"),
-                    "hash",
-                )
+                    task_id: TaskId::new("app", "build"),
+                    hash: "hash",
+                })
                 .is_ok()
         );
     }
@@ -1185,14 +1199,14 @@ mod test {
             ..Default::default()
         };
         let mut task = cache
-            .task_cache(
-                &definition,
-                &graph
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
                     .package_task_context(&PackageName::from("app"))
                     .unwrap(),
-                TaskId::new("app", name),
-                "ordinary-task",
-            )
+                task_id: TaskId::new("app", name),
+                hash: "ordinary-task",
+            })
             .unwrap();
         assert!(super::is_scoped_task_log(&task.log_file_path));
         assert!(task.scoped_log_glob().is_none());
@@ -1209,14 +1223,14 @@ mod test {
         // Compare with an ordinary legacy task instead of imposing different
         // output-exclusion semantics on the lookalike filename.
         let mut control = cache
-            .task_cache(
-                &definition,
-                &graph
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
                     .package_task_context(&PackageName::from("app"))
                     .unwrap(),
-                TaskId::new("app", "build"),
-                "ordinary-control",
-            )
+                task_id: TaskId::new("app", "build"),
+                hash: "ordinary-control",
+            })
             .unwrap();
         let mut writer = control.output_writer(std::io::sink()).unwrap();
         writeln!(writer, "ordinary log").unwrap();
@@ -1251,14 +1265,14 @@ mod test {
             ..Default::default()
         };
         let mut broad_task = cache
-            .task_cache(
-                &definition,
-                &graph
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
                     .package_task_context(&PackageName::from("app"))
                     .unwrap(),
-                TaskId::new("app", name),
-                "ordinary-broad-task",
-            )
+                task_id: TaskId::new("app", name),
+                hash: "ordinary-broad-task",
+            })
             .unwrap();
         broad_task
             .save_outputs(
@@ -1295,12 +1309,12 @@ mod test {
         let mut log_paths = HashSet::new();
         for package in [PackageName::Root, PackageName::from("cargo-workspace")] {
             let task_cache = cache
-                .task_cache(
-                    &definition,
-                    &graph.package_task_context(&package).unwrap(),
-                    TaskId::new(package.as_str(), "build").into_owned(),
-                    "hash",
-                )
+                .task_cache(TaskCacheContext {
+                    task_definition: &definition,
+                    package_context: &graph.package_task_context(&package).unwrap(),
+                    task_id: TaskId::new(package.as_str(), "build").into_owned(),
+                    hash: "hash",
+                })
                 .unwrap();
             let relative =
                 TaskDefinition::workspace_relative_log_file("build", Some(package.as_str()));
@@ -1337,12 +1351,12 @@ mod test {
                 .unwrap()
                 .directory()
         );
-        let result = run_cache(&second_root).task_cache(
-            &TaskDefinition::default(),
-            &first_graph.package_task_context(&package).unwrap(),
-            TaskId::new("app", "build"),
-            "hash",
-        );
+        let result = run_cache(&second_root).task_cache(TaskCacheContext {
+            task_definition: &TaskDefinition::default(),
+            package_context: &first_graph.package_task_context(&package).unwrap(),
+            task_id: TaskId::new("app", "build"),
+            hash: "hash",
+        });
         assert!(matches!(
             result,
             Err(super::Error::ContextRepositoryRootMismatch { .. })

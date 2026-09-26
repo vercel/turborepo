@@ -134,14 +134,14 @@ async fn concurrent_scoped_logs_save_restore_and_replay_independently() {
             .enumerate()
             .map(|(index, name)| {
                 cache
-                    .task_cache(
-                        &definition,
-                        &graph
+                    .task_cache(TaskCacheContext {
+                        task_definition: &definition,
+                        package_context: &graph
                             .package_task_context(&PackageName::from(*name))
                             .unwrap(),
-                        TaskId::new(name, "build").into_owned(),
-                        &format!("scoped-log-{index}"),
-                    )
+                        task_id: TaskId::new(name, "build").into_owned(),
+                        hash: &format!("scoped-log-{index}"),
+                    })
                     .unwrap()
             })
             .collect();
@@ -288,14 +288,14 @@ async fn aliased_scope_directories_have_distinct_physical_logs() {
         .iter()
         .map(|name| {
             cache
-                .task_cache(
-                    &definition,
-                    &graph
+                .task_cache(TaskCacheContext {
+                    task_definition: &definition,
+                    package_context: &graph
                         .package_task_context(&PackageName::from(*name))
                         .unwrap(),
-                    TaskId::new(name, "build").into_owned(),
-                    "aliased-scopes",
-                )
+                    task_id: TaskId::new(name, "build").into_owned(),
+                    hash: "aliased-scopes",
+                })
                 .unwrap()
         })
         .collect();
@@ -368,14 +368,14 @@ async fn symlinked_output_directory_does_not_archive_or_overwrite_peer_logs() {
             .enumerate()
             .map(|(index, name)| {
                 cache
-                    .task_cache(
-                        &definition,
-                        &graph
+                    .task_cache(TaskCacheContext {
+                        task_definition: &definition,
+                        package_context: &graph
                             .package_task_context(&PackageName::from(*name))
                             .unwrap(),
-                        TaskId::new(name, "build").into_owned(),
-                        &format!("symlinked-log-{index}"),
-                    )
+                        task_id: TaskId::new(name, "build").into_owned(),
+                        hash: &format!("symlinked-log-{index}"),
+                    })
                     .unwrap()
             })
             .collect();
@@ -401,14 +401,14 @@ async fn symlinked_output_directory_does_not_archive_or_overwrite_peer_logs() {
                 ..definition
             };
             tasks[0] = cache
-                .task_cache(
-                    &definition,
-                    &graph
+                .task_cache(TaskCacheContext {
+                    task_definition: &definition,
+                    package_context: &graph
                         .package_task_context(&PackageName::from(NAMES[0]))
                         .unwrap(),
-                    TaskId::new(NAMES[0], "build"),
-                    "symlinked-log-0",
-                )
+                    task_id: TaskId::new(NAMES[0], "build"),
+                    hash: "symlinked-log-0",
+                })
                 .unwrap();
             assert_eq!(tasks[0].log_file_path, paths[0]);
         }
@@ -637,20 +637,20 @@ async fn watcher_tracks_excluded_scoped_log_deletion_and_hash_switches() {
         .package_task_context(&PackageName::from(NAMES[0]))
         .unwrap();
     let mut task_a = cache
-        .task_cache(
-            &definition,
-            &context,
-            TaskId::new(NAMES[0], "build"),
-            "hash-A",
-        )
+        .task_cache(TaskCacheContext {
+            task_definition: &definition,
+            package_context: &context,
+            task_id: TaskId::new(NAMES[0], "build"),
+            hash: "hash-A",
+        })
         .unwrap();
     let mut task_b = cache
-        .task_cache(
-            &definition,
-            &context,
-            TaskId::new(NAMES[0], "build"),
-            "hash-B",
-        )
+        .task_cache(TaskCacheContext {
+            task_definition: &definition,
+            package_context: &context,
+            task_id: TaskId::new(NAMES[0], "build"),
+            hash: "hash-B",
+        })
         .unwrap();
     assert_eq!(task_a.log_file_path, task_b.log_file_path);
     let telemetry = PackageTaskEventBuilder::new(NAMES[0], "build");
@@ -752,14 +752,14 @@ async fn unshared_root_outputs_preserve_peer_logs_and_ordinary_lookalikes() {
     let mut peers = Vec::new();
     for name in NAMES {
         let peer = cache
-            .task_cache(
-                &TaskDefinition::default(),
-                &graph
+            .task_cache(TaskCacheContext {
+                task_definition: &TaskDefinition::default(),
+                package_context: &graph
                     .package_task_context(&PackageName::from(name))
                     .unwrap(),
-                TaskId::new(name, "build").into_owned(),
-                "peer-hash",
-            )
+                task_id: TaskId::new(name, "build").into_owned(),
+                hash: "peer-hash",
+            })
             .unwrap();
         let mut writer = peer.output_writer(std::io::sink()).unwrap();
         writeln!(writer, "original {name}").unwrap();
@@ -786,12 +786,12 @@ async fn unshared_root_outputs_preserve_peer_logs_and_ordinary_lookalikes() {
         ..Default::default()
     };
     let mut root_task = cache
-        .task_cache(
-            &definition,
-            &graph.package_task_context(&PackageName::Root).unwrap(),
-            TaskId::new("//", "build"),
-            "root-capture",
-        )
+        .task_cache(TaskCacheContext {
+            task_definition: &definition,
+            package_context: &graph.package_task_context(&PackageName::Root).unwrap(),
+            task_id: TaskId::new("//", "build"),
+            hash: "root-capture",
+        })
         .unwrap();
     assert!(root_task.scoped_log_glob().is_none());
     let mut writer = root_task.output_writer(std::io::sink()).unwrap();
@@ -853,14 +853,14 @@ async fn scoped_errors_only_logs_remain_isolated_without_caching() {
     };
     for name in NAMES {
         let task = cache
-            .task_cache(
-                &definition,
-                &graph
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
                     .package_task_context(&PackageName::from(name))
                     .unwrap(),
-                TaskId::new(name, "build").into_owned(),
-                "uncached",
-            )
+                task_id: TaskId::new(name, "build").into_owned(),
+                hash: "uncached",
+            })
             .unwrap();
         let mut writer = task.output_writer(std::io::sink()).unwrap();
         writeln!(writer, "error from {name}").unwrap();
