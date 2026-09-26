@@ -58,7 +58,6 @@ miette = { version = "7.5.0", features = ["fancy"] }
 turbo-trace = { path = "crates/turbo-trace" }
 turbo-updater = { path = "crates/turborepo-updater" }
 turbopath = { path = "crates/turborepo-paths" }
-turborepo = { path = "crates/turborepo" }
 turborepo-analytics = { path = "crates/turborepo-analytics" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-boundaries = { path = "crates/turborepo-boundaries" }
@@ -123,22 +122,15 @@ turborepo-ghostty = { path = "crates/turborepo-ghostty" }
 libghostty-vt = "0.2.1"
 
 reqwest = { version = "0.12.28", default-features = false }
-rustls-native-certs = "0.8.3"
 hyper-rustls = { version = "0.27.7", default-features = false }
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
-async-compression = { version = "0.3.13", default-features = false, features = [
-  "gzip",
-  "tokio",
-] }
 async-graphql = { version = "7.0.17", default-features = false, features = [
   "graphiql",
 ] }
 async-graphql-axum = "7.0.16"
-async-trait = "0.1.64"
 axum = "0.8.4"
-axum-server = "0.8.0"
 biome_deserialize = { version = "0.6.0", features = ["serde"] }
 biome_deserialize_macros = { version = "0.6.0" }
 biome_diagnostics = { version = "0.5.7" }
@@ -153,7 +145,6 @@ chrono = { version = "0.4.23", default-features = false, features = [
   "std",
 ] }
 console = "0.16.0"
-crossbeam-channel = "0.5.15"
 dashmap = "6.1.0"
 dialoguer = "0.12.0"
 dunce = "1.0.3"
@@ -167,14 +158,12 @@ gix-object = { version = "0.56.0", default-features = false }
 hex = "0.4.3"
 httpmock = { version = "0.8.0", default-features = false }
 indicatif = "0.18.3"
-indoc = "2.0.0"
 insta = { version = "1.34.0", features = ["json"] }
 itertools = "0.14.0"
 nix = { version = "0.26.2", default-features = false, features = ["term"] }
 notify = "6.1.1"
 oxc_allocator = "0.115.0"
 oxc_ast = { version = "0.115.0", features = ["serialize"] }
-oxc_diagnostics = "0.115.0"
 oxc_estree = { version = "0.115.0", features = ["serialize"] }
 oxc_parser = "0.115.0"
 oxc_span = "0.115.0"

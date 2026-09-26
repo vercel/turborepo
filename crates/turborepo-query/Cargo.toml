@@ -11,12 +11,6 @@ axum = { workspace = true }
 camino = "1.1.4"
 itertools = { workspace = true }
 miette = { workspace = true }
-oxc_allocator = { workspace = true }
-oxc_ast = { workspace = true }
-oxc_estree = { workspace = true }
-oxc_parser = { workspace = true }
-oxc_span = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
@@ -29,7 +23,6 @@ turborepo-query-api = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-signals = { workspace = true }
 turborepo-types = { workspace = true }
-wax = { workspace = true }
 webbrowser = { workspace = true }
 
 [dev-dependencies]

@@ -20,8 +20,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
 # File watching
-ignore = "0.4.24"
-notify = { workspace = true }
 
 # Utilities
 rand = { workspace = true }
@@ -32,7 +30,6 @@ tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-repository = { path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
