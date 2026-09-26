@@ -226,7 +226,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
     // Disabling this lint until we stop adding state to the visitor.
     // Once we have the full picture we will go about grouping these pieces of data
     // together
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn new(
         repo: &'a RepoContext,
         run_cache: Arc<RunCache>,
@@ -1072,7 +1072,6 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-    #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         self,
         packages,
@@ -1080,7 +1079,6 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         engine,
         env_at_execution_start,
     ))]
-    #[allow(clippy::too_many_arguments)]
     pub async fn finish(
         self,
         exit_code: i32,

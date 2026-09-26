@@ -1326,7 +1326,7 @@ fn should_start_terminal(event: &Event) -> bool {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn run_app_inner(
     terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
     display: &mut DisplayState,

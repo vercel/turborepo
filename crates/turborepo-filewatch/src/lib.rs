@@ -854,7 +854,7 @@ fn setup_cookie_dir(cookie_dir: &AbsoluteSystemPath) -> Result<(), WatchError> {
 }
 
 #[cfg(not(any(feature = "watch_ancestors", feature = "manual_recursive_watch")))]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn watch_events(
     mut watcher: Backend,
     watch_root: AbsoluteSystemPathBuf,
@@ -892,7 +892,7 @@ async fn watch_events(
 }
 
 #[cfg(any(feature = "watch_ancestors", feature = "manual_recursive_watch"))]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn watch_events(
     #[cfg(feature = "manual_recursive_watch")] mut watcher: Backend,
     #[cfg(not(feature = "manual_recursive_watch"))] mut watcher: Backend,
@@ -1636,7 +1636,7 @@ fn route_materialized_interests(
     route_event(registry, Ok(&event));
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn run_watcher(
     #[cfg(target_os = "macos")] backend: MacOsBackend,
     root: &AbsoluteSystemPath,
@@ -1697,7 +1697,7 @@ fn run_watcher(
 }
 
 #[cfg(not(feature = "manual_recursive_watch"))]
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 fn dispatch_non_mutating_backend_event(
     backend_ready: &AtomicBool,
     ordered_driver_delivery: &AtomicBool,

@@ -345,7 +345,6 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 fn transitive_closure_cached<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,

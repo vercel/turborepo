@@ -109,7 +109,7 @@ pub trait CacheClient {
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<Option<Response>>> + Send;
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn put_artifact(
         &self,
         hash: &str,

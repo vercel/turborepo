@@ -63,7 +63,7 @@ pub fn startup_timeout_secs() -> u64 {
 }
 
 impl PackageChangesWatcher {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events: WatchSource,
@@ -393,7 +393,7 @@ impl RepoState {
 }
 
 impl Subscriber {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events: WatchSource,
