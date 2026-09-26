@@ -1,4 +1,3 @@
-#![allow(clippy::sliced_string_as_bytes)]
 // miette's derive macro causes false positives for these lints
 #![allow(unused_assignments)]
 
@@ -519,7 +518,7 @@ impl BoundariesChecker {
 
             // If newline exists, we write all the contents before newline
             if let Some(newline_idx) = newline_idx {
-                file.write_all(contents[last_idx..(last_idx + newline_idx)].as_bytes())
+                file.write_all(&contents.as_bytes()[last_idx..(last_idx + newline_idx)])
                     .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
                 file.write_all(b"\n")
                     .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
@@ -535,7 +534,7 @@ impl BoundariesChecker {
             last_idx = idx;
         }
 
-        file.write_all(contents[last_idx..].as_bytes())
+        file.write_all(&contents.as_bytes()[last_idx..])
             .map_err(|_| Error::FileWrite(file_path.to_owned()))?;
 
         Ok(())

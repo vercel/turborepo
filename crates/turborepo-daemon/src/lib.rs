@@ -23,8 +23,6 @@
 #![allow(unused_features, reason = "impl_trait_in_assoc_type is actually used")]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
-#![allow(clippy::needless_lifetimes)]
-#![allow(clippy::uninlined_format_args)]
 
 mod bump_timeout;
 mod bump_timeout_layer;
