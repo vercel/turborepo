@@ -189,16 +189,6 @@ fn serial_for_path(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) -> Opti
 }
 
 impl CookieWriter {
-    #[cfg(test)]
-    pub fn new_with_default_cookie_dir(
-        repo_root: &AbsoluteSystemPath,
-        timeout: Duration,
-        source: impl Into<WatchSource>,
-    ) -> Self {
-        let cookie_root = repo_root.join_components(&[".turbo", "cookies"]);
-        Self::new(&cookie_root, timeout, source)
-    }
-
     pub fn new(
         cookie_root: &AbsoluteSystemPath,
         timeout: Duration,

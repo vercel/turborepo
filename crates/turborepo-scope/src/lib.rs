@@ -30,31 +30,7 @@ use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::SCM;
 use turborepo_types::{FilterMode, ScopeOpts};
-
-/// Resolve which packages should be included in the run based on scope options.
-///
-/// Returns the filtered package set alongside a [`FilterMode`] that
-/// describes how the filter was classified (all packages, exclude-only,
-/// or explicit selection). The caller uses `FilterMode` to decide
-/// whether root tasks should be injected.
-#[tracing::instrument(skip(opts, pkg_graph, scm))]
-pub fn resolve_packages(
-    opts: &ScopeOpts,
-    turbo_root: &AbsoluteSystemPath,
-    pkg_graph: &PackageGraph,
-    scm: &SCM,
-    global_deps: &[String],
-) -> Result<(HashMap<PackageName, PackageInclusionReason>, FilterMode), ResolutionError> {
-    let globals = opts
-        .global_deps
-        .iter()
-        .map(String::as_str)
-        .chain(global_deps.iter().map(String::as_str));
-    let detector = ScopeChangeDetector::new(turbo_root, scm, pkg_graph, globals, vec![])?;
-    resolve_packages_with_change_detector(opts, turbo_root, pkg_graph, detector)
-}
 
 /// Resolve through the production scope entry point with an injected change
 /// detector. Repository discovery and Git observations can both be supplied in

@@ -237,19 +237,6 @@ fn rustc_supported_targets(repo_root: &AbsoluteSystemPath) -> HashSet<String> {
         .unwrap_or_default()
 }
 
-/// Per-crate external dependency closures from Cargo.lock, for the crates'
-/// external-dependency hashes.
-///
-/// A missing, unreadable, or unparsable lockfile is a hard error — silently
-/// hashing nothing would be unsound.
-pub fn external_closures(
-    repo_root: &AbsoluteSystemPath,
-    members: &[String],
-) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
-    let contents = read_lockfile(repo_root)?;
-    external_closures_from_lockfile(&contents, members)
-}
-
 fn read_lockfile(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
     match repo_root.join_component(CARGO_LOCK).read_to_string() {
         Ok(contents) => Ok(contents),

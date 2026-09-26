@@ -205,9 +205,4 @@ impl TS for FutureFlags {
     }
 }
 
-impl FutureFlags {
-    /// Create a new FutureFlags
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
+impl FutureFlags {}

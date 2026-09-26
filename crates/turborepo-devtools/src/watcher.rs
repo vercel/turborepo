@@ -62,11 +62,6 @@ pub struct DevtoolsWatcher {
 }
 
 impl DevtoolsWatcher {
-    /// Creates a new devtools watcher for the given repository root.
-    pub fn new(repo_root: AbsoluteSystemPathBuf) -> Result<Self, WatchError> {
-        Self::new_with_paths(repo_root, Vec::new())
-    }
-
     /// Creates a watcher with exact paths that bypass filename and ignored
     /// directory filtering.
     pub fn new_with_paths(

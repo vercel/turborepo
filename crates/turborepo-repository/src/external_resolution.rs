@@ -203,10 +203,6 @@ impl ExternalPackageIdentity {
     pub fn display_name(&self) -> &str {
         self.human_name.as_deref().unwrap_or(&self.key)
     }
-
-    pub fn human_name(&self) -> Option<&str> {
-        self.human_name.as_deref()
-    }
 }
 
 /// Why a resolved generation is incomplete.
@@ -226,10 +222,6 @@ impl ResolutionIncompleteReason {
 
     pub fn code(&self) -> &str {
         &self.code
-    }
-
-    pub fn message(&self) -> &str {
-        &self.message
     }
 }
 
@@ -569,14 +561,6 @@ impl ExternalResolutionDomain {
     pub fn data(&self) -> &ExternalResolutionData {
         &self.data
     }
-}
-
-/// Lifecycle state for resolution production, kept separate from terminal
-/// generation data.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExternalResolutionStatus {
-    Pending,
-    Complete,
 }
 
 /// A validated, immutable generation of external resolution knowledge.

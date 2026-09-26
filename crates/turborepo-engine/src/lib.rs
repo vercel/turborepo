@@ -499,22 +499,6 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         self.prune_to_reachable(&reachable, true)
     }
 
-    /// Removes the given tasks and their incident dependency edges.
-    pub fn remove_tasks(self, excluded_tasks: &HashSet<TaskId>) -> Self {
-        let mut retained = NodeMembership::for_graph(&self.task_graph);
-        for index in self.task_graph.node_indices() {
-            let retain = match self.task_graph.node_weight(index) {
-                Some(TaskNode::Root) => true,
-                Some(TaskNode::Task(task)) => !excluded_tasks.contains(task),
-                None => false,
-            };
-            if retain {
-                retained.insert(index);
-            }
-        }
-        self.prune_to_reachable(&retained, false)
-    }
-
     /// Prunes the engine to only the given tasks and their transitive
     /// dependencies (upstream tasks needed for execution).
     ///
@@ -980,10 +964,6 @@ impl TaskWarning {
 }
 
 impl TaskError {
-    pub fn new(task_id: String, cause: TaskErrorCause) -> Self {
-        Self { task_id, cause }
-    }
-
     pub fn task_id(&self) -> &str {
         &self.task_id
     }
@@ -1611,10 +1591,6 @@ impl TaskErrorCollectorWrapper {
     pub fn from_arc(arc: Arc<Mutex<Vec<TaskError>>>) -> Self {
         Self(arc)
     }
-
-    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskError>>> {
-        self.0
-    }
 }
 
 impl Default for TaskErrorCollectorWrapper {
@@ -1651,10 +1627,6 @@ impl TaskWarningCollectorWrapper {
 
     pub fn from_arc(arc: Arc<Mutex<Vec<TaskWarning>>>) -> Self {
         Self(arc)
-    }
-
-    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskWarning>>> {
-        self.0
     }
 }
 

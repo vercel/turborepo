@@ -19,9 +19,9 @@ use crate::{
     discovery::LocalPackageDiscoveryBuilder,
     external_resolution::{
         ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
-        ExternalResolutionDomainId, ExternalResolutionGeneration, ExternalResolutionStatus,
-        JAVASCRIPT_RESOLUTION_DOMAIN, PYTHON_RESOLUTION_DOMAIN, PackageExternalDeclarations,
-        PackageResolutionState, ResolutionFingerprint,
+        ExternalResolutionDomainId, ExternalResolutionGeneration, JAVASCRIPT_RESOLUTION_DOMAIN,
+        PYTHON_RESOLUTION_DOMAIN, PackageExternalDeclarations, PackageResolutionState,
+        ResolutionFingerprint,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -68,7 +68,6 @@ pub enum JavascriptExternalResolution {
 
 #[derive(Debug)]
 struct ExternalResolutionKnowledge {
-    status: ExternalResolutionStatus,
     generation: Option<Arc<ExternalResolutionGeneration>>,
     claims: HashMap<String, ExternalResolutionDomainId>,
 }
@@ -76,7 +75,6 @@ struct ExternalResolutionKnowledge {
 impl ExternalResolutionKnowledge {
     fn absent() -> Self {
         Self {
-            status: ExternalResolutionStatus::Complete,
             generation: None,
             claims: HashMap::new(),
         }
@@ -95,7 +93,6 @@ impl ExternalResolutionKnowledge {
             })
             .collect();
         Self {
-            status: ExternalResolutionStatus::Complete,
             generation: Some(generation),
             claims,
         }
@@ -1236,13 +1233,6 @@ impl PackageGraph {
             });
         }
         Ok(changes)
-    }
-
-    pub fn external_resolution_status(&self) -> ExternalResolutionStatus {
-        self.external_resolution
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .status
     }
 
     pub fn package_resolution_states(&self) -> HashMap<String, PackageResolutionState> {

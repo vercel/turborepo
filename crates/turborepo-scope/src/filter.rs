@@ -15,13 +15,11 @@ use turborepo_repository::{
     change_mapper::{ChangeMapError, PackageInclusionReason, merge_changed_packages},
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::SCM;
 use turborepo_types::FilterMode;
 use wax::Program;
 
 use crate::{
-    ScopeOpts,
-    change_detector::{GitChangeDetector, ScopeChangeDetector},
+    change_detector::GitChangeDetector,
     simple_glob::{Match, SimpleGlob},
     target_selector::{GitRange, InvalidSelectorError, TargetSelector},
 };
@@ -166,33 +164,6 @@ pub struct FilterResolver<'a, T: GitChangeDetector> {
     turbo_root: &'a AbsoluteSystemPath,
     inference: Option<PackageInference>,
     change_detector: T,
-}
-
-impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
-    pub fn new(
-        opts: &'a ScopeOpts,
-        pkg_graph: &'a PackageGraph,
-        turbo_root: &'a AbsoluteSystemPath,
-        inference: Option<PackageInference>,
-        scm: &'a SCM,
-        global_deps: &'a [String],
-    ) -> Result<Self, ResolutionError> {
-        let global_deps_iter = opts
-            .global_deps
-            .iter()
-            .map(|s| s.as_str())
-            .chain(global_deps.iter().map(|s| s.as_str()));
-
-        let change_detector =
-            ScopeChangeDetector::new(turbo_root, scm, pkg_graph, global_deps_iter, vec![])?;
-
-        Ok(Self::new_with_change_detector(
-            pkg_graph,
-            turbo_root,
-            inference,
-            change_detector,
-        ))
-    }
 }
 
 impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
