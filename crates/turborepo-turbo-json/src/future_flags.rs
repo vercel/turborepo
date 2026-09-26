@@ -21,14 +21,11 @@
 use biome_deserialize_macros::Deserializable;
 use schemars::JsonSchema;
 use serde::Serialize;
-use struct_iterable::Iterable;
 use ts_rs::TS;
 
 /// Opt into breaking changes prior to major releases, experimental features,
 /// and beta features.
-#[derive(
-    Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq, JsonSchema,
-)]
+#[derive(Serialize, Default, Debug, Copy, Clone, Deserializable, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename_all = "camelCase")]
 #[deserializable()]
@@ -150,8 +147,8 @@ pub struct FutureFlags {
     pub experimental_task_command: bool,
 }
 
-// Manual TS impl because #[derive(TS)] conflicts with the Iterable and
-// Deserializable derives. Each new field must be added to inline(),
+// Manual TS impl because #[derive(TS)] conflicts with the Deserializable
+// derive. Each new field must be added to inline(),
 // inline_flattened(), decl(), and decl_concrete() below.
 impl TS for FutureFlags {
     type WithoutGenerics = Self;

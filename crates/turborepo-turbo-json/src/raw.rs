@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 use biome_deserialize_macros::Deserializable;
 use schemars::JsonSchema;
 use serde::Serialize;
-use struct_iterable::Iterable;
 use ts_rs::TS;
 use turbopath::AbsoluteSystemPath;
 use turborepo_boundaries::BoundariesConfig;
@@ -110,7 +109,7 @@ pub trait HasConfigBeyondExtends {
 /// cache.
 ///
 /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
-#[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable, JsonSchema, TS)]
+#[derive(Clone, Debug, Default, Serialize, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "RemoteCache", rename_all = "camelCase")]
 #[ts(export, rename = "RemoteCache")]
@@ -194,7 +193,7 @@ pub struct RawRemoteCacheOptions {
 }
 
 /// OpenTelemetry exporter configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtel {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,7 +217,7 @@ pub struct RawObservabilityOtel {
 }
 
 /// Experimental observability configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawExperimentalObservability {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -226,7 +225,7 @@ pub struct RawExperimentalObservability {
 }
 
 /// OTel metrics configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtelMetrics {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -240,7 +239,7 @@ pub struct RawObservabilityOtelMetrics {
 }
 
 /// OTel run attribute configuration for run-level metrics.
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtelRunAttributes {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -250,7 +249,7 @@ pub struct RawObservabilityOtelRunAttributes {
 }
 
 /// OTel task attribute configuration for task detail metrics.
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtelTaskAttributes {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -272,7 +271,7 @@ pub struct RawObservabilityOtelTaskAttributes {
 /// 4. `WithMetadata` impl in `parser.rs`
 /// 5. `GlobalConfig` in `config-v2.ts` and `generate_global_config_interface()`
 ///    in schema-gen
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "GlobalConfig", rename_all = "camelCase")]
 #[ts(export, rename = "GlobalConfig")]
@@ -379,7 +378,7 @@ pub struct RawGlobalConfig {
 }
 
 // Root turbo.json
-#[derive(Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Default, Debug, Clone, Deserializable)]
 pub struct RawRootTurboJson {
     pub span: Spanned<()>,
 
@@ -419,7 +418,7 @@ pub struct RawRootTurboJson {
 }
 
 // Package turbo.json
-#[derive(Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Default, Debug, Clone, Deserializable)]
 pub struct RawPackageTurboJson {
     pub span: Spanned<()>,
     #[deserializable(rename = "$schema")]
@@ -440,7 +439,7 @@ pub struct RawPackageTurboJson {
 /// the outputs of tasks in your project.
 ///
 /// Documentation: https://turborepo.dev/docs/reference/configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename_all = "camelCase")]
 #[ts(export)]
@@ -727,7 +726,7 @@ impl Serialize for RawCommand {
 /// workspace package with a `package.json` scripts object with a matching
 /// key, it will apply the pipeline task configuration to that npm script
 /// during execution.
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable, Deserializable, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "Pipeline", rename_all = "camelCase")]
 #[ts(export, rename = "Pipeline")]

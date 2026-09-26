@@ -13,9 +13,7 @@ use biome_deserialize::{
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
-use convert_case::{Case, Casing};
 use miette::Diagnostic;
-use struct_iterable::Iterable;
 use thiserror::Error;
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_task_id::TaskName;
@@ -56,22 +54,6 @@ impl BiomeParseError {
             backtrace: backtrace::Backtrace::capture(),
         }
     }
-}
-
-/// Creates an unknown key diagnostic from a struct that implements Iterable
-#[allow(dead_code)]
-pub fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
-    struct_iterable: &T,
-    unknown_key: &str,
-    range: TextRange,
-) -> DeserializationDiagnostic {
-    let allowed_keys = struct_iterable
-        .iter()
-        .map(|(k, _)| k.to_case(Case::Camel))
-        .collect::<Vec<_>>();
-    let allowed_keys_borrowed = allowed_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-
-    DeserializationDiagnostic::new_unknown_key(unknown_key, range, &allowed_keys_borrowed)
 }
 
 impl Deserializable for Pipeline {
