@@ -42,7 +42,6 @@ use merge::Merge;
 use miette::Diagnostic;
 use override_env::OverrideEnvVars;
 use serde::{Deserialize, Serialize};
-use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::debug;
 use turbo_json::TurboJsonReader;
@@ -249,7 +248,7 @@ impl From<turborepo_turbo_json::LoaderError> for Error {
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
-#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Merge, Setters)]
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 // Generate setters for the builder type that set these values on its override_config field

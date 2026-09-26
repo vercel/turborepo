@@ -3,14 +3,13 @@ use std::{collections::BTreeMap, sync::Arc};
 use biome_deserialize_macros::Deserializable;
 use schemars::JsonSchema;
 use serde::Serialize;
-use struct_iterable::Iterable;
 use ts_rs::TS;
 use turborepo_errors::{Spanned, WithMetadata};
 
 /// Configuration for `turbo boundaries`.
 ///
 /// Allows users to restrict a package's dependencies and dependents.
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename_all = "camelCase")]
 #[ts(export)]
@@ -54,7 +53,7 @@ pub type RulesMap = BTreeMap<String, Spanned<Rule>>;
 ///
 /// Restricts which packages a tag can import and which packages can import this
 /// tag.
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable, PartialEq, JsonSchema, TS)]
 #[schemars(rename = "TagRules")]
 #[ts(export, rename = "TagRules")]
 pub struct Rule {
@@ -74,7 +73,7 @@ pub struct Rule {
 }
 
 /// Permission rules for boundaries.
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable, PartialEq, JsonSchema, TS)]
 #[ts(export)]
 pub struct Permissions {
     /// Lists which tags are allowed.
