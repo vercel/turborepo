@@ -1434,6 +1434,7 @@ impl PackageGraph {
     /// set. Hot paths that only iterate the dependencies (engine graph
     /// construction queries this once per task) skip hashing every
     /// package name into a `HashSet`.
+    #[expect(clippy::expect_used, reason = "neighbor indexes refer to graph nodes")]
     pub fn immediate_dependencies_iter(
         &self,
         package: &PackageNode,
@@ -1459,6 +1460,7 @@ impl PackageGraph {
     ///
     /// immediate_ancestors(c) -> {b}
     #[allow(dead_code)]
+    #[expect(clippy::expect_used, reason = "neighbor indexes refer to graph nodes")]
     pub fn immediate_ancestors(&self, package: &PackageNode) -> Option<HashSet<&PackageNode>> {
         let index = self.node_lookup.get(package)?;
         Some(

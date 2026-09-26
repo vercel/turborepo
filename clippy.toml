@@ -16,7 +16,7 @@ disallowed-methods = [
   "biome_deserialize::json::deserialize_from_json_ast",
 ]
 
-# Tests can use panic-extraction helpers freely. The cargo lint alias skips
-# test targets, but this keeps #[cfg(test)] modules exempt if linted directly.
+# Tests can use panic-extraction helpers freely, including when the cargo lint
+# alias checks all targets and #[cfg(test)] modules.
 allow-expect-in-tests = true
 allow-unwrap-in-tests = true

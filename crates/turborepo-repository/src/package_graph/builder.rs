@@ -1652,6 +1652,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         Ok(())
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "JavaScript package managers require the root package.json"
+    )]
     #[tracing::instrument(skip(self, package_manager))]
     async fn populate_lockfile(
         &mut self,
@@ -1992,6 +1996,10 @@ impl Relationships {
     #[expect(
         clippy::too_many_arguments,
         reason = "classification needs the workspace, dependency indexes, and dependency list"
+    )]
+    #[expect(
+        clippy::expect_used,
+        reason = "package.json paths have a parent directory"
     )]
     fn classify<'a, I: IntoIterator<Item = (&'a String, &'a String, DependencyKind)>>(
         repo_root: &AbsoluteSystemPath,

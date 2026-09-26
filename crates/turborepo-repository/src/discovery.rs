@@ -259,6 +259,10 @@ impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
 }
 
 impl PackageDiscovery for LocalPackageDiscovery {
+    #[expect(
+        clippy::expect_used,
+        reason = "globbed package.json paths have a parent directory"
+    )]
     async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
         tracing::debug!("discovering packages using local strategy");
 
