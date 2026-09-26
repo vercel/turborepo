@@ -1635,7 +1635,10 @@ fn route_materialized_interests(
     route_event(registry, Ok(&event));
 }
 
-#[expect(clippy::too_many_arguments)]
+#[cfg_attr(
+    all(target_os = "macos", not(feature = "manual_recursive_watch")),
+    expect(clippy::too_many_arguments)
+)]
 fn run_watcher(
     #[cfg(target_os = "macos")] backend: MacOsBackend,
     root: &AbsoluteSystemPath,
