@@ -35,7 +35,6 @@ port_scanner = { workspace = true }
 pretty_assertions = { workspace = true }
 serial_test = "3.0"
 temp-env = { workspace = true }
-tempfile = { workspace = true }
 test-case = { workspace = true }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 tracing.workspace = true
@@ -57,7 +56,6 @@ dirs-next = "2.0.0"
 either = { workspace = true }
 futures = { workspace = true }
 go-parse-duration = "0.1.1"
-human-panic = "1.2.1"
 humantime = "2.1.0"
 ignore = "0.4.24"
 indicatif = { workspace = true }
@@ -78,10 +76,12 @@ sha2 = { workspace = true }
 shared_child = "1.0.0"
 
 sysinfo = "0.27.7"
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 time = "0.3.20"
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
+toml = { workspace = true }
 tonic = { version = "0.14", features = ["transport"] }
 
 tracing-appender = "0.2.2"
