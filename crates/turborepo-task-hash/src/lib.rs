@@ -31,7 +31,7 @@ use turborepo_hash::{FileHashes, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
+use turborepo_telemetry::events::task::PackageTaskEventBuilder;
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
     TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
@@ -124,17 +124,12 @@ fn validate_task_context(
 }
 
 impl PackageInputsHashes {
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "hashing inputs needs task definitions, repository state, and hash options"
-    )]
     #[tracing::instrument(skip(
         all_tasks,
         package_graph,
         task_definitions,
         repo_root,
         scm,
-        _telemetry,
         pre_built_index
     ))]
     pub fn calculate_file_hashes<'a, T>(
@@ -143,7 +138,6 @@ impl PackageInputsHashes {
         package_graph: &PackageGraph,
         task_definitions: &HashMap<TaskId<'static>, T>,
         repo_root: &AbsoluteSystemPath,
-        _telemetry: &GenericEventBuilder,
         pre_built_index: Option<&RepoGitIndex>,
         needs_expanded_hashes: bool,
     ) -> Result<PackageInputsHashes, Error>
@@ -1944,7 +1938,6 @@ mod test {
             &graph,
             &definitions,
             &repo_root,
-            &GenericEventBuilder::new(),
             None,
             true,
         )
@@ -1974,7 +1967,6 @@ mod test {
             &graph,
             &definitions,
             &other_root,
-            &GenericEventBuilder::new(),
             None,
             false,
         )
@@ -2012,7 +2004,6 @@ mod test {
             &graph,
             &definitions,
             &repo_root,
-            &GenericEventBuilder::new(),
             None,
             false,
         )

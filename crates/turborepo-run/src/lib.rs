@@ -1111,7 +1111,6 @@ impl Run {
                         self.pkg_dep_graph(),
                         self.execution.engine.task_definitions(),
                         self.repo_root(),
-                        &self.services.run_telemetry,
                         repo_index,
                         needs_expanded,
                     ));

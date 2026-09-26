@@ -21,7 +21,6 @@ fn package_inputs_hashes(
         graph,
         &definitions,
         repo_root,
-        &GenericEventBuilder::new(),
         None,
         true,
     )
