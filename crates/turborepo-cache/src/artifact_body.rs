@@ -98,8 +98,11 @@ impl ArtifactBody {
     ) -> Result<String, SignatureError> {
         match self {
             ArtifactBody::InMemory(bytes) => signer.generate_tag(hash.as_bytes(), bytes),
-            ArtifactBody::OnDisk(file) => {
-                signer.generate_tag_reader(hash.as_bytes(), file, self.len() as u64)
+            ArtifactBody::OnDisk(_) => {
+                // Cloned handles share one file offset, so sign from a
+                // rewound reader rather than wherever the last consumer
+                // stopped.
+                signer.generate_tag_reader(hash.as_bytes(), self.reader()?, self.len() as u64)
             }
         }
     }
@@ -172,4 +175,37 @@ fn chunked_byte_stream(
         let chunk = buf.slice(offset..end);
         Some((Ok(chunk), (buf, end)))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+
+    use super::*;
+
+    /// The local cache install reads an on-disk body to the end before the
+    /// upload signs it. The tag must still cover every byte of the archive.
+    #[test]
+    fn test_on_disk_tag_covers_body_after_copy() -> Result<()> {
+        let contents = vec![7u8; ARTIFACT_MEMORY_THRESHOLD + 1];
+        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
+        spool.write_all(&contents)?;
+        spool.seek(SeekFrom::Start(0))?;
+        let body = ArtifactBody::from_spool(spool)?;
+        assert!(matches!(body, ArtifactBody::OnDisk(_)));
+
+        let mut copied = Vec::new();
+        body.copy_to(&mut copied)?;
+        assert_eq!(copied, contents);
+
+        let signer = ArtifactSignatureAuthenticator {
+            team_id: b"my-team".to_vec(),
+            secret_key_override: Some(b"signing-key-that-is-long-enough-to-use".to_vec()),
+        };
+        assert_eq!(
+            body.generate_tag(&signer, "hash")?,
+            signer.generate_tag(b"hash", &contents)?
+        );
+        Ok(())
+    }
 }
