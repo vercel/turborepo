@@ -511,6 +511,10 @@ fn unquote_interpreted(chars: &mut CharStream<'_>) -> Result<String, String> {
     Err("unterminated quoted string".to_string())
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "this match arm accepts only octal digits"
+)]
 fn decode_escape(chars: &mut CharStream<'_>, bytes: &mut Vec<u8>) -> Result<(), String> {
     let Some(escape) = chars.next() else {
         return Err("unterminated escape in quoted string".to_string());

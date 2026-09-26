@@ -337,6 +337,10 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             .map_err(Into::into)
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "callers supply a lockfile inside the repository root"
+    )]
     pub fn lockfile_changed(
         turbo_root: &AbsoluteSystemPath,
         changed_files: &HashSet<AnchoredSystemPathBuf>,

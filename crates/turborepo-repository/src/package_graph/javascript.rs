@@ -84,6 +84,10 @@ pub(super) fn external_dependencies(
         .collect()
 }
 
+#[expect(
+    clippy::expect_used,
+    reason = "package.json is a validated static path"
+)]
 pub(super) fn unavailable_resolution(
     knowledge: &RepositoryKnowledge,
     mut domains: Vec<ExternalResolutionDomain>,

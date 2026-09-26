@@ -126,6 +126,7 @@ impl DefaultPackageChangeMapperWithLockfile {
 }
 
 impl PackageChangeMapper for DefaultPackageChangeMapperWithLockfile {
+    #[expect(clippy::unwrap_used, reason = "the empty root path is valid")]
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
         // If we have a lockfile change, we consider this as a root package change,
         // since there's a chance that the root package uses a workspace package

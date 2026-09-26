@@ -1057,10 +1057,11 @@ impl PackageManager {
         let package_manager_pattern = regex!(
             r"\A(?P<manager>aube|bun|npm|nub|pnpm|yarn)@(?P<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?|https?://\S+)\z"
         );
-        if let Some(captures) = package_manager_pattern.captures(manager) {
-            let manager = captures.name("manager").unwrap().as_str();
-            let version = captures.name("version").unwrap().as_str();
-            Ok((manager, version))
+        if let Some(captures) = package_manager_pattern.captures(manager)
+            && let (Some(name), Some(version)) =
+                (captures.name("manager"), captures.name("version"))
+        {
+            Ok((name.as_str(), version.as_str()))
         } else {
             let (span, text) = manager.span_and_text("package.json");
             Err(Error::InvalidPackageManager {
@@ -1238,6 +1239,10 @@ impl PackageManager {
     /// workspace gets its own `pnpm-lock.yaml`. This method reads and
     /// merges them into a single lockfile. Returns `None` if shared
     /// lockfile mode is active (the default).
+    #[expect(
+        clippy::expect_used,
+        reason = "workspace package.json paths have parents inside the repository"
+    )]
     fn try_read_pnpm_per_workspace_lockfiles(
         &self,
         root_path: &AbsoluteSystemPath,
@@ -1345,6 +1350,10 @@ impl PackageManager {
     /// there's a package in the workspace with the name of `lib` and
     /// version `1.2.3` if this is true, then the local `lib` package will
     /// be used where `false` would use a `lib` package from the registry.
+    #[expect(
+        clippy::expect_used,
+        reason = "only pnpm variants are converted to PnpmVersion"
+    )]
     pub fn link_workspace_packages(&self, repo_root: &AbsoluteSystemPath) -> bool {
         match self {
             PackageManager::Berry => berry::link_workspace_packages(repo_root),

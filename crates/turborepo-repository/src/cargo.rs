@@ -1660,6 +1660,7 @@ impl RepositoryContributor for CargoContributor {
         ToolchainId::RUST
     }
 
+    #[expect(clippy::expect_used, reason = "CARGO_TOML is a validated static path")]
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
