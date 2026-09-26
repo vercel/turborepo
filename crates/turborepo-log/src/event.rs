@@ -288,11 +288,6 @@ impl SanitizedString {
     pub fn as_str(&self) -> &str {
         &self.0
     }
-
-    /// Consume and return the inner string.
-    pub fn into_inner(self) -> String {
-        self.0
-    }
 }
 
 impl fmt::Display for SanitizedString {

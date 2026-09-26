@@ -226,15 +226,6 @@ where
     W: TaskWarningCollector,
     A: TaskAccessProvider,
 {
-    /// Execute a dry run (only check cache status).
-    pub async fn execute_dry_run(&mut self, tracker: TaskTracker<()>) {
-        if let Ok(Some(status)) = self.task_cache.exists().await {
-            self.hash_tracker
-                .insert_cache_status(self.task_id.clone(), status);
-        }
-        tracker.dry_run().await;
-    }
-
     /// Execute the task.
     ///
     /// This is the main entry point for task execution. It:

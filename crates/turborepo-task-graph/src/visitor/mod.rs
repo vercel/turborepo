@@ -33,8 +33,7 @@ use turborepo_task_executor::{
     InternalError as TaskInternalError, TaskOutput, command_invokes_turbo,
 };
 use turborepo_task_hash::{
-    Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
-    TaskHasher,
+    Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHasher,
 };
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
@@ -1162,12 +1161,6 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
         }
-    }
-
-    /// Only used for the hashing comparison between Rust and Go. After port,
-    /// should delete
-    pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
-        self.task_hasher.into_task_hash_tracker_state()
     }
 
     pub fn dry_run(&mut self) {

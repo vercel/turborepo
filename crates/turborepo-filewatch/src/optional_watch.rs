@@ -22,13 +22,6 @@ impl<T> OptionalWatch<T> {
         (tx, OptionalWatch(rx))
     }
 
-    /// Create a new `OptionalWatch` with an initial, unchanging value.
-    #[cfg(test)]
-    pub fn once(init: T) -> Self {
-        let (_tx, rx) = watch::channel(Some(init));
-        OptionalWatch(rx)
-    }
-
     /// Wait for the value to be available and then return it.
     ///
     /// If you receive a `RecvError`, the sender has been dropped, meaning you
