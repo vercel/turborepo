@@ -751,6 +751,10 @@ mod tests {
         }
     }
 
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "test helper passes through task inclusion constraints to the filter"
+    )]
     fn filter_cargo_task_graph(
         engine: Engine,
         selectors: &[TargetSelector],

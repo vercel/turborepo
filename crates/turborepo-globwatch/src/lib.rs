@@ -9,7 +9,6 @@
 //! watch for a full round trip through the filesystem to ensure the watcher is
 //! up to date.
 
-#![allow(clippy::all)]
 #![deny(
     missing_docs,
     missing_debug_implementations,
@@ -327,6 +326,10 @@ pub enum ConfigError {
 
 impl<T: Watcher> WatchConfig<T> {
     /// Register a glob to be included by the watcher.
+    #[expect(
+        clippy::manual_try_fold,
+        reason = "try_fold stops early; include must attempt every path and collect all errors"
+    )]
     #[tracing::instrument(skip(self))]
     pub async fn include(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
         trace!("including {:?}", glob);
@@ -545,11 +548,11 @@ fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol<'_>> {
                 escaped = false;
                 return if end - start == 1 {
                     Some(GlobSymbol::Char(match glob_bytes[start] {
-                        b'a' => &[b'\x61'],
-                        b'b' => &[b'\x08'],
-                        b'n' => &[b'\n'],
-                        b'r' => &[b'\r'],
-                        b't' => &[b'\t'],
+                        b'a' => b"\x61",
+                        b'b' => b"\x08",
+                        b'n' => b"\n",
+                        b'r' => b"\r",
+                        b't' => b"\t",
                         _ => &glob_bytes[start..end],
                     }))
                 } else {

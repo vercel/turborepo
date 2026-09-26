@@ -1989,6 +1989,10 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
 struct Relationships;
 
 impl Relationships {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "classification needs the workspace, dependency indexes, and dependency list"
+    )]
     fn classify<'a, I: IntoIterator<Item = (&'a String, &'a String, DependencyKind)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPath,

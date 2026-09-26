@@ -1332,6 +1332,10 @@ fn aggregate_task(
     ))
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "tool tasks need their execution plan, target scope, and task contract"
+)]
 fn declared_tool_task(
     kind: UvPackageKind,
     task: &str,
@@ -1435,6 +1439,10 @@ fn warn_formatter_precedence(scope: &str, formatters: &[PythonTool], selected: P
 }
 
 /// Layer declared tools over the built-in uv fallback tasks.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "task generation combines workspace context, tool plans, and build settings"
+)]
 fn python_tasks_for_package(
     kind: UvPackageKind,
     package: &str,
