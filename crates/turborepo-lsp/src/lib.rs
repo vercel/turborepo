@@ -895,7 +895,10 @@ impl Backend {
         }
     }
 
-    #[allow(clippy::result_large_err)]
+    #[expect(
+        clippy::result_large_err,
+        reason = "retain structured repository discovery errors for LSP"
+    )]
     async fn package_discovery(&self) -> Result<Arc<LspPackages>, package_graph::Error> {
         if let Some(packages) = self.packages.get() {
             return Ok(packages);

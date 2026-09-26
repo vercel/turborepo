@@ -58,7 +58,10 @@ pub struct GlobalHashableInputs<'a> {
 }
 
 #[expect(clippy::too_many_arguments)]
-#[allow(clippy::result_large_err)]
+#[expect(
+    clippy::result_large_err,
+    reason = "retain structured global-hash errors"
+)]
 pub fn get_global_hash_inputs<'a>(
     root_external_dependencies_hash: Option<&'a str>,
     root_internal_dependencies_hash: Option<&'a str>,
@@ -126,7 +129,10 @@ pub struct GlobalFileHashInputs<'a> {
 /// can be run concurrently with package file hashing and internal deps
 /// hashing since it has no dependencies on those results.
 #[expect(clippy::too_many_arguments)]
-#[allow(clippy::result_large_err)]
+#[expect(
+    clippy::result_large_err,
+    reason = "retain structured global-hash errors"
+)]
 pub fn collect_global_file_hash_inputs<'a>(
     // Root `engines` from task-contract knowledge (not a live PackageJson read).
     root_engines: Option<&'a std::collections::BTreeMap<String, String>>,
@@ -197,7 +203,10 @@ pub fn collect_global_file_hash_inputs<'a>(
     })
 }
 
-#[allow(clippy::result_large_err)]
+#[expect(
+    clippy::result_large_err,
+    reason = "retain structured global-hash errors"
+)]
 fn collect_global_deps(
     package_manager: Option<&PackageManager>,
     root_path: &AbsoluteSystemPath,
