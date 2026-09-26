@@ -1480,7 +1480,7 @@ mod test {
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -1589,7 +1589,7 @@ mod test {
 
     #[tokio::test]
     async fn test_content_length() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -1634,7 +1634,7 @@ mod test {
 
     #[tokio::test]
     async fn test_record_telemetry_success() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -1676,7 +1676,7 @@ mod test {
 
     #[tokio::test]
     async fn test_record_telemetry_empty_events() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -1705,7 +1705,7 @@ mod test {
 
     #[tokio::test]
     async fn test_record_telemetry_with_different_event_types() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -1739,7 +1739,7 @@ mod test {
 
     #[tokio::test]
     async fn test_get_user() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -1774,7 +1774,7 @@ mod test {
 
     #[tokio::test]
     async fn test_get_teams() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -1806,7 +1806,7 @@ mod test {
 
     #[tokio::test]
     async fn test_get_caching_status() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -1833,7 +1833,7 @@ mod test {
 
     #[tokio::test]
     async fn test_put_and_fetch_artifact() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -1886,7 +1886,7 @@ mod test {
 
     #[tokio::test]
     async fn test_api_client_with_upload_timeout() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -1930,7 +1930,7 @@ mod test {
 
     #[tokio::test]
     async fn test_api_client_no_timeout() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -1966,7 +1966,7 @@ mod test {
 
     #[tokio::test]
     async fn test_anon_client_no_timeout() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -1994,7 +1994,7 @@ mod test {
     /// Starts a mock server and returns an APIClient pointed at it, along with
     /// the server handle for cleanup.
     async fn start_vca_test_client() -> Result<(APIClient, tokio::task::JoinHandle<Result<()>>)> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;

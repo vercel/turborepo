@@ -464,7 +464,7 @@ mod test {
             .create_with_contents(r#"{ "apiurl": "http://localhost:3000" }"#)
             .unwrap();
 
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
