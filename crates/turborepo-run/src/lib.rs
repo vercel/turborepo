@@ -1,5 +1,8 @@
-#![allow(clippy::result_large_err)]
 #![allow(dead_code)]
+// Run orchestration returns rich, shared errors through 28 production methods.
+// Narrow annotations would duplicate this API-wide decision; revisit error
+// layout separately before changing its size or introducing allocations.
+#![allow(clippy::result_large_err)]
 
 pub mod boundaries;
 pub mod builder;

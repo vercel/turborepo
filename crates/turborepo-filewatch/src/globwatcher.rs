@@ -494,6 +494,7 @@ impl GlobWatcher {
     ///
     /// This function will return `Error::Unavailable` if the globwatcher is not
     /// yet available.
+    #[expect(clippy::result_large_err, reason = "retain watcher error details")]
     pub async fn watch_globs(
         &self,
         hash: Hash,
@@ -541,6 +542,7 @@ impl GlobWatcher {
     ///
     /// This function will return `Error::Unavailable` if the globwatcher is not
     /// yet available.
+    #[expect(clippy::result_large_err, reason = "retain watcher error details")]
     pub async fn get_changed_globs(
         &self,
         hash: Hash,
@@ -558,6 +560,7 @@ impl GlobWatcher {
         tokio::time::timeout(timeout, rx).await??
     }
 
+    #[expect(clippy::result_large_err, reason = "retain watcher error details")]
     async fn send_request(&self, req: Query) -> Result<(), Error> {
         let cookied_request = self.cookie_writer.cookie_request(req).await?;
         let mut query_ch = self.query_ch_lazy.clone();

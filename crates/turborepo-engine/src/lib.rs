@@ -4,8 +4,9 @@
 //! monorepo. It handles task graph construction, dependency resolution, and
 //! parallel execution.
 
-// Allow large error types - boxing would be a significant refactor and these
-// errors are already established patterns in the codebase
+// Engine builder errors retain rich diagnostics across 29 production functions.
+// Keep the shared error shape rather than adding a separate allocation at each
+// failure or scattering per-function lint attributes across the builder.
 #![allow(clippy::result_large_err)]
 
 pub mod affected;

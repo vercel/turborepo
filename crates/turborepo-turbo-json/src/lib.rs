@@ -9,9 +9,9 @@
 // miette's derive macros, not directly by code. The derive macros generate code
 // that reads these fields for error formatting and display.
 #![allow(unused_assignments)]
-// The Error type is large due to miette diagnostic fields (NamedSource, SourceSpan).
-// This is intentional for rich error reporting. Boxing would add indirection overhead
-// for error paths that are not performance-critical.
+// The rich miette Error (including source text and spans) is returned throughout
+// parsing and validation. Clippy reports 50+ sites; narrow per-function allows
+// would obscure this crate-wide error API without changing its size.
 #![allow(clippy::result_large_err)]
 
 use std::{collections::HashSet, sync::Arc};

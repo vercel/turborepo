@@ -22,7 +22,6 @@
 
 #![deny(clippy::all)]
 #![allow(clippy::mutable_key_type)]
-#![allow(clippy::result_large_err)]
 
 #[cfg(not(feature = "manual_recursive_watch"))]
 use std::sync::atomic::AtomicBool;

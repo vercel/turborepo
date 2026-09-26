@@ -17,6 +17,8 @@
 //! to `endpoint`: once an endpoint is set by a source, credentials from
 //! lower-priority sources are discarded. See `ExperimentalOtelOptions::merge`.
 
+// Structured config errors are returned throughout configuration resolution;
+// Clippy reports 29 sites. Keep the shared diagnostic error type unchanged.
 #![allow(clippy::result_large_err)]
 
 mod env;

@@ -10,8 +10,8 @@
 #![deny(clippy::all)]
 #![cfg_attr(not(test), deny(clippy::expect_used, clippy::unwrap_used))]
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
-// Allow large error types - ResolutionError contains ChangeMapError which is 128+ bytes.
-// Boxing would complicate error handling without significant benefit for a CLI tool.
+// Scope resolution shares a large structured error with its filters;
+// Clippy reports 14 production sites. Boxing would alter its error API.
 #![allow(clippy::result_large_err)]
 
 // Module declarations

@@ -161,6 +161,7 @@ impl HashWatcher {
     // responding. Both package discovery and file hashing can fail depending on the
     // state of the filesystem, so clients will need to be robust to receiving
     // errors.
+    #[expect(clippy::result_large_err, reason = "retain hash-watcher error details")]
     pub async fn get_file_hashes(&self, hash_spec: HashSpec) -> Result<Arc<GitHashes>, Error> {
         let (tx, rx) = oneshot::channel();
         self.query_tx.send(Query::GetHash(hash_spec, tx)).await?;
@@ -173,6 +174,7 @@ impl HashWatcher {
     /// graph also knows about native execution scopes, so watch mode registers
     /// those paths here to make their content hashes available for
     /// deduplication.
+    #[expect(clippy::result_large_err, reason = "retain hash-watcher error details")]
     pub async fn set_package_paths(
         &self,
         package_paths: HashSet<AnchoredSystemPathBuf>,

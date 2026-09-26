@@ -84,6 +84,10 @@ impl PackageWatcher {
     /// Creates a new package watcher whose current package data can be queried.
     /// `backup_discovery` is used to perform the initial discovery of packages,
     /// to populate the state before we can watch.
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve package discovery error details"
+    )]
     pub fn new(
         root: AbsoluteSystemPathBuf,
         source: impl Into<WatchSource>,
@@ -111,6 +115,10 @@ impl PackageWatcher {
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::result_large_err,
+        reason = "test hook returns the same package discovery error"
+    )]
     fn new_with_discovery_hook(
         root: AbsoluteSystemPathBuf,
         source: impl Into<WatchSource>,
@@ -300,6 +308,10 @@ impl Subscriber {
     /// performs the initial discovery using the `backup_discovery` of your
     /// choice, and then listens to file system events to keep the package
     /// data up to date.
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve package discovery error details"
+    )]
     fn new(
         repo_root: AbsoluteSystemPathBuf,
         writer: CookieWriter,

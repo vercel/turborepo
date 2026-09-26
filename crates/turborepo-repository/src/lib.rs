@@ -8,6 +8,9 @@
 
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
+// Repository and package-manager APIs return shared structured errors across
+// 54 production functions. Keep this crate-wide exemption until error layouts
+// are reviewed separately from lint suppression cleanup.
 #![allow(clippy::result_large_err)]
 
 pub mod cargo;
