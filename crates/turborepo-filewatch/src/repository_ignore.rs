@@ -64,10 +64,6 @@ impl RepositoryIgnore {
         }
     }
 
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
-
     /// Re-read repository ignore rules and tracked index state.
     ///
     /// Returns whether the refresh observed a change that consumers cannot
@@ -113,16 +109,6 @@ impl RepositoryIgnore {
     pub fn should_refresh(&self, path: &Path) -> bool {
         Self::is_gitignore(path)
             || self
-                .state
-                .read()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .control_paths
-                .contains(&normalize_event_path(&self.root, &self.match_root, path))
-    }
-
-    pub fn is_control_path(&self, path: &Path) -> bool {
-        !Self::is_gitignore(path)
-            && self
                 .state
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())

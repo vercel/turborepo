@@ -174,10 +174,6 @@ impl ChangeKnowledge {
         &self.membership_file_names
     }
 
-    pub fn membership_paths(&self) -> &[String] {
-        &self.membership_paths
-    }
-
     pub fn resolution_paths(&self) -> &[String] {
         &self.resolution_paths
     }

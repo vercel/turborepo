@@ -49,11 +49,6 @@ impl<'b> TaskTable<'b> {
         task_name_width + 4
     }
 
-    /// Update the current time of the table
-    pub fn tick(&mut self) {
-        self.spinner.update();
-    }
-
     fn should_dim_task(&self, task_name: &str) -> bool {
         match self.section {
             LayoutSections::Search { results, .. }

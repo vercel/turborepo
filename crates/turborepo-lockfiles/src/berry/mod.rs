@@ -74,10 +74,6 @@ type ManifestParts = (Vec<(Resolution, String)>, CatalogMap, PackageExtensionMap
 pub struct BerryResolutionMap(Vec<(String, String)>);
 
 impl BerryResolutionMap {
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &String)> {
-        self.0.iter().map(|(key, value)| (key, value))
-    }
-
     pub fn retain(&mut self, mut predicate: impl FnMut(&String, &String) -> bool) {
         self.0.retain(|(key, value)| predicate(key, value));
     }
