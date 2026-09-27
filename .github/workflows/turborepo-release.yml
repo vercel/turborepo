@@ -524,6 +524,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     needs: [stage, build-rust]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
