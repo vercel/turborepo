@@ -84,8 +84,6 @@ pub enum Error {
     #[error(transparent)]
     Env(#[from] turborepo_env::Error),
     #[error(transparent)]
-    Regex(#[from] regex::Error),
-    #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Hash(#[from] turborepo_hash::Error),
