@@ -55,7 +55,22 @@ pub async fn run_server(run: Arc<dyn QueryRun>) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use axum::{body::to_bytes, http::header::CONTENT_TYPE, response::IntoResponse};
+
     use super::is_allowed_host;
+
+    #[tokio::test]
+    async fn serves_pinned_graphiql_page() {
+        let response = crate::graphiql().await.into_response();
+        assert_eq!(response.headers()[CONTENT_TYPE], "text/html; charset=utf-8");
+        let body = to_bytes(response.into_body(), 16 * 1024)
+            .await
+            .unwrap_or_default();
+        let page = String::from_utf8_lossy(&body);
+        assert!(page.contains("graphiql@5.0.0-rc.1/graphiql.min.js"));
+        assert!(page.contains("graphiql@5.0.0-rc.1/graphiql.min.css"));
+        assert!(page.contains("url: createUrl('/')"));
+    }
 
     #[test]
     fn allows_localhost_hosts() {

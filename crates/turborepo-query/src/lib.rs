@@ -15,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::{http::GraphiQLSource, *};
+use async_graphql::*;
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
 use itertools::Itertools;
@@ -1028,12 +1028,9 @@ fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskC
 }
 
 pub async fn graphiql() -> impl IntoResponse {
-    response::Html(
-        GraphiQLSource::build()
-            .version("5.0.0-rc.1")
-            .endpoint("/")
-            .finish(),
-    )
+    // GraphiQLSource always rendered the same HTML for this fixed version and
+    // endpoint; embedding that output avoids compiling its template per request.
+    response::Html(include_str!("query_ide.html"))
 }
 
 pub async fn run_query_server(run: Arc<dyn QueryRun>, signal: SignalHandler) -> Result<(), Error> {
