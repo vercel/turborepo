@@ -574,7 +574,8 @@ impl Subscriber {
             .hash_watcher
             .get_file_hashes(HashSpec {
                 package_path: package_path.clone(),
-                // TODO: Support inputs
+                // Keep package-level hashing broad; task-input filtering is
+                // applied downstream using the changed-file set.
                 inputs: InputGlobs::Default,
             })
             .await
