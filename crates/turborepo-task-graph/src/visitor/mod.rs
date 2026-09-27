@@ -24,7 +24,7 @@ use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_microfrontends_config::MicrofrontendsConfigs;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageName, PackageTaskContext, ROOT_PKG_NAME};
-use turborepo_run_cache::RunCache;
+use turborepo_run_cache::{RunCache, TaskCacheContext};
 use turborepo_run_context::RepoContext;
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::RepoGitIndex;
@@ -875,12 +875,12 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
 
             let task_cache = {
                 let _span = tracing::info_span!("task_cache_new").entered();
-                match self.run_cache.task_cache(
+                match self.run_cache.task_cache(TaskCacheContext {
                     task_definition,
-                    &package_context,
-                    info.clone(),
-                    &task_hash,
-                ) {
+                    package_context: &package_context,
+                    task_id: info.clone(),
+                    hash: &task_hash,
+                }) {
                     Ok(task_cache) => task_cache,
                     Err(err) => {
                         dispatch_error = Some(Error::RunCache(err));
