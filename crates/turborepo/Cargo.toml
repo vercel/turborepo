@@ -26,7 +26,7 @@ tokio = { workspace = true }
 turbopath = { workspace = true }
 which = { workspace = true }
 
-[target.'cfg(target_os = "linux")'.dev-dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
 terminal-control = "=0.6.0"
 
 [lints]
