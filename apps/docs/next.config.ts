@@ -21,7 +21,7 @@ const config: NextConfig = {
       }
     ];
     return [
-      { source: "/install.sh", headers: installerHeaders },
+      { source: "/install", headers: installerHeaders },
       { source: "/install.ps1", headers: installerHeaders }
     ];
   },

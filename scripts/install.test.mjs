@@ -18,7 +18,7 @@ import test from "node:test";
 
 const VERSION = "2.11.5";
 const installerPath = fileURLToPath(
-  new URL("../apps/docs/public/install.sh", import.meta.url)
+  new URL("../apps/docs/public/install", import.meta.url)
 );
 
 function currentTarget() {
