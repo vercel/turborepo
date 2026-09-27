@@ -12,17 +12,11 @@ workspace = true
 [features]
 biome = [
   "dep:biome_deserialize",
-  "dep:biome_deserialize_macros",
-  "dep:biome_diagnostics",
-  "dep:biome_json_parser",
   "dep:turborepo-unescape",
 ]
 
 [dependencies]
 biome_deserialize = { workspace = true, optional = true }
-biome_deserialize_macros = { workspace = true, optional = true }
-biome_diagnostics = { workspace = true, optional = true }
-biome_json_parser = { workspace = true, optional = true }
 turborepo-unescape = { workspace = true, optional = true }
 
 camino = { workspace = true }
