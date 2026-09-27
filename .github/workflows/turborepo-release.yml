@@ -519,6 +519,42 @@ jobs:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
 
+  standalone-archives:
+    name: "Package Standalone Archives"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [stage, build-rust]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          package-install: false
+
+      - name: Download Rust artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: turbo-*
+          path: rust-artifacts
+
+      - name: Test standalone archive layout
+        run: node --test scripts/package-standalone-archives.test.mjs
+
+      - name: Package standalone archives
+        run: node scripts/package-standalone-archives.mjs "${{ needs.stage.outputs.version }}"
+
+      - name: Upload standalone archives
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: standalone-turbo-${{ needs.stage.outputs.version }}
+          path: standalone-artifacts/*.tar.gz
+          if-no-files-found: error
+
   npm-publish:
     name: "Publish To NPM"
     runs-on: ubuntu-24.04
@@ -529,8 +565,8 @@ jobs:
     env:
       NPM_CONFIG_PROVENANCE: "true"
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
-    needs: [stage, build-rust, js-smoke-test]
-    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    needs: [stage, build-rust, js-smoke-test, standalone-archives]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' && needs.standalone-archives.result == 'success' }}
     outputs:
       publish-started: ${{ steps.publish-state.outputs.started }}
     steps:
@@ -549,6 +585,7 @@ jobs:
       - name: Download Rust artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
+          pattern: turbo-*
           path: rust-artifacts
 
       - name: Install Global Turbo
