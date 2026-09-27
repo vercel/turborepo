@@ -362,7 +362,7 @@ impl Merge for ConfigurationOptions {
             cache_max_size, root_turbo_json_path, force, log_order, cache,
             remote_only, remote_cache_read_only, run_summary,
             allow_no_turbo_json, tui_scrollback_length, concurrency,
-            no_update_notifier, sso_login_callback_port, future_flags,
+            no_update_notifier, agent_guidance, sso_login_callback_port, future_flags,
             log_file; nested = experimental_observability
         );
     }
@@ -906,7 +906,7 @@ mod test {
     use crate::{
         CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
         DEFAULT_TIMEOUT, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
-        ExperimentalOtelOptions, ExperimentalOtelProtocol, TurborepoConfigBuilder,
+        ExperimentalOtelOptions, ExperimentalOtelProtocol, Merge, TurborepoConfigBuilder,
     };
 
     #[test]
@@ -936,6 +936,22 @@ mod test {
             .with_api_url(None)
             .with_log_file(Some(crate::LogFileConfig::Enabled));
         assert_eq!(builder.override_config, config);
+    }
+
+    #[test]
+    fn test_agent_guidance_merge() {
+        let mut config = ConfigurationOptions::default();
+        config.merge(ConfigurationOptions {
+            agent_guidance: Some(false),
+            ..Default::default()
+        });
+        assert!(!config.agent_guidance());
+
+        config.merge(ConfigurationOptions {
+            agent_guidance: Some(true),
+            ..Default::default()
+        });
+        assert!(!config.agent_guidance());
     }
 
     #[test]
