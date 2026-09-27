@@ -3,7 +3,7 @@ title: Installation
 description: Learn how to get started with Turborepo.
 product: turborepo
 type: guide
-summary: Install Turborepo globally and in your repository using your preferred package manager.
+summary: Install the standalone Turborepo CLI globally and pin Turborepo in your repository.
 prerequisites:
   - /docs/getting-started
 related:
@@ -73,54 +73,56 @@ For more details on the starter, [visit the README for the basic starter on GitH
 
 ### Global installation
 
-A global install of `turbo` brings flexibility and speed to your local workflows.
+Install the standalone `turbo` binary globally. This method does not require Node.js or a package manager.
 
-<PackageManagerTabs>
+<Tabs items={["macOS and Linux", "Windows"]}>
 
-  <Tab value="pnpm">
-  ```bash title="Terminal"
-  pnpm add turbo --global
-  ```
+<Tab value="macOS and Linux">
 
-  </Tab>
+```bash title="Terminal"
+curl -fsSL https://turborepo.dev/install.sh | sh
+```
 
-  <Tab value="yarn">
-  ```bash title="Terminal"
-  yarn global add turbo
-  ```
+The installer supports macOS and Linux on x64 and ARM64. It installs `turbo` to `~/.local/bin` and configures `PATH` for future zsh, bash, and POSIX shell sessions. Open a new terminal after installation. Other shells may require you to add `~/.local/bin` to `PATH` manually.
 
-  </Tab>
+</Tab>
 
-  <Tab value="npm">
-  ```bash title="Terminal"
-  npm install turbo --global
-  ```
+<Tab value="Windows">
 
-  </Tab>
+```powershell title="PowerShell"
+irm https://turborepo.dev/install.ps1 | iex
+```
 
-  <Tab value="bun">
-  ```bash title="Terminal"
-  bun install turbo --global
-  ```
+The installer supports Windows on x64. It installs `turbo.exe` to `%LOCALAPPDATA%\Programs\Turborepo\bin` and adds that directory to your user `PATH`. Open a new terminal after installation.
 
-  </Tab>
+</Tab>
 
+</Tabs>
 
-<Tab value="nub">
-  ```bash title="Terminal"
-  nub add turbo --global
-  ```
+By default, the installer downloads the latest stable release. To install a specific version, set `TURBO_VERSION` for the process that runs the downloaded script:
 
-  </Tab>
+<Tabs items={["macOS and Linux", "Windows"]}>
 
-<Tab value="aube">
-  ```bash title="Terminal"
-  aube add turbo --global
-  ```
+<Tab value="macOS and Linux">
 
-  </Tab>
+```bash title="Terminal"
+curl -fsSL https://turborepo.dev/install.sh | TURBO_VERSION=2.5.0 sh
+```
 
-</PackageManagerTabs>
+</Tab>
+
+<Tab value="Windows">
+
+```powershell title="PowerShell"
+$env:TURBO_VERSION = "2.5.0"
+irm https://turborepo.dev/install.ps1 | iex
+```
+
+</Tab>
+
+</Tabs>
+
+You can also set `TURBO_INSTALL_DIR` to choose another absolute installation directory.
 
 Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running one-off commands to use within your repository. For example:
 
@@ -134,11 +136,12 @@ Once installed globally, you can run your scripts through `turbo` from your term
   `turbo build` and `turbo run build` will both run your `build` task.
 </Callout>
 
-<Callout type="error" title="Avoid multiple global installations">
-  If you've installed global `turbo` before, make sure you use the same package
-  manager as your existing installation to avoid unexpected behaviors. You can
-  quickly check which package manager you previously used with [`turbo
-  bin`](/docs/reference/bin).
+<Callout type="error" title="Remove existing global installations first">
+  The standalone installer stops if `turbo` is already available on `PATH` and
+  never replaces an existing executable. Use [`turbo bin`](/docs/reference/bin)
+  to locate your current installation, uninstall it with the package manager or
+  method that installed it, and then run the standalone installer. Follow the
+  same remove-and-reinstall process to upgrade a standalone global installation.
 </Callout>
 
 #### Using global `turbo` in CI

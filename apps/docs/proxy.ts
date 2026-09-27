@@ -16,7 +16,7 @@ const proxy = createProxy({
 
 export const config = {
   matcher: [
-    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|feed.xml|sitemap.xml|robots.txt|images(?:/|$)|og-image\\.png|schema\\.json|schema\\.v\\d+\\.json|microfrontends/schema\\.json|\\.well-known/security\\.txt).*)"
+    "/((?!api(?:/|$)|_next/static|_next/image|favicon.ico|feed.xml|sitemap.xml|robots.txt|images(?:/|$)|og-image\\.png|schema\\.json|schema\\.v\\d+\\.json|install[.]sh(?:/|$)|install[.]ps1(?:/|$)|microfrontends/schema\\.json|\\.well-known/security\\.txt).*)"
   ]
 };
 

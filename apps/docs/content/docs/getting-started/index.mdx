@@ -18,22 +18,16 @@ If you're new to Turborepo, you can follow these steps to get started.
 
 Install `turbo` globally so you can conveniently run `turbo` commands in your terminal from anywhere in your repository.
 
-<Tabs items={["npm", "yarn", "pnpm"]} storageKey="selected-pkg-manager">
-  <Tab value="npm">
+<Tabs items={["macOS and Linux", "Windows"]}>
+  <Tab value="macOS and Linux">
   ```bash title="Terminal"
-  npm install turbo --global
+  curl -fsSL https://turborepo.dev/install.sh | sh
   ```
 
   </Tab>
-  <Tab value="yarn">
-  ```bash title="Terminal"
-  yarn global add turbo
-  ```
-
-  </Tab>
-  <Tab value="pnpm">
-  ```bash title="Terminal"
-  pnpm add turbo --global
+  <Tab value="Windows">
+  ```powershell title="PowerShell"
+  irm https://turborepo.dev/install.ps1 | iex
   ```
 
   </Tab>
