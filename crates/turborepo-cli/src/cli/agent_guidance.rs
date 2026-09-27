@@ -223,8 +223,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        find_bundled_docs_index, maintain, replace_if_unchanged, upsert, MaintenanceStatus,
-        BEGIN_MARKER, END_MARKER, MANAGED_BLOCK,
+        BEGIN_MARKER, END_MARKER, MANAGED_BLOCK, MaintenanceStatus, find_bundled_docs_index,
+        maintain, replace_if_unchanged, upsert,
     };
 
     fn install_docs(root: &Path) -> std::path::PathBuf {
