@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import childProcess from "node:child_process";
 import picocolors from "picocolors";
 import { setupTestFixtures, spyConsole, spyExit } from "@turbo/test-utils";
@@ -41,6 +42,19 @@ describe("create-turbo", () => {
         telemetry_salt: "telemetry-salt"
       }
     })
+  });
+
+  it("includes managed agent guidance in the default starter", () => {
+    const agentsPath = path.resolve(
+      __dirname,
+      "../../../examples/basic/AGENTS.md"
+    );
+    const agents = readFileSync(agentsPath, "utf8");
+
+    expect(agents).toContain("<!-- BEGIN:turborepo-agent-rules -->");
+    expect(agents).toContain("# This is NOT the Turborepo you know");
+    expect(agents).toContain("docs/README.md");
+    expect(agents).toContain('"agentGuidance": false');
   });
 
   it.each<{ packageManager: PackageManager }>([

@@ -115,6 +115,22 @@ When set to `true`, disables the update notification that appears when a new ver
 }
 ```
 
+### `agentGuidance`
+
+Default: `true`
+
+When an AI coding agent is detected, `turbo` maintains a managed block in the repository-root `AGENTS.md` that points to the documentation bundled with the installed `turbo` package. The guidance is refreshed before repository-scoped commands, and only Turborepo's own block is updated. Existing instructions and other tools' blocks are preserved.
+
+This is a root-only option; it cannot be set in package-level `turbo.json` files. Use it in either `turbo.json` or `turbo.jsonc` to stop future automatic updates:
+
+```json title="./turbo.json"
+{
+  "agentGuidance": false
+}
+```
+
+Opting out does not delete an existing `AGENTS.md` file or Turborepo block. Existing repositories receive the guidance on a later `turbo` invocation when an agent is detected. New projects created from the default starter include it immediately.
+
 ### `concurrency`
 
 Default: `"10"`

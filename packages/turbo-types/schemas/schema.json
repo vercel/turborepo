@@ -15,6 +15,17 @@
         }
       ]
     },
+    "agentGuidance": {
+      "description": "Controls whether turbo maintains a root `AGENTS.md` block for AI agents.\n\nDefaults to `true`. Set to `false` to opt out of future automatic updates.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "boundaries": {
       "description": "Configuration for `turbo boundaries`.\n\nAllows users to restrict a package's dependencies and dependents.",
       "anyOf": [
@@ -305,6 +316,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalGoWorkspaces": {
+          "description": "Treat the modules listed in a `go.work` file as Turborepo packages.\n\nWhen enabled, Go modules are discovered from the repository-root `go.work` via the Go toolchain and participate in the package graph: they resolve in `--filter` expressions, propagate `--affected`, and appear in `turbo query`. This feature is experimental.",
+          "default": false,
+          "type": "boolean"
+        },
         "experimentalObservability": {
           "description": "Enable experimental OpenTelemetry exporter support.\n\nWhen enabled, Turborepo will honor the `experimentalObservability` configuration block (if present) to send run summaries to an observability backend.",
           "default": false,
@@ -312,11 +328,6 @@
         },
         "experimentalPythonWorkspaces": {
           "description": "Treat the members of a uv workspace as Turborepo packages.\n\nWhen enabled, Python packages are discovered from the root `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the package graph, resolve in `--filter` expressions, and appear in `turbo query`. uv is the only supported Python package manager. This feature is experimental.",
-          "default": false,
-          "type": "boolean"
-        },
-        "experimentalGoWorkspaces": {
-          "description": "Treat the modules listed in a `go.work` file as Turborepo packages.\n\nWhen enabled, Go modules are discovered from the repository-root `go.work` via the Go toolchain and participate in the package graph: they resolve in `--filter` expressions, propagate `--affected`, and appear in `turbo query`. This feature is experimental.",
           "default": false,
           "type": "boolean"
         },
