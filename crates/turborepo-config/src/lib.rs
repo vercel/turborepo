@@ -188,8 +188,6 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
     #[error("Encountered an I/O error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
