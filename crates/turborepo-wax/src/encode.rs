@@ -202,15 +202,15 @@ fn encode<'t, A, T>(
         grouping.push_str(pattern, sepexpr!(".*{0}"));
         Grouping::push_close(pattern);
     }
+    let mut is_case_insensitive = None;
     for (position, token) in tokens.into_iter().with_position() {
         match (position, token.borrow().kind()) {
             (_, Literal(literal)) => {
-                // TODO: Only encode changes to casing flags.
                 // TODO: Should Unicode support also be toggled by casing flags?
-                if literal.is_case_insensitive() {
-                    pattern.push_str("(?i)");
-                } else {
-                    pattern.push_str("(?-i)");
+                let case_insensitive = literal.is_case_insensitive();
+                if is_case_insensitive != Some(case_insensitive) {
+                    pattern.push_str(if case_insensitive { "(?i)" } else { "(?-i)" });
+                    is_case_insensitive = Some(case_insensitive);
                 }
                 pattern.push_str(&literal.text().escaped());
             }
@@ -334,7 +334,6 @@ fn encode<'t, A, T>(
 #[cfg(test)]
 mod tests {
     use crate::{encode, token::TokenTree};
-
     #[test]
     fn class_matches_anything_checks_syntax_and_empty_intersections() {
         assert!(encode::class_matches_anything("[ab&&[^a]]"));
@@ -358,5 +357,23 @@ mod tests {
         assert!(!encode::case_folded_eq("a", "b"));
         assert!(!encode::case_folded_eq("aa", "a"));
         assert!(!encode::case_folded_eq("a", "aa"));
+    }
+
+    #[test]
+    fn only_encodes_changes_to_casing_flags() {
+        let tokens = crate::token::parse("(?i)a(?i)b(?-i)c(?-i)d").unwrap();
+        let regex = encode::compile(tokens.tokens().iter()).unwrap();
+
+        assert_eq!(regex.as_str(), "^(?i)ab(?-i)cd$");
+    }
+
+    #[test]
+    fn casing_flags_in_groups_do_not_change_outer_state() {
+        let tokens = crate::token::parse("(?-i)a{(?i)b,(?-i)c}(?-i)d").unwrap();
+        let regex = encode::compile(tokens.tokens().iter()).unwrap();
+
+        assert!(regex.is_match("aBd"));
+        assert!(!regex.is_match("aBD"));
+        assert!(!regex.is_match("Abd"));
     }
 }
