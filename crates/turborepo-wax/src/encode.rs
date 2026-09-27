@@ -158,9 +158,6 @@ where
     })
 }
 
-// TODO: Some versions of `const_format` in `^0.2.0` fail this lint in
-// `formatcp`. See       https://github.com/rodrimati1992/const_format_crates/issues/38
-#[allow(clippy::double_parens)]
 fn encode<'t, A, T>(
     grouping: Grouping,
     superposition: Option<Position>,
