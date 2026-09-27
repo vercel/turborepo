@@ -731,19 +731,22 @@ jobs:
       - name: Attach standalone archives and checksum manifest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
           VERSION: ${{ needs.stage.outputs.version }}
         run: |
-          if [ "$(gh release view "v${VERSION}" --json isDraft --jq .isDraft)" != "true" ]; then
+          IS_DRAFT=$(gh release view "v${VERSION}" --repo "${REPOSITORY}" --json isDraft --jq .isDraft)
+          if [ "${IS_DRAFT}" != "true" ]; then
             echo "::error::Refusing to replace assets on published release v${VERSION}."
             exit 1
           fi
-          gh release upload "v${VERSION}" standalone-artifacts/*.tar.gz standalone-artifacts/SHA256SUMS --clobber
+          gh release upload "v${VERSION}" standalone-artifacts/*.tar.gz standalone-artifacts/SHA256SUMS --repo "${REPOSITORY}" --clobber
 
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
           VERSION: ${{ needs.stage.outputs.version }}
-        run: gh release edit "v${VERSION}" --draft=false
+        run: gh release edit "v${VERSION}" --repo "${REPOSITORY}" --draft=false
 
   publish-vscode-extension:
     name: "Publish VS Code Extension"
