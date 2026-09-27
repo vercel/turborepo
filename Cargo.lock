@@ -3406,12 +3406,6 @@ checksum = "c3d129799327c8f80861e467c59b825ba24c277dba6ad0d71a141dc98f9e04ee"
 
 [[package]]
 name = "jsonc-parser"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1853e40333206f9a685358046d13ab200169e3ee573019bddf0ede0dc29307"
-
-[[package]]
-name = "jsonc-parser"
 version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7725c320caac8c21d8228c1d055af27a995d371f78cc763073d3e068323641b5"
@@ -7647,9 +7641,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "biome_deserialize 0.6.0",
- "biome_deserialize_macros 0.6.0",
- "biome_diagnostics",
- "biome_json_parser",
  "camino",
  "dunce",
  "fs-err",
@@ -7912,7 +7903,6 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "miette",
- "reqwest",
  "serde",
  "serde_json",
  "tempfile",
@@ -8175,7 +8165,7 @@ dependencies = [
 name = "turborepo-json-rewrite"
 version = "0.1.0"
 dependencies = [
- "jsonc-parser 0.21.0",
+ "jsonc-parser",
  "pretty_assertions",
  "thiserror 2.0.18",
 ]
@@ -8242,7 +8232,7 @@ dependencies = [
  "go-parse-duration",
  "humantime",
  "itertools 0.14.0",
- "jsonc-parser 0.23.0",
+ "jsonc-parser",
  "pidlock",
  "serde_json",
  "tempfile",
@@ -8902,7 +8892,6 @@ dependencies = [
  "globwalk",
  "itertools 0.14.0",
  "rayon",
- "regex",
  "serde",
  "serde_json",
  "tempfile",
@@ -9648,6 +9637,7 @@ dependencies = [
  "path-slash",
  "pori",
  "regex",
+ "regex-syntax",
  "tardar",
  "tempfile",
  "thiserror 2.0.18",
