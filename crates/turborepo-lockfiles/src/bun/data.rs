@@ -119,10 +119,6 @@ impl Negatable {
 pub enum Error {
     #[error("Failed to strip commas: {0}")]
     Utf8(#[from] std::str::Utf8Error),
-    #[error("Failed to strip commas: {0}")]
-    Format(#[from] biome_formatter::FormatError),
-    #[error("Failed to strip commas: {0}")]
-    Print(#[from] biome_formatter::PrintError),
     #[error("{ident} had two entries with differing checksums: {sha1}, {sha2}")]
     MismatchedShas {
         ident: String,
