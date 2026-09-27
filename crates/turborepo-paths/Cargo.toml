@@ -10,10 +10,7 @@ edition = { workspace = true }
 workspace = true
 
 [features]
-biome = [
-  "dep:biome_deserialize",
-  "dep:turborepo-unescape",
-]
+biome = ["dep:biome_deserialize", "dep:turborepo-unescape"]
 
 [dependencies]
 biome_deserialize = { workspace = true, optional = true }
