@@ -152,6 +152,16 @@ pub fn case_folded_eq(left: &str, right: &str) -> bool {
     }
 }
 
+fn class_matches_anything(pattern: &str) -> bool {
+    let Ok(hir) = regex_syntax::Parser::new().parse(pattern) else {
+        return false;
+    };
+    !matches!(
+        hir.kind(),
+        regex_syntax::hir::HirKind::Class(class) if class.is_empty()
+    )
+}
+
 pub fn compile<'t, A, T>(tokens: impl IntoIterator<Item = T>) -> Result<Regex, CompileError>
 where
     T: Borrow<Token<'t, A>>,
@@ -275,17 +285,13 @@ fn encode<'t, A, T>(
                         pattern.push_str(nsepexpr!("&&{0}"));
                     }
                     pattern.push(']');
-                    // TODO: The compiled `Regex` is discarded. Is there a way to check the
-                    //       correctness of the expression but do less work (i.e., don't build a
-                    //       complete `Regex`)?
-                    // Compile the character class sub-expression. This may fail if the subtraction
-                    // of the separator pattern yields an empty character class (meaning that the
-                    // glob expression matches only separator characters on the target platform).
-                    if Regex::new(&pattern).is_ok() {
+                    // Parse the class without compiling a complete `Regex`. The result may be
+                    // empty if separator subtraction removes every character in the class.
+                    if class_matches_anything(&pattern) {
                         pattern.into()
                     } else {
-                        // If compilation fails, then use `NEVER_EXPRESSION`, which matches
-                        // nothing.
+                        // If parsing fails or the class is empty, use `NEVER_EXPRESSION`, which
+                        // matches nothing.
                         NEVER_EXPRESSION.into()
                     }
                 });
@@ -327,7 +333,22 @@ fn encode<'t, A, T>(
 
 #[cfg(test)]
 mod tests {
-    use crate::encode;
+    use crate::{encode, token::TokenTree};
+
+    #[test]
+    fn class_matches_anything_checks_syntax_and_empty_intersections() {
+        assert!(encode::class_matches_anything("[ab&&[^a]]"));
+        assert!(!encode::class_matches_anything("[a&&[^a]]"));
+        assert!(!encode::class_matches_anything("[z-a]"));
+    }
+
+    #[test]
+    fn class_restricted_to_separators_matches_nothing() {
+        let tokens = crate::token::parse("[/]").unwrap();
+        let regex = encode::compile(tokens.tokens().iter()).unwrap();
+
+        assert!(!regex.is_match("/"));
+    }
 
     #[test]
     fn case_folded_eq() {

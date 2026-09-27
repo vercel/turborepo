@@ -41,6 +41,11 @@ thiserror = { workspace = true }
   features = ["perf", "std", "unicode-case"]
   version = "^1.13.0"
 
+  [dependencies.regex-syntax]
+  default-features = false
+  features = ["std", "unicode-case"]
+  version = "^0.8.0"
+
   [dependencies.tardar]
   optional = true
   version = "^0.2.0"
