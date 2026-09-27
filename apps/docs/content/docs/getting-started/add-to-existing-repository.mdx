@@ -48,32 +48,14 @@ familiar with Turborepo.
 
 We recommend you install `turbo` both globally and into your repository's root for the best developer experience.
 
-First, install the standalone `turbo` binary globally:
-
-<Tabs items={["macOS and Linux", "Windows"]}>
-  <Tab value="macOS and Linux">
-
-  ```bash title="Terminal"
-  curl -fsSL https://turborepo.dev/install.sh | sh
-  ```
-
-  </Tab>
-  <Tab value="Windows">
-
-  ```powershell title="PowerShell"
-  irm https://turborepo.dev/install.ps1 | iex
-  ```
-
-  </Tab>
-</Tabs>
-
-Then, install `turbo` in your repository:
-
 <PackageManagerTabs>
   <Tab value="pnpm">
       Ensure you have created a `pnpm-workspace.yaml` file before you begin the installation. Failure to have this file will result in an error that says: ` --workspace-root may only be used inside a workspace`.
 
     ```bash title="Terminal"
+    # Global install
+    pnpm add turbo --global
+    # Install in repository
     pnpm add turbo --save-dev --workspace-root
     ```
 
@@ -81,6 +63,9 @@ Then, install `turbo` in your repository:
   <Tab value="yarn">
 
     ```bash title="Terminal"
+    # Global install
+    yarn global add turbo
+    # Install in repository
     yarn add turbo --dev
     ```
 
@@ -88,6 +73,9 @@ Then, install `turbo` in your repository:
   <Tab value="npm">
 
     ```bash title="Terminal"
+    # Global install
+    npm install turbo --global
+    # Install in repository
     npm install turbo --save-dev
     ```
 
@@ -95,6 +83,9 @@ Then, install `turbo` in your repository:
   <Tab value="bun">
 
     ```bash title="Terminal"
+    # Global install
+    bun install turbo --global
+    # Install in repository
     bun install turbo --dev
     ```
 
@@ -103,6 +94,9 @@ Then, install `turbo` in your repository:
 <Tab value="nub">
 
     ```bash title="Terminal"
+    # Global install
+    nub add turbo --global
+    # Install in repository
     nub add turbo --save-dev
     ```
 
@@ -111,6 +105,9 @@ Then, install `turbo` in your repository:
 <Tab value="aube">
 
     ```bash title="Terminal"
+    # Global install
+    aube add turbo --global
+    # Install in repository
     aube add turbo --save-dev
     ```
 
