@@ -245,10 +245,11 @@ test("refuses an existing PATH shim before downloading or executing it", async (
       TURBO_VERSION: VERSION
     });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /An existing "turbo" alias was found on PATH/);
+    assert.match(result.stderr, /Found an existing turbo on PATH at/);
+    assert.match(result.stderr, /Uninstall it using the tool that installed it/);
     assert.match(
       result.stderr,
-      /Uninstall it and then retry installing the new version again/
+      /curl -fsSL https:\/\/turborepo\.dev\/install \| sh/
     );
     assert.ok(result.stderr.includes(shim));
     await assert.rejects(readFile(harness.curlLog));
@@ -261,7 +262,7 @@ test("refuses an existing PATH shim before downloading or executing it", async (
   }
 });
 
-test("leaves an existing install untouched and fails before downloading", async (t) => {
+test("replaces a regular binary in the install directory, including when it is on PATH", async (t) => {
   if (process.platform === "win32") {
     t.skip("POSIX installer tests run on macOS and Linux");
     return;
@@ -271,14 +272,62 @@ test("leaves an existing install untouched and fails before downloading", async 
     const harness = await createHarness(root);
     const installDirectory = harness.env.TURBO_INSTALL_DIR;
     await mkdir(installDirectory, { recursive: true });
-    await writeFile(join(installDirectory, "turbo"), "existing executable");
-    const result = runInstaller({ ...harness.env, TURBO_VERSION: VERSION });
+    const destination = join(installDirectory, "turbo");
+    await writeFile(destination, "existing executable");
+    await chmod(destination, 0o755);
+    const result = runInstaller({
+      ...harness.env,
+      PATH: `${installDirectory}:${harness.env.PATH}`,
+      TURBO_VERSION: VERSION
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(await readFile(destination, "utf8"), harness.binaryContents);
+    assert.match(result.stdout, new RegExp(`Upgraded turbo ${VERSION}`));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps the old binary when verification fails", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX installer tests run on macOS and Linux");
+    return;
+  }
+  const root = await mkdtemp(join(tmpdir(), "turbo-install-test-"));
+  try {
+    const harness = await createHarness(root, { corruptArchive: true });
+    const destination = join(harness.env.TURBO_INSTALL_DIR, "turbo");
+    await mkdir(harness.env.TURBO_INSTALL_DIR, { recursive: true });
+    await writeFile(destination, "old binary");
+    await chmod(destination, 0o755);
+    const result = runInstaller({
+      ...harness.env,
+      PATH: `${harness.env.TURBO_INSTALL_DIR}:${harness.env.PATH}`
+    });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /already exists; it was left untouched/);
-    assert.equal(
-      await readFile(join(installDirectory, "turbo"), "utf8"),
-      "existing executable"
-    );
+    assert.match(result.stderr, /SHA-256 verification failed/);
+    assert.equal(await readFile(destination, "utf8"), "old binary");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses a symlink at the install destination before downloading", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX installer tests run on macOS and Linux");
+    return;
+  }
+  const root = await mkdtemp(join(tmpdir(), "turbo-install-test-"));
+  try {
+    const harness = await createHarness(root);
+    const target = join(root, "other-turbo");
+    await writeFile(target, "keep me");
+    await mkdir(harness.env.TURBO_INSTALL_DIR, { recursive: true });
+    await symlink(target, join(harness.env.TURBO_INSTALL_DIR, "turbo"));
+    const result = runInstaller(harness.env);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /is not a regular file; it was left untouched/);
+    assert.equal(await readFile(target, "utf8"), "keep me");
     await assert.rejects(readFile(harness.curlLog));
   } finally {
     await rm(root, { recursive: true, force: true });

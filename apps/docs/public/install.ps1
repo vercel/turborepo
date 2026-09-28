@@ -115,20 +115,6 @@ function Add-TurboToUserPath {
   }
 }
 
-$existingTurbo = Get-Command -Name 'turbo' -All -ErrorAction SilentlyContinue |
-  Where-Object { $_.CommandType -in @('Application', 'ExternalScript', 'Script') } |
-  Select-Object -First 1
-if ($null -ne $existingTurbo) {
-  $existingTurboPath = $existingTurbo.Source
-  if ([string]::IsNullOrWhiteSpace($existingTurboPath)) {
-    $existingTurboPath = $existingTurbo.Path
-  }
-  if ([string]::IsNullOrWhiteSpace($existingTurboPath)) {
-    $existingTurboPath = $existingTurbo.Definition
-  }
-  throw ('An existing "turbo" alias was found on PATH at {0}. Uninstall it and then retry installing the new version again.' -f $existingTurboPath)
-}
-
 if ([string]::IsNullOrWhiteSpace($InstallDirectory)) {
   if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     throw 'LOCALAPPDATA is not set; provide -InstallDirectory or TURBO_INSTALL_DIR.'
@@ -140,9 +126,33 @@ if ($InstallDirectory.IndexOfAny([char[]]@(';', "`r", "`n")) -ge 0) {
   throw 'InstallDirectory must not contain a semicolon or line break.'
 }
 $destination = Join-Path $InstallDirectory 'turbo.exe'
-if (Test-Path -LiteralPath $destination) {
-  throw "$destination already exists; it was left untouched. Remove it yourself or choose another install directory."
+$existingTurbo = Get-Command -Name 'turbo' -All -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandType -in @('Application', 'ExternalScript', 'Script') } |
+  Select-Object -First 1
+if ($null -ne $existingTurbo) {
+  $existingTurboPath = $existingTurbo.Source
+  if ([string]::IsNullOrWhiteSpace($existingTurboPath)) {
+    $existingTurboPath = $existingTurbo.Path
+  }
+  if ([string]::IsNullOrWhiteSpace($existingTurboPath)) {
+    $existingTurboPath = $existingTurbo.Definition
+  }
+  if (-not [string]::Equals([IO.Path]::GetFullPath($existingTurboPath), $destination, [StringComparison]::OrdinalIgnoreCase)) {
+    throw ("Found an existing turbo on PATH at {0}.`nUninstall it using the tool that installed it, then rerun:`n  irm https://turborepo.dev/install.ps1 | iex" -f $existingTurboPath)
+  }
 }
+
+function Test-TurboDestination {
+  $item = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+  if ($null -eq $item) {
+    return $false
+  }
+  if ($item -isnot [IO.FileInfo] -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw "$destination is not a regular file; it was left untouched. Remove it yourself or choose another install directory."
+  }
+  return $true
+}
+$null = Test-TurboDestination
 
 $architecture = $env:PROCESSOR_ARCHITECTURE
 if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
@@ -159,6 +169,7 @@ if ($null -eq $tarCommand) {
 
 $workDirectory = Join-Path ([IO.Path]::GetTempPath()) ("turbo-install-" + [Guid]::NewGuid().ToString('N'))
 $stagedBinary = $null
+$backupBinary = $null
 try {
   [IO.Directory]::CreateDirectory($workDirectory) | Out-Null
   $Version = Get-TurboVersion -RequestedVersion $Version
@@ -210,12 +221,16 @@ try {
   }
 
   [IO.Directory]::CreateDirectory($InstallDirectory) | Out-Null
-  if (Test-Path -LiteralPath $destination) {
-    throw "$destination already exists; it was left untouched. Remove it yourself or choose another install directory."
-  }
+  $null = Test-TurboDestination
   $stagedBinary = Join-Path $InstallDirectory ('.turbo.exe.install.' + [Guid]::NewGuid().ToString('N'))
   [IO.File]::Copy($extractedBinary, $stagedBinary, $false)
-  [IO.File]::Move($stagedBinary, $destination)
+  $replaced = Test-TurboDestination
+  if ($replaced) {
+    $backupBinary = Join-Path $InstallDirectory ('.turbo.exe.backup.' + [Guid]::NewGuid().ToString('N'))
+    [IO.File]::Replace($stagedBinary, $destination, $backupBinary)
+  } else {
+    [IO.File]::Move($stagedBinary, $destination)
+  }
   $stagedBinary = $null
 
   if (-not $NoModifyPath) {
@@ -232,10 +247,14 @@ try {
   } else {
     Write-Host "PATH was not changed. Add $InstallDirectory to PATH to run turbo by name."
   }
-  Write-Host "Installed turbo $Version at $destination"
+  $action = if ($replaced) { "Upgraded" } else { "Installed" }
+  Write-Host "$action turbo $Version at $destination"
 } finally {
   if ($null -ne $stagedBinary -and (Test-Path -LiteralPath $stagedBinary)) {
     Remove-Item -LiteralPath $stagedBinary -Force
+  }
+  if ($null -ne $backupBinary -and (Test-Path -LiteralPath $backupBinary)) {
+    Remove-Item -LiteralPath $backupBinary -Force
   }
   if (Test-Path -LiteralPath $workDirectory) {
     Remove-Item -LiteralPath $workDirectory -Recurse -Force
