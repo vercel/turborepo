@@ -75,7 +75,9 @@ binary_name=turbo
 destination="$install_dir/$binary_name"
 if existing_turbo=$(command -v turbo 2>/dev/null); then
   if [ "$existing_turbo" != "$destination" ]; then
-    fail "An existing \"turbo\" alias was found on PATH at $existing_turbo. Uninstall it and then retry installing the new version again."
+    fail "Found an existing turbo on PATH at $existing_turbo.
+Uninstall it using the tool that installed it, then rerun:
+  curl -fsSL https://turborepo.dev/install | sh"
   fi
 fi
 

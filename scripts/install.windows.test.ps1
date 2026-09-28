@@ -64,9 +64,10 @@ try {
       . $installerPath -Version '2.11.5' -InstallDirectory $realCollisionInstallDirectory -NoModifyPath
     } catch {
       $failureMessage = $_.Exception.Message
-      $failed = $failureMessage -match 'An existing "turbo" alias was found on PATH'
+      $failed = $failureMessage -match 'Found an existing turbo on PATH at'
       Assert-True ($failureMessage.Contains($existingTurboPath)) 'PATH collision error omitted the real executable path.'
-      Assert-True ($failureMessage -match 'Uninstall it and then retry installing the new version again') 'Installer omitted the retry instruction.'
+      Assert-True ($failureMessage -match 'Uninstall it using the tool that installed it') 'Installer omitted the retry instruction.'
+      Assert-True ($failureMessage.Contains('irm https://turborepo.dev/install.ps1 | iex')) 'Installer omitted the rerun command.'
     }
     Assert-True $failed 'Installer did not reject the real existing turbo command on PATH.'
     Assert-True ($script:RequestCount -eq 0) 'Installer downloaded files before refusing the real PATH collision.'
@@ -195,9 +196,10 @@ try {
   try {
     . $installerPath -Version '2.11.5' -InstallDirectory (Join-Path $testRoot 'path-collision-install') -NoModifyPath
   } catch {
-    $failed = $_.Exception.Message -match 'An existing "turbo" alias was found on PATH'
+    $failed = $_.Exception.Message -match 'Found an existing turbo on PATH at'
     Assert-True ($_.Exception.Message.Contains($collisionShim)) 'PATH collision error omitted the executable path.'
-    Assert-True ($_.Exception.Message -match 'Uninstall it and then retry installing the new version again') 'Installer omitted the retry instruction.'
+    Assert-True ($_.Exception.Message -match 'Uninstall it using the tool that installed it') 'Installer omitted the retry instruction.'
+    Assert-True ($_.Exception.Message.Contains('irm https://turborepo.dev/install.ps1 | iex')) 'Installer omitted the rerun command.'
   }
   Assert-True $failed 'Installer did not refuse an existing turbo.cmd on PATH.'
   Assert-True ($script:RequestCount -eq $requestCountBeforePathCollision) 'Installer downloaded files before refusing the PATH collision.'

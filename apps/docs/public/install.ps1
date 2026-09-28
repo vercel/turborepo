@@ -138,7 +138,7 @@ if ($null -ne $existingTurbo) {
     $existingTurboPath = $existingTurbo.Definition
   }
   if (-not [string]::Equals([IO.Path]::GetFullPath($existingTurboPath), $destination, [StringComparison]::OrdinalIgnoreCase)) {
-    throw ('An existing "turbo" alias was found on PATH at {0}. Uninstall it and then retry installing the new version again.' -f $existingTurboPath)
+    throw ("Found an existing turbo on PATH at {0}.`nUninstall it using the tool that installed it, then rerun:`n  irm https://turborepo.dev/install.ps1 | iex" -f $existingTurboPath)
   }
 }
 

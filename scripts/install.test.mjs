@@ -245,10 +245,11 @@ test("refuses an existing PATH shim before downloading or executing it", async (
       TURBO_VERSION: VERSION
     });
     assert.notEqual(result.status, 0);
-    assert.match(result.stderr, /An existing "turbo" alias was found on PATH/);
+    assert.match(result.stderr, /Found an existing turbo on PATH at/);
+    assert.match(result.stderr, /Uninstall it using the tool that installed it/);
     assert.match(
       result.stderr,
-      /Uninstall it and then retry installing the new version again/
+      /curl -fsSL https:\/\/turborepo\.dev\/install \| sh/
     );
     assert.ok(result.stderr.includes(shim));
     await assert.rejects(readFile(harness.curlLog));
