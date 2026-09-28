@@ -144,6 +144,8 @@ docker build -f apps/web/Dockerfile .
   mode](https://nextjs.org/docs/pages/api-reference/next-config-js/output).
 </Callout>
 
+Standalone release archives start at 2.11.5. To use an older `turbo` version, install it with your package manager in the `prepare` stage instead of downloading an archive (for example, `RUN yarn global add turbo@2.11.4`).
+
 ```docker title="./apps/web/Dockerfile"
 FROM node:18-alpine AS base
 RUN apk update
