@@ -1,0 +1,7 @@
+---
+source: crates/turborepo/tests/command_archive_test.rs
+expression: stdout(&output)
+---
+Archiving another
+ - Moved packages/another to _archived/another
+Run `npm install` so the lockfile no longer lists `another`.

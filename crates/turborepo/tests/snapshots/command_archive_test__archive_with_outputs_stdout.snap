@@ -1,0 +1,10 @@
+---
+source: crates/turborepo/tests/command_archive_test.rs
+expression: stdout(&output)
+---
+Archiving my-app
+ - Removed 2 task outputs
+ - Removed node_modules
+ - Removed .turbo
+ - Moved apps/my-app to _archived/my-app
+Run `npm install` so the lockfile no longer lists `my-app`.
