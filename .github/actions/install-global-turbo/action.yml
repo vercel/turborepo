@@ -10,7 +10,8 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install standalone turbo
+    - name: Install standalone turbo (macOS and Linux)
+      if: runner.os != 'Windows'
       shell: bash
       env:
         TURBO_VERSION_INPUT: ${{ inputs.turbo-version }}
@@ -26,3 +27,22 @@ runs:
           VERSION=$(npm view "turbo@$TURBO_VERSION_INPUT" version)
         fi
         curl -fsSL https://turborepo.dev/install | TURBO_VERSION="$VERSION" sh
+
+    - name: Install standalone turbo (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        TURBO_VERSION_INPUT: ${{ inputs.turbo-version }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+        if ($env:TURBO_VERSION_INPUT) {
+          if ($env:TURBO_VERSION_INPUT -cnotmatch '^[0-9A-Za-z][0-9A-Za-z._-]{0,127}$') {
+            throw "Invalid turbo version '$env:TURBO_VERSION_INPUT'. Use a semver version or safe npm dist-tag."
+          }
+          # The standalone installer accepts release versions, not npm dist-tags.
+          $env:TURBO_VERSION = npm view "turbo@$env:TURBO_VERSION_INPUT" version
+          if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the turbo version.' }
+        } else {
+          Remove-Item Env:TURBO_VERSION -ErrorAction SilentlyContinue
+        }
+        irm https://turborepo.dev/install.ps1 | iex
