@@ -75,13 +75,11 @@ You can install `turbo` globally and pin a version in your repository. When a lo
 
 A global install of `turbo` brings flexibility and speed to your local workflows.
 
-See the [support policy](/docs/support-policy#platforms) for supported platforms.
-
 <Tabs items={["macOS and Linux", "Windows x64"]}>
   <Tab value="macOS and Linux">
 
 ```sh title="Terminal"
-curl -fsSL https://turborepo.dev/install.sh | sh
+curl -fsSL https://turborepo.dev/install | sh
 ```
 
   </Tab>
@@ -94,7 +92,13 @@ irm https://turborepo.dev/install.ps1 | iex
   </Tab>
 </Tabs>
 
-The binaries are also available directly in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
+<Callout type="info">
+  See the [support policy](/docs/support-policy#platforms) for supported platforms.
+</Callout>
+
+<Callout type="info">
+  The binaries are also available directly in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
+</Callout>
 
 After installing `turbo`, you can run commands from your terminal. For example:
 

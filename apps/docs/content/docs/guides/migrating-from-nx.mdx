@@ -471,7 +471,24 @@ aube add turbo --save-dev
 
 </PackageManagerTabs>
 
-To run `turbo` directly from your terminal, [install the standalone binary](/docs/getting-started/installation#global-installation).
+To run `turbo` directly from your terminal, install the global binary:
+
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
+
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh
+```
+
+  </Tab>
+  <Tab value="Windows x64">
+
+```powershell title="PowerShell"
+irm https://turborepo.dev/install.ps1 | iex
+```
+
+  </Tab>
+</Tabs>
 
 ### Step 8: Add a `turbo.json`
 

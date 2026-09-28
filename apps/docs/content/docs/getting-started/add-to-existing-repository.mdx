@@ -46,13 +46,13 @@ familiar with Turborepo.
 <Step>
 ### Install `turbo`
 
-Install `turbo` globally. The binaries are also in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
+Install `turbo` globally.
 
 <Tabs items={["macOS and Linux", "Windows x64"]}>
   <Tab value="macOS and Linux">
 
 ```sh title="Terminal"
-curl -fsSL https://turborepo.dev/install.sh | sh
+curl -fsSL https://turborepo.dev/install | sh
 ```
 
   </Tab>
@@ -64,6 +64,10 @@ irm https://turborepo.dev/install.ps1 | iex
 
   </Tab>
 </Tabs>
+
+<Callout type="info">
+  The binaries are also available in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
+</Callout>
 
 Then pin `turbo` in your repository's root:
 
@@ -116,7 +120,7 @@ Then pin `turbo` in your repository's root:
 
 </PackageManagerTabs>
 
-The installed local version takes precedence when you run the global binary from this repository. See [Installation](/docs/getting-started/installation#repository-installation) for details.
+The installed local version takes precedence when you run the global binary in your repository. See [Installation](/docs/getting-started/installation#repository-installation) for details.
 
 </Step>
 <Step>
