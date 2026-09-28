@@ -46,7 +46,26 @@ familiar with Turborepo.
 <Step>
 ### Install `turbo`
 
-Install the [standalone `turbo` binary](/docs/getting-started/installation#global-installation) globally, then pin `turbo` in your repository's root.
+Install `turbo` globally. These installer commands will be available once the script endpoints ship; the binaries are also in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
+
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
+
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install.sh | sh
+```
+
+  </Tab>
+  <Tab value="Windows x64">
+
+```powershell title="PowerShell"
+irm https://turborepo.dev/install.ps1 | iex
+```
+
+  </Tab>
+</Tabs>
+
+Then pin `turbo` in your repository's root:
 
 <PackageManagerTabs>
   <Tab value="pnpm">

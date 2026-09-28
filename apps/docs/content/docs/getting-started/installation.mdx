@@ -75,99 +75,26 @@ You can install `turbo` globally and pin a version in your repository. When a lo
 
 A global install of `turbo` brings flexibility and speed to your local workflows.
 
-The standalone installers support macOS (Apple silicon and x64), Linux (arm64 and x64), and Windows x64. They download a versioned archive from [GitHub releases](https://github.com/vercel/turborepo/releases), verify it against the release's `SHA256SUMS`, and install `turbo` on your PATH. Other platforms are not supported by these installers.
+See the [support policy](/docs/support-policy#platforms) for supported platforms. The installer commands below are available once the script endpoints ship.
 
-<Callout type="info" title="Installer endpoints">
-  The canonical commands below are proposed for `turborepo.dev/install.sh` and `turborepo.dev/install.ps1`. Do not run them until the endpoints serve the installer scripts; this checkout does not serve `/install.sh`. In the meantime, use the direct-download instructions below for a published release with standalone archives.
-</Callout>
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
 
-```sh title="macOS or Linux (when the endpoint is available)"
+```sh title="Terminal"
 curl -fsSL https://turborepo.dev/install.sh | sh
 ```
 
-```powershell title="Windows PowerShell (when the endpoint is available)"
+  </Tab>
+  <Tab value="Windows x64">
+
+```powershell title="PowerShell"
 irm https://turborepo.dev/install.ps1 | iex
 ```
 
-Review a remote script before running it if you prefer. To pin an **exact** release instead of the latest stable release, set `TURBO_VERSION` before invoking an installer (`export TURBO_VERSION=2.11.5` on Unix, or `$env:TURBO_VERSION = '2.11.5'` in PowerShell); `v2.11.5` is also accepted. The Unix installer accepts `--version` and `--install-dir` when run from a downloaded file, while the Windows script accepts `-Version` and `-InstallDirectory`. Set `TURBO_INSTALL_DIR` to change the installation directory for a piped installer. Defaults are `~/.local/bin` on macOS/Linux and `%LOCALAPPDATA%\Programs\Turborepo\bin` on Windows.
+  </Tab>
+</Tabs>
 
-For a direct download without piping a script into a shell, choose an exact version whose [release assets](https://github.com/vercel/turborepo/releases) include your platform's archive and `SHA256SUMS`. On macOS/Linux, the following commands download, verify, and install the archive; change `version` to the release you want:
-
-```sh title="macOS or Linux (direct download)"
-set -eu
-version=2.11.5
-if command -v turbo >/dev/null 2>&1; then
-  echo "Existing turbo on PATH: $(command -v turbo); remove it using its original manager first" >&2
-  exit 1
-fi
-case "$(uname -s):$(uname -m)" in
-  Darwin:arm64|Darwin:aarch64) target=aarch64-apple-darwin ;;
-  Darwin:x86_64) target=x86_64-apple-darwin ;;
-  Linux:aarch64|Linux:arm64) target=aarch64-unknown-linux-musl ;;
-  Linux:x86_64|Linux:amd64) target=x86_64-unknown-linux-musl ;;
-  *) echo 'Unsupported platform' >&2; exit 1 ;;
-esac
-archive="turbo-$version-$target.tar.gz"
-release="https://github.com/vercel/turborepo/releases/download/v$version"
-curl -fL -o SHA256SUMS "$release/SHA256SUMS"
-curl -fL -o "$archive" "$release/$archive"
-awk -v name="$archive" '$2 == name && NF == 2 { print }' SHA256SUMS > turbo-checksum
-# Check that the manifest has exactly one entry for this archive.
-[ "$(wc -l < turbo-checksum)" -eq 1 ] || exit 1
-if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum -c turbo-checksum
-else
-  shasum -a 256 -c turbo-checksum
-fi || exit 1
-[ "$(tar -tzf "$archive")" = turbo ] || exit 1
-[ ! -e "$HOME/.local/bin/turbo" ] && [ ! -L "$HOME/.local/bin/turbo" ] || exit 1
-extracted=$(mktemp -d)
-trap 'rm -rf "$extracted"' EXIT
-tar -xzf "$archive" -C "$extracted" turbo
-mkdir -p "$HOME/.local/bin"
-install -m 755 "$extracted/turbo" "$HOME/.local/bin/turbo"
-export PATH="$HOME/.local/bin:$PATH"
-turbo --version
-```
-
-Save the Unix commands as a shell script and run it in a temporary, empty directory (it exits on failed downloads or verification). Add `$HOME/.local/bin` to your shell's PATH for future sessions. On Windows x64, use PowerShell in a temporary directory (the archive contains `turbo.exe`):
-
-```powershell title="Windows PowerShell (direct download)"
-$version = '2.11.5'
-$existing = Get-Command turbo -All -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($existing) { throw "Existing turbo on PATH: $($existing.Source); remove it using its original manager first" }
-$archive = "turbo-$version-x86_64-pc-windows-msvc.tar.gz"
-$release = "https://github.com/vercel/turborepo/releases/download/v$version"
-Invoke-WebRequest "$release/SHA256SUMS" -OutFile SHA256SUMS
-Invoke-WebRequest "$release/$archive" -OutFile $archive
-$entries = @(Get-Content SHA256SUMS | Where-Object { $_ -match '^([0-9a-fA-F]{64})  (.+)$' -and $Matches[2] -ceq $archive })
-if ($entries.Count -ne 1) { throw "Missing or duplicate checksum for $archive" }
-$expected = $entries[0].Split(' ')[0]
-if ((Get-FileHash $archive -Algorithm SHA256).Hash -ne $expected) { throw 'SHA-256 mismatch' }
-$bin = Join-Path $env:LOCALAPPDATA 'Programs\Turborepo\bin'
-$members = @(tar.exe -tzf $archive)
-if ($LASTEXITCODE -ne 0 -or $members.Count -ne 1 -or $members[0] -cne 'turbo.exe') { throw 'Unexpected archive contents' }
-if (Test-Path (Join-Path $bin 'turbo.exe')) { throw 'Destination already contains turbo.exe' }
-New-Item -ItemType Directory -Force $bin | Out-Null
-tar.exe -xzf $archive -C $bin turbo.exe
-if ($LASTEXITCODE -ne 0) { throw 'Extraction failed' }
-$env:Path = "$bin;$env:Path"
-turbo --version
-```
-
-Add `$bin` to your Windows user PATH for future terminals. For either platform, inspect the downloaded manifest and archive names before installing; checksum verification checks against the release's manifest, not against an independent publisher signature.
-
-##### Existing global `turbo`, upgrades, and removal
-
-Before installing, check `command -v turbo` (macOS/Linux) or `Get-Command turbo -All` (PowerShell). If another executable is first on PATH, the installer reports its path and stops. Uninstall that copy with the tool that installed it, then retry. The installer will not remove, replace, or shadow an unrelated global installation. A repository-local `node_modules/.bin/turbo` on PATH may also be detected; run the installer outside that PATH entry.
-
-To upgrade an **installer-owned** binary at the same destination, rerun its installer with an explicit `TURBO_VERSION`, or omit the variable for the latest stable release. The installer can replace the regular file it previously installed there; do not use it to overwrite a different tool's binary. For a manual direct-download install, repeat the verified download with the new version before replacing your own binary. To uninstall a standalone copy, remove only its installed `turbo` (or `turbo.exe`) file and remove the installer-added PATH entry from your shell profile or Windows user PATH. Do not remove a repository's pinned `turbo` dependency as part of global uninstall.
-
-##### Repository-local precedence and CI
-
-If your repository has an **installed** local `turbo` binary in `node_modules`, invoking a global `turbo` from that repository defers to it, so the repository's pinned version runs. A version declared in `package.json` alone is not enough: before dependencies are installed, the global binary runs instead (or may use `npx` if a resolvable local version is configured). Pin the standalone version to an exact release compatible with your repository for pre-install CI steps; after installing dependencies, the local binary takes precedence. Installing standalone `turbo` does not make the rest of a JavaScript build work without its dependencies.
-
-For native CI, download and verify the exact release as above in a setup step, add its install directory to the job's PATH, then run pre-install CLI commands such as `turbo --version` or `turbo prune`. On GitHub Actions, the installers add their directory to `$GITHUB_PATH` when it is set. With direct download, append `$HOME/.local/bin` (Unix: `printf '%s\n' "$HOME/.local/bin" >> "$GITHUB_PATH"`) or `$bin` (PowerShell: `Add-Content -Path $env:GITHUB_PATH -Value $bin`) **in the same step as the download** for subsequent steps. Keep the version pinned and upgrade it explicitly when changing your repository's local version. When a `turbo setup` command is available, you can call it from the global binary before JS dependencies are installed; this checkout does not yet implement that command, so do not rely on it in CI today.
+The binaries are also available directly in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
 
 After installing `turbo`, you can run commands from your terminal. For example:
 
