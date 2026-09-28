@@ -1,0 +1,55 @@
+---
+title: archive
+description: API reference for the `turbo archive` command
+product: turborepo
+type: reference
+summary: All flags and options for the `turbo archive` command that moves a package out of the workspace into `_archived/`.
+related:
+  - /docs/reference/unarchive
+  - /docs/reference/ls
+---
+
+Move a package out of the workspace without deleting its source. The package leaves the package graph, so `turbo run`, `turbo ls`, and your package manager stop seeing it. Restore it later with [`turbo unarchive`](/docs/reference/unarchive).
+
+```bash title="Terminal"
+turbo archive <package> [flags]
+```
+
+`turbo archive` makes these changes:
+
+- Deletes the files that the package's task `outputs` match, and the package's `node_modules` and `.turbo` directories. Other files stay, including gitignored files such as `.env.local`.
+- Moves the package directory to `_archived/<package>`. A scoped package moves to `_archived/@scope/name`.
+- Removes the package from the workspace definition when it is listed by its exact path, such as `"packages/util"` in `package.json` `workspaces` or `pnpm-workspace.yaml` `packages`. Glob entries such as `"packages/*"` stay, because they no longer match the moved directory.
+- Writes `_archived/<package>/.turbo-archive.json`, which records everything `turbo unarchive` needs to undo the change.
+
+The command refuses to run when:
+
+- Another package depends on the package, or a `turbo.json` references one of its tasks in `dependsOn` or `with`, or lists it in `extends`. Pass [`--force`](#--force) to archive it anyway.
+- Another package is inside the package's directory.
+- The workspace globs match `_archived/<package>`. Add `!_archived/**` to your workspace definition to fix this.
+
+Your lockfile still lists the archived package. Run your package manager's install command after you archive a package.
+
+## Flags
+
+### `--force`
+
+Archive the package even when other packages or tasks depend on it. `turbo archive` prints a warning for each dependent. Those packages and tasks fail until you update them or restore the package.
+
+```bash title="Terminal"
+turbo archive @repo/legacy-ui --force
+```
+
+### `--git-exclude`
+
+Add `/<original path>/` and `/_archived/<package>/` to `.git/info/exclude`. This hides untracked files in those paths from `git status` on your machine only. `turbo unarchive` removes the lines again.
+
+```bash title="Terminal"
+turbo archive @repo/legacy-ui --git-exclude
+```
+
+<Callout type="info">
+  `.git/info/exclude` hides untracked files only. Git still shows files it
+  already tracks as deleted from the original path until you commit the move
+  or run `turbo unarchive`.
+</Callout>

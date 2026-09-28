@@ -1,0 +1,27 @@
+---
+title: unarchive
+description: API reference for the `turbo unarchive` command
+product: turborepo
+type: reference
+summary: Reference for the `turbo unarchive` command that restores a package archived with `turbo archive`.
+related:
+  - /docs/reference/archive
+  - /docs/reference/ls
+---
+
+Restore a package that you archived with [`turbo archive`](/docs/reference/archive).
+
+```bash title="Terminal"
+turbo unarchive <package>
+```
+
+`turbo unarchive` reads `_archived/<package>/.turbo-archive.json` and makes these changes:
+
+- Adds the workspace entry that `turbo archive` removed, if it removed one.
+- Removes the lines that `turbo archive --git-exclude` added to `.git/info/exclude`. Other lines stay.
+- Moves the package back to its original path and deletes `.turbo-archive.json`.
+- Removes `_archived/` when it is empty.
+
+The command refuses to run when the original path already exists.
+
+Deleted build outputs and `node_modules` do not come back. Run your package manager's install command, then rebuild the package.
