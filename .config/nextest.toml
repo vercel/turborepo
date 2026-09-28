@@ -5,6 +5,13 @@
 failure-output = "immediate-final"
 
 [[profile.default.overrides]]
+# These OTel tests configure an endpoint without a collector. Bound setup and
+# turbo runs to one minute, and do not retry a timed-out test on Windows.
+filter = 'package(turbo) and binary(experimental_otel_test)'
+slow-timeout = { period = "60s", terminate-after = 1 }
+retries = 0
+
+[[profile.default.overrides]]
 # Windows runners intermittently fail process spawns en masse with DLL
 # initialization error 0xc0000142 (STATUS_DLL_INIT_FAILED, os error 1114) when
 # session resources are momentarily exhausted under nextest's process churn.
