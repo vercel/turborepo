@@ -186,6 +186,9 @@ function wrapper(root, depth, forward, forwardDelayMs, exitMode, cleanupMs, watc
 
   child.on("exit", (code, signal) => {
     log(`wrapper child exit pid=${process.pid} code=${code} signal=${signal}`);
+    // The child can exit before the pending worker-ack poll runs. Let that
+    // poll record this wrapper's exit instead of skipping its marker.
+    if (exitMode === "after-ack" && acted) return;
     process.exit(code ?? (signal ? 1 : 0));
   });
 
