@@ -46,10 +46,6 @@ while [ "$#" -gt 0 ]; do
 done
 [ "$#" -eq 0 ] || fail "unexpected argument: $1"
 
-if existing_turbo=$(command -v turbo 2>/dev/null); then
-  fail "An existing \"turbo\" alias was found on PATH at $existing_turbo. Uninstall it and then retry installing the new version again."
-fi
-
 [ -n "${HOME:-}" ] || fail 'HOME is not set'
 [ -n "$install_dir" ] || install_dir="$HOME/.local/bin"
 case "$install_dir" in
@@ -77,11 +73,20 @@ esac
 
 binary_name=turbo
 destination="$install_dir/$binary_name"
-if [ -e "$destination" ] || [ -L "$destination" ]; then
-  fail "$destination already exists; it was left untouched. Remove it yourself or choose another --install-dir."
+if existing_turbo=$(command -v turbo 2>/dev/null); then
+  if [ "$existing_turbo" != "$destination" ]; then
+    fail "An existing \"turbo\" alias was found on PATH at $existing_turbo. Uninstall it and then retry installing the new version again."
+  fi
 fi
 
-for utility in curl tar awk grep sed head mktemp mkdir cp chmod ln rm tr; do
+check_destination() {
+  if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+    fail "$destination is not a regular file; it was left untouched. Remove it yourself or choose another --install-dir."
+  fi
+}
+check_destination
+
+for utility in curl tar awk grep sed head mktemp mkdir cp chmod mv rm tr; do
   command -v "$utility" >/dev/null 2>&1 || fail "required command not found: $utility"
 done
 
@@ -189,15 +194,23 @@ extracted_binary="$extracted_dir/$binary_name"
 chmod 0755 "$extracted_binary"
 
 mkdir -p "$install_dir" || fail "could not create install directory: $install_dir"
-if [ -e "$destination" ] || [ -L "$destination" ]; then
-  fail "$destination already exists; it was left untouched. Remove it yourself or choose another --install-dir."
-fi
+check_destination
 staged_binary=$(mktemp "$install_dir/.turbo-install.XXXXXX") || fail "could not create a staging file in $install_dir"
 if ! cp "$extracted_binary" "$staged_binary" || ! chmod 0755 "$staged_binary"; then
   fail "could not stage turbo in $install_dir"
 fi
-if ! ln "$staged_binary" "$destination"; then
-  fail "could not install $destination without replacing an existing file"
+check_destination
+if [ -e "$destination" ]; then
+  action=Upgraded
+  # A rename in the same directory replaces the old binary without a missing-file window.
+  if ! mv -f "$staged_binary" "$destination"; then
+    fail "could not replace $destination"
+  fi
+else
+  action=Installed
+  if ! ln "$staged_binary" "$destination"; then
+    fail "could not install $destination without replacing an existing file"
+  fi
 fi
 rm -f "$staged_binary"
 staged_binary=
@@ -238,7 +251,7 @@ configure_path() {
   esac
 }
 
-printf 'Installed turbo %s at %s\n' "$version" "$destination"
+printf '%s turbo %s at %s\n' "$action" "$version" "$destination"
 if configure_path; then
   case ":${PATH:-}:" in
     *":$install_dir:"*) ;;

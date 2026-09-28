@@ -160,20 +160,29 @@ try {
   Assert-True $failed "Installer did not reject a mismatched digest. Received: $failureMessage"
   Assert-True (-not (Test-Path -LiteralPath $badInstallDirectory)) 'Installer created files after a digest failure.'
 
-  $requestCountBeforeCollision = $script:RequestCount
+  [IO.File]::WriteAllText($script:ChecksumFixture, "$digest  $script:ArchiveName`n")
   $existingDirectory = Join-Path $testRoot 'existing-install'
   [IO.Directory]::CreateDirectory($existingDirectory) | Out-Null
   $existingBinary = Join-Path $existingDirectory 'turbo.exe'
-  [IO.File]::WriteAllText($existingBinary, 'keep me')
+  [IO.File]::WriteAllText($existingBinary, 'old binary')
+  $env:Path = "$existingDirectory;$systemPath"
+  $requestCountBeforeUpgrade = $script:RequestCount
+  $upgradeOutput = . $installerPath -Version '2.11.5' -InstallDirectory $existingDirectory -NoModifyPath 6>&1
+  Assert-True (($upgradeOutput | Out-String) -match 'Upgraded turbo 2.11.5 at') 'Installer did not announce the upgrade.'
+  Assert-True ([IO.File]::ReadAllText($existingBinary) -eq 'standalone turbo fixture') 'Installer did not replace its existing binary.'
+  Assert-True (@(Get-ChildItem -LiteralPath $existingDirectory -Filter '.turbo.exe.*').Count -eq 0) 'Installer left a staging or backup file behind.'
+  Assert-True ($script:RequestCount -eq ($requestCountBeforeUpgrade + 2)) 'Upgrade did not download and verify the archive.'
+
+  [IO.File]::WriteAllText($script:ChecksumFixture, (('0' * 64) + "  $script:ArchiveName`n"))
   $failed = $false
   try {
     . $installerPath -Version '2.11.5' -InstallDirectory $existingDirectory -NoModifyPath
   } catch {
-    $failed = $_.Exception.Message -match 'already exists'
+    $failed = $_.Exception.Message -match 'SHA-256 verification failed'
   }
-  Assert-True $failed 'Installer did not refuse to replace an existing turbo.exe.'
-  Assert-True ([IO.File]::ReadAllText($existingBinary) -eq 'keep me') 'Installer changed the pre-existing turbo.exe.'
-  Assert-True ($script:RequestCount -eq $requestCountBeforeCollision) 'Installer downloaded files before refusing the existing executable.'
+  Assert-True $failed 'Installer accepted a bad digest while upgrading.'
+  Assert-True ([IO.File]::ReadAllText($existingBinary) -eq 'standalone turbo fixture') 'Failed upgrade changed the existing executable.'
+  $env:Path = $systemPath
 
   $collisionDirectory = Join-Path $testRoot 'existing-path'
   [IO.Directory]::CreateDirectory($collisionDirectory) | Out-Null
@@ -196,7 +205,7 @@ try {
   Assert-True (-not (Test-Path -LiteralPath $collisionMarker)) 'Installer executed the pre-existing turbo command.'
   $env:Path = $previousPath
 
-  Write-Output 'PASS: Windows installer refuses PATH shims and preserves existing files.'
+  Write-Output 'PASS: Windows installer replaces its own binary, refuses PATH shims, and preserves files on failure.'
 } finally {
   if (Test-Path -LiteralPath $testRoot) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force
