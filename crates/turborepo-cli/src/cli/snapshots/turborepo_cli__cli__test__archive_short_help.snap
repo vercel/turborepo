@@ -1,37 +1,22 @@
 ---
 source: crates/turborepo-cli/src/cli/test.rs
-expression: "Args::render_help(Args::command(), true).unwrap()"
+expression: "Args::render_help(cmd, false).unwrap()"
 ---
-The build system that makes ship happen
+Move a package out of the workspace into `_archived/`
 
-Usage: turbo [FLAGS] <SUBCOMMAND>
+Usage: turbo archive [--force] [--git-exclude] <PACKAGE>
 
-Commands:
-  archive       Move a package out of the workspace into `_archived/`
-  bin           Get the path to the Turbo binary
-  completion    Generate the autocompletion script for the specified shell
-  daemon        Runs the Turborepo background daemon
-  devtools      Visualize your monorepo's package graph in the browser
-  docs          Search the Turborepo documentation
-  generate      Generate a new app / package [aliases: g, gen]
-  get-mfe-port  Get the port assigned to the current microfrontend
-  info          Print debugging information
-  link          Link your local directory to a Vercel organization and enable
-                remote caching.
-  login         Login to your Vercel account
-  logout        Logout to your Vercel account
-  ls            List packages in your monorepo.
-  prune         Prepare a subset of your monorepo.
-  query         Query your monorepo using GraphQL. If no query is provided,
-                spins up a GraphQL server with GraphiQL.
-  run           Run tasks across projects in your monorepo
-  telemetry     Enable or disable anonymous telemetry
-  unarchive     Restore a package archived with `turbo archive`
-  unlink        Unlink the current directory from your Vercel organization and
-                disable Remote Caching
-  watch
+Arguments:
+  <PACKAGE>  Name of the package to archive
 
 Flags:
+      --force                     Archive even when other packages or tasks
+                                  depend on this package
+      --git-exclude               Hide the package's paths from `git status` on
+                                  this machine via `.git/info/exclude`
+  -h, --help                      Print help
+
+Global flags:
       --version
       --skip-infer                Skip any attempts to infer which version of
                                   Turbo the project is configured to use
@@ -75,10 +60,6 @@ Flags:
       --dangerously-disable-package-manager-check
                                   Allow for missing `packageManager` in
                                   `package.json`.
-
-                                  `turbo` will use hints from codebase to guess
-                                  which package manager should be used.
       --root-turbo-json <ROOT_TURBO_JSON>  Use the `turbo.json` located at the
                                   provided path instead of one at the
                                   root of the repository.
-  -h, --help                      Print help

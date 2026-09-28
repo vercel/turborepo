@@ -331,6 +331,18 @@ fn unlink_short_help() {
 }
 
 #[test]
+fn archive_short_help() {
+    let cmd = get_subcommand("archive");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn unarchive_short_help() {
+    let cmd = get_subcommand("unarchive");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
 fn login_short_help() {
     let cmd = get_subcommand("login");
     assert_snapshot!(Args::render_help(cmd, false).unwrap());
@@ -1714,6 +1726,56 @@ fn test_parse_prune() {
             ..Args::default()
         }
     );
+}
+
+#[test]
+fn test_parse_archive() {
+    let archive = |force, git_exclude| Command::Archive {
+        package: "util".to_string(),
+        force,
+        git_exclude,
+    };
+
+    assert_eq!(
+        parse_args(["turbo", "archive", "util"]).unwrap(),
+        Args {
+            command: Some(archive(false, false)),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "archive",
+        command_args: vec![vec!["util"], vec!["--force"], vec!["--git-exclude"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(archive(true, true)),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    assert!(parse_args(["turbo", "archive"]).is_err());
+}
+
+#[test]
+fn test_parse_unarchive() {
+    CommandTestCase {
+        command: "unarchive",
+        command_args: vec![vec!["@acme/util"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Unarchive {
+                package: "@acme/util".to_string(),
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    assert!(parse_args(["turbo", "unarchive", "util", "--force"]).is_err());
 }
 
 #[test]

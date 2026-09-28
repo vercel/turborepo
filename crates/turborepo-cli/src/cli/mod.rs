@@ -20,8 +20,8 @@ use turborepo_watch::WatchClient;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, telemetry, unlink,
+        CommandBase, archive, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info,
+        link, login, logout, ls, prune, query, run, telemetry, unlink,
     },
     get_version,
 };
@@ -817,6 +817,31 @@ async fn run_main(
                 event_child,
             )
             .await?;
+            Ok(0)
+        }
+        Command::Archive {
+            package,
+            force,
+            git_exclude,
+        } => {
+            let event = CommandEventBuilder::new("archive").with_parent(&root_telemetry);
+            event.track_call();
+            let package = package.clone();
+            let force = *force;
+            let git_exclude = *git_exclude;
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+            let event_child = event.child();
+            archive::archive(&base, &package, force, git_exclude, event_child).await?;
+            Ok(0)
+        }
+        Command::Unarchive { package } => {
+            let event = CommandEventBuilder::new("unarchive").with_parent(&root_telemetry);
+            event.track_call();
+            let package = package.clone();
+            let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+            archive::unarchive(&base, &package)?;
             Ok(0)
         }
         Command::Completion { shell } => {

@@ -13,6 +13,7 @@ use crate::{
     config::{ConfigurationOptions, Error as ConfigError, resolve_turbo_config_path},
 };
 
+pub(crate) mod archive;
 pub(crate) mod bin;
 pub(crate) mod boundaries;
 pub(crate) mod config;

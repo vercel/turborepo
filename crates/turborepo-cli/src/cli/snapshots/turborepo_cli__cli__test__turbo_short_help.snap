@@ -7,6 +7,7 @@ The build system that makes ship happen
 Usage: turbo [FLAGS] <SUBCOMMAND>
 
 Commands:
+  archive       Move a package out of the workspace into `_archived/`
   bin           Get the path to the Turbo binary
   completion    Generate the autocompletion script for the specified shell
   daemon        Runs the Turborepo background daemon
@@ -25,6 +26,7 @@ Commands:
                 spins up a GraphQL server with GraphiQL.
   run           Run tasks across projects in your monorepo
   telemetry     Enable or disable anonymous telemetry
+  unarchive     Restore a package archived with `turbo archive`
   unlink        Unlink the current directory from your Vercel organization and
                 disable Remote Caching
   watch

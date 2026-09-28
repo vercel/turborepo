@@ -10,7 +10,9 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{BOLD, GREY, color};
 use turborepo_watch as watch;
 
-use crate::commands::{CommandBase, bin, docs, generate, get_mfe_port, link, login, ls, prune};
+use crate::commands::{
+    CommandBase, archive, bin, docs, generate, get_mfe_port, link, login, ls, prune,
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -18,6 +20,9 @@ pub enum Error {
     NoCommand,
     #[error("Query server not available. The turbo query command requires the full turbo binary.")]
     QueryNotAvailable,
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Archive(#[from] archive::Error),
     #[error("{0}")]
     Bin(#[from] bin::Error),
     #[error(transparent)]

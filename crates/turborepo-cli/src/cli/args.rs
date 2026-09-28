@@ -1064,6 +1064,18 @@ impl Args {
 /// Defines the subcommandsds for CLI
 #[derive(Subcommands, Clone, Debug, PartialEq)]
 pub enum Command {
+    /// Move a package out of the workspace into `_archived/`
+    Archive {
+        /// Name of the package to archive
+        package: String,
+        /// Archive even when other packages or tasks depend on this package
+        #[usage(long)]
+        force: bool,
+        /// Hide the package's paths from `git status` on this machine via
+        /// `.git/info/exclude`
+        #[usage(long)]
+        git_exclude: bool,
+    },
     /// Get the path to the Turbo binary
     Bin,
     /// Get the port assigned to the current microfrontend
@@ -1252,6 +1264,11 @@ pub enum Command {
         /// EXPERIMENTAL: Write to cache in watch mode.
         #[usage(long)]
         experimental_write_cache: bool,
+    },
+    /// Restore a package archived with `turbo archive`
+    Unarchive {
+        /// Name of the package to restore
+        package: String,
     },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching

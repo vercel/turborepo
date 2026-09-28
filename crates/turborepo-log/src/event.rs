@@ -166,6 +166,8 @@ pub enum OutputChannel {
 #[non_exhaustive]
 #[serde(rename_all = "kebab-case")]
 pub enum Subsystem {
+    /// Moving packages in and out of `_archived/` (`turbo archive`).
+    Archive,
     /// Package boundary checks (`turbo boundaries`).
     Boundaries,
     /// Cache reads, writes, and configuration.
@@ -189,6 +191,7 @@ pub enum Subsystem {
 impl fmt::Display for Subsystem {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Subsystem::Archive => write!(f, "archive"),
             Subsystem::Boundaries => write!(f, "boundaries"),
             Subsystem::Cache => write!(f, "cache"),
             Subsystem::Logs => write!(f, "logs"),
