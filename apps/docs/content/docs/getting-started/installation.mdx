@@ -3,7 +3,7 @@ title: Installation
 description: Learn how to get started with Turborepo.
 product: turborepo
 type: guide
-summary: Install the standalone turbo binary without JavaScript, or install it with a package manager in your repository.
+summary: Install Turborepo globally and in your repository.
 prerequisites:
   - /docs/getting-started
 related:
@@ -69,15 +69,13 @@ For more details on the starter, [visit the README for the basic starter on GitH
 
 ## Installing `turbo`
 
-`turbo` can be installed both globally **and** in your repository. We highly recommend installing both ways so you can take advantage of fast, convenient workflows _and_ a stable version of `turbo` for all developers working in your repository.
+You can install `turbo` globally and pin a version in your repository. When a local binary is installed, the global binary defers to it.
 
 ### Global installation
 
-A global install of `turbo` brings flexibility and speed to your local workflows. You can install a native binary without Node.js or a JavaScript package manager, or use a JavaScript package manager below.
+A global install of `turbo` brings flexibility and speed to your local workflows.
 
-#### Standalone installation (no JavaScript required)
-
-The standalone installers target macOS (Apple silicon and x64), Linux (arm64 and x64), and Windows x64. Other platforms are not supported by these installers. They fetch a versioned archive from [GitHub releases](https://github.com/vercel/turborepo/releases), verify it against the release's `SHA256SUMS`, and install `turbo` on your PATH. Installing the binary does not install your repository's JavaScript dependencies.
+The standalone installers support macOS (Apple silicon and x64), Linux (arm64 and x64), and Windows x64. They download a versioned archive from [GitHub releases](https://github.com/vercel/turborepo/releases), verify it against the release's `SHA256SUMS`, and install `turbo` on your PATH. Other platforms are not supported by these installers.
 
 <Callout type="info" title="Installer endpoints">
   The canonical commands below are proposed for `turborepo.dev/install.sh` and `turborepo.dev/install.ps1`. Do not run them until the endpoints serve the installer scripts; this checkout does not serve `/install.sh`. In the meantime, use the direct-download instructions below for a published release with standalone archives.
@@ -161,7 +159,7 @@ Add `$bin` to your Windows user PATH for future terminals. For either platform, 
 
 ##### Existing global `turbo`, upgrades, and removal
 
-Before installing, check `command -v turbo` (macOS/Linux) or `Get-Command turbo -All` (PowerShell). If an existing global executable is first on PATH at a different path, the installer reports that path and stops. Uninstall that global copy with the **same tool that installed it** (for example, `npm uninstall --global turbo` for npm), then retry. The installer will not remove, replace, or shadow an unrelated global installation automatically. A repository-local `node_modules/.bin/turbo` on PATH may also be detected; run the installer outside that PATH entry.
+Before installing, check `command -v turbo` (macOS/Linux) or `Get-Command turbo -All` (PowerShell). If another executable is first on PATH, the installer reports its path and stops. Uninstall that copy with the tool that installed it, then retry. The installer will not remove, replace, or shadow an unrelated global installation. A repository-local `node_modules/.bin/turbo` on PATH may also be detected; run the installer outside that PATH entry.
 
 To upgrade an **installer-owned** binary at the same destination, rerun its installer with an explicit `TURBO_VERSION`, or omit the variable for the latest stable release. The installer can replace the regular file it previously installed there; do not use it to overwrite a different tool's binary. For a manual direct-download install, repeat the verified download with the new version before replacing your own binary. To uninstall a standalone copy, remove only its installed `turbo` (or `turbo.exe`) file and remove the installer-added PATH entry from your shell profile or Windows user PATH. Do not remove a repository's pinned `turbo` dependency as part of global uninstall.
 
@@ -171,56 +169,7 @@ If your repository has an **installed** local `turbo` binary in `node_modules`, 
 
 For native CI, download and verify the exact release as above in a setup step, add its install directory to the job's PATH, then run pre-install CLI commands such as `turbo --version` or `turbo prune`. On GitHub Actions, the installers add their directory to `$GITHUB_PATH` when it is set. With direct download, append `$HOME/.local/bin` (Unix: `printf '%s\n' "$HOME/.local/bin" >> "$GITHUB_PATH"`) or `$bin` (PowerShell: `Add-Content -Path $env:GITHUB_PATH -Value $bin`) **in the same step as the download** for subsequent steps. Keep the version pinned and upgrade it explicitly when changing your repository's local version. When a `turbo setup` command is available, you can call it from the global binary before JS dependencies are installed; this checkout does not yet implement that command, so do not rely on it in CI today.
 
-#### JavaScript package manager installation
-
-<PackageManagerTabs>
-
-  <Tab value="pnpm">
-  ```bash title="Terminal"
-  pnpm add turbo --global
-  ```
-
-  </Tab>
-
-  <Tab value="yarn">
-  ```bash title="Terminal"
-  yarn global add turbo
-  ```
-
-  </Tab>
-
-  <Tab value="npm">
-  ```bash title="Terminal"
-  npm install turbo --global
-  ```
-
-  </Tab>
-
-  <Tab value="bun">
-  ```bash title="Terminal"
-  bun install turbo --global
-  ```
-
-  </Tab>
-
-
-<Tab value="nub">
-  ```bash title="Terminal"
-  nub add turbo --global
-  ```
-
-  </Tab>
-
-<Tab value="aube">
-  ```bash title="Terminal"
-  aube add turbo --global
-  ```
-
-  </Tab>
-
-</PackageManagerTabs>
-
-Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running one-off commands to use within your repository. For example:
+After installing `turbo`, you can run commands from your terminal. For example:
 
 - `turbo build`: Run `build` scripts following your repository's dependency graph
 - `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package (without running it)
@@ -232,20 +181,13 @@ Once installed globally, you can run your scripts through `turbo` from your term
   `turbo build` and `turbo run build` will both run your `build` task.
 </Callout>
 
-<Callout type="error" title="Avoid multiple global installations">
-  If you've installed global `turbo` before, make sure you use the same package
-  manager as your existing installation to avoid unexpected behaviors. You can
-  quickly check which package manager you previously used with [`turbo
-  bin`](/docs/reference/bin).
-</Callout>
-
 #### Using global `turbo` in CI
 
-You can also take advantage of global `turbo` when creating your CI pipelines. Visit the [Constructing CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci) guide for more information.
+To use the global binary in CI, see [Constructing CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci).
 
 ### Repository installation
 
-When collaborating with other developers in a repository, it's a good idea to pin versions of dependencies. You can do this with `turbo` by adding it as a `devDependency` in the root of your repository:
+To pin the `turbo` version used in a repository, add it as a `devDependency` at the root:
 
 <PackageManagerTabs>
 
@@ -294,6 +236,4 @@ When collaborating with other developers in a repository, it's a good idea to pi
 
 </PackageManagerTabs>
 
-You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repository if it exists.
-
-This lets you to get the best of both installations: easily run commands in your terminal while maintaining a pinned version for consistent usage for all developers in the repository.
+When you invoke the global binary from this repository, it uses the installed local version instead.
