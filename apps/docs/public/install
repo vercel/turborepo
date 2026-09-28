@@ -88,7 +88,7 @@ check_destination() {
 }
 check_destination
 
-for utility in curl tar awk grep sed head mktemp mkdir cp chmod mv rm tr; do
+for utility in curl tar awk grep sed head mktemp mkdir cp chmod mv ln rm tr; do
   command -v "$utility" >/dev/null 2>&1 || fail "required command not found: $utility"
 done
 
