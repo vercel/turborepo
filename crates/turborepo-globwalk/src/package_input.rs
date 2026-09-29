@@ -39,7 +39,7 @@ impl PackageInput {
         joined.push_str(package);
         joined.push('/');
         joined.push_str(pattern_without_slash);
-        let glob = ValidatedGlob::from_str(&joined)?;
+        let glob = strip_leading_slashes(ValidatedGlob::from_str(&joined)?);
 
         let package_relative_start = package_relative_start(glob.as_str(), package);
 
@@ -95,6 +95,19 @@ impl PackageInput {
         let start = self.package_relative_start?;
         let relative = &self.glob.as_str()[start..];
         Some(if relative.is_empty() { "." } else { relative })
+    }
+}
+
+/// The root package joins as `/{input}`. `ValidatedGlob` strips that leading
+/// slash on Unix but not on Windows, so strip it here to keep resolved globs
+/// repo-root-relative on every platform. The walker trims leading slashes when
+/// joining globs onto its base path, so walked files are unchanged.
+fn strip_leading_slashes(glob: ValidatedGlob) -> ValidatedGlob {
+    if !glob.inner.starts_with('/') {
+        return glob;
+    }
+    ValidatedGlob {
+        inner: glob.inner.trim_start_matches('/').to_owned(),
     }
 }
 
@@ -217,6 +230,14 @@ mod tests {
         assert!(input.escapes_repo_root());
         assert!(input.reaches_outside_package());
         assert_eq!(input.package_relative(), None);
+    }
+
+    #[test]
+    fn strips_leading_slashes() {
+        let glob = strip_leading_slashes(ValidatedGlob {
+            inner: "//infra/**".to_owned(),
+        });
+        assert_eq!(glob.as_str(), "infra/**");
     }
 
     #[test]
