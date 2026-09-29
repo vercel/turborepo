@@ -244,6 +244,85 @@ For example, the following illustrates a monorepo with three locations for gener
     <File name="turbo.json" />
   </Files>
 </Tab>
+
+<Tab value="nub">
+  <Files>
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs">
+        <File name="package.json" />
+      </Folder>
+      <Folder name="web" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+    <Folder name="packages" defaultOpen>
+      <Folder name="ui" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+    <Folder name="turbo" green defaultOpen>
+      <Folder name="generators">
+        <File name="config.ts" />
+        <File name="templates" />
+      </Folder>
+    </Folder>
+    <File name="package.json" />
+    <File name="nub.lock" />
+    <File name="turbo.json" />
+  </Files>
+</Tab>
+
+<Tab value="aube">
+  <Files>
+    <Folder name="apps" defaultOpen>
+      <Folder name="docs">
+        <File name="package.json" />
+      </Folder>
+      <Folder name="web" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+    <Folder name="packages" defaultOpen>
+      <Folder name="ui" defaultOpen>
+        <File name="package.json" />
+        <Folder name="turbo" green defaultOpen>
+          <Folder name="generators">
+            <File name="config.ts" />
+            <File name="templates" />
+          </Folder>
+        </Folder>
+      </Folder>
+    </Folder>
+    <Folder name="turbo" green defaultOpen>
+      <Folder name="generators">
+        <File name="config.ts" />
+        <File name="templates" />
+      </Folder>
+    </Folder>
+    <File name="package.json" />
+    <File name="aube-lock.yaml" />
+    <File name="turbo.json" />
+  </Files>
+</Tab>
+
 </PackageManagerTabs>
 
 Generators created within workspaces are automatically run from the workspace root, **not** the repo root, nor the location of the generator configuration.

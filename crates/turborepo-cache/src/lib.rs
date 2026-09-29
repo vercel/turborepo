@@ -10,6 +10,9 @@
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
 
+/// A compressed artifact body shared between local and remote cache consumers
+/// so archives are built exactly once.
+pub(crate) mod artifact_body;
 /// A wrapper for the cache that uses a worker pool to perform cache operations
 mod async_cache;
 /// The core cache creation and restoration logic.
@@ -24,6 +27,7 @@ pub mod http;
 /// A wrapper that allows reads and writes from the file system and remote
 /// cache.
 mod multiplexer;
+mod outage_breaker;
 /// Cache signature authentication lets users provide a private key to sign
 /// their cache payloads.
 pub mod signature_authentication;
@@ -98,6 +102,8 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
+    #[error("blocking cache archive task failed to complete: {0}")]
+    BlockingTask(#[from] tokio::task::JoinError),
     #[error("Invalid restore manifest: {0}")]
     InvalidManifest(String),
     #[error("Unable to determine config cache base")]
@@ -106,6 +112,8 @@ pub enum CacheError {
     ConfigCacheError,
     #[error("Insufficient permissions to write to remote cache. Please verify that your role has write access for Remote Cache Artifact at https://vercel.com/docs/accounts/team-members-and-roles/access-roles/team-level-roles?resource=Remote+Cache+Artifact")]
     ForbiddenRemoteCacheWrite,
+    #[error("Remote artifact cache is temporarily unavailable; retry after the outage cooldown")]
+    RemoteCacheUnavailable,
 }
 
 impl From<turborepo_api_client::Error> for CacheError {

@@ -1,0 +1,37 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": [
+        "BLOB_READ_WRITE_TOKEN",
+        "BLOB_STORE_ID",
+        "FACTORY_IMAGE_CONNECTOR_ID",
+        "GITHUB_TOKEN_EXCHANGE_URL",
+        "SLACK_CHANNEL_ID",
+        "SLACK_CONNECT_UID",
+        "SLACK_INSTALLATION_ID",
+        "VERCEL",
+        "VERCEL_DEPLOYMENT_ID",
+        "VERCEL_GIT_COMMIT_SHA",
+        "VERCEL_OIDC_TOKEN"
+      ],
+      "outputs": [
+        ".eve/**",
+        ".next/**",
+        "!.next/cache/**",
+        ".output/**",
+        ".vercel/**"
+      ]
+    },
+    "dev": {
+      "env": [
+        "AI_GATEWAY_API_KEY",
+        "BLOB_READ_WRITE_TOKEN",
+        "BLOB_STORE_ID",
+        "VERCEL_OIDC_TOKEN"
+      ]
+    },
+    "check-types": {},
+    "test": {}
+  }
+}

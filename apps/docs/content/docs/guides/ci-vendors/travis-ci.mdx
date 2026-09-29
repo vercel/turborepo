@@ -126,6 +126,51 @@ Create a file called `.travis.yml` in your repository with the following content
       ```
 
   </Tab>
+
+<Tab value="nub">
+
+      ```yaml title=".travis.yml"
+      language: node_js
+      node_js:
+        - lts/*
+      cache:
+        npm: false
+        directories:
+          - "~/.pnpm-store"
+      before_install:
+        - npm install -g nub
+      install:
+        - nub install
+      script:
+        - nub run build
+      script:
+        - nub run test
+      ```
+
+  </Tab>
+
+<Tab value="aube">
+
+      ```yaml title=".travis.yml"
+      language: node_js
+      node_js:
+        - lts/*
+      cache:
+        npm: false
+        directories:
+          - "~/.pnpm-store"
+      before_install:
+        - npm install -g aube
+      install:
+        - aube install
+      script:
+        - aube run build
+      script:
+        - aube run test
+      ```
+
+  </Tab>
+
 </PackageManagerTabs>
 
 ## Remote Caching

@@ -3,7 +3,26 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "command": ["pnpm", "run", "build"]
+    },
+    "dev": {
+      "command": ["pnpm", "exec", "tsdown", "--watch"]
+    },
+    "test": {
+      "command": ["pnpm", "exec", "jest"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
     }
   }
 }

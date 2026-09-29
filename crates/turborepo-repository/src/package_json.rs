@@ -5,13 +5,9 @@ use miette::Diagnostic;
 use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::{ParseDiagnostic, Spanned};
+use turborepo_lockfiles::BerryResolutionMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DependencyKind {
-    Production,
-    Development,
-    Peer { optional: bool },
-}
+pub use crate::relationships::DependencyKind;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,7 +31,7 @@ pub struct PackageJson {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub scripts: BTreeMap<String, Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub resolutions: Option<BTreeMap<String, String>>,
+    pub resolutions: Option<BerryResolutionMap>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pnpm: Option<PnpmConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -64,6 +60,32 @@ pub enum Error {
     #[error("Unable to parse package.json.")]
     #[diagnostic(code(package_json_parse_error))]
     Parse(#[related] Vec<ParseDiagnostic>),
+}
+
+/// Supplies workspace manifests after package discovery has located them.
+/// Graph construction uses [`FileSystemPackageJsonLoader`] by default; callers
+/// can inject another loader without replacing workspace discovery.
+pub trait PackageJsonLoader: Send + Sync {
+    fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, Error>;
+}
+
+impl<F> PackageJsonLoader for F
+where
+    F: Fn(&AbsoluteSystemPath) -> Result<PackageJson, Error> + Send + Sync,
+{
+    fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
+        self(path)
+    }
+}
+
+/// The production manifest loader, preserving the usual filesystem behavior.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FileSystemPackageJsonLoader;
+
+impl PackageJsonLoader for FileSystemPackageJsonLoader {
+    fn load(&self, path: &AbsoluteSystemPath) -> Result<PackageJson, Error> {
+        PackageJson::load(path)
+    }
 }
 
 impl PackageJson {
@@ -100,8 +122,12 @@ impl PackageJson {
             .dependencies
             .iter()
             .flatten()
-            .chain(self.optional_dependencies.iter().flatten())
             .map(|(name, version)| (name, version, DependencyKind::Production));
+        let optional = self
+            .optional_dependencies
+            .iter()
+            .flatten()
+            .map(|(name, version)| (name, version, DependencyKind::Optional));
         let dev = self
             .dev_dependencies
             .iter()
@@ -120,7 +146,7 @@ impl PackageJson {
                     },
                 )
             });
-        normal.chain(dev).chain(peer)
+        normal.chain(optional).chain(dev).chain(peer)
     }
 
     pub fn is_optional_peer_dependency(&self, name: &str) -> bool {
@@ -132,14 +158,6 @@ impl PackageJson {
             .and_then(|entry| entry.get("optional"))
             .and_then(|optional| optional.as_bool())
             .unwrap_or(false)
-    }
-
-    /// Returns the command for script_name if it is non-empty
-    pub fn command(&self, script_name: &str) -> Option<&str> {
-        self.scripts
-            .get(script_name)
-            .filter(|command| !command.is_empty())
-            .map(|command| command.as_str())
     }
 
     pub fn engines(&self) -> Option<HashMap<&str, &str>> {
@@ -234,6 +252,7 @@ mod test {
         let json = json!({
             "name": "test",
             "dependencies": { "prod-pkg": "1.0.0", "shared-pkg": "2.0.0" },
+            "optionalDependencies": { "optional-pkg": "1.0.0" },
             "devDependencies": { "dev-pkg": "1.0.0", "shared-pkg": "1.0.0" }
         });
         let pkg: PackageJson = PackageJson::from_value(json).unwrap();
@@ -242,6 +261,7 @@ mod test {
             kinds.entry(name.as_str()).or_insert(kind);
         }
         assert_eq!(kinds.get("prod-pkg"), Some(&DependencyKind::Production));
+        assert_eq!(kinds.get("optional-pkg"), Some(&DependencyKind::Optional));
         assert_eq!(kinds.get("dev-pkg"), Some(&DependencyKind::Development));
         assert_eq!(kinds.get("shared-pkg"), Some(&DependencyKind::Production));
     }

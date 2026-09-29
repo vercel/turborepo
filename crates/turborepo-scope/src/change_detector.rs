@@ -39,6 +39,43 @@ pub(crate) fn all_package_changes(
         .collect()
 }
 
+/// Resolves raw changed files for an affected comparison. The merge-base and
+/// working-tree policies are explicit so run and query callers can use the
+/// same SCM behavior while tests provide fixed file sets.
+pub trait ChangedFilesDetector {
+    fn changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
+        merge_base: bool,
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, ScmError>;
+}
+
+impl ChangedFilesDetector for SCM {
+    fn changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
+        merge_base: bool,
+    ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, ScmError> {
+        SCM::changed_files(
+            self,
+            turbo_root,
+            from_ref,
+            to_ref,
+            include_uncommitted,
+            allow_unknown_objects,
+            merge_base,
+        )
+    }
+}
+
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
     /// Determine which packages have changed between two git refs.
@@ -90,32 +127,47 @@ impl<'a> ScopeChangeDetector<'a> {
 
     /// Gets the lockfile content from SCM if it has changed.
     /// Does *not* error if cannot get content.
+    ///
+    /// Resolution definition paths come from foundational change knowledge
+    /// rather than probing the package manager at classification time.
     pub fn get_lockfile_contents(
         &self,
         from_ref: Option<&str>,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
-        let Some(package_manager) = self.pkg_graph.package_manager() else {
-            return LockfileContents::Unchanged;
-        };
-        let lockfile_path = package_manager.lockfile_path(self.turbo_root);
-
-        if !ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
-            self.turbo_root,
-            changed_files,
-            &lockfile_path,
-        ) {
-            debug!("lockfile did not change");
+        let resolution_paths = self.pkg_graph.change_knowledge().resolution_paths();
+        if resolution_paths.is_empty() {
             return LockfileContents::Unchanged;
         }
+
+        let Some(lockfile_path) = resolution_paths.iter().find_map(|path| {
+            let relative = turbopath::RelativeUnixPath::new(path).ok()?;
+            let absolute = self.turbo_root.join_unix_path(relative);
+            ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
+                self.turbo_root,
+                changed_files,
+                &absolute,
+            )
+            .then_some(absolute)
+        }) else {
+            debug!("lockfile did not change");
+            return LockfileContents::Unchanged;
+        };
 
         let Ok(content) = self.scm.previous_content(from_ref, &lockfile_path) else {
             debug!("lockfile did change but could not get previous content");
             return LockfileContents::UnknownChange;
         };
 
+        let Ok(path) = self.turbo_root.anchor(&lockfile_path) else {
+            debug!("lockfile changed but was outside the repository");
+            return LockfileContents::UnknownChange;
+        };
         debug!("lockfile changed, have the previous content");
-        LockfileContents::Changed(content)
+        LockfileContents::Changed {
+            path,
+            previous_contents: content,
+        }
     }
 }
 

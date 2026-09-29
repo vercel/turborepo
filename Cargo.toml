@@ -27,7 +27,6 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
 
 [workspace.lints.clippy]
 expect_used = "deny"
-too_many_arguments = "allow"
 unwrap_used = "deny"
 
 [profile.dev]
@@ -58,7 +57,6 @@ miette = { version = "7.5.0", features = ["fancy"] }
 turbo-trace = { path = "crates/turbo-trace" }
 turbo-updater = { path = "crates/turborepo-updater" }
 turbopath = { path = "crates/turborepo-paths" }
-turborepo = { path = "crates/turborepo" }
 turborepo-analytics = { path = "crates/turborepo-analytics" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
 turborepo-boundaries = { path = "crates/turborepo-boundaries" }
@@ -66,6 +64,7 @@ turborepo-auth = { path = "crates/turborepo-auth" }
 turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ai-agents = { path = "crates/turborepo-ai-agents" }
 turborepo-ci = { path = "crates/turborepo-ci" }
+turborepo-config = { path = "crates/turborepo-config" }
 turborepo-daemon = { path = "crates/turborepo-daemon" }
 turborepo-engine = { path = "crates/turborepo-engine" }
 turborepo-env = { path = "crates/turborepo-env" }
@@ -75,62 +74,60 @@ turborepo-frameworks = { path = "crates/turborepo-frameworks" }
 turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-gitignore = { path = "crates/turborepo-gitignore" }
 turborepo-hash = { path = "crates/turborepo-hash" }
+turborepo-lockfile-hash = { path = "crates/turborepo-lockfile-hash" }
 turborepo-json-rewrite = { path = "crates/turborepo-json-rewrite" }
-turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
+turborepo-cli = { path = "crates/turborepo-cli", default-features = false }
 turborepo-lsp = { path = "crates/turborepo-lsp", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-log = { path = "crates/turborepo-log" }
 turborepo-microfrontends = { path = "crates/turborepo-microfrontends" }
+turborepo-microfrontends-config = { path = "crates/turborepo-microfrontends-config" }
 turborepo-microfrontends-proxy = { path = "crates/turborepo-microfrontends-proxy" }
+turborepo-package-watcher = { path = "crates/turborepo-package-watcher" }
 turborepo-process = { path = "crates/turborepo-process" }
+turborepo-prune = { path = "crates/turborepo-prune" }
 turborepo-query = { path = "crates/turborepo-query" }
 turborepo-query-api = { path = "crates/turborepo-query-api" }
 turborepo-profile-md = { path = "crates/turborepo-profile-md" }
 turborepo-repository = { path = "crates/turborepo-repository" }
-turborepo-sccache-proxy = { path = "crates/turborepo-sccache-proxy" }
-# Vercel fork of mozilla/sccache (v0.16.0 + the `main_from_args` embedding
-# entrypoint from the `vercel/main-from-args` branch). Public, so anonymous
-# builds fetch it; the rev is pinned for reproducibility.
-sccache = { git = "https://github.com/vercel/sccache", rev = "52bfcd03ee7fa94059d0af593d466a464254307e", default-features = false, features = [
-  "webdav",
-] }
 turborepo-task-id = { path = "crates/turborepo-task-id" }
+turborepo-telemetry = { path = "crates/turborepo-telemetry" }
+turborepo-tracing = { path = "crates/turborepo-tracing" }
 turborepo-types = { path = "crates/turborepo-types" }
 turborepo-ui = { path = "crates/turborepo-ui" }
 turborepo-unescape = { path = "crates/turborepo-unescape" }
+turborepo-run-cache = { path = "crates/turborepo-run-cache" }
 turborepo-run-summary = { path = "crates/turborepo-run-summary" }
 turborepo-scm = { path = "crates/turborepo-scm" }
 turborepo-scope = { path = "crates/turborepo-scope" }
 turborepo-signals = { path = "crates/turborepo-signals" }
+turborepo-task-access = { path = "crates/turborepo-task-access" }
 turborepo-task-executor = { path = "crates/turborepo-task-executor" }
+turborepo-task-filter = { path = "crates/turborepo-task-filter" }
+turborepo-task-graph = { path = "crates/turborepo-task-graph" }
 turborepo-task-hash = { path = "crates/turborepo-task-hash" }
 turborepo-turbo-json = { path = "crates/turborepo-turbo-json" }
 turborepo-otel = { path = "crates/turborepo-otel" }
 turborepo-rayon-compat = { path = "crates/turborepo-rayon-compat" }
+turborepo-run = { path = "crates/turborepo-run", default-features = false }
+turborepo-run-context = { path = "crates/turborepo-run-context" }
+turborepo-run-opts = { path = "crates/turborepo-run-opts" }
 wax = { path = "crates/turborepo-wax" }
 turborepo-shim = { path = "crates/turborepo-shim" }
 turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
+turborepo-watch = { path = "crates/turborepo-watch", default-features = false }
 turborepo-ghostty = { path = "crates/turborepo-ghostty" }
 libghostty-vt = "0.2.1"
 
 reqwest = { version = "0.12.28", default-features = false }
-rustls-native-certs = "0.8.3"
 hyper-rustls = { version = "0.27.7", default-features = false }
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
-async-compression = { version = "0.3.13", default-features = false, features = [
-  "gzip",
-  "tokio",
-] }
-async-graphql = { version = "7.0.17", default-features = false, features = [
-  "graphiql",
-] }
+async-graphql = { version = "7.0.17", default-features = false }
 async-graphql-axum = "7.0.16"
-async-trait = "0.1.64"
 axum = "0.8.4"
-axum-server = "0.8.0"
 biome_deserialize = { version = "0.6.0", features = ["serde"] }
 biome_deserialize_macros = { version = "0.6.0" }
 biome_diagnostics = { version = "0.5.7" }
@@ -144,12 +141,8 @@ chrono = { version = "0.4.23", default-features = false, features = [
   "clock",
   "std",
 ] }
-clap = "4.5.16"
-clap_complete = "4.5.24"
 console = "0.16.0"
-crossbeam-channel = "0.5.15"
 dashmap = "6.1.0"
-derive_setters = "0.1.6"
 dialoguer = "0.12.0"
 dunce = "1.0.3"
 dhat = "0.3.3"
@@ -162,15 +155,12 @@ gix-object = { version = "0.56.0", default-features = false }
 hex = "0.4.3"
 httpmock = { version = "0.8.0", default-features = false }
 indicatif = "0.18.3"
-indoc = "2.0.0"
 insta = { version = "1.34.0", features = ["json"] }
 itertools = "0.14.0"
-merge = "0.2.0"
 nix = { version = "0.26.2", default-features = false, features = ["term"] }
 notify = "6.1.1"
 oxc_allocator = "0.115.0"
 oxc_ast = { version = "0.115.0", features = ["serialize"] }
-oxc_diagnostics = "0.115.0"
 oxc_estree = { version = "0.115.0", features = ["serialize"] }
 oxc_parser = "0.115.0"
 oxc_span = "0.115.0"
@@ -180,16 +170,15 @@ owo-colors = "3.5.0"
 unrs_resolver = "1.11.1"
 path-clean = "1.0.1"
 petgraph = { version = "0.8.3", default-features = false, features = ["std"] }
-port_scanner = "0.1.5"
 pretty_assertions = "1.3.0"
 radix_trie = "0.2.1"
 rand = "0.9.3"
-ratatui = "0.30.0"
+ratatui = "0.30.2"
 regex = "1.13.0"
 secrecy = "0.10.3"
 semver = "1.0.16"
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = { version = "1.0.93", features = ["preserve_order"] }
+serde_json = { version = "1.0.147", features = ["preserve_order"] }
 serde_yaml_ng = "0.10.0"
 sha2 = "0.10.6"
 
@@ -197,7 +186,6 @@ temp-env = "0.3.6"
 tempfile = "3.3.0"
 test-case = "3.3.1"
 thiserror = "2.0.18"
-tiny-gradient = "0.1.0"
 tokio = "1.47.1"
 tokio-util = { version = "0.7.7", features = ["io"] }
 toml = "0.9.5"

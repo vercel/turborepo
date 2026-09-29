@@ -2,6 +2,7 @@ use std::{borrow::Cow, collections::HashSet, io::ErrorKind, str::FromStr};
 
 use globwalk::{ValidatedGlob, fix_glob_pattern, is_glob_pattern};
 use ignore::WalkBuilder;
+use tracing::info;
 use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix, RelativeUnixPath,
 };
@@ -30,7 +31,9 @@ fn expand_dir_pattern<'a>(base: &AbsoluteSystemPath, pattern: &'a str) -> Cow<'a
 
 fn to_glob(input: &str) -> Result<Glob<'static>, Error> {
     let glob = fix_glob_pattern(input).into_unix();
-    let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
+    // Walked paths are package-relative and never start with `./`. Native
+    // workspace contracts and authored inputs may include that prefix.
+    let g = Glob::new(glob.as_str().trim_start_matches("./")).map(|g| g.into_owned())?;
 
     Ok(g)
 }
@@ -67,6 +70,9 @@ pub(crate) fn hash_files(
             {
                 continue;
             }
+            Err(Error::Io(io_error, _)) => {
+                return Err(Error::hash_file(path, io_error));
+            }
             Err(e) => return Err(e),
         };
     }
@@ -92,19 +98,63 @@ fn hash_file_with_attrs(
     crate::crlf::manual_hash_file_maybe_normalized(path, text_attr)
 }
 
+fn hash_discovered_file(
+    path: &AbsoluteSystemPath,
+    attr_path: &str,
+    attrs: Option<&crate::crlf::GitAttrs>,
+) -> Result<Option<OidHash>, Error> {
+    let text_attr = attrs
+        .map(|attrs| attrs.resolve_text_attr(attr_path))
+        .unwrap_or(crate::crlf::TextAttr::Unspecified);
+    match crate::crlf::hash_file_as_git_blob(path, text_attr) {
+        Ok(Some(hash)) => Ok(Some(hash)),
+        Ok(None) => {
+            info!(%path, "skipping non-regular hash candidate");
+            Ok(None)
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            info!(%path, "discovered hash candidate disappeared");
+            Ok(None)
+        }
+        Err(error) => Err(Error::hash_file(path.to_owned(), error)),
+    }
+}
+
+pub(crate) fn hash_discovered_files(
+    root_path: &AbsoluteSystemPath,
+    files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
+    attrs_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+) -> Result<GitHashes, Error> {
+    let effective_attrs_root = attrs_root.unwrap_or(root_path);
+    let mut owned_attrs = None;
+    let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
+    let mut hashes = GitHashes::new();
+    for file in files {
+        let anchored = file.as_ref();
+        let path = root_path.resolve(anchored);
+        let attr_path = effective_attrs_root.anchor(&path)?.to_unix();
+        if let Some(hash) = hash_discovered_file(&path, attr_path.as_str(), attrs)? {
+            hashes.insert(anchored.to_unix(), hash);
+        }
+    }
+    Ok(hashes)
+}
+
 pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
     inputs: &[S],
     include_default_files: bool,
-    attrs_root: Option<&AbsoluteSystemPath>,
+    git_root: Option<&AbsoluteSystemPath>,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);
     let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
 
-    let effective_attrs_root = attrs_root.unwrap_or(turbo_root);
+    let effective_attrs_root = git_root.unwrap_or(turbo_root);
+    let git_metadata_path = effective_attrs_root.join_component(".git");
     let mut owned_attrs = None;
     let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
     let mut default_file_hashes = GitHashes::new();
@@ -137,6 +187,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             local_inputs.push(pattern);
         }
     }
+    let has_local_inclusions = local_inputs.iter().any(|pattern| !pattern.starts_with('!'));
 
     if !external_inclusions.is_empty() {
         let files = globwalk::globwalk(
@@ -150,9 +201,12 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                 AnchoredSystemPathBuf::relative_path_between(&full_package_path, file_path)
                     .to_unix();
             // Use attrs-root-relative path for .gitattributes pattern matching.
-            let attr_path = effective_attrs_root.anchor(file_path)?.to_unix();
-            let hash = hash_file_with_attrs(file_path, attr_path.as_str(), attrs)?;
-            hashes.insert(relative_path, hash);
+            let attr_path =
+                AnchoredSystemPathBuf::relative_path_between(effective_attrs_root, file_path)
+                    .to_unix();
+            if let Some(hash) = hash_discovered_file(file_path, attr_path.as_str(), attrs)? {
+                hashes.insert(relative_path, hash);
+            }
         }
     }
 
@@ -199,6 +253,11 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         Some(any(excludes)?)
     };
 
+    if !has_local_inclusions {
+        let git_metadata_path = git_metadata_path.clone();
+        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
+    }
+
     let walker = walker_builder
         .follow_links(false)
         // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
@@ -210,7 +269,18 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
 
     for dirent in walker {
         let dirent = dirent?;
-        let metadata = dirent.metadata()?;
+        let metadata = match dirent.metadata() {
+            Ok(metadata) => metadata,
+            Err(error)
+                if error
+                    .io_error()
+                    .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
+            {
+                info!(path = %dirent.path().display(), "discovered hash candidate disappeared");
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         // Skip anything that isn't a regular file (directories, symlinks,
         // sockets, FIFOs, device nodes). This must be here rather than as a
         // walker filter because the root directory is always yielded.
@@ -237,13 +307,15 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         }
 
         let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-        let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
-        hashes.insert(relative_path, hash);
+        if let Some(hash) = hash_discovered_file(path, attr_path.as_str(), attrs)? {
+            hashes.insert(relative_path, hash);
+        }
     }
 
     // If we're including default files, we need to walk again, but this time with
     // git_ignore enabled
     if include_default_files {
+        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
         let walker = walker_builder
             .follow_links(false)
             .git_ignore(true)
@@ -253,7 +325,18 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
 
         for dirent in walker {
             let dirent = dirent?;
-            let metadata = dirent.metadata()?;
+            let metadata = match dirent.metadata() {
+                Ok(metadata) => metadata,
+                Err(error)
+                    if error
+                        .io_error()
+                        .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
+                {
+                    info!(path = %dirent.path().display(), "discovered hash candidate disappeared");
+                    continue;
+                }
+                Err(error) => return Err(error.into()),
+            };
             // Skip anything that isn't a regular file. Must be here rather
             // than as a walker filter because the root directory is always
             // yielded.
@@ -280,8 +363,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             }
 
             let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-            let hash = hash_file_with_attrs(path, attr_path.as_str(), attrs)?;
-            default_file_hashes.insert(relative_path, hash);
+            if let Some(hash) = hash_discovered_file(path, attr_path.as_str(), attrs)? {
+                default_file_hashes.insert(relative_path, hash);
+            }
         }
     }
 
@@ -346,6 +430,40 @@ mod tests {
         }
     }
 
+    #[test_case("./src/**"; "glob")]
+    #[test_case("./src/"; "directory")]
+    #[test_case("././src/**"; "repeated current directory")]
+    fn test_current_directory_inputs_without_git(source_input: &str) {
+        let (_tmp, root) = tmp_dir();
+        root.join_component("src").create_dir_all().unwrap();
+        root.join_components(&["src", "main.py"])
+            .create_with_contents("VALUE = 1\n")
+            .unwrap();
+        root.join_components(&["src", "ignored.py"])
+            .create_with_contents("ignored\n")
+            .unwrap();
+        root.join_component("pyproject.toml")
+            .create_with_contents("[project]\n")
+            .unwrap();
+        let hash = |inputs: &[&str]| {
+            get_package_file_hashes_without_git(
+                &root,
+                AnchoredSystemPath::new("").unwrap(),
+                inputs,
+                false,
+                None,
+                None,
+            )
+            .unwrap()
+        };
+        let expected = hash(&["src/**", "pyproject.toml", "!src/ignored.py"]);
+        assert_eq!(expected.len(), 2);
+        assert_eq!(
+            hash(&[source_input, "./pyproject.toml", "!./src/ignored.py"]),
+            expected
+        );
+    }
+
     #[test]
     fn test_hash_symlink() {
         let (_tmp, turbo_root) = tmp_dir();
@@ -391,7 +509,10 @@ mod tests {
                 None,
             );
             match out.err().unwrap() {
-                Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::IsADirectory),
+                Error::HashFile { path, source, .. } => {
+                    assert_eq!(path, from_to_dir);
+                    assert_eq!(source.kind(), ErrorKind::IsADirectory);
+                }
                 _ => panic!("wrong error"),
             };
         }
@@ -408,7 +529,11 @@ mod tests {
         let expected_err_kind = ErrorKind::PermissionDenied;
         #[cfg(not(windows))]
         let expected_err_kind = ErrorKind::IsADirectory;
-        assert_matches!(out.unwrap_err(), Error::Io(io_error, _) if io_error.kind() == expected_err_kind);
+        assert_matches!(
+            out.unwrap_err(),
+            Error::HashFile { path, source, .. }
+                if path == from_to_dir && source.kind() == expected_err_kind
+        );
 
         // Broken symlink with allow_missing = true.
         let out = hash_files(
@@ -431,9 +556,82 @@ mod tests {
             None,
         );
         match out.err().unwrap() {
-            Error::Io(io_error, _) => assert_eq!(io_error.kind(), ErrorKind::NotFound),
+            Error::HashFile { path, source, .. } => {
+                assert_eq!(path, broken);
+                assert_eq!(source.kind(), ErrorKind::NotFound);
+            }
             _ => panic!("wrong error"),
         };
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_external_recursive_input_skips_directory_symlink() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("packages/app").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        let store_dir = turbo_root.join_components(&[".pnpm", "dep"]);
+        store_dir.create_dir_all().unwrap();
+        store_dir
+            .join_component("index.js")
+            .create_with_contents("module.exports = 1")
+            .unwrap();
+        let node_modules = turbo_root.join_component("node_modules");
+        node_modules.create_dir_all().unwrap();
+        node_modules
+            .join_component("dep")
+            .symlink_to_dir(store_dir.to_string())
+            .unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["../../**/*"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(!hashes.contains_key(&RelativeUnixPathBuf::new("../../node_modules/dep").unwrap()));
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()));
+    }
+
+    #[test]
+    fn test_parent_input_includes_configured_ancestor_git_metadata() {
+        let (_tmp, repo_root) = tmp_dir();
+        let git_dir = repo_root.join_component(".git");
+        git_dir.create_dir_all().unwrap();
+        git_dir
+            .join_component("index.lock")
+            .create_with_contents("lock")
+            .unwrap();
+        let turbo_root = repo_root.join_component("workspace");
+        let pkg_path = AnchoredSystemPathBuf::from_raw("app").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["../../**/*"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("../../.git/index.lock").unwrap()));
     }
 
     #[test]
@@ -564,6 +762,54 @@ mod tests {
         .unwrap();
 
         assert_eq!(hashes, expected);
+    }
+
+    #[test]
+    fn test_nested_package_paths_in_parent_gitignore_are_applied() {
+        // A root .gitignore can ignore a path nested more than one level inside
+        // a package (e.g. "child-dir/libA/logs/exec"). Git-based hashing applies
+        // such patterns, and the manual walk must match: with ignore 0.4.22 they
+        // were silently dropped when the walk was rooted at the package
+        // directory, so per-run files under the "ignored" path leaked into the
+        // package's hashes and the affected tasks missed the cache on every run.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("child-dir/libA").unwrap();
+
+        turbo_root
+            .join_component(".gitignore")
+            .create_with_contents("child-dir/libA/logs/exec\nchild-dir/libA/shallow\n")
+            .unwrap();
+
+        for raw_unix_path in [
+            "child-dir/libA/keep.txt",
+            "child-dir/libA/shallow/run.log",
+            "child-dir/libA/logs/exec/run.log",
+        ] {
+            let file_path =
+                turbo_root.join_unix_path(RelativeUnixPath::new(raw_unix_path).unwrap());
+            file_path.ensure_dir().unwrap();
+            file_path.create_with_contents("contents").unwrap();
+        }
+
+        let hashes = get_package_file_hashes_without_git::<&str>(
+            &turbo_root,
+            &pkg_path,
+            &[],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("keep.txt").unwrap()));
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("shallow/run.log").unwrap()),
+            "one-level-deep parent gitignore pattern must be applied"
+        );
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("logs/exec/run.log").unwrap()),
+            "nested parent gitignore pattern must be applied"
+        );
     }
 
     #[test]

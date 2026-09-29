@@ -9,9 +9,9 @@
 // miette's derive macros, not directly by code. The derive macros generate code
 // that reads these fields for error formatting and display.
 #![allow(unused_assignments)]
-// The Error type is large due to miette diagnostic fields (NamedSource, SourceSpan).
-// This is intentional for rich error reporting. Boxing would add indirection overhead
-// for error paths that are not performance-critical.
+// The rich miette Error (including source text and spans) is returned throughout
+// parsing and validation. Clippy reports 50+ sites; narrow per-function allows
+// would obscure this crate-wide error API without changing its size.
 #![allow(clippy::result_large_err)]
 
 use std::{collections::HashSet, sync::Arc};
@@ -41,14 +41,14 @@ pub use loader::{
 };
 pub use parser::{BiomeParseError, parse_turbo_json};
 pub use processed::{
-    ProcessedCommand, ProcessedDependsOn, ProcessedEnv, ProcessedGlob,
-    ProcessedIncrementalPartition, ProcessedInputs, ProcessedOutputs, ProcessedPassThroughEnv,
-    ProcessedTaskDefinition, ProcessedWith, duplicate_startup_error,
+    ProcessedCommand, ProcessedDependsOn, ProcessedEnv, ProcessedGlob, ProcessedInputs,
+    ProcessedOutputs, ProcessedPassThroughEnv, ProcessedTaskDefinition, ProcessedWith,
+    duplicate_startup_error,
 };
 pub use raw::{
-    HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawIncrementalPartition,
-    RawObservabilityOtel, RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions,
-    RawRootTurboJson, RawTaskDefinition, RawTurboJson,
+    HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawObservabilityOtel,
+    RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
+    RawTaskDefinition, RawTurboJson,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 
@@ -224,7 +224,17 @@ impl TurboJson {
         is_root: bool,
         future_flags: FutureFlags,
     ) -> Result<Option<TurboJson>, Error> {
-        let Some(raw_turbo_json) = RawTurboJson::read(repo_root, path, is_root)? else {
+        Self::read_with_root_check(repo_root, path, || is_root, future_flags)
+    }
+
+    pub(crate) fn read_with_root_check(
+        repo_root: &AbsoluteSystemPath,
+        path: &AbsoluteSystemPath,
+        is_root: impl FnOnce() -> bool,
+        future_flags: FutureFlags,
+    ) -> Result<Option<TurboJson>, Error> {
+        let Some(raw_turbo_json) = RawTurboJson::read_with_root_check(repo_root, path, is_root)?
+        else {
             return Ok(None);
         };
 
@@ -299,12 +309,6 @@ impl TurboJson {
             )));
         }
         with_tasks.push(Spanned::new(UnescapedString::from(with.to_string())))
-    }
-
-    /// Create a TurboJson with a specific path (intended for testing)
-    pub fn with_path(mut self, path: impl Into<Arc<str>>) -> Self {
-        self.path = Some(path.into());
-        self
     }
 
     /// Clear text and path fields (intended for testing - useful for
@@ -399,29 +403,6 @@ impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
             eager,
         })
     }
-}
-
-/// Creates IncrementalPartitions from ProcessedIncrementalPartitions with
-/// resolved paths.
-pub fn incremental_partitions_from_processed(
-    partitions: Vec<ProcessedIncrementalPartition>,
-    turbo_root_path: &RelativeUnixPath,
-) -> Result<Vec<turborepo_types::IncrementalPartition>, Error> {
-    partitions
-        .into_iter()
-        .map(|p| {
-            let outputs = task_outputs_from_processed(p.outputs, turbo_root_path)?;
-            let inputs = p
-                .inputs
-                .map(|i| {
-                    turborepo_types::TaskInputs::from_processed(i, turbo_root_path)
-                        .map(|ti| ti.globs)
-                })
-                .transpose()?
-                .unwrap_or_default();
-            Ok(turborepo_types::IncrementalPartition { outputs, inputs })
-        })
-        .collect()
 }
 
 /// Creates TaskOutputs from ProcessedOutputs with resolved paths
@@ -783,6 +764,39 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_future_flags_github_actions_remote_base_ref_fallback() {
+        let json = r#"{
+            "tasks": {},
+            "futureFlags": {
+                "githubActionsRemoteBaseRefFallback": true
+            }
+        }"#;
+
+        let (deserialized, diagnostics) = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        assert!(diagnostics.is_empty());
+        let raw_turbo_json: RawTurboJson = deserialized.unwrap();
+        assert!(
+            raw_turbo_json
+                .future_flags
+                .as_ref()
+                .unwrap()
+                .as_inner()
+                .github_actions_remote_base_ref_fallback
+        );
+
+        let turbo_json = TurboJson::try_from(raw_turbo_json).unwrap();
+        assert!(
+            turbo_json
+                .future_flags
+                .github_actions_remote_base_ref_fallback
+        );
+    }
+
+    #[test]
     fn test_is_root_config_with_root_path() {
         let turbo_json = TurboJson {
             path: Some("turbo.json".into()),
@@ -818,7 +832,7 @@ mod tests {
         );
     }
 
-    // Tests moved from turborepo-lib/turbo_json/mod.rs during consolidation
+    // Tests moved from the former monolithic CLI crate during consolidation
 
     #[test_case("{}", "empty boundaries")]
     #[test_case(r#"{"tags": {} }"#, "empty tags")]
@@ -892,6 +906,27 @@ mod tests {
         );
         let raw_boundaries_config: BoundariesConfig = deserialized.unwrap();
         insta::assert_json_snapshot!(name.replace(' ', "_"), raw_boundaries_config);
+    }
+
+    #[test]
+    fn test_boundaries_tags_serialize_deterministically() {
+        let (deserialized, _) = deserialize_from_json_str(
+            r#"{
+                "tags": {
+                    "gamma": {},
+                    "alpha": {},
+                    "beta": {}
+                }
+            }"#,
+            JsonParserOptions::default(),
+            "turbo.json",
+        );
+        let boundaries_config: BoundariesConfig = deserialized.unwrap();
+
+        assert_eq!(
+            serde_json::to_string(&boundaries_config).unwrap(),
+            r#"{"tags":{"alpha":{},"beta":{},"gamma":{}}}"#
+        );
     }
 
     #[test_case("[]", TaskOutputs::default() ; "empty")]

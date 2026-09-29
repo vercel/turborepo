@@ -3,5 +3,8 @@ const path = require("node:path");
 
 const markerDir = path.join(__dirname, ".markers");
 fs.mkdirSync(markerDir, { recursive: true });
-fs.writeFileSync(path.join(markerDir, `dev-${Date.now()}`), "");
+fs.writeFileSync(
+  path.join(markerDir, `dev-${process.pid}-${process.hrtime.bigint()}`),
+  "",
+);
 setInterval(() => {}, 1000);

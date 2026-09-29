@@ -9,7 +9,7 @@
 
 use miette::Diagnostic;
 use thiserror::Error;
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::package_graph::{PackageName, RelationshipProjectionError};
 
 use crate::{
     InvalidTaskNameError,
@@ -17,7 +17,7 @@ use crate::{
         CyclicExtends, MissingPackageFromTaskError, MissingPackageTaskError,
         MissingRootTaskInTurboJsonError, MissingTaskError, MissingTurboJsonExtends,
     },
-    validate::Error as ValidateError,
+    validate::Error as TaskNameValidateError,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -55,16 +55,36 @@ pub enum Error {
     #[error(transparent)]
     Graph(#[from] turborepo_graph_utils::Error),
     #[error(transparent)]
+    RelationshipProjection(#[from] RelationshipProjectionError),
+    #[error(transparent)]
     #[diagnostic(transparent)]
     InvalidTaskName(Box<InvalidTaskNameError>),
     #[error("Engine builder cannot be constructed without a turbo.json loader")]
     MissingTurboJsonLoader,
+    #[error(
+        "Cannot pass arguments to aggregate task `{task_id}` because it does not run a process. \
+         Run one of its qualified dependency tasks instead: {alternatives}."
+    )]
+    AggregatePassThrough {
+        task_id: String,
+        alternatives: String,
+    },
+    #[error(
+        "Task `{task_id}` cannot cache Python virtual environment `{environment}` as output \
+         `{output}`. Virtual environments are machine-specific; remove this output and cache \
+         portable artifacts such as `dist/**` instead."
+    )]
+    PythonVirtualEnvironmentOutput {
+        task_id: String,
+        environment: String,
+        output: String,
+    },
 }
 
-impl From<ValidateError> for Error {
-    fn from(err: ValidateError) -> Self {
+impl From<TaskNameValidateError> for Error {
+    fn from(err: TaskNameValidateError) -> Self {
         match err {
-            ValidateError::InvalidTaskName(e) => Error::InvalidTaskName(e),
+            TaskNameValidateError::InvalidTaskName(e) => Error::InvalidTaskName(e),
         }
     }
 }

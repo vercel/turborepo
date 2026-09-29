@@ -13,22 +13,20 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{ChangeMapError, PackageInclusionReason, merge_changed_packages},
-    package_graph::{self, PackageGraph, PackageName},
+    package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::SCM;
 use turborepo_types::FilterMode;
 use wax::Program;
 
 use crate::{
-    ScopeOpts,
-    change_detector::{GitChangeDetector, ScopeChangeDetector},
+    change_detector::GitChangeDetector,
     simple_glob::{Match, SimpleGlob},
     target_selector::{GitRange, InvalidSelectorError, TargetSelector},
 };
 
 /// Package inference for directory-based filtering.
 pub struct PackageInference {
-    package_name: Option<String>,
+    package_names: Vec<String>,
     directory_root: AnchoredSystemPathBuf,
 }
 
@@ -37,7 +35,7 @@ impl PackageInference {
     // the pieces of a filter spec that we will infer. If turbo was invoked
     // somewhere between the root and packages, scope turbo invocations to the
     // packages below where turbo was invoked. If turbo was invoked at or within
-    // a particular package, scope the turbo invocation to just that package.
+    // a package directory, scope the invocation to every package at that directory.
     pub fn calculate(
         turbo_root: &AbsoluteSystemPath,
         pkg_inference_path: &AnchoredSystemPathBuf,
@@ -49,11 +47,9 @@ impl PackageInference {
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
 
-        // Track the best matching package (the one whose path is the longest prefix
-        // of the inference path, i.e., the most specific package containing our
-        // current directory)
-        let mut best_match: Option<(String, AnchoredSystemPathBuf)> = None;
-        let mut found_package_below = false;
+        // Keep every package at the most specific directory containing cwd.
+        // Different toolchains may contribute distinct identities at the same path.
+        let mut best_match: Option<(Vec<String>, AnchoredSystemPathBuf)> = None;
 
         for (graph_name, package_path) in pkg_graph.package_scope_directories() {
             if !pkg_graph.is_real_package(&graph_name) {
@@ -79,59 +75,47 @@ impl PackageInference {
                 };
 
                 if is_better_match {
-                    best_match = Some((package_name, package_path.to_owned()));
+                    best_match = Some((vec![package_name], package_path.to_owned()));
+                } else if let Some((names, directory)) = &mut best_match
+                    && &**directory == package_path
+                {
+                    names.push(package_name);
                 }
-            }
-
-            // Check if this package is below the inference path (full_inference_path is a
-            // prefix of pkg_path)
-            let inferred_path_is_between_root_and_pkg = full_inference_path.contains(&pkg_path);
-            if inferred_path_is_between_root_and_pkg {
-                // We've found *some* package below our inference directory
-                found_package_below = true;
             }
         }
 
-        // If we found a package that contains our inference path, use it
-        if let Some((package_name, directory_root)) = best_match {
+        if let Some((mut package_names, directory_root)) = best_match {
+            // Selector expansion must not depend on contributor discovery order.
+            package_names.sort();
             return Self {
-                package_name: Some(package_name),
+                package_names,
                 directory_root,
             };
         }
 
-        // If we found packages below the inference path, or no packages matched at all,
-        // use the inference path as the directory root
-        if found_package_below {
-            // We're in a directory that contains packages
-        }
-
         Self {
-            package_name: None,
+            package_names: Vec::new(),
             directory_root: pkg_inference_path.to_owned(),
         }
     }
 
-    pub fn apply(&self, selector: &mut TargetSelector) -> Result<(), ResolutionError> {
-        // if the name pattern is provided, do not attempt inference
+    pub fn apply(
+        &self,
+        mut selector: TargetSelector,
+    ) -> Result<Vec<TargetSelector>, ResolutionError> {
+        // Explicit name patterns bypass inference.
         if !selector.name_pattern.is_empty() {
-            return Ok(());
-        };
+            return Ok(vec![selector]);
+        }
 
-        // Inject package name based on the directory filter:
-        // - No filter: inject name (original behavior)
-        // - Filter navigates up (starts with ".."): inject name (backwards compat)
-        // - Filter stays within current dir (e.g., "./*"): don't inject name because
-        //   user is explicitly selecting child packages
-        if let Some(name) = &self.package_name {
-            let should_inject_name = match selector.parent_dir.as_deref() {
+        // Infer package names with no directory filter, or when navigating up
+        // (backwards compatibility). Local directory filters such as ./* instead
+        // explicitly select packages relative to the inferred directory.
+        let should_inject_names = !self.package_names.is_empty()
+            && match selector.parent_dir.as_deref() {
                 None => true,
                 Some(parent_dir) => parent_dir.as_str().starts_with(".."),
             };
-            if should_inject_name {
-                selector.name_pattern.clone_from(name);
-            }
-        }
 
         if let Some(parent_dir) = selector.parent_dir.as_deref() {
             let repo_relative_parent_dir = self.directory_root.join(parent_dir);
@@ -150,15 +134,27 @@ impl PackageInference {
                     ))
                 })?,
             );
-        } else if self.package_name.is_none() {
-            // fallback: the user didn't set a parent directory and we didn't find a single
-            // package, so use the directory we inferred and select all subdirectories
+        } else if self.package_names.is_empty() {
+            // Outside a package, infer every package below the current directory.
             let mut parent_dir = self.directory_root.clone();
             parent_dir.push("**");
             selector.parent_dir = Some(parent_dir);
         }
 
-        Ok(())
+        if should_inject_names {
+            // Expand rather than inventing a name glob: each package keeps the
+            // original selector's dependency, exclusion, and Git-range modifiers.
+            Ok(self
+                .package_names
+                .iter()
+                .map(|name| TargetSelector {
+                    name_pattern: name.clone(),
+                    ..selector.clone()
+                })
+                .collect())
+        } else {
+            Ok(vec![selector])
+        }
     }
 }
 
@@ -168,33 +164,6 @@ pub struct FilterResolver<'a, T: GitChangeDetector> {
     turbo_root: &'a AbsoluteSystemPath,
     inference: Option<PackageInference>,
     change_detector: T,
-}
-
-impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
-    pub fn new(
-        opts: &'a ScopeOpts,
-        pkg_graph: &'a PackageGraph,
-        turbo_root: &'a AbsoluteSystemPath,
-        inference: Option<PackageInference>,
-        scm: &'a SCM,
-        global_deps: &'a [String],
-    ) -> Result<Self, ResolutionError> {
-        let global_deps_iter = opts
-            .global_deps
-            .iter()
-            .map(|s| s.as_str())
-            .chain(global_deps.iter().map(|s| s.as_str()));
-
-        let change_detector =
-            ScopeChangeDetector::new(turbo_root, scm, pkg_graph, global_deps_iter, vec![])?;
-
-        Ok(Self::new_with_change_detector(
-            pkg_graph,
-            turbo_root,
-            inference,
-            change_detector,
-        ))
-    }
 }
 
 impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
@@ -392,17 +361,18 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         };
 
         // if there is no selector provided, synthesize one
-        let mut selectors = if selectors.is_empty() {
+        let selectors = if selectors.is_empty() {
             vec![Default::default()]
         } else {
             selectors
         };
 
-        for selector in &mut selectors {
-            inference.apply(selector)?;
+        let mut inferred_selectors = Vec::with_capacity(selectors.len());
+        for selector in selectors {
+            inferred_selectors.extend(inference.apply(selector)?);
         }
 
-        Ok(selectors)
+        Ok(inferred_selectors)
     }
 
     fn filter_graph(
@@ -411,10 +381,13 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let (include_selectors, exclude_selectors) =
             selectors.into_iter().partition::<Vec<_>, _>(|t| !t.exclude);
+        // Inference can expand one Git selector into several package selectors.
+        // Reuse one change snapshot per complete range within this filter pass.
+        let mut changes_by_range = HashMap::new();
 
         let mut include = if !include_selectors.is_empty() {
             // TODO: add telemetry for each selector
-            self.filter_graph_with_selectors(include_selectors)?
+            self.filter_graph_with_selectors(include_selectors, &mut changes_by_range)?
         } else {
             self.selectable_packages()
                 .map(|name| {
@@ -434,7 +407,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // We want to just collect the names, not the reasons, so when we check for
         // inclusion we don't need to check the reason
         let exclude: HashSet<PackageName> = self
-            .filter_graph_with_selectors(exclude_selectors)?
+            .filter_graph_with_selectors(exclude_selectors, &mut changes_by_range)?
             .into_keys()
             .collect();
 
@@ -446,6 +419,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_graph_with_selectors(
         &self,
         selectors: Vec<TargetSelector>,
+        changes_by_range: &mut HashMap<GitRange, HashMap<PackageName, PackageInclusionReason>>,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let mut unmatched_selectors = Vec::new();
         let mut walked_dependencies = HashMap::new();
@@ -453,8 +427,19 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         let mut walked_dependent_dependencies = HashMap::new();
         let mut cherry_picked_packages = HashMap::new();
 
+        let empty_changes = HashMap::new();
         for selector in selectors {
-            let selector_packages = self.filter_graph_with_selector(&selector)?;
+            let changed_packages = if let Some(range) = &selector.git_range {
+                match changes_by_range.entry(range.clone()) {
+                    std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+                    std::collections::hash_map::Entry::Vacant(entry) => {
+                        entry.insert(self.packages_changed_in_range(range)?)
+                    }
+                }
+            } else {
+                &empty_changes
+            };
+            let selector_packages = self.filter_graph_with_selector(&selector, changed_packages)?;
 
             if selector_packages.is_empty() {
                 unmatched_selectors.push(selector);
@@ -462,16 +447,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             }
 
             for (package, reason) in selector_packages {
-                let node = package_graph::PackageNode::Workspace(package.clone());
-
                 if selector.include_dependencies {
-                    let dependencies = self.pkg_graph.dependencies(&node);
-                    let dependencies = dependencies
-                        .iter()
-                        .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                        .map(|i| {
+                    let dependencies = self
+                        .pkg_graph
+                        .filtering_relationships()
+                        .transitive_dependencies(&package)?
+                        .into_iter()
+                        .map(|dependency| {
                             (
-                                i.as_package_name().to_owned(),
+                                dependency,
                                 // While we're adding dependencies, from their
                                 // perspective, they were changed because
                                 // of a *dependent*
@@ -482,13 +466,16 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                         })
                         .collect::<Vec<_>>();
 
-                    // flatmap through the option, the set, and then the optional package name
+                    // Merge the explicit, validated filtering projection.
                     merge_changed_packages(&mut walked_dependencies, dependencies);
                 }
 
                 if selector.include_dependents {
-                    let dependents = self.pkg_graph.ancestors(&node);
-                    for dependent in dependents.iter().map(|i| i.as_package_name()) {
+                    let dependents = self
+                        .pkg_graph
+                        .filtering_relationships()
+                        .transitive_dependents(&package)?;
+                    for dependent in &dependents {
                         walked_dependents.insert(
                             dependent.clone(),
                             // While we're adding dependents, from their
@@ -505,29 +492,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     // dependent. The closure includes the dependents
                     // themselves, but they already carry the same inclusion
                     // reason via `walked_dependents`, which takes precedence
-                    // in the merge below. Like `dependencies`, the root
+                    // in the merge below. Like the dependency projection, the root
                     // package's own dependencies count as implied
                     // dependencies of every dependent.
                     if selector.include_dependencies && !dependents.is_empty() {
-                        let dependent_nodes: Vec<package_graph::PackageNode> = dependents
-                            .iter()
-                            .map(|i| {
-                                package_graph::PackageNode::Workspace(i.as_package_name().clone())
-                            })
-                            .collect();
-
                         let dependent_dependencies = self
                             .pkg_graph
-                            .transitive_closure(dependent_nodes.iter())
+                            .filtering_relationships()
+                            .dependency_closure(&dependents)?
                             .into_iter()
-                            .filter(|node| !matches!(node, package_graph::PackageNode::Root))
-                            .map(|i| i.as_package_name().to_owned())
-                            .chain(
-                                self.pkg_graph
-                                    .root_internal_package_dependencies()
-                                    .into_iter()
-                                    .map(|workspace| workspace.name),
-                            )
                             .map(|name| {
                                 (
                                     name,
@@ -571,11 +544,12 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_graph_with_selector(
         &self,
         selector: &TargetSelector,
+        changed_packages: &HashMap<PackageName, PackageInclusionReason>,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         if selector.match_dependencies {
-            self.filter_subtrees_with_selector(selector)
+            self.filter_subtrees_with_selector(selector, changed_packages)
         } else {
-            self.filter_nodes_with_selector(selector)
+            self.filter_nodes_with_selector(selector, changed_packages)
         }
     }
 
@@ -591,6 +565,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_subtrees_with_selector(
         &self,
         selector: &TargetSelector,
+        changed_packages: &HashMap<PackageName, PackageInclusionReason>,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let mut entry_packages = HashMap::new();
 
@@ -646,32 +621,25 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             entry_packages
         };
 
-        let changed_packages = if let Some(git_range) = selector.git_range.as_ref() {
-            self.packages_changed_in_range(git_range)?
-        } else {
-            HashMap::default()
-        };
-
         // A package is selected if it is itself changed (unless excluded) or
         // if it transitively depends on a changed package. Answering the
         // latter with reverse traversals from the changed set is much cheaper
         // than computing a forward dependency closure for every candidate
         // package: the changed set is typically far smaller than the package
-        // count. `ancestors` also matches the semantics of `dependencies`
-        // here, including treating the root package's dependencies as implied
+        // count. The reverse filtering projection matches forward dependency
+        // semantics, including treating the root package's dependencies as implied
         // dependencies of every package.
         let mut dependent_on_changed = HashSet::new();
         for changed_package in changed_packages.keys() {
-            let changed_node = package_graph::PackageNode::Workspace(changed_package.to_owned());
-            for ancestor in self.pkg_graph.ancestors(&changed_node) {
-                // `dependencies` never includes the package itself, so a
+            for ancestor in self
+                .pkg_graph
+                .filtering_relationships()
+                .transitive_dependents(changed_package)?
+            {
+                // Filtering projections never include the package itself, so a
                 // package's own change must not mark it as depending on a
                 // changed package; self-selection is handled below.
-                if *ancestor != changed_node
-                    && !matches!(ancestor, package_graph::PackageNode::Root)
-                {
-                    dependent_on_changed.insert(ancestor.as_package_name().clone());
-                }
+                dependent_on_changed.insert(ancestor);
             }
         }
 
@@ -689,6 +657,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     fn filter_nodes_with_selector(
         &self,
         selector: &TargetSelector,
+        changed_packages: &HashMap<PackageName, PackageInclusionReason>,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let mut entry_packages = HashMap::new();
         let mut selector_valid = false;
@@ -706,16 +675,14 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         if let Some(globber) = parent_dir_globber.clone() {
             let (base, _) = globber.partition();
-            // wax takes a unix-like glob, but partition will return a system path
-            // TODO: it would be more proper to use
-            // `AnchoredSystemPathBuf::from_system_path` but that function
-            // doesn't allow leading `.` or `..`.
+            // wax takes a unix-like glob, but partition will return a system path.
+            // Keep leading `.` and `..` components while rejecting absolute paths.
             let base = base.to_str().ok_or_else(|| {
                 ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
                     base.to_string_lossy().into_owned(),
                 ))
             })?;
-            let base = AnchoredSystemPathBuf::from_raw(base).map_err(|_| {
+            let base = AnchoredSystemPathBuf::try_from(base).map_err(|_| {
                 ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
                     base.to_string(),
                 ))
@@ -727,15 +694,17 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             }
         }
 
-        if let Some(git_range) = selector.git_range.as_ref() {
+        if selector.git_range.is_some() {
             selector_valid = true;
-            let changed_packages = self.packages_changed_in_range(git_range)?;
             let package_path_lookup = self
                 .pkg_graph
                 .package_scope_directories()
                 .collect::<HashMap<_, _>>();
 
-            for (package, reason) in changed_packages {
+            for (package, reason) in changed_packages
+                .iter()
+                .map(|(package, reason)| (package.clone(), reason.clone()))
+            {
                 if let Some(parent_dir_globber) = parent_dir_globber.as_ref() {
                     if package == PackageName::Root {
                         // `{.}` addresses the root Turbo namespace even when
@@ -904,6 +873,10 @@ pub enum ResolutionError {
     DirectoryDoesNotExist(AbsoluteSystemPathBuf),
     #[error("failed to construct glob for globalDependencies")]
     GlobalDependenciesGlob(#[from] turborepo_repository::change_mapper::Error),
+    #[error(transparent)]
+    RelationshipProjection(
+        #[from] turborepo_repository::package_graph::RelationshipProjectionError,
+    ),
 }
 
 #[cfg(test)]
@@ -925,9 +898,10 @@ mod test {
         package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
         package_json::PackageJson,
         package_manager::PackageManager,
+        relationships::{DependencyKind, Relationship, RelationshipTarget},
         toolchain::{
-            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, Toolchain, ToolchainId,
-            WorkspaceRoot,
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+            ToolchainId, WorkspaceRoot,
         },
     };
 
@@ -976,11 +950,11 @@ mod test {
         }
     }
 
-    struct AggregateToolchain {
+    struct AggregateContributor {
         definition_path: AbsoluteSystemPathBuf,
     }
 
-    impl Toolchain for AggregateToolchain {
+    impl RepositoryContributor for AggregateContributor {
         fn id(&self) -> ToolchainId {
             ToolchainId::new("aggregate-test")
         }
@@ -997,54 +971,24 @@ mod test {
                         "cargo-workspace".to_string(),
                         PackageJson::default(),
                         self.definition_path.clone(),
-                        None,
                     )],
                     vec![WorkspaceRoot::new("cargo", root)],
                 ))
             })
         }
 
-        fn task_command(
+        fn discover_package_scopes(
             &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-            _pass_through_args: Option<&[String]>,
-            _override_command: Option<&[String]>,
-        ) -> Result<
-            Option<turborepo_repository::toolchain::TaskCommand>,
-            turborepo_repository::toolchain::Error,
-        > {
-            Ok(None)
-        }
-
-        fn task_display_command(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-        ) -> Option<String> {
-            None
-        }
-
-        fn defines_task(
-            &self,
-            _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-            _task: &str,
-        ) -> bool {
-            false
-        }
-
-        fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
-            turborepo_repository::toolchain::WatchSpec::default()
-        }
-
-        fn prune_plan(
-            &self,
-            _kept_packages: &[String],
-        ) -> Result<
-            Option<turborepo_repository::toolchain::PrunePlan>,
-            turborepo_repository::toolchain::Error,
-        > {
-            Ok(None)
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        output.packages(),
+                        output.workspace_roots(),
+                    ),
+                )
+            })
         }
     }
 
@@ -1267,7 +1211,7 @@ mod test {
             ..Default::default()
         }],
         Some(PackageInference{
-            package_name: None,
+            package_names: Vec::new(),
             directory_root: AnchoredSystemPathBuf::try_from("project-5").unwrap(),
         }),
         &["project-0", "project-1"] ;
@@ -1337,7 +1281,7 @@ mod test {
     #[test_case(
         vec![],
         Some(PackageInference{
-            package_name: None,
+            package_names: Vec::new(),
             directory_root: AnchoredSystemPathBuf::try_from("packages").unwrap(),
         }),
         &["project-0", "project-1"] ;
@@ -1346,7 +1290,7 @@ mod test {
     #[test_case(
         vec![],
         Some(PackageInference{
-            package_name: Some("project-0".to_string()),
+            package_names: vec!["project-0".to_string()],
             directory_root: AnchoredSystemPathBuf::try_from("packages/project-0").unwrap(),
         }),
         &["project-0"] ;
@@ -1355,7 +1299,7 @@ mod test {
     #[test_case(
         vec![],
         Some(PackageInference{
-            package_name: Some("project-0".to_string()),
+            package_names: vec!["project-0".to_string()],
             directory_root: AnchoredSystemPathBuf::try_from("packages/project-0/src").unwrap(),
         }),
         &["project-0"] ;
@@ -1754,7 +1698,7 @@ mod test {
         let turbo_root = Box::leak(Box::new(
             AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
         ));
-        let aggregate = Arc::new(AggregateToolchain {
+        let aggregate = Arc::new(AggregateContributor {
             definition_path: turbo_root.join_component("Cargo.toml"),
         });
         let graph = tokio::runtime::Builder::new_current_thread()
@@ -1765,7 +1709,7 @@ mod test {
                 PackageGraph::builder_optional(turbo_root, root_package_json)
                     .with_package_discovery(MockDiscovery)
                     .with_package_jsons(Some(HashMap::new()))
-                    .with_toolchain(aggregate)
+                    .with_contributor(aggregate)
                     .build(),
             )
             .unwrap();
@@ -1820,7 +1764,7 @@ mod test {
             &AnchoredSystemPathBuf::default(),
             resolver.pkg_graph,
         );
-        assert_eq!(inference.package_name, None);
+        assert!(inference.package_names.is_empty());
         assert_eq!(inference.directory_root, AnchoredSystemPathBuf::default());
     }
 
@@ -1959,6 +1903,342 @@ mod test {
         );
     }
 
+    struct ColocatedContributor {
+        id: ToolchainId,
+        output: DiscoveredPackages,
+    }
+
+    impl RepositoryContributor for ColocatedContributor {
+        fn id(&self) -> ToolchainId {
+            self.id.clone()
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async { Ok(self.output.clone()) })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async {
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        self.output.packages(),
+                        self.output.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    async fn make_colocated_graph(
+        native_packages: &[(ToolchainId, &str, &str)],
+    ) -> (TempDir, AbsoluteSystemPathBuf, PackageGraph) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::new(tempdir.path().to_str().unwrap()).unwrap();
+        let mut package_jsons = HashMap::new();
+        for (directory, name) in [
+            ("apps", "apps"),
+            ("apps/shared", "@repo/js"),
+            ("apps/shared/child", "child"),
+            ("packages/unrelated", "unrelated"),
+            ("packages/native-dep", "native-dep"),
+        ] {
+            let path = root.join_unix_path(
+                RelativeUnixPathBuf::new(format!("{directory}/package.json")).unwrap(),
+            );
+            path.ensure_dir().unwrap();
+            package_jsons.insert(
+                path,
+                PackageJson {
+                    name: Some(Spanned::new(name.to_string())),
+                    dependencies: match name {
+                        "@repo/js" => Some([("unrelated".to_string(), "*".to_string())].into()),
+                        _ => None,
+                    },
+                    ..Default::default()
+                },
+            );
+        }
+        // Contribute the cross-language edge explicitly: an npm dependency
+        // declaration cannot resolve to a Cargo package just by sharing a name.
+        let consumer_relationships = native_packages
+            .iter()
+            .any(|(_, name, _)| *name == "rust-pkg")
+            .then(|| Relationship::internal("rust-pkg", DependencyKind::Production))
+            .into_iter()
+            .collect();
+        let mut builder = PackageGraph::builder(&root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(package_jsons))
+            .with_contributor(Arc::new(ColocatedContributor {
+                id: ToolchainId::new("test-consumer"),
+                output: DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some("consumer".to_string()),
+                            PackageJson::default(),
+                            root.join_components(&["packages", "consumer", "package.json"]),
+                        )
+                        .with_native_relationships(consumer_relationships),
+                    ],
+                    vec![WorkspaceRoot::new("test-consumer", root.clone())],
+                ),
+            }));
+        for (id, name, manifest) in native_packages {
+            builder = builder.with_contributor(Arc::new(ColocatedContributor {
+                id: id.clone(),
+                output: DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some(name.to_string()),
+                            PackageJson::default(),
+                            root.join_components(&["apps", "shared", manifest]),
+                        )
+                        .with_native_relationships(vec![
+                            Relationship::new(
+                                "native-dep",
+                                DependencyKind::Production,
+                                RelationshipTarget::Internal("native-dep".to_string()),
+                            ),
+                        ]),
+                    ],
+                    vec![WorkspaceRoot::new(id.as_str(), root.clone())],
+                ),
+            }));
+        }
+        let graph = builder.build().await.unwrap();
+        (tempdir, root, graph)
+    }
+
+    #[tokio::test]
+    async fn test_colocated_package_inference_selects_all_deepest_packages() {
+        let go = (ToolchainId::GO, "example.com/go", "go.mod");
+        let rust = (ToolchainId::RUST, "rust-pkg", "Cargo.toml");
+        for native_packages in [
+            vec![go.clone()],
+            vec![go.clone(), rust.clone()],
+            vec![rust, go],
+        ] {
+            let (_tempdir, root, graph) = make_colocated_graph(&native_packages).await;
+            let expected: HashSet<_> = std::iter::once(PackageName::from("@repo/js"))
+                .chain(
+                    native_packages
+                        .iter()
+                        .map(|(_, name, _)| PackageName::from(*name)),
+                )
+                .collect();
+            for cwd in ["apps/shared", "apps/shared/src"] {
+                let inference = PackageInference::calculate(
+                    &root,
+                    &AnchoredSystemPathBuf::from_raw(cwd).unwrap(),
+                    &graph,
+                );
+                let resolver = FilterResolver::new_with_change_detector(
+                    &graph,
+                    &root,
+                    Some(inference),
+                    TestChangeDetector::new(&[]),
+                );
+                let selected = resolver.get_filtered_packages(vec![]).unwrap();
+                assert_eq!(
+                    selected.into_keys().collect::<HashSet<_>>(),
+                    expected,
+                    "{cwd}"
+                );
+            }
+            let resolver = FilterResolver::new_with_change_detector(
+                &graph,
+                &root,
+                None,
+                TestChangeDetector::new(&[]),
+            );
+            let selected = resolver
+                .get_filtered_packages(vec![TargetSelector::from_str("./apps/shared").unwrap()])
+                .unwrap();
+            assert_eq!(selected.into_keys().collect::<HashSet<_>>(), expected);
+
+            // A nested package still takes precedence over every co-located parent.
+            let inference = PackageInference::calculate(
+                &root,
+                &AnchoredSystemPathBuf::from_raw("apps/shared/child/src").unwrap(),
+                &graph,
+            );
+            let resolver = FilterResolver::new_with_change_detector(
+                &graph,
+                &root,
+                Some(inference),
+                TestChangeDetector::new(&[]),
+            );
+            let selected = resolver.get_filtered_packages(vec![]).unwrap();
+            assert_eq!(
+                selected.into_keys().collect::<HashSet<_>>(),
+                [PackageName::from("child")].into()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_colocated_package_inference_preserves_filter_semantics() {
+        let (_tempdir, root, graph) = make_colocated_graph(&[
+            (ToolchainId::GO, "example.com/go", "go.mod"),
+            (ToolchainId::RUST, "rust-pkg", "Cargo.toml"),
+        ])
+        .await;
+        let inference = PackageInference::calculate(
+            &root,
+            &AnchoredSystemPathBuf::from_raw("apps/shared/src").unwrap(),
+            &graph,
+        );
+        let resolver = FilterResolver::new_with_change_detector(
+            &graph,
+            &root,
+            Some(inference),
+            TestChangeDetector::new(&[("main", None, &["rust-pkg", "unrelated"])]),
+        );
+        let all = &["@repo/js", "example.com/go", "rust-pkg"][..];
+        for (patterns, expected) in [
+            (
+                vec!["..."],
+                &[
+                    "@repo/js",
+                    "example.com/go",
+                    "rust-pkg",
+                    "unrelated",
+                    "native-dep",
+                ][..],
+            ),
+            (vec!["^..."], &["unrelated", "native-dep"][..]),
+            (
+                vec!["...", "!example.com/go"],
+                &["@repo/js", "rust-pkg", "unrelated", "native-dep"][..],
+            ),
+            (
+                vec!["...", "![main]"],
+                &["@repo/js", "example.com/go", "unrelated", "native-dep"][..],
+            ),
+            (vec!["...", "!^..."], all),
+            (
+                vec!["...{../*}"],
+                &["@repo/js", "example.com/go", "rust-pkg", "consumer"][..],
+            ),
+            (vec!["...^{../*}"], &["consumer"][..]),
+            (vec!["{../*}...[main]"], &["@repo/js", "rust-pkg"][..]),
+            (vec!["rust-pkg"], &["rust-pkg"][..]),
+            (vec!["unrelated"], &["unrelated"][..]),
+            (vec!["./child"], &["child"][..]),
+            (vec!["./*"], &["child"][..]),
+            (vec!["./"], all),
+            (vec!["{../*}"], all),
+            (vec!["[main]"], &["rust-pkg"][..]),
+        ] {
+            let selectors = patterns
+                .iter()
+                .map(|pattern| TargetSelector::from_str(pattern).unwrap())
+                .collect();
+            let selected = resolver.get_filtered_packages(selectors).unwrap();
+            assert_eq!(
+                selected.into_keys().collect::<HashSet<_>>(),
+                expected
+                    .iter()
+                    .map(|name| PackageName::from(*name))
+                    .collect(),
+                "{patterns:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_colocated_package_inference_reuses_git_range_snapshot() {
+        struct CountingChangeDetector {
+            calls: std::cell::Cell<usize>,
+        }
+
+        impl GitChangeDetector for CountingChangeDetector {
+            fn changed_packages(
+                &self,
+                from_ref: Option<&str>,
+                to_ref: Option<&str>,
+                include_uncommitted: bool,
+                allow_unknown_objects: bool,
+                merge_base: bool,
+            ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
+                self.calls.set(self.calls.get() + 1);
+                TestChangeDetector::new(&[("main", None, &["rust-pkg", "unrelated"])])
+                    .changed_packages(
+                        from_ref,
+                        to_ref,
+                        include_uncommitted,
+                        allow_unknown_objects,
+                        merge_base,
+                    )
+            }
+        }
+
+        let (_tempdir, root, graph) = make_colocated_graph(&[
+            (ToolchainId::GO, "example.com/go", "go.mod"),
+            (ToolchainId::RUST, "rust-pkg", "Cargo.toml"),
+        ])
+        .await;
+        let inference = PackageInference::calculate(
+            &root,
+            &AnchoredSystemPathBuf::from_raw("apps/shared").unwrap(),
+            &graph,
+        );
+        let resolver = FilterResolver::new_with_change_detector(
+            &graph,
+            &root,
+            Some(inference),
+            CountingChangeDetector {
+                calls: std::cell::Cell::new(0),
+            },
+        );
+
+        let (selected, _) = resolver
+            .resolve(
+                &Some((Some("main".to_string()), None)),
+                &["!@repo/js".to_string()],
+            )
+            .unwrap();
+        assert_eq!(
+            selected.into_keys().collect::<HashSet<_>>(),
+            [PackageName::from("rust-pkg"), PackageName::from("consumer")].into()
+        );
+        assert_eq!(resolver.change_detector.calls.get(), 1);
+
+        // Includes and exclusions of the same range share a snapshot. A new
+        // filter pass must observe changes again rather than retain stale data.
+        let selector = TargetSelector::from_str("[main]").unwrap();
+        let mut excluded = selector.clone();
+        excluded.exclude = true;
+        assert!(
+            resolver
+                .get_filtered_packages(vec![selector.clone(), excluded])
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(resolver.change_detector.calls.get(), 2);
+
+        // The key includes every range option, not just the ref names.
+        for option in ["include_uncommitted", "allow_unknown_objects", "merge_base"] {
+            let mut different = selector.clone();
+            let range = different.git_range.as_mut().unwrap();
+            match option {
+                "include_uncommitted" => range.include_uncommitted = !range.include_uncommitted,
+                "allow_unknown_objects" => {
+                    range.allow_unknown_objects = !range.allow_unknown_objects
+                }
+                "merge_base" => range.merge_base = !range.merge_base,
+                _ => unreachable!(),
+            }
+            let before = resolver.change_detector.calls.get();
+            resolver
+                .get_filtered_packages(vec![selector.clone(), different])
+                .unwrap();
+            assert_eq!(resolver.change_detector.calls.get(), before + 2, "{option}");
+        }
+    }
+
     /// Test that PackageInference::calculate is deterministic when invoked from
     /// a directory that contains nested packages (regression test for
     /// GitHub issue #11428).
@@ -1987,10 +2267,10 @@ mod test {
             // We should NOT infer a specific package - we're in a directory that contains
             // packages, not inside a specific package
             assert!(
-                inference.package_name.is_none(),
+                inference.package_names.is_empty(),
                 "Expected no package to be inferred when running from a directory containing \
                  packages, but got {:?}",
-                inference.package_name
+                inference.package_names
             );
 
             // The directory root should be the inference path itself
@@ -2013,8 +2293,8 @@ mod test {
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
-            inference.package_name,
-            Some("backend".to_string()),
+            inference.package_names,
+            vec!["backend".to_string()],
             "Expected to infer 'backend' package"
         );
         assert_eq!(
@@ -2027,8 +2307,8 @@ mod test {
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
-            inference.package_name,
-            Some("backend".to_string()),
+            inference.package_names,
+            vec!["backend".to_string()],
             "Expected to infer 'backend' package from subdirectory"
         );
         assert_eq!(
@@ -2054,8 +2334,8 @@ mod test {
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
-            inference.package_name,
-            Some("ui".to_string()),
+            inference.package_names,
+            vec!["ui".to_string()],
             "Expected to infer the deepest package 'ui'"
         );
         assert_eq!(
@@ -2068,8 +2348,8 @@ mod test {
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
-            inference.package_name,
-            Some("web".to_string()),
+            inference.package_names,
+            vec!["web".to_string()],
             "Expected to infer 'web' package"
         );
         assert_eq!(
@@ -2098,7 +2378,7 @@ mod test {
             &[],
             // Simulate running from apps/onprem
             Some(PackageInference {
-                package_name: None,
+                package_names: Vec::new(),
                 directory_root: AnchoredSystemPathBuf::try_from("apps/onprem").unwrap(),
             }),
             TestChangeDetector::new(&[]),
@@ -2149,7 +2429,7 @@ mod test {
             ],
             &[],
             Some(PackageInference {
-                package_name: None,
+                package_names: Vec::new(),
                 directory_root: AnchoredSystemPathBuf::try_from("apps/onprem").unwrap(),
             }),
             TestChangeDetector::new(&[]),
@@ -2212,10 +2492,10 @@ mod test {
                 "packages/tooling-config",
             ],
             // Simulate running from apps directory
-            // PackageInference::calculate would set package_name to Some("apps")
+            // PackageInference::calculate would set package_names to ["apps"]
             // because apps is a workspace at that path
             Some(PackageInference {
-                package_name: Some("apps".to_string()),
+                package_names: vec!["apps".to_string()],
                 directory_root: AnchoredSystemPathBuf::try_from("apps").unwrap(),
             }),
             TestChangeDetector::new(&[]),
@@ -2382,7 +2662,7 @@ mod test {
     #[test]
     fn filter_mode_inference_forces_explicit_selection() {
         let inference = Some(PackageInference {
-            package_name: Some("project-0".to_string()),
+            package_names: vec!["project-0".to_string()],
             directory_root: AnchoredSystemPathBuf::try_from("packages/project-0").unwrap(),
         });
         // Exclude-only patterns with inference should still be ExplicitSelection.

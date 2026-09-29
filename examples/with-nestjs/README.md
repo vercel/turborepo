@@ -12,7 +12,7 @@ npx create-turbo@latest -e with-nestjs
 
 ## What's inside?
 
-This Turborepo includes the following packages & apps:
+This Turborepo includes the following packages and apps:
 
 ### Apps and Packages
 
@@ -22,99 +22,103 @@ This Turborepo includes the following packages & apps:
 │   ├── api                       # NestJS app (https://nestjs.com).
 │   └── web                       # Next.js app (https://nextjs.org).
 └── packages
-    ├── @repo/api                 # Shared `NestJS` resources.
-    ├── @repo/eslint-config       # `eslint` configurations (includes `prettier`)
-    ├── @repo/jest-config         # `jest` configurations
-    ├── @repo/typescript-config   # `tsconfig.json`s used throughout the monorepo
-    └── @repo/ui                  # Shareable stub React component library.
+    ├── @repo/api                 # Shared NestJS resources.
+    ├── @repo/eslint-config       # ESLint configurations (includes Prettier)
+    ├── @repo/jest-config         # Jest configurations
+    ├── @repo/typescript-config   # tsconfig.json files used throughout the monorepo
+    └── @repo/ui                  # Shareable React component library.
 ```
 
-Each package and application are mostly written in [TypeScript](https://www.typescriptlang.org/).
+Each package and application is mostly written in [TypeScript](https://www.typescriptlang.org/).
 
 ### Utilities
 
-This `Turborepo` has some additional tools already set for you:
+This Turborepo has some additional tools already set up for you:
 
-- [TypeScript](https://www.typescriptlang.org/) for static type-safety
+- [TypeScript](https://www.typescriptlang.org/) for static type safety
 - [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
-- [Jest](https://prettier.io) & [Playwright](https://playwright.dev/) for testing
+- [Jest](https://jestjs.io/) for testing
 
 ### Commands
 
-This `Turborepo` already configured useful commands for all your apps and packages.
+This Turborepo includes useful commands for its apps and packages.
 
 #### Build
 
 ```bash
-# Will build all the app & packages with the supported `build` script.
-pnpm run build
-
-# ℹ️ If you plan to only build apps individually,
-# Please make sure you've built the packages first.
+# Build all apps and packages that have a `build` script.
+pnpm build
 ```
 
 #### Develop
 
 ```bash
-# Will run the development server for all the app & packages with the supported `dev` script.
-pnpm run dev
+# Run development servers for all apps and packages that have a `dev` script.
+pnpm dev
 ```
 
-#### test
+#### Test
 
 ```bash
-# Will launch a test suites for all the app & packages with the supported `test` script.
-pnpm run test
+# Run unit tests for all apps and packages that have a `test` script.
+pnpm test
 
-# You can launch e2e testes with `test:e2e`
-pnpm run test:e2e
-
-# See `@repo/jest-config` to customize the behavior.
+# Run end-to-end tests for all apps and packages that have a `test:e2e` script.
+pnpm test:e2e
 ```
+
+See `@repo/jest-config` to customize test behavior.
 
 #### Lint
 
 ```bash
-# Will lint all the app & packages with the supported `lint` script.
-# See `@repo/eslint-config` to customize the behavior.
-pnpm run lint
+# Lint all apps and packages that have a `lint` script.
+pnpm lint
+```
+
+See `@repo/eslint-config` to customize lint behavior.
+
+#### Check types
+
+```bash
+# Type-check all apps and packages that have a `check-types` script.
+pnpm check-types
 ```
 
 #### Format
 
 ```bash
-# Will format all the supported `.ts,.js,json,.tsx,.jsx` files.
-# See `@repo/eslint-config/prettier-base.js` to customize the behavior.
+# Format supported TypeScript, TSX, and Markdown files.
 pnpm format
 ```
+
+See `@repo/eslint-config/prettier-base` to customize formatting.
 
 ### Remote Caching
 
 > [!TIP]
 > Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+Turborepo can use [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines and CI.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+By default, Turborepo caches locally. To enable Remote Caching, create a [Vercel account](https://vercel.com/signup?utm_source=turborepo-examples), then authenticate:
 
 ```bash
-npx turbo login
+pnpm turbo login
 ```
 
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+Next, link the repository to Remote Cache from the repository root:
 
 ```bash
-npx turbo link
+pnpm turbo link
 ```
 
 ## Useful Links
 
-This example take some inspiration the [with-nextjs](https://github.com/vercel/turborepo/tree/main/examples/with-nextjs) `Turbo` example and [01-cats-app](https://github.com/nestjs/nest/tree/master/sample/01-cats-app) `NestJs` sample.
+This example takes inspiration from the [with-nextjs](https://github.com/vercel/turborepo/tree/main/examples/with-nextjs) Turborepo example and the [01-cats-app](https://github.com/nestjs/nest/tree/master/sample/01-cats-app) NestJS sample.
 
-Learn more about the power of Turborepo:
+Learn more about Turborepo:
 
 - [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
 - [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)

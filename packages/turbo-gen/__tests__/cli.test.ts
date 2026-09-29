@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { execSync, spawn } from "node:child_process";
+import { execFile, execSync, spawn } from "node:child_process";
+import { promisify } from "node:util";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
 const CLI = path.resolve(__dirname, "..", "dist", "cli.js");
 const cliExists = fs.existsSync(CLI);
+const execFileAsync = promisify(execFile);
 
 function run(args: string[], cwd?: string): string {
   const escaped = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
@@ -55,6 +57,43 @@ export default function generator(plop: any): void {
     description: "${name}",
     prompts: [],
     actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+  });
+}
+`;
+
+const TS_CONFIG_RECORDING_FILENAME = `
+import fs from "node:fs";
+
+export default function generator(plop: any): void {
+  plop.setGenerator("race", {
+    prompts: [],
+    actions: [() => {
+      fs.writeFileSync(process.env.TURBO_GEN_OUTPUT!, __filename);
+      return "recorded bundle path";
+    }]
+  });
+}
+`;
+
+const TS_CONFIG_WITH_NO_OP_APPEND = `
+export default function generator(plop: any): void {
+  plop.setGenerator("no-op-append", {
+    prompts: [],
+    actions: [{
+      type: "append",
+      path: "target.txt",
+      pattern: /missing anchor/,
+      template: "appended content"
+    }]
+  });
+}
+`;
+
+const TS_CONFIG_WITH_NO_ACTIONS = `
+export default function generator(plop: any): void {
+  plop.setGenerator("no-actions", {
+    prompts: [],
+    actions: []
   });
 }
 `;
@@ -198,6 +237,99 @@ describeIfBuilt("@turbo/gen CLI", () => {
       expect(out).toContain("run");
       expect(out).toContain("workspace");
     });
+  });
+
+  it("reports when no actions were taken", () => {
+    const projectDir = path.join(tmpDir, "no-actions");
+    fs.mkdirSync(projectDir, { recursive: true });
+    createProject(projectDir, {
+      configFile: "config.ts",
+      configContent: TS_CONFIG_WITH_NO_ACTIONS
+    });
+
+    const output = run(
+      [
+        "raw",
+        "run",
+        "--json",
+        JSON.stringify({
+          root: projectDir,
+          generator_name: "no-actions"
+        })
+      ],
+      projectDir
+    );
+
+    expect(output).toContain("No actions were taken.");
+    expect(output).not.toContain("Actions completed:");
+  });
+
+  // Regression test for https://github.com/vercel/turborepo/issues/13909
+  it("does not report a no-op append as a change", () => {
+    const projectDir = path.join(tmpDir, "no-op-append");
+    fs.mkdirSync(projectDir, { recursive: true });
+    createProject(projectDir, {
+      configFile: "config.ts",
+      configContent: TS_CONFIG_WITH_NO_OP_APPEND
+    });
+    fs.writeFileSync(path.join(projectDir, "target.txt"), "unchanged\n");
+
+    const output = run(
+      [
+        "raw",
+        "run",
+        "--json",
+        JSON.stringify({
+          root: projectDir,
+          generator_name: "no-op-append"
+        })
+      ],
+      projectDir
+    );
+
+    expect(output).toContain("Actions completed:");
+    expect(output).not.toContain("Changes made:");
+    expect(fs.readFileSync(path.join(projectDir, "target.txt"), "utf8")).toBe(
+      "unchanged\n"
+    );
+  });
+
+  // Regression test for https://github.com/vercel/turborepo/issues/13735
+  it("uses independent bundles for concurrent invocations", async () => {
+    const projectDir = path.join(tmpDir, "concurrent-invocations");
+    fs.mkdirSync(projectDir, { recursive: true });
+    createProject(projectDir, {
+      configFile: "config.ts",
+      configContent: TS_CONFIG_RECORDING_FILENAME
+    });
+
+    const outputs = ["first.txt", "second.txt"].map((file) =>
+      path.join(projectDir, file)
+    );
+    const args = [
+      CLI,
+      "raw",
+      "run",
+      "--json",
+      JSON.stringify({ root: projectDir, generator_name: "race" })
+    ];
+
+    await Promise.all(
+      outputs.map((output) =>
+        execFileAsync(process.execPath, args, {
+          cwd: projectDir,
+          env: { ...process.env, TURBO_GEN_OUTPUT: output }
+        })
+      )
+    );
+
+    const bundlePaths = outputs.map((output) =>
+      fs.readFileSync(output, "utf8")
+    );
+    expect(bundlePaths[0]).not.toBe(bundlePaths[1]);
+    expect(bundlePaths.every((bundlePath) => !fs.existsSync(bundlePath))).toBe(
+      true
+    );
   });
 
   // ESM/CJS config loading matrix — covers every realistic combination of

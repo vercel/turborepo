@@ -43,7 +43,7 @@ Extend from the root `turbo.json` to create specific configuration for a package
 
 A list of globs that you want to include in all task hashes. **If any file matching these globs changes, all tasks will miss cache.** Globs are relative to the location of `turbo.json`.
 
-By default, only the root package.json and lockfile are included in [the global hash](/docs/crafting-your-repository/caching) and can't be ignored. Any added `globalDependencies` will also be included in the global hash.
+By default, the root `package.json`, lockfile, and source files in internal packages that the root package depends on are included in [the global hash](/docs/crafting-your-repository/caching#root-workspace-dependencies) and can't be ignored. Any added `globalDependencies` will also be included in the global hash.
 
 <Callout type="error">
   Globs must be in the repository's source control root. Globs outside of the
@@ -115,6 +115,22 @@ When set to `true`, disables the update notification that appears when a new ver
 }
 ```
 
+### `agentGuidance`
+
+Default: `true`
+
+When an AI coding agent is detected, `turbo` maintains a managed block in the repository-root `AGENTS.md` that points to the documentation bundled with the installed `turbo` package. The guidance is refreshed before repository-scoped commands, and only Turborepo's own block is updated. Existing instructions and other tools' blocks are preserved.
+
+This is a root-only option; it cannot be set in package-level `turbo.json` files. Use it in either `turbo.json` or `turbo.jsonc` to stop future automatic updates:
+
+```json title="./turbo.json"
+{
+  "agentGuidance": false
+}
+```
+
+Opting out does not delete an existing `AGENTS.md` file or Turborepo block. Existing repositories receive the guidance on a later `turbo` invocation when an agent is detected. New projects created from the default starter include it immediately.
+
 ### `concurrency`
 
 Default: `"10"`
@@ -169,8 +185,12 @@ Specify the filesystem cache directory.
   When no `cacheDir` is specified and you're working in a [Git
   worktree](https://git-scm.com/docs/git-worktree), Turborepo automatically
   shares the cache with the main worktree. This allows cache hits across
-  different branches checked out in separate worktrees. Setting an explicit
-  `cacheDir` disables this behavior.
+  different branches checked out in separate worktrees. Cache artifacts are
+  restored without rewriting their contents, so outputs containing absolute
+  worktree paths can point to another checkout after a cache hit. Setting an
+  explicit relative `cacheDir`, such as `.turbo/cache`, resolves from the root
+  of the current worktree and disables sharing, giving each worktree its own
+  local cache.
 </Callout>
 
 ### `cacheMaxAge`
@@ -355,12 +375,35 @@ Without this flag, `--affected` operates at the **package level**: if any file i
 
 In this example, if only `README.md` changed in a package, `build` would not run because it excludes `README.md` from its inputs.
 
+This flag also makes package-oriented queries and pruning follow the Task Graph:
+
+- [`turbo query`](/docs/reference/query)'s `affectedPackages` returns the packages that own affected tasks, including dependents connected only through explicit `package#task` dependencies. Packages with no affected tasks are omitted, and unchanged task prerequisites are not reported as affected.
+- [`turbo prune`](/docs/reference/prune) retains packages needed by the tasks of retained packages, along with their package dependencies and inherited Package Configurations. The arguments remain package names, so pruning considers all configured tasks rather than a single task such as `build`.
+
+Both behaviors follow task dependencies within and across enabled toolchains. For example, a JavaScript task depending on `mycrate#build:types` can make its package affected when the Rust task changes, and pruning the JavaScript package retains the crate even without a package-manifest dependency. With the flag disabled, both operations retain their package-based behavior.
+
 <Callout type="info">
   Changes to root configuration files (`package.json`, `turbo.json`,
   `turbo.jsonc`), the package manager lockfile, or
   [`globalDependencies`](#globaldependencies) will always cause all tasks to be
   selected, regardless of individual task `inputs`.
 </Callout>
+
+#### `githubActionsRemoteBaseRefFallback`
+
+Default: `false`
+
+When GitHub Actions reports a pull request's base branch but that branch is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts created by `actions/checkout`, where the base branch may only exist as a remote-tracking ref.
+
+Local refs continue to take precedence. This flag only affects base refs inferred from GitHub Actions. Explicit refs provided through `TURBO_SCM_BASE` and default `main` or `master` resolution are unchanged.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "githubActionsRemoteBaseRefFallback": true,
+  },
+}
+```
 
 #### `watchUsingTaskInputs`
 

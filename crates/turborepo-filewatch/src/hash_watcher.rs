@@ -161,10 +161,30 @@ impl HashWatcher {
     // responding. Both package discovery and file hashing can fail depending on the
     // state of the filesystem, so clients will need to be robust to receiving
     // errors.
+    #[expect(clippy::result_large_err, reason = "retain hash-watcher error details")]
     pub async fn get_file_hashes(&self, hash_spec: HashSpec) -> Result<Arc<GitHashes>, Error> {
         let (tx, rx) = oneshot::channel();
         self.query_tx.send(Query::GetHash(hash_spec, tx)).await?;
         rx.await?
+    }
+
+    /// Replace the package paths supplied by the repository graph.
+    ///
+    /// Package discovery only reports JavaScript workspaces. The repository
+    /// graph also knows about native execution scopes, so watch mode registers
+    /// those paths here to make their content hashes available for
+    /// deduplication.
+    #[expect(clippy::result_large_err, reason = "retain hash-watcher error details")]
+    pub async fn set_package_paths(
+        &self,
+        package_paths: HashSet<AnchoredSystemPathBuf>,
+    ) -> Result<(), Error> {
+        let (tx, rx) = oneshot::channel();
+        self.query_tx
+            .send(Query::SetPackagePaths(package_paths, tx))
+            .await?;
+        rx.await?;
+        Ok(())
     }
 }
 
@@ -179,6 +199,7 @@ struct Subscriber {
 #[derive(Debug)]
 enum Query {
     GetHash(HashSpec, oneshot::Sender<Result<Arc<GitHashes>, Error>>),
+    SetPackagePaths(HashSet<AnchoredSystemPathBuf>, oneshot::Sender<()>),
 }
 
 // Version is a type that exists to stamp an asynchronous hash computation
@@ -528,9 +549,15 @@ impl Subscriber {
         };
         let (hash_update_tx, mut hash_update_rx) = mpsc::channel::<HashUpdate>(16);
         let mut hashes = FileHashes::new();
+        let mut graph_package_paths = HashSet::new();
 
         let mut package_data = self.package_discovery.borrow().to_owned();
-        self.handle_package_data_update(&package_data, &mut hashes, &hash_update_tx);
+        self.handle_package_data_update(
+            &package_data,
+            &graph_package_paths,
+            &mut hashes,
+            &hash_update_tx,
+        );
         dynamic_scope.replace(&hashes);
         let mut package_discovery_open = true;
         // We've gotten the ready signal from filewatching, and *some* state from
@@ -556,7 +583,12 @@ impl Subscriber {
                 package_discovery_result = self.package_discovery.changed(), if package_discovery_open => {
                     if package_discovery_result.is_ok() {
                         self.package_discovery.borrow().clone_into(&mut package_data);
-                        self.handle_package_data_update(&package_data, &mut hashes, &hash_update_tx);
+                        self.handle_package_data_update(
+                            &package_data,
+                            &graph_package_paths,
+                            &mut hashes,
+                            &hash_update_tx,
+                        );
                         dynamic_scope.replace(&hashes);
                     } else {
                         // `changed()` remains immediately ready after all senders are dropped.
@@ -577,6 +609,7 @@ impl Subscriber {
                                     &mut hashes,
                                     &hash_update_tx,
                                     &package_data,
+                                    &graph_package_paths,
                                     "non-UTF-8 file event",
                                 );
                             } else {
@@ -585,7 +618,7 @@ impl Subscriber {
                         },
                         Ok(Err(e)) => {
                             debug!("file watcher error: {:?}", e);
-                            self.flush_and_rehash(&mut hashes, &hash_update_tx, &package_data, &format!("file watcher error: {e}"));
+                            self.flush_and_rehash(&mut hashes, &hash_update_tx, &package_data, &graph_package_paths, &format!("file watcher error: {e}"));
                         },
                         Err(broadcast::error::RecvError::Closed) => {
                             debug!("file watcher closed");
@@ -594,7 +627,7 @@ impl Subscriber {
                         },
                         Err(broadcast::error::RecvError::Lagged(_)) => {
                             debug!("file watcher lagged");
-                            self.flush_and_rehash(&mut hashes, &hash_update_tx, &package_data, "file watcher lagged");
+                            self.flush_and_rehash(&mut hashes, &hash_update_tx, &package_data, &graph_package_paths, "file watcher lagged");
                         },
                     }
                 },
@@ -607,7 +640,14 @@ impl Subscriber {
                     }
                 },
                 Some(query) = self.query_rx.recv() => {
-                    self.handle_query(query, &mut hashes, &hash_update_tx, &dynamic_scope).await;
+                    self.handle_query(
+                        query,
+                        &package_data,
+                        &mut graph_package_paths,
+                        &mut hashes,
+                        &hash_update_tx,
+                        &dynamic_scope,
+                    ).await;
                 }
             }
         }
@@ -618,20 +658,22 @@ impl Subscriber {
         hashes: &mut FileHashes,
         hash_update_tx: &mpsc::Sender<HashUpdate>,
         package_data: &Option<Result<DiscoveryResponse, String>>,
+        graph_package_paths: &HashSet<AnchoredSystemPathBuf>,
         reason: &str,
     ) {
         // We need to send errors to any RPCs that are pending, and having an empty set
         // of hashes will cause handle_package_data_update to consider all
         // packages as new and rehash them.
         hashes.drain(reason);
-        self.handle_package_data_update(package_data, hashes, hash_update_tx);
+        self.handle_package_data_update(package_data, graph_package_paths, hashes, hash_update_tx);
     }
 
-    // We currently only support a single query, getting hashes for a given
-    // HashSpec.
+    // Queries retrieve hashes and synchronize the repository graph's package paths.
     async fn handle_query(
         &self,
         query: Query,
+        package_data: &Option<Result<DiscoveryResponse, String>>,
+        graph_package_paths: &mut HashSet<AnchoredSystemPathBuf>,
         hashes: &mut FileHashes,
         hash_update_tx: &mpsc::Sender<HashUpdate>,
         dynamic_scope: &DynamicWatchScope,
@@ -691,6 +733,17 @@ impl Subscriber {
                     // We don't know anything about this package.
                     let _ = tx.send(Err(Error::UnknownPackage(spec)));
                 }
+            }
+            Query::SetPackagePaths(package_paths, tx) => {
+                *graph_package_paths = package_paths;
+                self.handle_package_data_update(
+                    package_data,
+                    graph_package_paths,
+                    hashes,
+                    hash_update_tx,
+                );
+                dynamic_scope.replace(hashes);
+                let _ = tx.send(());
             }
         }
     }
@@ -761,9 +814,33 @@ impl Subscriber {
         hash_update_tx: &mpsc::Sender<HashUpdate>,
         immediate: bool,
     ) -> (Version, Arc<Debouncer>) {
-        let version = Version(self.next_version.fetch_add(1, Ordering::SeqCst));
+        let (versions, debouncer) =
+            self.queue_package_hashes_batch(vec![spec.clone()], hash_update_tx, immediate);
+        // The batch always returns one version per queued spec.
+        let Some(version) = versions.into_iter().next() else {
+            unreachable!("one version per queued spec");
+        };
+        (version, debouncer)
+    }
+
+    /// Queues one debounced hashing task for several input specs of the same
+    /// package. A freshly built repo index is shared across all of them: one
+    /// read of git state instead of a `git ls-tree` + `git status` subprocess
+    /// pair per spec, and clean files reuse committed blob hashes instead of
+    /// being re-hashed per spec. If the index build fails, each spec falls
+    /// back to per-package hashing exactly as before.
+    fn queue_package_hashes_batch(
+        &self,
+        specs: Vec<HashSpec>,
+        hash_update_tx: &mpsc::Sender<HashUpdate>,
+        immediate: bool,
+    ) -> (Vec<Version>, Arc<Debouncer>) {
+        let versions: Vec<Version> = specs
+            .iter()
+            .map(|_| Version(self.next_version.fetch_add(1, Ordering::SeqCst)))
+            .collect();
+        let task_versions = versions.clone();
         let tx = hash_update_tx.clone();
-        let spec = spec.clone();
         let repo_root = self.repo_root.clone();
         let scm = self.scm.clone();
         let debouncer = if immediate {
@@ -781,29 +858,38 @@ impl Subscriber {
             let scm_instance = scm_permit.clone();
             // Package hashing involves blocking IO calls, so run on a blocking thread.
             let blocking_handle = tokio::task::spawn_blocking(move || {
-                let telemetry = None;
-                let inputs = spec.inputs.as_inputs();
-                let result = scm_instance.get_package_file_hashes(
-                    &repo_root,
-                    &spec.package_path,
-                    &inputs,
-                    spec.inputs.include_default_files(),
-                    telemetry,
-                    None,
-                );
-                trace!("hashing complete for {:?}", spec);
-                let _ = tx.blocking_send(HashUpdate {
-                    spec,
-                    version,
-                    result,
-                });
+                let batch_packages: Vec<_> = specs.iter().map(|s| s.package_path.clone()).collect();
+                let index = scm_instance.build_repo_index_for_packages(&repo_root, &batch_packages);
+                for (spec, version) in specs.into_iter().zip(task_versions) {
+                    let telemetry = None;
+                    let inputs = spec.inputs.as_inputs();
+                    let result = scm_instance.get_package_file_hashes(
+                        &repo_root,
+                        &spec.package_path,
+                        &inputs,
+                        spec.inputs.include_default_files(),
+                        telemetry,
+                        index.as_ref(),
+                    );
+                    trace!("hashing complete for {:?}", spec);
+                    if tx
+                        .blocking_send(HashUpdate {
+                            spec,
+                            version,
+                            result,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
             });
             // We wait for the git task to finish so `scm_permit` only gets dropped once the
             // resource is no longer being used.
             // We should not shut down if a SCM task panics
             blocking_handle.await.ok();
         });
-        (version, debouncer)
+        (versions, debouncer)
     }
 
     fn handle_file_event(
@@ -837,27 +923,23 @@ impl Subscriber {
                 trace!("Ignoring change to {repo_relative_change_path}");
             }
         }
-        // TODO: handle different sets of inputs
+        // Keep distinct HashSpecs so each input set receives its own hash.
 
         // Any rehashing we do was triggered by a file event, so don't do it
         // immediately. Wait for the debouncer to time out instead.
         let immediate = false;
+        // New specs are batched per package so that one file event matching
+        // several overlapping input specs shares one git-state read.
+        let mut new_specs_by_package: HashMap<_, Vec<HashSpec>> = HashMap::new();
         for spec in changed_specs {
             match hashes.get_mut(&spec) {
                 // Technically this shouldn't happen, the package_paths are sourced from keys in
                 // hashes.
                 None => {
-                    let (version, debouncer) =
-                        self.queue_package_hash(&spec, hash_update_tx, immediate);
-                    hashes.insert(
-                        spec,
-                        HashState::Pending {
-                            version,
-                            debouncer,
-                            txs: vec![],
-                            rerun_after_current: false,
-                        },
-                    );
+                    new_specs_by_package
+                        .entry(spec.package_path.clone())
+                        .or_default()
+                        .push(spec);
                 }
                 Some(entry) => {
                     if let HashState::Pending {
@@ -886,57 +968,77 @@ impl Subscriber {
                 }
             }
         }
+
+        for (_package_path, specs) in new_specs_by_package {
+            let (versions, debouncer) =
+                self.queue_package_hashes_batch(specs.clone(), hash_update_tx, immediate);
+            for (spec, version) in specs.into_iter().zip(versions) {
+                hashes.insert(
+                    spec,
+                    HashState::Pending {
+                        version,
+                        debouncer: debouncer.clone(),
+                        txs: vec![],
+                        rerun_after_current: false,
+                    },
+                );
+            }
+        }
     }
 
     fn handle_package_data_update(
         &self,
         package_data: &Option<Result<DiscoveryResponse, String>>,
+        graph_package_paths: &HashSet<AnchoredSystemPathBuf>,
         hashes: &mut FileHashes,
         hash_update_tx: &mpsc::Sender<HashUpdate>,
     ) {
         debug!("handling package data {:?}", package_data);
-        match package_data {
-            Some(Ok(data)) => {
-                let package_paths: HashSet<AnchoredSystemPathBuf> =
-                    HashSet::from_iter(data.workspaces.iter().filter_map(|ws| {
-                        let package_dir = ws.package_json.parent()?;
-                        self.repo_root.anchor(package_dir).ok()
-                    }));
-                // We have new package data. Drop any packages we don't need anymore, add any
-                // new ones
-                hashes.drop_matching(
-                    |package_path| !package_paths.contains(package_path),
-                    "package was removed",
+        let mut package_paths = graph_package_paths.clone();
+        if let Some(Ok(data)) = package_data {
+            package_paths.extend(
+                data.workspaces
+                    .iter()
+                    .filter_map(|ws| self.repo_root.anchor(ws.workspace_root()).ok()),
+            );
+        } else if package_paths.is_empty() {
+            hashes.drain("package discovery is unavailable");
+            return;
+        }
+
+        // Reconcile JavaScript discovery with all execution scopes observed by the
+        // repository graph (including Cargo and Python packages).
+        hashes.drop_matching(
+            |package_path| !package_paths.contains(package_path),
+            "package was removed",
+        );
+        // Package data updates are triggered by file events, so don't immediately
+        // start rehashing, use the debouncer to wait for a quiet period.
+        let immediate = false;
+        for package_path in package_paths {
+            let spec = HashSpec {
+                package_path,
+                inputs: InputGlobs::Default,
+            };
+            if !hashes.contains_key(&spec) {
+                let (version, debouncer) =
+                    self.queue_package_hash(&spec, hash_update_tx, immediate);
+                hashes.insert(
+                    spec,
+                    HashState::Pending {
+                        version,
+                        debouncer,
+                        txs: vec![],
+                        rerun_after_current: false,
+                    },
                 );
-                // package data updates are triggered by file events, so don't immediately
-                // start rehashing, use the debouncer to wait for a quiet period.
-                let immediate = false;
-                for package_path in package_paths {
-                    let spec = HashSpec {
-                        package_path,
-                        inputs: InputGlobs::Default,
-                    };
-                    if !hashes.contains_key(&spec) {
-                        let (version, debouncer) =
-                            self.queue_package_hash(&spec, hash_update_tx, immediate);
-                        hashes.insert(
-                            spec,
-                            HashState::Pending {
-                                version,
-                                debouncer,
-                                txs: vec![],
-                                rerun_after_current: false,
-                            },
-                        );
-                    }
-                }
-                tracing::debug!("received package discovery data: {:?}", data);
-            }
-            None | Some(Err(_)) => {
-                // package data invalidated, flush everything
-                hashes.drain("package discovery is unavailable");
             }
         }
+        tracing::debug!(
+            ?package_data,
+            ?graph_package_paths,
+            "updated hash watcher package paths"
+        );
     }
 }
 
@@ -944,6 +1046,7 @@ impl Subscriber {
 mod tests {
     use std::{
         assert_matches,
+        collections::HashSet,
         process::Command,
         sync::Arc,
         time::{Duration, Instant},
@@ -1142,6 +1245,64 @@ mod tests {
         assert_eq!(
             state.packages.get(bar_path.as_str()).unwrap().inputs.len(),
             1
+        );
+    }
+
+    #[tokio::test]
+    async fn repository_graph_package_paths_are_hashable_without_js_discovery() {
+        let (_tmp, repo_root) = setup_fixture();
+        let native_dir = repo_root.join_components(&["crates", "native"]);
+        native_dir.create_dir_all().unwrap();
+        native_dir
+            .join_component("Cargo.toml")
+            .create_with_contents("[package]\nname = \"native\"\nversion = \"0.1.0\"\n")
+            .unwrap();
+        let source = native_dir.join_components(&["src", "lib.rs"]);
+        source.ensure_dir().unwrap();
+        source
+            .create_with_contents("pub fn value() -> u8 { 1 }\n")
+            .unwrap();
+        commit_all(&repo_root);
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let (_package_discovery_tx, package_discovery_rx) = tokio::sync::watch::channel(None);
+        let hash_watcher = HashWatcher::new(
+            repo_root.clone(),
+            package_discovery_rx,
+            watcher.watch(),
+            SCM::new(&repo_root),
+        );
+        let native_path = repo_root.anchor(&native_dir).unwrap();
+        hash_watcher
+            .set_package_paths(HashSet::from([native_path.clone()]))
+            .await
+            .unwrap();
+
+        let spec = HashSpec {
+            package_path: native_path.clone(),
+            inputs: InputGlobs::Default,
+        };
+        let hashes = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Ok(hashes) = hash_watcher.get_file_hashes(spec.clone()).await {
+                    break hashes;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("repository graph package path should become hashable");
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("Cargo.toml").unwrap()));
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("src/lib.rs").unwrap()));
+
+        hash_watcher
+            .set_package_paths(HashSet::new())
+            .await
+            .unwrap();
+        assert_matches!(
+            hash_watcher.get_file_hashes(spec).await,
+            Err(crate::hash_watcher::Error::UnknownPackage(unknown_spec))
+                if unknown_spec.package_path == native_path
         );
     }
 

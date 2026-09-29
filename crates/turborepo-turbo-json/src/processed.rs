@@ -552,18 +552,10 @@ impl ProcessedWith {
     }
 }
 
-/// A processed incremental cache partition with validated output and input
-/// globs.
-#[derive(Debug, Clone, PartialEq)]
-pub struct ProcessedIncrementalPartition {
-    pub outputs: ProcessedOutputs,
-    pub inputs: Option<ProcessedInputs>,
-}
-
 /// The canonical toolchain ids accepted as `command` map keys, alongside
 /// their accepted aliases. Kept as literals: this crate sits below the
 /// toolchain registry, and these ids are stable public API.
-const KNOWN_TOOLCHAINS: [&str; 2] = ["javascript", "rust"];
+const KNOWN_TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
 const TOOLCHAIN_ALIASES: [(&str, &str); 1] = [("typescript", "javascript")];
 
 /// A task `command` after alias resolution and validation: the argv the
@@ -633,6 +625,10 @@ impl ProcessedCommand {
             let (span, text) = key.span_and_text("turbo.json");
             let hint = if raw_key == "cargo" {
                 r#"Rust crates are the "rust" toolchain."#.to_string()
+            } else if raw_key == "uv" {
+                r#"Python packages are the "python" toolchain."#.to_string()
+            } else if raw_key == "golang" {
+                r#"Go modules are the "go" toolchain."#.to_string()
             } else {
                 format!(
                     "Known toolchains: {}.",
@@ -650,10 +646,21 @@ impl ProcessedCommand {
                 text,
             });
         }
-        if canonical == "rust" && !future_flags.experimental_cargo_workspaces {
+        let missing_flag = match canonical {
+            "rust" if !future_flags.experimental_cargo_workspaces => {
+                Some("experimentalCargoWorkspaces")
+            }
+            "python" if !future_flags.experimental_python_workspaces => {
+                Some("experimentalPythonWorkspaces")
+            }
+            "go" if !future_flags.experimental_go_workspaces => Some("experimentalGoWorkspaces"),
+            _ => None,
+        };
+        if let Some(flag) = missing_flag {
             let (span, text) = key.span_and_text("turbo.json");
             return Err(Error::TaskCommandToolchainRequiresFlag {
                 key: raw_key.to_string(),
+                flag,
                 span,
                 text,
             });
@@ -729,7 +736,6 @@ pub struct ProcessedTaskDefinition {
     pub interactive: Option<Spanned<bool>>,
     pub env_mode: Option<Spanned<EnvMode>>,
     pub with: Option<ProcessedWith>,
-    pub incremental: Option<Vec<ProcessedIncrementalPartition>>,
     pub experimental_ci: Option<Spanned<ExperimentalCIConfig>>,
     pub command: Option<ProcessedCommand>,
 }
@@ -740,56 +746,6 @@ impl ProcessedTaskDefinition {
         raw_task: RawTaskDefinition,
         future_flags: &FutureFlags,
     ) -> Result<Self, Error> {
-        let incremental = raw_task
-            .incremental
-            .map(|partitions| {
-                partitions
-                    .into_iter()
-                    .filter_map(|partition| {
-                        let outputs = match partition
-                            .outputs
-                            .map(|o| ProcessedOutputs::new(o, future_flags))
-                            .transpose()
-                        {
-                            Ok(o) => o.unwrap_or_default(),
-                            Err(e) => return Some(Err(e)),
-                        };
-                        // Skip partitions with no output globs — they'd never
-                        // match any files and are almost certainly a config error.
-                        if outputs.globs.is_empty() {
-                            return None;
-                        }
-                        // Reject task-input DSL tokens in
-                        // incremental inputs — these DSL tokens only apply to
-                        // regular task inputs and have no meaning here.
-                        if let Some(ref raw_inputs) = partition.inputs {
-                            for input in raw_inputs {
-                                if input.as_str() == TURBO_DEFAULT
-                                    || input.as_str() == TURBO_EXTENDS
-                                {
-                                    let (span, text) = input.span_and_text("turbo.json");
-                                    return Some(Err(Error::InvalidIncrementalInput {
-                                        value: input.as_str().to_string(),
-                                        span,
-                                        text,
-                                    }));
-                                }
-                            }
-                        }
-                        let inputs = match partition
-                            .inputs
-                            .map(|i| ProcessedInputs::new_legacy(i, future_flags))
-                            .transpose()
-                        {
-                            Ok(i) => i,
-                            Err(e) => return Some(Err(e)),
-                        };
-                        Some(Ok(ProcessedIncrementalPartition { outputs, inputs }))
-                    })
-                    .collect::<Result<Vec<_>, Error>>()
-            })
-            .transpose()?;
-
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
             description: raw_task.description,
@@ -823,7 +779,6 @@ impl ProcessedTaskDefinition {
                 .with
                 .map(|with| ProcessedWith::new(with, future_flags))
                 .transpose()?,
-            incremental,
             experimental_ci: raw_task.experimental_ci,
             command: raw_task
                 .command
@@ -846,7 +801,6 @@ impl ProcessedTaskDefinition {
             || self.output_logs.is_some()
             || self.interactive.is_some()
             || self.with.is_some()
-            || self.incremental.is_some()
             || self.experimental_ci.is_some()
             || self.command.is_some()
     }
@@ -957,11 +911,19 @@ mod tests {
 
     #[test]
     fn test_command_unknown_toolchain_hints() {
-        let err = ProcessedCommand::from_raw(spanned_map(&[("go", &["go"])]), &command_flags())
+        let err = ProcessedCommand::from_raw(spanned_map(&[("ruby", &["ruby"])]), &command_flags())
             .unwrap_err();
         assert!(
             matches!(err, Error::TaskCommandUnknownToolchain { ref hint, .. }
                 if hint.contains("javascript") && hint.contains("rust")),
+            "got: {err}"
+        );
+
+        let err = ProcessedCommand::from_raw(spanned_map(&[("golang", &["go"])]), &command_flags())
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::TaskCommandUnknownToolchain { ref hint, .. }
+                if hint.contains(r#""go" toolchain"#)),
             "got: {err}"
         );
 
@@ -985,6 +947,20 @@ mod tests {
             ..Default::default()
         };
         let err = ProcessedCommand::from_raw(spanned_map(&[("rust", &["cargo", "test"])]), &flags)
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            Error::TaskCommandToolchainRequiresFlag { .. }
+        ));
+    }
+
+    #[test]
+    fn test_command_go_key_requires_go_flag() {
+        let flags = FutureFlags {
+            experimental_task_command: true,
+            ..Default::default()
+        };
+        let err = ProcessedCommand::from_raw(spanned_map(&[("go", &["go", "test"])]), &flags)
             .unwrap_err();
         assert!(matches!(
             err,
@@ -1114,39 +1090,6 @@ mod tests {
             ProcessedGlob::from_spanned_output(Spanned::new(UnescapedString::from(absolute_path)));
 
         assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
-    }
-
-    #[test]
-    fn test_incremental_outputs_allow_parent_directory_segments() {
-        let raw_task = RawTaskDefinition {
-            incremental: Some(vec![crate::raw::RawIncrementalPartition {
-                outputs: Some(vec![Spanned::new(UnescapedString::from("../target.txt"))]),
-                ..Default::default()
-            }]),
-            ..Default::default()
-        };
-
-        let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
-
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_incremental_negated_outputs_allow_parent_directory_segments() {
-        let raw_task = RawTaskDefinition {
-            incremental: Some(vec![crate::raw::RawIncrementalPartition {
-                outputs: Some(vec![
-                    Spanned::new(UnescapedString::from("dist/**")),
-                    Spanned::new(UnescapedString::from("!../../secret.txt")),
-                ]),
-                ..Default::default()
-            }]),
-            ..Default::default()
-        };
-
-        let result = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default());
-
-        assert!(result.is_ok());
     }
 
     #[test]
@@ -1281,5 +1224,103 @@ mod tests {
         let depends_on = result.unwrap();
         assert!(depends_on.extends);
         assert_eq!(depends_on.deps.len(), 2);
+    }
+
+    fn process_build_task(inputs: &str) -> Result<ProcessedTaskDefinition, Error> {
+        let json = format!(r#"{{"tasks": {{"build": {{"inputs": {inputs}}}}}}}"#);
+        let raw = crate::RawRootTurboJson::parse(&json, "turbo.json").expect("turbo.json parses");
+        let task = raw
+            .tasks
+            .expect("tasks are present")
+            .0
+            .remove(&crate::TaskName::from("build"))
+            .expect("build task is present");
+        ProcessedTaskDefinition::from_raw(task.into_inner(), &FutureFlags::default())
+    }
+
+    #[test_case(
+        r#"["$TURBO_DEFAULT$", {"mode": "startup", "globs": ["src/**"]}]"#,
+        &["Legacy input strings normalize to mode \"startup\"", "Use either legacy startup inputs", "Or one structured startup input"]
+        ; "legacy and structured startup inputs cannot mix"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "globs": ["src/generated/**"]}, {"mode": "jit", "globs": ["other/**"]}]"#,
+        &["duplicate structured \"jit\" input mode"]
+        ; "duplicate structured modes"
+    )]
+    #[test_case(
+        r#"[{"globs": ["src/**"]}]"#,
+        &["Structured input entries must specify mode"]
+        ; "mode is required"
+    )]
+    #[test_case(
+        r#"[{"mode": "runtime", "globs": ["src/**"]}]"#,
+        &["Unknown input mode \"runtime\""]
+        ; "unknown modes"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "from": ["codegen"], "globs": ["src/generated/**"]}]"#,
+        &["from is only valid for dependencyOutputs inputs"]
+        ; "from outside dependency outputs"
+    )]
+    #[test_case(
+        r#"[{"mode": "dependencyOutputs", "withDefaults": true}]"#,
+        &["withDefaults is only valid for startup or jit inputs"]
+        ; "with defaults on dependency outputs"
+    )]
+    #[test_case(
+        r#"[{"mode": "startup", "globs": ["$TURBO_DEFAULT$"]}]"#,
+        &["Sentinel string \"$TURBO_DEFAULT$\" is not valid inside structured globs"]
+        ; "default sentinel inside structured globs"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "globs": ["$TURBO_EXTENDS$"]}]"#,
+        &["Sentinel string \"$TURBO_EXTENDS$\" is not valid inside structured globs"]
+        ; "extends sentinel inside structured globs"
+    )]
+    #[test_case(
+        r#"[{"mode": "startup", "globs": ["!src/generated/**"]}]"#,
+        &["negative-only startup globs require withDefaults: true"]
+        ; "negative only startup globs"
+    )]
+    #[test_case(
+        r#"[{"mode": "jit", "globs": ["!src/generated/**"]}]"#,
+        &["negative-only jit globs require withDefaults: true"]
+        ; "negative only jit globs"
+    )]
+    fn test_structured_inputs_reject_invalid_configuration(inputs: &str, expected: &[&str]) {
+        let err = process_build_task(inputs).unwrap_err();
+        assert_matches!(err, Error::StructuredInput { .. });
+        let message = err.to_string();
+        for fragment in expected {
+            assert!(
+                message.contains(fragment),
+                "expected {fragment:?} in {message:?}"
+            );
+        }
+    }
+
+    #[test_case(r#"[{"mode": "startup", "withDefaults": true, "globs": ["!src/generated/**"]}]"# ; "negative only startup globs with defaults")]
+    #[test_case(r#"[{"mode": "jit", "withDefaults": true, "globs": ["!src/generated/**"]}]"# ; "negative only jit globs with defaults")]
+    #[test_case(r#"[{"mode": "dependencyOutputs", "from": ["codegen"], "globs": ["dist/**"]}]"# ; "from on dependency outputs")]
+    fn test_structured_inputs_accept_valid_counterparts(inputs: &str) {
+        process_build_task(inputs).unwrap();
+    }
+
+    #[test]
+    fn test_env_rejects_pipeline_delimiter_prefix() {
+        let err = ProcessedEnv::new(
+            vec![
+                Spanned::new(UnescapedString::from("NODE_ENV".to_string())),
+                Spanned::new(UnescapedString::from("$FOOBAR".to_string())),
+            ],
+            &FutureFlags::default(),
+        )
+        .unwrap_err();
+        let Error::InvalidEnvPrefix(err) = err else {
+            panic!("expected InvalidEnvPrefix, got {err:?}");
+        };
+        assert_eq!(err.value, "$FOOBAR");
+        assert_eq!(err.key, "env");
     }
 }

@@ -1,0 +1,5369 @@
+//! The Go toolchain: modules discovered from a `go.work` workspace.
+//!
+//! Turborepo does not replace the Go toolchain — Go owns module resolution,
+//! compilation, and testing. Turborepo's job is orchestration: decide *which*
+//! modules are in scope and how they relate, using authoritative output from
+//! the `go` command.
+//!
+//! Discovery reads workspace membership from `go work edit -json`, module paths
+//! from `go mod edit -json`, and internal relationships from `go mod graph`.
+//!
+//! Support is experimental and gated behind
+//! `futureFlags.experimentalGoWorkspaces`.
+
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    io,
+    path::Path,
+    process::Command,
+};
+
+use serde::Deserialize;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+
+mod scope_inventory;
+
+use crate::{
+    change_knowledge::ChangeObservation,
+    external_resolution::{
+        ExternalPackageIdentity, ExternalResolutionData, ExternalResolutionDomain,
+        GO_RESOLUTION_DOMAIN, PackageResolution, ResolutionCompleteness,
+    },
+    native_tasks::{
+        NativeTaskContract, PassThroughPlacement, TaskEntrypoint, WorkingDirectoryPolicy,
+    },
+    package_json::PackageJson,
+    prune_knowledge::{PruneDomain, PrunePlan},
+    relationships::{DependencyKind, Relationship, RelationshipTarget},
+    task_contracts::DependencySourceInputs,
+    toolchain::{
+        self, DerivedInputSafety, DerivedOutputs, DiscoverPackageScopesFuture,
+        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackageScopes, DiscoveredPackages,
+        RepositoryContributor, ToolchainId, WorkspaceRoot,
+    },
+};
+
+/// The conventional file name for a Go workspace definition.
+pub const GO_WORK: &str = "go.work";
+
+/// The conventional file name for a Go module manifest.
+pub const GO_MOD: &str = "go.mod";
+
+const GO_SUM: &str = "go.sum";
+const GO_WORK_SUM: &str = "go.work.sum";
+
+/// Deterministic identity for the workspace-wide Go verification scope.
+pub const GO_WORKSPACE_NAME: &str = "go-workspace";
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(
+        "Go is required for experimental Go workspaces, but `go` was not found while running \
+         `{command}`. Install Go 1.22 or newer and ensure `go` is on PATH."
+    )]
+    GoExecutableNotFound { command: &'static str },
+    #[error("failed to run `{command}`: {source}")]
+    CommandSpawn {
+        command: &'static str,
+        #[source]
+        source: io::Error,
+    },
+    #[error("`{command}` failed: {stderr}. {remediation}")]
+    CommandFailed {
+        command: &'static str,
+        stderr: String,
+        remediation: &'static str,
+    },
+    #[error(
+        "`{command}` returned invalid output. Verify that `go` is Go 1.22 or newer and is not \
+         replaced by a wrapper that changes JSON output."
+    )]
+    CommandParse {
+        command: &'static str,
+        _source: serde_json::Error,
+    },
+    #[error("`go env` did not return requested variable {name}")]
+    MissingEnvironmentVariable { name: &'static str },
+    #[error("failed to serialize normalized Go toolchain identity: {0}")]
+    IdentitySerialize(serde_json::Error),
+    #[error("failed to serialize a Go workspace token: {0}")]
+    WorkspaceSerialize(serde_json::Error),
+    #[error("root {path} is not a Go workspace (missing go.work)")]
+    NotAWorkspace { path: String },
+    #[error("go.work lists no workspace modules. Add at least one module with `go work use`.")]
+    EmptyWorkspace,
+    #[error(
+        "go.work member at {path} is outside the repository. Move the module into the repository \
+         or remove it from go.work."
+    )]
+    MemberOutsideRepository { path: String },
+    #[error(
+        "go.work member at {path} has no go.mod. Create the module with `go mod init` or remove \
+         it with `go work edit -dropuse`."
+    )]
+    MissingGoMod { path: String },
+    #[error(
+        "go.mod at {path} has no module path. Add one with `go mod edit -module=<module-path>`."
+    )]
+    MissingModulePath { path: String },
+    #[error(
+        "duplicate Go module identity {module_path:?} (also declared at {other_manifest}). Give \
+         every go.work member a unique `module` path."
+    )]
+    DuplicateModuleIdentity {
+        module_path: String,
+        other_manifest: String,
+    },
+    #[error(
+        "Turborepo package name {name:?} is reserved for the Go workspace aggregate. Rename the \
+         Go module before enabling experimental Go workspaces."
+    )]
+    WorkspaceNameCollision { name: String },
+    #[error(
+        "go.work member at {path} resolves to module {module_path:?}, which collides with the \
+         repository root module definition. Root modules cannot be go.work members; move the \
+         module into a subdirectory."
+    )]
+    RootDefinitionCollision { path: String, module_path: String },
+    #[error(
+        "secondary Go workspace at {path} is unsupported. Keep a single go.work at the Turborepo \
+         root and remove or relocate the secondary workspace."
+    )]
+    SecondaryWorkspace { path: String },
+    #[error(
+        "vendored Go module at {path} is unsupported because vendor contents cannot be resolved \
+         safely for Turborepo caching. Remove the vendor directory and use go.sum/go.work.sum."
+    )]
+    VendoredModule { path: String },
+    #[error(
+        "local Go module {module_path:?} at {manifest_path} is outside the repository and cannot \
+         be cached, watched, or pruned safely. Move it into the repository and add it to go.work."
+    )]
+    OutsideRepositoryLocalModule {
+        module_path: String,
+        manifest_path: String,
+    },
+    #[error(
+        "local Go module {module_path:?} at {manifest_path} is not a go.work member and cannot be \
+         hashed or pruned safely. Add it with `go work use` or replace it with a versioned module."
+    )]
+    NonMemberLocalModule {
+        module_path: String,
+        manifest_path: String,
+    },
+    #[error(
+        "`go mod graph` returned an unrecognized line: {line}. Run `go mod tidy` in each member, \
+         then `go work sync`, and commit the resulting sums."
+    )]
+    MalformedModGraphLine { line: String },
+    #[error(
+        "malformed Go replacement: {reason}. Repair the replace directive and run `go work sync`."
+    )]
+    MalformedReplacement { reason: String },
+    #[error(
+        "`go mod graph` references {module}, but `go list -m all` did not resolve it. Run `go mod \
+         tidy` in each member, then `go work sync`, and commit go.sum/go.work.sum."
+    )]
+    UnknownResolutionModule { module: String },
+    #[error("failed to scan for secondary Go workspaces: {0}")]
+    WorkspaceScan(#[source] globwalk::WalkError),
+    #[error("failed to configure the Go workspace scan: {0}")]
+    WorkspaceGlob(#[source] globwalk::GlobError),
+    #[error("failed to resolve Go module path {path}: {source}")]
+    ModulePath {
+        path: String,
+        #[source]
+        source: turbopath::PathError,
+    },
+    #[error("failed to read {path}: {source}")]
+    ManifestRead {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[error("malformed go.work: {reason}. Repair the directive and run `go work sync`.")]
+    MalformedGoWork { reason: String },
+    #[error(
+        "go.work at {path} contains an unknown `{directive}` directive. The go command supports \
+         only `go`, `toolchain`, `use`, `replace`, and `godebug` directives in go.work. Repair \
+         the repository-root go.work with `go work edit` and `go work use`."
+    )]
+    UnknownGoWorkDirective { path: String, directive: String },
+    #[error("malformed go.mod at {path}: {reason}. Repair the directive and run `go mod tidy`.")]
+    MalformedGoMod { path: String, reason: String },
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+}
+
+/// A single Go module discovered within a `go.work` workspace.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoModule {
+    /// The module path from `go.mod` (for example `example.com/api`).
+    pub module_path: String,
+    /// Absolute path to the module's `go.mod`.
+    pub manifest_path: AbsoluteSystemPathBuf,
+    /// Direct internal relationships to other workspace modules.
+    pub relationships: Vec<Relationship>,
+    /// Package pattern for the sole `main` package used by the `build` and
+    /// `dev` tasks, when unambiguous.
+    pub runnable_target: Option<String>,
+    /// Module-root source files that must not be treated as generated binaries.
+    /// None means discovery could not safely classify potential output names.
+    pub root_source_inputs: Option<HashSet<String>>,
+}
+
+impl GoModule {
+    /// The unique Turborepo identity, distinct from Go's full module path.
+    fn package_name(&self) -> &str {
+        package_name(&self.module_path)
+    }
+}
+
+/// Derive a Turborepo name from a Go module path, retaining a trailing major
+/// version with its preceding component: `example.com/api/v2` becomes `api/v2`.
+/// This is the sole package identity, not an alias for the full module path.
+fn package_name(module_path: &str) -> &str {
+    let Some((prefix, last)) = module_path.rsplit_once('/') else {
+        return module_path;
+    };
+    if is_version_element(last) {
+        &module_path[prefix.rfind('/').map_or(0, |index| index + 1)..]
+    } else {
+        last
+    }
+}
+
+// Match cmd/go/internal/load's isVersionElement: N >= 2, no leading zero.
+// Do not parse N: Go imposes no integer limit.
+fn is_version_element(element: &str) -> bool {
+    element.strip_prefix('v').is_some_and(|version| {
+        !version.is_empty()
+            && version != "1"
+            && !version.starts_with('0')
+            && version.bytes().all(|byte| byte.is_ascii_digit())
+    })
+}
+
+/// The result of Go workspace discovery.
+#[derive(Debug, Default)]
+pub struct DiscoveredWorkspace {
+    pub modules: Vec<GoModule>,
+    graph: String,
+    listed: Vec<GoListModule>,
+    prune: Option<GoPruneKnowledge>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GoWorkJson {
+    #[serde(default, rename = "Go")]
+    go: String,
+    #[serde(rename = "Toolchain")]
+    toolchain: Option<String>,
+    #[serde(rename = "Use")]
+    use_: Option<Vec<GoWorkUse>>,
+    #[serde(rename = "Replace")]
+    replace: Option<Vec<GoModReplace>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GoWorkUse {
+    #[serde(rename = "DiskPath")]
+    disk_path: Option<String>,
+    #[serde(rename = "ModulePath")]
+    module_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoModEditJson {
+    #[serde(rename = "Module")]
+    module: Option<GoModModule>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoModModule {
+    #[serde(rename = "Path")]
+    path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GoModReplace {
+    #[serde(rename = "Old")]
+    old: GoModModuleRef,
+    #[serde(rename = "New")]
+    new: GoModModuleRef,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GoModModuleRef {
+    #[serde(rename = "Path")]
+    path: Option<String>,
+    #[serde(rename = "Version")]
+    version: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoListPackage {
+    #[serde(rename = "Dir")]
+    directory: String,
+    #[serde(rename = "Name")]
+    name: String,
+    // Keep Go's *Files and *EmbedPatterns families, including ignored sources
+    // and internal/external test inputs, without duplicating its file taxonomy.
+    #[serde(flatten)]
+    details: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoListModule {
+    #[serde(rename = "Path")]
+    path: String,
+    #[serde(default, rename = "Version")]
+    version: String,
+    #[serde(default, rename = "Sum")]
+    sum: String,
+    #[serde(default, rename = "GoModSum")]
+    go_mod_sum: String,
+    #[serde(default, rename = "Main")]
+    main: bool,
+    // Used for membership validation only, never a portable external identity.
+    #[serde(rename = "Dir")]
+    directory: Option<String>,
+    #[serde(rename = "Replace")]
+    replace: Option<Box<GoListModule>>,
+}
+
+#[derive(Debug)]
+struct GoEnvironment {
+    target_os: String,
+    build_cache: String,
+    module_cache: String,
+    fingerprint_values: BTreeMap<String, String>,
+}
+
+fn run_go(
+    repo_root: &AbsoluteSystemPath,
+    args: &[&str],
+    command: &'static str,
+) -> Result<std::process::Output, Error> {
+    Command::new("go")
+        .args(args)
+        .current_dir(repo_root.as_std_path())
+        .output()
+        .map_err(|source| {
+            if source.kind() == io::ErrorKind::NotFound {
+                Error::GoExecutableNotFound { command }
+            } else {
+                Error::CommandSpawn { command, source }
+            }
+        })
+}
+
+fn command_remediation(command: &str) -> &'static str {
+    match command {
+        "go work edit -json" => {
+            "Repair the repository-root go.work with `go work edit` and `go work use`."
+        }
+        "go mod edit -json" => {
+            "Repair the referenced go.mod and ensure it contains a `module` directive."
+        }
+        "go mod graph" | "go list -mod=readonly -m -json all" => {
+            "Run `go mod tidy` in each workspace member, then `go work sync`, and commit \
+             go.sum/go.work.sum."
+        }
+        _ => "Verify the Go installation and workspace configuration.",
+    }
+}
+
+fn go_work_json(repo_root: &AbsoluteSystemPath) -> Result<GoWorkJson, Error> {
+    let output = run_go(repo_root, &["work", "edit", "-json"], "go work edit -json")?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: "go work edit -json",
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation("go work edit -json"),
+        });
+    }
+    serde_json::from_slice(&output.stdout).map_err(|_source| Error::CommandParse {
+        command: "go work edit -json",
+        _source,
+    })
+}
+
+fn go_mod_edit_json(
+    repo_root: &AbsoluteSystemPath,
+    module_dir: &AbsoluteSystemPath,
+) -> Result<GoModEditJson, Error> {
+    let manifest = module_dir.join_component(GO_MOD);
+    let output = run_go(
+        repo_root,
+        &["mod", "edit", "-json", manifest.as_str()],
+        "go mod edit -json",
+    )?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: "go mod edit -json",
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation("go mod edit -json"),
+        });
+    }
+    serde_json::from_slice(&output.stdout).map_err(|_source| Error::CommandParse {
+        command: "go mod edit -json",
+        _source,
+    })
+}
+
+fn go_mod_graph(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
+    let output = run_go(repo_root, &["mod", "graph"], "go mod graph")?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: "go mod graph",
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation("go mod graph"),
+        });
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn go_list_modules(repo_root: &AbsoluteSystemPath) -> Result<Vec<GoListModule>, Error> {
+    const COMMAND: &str = "go list -mod=readonly -m -json all";
+    let output = run_go(
+        repo_root,
+        &["list", "-mod=readonly", "-m", "-json", "all"],
+        COMMAND,
+    )?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: COMMAND,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation(COMMAND),
+        });
+    }
+    serde_json::Deserializer::from_slice(&output.stdout)
+        .into_iter::<GoListModule>()
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_source| Error::CommandParse {
+            command: COMMAND,
+            _source,
+        })
+}
+
+fn normalize_checkout_path(repo_root: &AbsoluteSystemPath, value: &str) -> String {
+    let native_root = repo_root.as_str().trim_end_matches(['/', '\\']);
+
+    #[cfg(windows)]
+    {
+        // Go may report paths with either separator on Windows, and drive
+        // letters are case-insensitive. Normalize separators before replacing
+        // checkout roots while preserving the case of all non-root text.
+        let slash_root = native_root.replace('\\', "/");
+        let slash_value = value.replace('\\', "/");
+        let folded_root = slash_root.to_ascii_lowercase();
+        let folded_value = slash_value.to_ascii_lowercase();
+        let mut normalized = String::with_capacity(slash_value.len());
+        let mut copied = 0;
+        for (index, _) in folded_value.match_indices(&folded_root) {
+            normalized.push_str(&slash_value[copied..index]);
+            normalized.push_str("$REPO");
+            copied = index + slash_root.len();
+        }
+        normalized.push_str(&slash_value[copied..]);
+        normalized
+    }
+
+    #[cfg(not(windows))]
+    {
+        value.replace(native_root, "$REPO")
+    }
+}
+
+fn normalized_go_toolchain_version(
+    repo_root: &AbsoluteSystemPath,
+    go_version: &str,
+    values: &BTreeMap<String, String>,
+) -> Result<String, Error> {
+    let mut identity = values
+        .iter()
+        .map(|(name, value)| (name.clone(), normalize_checkout_path(repo_root, value)))
+        .collect::<BTreeMap<_, _>>();
+    identity.insert("go version".to_string(), go_version.trim().to_string());
+    serde_json::to_string(&identity).map_err(Error::IdentitySerialize)
+}
+
+fn go_toolchain_identity(
+    repo_root: &AbsoluteSystemPath,
+    environment: &GoEnvironment,
+) -> Result<ExternalPackageIdentity, Error> {
+    const COMMAND: &str = "go version";
+    let output = run_go(repo_root, &["version"], COMMAND)?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: COMMAND,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation(COMMAND),
+        });
+    }
+    Ok(ExternalPackageIdentity::new(
+        "go",
+        normalized_go_toolchain_version(
+            repo_root,
+            &String::from_utf8_lossy(&output.stdout),
+            &environment.fingerprint_values,
+        )?,
+    )
+    .with_human_name("go"))
+}
+
+fn fingerprinted_go_environment(
+    values: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>, Error> {
+    FINGERPRINTED_GO_ENV_VARS
+        .iter()
+        .map(|name| {
+            values
+                .get(*name)
+                .cloned()
+                .map(|value| ((*name).to_string(), value))
+                .ok_or(Error::MissingEnvironmentVariable { name })
+        })
+        .collect()
+}
+
+fn go_environment(repo_root: &AbsoluteSystemPath) -> Result<GoEnvironment, Error> {
+    const COMMAND: &str = "go env -json <fingerprinted variables>";
+    let mut requested = FINGERPRINTED_GO_ENV_VARS.to_vec();
+    requested.extend(["GOCACHE", "GOMODCACHE"]);
+    requested.sort_unstable();
+    requested.dedup();
+    let args = ["env", "-json"]
+        .into_iter()
+        .chain(requested)
+        .collect::<Vec<_>>();
+    let output = run_go(repo_root, &args, COMMAND)?;
+    if !output.status.success() {
+        return Err(Error::CommandFailed {
+            command: COMMAND,
+            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            remediation: command_remediation(COMMAND),
+        });
+    }
+    let values: BTreeMap<String, String> =
+        serde_json::from_slice(&output.stdout).map_err(|_source| Error::CommandParse {
+            command: COMMAND,
+            _source,
+        })?;
+    let value = |name: &'static str| {
+        values
+            .get(name)
+            .cloned()
+            .ok_or(Error::MissingEnvironmentVariable { name })
+    };
+    Ok(GoEnvironment {
+        target_os: value("GOOS")?,
+        build_cache: value("GOCACHE")?,
+        module_cache: value("GOMODCACHE")?,
+        fingerprint_values: fingerprinted_go_environment(&values)?,
+    })
+}
+
+fn module_package_inputs(
+    module_dir: &AbsoluteSystemPath,
+) -> Result<(Option<String>, Option<HashSet<String>>), Error> {
+    const COMMAND: &str = "go list -find -json ./...";
+
+    let output = run_go(module_dir, &["list", "-find", "-json", "./..."], COMMAND)?;
+    // Native inference is optional. Unknown package/source classification must
+    // not cause us to exclude a potentially real input from task hashes.
+    if !output.status.success() {
+        return Ok((None, None));
+    }
+
+    let packages =
+        serde_json::Deserializer::from_slice(&output.stdout).into_iter::<GoListPackage>();
+    let mut runnable = Vec::new();
+    let mut root_source_inputs = Some(HashSet::new());
+    let mut saw_root_package = false;
+    for package in packages {
+        let package = package.map_err(|_source| Error::CommandParse {
+            command: COMMAND,
+            _source,
+        })?;
+        let Ok(relative) = Path::new(&package.directory).strip_prefix(module_dir.as_std_path())
+        else {
+            return Ok((None, None));
+        };
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        if relative.is_empty() {
+            saw_root_package = true;
+            for (key, value) in &package.details {
+                if !key.ends_with("Files") && !key.ends_with("EmbedPatterns") {
+                    continue;
+                }
+                let Some(values) = value.as_array() else {
+                    root_source_inputs = None;
+                    continue;
+                };
+                for value in values {
+                    let Some(value) = value.as_str() else {
+                        root_source_inputs = None;
+                        continue;
+                    };
+                    if key == "IgnoredGoFiles"
+                        && std::fs::read_to_string(module_dir.join_component(value).as_std_path())
+                            .map_or(true, |source| source.contains("//go:embed"))
+                    {
+                        // Task-level build tags can activate embeds that go list
+                        // did not resolve. Do not guess their potential matches.
+                        root_source_inputs = None;
+                    }
+                    let value = value.strip_prefix("all:").unwrap_or(value);
+                    if key.ends_with("EmbedPatterns")
+                        && !value.contains('/')
+                        && value.contains(['*', '?', '[', '\\'])
+                    {
+                        // Patterns may match a binary that does not exist yet.
+                        // Conservatively preserve both names instead of emulating
+                        // Go's pattern language or trusting only current matches.
+                        root_source_inputs = None;
+                    } else if let Some(inputs) = &mut root_source_inputs {
+                        inputs.insert(value.to_string());
+                    }
+                }
+            }
+        }
+        if package.name == "main" {
+            runnable.push(if relative.is_empty() {
+                ".".to_string()
+            } else {
+                format!("./{relative}")
+            });
+        }
+    }
+    if !saw_root_package
+        && std::fs::read_dir(module_dir.as_std_path()).map_or(true, |mut entries| {
+            entries.any(|entry| {
+                entry.map_or(true, |entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "go")
+                })
+            })
+        })
+    {
+        // Go omits packages whose files are all excluded by build constraints.
+        // Task-level tags may activate their embeds; absence is not proof of
+        // an empty source set. Directory read errors must also fail closed.
+        root_source_inputs = None;
+    }
+    Ok((
+        if runnable.len() == 1 {
+            runnable.pop()
+        } else {
+            None
+        },
+        root_source_inputs,
+    ))
+}
+
+fn tracked_source_files(repo_root: &AbsoluteSystemPath) -> Option<HashSet<AbsoluteSystemPathBuf>> {
+    // One read-only index query for the entire workspace, never one per module.
+    // Index membership is stable across missing, restored, or mutated binaries.
+    // If Git/index knowledge is unavailable, retain all potential source inputs.
+    let output = Command::new("git")
+        .args(["ls-files", "--cached", "-z", "--"])
+        .current_dir(repo_root.as_std_path())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let paths = String::from_utf8(output.stdout).ok()?;
+    Some(
+        paths
+            .split('\0')
+            .filter(|path| !path.is_empty())
+            .map(|path| AbsoluteSystemPathBuf::from_unknown(repo_root, path))
+            .collect(),
+    )
+}
+
+fn join_relative_path(
+    base: &AbsoluteSystemPath,
+    relative: &str,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    Ok(AbsoluteSystemPathBuf::from_unknown(base, relative))
+}
+
+fn path_is_within_repository(
+    repo_root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+) -> Result<bool, Error> {
+    if !repo_root.contains(path) {
+        return Ok(false);
+    }
+    if !path.exists() {
+        return Ok(true);
+    }
+    let real_root = repo_root
+        .to_realpath()
+        .map_err(|source| Error::ModulePath {
+            path: repo_root.to_string(),
+            source,
+        })?;
+    let real_path = path.to_realpath().map_err(|source| Error::ModulePath {
+        path: path.to_string(),
+        source,
+    })?;
+    Ok(real_root.contains(&real_path))
+}
+
+fn required_module_path<'a>(
+    module: &'a GoModEditJson,
+    manifest_path: &AbsoluteSystemPath,
+) -> Result<&'a str, Error> {
+    module
+        .module
+        .as_ref()
+        .map(|module| module.path.as_str())
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| Error::MissingModulePath {
+            path: manifest_path.to_string(),
+        })
+}
+
+/// Reject any `go.work` that Go would pick over the root workspace for a
+/// member.
+///
+/// Go uses the first `go.work` it finds walking up from the working directory,
+/// so a secondary workspace only matters between the repository root and a
+/// member, or inside a member's own module. A `go.work` anywhere else, such as
+/// in a git worktree checked out under the repository, is never read for this
+/// workspace.
+fn validate_single_workspace(
+    repo_root: &AbsoluteSystemPath,
+    member_dirs: &[AbsoluteSystemPathBuf],
+) -> Result<(), Error> {
+    let mut secondary = Vec::new();
+    for member_dir in member_dirs {
+        secondary.extend(
+            member_dir
+                .ancestors()
+                .skip(1)
+                .take_while(|dir| *dir != repo_root && repo_root.contains(dir))
+                .map(|dir| dir.join_component(GO_WORK))
+                .filter(|path| path.exists()),
+        );
+        secondary.extend(
+            workspaces_under(member_dir)?
+                .into_iter()
+                .filter(|path| !is_in_nested_module(member_dir, path)),
+        );
+    }
+    let root_workspace = repo_root.join_component(GO_WORK);
+    secondary.retain(|path| path != &root_workspace);
+    secondary.sort();
+    if let Some(path) = secondary.into_iter().next() {
+        return Err(Error::SecondaryWorkspace {
+            path: path.to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// A `go.work` below another `go.mod` belongs to that nested module, which Go
+/// excludes from the member's packages.
+fn is_in_nested_module(member_dir: &AbsoluteSystemPath, work_path: &AbsoluteSystemPath) -> bool {
+    work_path
+        .ancestors()
+        .skip(1)
+        .take_while(|dir| *dir != member_dir)
+        .any(|dir| dir.join_component(GO_MOD).exists())
+}
+
+fn workspaces_under(dir: &AbsoluteSystemPath) -> Result<Vec<AbsoluteSystemPathBuf>, Error> {
+    let includes = ["**/go.work"]
+        .into_iter()
+        .map(str::parse)
+        .collect::<Result<Vec<globwalk::ValidatedGlob>, _>>()
+        .map_err(Error::WorkspaceGlob)?;
+    let excludes = [
+        "**/.git/**",
+        "**/.turbo/**",
+        "**/node_modules/**",
+        "**/vendor/**",
+    ]
+    .into_iter()
+    .map(str::parse)
+    .collect::<Result<Vec<globwalk::ValidatedGlob>, _>>()
+    .map_err(Error::WorkspaceGlob)?;
+    Ok(
+        globwalk::globwalk(dir, &includes, &excludes, globwalk::WalkType::Files)
+            .map_err(Error::WorkspaceScan)?
+            .into_iter()
+            .collect(),
+    )
+}
+
+fn resolve_member_dir(
+    repo_root: &AbsoluteSystemPath,
+    disk_path: &str,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    let member = join_relative_path(repo_root, disk_path)?;
+    if !path_is_within_repository(repo_root, &member)? {
+        return Err(Error::MemberOutsideRepository {
+            path: member.to_string(),
+        });
+    }
+    Ok(member)
+}
+
+fn module_path_without_version(dep: &str) -> &str {
+    dep.split('@').next().unwrap_or(dep)
+}
+
+fn local_replacement_target(
+    repo_root: &AbsoluteSystemPath,
+    module_dir: &AbsoluteSystemPath,
+    module_path: &str,
+    modules: &[GoModule],
+) -> Result<Option<(String, String)>, Error> {
+    if !module_path.starts_with('.') && !Path::new(module_path).is_absolute() {
+        return Ok(None);
+    }
+    let resolved = join_relative_path(module_dir, module_path)?;
+    if !path_is_within_repository(repo_root, &resolved)? {
+        return Err(Error::OutsideRepositoryLocalModule {
+            module_path: module_path.to_string(),
+            manifest_path: resolved.join_component(GO_MOD).to_string(),
+        });
+    }
+    if !resolved.join_component(GO_MOD).exists() {
+        return Err(Error::MissingGoMod {
+            path: resolved.to_string(),
+        });
+    }
+    let resolved_module = go_mod_edit_json(repo_root, &resolved)?;
+    let resolved_module_path =
+        required_module_path(&resolved_module, &resolved.join_component(GO_MOD))?.to_string();
+    // A matching module name (or a symlinked go.mod) is not proof that
+    // we track the source directory Go actually builds.
+    let resolved_directory = resolved.to_realpath()?;
+    for module in modules {
+        let Some(member_directory) = module.manifest_path.parent() else {
+            continue;
+        };
+        if member_directory.to_realpath()? == resolved_directory {
+            let directory = AnchoredSystemPathBuf::new(repo_root, member_directory)?
+                .to_unix()
+                .to_string();
+            return Ok(Some((module.module_path.clone(), directory)));
+        }
+    }
+    Err(Error::NonMemberLocalModule {
+        module_path: resolved_module_path,
+        manifest_path: resolved.join_component(GO_MOD).to_string(),
+    })
+}
+
+fn replacement_path(reference: &GoModModuleRef) -> Result<&str, Error> {
+    reference
+        .path
+        .as_deref()
+        .filter(|path| !path.is_empty())
+        .ok_or_else(|| Error::MalformedReplacement {
+            reason: "replacement module path is missing".to_string(),
+        })
+}
+
+fn relationships_from_mod_graph(
+    graph: &str,
+    module_paths: &HashSet<String>,
+    replacement_targets: &HashMap<String, String>,
+) -> Result<HashMap<String, Vec<Relationship>>, Error> {
+    let mut relationships: HashMap<String, Vec<Relationship>> = HashMap::new();
+    for line in graph.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let (from, to) = line
+            .split_once(' ')
+            .ok_or_else(|| Error::MalformedModGraphLine {
+                line: line.to_string(),
+            })?;
+        if !module_paths.contains(from) {
+            continue;
+        }
+        let dependency = module_path_without_version(to);
+        let internal = module_paths
+            .contains(dependency)
+            .then_some(dependency)
+            .or_else(|| replacement_targets.get(dependency).map(String::as_str));
+        if let Some(internal) = internal {
+            relationships
+                .entry(from.to_string())
+                .or_default()
+                .push(Relationship::internal(
+                    package_name(internal),
+                    DependencyKind::Production,
+                ));
+        }
+    }
+    Ok(relationships)
+}
+
+#[derive(Debug, Clone)]
+struct GoPruneReplacement {
+    old_path: String,
+    old_version: Option<String>,
+    new_path: String,
+    new_version: Option<String>,
+    local_target: Option<String>,
+}
+
+#[derive(Debug)]
+struct GoPruneKnowledge {
+    domain: crate::prune_knowledge::PruneDomainId,
+    go: String,
+    toolchain: Option<String>,
+    package_directories: HashMap<String, String>,
+    relationships: HashMap<String, Vec<String>>,
+    replacements: Vec<GoPruneReplacement>,
+}
+
+fn go_work_token(value: &str) -> Result<String, Error> {
+    if value
+        .chars()
+        .all(|character| !character.is_whitespace() && !matches!(character, '"' | '\\' | '`'))
+    {
+        Ok(value.to_string())
+    } else {
+        serde_json::to_string(value).map_err(Error::WorkspaceSerialize)
+    }
+}
+
+fn render_go_work(
+    go: &str,
+    toolchain: Option<&str>,
+    directories: &[String],
+    replacements: &[GoPruneReplacement],
+) -> Result<String, Error> {
+    let mut output = format!("go {}\n", go_work_token(go)?);
+    if let Some(toolchain) = toolchain.filter(|toolchain| !toolchain.is_empty()) {
+        output.push_str(&format!("\ntoolchain {}\n", go_work_token(toolchain)?));
+    }
+    output.push_str("\nuse (\n");
+    for directory in directories {
+        output.push_str(&format!(
+            "\t{}\n",
+            go_work_token(&format!("./{directory}"))?
+        ));
+    }
+    output.push_str(")\n");
+    if !replacements.is_empty() {
+        output.push_str("\nreplace (\n");
+        for replacement in replacements {
+            output.push('\t');
+            output.push_str(&go_work_token(&replacement.old_path)?);
+            if let Some(version) = &replacement.old_version {
+                output.push(' ');
+                output.push_str(&go_work_token(version)?);
+            }
+            output.push_str(" => ");
+            output.push_str(&go_work_token(&replacement.new_path)?);
+            if let Some(version) = &replacement.new_version {
+                output.push(' ');
+                output.push_str(&go_work_token(version)?);
+            }
+            output.push('\n');
+        }
+        output.push_str(")\n");
+    }
+    Ok(output)
+}
+
+impl PruneDomain for GoPruneKnowledge {
+    fn id(&self) -> &crate::prune_knowledge::PruneDomainId {
+        &self.domain
+    }
+
+    fn plan(
+        &self,
+        kept_packages: &[String],
+    ) -> Result<Option<PrunePlan>, crate::prune_knowledge::Error> {
+        if kept_packages.is_empty() {
+            return Ok(None);
+        }
+        let failed = |error: Error| crate::prune_knowledge::Error::Failed(Box::new(error));
+        let requested: HashSet<&str> = kept_packages.iter().map(String::as_str).collect();
+        let mut retained: HashSet<String> = kept_packages.iter().cloned().collect();
+        let mut pending = kept_packages.to_vec();
+        while let Some(package) = pending.pop() {
+            for dependency in self.relationships.get(&package).into_iter().flatten() {
+                if retained.insert(dependency.clone()) {
+                    pending.push(dependency.clone());
+                }
+            }
+        }
+
+        let mut retained_names = retained.into_iter().collect::<Vec<_>>();
+        retained_names.sort();
+        let mut directories = retained_names
+            .iter()
+            .filter_map(|name| self.package_directories.get(name).cloned())
+            .collect::<Vec<_>>();
+        directories.sort();
+        directories.dedup();
+        let replacements = self
+            .replacements
+            .iter()
+            .filter(|replacement| {
+                replacement
+                    .local_target
+                    .as_ref()
+                    .is_none_or(|target| retained_names.binary_search(target).is_ok())
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let go_work = render_go_work(
+            &self.go,
+            self.toolchain.as_deref(),
+            &directories,
+            &replacements,
+        )
+        .map_err(failed)?;
+        let extra_packages = retained_names
+            .iter()
+            .filter(|name| !requested.contains(name.as_str()))
+            .cloned()
+            .collect();
+        let mut copy_paths = vec![GO_WORK_SUM.to_string()];
+        copy_paths.extend(
+            directories
+                .iter()
+                .map(|directory| format!("{directory}/{GO_SUM}")),
+        );
+
+        Ok(Some(PrunePlan {
+            extra_packages,
+            root_files: vec![(GO_WORK.to_string(), go_work)],
+            copy_paths,
+        }))
+    }
+}
+
+fn module_identity(module: &GoListModule) -> ExternalPackageIdentity {
+    fn describe(module: &GoListModule) -> String {
+        format!(
+            "path={};version={};sum={};go_mod_sum={}",
+            module.path, module.version, module.sum, module.go_mod_sum
+        )
+    }
+
+    let mut version = describe(module);
+    if let Some(replacement) = module.replace.as_deref() {
+        version.push_str(";replace=");
+        version.push_str(&describe(replacement));
+    }
+    ExternalPackageIdentity::new(module.path.clone(), version).with_human_name(module.path.clone())
+}
+
+fn external_resolutions(
+    graph: &str,
+    modules: &[GoModule],
+    listed: &[GoListModule],
+    toolchain: &ExternalPackageIdentity,
+) -> Result<Vec<PackageResolution>, Error> {
+    let internal: HashSet<&str> = modules
+        .iter()
+        .map(|module| module.module_path.as_str())
+        .collect();
+    let mut by_reference = HashMap::new();
+    let mut selected_references = HashMap::new();
+    for module in listed.iter().filter(|module| !module.main) {
+        let identity = module_identity(module);
+        selected_references.insert(
+            module.path.as_str(),
+            format!("{}@{}", module.path, module.version),
+        );
+        by_reference.insert(module.path.clone(), identity.clone());
+        if !module.version.is_empty() {
+            by_reference.insert(format!("{}@{}", module.path, module.version), identity);
+        }
+    }
+
+    let mut adjacency: HashMap<&str, Vec<&str>> = HashMap::new();
+    for line in graph.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let (from, to) = line
+            .split_once(' ')
+            .ok_or_else(|| Error::MalformedModGraphLine {
+                line: line.to_string(),
+            })?;
+        adjacency.entry(from).or_default().push(to);
+    }
+
+    let mut resolutions = Vec::with_capacity(modules.len() + 1);
+    let mut aggregate = HashSet::new();
+    for module in modules {
+        let mut identities = HashSet::from([toolchain.clone()]);
+        let mut pending = vec![module.module_path.as_str()];
+        let mut seen = HashSet::new();
+        while let Some(node) = pending.pop() {
+            if !seen.insert(node) {
+                continue;
+            }
+            for dependency in adjacency.get(node).into_iter().flatten() {
+                let path = module_path_without_version(dependency);
+                if internal.contains(path) {
+                    pending.push(path);
+                    continue;
+                }
+                if matches!(path, "go" | "toolchain") {
+                    continue;
+                }
+                let identity = by_reference
+                    .get(*dependency)
+                    .or_else(|| by_reference.get(path))
+                    .ok_or_else(|| Error::UnknownResolutionModule {
+                        module: (*dependency).to_string(),
+                    })?
+                    .clone();
+                // All workspace consumers build the MVS-selected version,
+                // not the historical version written in their require line.
+                if let Some(selected) = selected_references.get(path) {
+                    pending.push(selected.as_str());
+                }
+                aggregate.insert(identity.clone());
+                identities.insert(identity);
+            }
+        }
+        resolutions.push(PackageResolution::new(module.package_name(), identities));
+    }
+    aggregate.insert(toolchain.clone());
+    resolutions.push(PackageResolution::new(GO_WORKSPACE_NAME, aggregate));
+    Ok(resolutions)
+}
+
+/// Discover all Go modules listed by the repository-root `go.work`.
+pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWorkspace, Error> {
+    let work_path = repo_root.join_component(GO_WORK);
+    if !work_path.exists() {
+        return Ok(DiscoveredWorkspace::default());
+    }
+
+    let work = go_work_json(repo_root)?;
+    let uses = work.use_.clone().ok_or(Error::EmptyWorkspace)?;
+    if uses.is_empty() {
+        return Err(Error::EmptyWorkspace);
+    }
+    let member_dirs = uses
+        .iter()
+        .map(|entry| match entry.disk_path.as_deref() {
+            Some(disk_path) => resolve_member_dir(repo_root, disk_path),
+            None => Err(Error::MalformedModGraphLine {
+                line: "go.work Use entry is missing DiskPath".to_string(),
+            }),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    validate_single_workspace(repo_root, &member_dirs)?;
+
+    let root_module_path = if repo_root.join_component(GO_MOD).exists() {
+        let root_module = go_mod_edit_json(repo_root, repo_root)?;
+        Some(required_module_path(&root_module, &repo_root.join_component(GO_MOD))?.to_string())
+    } else {
+        None
+    };
+
+    let tracked_sources = tracked_source_files(repo_root);
+    let mut modules = Vec::new();
+    let mut identities: HashMap<String, String> = HashMap::new();
+    let mut package_directories = HashMap::new();
+    let mut member_paths = HashSet::new();
+
+    for (entry, member_dir) in uses.into_iter().zip(member_dirs) {
+        if !member_dir.join_component(GO_MOD).exists() {
+            return Err(Error::MissingGoMod {
+                path: member_dir.to_string(),
+            });
+        }
+        if member_dir.join_component("vendor").exists() {
+            return Err(Error::VendoredModule {
+                path: member_dir.join_component("vendor").to_string(),
+            });
+        }
+
+        let module_json = go_mod_edit_json(repo_root, &member_dir)?;
+        let module_path = match entry.module_path.filter(|path| !path.is_empty()) {
+            Some(path) => path,
+            None => {
+                required_module_path(&module_json, &member_dir.join_component(GO_MOD))?.to_string()
+            }
+        };
+        if package_name(&module_path) == GO_WORKSPACE_NAME {
+            return Err(Error::WorkspaceNameCollision {
+                name: GO_WORKSPACE_NAME.to_string(),
+            });
+        }
+        if let Some(root_path) = &root_module_path
+            && root_path == &module_path
+        {
+            return Err(Error::RootDefinitionCollision {
+                path: member_dir.to_string(),
+                module_path,
+            });
+        }
+        if let Some(other_manifest) = identities.get(&module_path) {
+            return Err(Error::DuplicateModuleIdentity {
+                module_path,
+                other_manifest: other_manifest.clone(),
+            });
+        }
+        identities.insert(
+            module_path.clone(),
+            member_dir.join_component(GO_MOD).to_string(),
+        );
+        package_directories.insert(
+            package_name(&module_path).to_string(),
+            AnchoredSystemPathBuf::new(repo_root, &member_dir)?
+                .to_unix()
+                .to_string(),
+        );
+        member_paths.insert(module_path.clone());
+
+        let (runnable_target, root_source_inputs) = module_package_inputs(&member_dir)?;
+        let mut module = GoModule {
+            module_path,
+            manifest_path: member_dir.join_component(GO_MOD),
+            relationships: Vec::new(),
+            runnable_target,
+            root_source_inputs,
+        };
+        if let Some(tracked) = &tracked_sources {
+            if let Some(name) = runnable_output_name(&module)
+                && let Some(inputs) = &mut module.root_source_inputs
+            {
+                for name in [name.clone(), format!("{name}.exe")] {
+                    if tracked.contains(&member_dir.join_component(&name)) {
+                        inputs.insert(name);
+                    }
+                }
+            }
+        } else {
+            module.root_source_inputs = None;
+        }
+        modules.push(module);
+    }
+
+    // Go owns workspace precedence, version-specific replacements, and MVS.
+    // Inactive or overridden member directives must not affect this graph.
+    let listed = go_list_modules(repo_root)?;
+    let mut replacement_targets = HashMap::new();
+    for selected in &listed {
+        let Some(replacement) = &selected.replace else {
+            continue;
+        };
+        if !replacement.version.is_empty() {
+            continue;
+        }
+        let directory =
+            replacement
+                .directory
+                .as_deref()
+                .ok_or_else(|| Error::MalformedReplacement {
+                    reason: format!(
+                        "Go did not resolve the local replacement directory for {}",
+                        selected.path
+                    ),
+                })?;
+        if let Some((target, _)) =
+            local_replacement_target(repo_root, repo_root, directory, &modules)?
+        {
+            replacement_targets.insert(selected.path.clone(), target);
+        }
+    }
+    let mut prune_replacements = Vec::new();
+    for replacement in work.replace.unwrap_or_default() {
+        let old_path = replacement_path(&replacement.old)?.to_string();
+        let new_path = replacement_path(&replacement.new)?;
+        let local = if replacement
+            .new
+            .version
+            .as_deref()
+            .unwrap_or_default()
+            .is_empty()
+        {
+            local_replacement_target(repo_root, repo_root, new_path, &modules)?
+        } else {
+            None
+        };
+        let (new_path, local_target) = match local {
+            Some((target, directory)) => (
+                format!("./{directory}"),
+                Some(package_name(&target).to_string()),
+            ),
+            None => (new_path.to_string(), None),
+        };
+        prune_replacements.push(GoPruneReplacement {
+            old_path,
+            old_version: replacement
+                .old
+                .version
+                .filter(|version| !version.is_empty()),
+            new_path,
+            new_version: replacement
+                .new
+                .version
+                .filter(|version| !version.is_empty()),
+            local_target,
+        });
+    }
+    prune_replacements.sort_by(|left, right| {
+        (
+            &left.old_path,
+            &left.old_version,
+            &left.new_path,
+            &left.new_version,
+        )
+            .cmp(&(
+                &right.old_path,
+                &right.old_version,
+                &right.new_path,
+                &right.new_version,
+            ))
+    });
+
+    let graph = go_mod_graph(repo_root)?;
+    let mut relationship_map =
+        relationships_from_mod_graph(&graph, &member_paths, &replacement_targets)?;
+    for module in &mut modules {
+        module.relationships = relationship_map
+            .remove(&module.module_path)
+            .unwrap_or_default();
+    }
+
+    let relationships = modules
+        .iter()
+        .map(|module| {
+            let dependencies = module
+                .relationships
+                .iter()
+                .filter_map(|relationship| match relationship.target() {
+                    RelationshipTarget::Internal(target) => Some(target.clone()),
+                    RelationshipTarget::UnresolvedExternal { .. } => None,
+                })
+                .collect();
+            (module.package_name().to_string(), dependencies)
+        })
+        .collect();
+    let prune = GoPruneKnowledge {
+        domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+        go: work.go,
+        toolchain: work.toolchain,
+        package_directories,
+        relationships,
+        replacements: prune_replacements,
+    };
+
+    Ok(DiscoveredWorkspace {
+        modules,
+        graph,
+        listed,
+        prune: Some(prune),
+    })
+}
+
+fn go_command_task(
+    name: &'static str,
+    subcommand: &'static str,
+    targets: Vec<String>,
+    pass_through_placement: crate::native_tasks::PassThroughPlacement,
+    cache: Option<bool>,
+    entrypoint: crate::native_tasks::TaskEntrypoint,
+    cwd_policy: crate::native_tasks::WorkingDirectoryPolicy,
+) -> crate::native_tasks::NativeTask {
+    use crate::native_tasks::{NativeCommandArguments, NativeCommandProgram, NativeTask};
+
+    let display = format!("go {subcommand} {}", targets.join(" "));
+    NativeTask::command_task(
+        name,
+        display,
+        NativeCommandProgram::Tool("go".to_string()),
+        NativeCommandArguments {
+            prefix: vec![subcommand.to_string()],
+            pass_through_placement,
+            pass_through_separator: None,
+            suffix: targets,
+        },
+        None,
+        cwd_policy,
+    )
+    .with_contract(NativeTaskContract::new(
+        toolchain::TaskDefaults { cache },
+        Some(entrypoint),
+        true,
+    ))
+}
+
+fn runnable_output_name(module: &GoModule) -> Option<String> {
+    let target = module.runnable_target.as_deref()?;
+    let import_path = if target == "." {
+        module.module_path.clone()
+    } else {
+        format!("{}/{}", module.module_path, target.trim_start_matches("./"))
+    };
+    let mut components = import_path.rsplit('/');
+    let name = components.next()?;
+    // Match cmd/go/internal/load's exeFromImportPath: binary names skip one
+    // trailing major version, unlike Turborepo package names which retain it.
+    Some(
+        if is_version_element(name) {
+            components.next().unwrap_or(name)
+        } else {
+            name
+        }
+        .to_string(),
+    )
+}
+
+/// Build the conservative built-in task table for one Go module.
+pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::NativeTask> {
+    let build_entrypoint = if module.runnable_target.is_some() {
+        TaskEntrypoint::Preferred
+    } else {
+        TaskEntrypoint::Candidate
+    };
+    // Select the sole main explicitly: `go build ./...` writes a binary only
+    // when the selection contains exactly one package, not merely one main.
+    let build_targets = vec![
+        module
+            .runnable_target
+            .clone()
+            .unwrap_or_else(|| "./...".to_string()),
+    ];
+    let mut tasks = vec![
+        go_command_task(
+            "build",
+            "build",
+            build_targets,
+            PassThroughPlacement::BeforeSuffix,
+            module.runnable_target.is_none().then_some(false),
+            build_entrypoint,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+        go_command_task(
+            "test",
+            "test",
+            vec!["./...".to_string()],
+            PassThroughPlacement::AfterSuffix,
+            None,
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+        go_command_task(
+            "lint",
+            "vet",
+            vec!["./...".to_string()],
+            PassThroughPlacement::BeforeSuffix,
+            None,
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+        go_command_task(
+            "format",
+            "fmt",
+            vec!["./...".to_string()],
+            PassThroughPlacement::BeforeSuffix,
+            Some(false),
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ),
+    ];
+    if let Some(target) = &module.runnable_target {
+        tasks.push(go_command_task(
+            "dev",
+            "run",
+            vec![target.clone()],
+            PassThroughPlacement::AfterSuffix,
+            Some(false),
+            TaskEntrypoint::Candidate,
+            WorkingDirectoryPolicy::PackageDirectory,
+        ));
+    }
+    tasks
+}
+
+/// Build the workspace's non-executing build contract.
+pub fn native_tasks_for_workspace() -> Vec<crate::native_tasks::NativeTask> {
+    use crate::native_tasks::NativeTask;
+
+    // Verification runs per module so filtered and unfiltered invocations select
+    // the same tasks and share cache entries. Formatting is also module-scoped:
+    // go fmt does not support cross-module workspace patterns.
+    vec![NativeTask::contract_task(
+        "build",
+        NativeTaskContract::new(
+            toolchain::TaskDefaults::default(),
+            Some(TaskEntrypoint::Excluded),
+            false,
+        ),
+    )]
+}
+
+/// Effective `go env` values that alter compilation, package selection, tests,
+/// module/workspace selection, target platform, or tool selection.
+///
+/// Values are captured from structured `go env` output so settings persisted
+/// with `go env -w` participate even when they are absent from the process
+/// environment. Checkout-root paths are normalized before fingerprinting.
+const FINGERPRINTED_GO_ENV_VARS: &[&str] = &[
+    // Tool selection and cgo compilation.
+    "AR",
+    "CC",
+    "CGO_CFLAGS",
+    "CGO_CPPFLAGS",
+    "CGO_CXXFLAGS",
+    "CGO_ENABLED",
+    "CGO_FFLAGS",
+    "CGO_LDFLAGS",
+    "CXX",
+    "GCCGO",
+    "PKG_CONFIG",
+    // Module/workspace mode, command flags (including build tags), experiments,
+    // and runtime knobs that can alter tests.
+    "GO111MODULE",
+    "GOCACHEPROG",
+    "GODEBUG",
+    "GOEXPERIMENT",
+    "GOFIPS140",
+    "GOFLAGS",
+    "GOTOOLCHAIN",
+    "GOWORK",
+    // Target platform and architecture feature levels.
+    "GO386",
+    "GOAMD64",
+    "GOARCH",
+    "GOARM",
+    "GOARM64",
+    "GOMIPS",
+    "GOMIPS64",
+    "GOOS",
+    "GOPPC64",
+    "GORISCV64",
+    "GOWASM",
+];
+
+/// Process environment variables that alter Go compilation, package
+/// selection, tests, or target platform. This existing direct task-hash input
+/// remains alongside the effective `go env` fingerprint above.
+pub const HASHED_ENV_VARS: &[&str] = &[
+    "GO111MODULE",
+    "GO386",
+    "GOAMD64",
+    "GOARCH",
+    "GOARM",
+    "GOARM64",
+    "GODEBUG",
+    "GOEXPERIMENT",
+    "GOFIPS140",
+    "GOMIPS",
+    "GOMIPS64",
+    "GOOS",
+    "GOPPC64",
+    "GORISCV64",
+    "GOTOOLCHAIN",
+    "GOWASM",
+    "CGO_ENABLED",
+];
+
+/// Machine-local Go variables required by task execution but excluded from
+/// verbatim task hashes. Path-bearing behavior is already represented by its
+/// checkout-normalized external identity; cache locations never participate.
+pub(crate) const PROJECTED_ONLY_ENV_VARS: &[&str] = &[
+    "GOENV",
+    "GOPATH",
+    "GOROOT",
+    "GOTMPDIR",
+    "GOCACHE",
+    "GOMODCACHE",
+    "AR",
+    "CC",
+    "CXX",
+    "GCCGO",
+    "GOCACHEPROG",
+    "GOFLAGS",
+    "GOWORK",
+    "CGO_CFLAGS",
+    "CGO_CPPFLAGS",
+    "CGO_CXXFLAGS",
+    "CGO_FFLAGS",
+    "CGO_LDFLAGS",
+    "PKG_CONFIG",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum GoContractKind {
+    Module { output_name: Option<String> },
+    Workspace,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoTaskContract {
+    kind: GoContractKind,
+    source_input_exclusions: Vec<String>,
+    output_overlaps_source: bool,
+    target_os: String,
+    cache_prefixes: Vec<String>,
+    go_flags: String,
+}
+
+impl GoTaskContract {
+    #[expect(clippy::expect_used, reason = "Go module manifests have a parent path")]
+    fn module(module: &GoModule, target_os: &str, cache_prefixes: &[String]) -> Self {
+        let output_name = runnable_output_name(module);
+        let is_source = |name: &str| {
+            module
+                .root_source_inputs
+                .as_ref()
+                .is_none_or(|inputs| inputs.contains(name))
+        };
+        let output_overlaps_source = output_name.as_ref().is_some_and(|name| {
+            let extension = if target_os == "windows" { ".exe" } else { "" };
+            is_source(&format!("{name}{extension}"))
+        });
+        let source_input_exclusions = output_name
+            .iter()
+            .flat_map(|name| [name.clone(), format!("{name}.exe")])
+            // Only untracked, non-source output names are artifacts. Preserve
+            // sources even when absent, embedded, or themselves executables.
+            .filter(|name| !is_source(name))
+            // Never prune a same-named source directory either.
+            .filter(|name| {
+                !module
+                    .manifest_path
+                    .parent()
+                    .expect("Go manifest has a parent")
+                    .join_component(name)
+                    .as_std_path()
+                    .is_dir()
+            })
+            .collect();
+        Self {
+            kind: GoContractKind::Module { output_name },
+            source_input_exclusions,
+            output_overlaps_source,
+            target_os: target_os.to_string(),
+            cache_prefixes: cache_prefixes.to_vec(),
+            go_flags: String::new(),
+        }
+    }
+
+    fn workspace(target_os: &str, cache_prefixes: &[String]) -> Self {
+        Self {
+            kind: GoContractKind::Workspace,
+            source_input_exclusions: Vec::new(),
+            output_overlaps_source: false,
+            target_os: target_os.to_string(),
+            cache_prefixes: cache_prefixes.to_vec(),
+            go_flags: String::new(),
+        }
+    }
+
+    fn with_go_flags(mut self, go_flags: &str) -> Self {
+        self.go_flags = go_flags.to_string();
+        self
+    }
+
+    pub(crate) fn source_input_exclusions(&self) -> &[String] {
+        &self.source_input_exclusions
+    }
+
+    pub(crate) fn dependency_source_inputs(&self) -> DependencySourceInputs {
+        match &self.kind {
+            GoContractKind::Module { .. } => DependencySourceInputs::Include,
+            GoContractKind::Workspace => DependencySourceInputs::Exclude,
+        }
+    }
+
+    pub(crate) fn derived_task_io(
+        &self,
+        _package: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        path_to_root: &str,
+        dependencies: &[crate::package_graph::PackageTaskContext<'_>],
+        wants_automatic_inputs: bool,
+        context: &toolchain::TaskIOContext<'_>,
+    ) -> Option<toolchain::DerivedTaskIO> {
+        if !matches!(task, "build" | "test" | "lint" | "format" | "dev") {
+            return None;
+        }
+
+        let root_input = |path: &str| {
+            if path_to_root.is_empty() {
+                path.to_string()
+            } else {
+                format!("{path_to_root}/{path}")
+            }
+        };
+        let mut io = toolchain::DerivedTaskIO {
+            input_globs: [GO_WORK, GO_WORK_SUM].map(root_input).to_vec(),
+            env: HASHED_ENV_VARS
+                .iter()
+                .map(|name| name.to_string())
+                .collect(),
+            forbidden_output_prefixes: vec![root_input(".git"), root_input(".turbo")],
+            ..Default::default()
+        };
+        for prefix in &self.cache_prefixes {
+            let prefix = root_input(prefix);
+            io.input_globs.push(format!("!{prefix}/**"));
+            io.forbidden_output_prefixes.push(prefix);
+        }
+
+        if wants_automatic_inputs {
+            match &self.kind {
+                GoContractKind::Module { .. } => {
+                    io.package_default_inputs = Some(true);
+                    io.input_globs.extend(
+                        self.source_input_exclusions()
+                            .iter()
+                            .map(|name| format!("!{name}")),
+                    );
+                }
+                GoContractKind::Workspace => io.package_default_inputs = Some(false),
+            }
+            for dependency in dependencies {
+                match dependency.task_contract().dependency_source_inputs() {
+                    DependencySourceInputs::Include => {
+                        let directory = root_input(dependency.directory().to_unix().as_str());
+                        io.input_globs.extend([
+                            format!("{directory}/**"),
+                            format!("!{directory}/.git/**"),
+                            format!("!{directory}/.turbo/**"),
+                        ]);
+                        io.input_globs.extend(
+                            dependency
+                                .task_contract()
+                                .source_input_exclusions()
+                                .iter()
+                                .map(|name| format!("!{directory}/{name}")),
+                        );
+                    }
+                    DependencySourceInputs::Exclude => {}
+                    DependencySourceInputs::Unknown => {
+                        io.input_safety = DerivedInputSafety::Untracked;
+                        io.cache_reason =
+                            Some("a Go dependency has unclassified source inputs".to_string());
+                    }
+                }
+            }
+            io.input_globs.sort();
+            io.input_globs.dedup();
+        }
+
+        if task == "build" {
+            io.outputs = match &self.kind {
+                GoContractKind::Module {
+                    output_name: Some(output_name),
+                } if context.task_args.is_none_or(<[_]>::is_empty) => {
+                    let extension = if self.target_os == "windows" {
+                        ".exe"
+                    } else {
+                        ""
+                    };
+                    DerivedOutputs::Resolved(vec![format!("{output_name}{extension}")])
+                }
+                GoContractKind::Module {
+                    output_name: Some(_),
+                } => {
+                    io.cache_reason =
+                        Some("Go build arguments can change the derived binary output".to_string());
+                    DerivedOutputs::Unavailable
+                }
+                GoContractKind::Module { output_name: None } => {
+                    io.cache_reason = Some(
+                        "Go library builds have no stable outputs for Turborepo to restore"
+                            .to_string(),
+                    );
+                    DerivedOutputs::Unavailable
+                }
+                GoContractKind::Workspace => DerivedOutputs::Resolved(Vec::new()),
+            };
+        }
+        if task == "build" && self.output_overlaps_source {
+            // Restoring an inferred output must never overwrite a source input,
+            // even if the user explicitly declares that path as an output.
+            io.input_safety = DerivedInputSafety::Untracked;
+            io.outputs = DerivedOutputs::Unavailable;
+            io.cache_reason = Some("Go binary output may overlap a source input".to_string());
+        }
+        // Explicit arguments and GOFLAGS can redirect Go to files or module
+        // selections outside the discovered workspace. Output declarations do
+        // not make those additional source inputs safe to cache.
+        let untracked = context
+            .task_args
+            .into_iter()
+            .flatten()
+            .any(|arg| go_argument_has_untracked_inputs(arg))
+            || self
+                .go_flags
+                .split_whitespace()
+                .any(go_argument_has_untracked_inputs)
+            || context.environment.get("GOFLAGS").is_some_and(|flags| {
+                flags
+                    .split_whitespace()
+                    .any(go_argument_has_untracked_inputs)
+            });
+        if untracked {
+            io.input_safety = DerivedInputSafety::Untracked;
+            io.outputs = DerivedOutputs::Unavailable;
+            io.cache_reason =
+                Some("Go arguments can select untracked inputs or outputs".to_string());
+        }
+        Some(io)
+    }
+}
+
+fn go_argument_has_untracked_inputs(argument: &str) -> bool {
+    // An allowlist is intentional: Go flags can select files, execute tools,
+    // or create side artifacts. Knowing only their spelling is insufficient.
+    let flag = argument.split('=').next().unwrap_or(argument);
+    !matches!(
+        flag,
+        "-a" | "-n"
+            | "-race"
+            | "-msan"
+            | "-asan"
+            | "-v"
+            | "-x"
+            | "-trimpath"
+            | "-buildvcs"
+            | "-p"
+            | "-tags"
+            | "-count"
+            | "-run"
+            | "-skip"
+            | "-short"
+            | "-failfast"
+            | "-fullpath"
+            | "-timeout"
+            | "-parallel"
+            | "-shuffle"
+            | "-list"
+            | "-bench"
+            | "-benchtime"
+            | "-benchmem"
+            | "-cpu"
+            | "-cover"
+            | "-covermode"
+            | "-coverpkg"
+            | "-json"
+    )
+}
+
+fn go_cache_prefixes(repo_root: &AbsoluteSystemPath, environment: &GoEnvironment) -> Vec<String> {
+    let mut prefixes = Vec::new();
+    for path in [&environment.build_cache, &environment.module_cache] {
+        let path = AbsoluteSystemPathBuf::from_unknown(repo_root, path);
+        if let Ok(prefix) = AnchoredSystemPathBuf::new(repo_root, &path)
+            && prefix.components().next().is_some()
+        {
+            prefixes.push(prefix.to_unix().to_string());
+        }
+    }
+    prefixes.sort();
+    prefixes.dedup();
+    prefixes
+}
+
+fn go_change_observation(
+    repo_root: &AbsoluteSystemPath,
+    modules: &[GoModule],
+    cache_prefixes: &[String],
+) -> Result<ChangeObservation, Error> {
+    let mut observation = ChangeObservation::new()
+        .with_rediscovery_file_name(GO_WORK)
+        .with_rediscovery_file_name(GO_MOD)
+        .with_resolution_path(GO_WORK_SUM);
+    for module in modules {
+        let manifest = AnchoredSystemPathBuf::new(repo_root, &module.manifest_path)?;
+        let directory = manifest.parent().ok_or_else(|| Error::MissingGoMod {
+            path: module.manifest_path.to_string(),
+        })?;
+        observation = observation
+            .with_resolution_path(directory.join_component(GO_SUM).to_unix().to_string());
+    }
+    for prefix in cache_prefixes {
+        observation = observation.with_ignore_prefix(prefix.clone());
+    }
+    Ok(observation)
+}
+
+fn package_from_module(
+    module: &GoModule,
+    target_os: &str,
+    cache_prefixes: &[String],
+    go_flags: &str,
+) -> DiscoveredPackage {
+    let name = module.package_name().to_string();
+    let descriptor = PackageJson {
+        name: Some(turborepo_errors::Spanned::new(name.clone())),
+        ..Default::default()
+    };
+    DiscoveredPackage::package(Some(name), descriptor, module.manifest_path.clone())
+        .with_native_relationships(module.relationships.clone())
+        .with_native_tasks(native_tasks_for_module(module))
+        .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
+            GoTaskContract::module(module, target_os, cache_prefixes).with_go_flags(go_flags),
+        ))
+}
+
+/// The Go repository contributor. Registered during graph construction when
+/// `futureFlags.experimentalGoWorkspaces` is enabled.
+pub(crate) struct GoContributor {
+    repo_root: AbsoluteSystemPathBuf,
+}
+
+impl GoContributor {
+    pub(crate) fn new(repo_root: AbsoluteSystemPathBuf) -> std::sync::Arc<Self> {
+        std::sync::Arc::new(Self { repo_root })
+    }
+
+    /// Cheap scope inventory without invoking `go` (see [`scope_inventory`]).
+    ///
+    /// Core's lazy discovery needs only the workspace's scope identities —
+    /// which Go modules exist, their manifests, the `go-workspace` aggregate,
+    /// and the workspace root — to route a selection, so unrelated selections
+    /// never spawn a `go` process. Identities match
+    /// [`Self::discover_packages`], which remains the single source of
+    /// tasks, edges, contracts, external resolution, and prune facts once a
+    /// selection actually needs Go.
+    async fn discover_package_scopes_inner(
+        &self,
+    ) -> Result<DiscoveredPackageScopes, toolchain::Error> {
+        turborepo_rayon_compat::block_in_place(|| {
+            scope_inventory::discover_package_scopes(&self.repo_root)
+        })
+        .map_err(|error| toolchain::Error::Failed(Box::new(error)))
+    }
+}
+
+/// Wrap an ecosystem failure at the contributor boundary.
+fn contribution_failure(error: Error) -> toolchain::Error {
+    toolchain::Error::Failed(Box::new(error))
+}
+
+/// Assemble the Go contributor's observation envelope from an already-observed
+/// workspace and toolchain environment.
+///
+/// Split from [`GoContributor::discover_packages`] so the subprocess-free half
+/// of Go support — package identities, native tasks, task contracts, external
+/// resolution domains, change observations, and prune knowledge — is directly
+/// exercisable with in-memory observation inputs. Toolchain identity stays lazy
+/// because observing it costs a `go version` process that an empty workspace
+/// never needs.
+fn contributed_packages(
+    repo_root: &AbsoluteSystemPath,
+    workspace: DiscoveredWorkspace,
+    environment: &GoEnvironment,
+    toolchain_identity: impl FnOnce() -> Result<ExternalPackageIdentity, Error>,
+) -> Result<DiscoveredPackages, Error> {
+    let cache_prefixes = go_cache_prefixes(repo_root, environment);
+    let change_observation = go_change_observation(repo_root, &workspace.modules, &cache_prefixes)?;
+
+    let workspace_roots = repo_root
+        .join_component(GO_WORK)
+        .exists()
+        .then(|| WorkspaceRoot::new("go", repo_root.to_owned()))
+        .into_iter()
+        .collect();
+
+    if workspace.modules.is_empty() {
+        return Ok(DiscoveredPackages::new(Vec::new(), workspace_roots)
+            .with_change_observation(change_observation));
+    }
+
+    let toolchain_identity = toolchain_identity()?;
+
+    let mut module_names = workspace
+        .modules
+        .iter()
+        .map(|module| module.package_name().to_string())
+        .collect::<Vec<_>>();
+    module_names.sort();
+    let workspace_relationships = module_names
+        .into_iter()
+        .map(|name| Relationship::internal(name, DependencyKind::Production))
+        .collect();
+
+    let mut packages = workspace
+        .modules
+        .iter()
+        .map(|module| {
+            package_from_module(
+                module,
+                &environment.target_os,
+                &cache_prefixes,
+                environment
+                    .fingerprint_values
+                    .get("GOFLAGS")
+                    .map(String::as_str)
+                    .unwrap_or_default(),
+            )
+        })
+        .collect::<Vec<_>>();
+    packages.push(
+        DiscoveredPackage::aggregate(
+            GO_WORKSPACE_NAME.to_string(),
+            PackageJson::default(),
+            repo_root.join_component(GO_WORK),
+        )
+        .with_native_relationships(workspace_relationships)
+        .with_native_tasks(native_tasks_for_workspace())
+        .with_task_contract(crate::task_contracts::ScopeTaskContract::go(
+            GoTaskContract::workspace(&environment.target_os, &cache_prefixes).with_go_flags(
+                environment
+                    .fingerprint_values
+                    .get("GOFLAGS")
+                    .map(String::as_str)
+                    .unwrap_or_default(),
+            ),
+        )),
+    );
+
+    let resolutions = external_resolutions(
+        &workspace.graph,
+        &workspace.modules,
+        &workspace.listed,
+        &toolchain_identity,
+    )?;
+    let members = resolutions
+        .iter()
+        .map(|resolution| resolution.package().to_string())
+        .collect::<Vec<_>>();
+    let anchored = |path| AnchoredSystemPathBuf::from_raw(path).map_err(Error::from);
+    let mut definition_sources = vec![anchored(GO_WORK)?];
+    if repo_root.join_component(GO_WORK_SUM).exists() {
+        definition_sources.push(anchored(GO_WORK_SUM)?);
+    }
+    for module in &workspace.modules {
+        let manifest =
+            AnchoredSystemPathBuf::new(repo_root, &module.manifest_path).map_err(Error::from)?;
+        let module_dir = manifest.parent().ok_or_else(|| Error::MissingGoMod {
+            path: module.manifest_path.to_string(),
+        })?;
+        let sum = module_dir.join_component(GO_SUM);
+        definition_sources.push(manifest);
+        if repo_root.resolve(&sum).exists() {
+            definition_sources.push(sum);
+        }
+    }
+    let resolution = ExternalResolutionDomain::new(
+        GO_RESOLUTION_DOMAIN.clone(),
+        ToolchainId::GO,
+        AnchoredSystemPathBuf::default(),
+        members,
+        definition_sources,
+        ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Complete,
+            packages: resolutions,
+        },
+    );
+
+    let discovered = DiscoveredPackages::new(packages, workspace_roots)
+        .with_external_resolution(resolution)
+        .with_change_observation(change_observation);
+    Ok(match workspace.prune {
+        Some(prune) => discovered.with_prune_domain(std::sync::Arc::new(prune)),
+        None => discovered,
+    })
+}
+
+impl RepositoryContributor for GoContributor {
+    fn id(&self) -> ToolchainId {
+        ToolchainId::GO
+    }
+
+    fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+        Box::pin(async move {
+            let workspace =
+                turborepo_rayon_compat::block_in_place(|| discover_workspace(&self.repo_root))
+                    .map_err(contribution_failure)?;
+            let environment =
+                turborepo_rayon_compat::block_in_place(|| go_environment(&self.repo_root))
+                    .map_err(contribution_failure)?;
+            contributed_packages(&self.repo_root, workspace, &environment, || {
+                turborepo_rayon_compat::block_in_place(|| {
+                    go_toolchain_identity(&self.repo_root, &environment)
+                })
+            })
+            .map_err(contribution_failure)
+        })
+    }
+
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(self.discover_package_scopes_inner())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::*;
+    use crate::{
+        discovery::DiscoveryResponse,
+        package_graph::{PackageGraph, PackageName},
+        package_manager::PackageManager,
+    };
+
+    fn go_available() -> bool {
+        which::which("go").is_ok()
+    }
+
+    #[test]
+    fn package_names_preserve_valid_major_versions_and_final_components() {
+        for (module_path, expected) in [
+            ("api", "api"),
+            ("v2", "v2"),
+            ("my-api", "my-api"),
+            ("yaml.v3", "yaml.v3"),
+            ("example.com/api", "api"),
+            ("example.com/team/services/my-api", "my-api"),
+            ("example.com/team/api.client", "api.client"),
+            ("api/v2", "api/v2"),
+            ("api/v10", "api/v10"),
+            ("example.com/api/v2", "api/v2"),
+            ("example.com/team/api/v10", "api/v10"),
+            (
+                "example.com/team/api/v999999999999999999999999999999",
+                "api/v999999999999999999999999999999",
+            ),
+            ("example.com/api/v0", "v0"),
+            ("example.com/api/v1", "v1"),
+            ("example.com/api/v01", "v01"),
+            ("example.com/api/v02", "v02"),
+            ("example.com/api/v", "v"),
+            ("example.com/api/v2beta", "v2beta"),
+            ("example.com/api/v2.0", "v2.0"),
+            ("example.com/api/v-2", "v-2"),
+            ("example.com/api/v+2", "v+2"),
+            ("example.com/api/v２", "v２"),
+            ("example.com/api/V2", "V2"),
+            ("example.com/api/v2/client", "client"),
+            ("gopkg.in/yaml.v3", "yaml.v3"),
+        ] {
+            assert_eq!(package_name(module_path), expected, "{module_path}");
+        }
+    }
+
+    #[test]
+    fn command_parse_diagnostic_hides_parser_details() {
+        let _source =
+            serde_json::from_str::<serde_json::Value>("{").expect_err("incomplete JSON must fail");
+        let diagnostic = Error::CommandParse {
+            command: "go work edit -json",
+            _source,
+        }
+        .to_string();
+
+        assert!(diagnostic.contains("returned invalid output"));
+        assert!(diagnostic.contains("Go 1.22 or newer"));
+        assert!(!diagnostic.contains("EOF"));
+        assert!(!diagnostic.contains("line 1 column"));
+    }
+
+    #[tokio::test]
+    async fn scope_inventory_reports_invalid_go_work_diagnostic_without_toolchain() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nunsupported ./apps/api\n")
+            .unwrap();
+
+        // This path only parses the scope inventory; it never consults PATH or
+        // invokes `go work edit -json` before returning the focused diagnostic.
+        let error = GoContributor::new(root.clone())
+            .discover_package_scopes()
+            .await
+            .unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("go.work at"), "{message}");
+        assert!(
+            message.contains("unknown `unsupported` directive"),
+            "{message}"
+        );
+        assert!(message.contains("go work edit"), "{message}");
+        assert!(!message.contains("go work edit -json"), "{message}");
+    }
+
+    fn write_workspace(root: &AbsoluteSystemPath, layout: &[(&str, &str, &str)]) {
+        fs::create_dir_all(root.as_std_path()).unwrap();
+        let mut work = String::from("go 1.22\n\nuse (\n");
+        for (dir, module_path, contents) in layout {
+            let module_dir = join_relative_path(root, dir).unwrap();
+            fs::create_dir_all(module_dir.as_std_path()).unwrap();
+            let go_mod = if contents.is_empty() {
+                format!("module {module_path}\n\ngo 1.22\n")
+            } else {
+                contents.to_string()
+            };
+            module_dir
+                .join_component(GO_MOD)
+                .create_with_contents(go_mod)
+                .unwrap();
+            work.push_str(&format!("\t./{dir}\n"));
+        }
+        work.push_str(")\n");
+        root.join_component(GO_WORK)
+            .create_with_contents(work)
+            .unwrap();
+    }
+
+    #[test]
+    fn selected_replacements_respect_workspace_precedence_and_versions() {
+        if !go_available() {
+            return;
+        }
+        for (member_replacements, workspace_replacements) in [
+            ("replace example.com/unused => ../missing\n", ""),
+            ("replace example.com/lib => ../missing\n", ""),
+            (
+                "require example.com/alias v1.0.0\nreplace example.com/alias => ../missing\n",
+                "replace example.com/alias => ./lib\n",
+            ),
+            (
+                "require example.com/alias v1.1.0\nreplace (\nexample.com/alias v1.0.0 => \
+                 ../missing\nexample.com/alias v1.1.0 => ../lib\n)\n",
+                "",
+            ),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = resolution_root(&tempdir);
+            let manifest = format!("module example.com/api\n\ngo 1.22\n{member_replacements}");
+            write_workspace(
+                &root,
+                &[
+                    ("api", "example.com/api", &manifest),
+                    ("lib", "example.com/lib", ""),
+                ],
+            );
+            root.join_component(GO_WORK)
+                .create_with_contents(format!(
+                    "go 1.22\nuse (\n./api\n./lib\n)\n{workspace_replacements}"
+                ))
+                .unwrap();
+            let discovered = discover_workspace(&root).unwrap();
+            let api = discovered
+                .modules
+                .iter()
+                .find(|module| module.module_path == "example.com/api")
+                .unwrap();
+            if member_replacements.contains("require") {
+                assert_eq!(api.relationships.len(), 1);
+                assert_eq!(
+                    api.relationships[0].target(),
+                    &RelationshipTarget::Internal("lib".into())
+                );
+            } else {
+                assert!(api.relationships.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn local_replacement_requires_the_actual_member_source_directory() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(
+            &root,
+            &[
+                (
+                    "api",
+                    "example.com/api",
+                    "module example.com/api\n\ngo 1.22\nrequire example.com/alias v1.0.0\nreplace \
+                     example.com/alias => ../copy\n",
+                ),
+                ("lib", "example.com/lib", ""),
+            ],
+        );
+        root.join_component("copy").create_dir_all().unwrap();
+        root.join_components(&["copy", GO_MOD])
+            .create_with_contents("module example.com/lib\n\ngo 1.22\n")
+            .unwrap();
+        assert!(matches!(
+            discover_workspace(&root),
+            Err(Error::NonMemberLocalModule { .. })
+        ));
+        #[cfg(unix)]
+        {
+            // Sharing only the manifest still leaves untracked source files.
+            let manifest = root.join_components(&["copy", GO_MOD]);
+            fs::remove_file(manifest.as_std_path()).unwrap();
+            std::os::unix::fs::symlink(root.join_components(&["lib", GO_MOD]), &manifest).unwrap();
+            assert!(matches!(
+                discover_workspace(&root),
+                Err(Error::NonMemberLocalModule { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn external_resolution_traverses_mvs_selected_versions() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![
+            resolution_module(&root, "example.com/app"),
+            resolution_module(&root, "example.com/other"),
+        ];
+        let graph = "example.com/app example.net/dep@v1.0.0\nexample.com/other \
+                     example.net/dep@v1.1.0\nexample.net/dep@v1.0.0 \
+                     example.net/obsolete@v1.0.0\nexample.net/dep@v1.1.0 example.net/leaf@v1.0.0\n";
+        let listed = vec![
+            listed_module("example.net/dep", "v1.1.0", "dep"),
+            listed_module("example.net/leaf", "v1.0.0", "leaf"),
+        ];
+        let toolchain = ExternalPackageIdentity::new("go", "go1.24");
+        let resolutions = external_resolutions(graph, &modules, &listed, &toolchain).unwrap();
+        assert_eq!(
+            resolution_keys(&resolutions, "app"),
+            HashSet::from(["go", "example.net/dep", "example.net/leaf"])
+        );
+        let changed = external_resolutions(
+            graph,
+            &modules,
+            &[
+                listed_module("example.net/dep", "v1.1.0", "dep"),
+                listed_module("example.net/leaf", "v1.1.0", "changed-leaf"),
+            ],
+            &toolchain,
+        )
+        .unwrap();
+        for package in ["app", "other", GO_WORKSPACE_NAME] {
+            assert_ne!(
+                resolution_for(&resolutions, package).identities(),
+                resolution_for(&changed, package).identities()
+            );
+        }
+    }
+
+    #[test]
+    fn discovers_multiple_modules() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(
+            &root,
+            &[
+                ("apps/api", "example.com/api", ""),
+                ("packages/lib", "example.com/lib", ""),
+            ],
+        );
+        join_relative_path(&root, "apps/api")
+            .unwrap()
+            .join_component("main.go")
+            .create_with_contents("package main\n")
+            .unwrap();
+        join_relative_path(&root, "packages/lib")
+            .unwrap()
+            .join_component("lib.go")
+            .create_with_contents("package lib\n")
+            .unwrap();
+
+        let workspace = discover_workspace(&root).expect("workspace discovery succeeds");
+        assert_eq!(workspace.modules.len(), 2);
+        let paths = workspace
+            .modules
+            .iter()
+            .map(|module| module.module_path.as_str())
+            .collect::<HashSet<_>>();
+        assert!(paths.contains("example.com/api"));
+        assert!(paths.contains("example.com/lib"));
+    }
+
+    #[test]
+    fn rejects_duplicate_module_identity() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(
+            &root,
+            &[
+                ("apps/api", "example.com/shared", ""),
+                ("packages/lib", "example.com/shared", ""),
+            ],
+        );
+
+        let error = discover_workspace(&root).expect_err("duplicate identities fail");
+        assert!(
+            error.to_string().contains("duplicate Go module identity"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn rejects_member_outside_repository() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse ../outside\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("outside members fail");
+        assert!(
+            error.to_string().contains("outside the repository"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_member_symlink_outside_repository() {
+        use std::os::unix::fs::symlink;
+
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(
+            outside.path().join(GO_MOD),
+            "module example.com/outside\n\ngo 1.22\n",
+        )
+        .unwrap();
+        symlink(outside.path(), tempdir.path().join("linked")).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse ./linked\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("symlinked outside members fail");
+        assert!(matches!(error, Error::MemberOutsideRepository { .. }));
+    }
+
+    #[test]
+    fn rejects_unnamed_reserved_root_and_vendored_modules() {
+        if !go_available() {
+            return;
+        }
+
+        for (name, setup, expected) in [
+            ("unnamed", "go 1.22\n", "has no module path"),
+            (
+                "reserved",
+                "module go-workspace\n\ngo 1.22\n",
+                "reserved for the Go workspace aggregate",
+            ),
+            (
+                "derived-reserved",
+                "module example.com/go-workspace\n\ngo 1.22\n",
+                "reserved for the Go workspace aggregate",
+            ),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            write_workspace(&root, &[("module", name, setup)]);
+            let error = discover_workspace(&root).expect_err("unsupported module identity fails");
+            assert!(
+                error.to_string().contains(expected),
+                "unexpected {name} diagnostic: {error}"
+            );
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("module", "example.com/module", "")]);
+        root.join_components(&["module", "vendor"])
+            .create_dir_all()
+            .unwrap();
+        let error = discover_workspace(&root).expect_err("vendored modules fail");
+        assert!(matches!(error, Error::VendoredModule { .. }));
+        assert!(error.to_string().contains("go.sum/go.work.sum"));
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_MOD)
+            .create_with_contents("module example.com/root\n\ngo 1.22\n")
+            .unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse .\n")
+            .unwrap();
+        let error = discover_workspace(&root).expect_err("root workspace modules fail");
+        assert!(matches!(error, Error::RootDefinitionCollision { .. }));
+    }
+
+    #[test]
+    fn rejects_secondary_workspace() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("module", "example.com/module", "")]);
+        root.join_components(&["module", GO_WORK])
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("secondary workspace fails");
+        assert!(matches!(error, Error::SecondaryWorkspace { .. }));
+        assert!(error.to_string().contains("single go.work"));
+    }
+
+    #[test]
+    fn rejects_secondary_workspace_above_member() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("apps/module", "example.com/module", "")]);
+        root.join_components(&["apps", GO_WORK])
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("secondary workspace fails");
+        assert!(matches!(error, Error::SecondaryWorkspace { .. }));
+    }
+
+    #[test]
+    fn ignores_workspaces_go_never_reads_for_members() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("module", "example.com/module", "")]);
+
+        // A git worktree checked out inside the repository.
+        let worktree = root.join_components(&[".claude", "worktrees", "copy"]);
+        write_workspace(&worktree, &[("module", "example.com/module", "")]);
+
+        // A nested module inside a member, which Go excludes from the member.
+        let nested = root.join_components(&["module", "nested"]);
+        write_workspace(&nested, &[("inner", "example.com/inner", "")]);
+        nested
+            .join_component(GO_MOD)
+            .create_with_contents("module example.com/nested\n\ngo 1.22\n")
+            .unwrap();
+
+        let workspace = discover_workspace(&root).expect("secondary workspaces are unreachable");
+        assert_eq!(workspace.modules.len(), 1);
+    }
+
+    #[test]
+    fn models_internal_relationships() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(
+            &root,
+            &[
+                (
+                    "apps/api",
+                    "example.com/api",
+                    "module example.com/api\n\ngo 1.22\n\nrequire example.com/lib \
+                     v0.0.0\n\nreplace example.com/lib => ../../packages/lib\n",
+                ),
+                ("packages/lib", "example.com/lib", ""),
+            ],
+        );
+        join_relative_path(&root, "apps/api")
+            .unwrap()
+            .join_component("main.go")
+            .create_with_contents("package main\nimport _ \"example.com/lib\"\nfunc main() {}\n")
+            .unwrap();
+        join_relative_path(&root, "packages/lib")
+            .unwrap()
+            .join_component("lib.go")
+            .create_with_contents("package lib\n")
+            .unwrap();
+
+        let workspace = discover_workspace(&root).expect("workspace discovery succeeds");
+        let api = workspace
+            .modules
+            .iter()
+            .find(|module| module.module_path == "example.com/api")
+            .expect("api module");
+        assert_eq!(api.relationships.len(), 1);
+        assert_eq!(
+            api.relationships[0].target(),
+            &crate::relationships::RelationshipTarget::Internal("lib".to_string())
+        );
+    }
+
+    #[test]
+    fn relationships_from_mod_graph_parses_workspace_edges() {
+        let graph = "example.com/api example.com/lib@v0.0.0\nexample.com/api go@1.22\n";
+        let module_paths =
+            HashSet::from(["example.com/api".to_string(), "example.com/lib".to_string()]);
+        let relationships =
+            relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
+        assert_eq!(relationships["example.com/api"].len(), 1);
+        assert_eq!(
+            relationships["example.com/api"][0].target(),
+            &RelationshipTarget::Internal("lib".to_string())
+        );
+    }
+
+    #[test]
+    fn versioned_relationships_and_resolutions_use_derived_package_names() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![
+            resolution_module(&root, "example.com/team/api/v2"),
+            resolution_module(&root, "example.com/team/lib/v10"),
+        ];
+        let graph = "example.com/team/api/v2 \
+                     example.com/team/lib/v10@v10.0.0\nexample.com/team/lib/v10 \
+                     example.net/dependency/v3@v3.0.0\n";
+        let module_paths = modules
+            .iter()
+            .map(|module| module.module_path.clone())
+            .collect();
+        let relationships =
+            relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
+        // Go graph lookup keys stay full paths; only Turborepo relationship targets
+        // shorten.
+        assert_eq!(
+            relationships["example.com/team/api/v2"][0].target(),
+            &RelationshipTarget::Internal("lib/v10".to_string())
+        );
+        let resolutions = external_resolutions(
+            graph,
+            &modules,
+            &[listed_module(
+                "example.net/dependency/v3",
+                "v3.0.0",
+                "h1:dependency",
+            )],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .unwrap();
+        assert_eq!(
+            resolutions
+                .iter()
+                .map(PackageResolution::package)
+                .collect::<HashSet<_>>(),
+            HashSet::from(["api/v2", "lib/v10", GO_WORKSPACE_NAME])
+        );
+        for name in ["api/v2", "lib/v10", GO_WORKSPACE_NAME] {
+            assert_eq!(
+                resolution_keys(&resolutions, name),
+                HashSet::from(["go", "example.net/dependency/v3"])
+            );
+        }
+        assert_eq!(modules[0].module_path, "example.com/team/api/v2");
+        assert_eq!(modules[1].module_path, "example.com/team/lib/v10");
+    }
+
+    #[test]
+    fn prune_plan_expands_dependencies_and_renders_workspace_deterministically() {
+        let knowledge = GoPruneKnowledge {
+            domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+            go: "1.22".to_string(),
+            toolchain: Some("go1.22.0".to_string()),
+            package_directories: HashMap::from([
+                ("api".to_string(), "apps/api".to_string()),
+                ("lib".to_string(), "packages/lib".to_string()),
+                ("unused".to_string(), "tools/unused".to_string()),
+            ]),
+            relationships: HashMap::from([("api".to_string(), vec!["lib".to_string()])]),
+            replacements: vec![
+                GoPruneReplacement {
+                    old_path: "example.net/local".to_string(),
+                    old_version: None,
+                    new_path: "./packages/lib".to_string(),
+                    new_version: None,
+                    local_target: Some("lib".to_string()),
+                },
+                GoPruneReplacement {
+                    old_path: "example.net/remote".to_string(),
+                    old_version: Some("v1.0.0".to_string()),
+                    new_path: "example.net/fork".to_string(),
+                    new_version: Some("v1.0.1".to_string()),
+                    local_target: None,
+                },
+                GoPruneReplacement {
+                    old_path: "example.net/unused".to_string(),
+                    old_version: None,
+                    new_path: "./tools/unused".to_string(),
+                    new_version: None,
+                    local_target: Some("unused".to_string()),
+                },
+            ],
+        };
+
+        let plan = knowledge
+            .plan(&["api".to_string()])
+            .unwrap()
+            .expect("kept Go modules produce a plan");
+        assert_eq!(plan.extra_packages, ["lib"]);
+        assert_eq!(
+            plan.root_files,
+            [(
+                GO_WORK.to_string(),
+                "go 1.22\n\ntoolchain go1.22.0\n\nuse \
+                 (\n\t./apps/api\n\t./packages/lib\n)\n\nreplace (\n\texample.net/local => \
+                 ./packages/lib\n\texample.net/remote v1.0.0 => example.net/fork v1.0.1\n)\n"
+                    .to_string()
+            )]
+        );
+        assert_eq!(
+            plan.copy_paths,
+            ["go.work.sum", "apps/api/go.sum", "packages/lib/go.sum"]
+        );
+    }
+
+    #[test]
+    fn rejects_outside_repository_go_work_replacement() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_workspace(&root, &[("apps/api", "example.com/api", "")]);
+        root.join_component(GO_WORK)
+            .create_with_contents(
+                "go 1.22\n\nuse ./apps/api\n\nreplace example.net/local => ../outside\n",
+            )
+            .unwrap();
+
+        let error = discover_workspace(&root).expect_err("outside workspace replacement fails");
+        assert!(matches!(error, Error::OutsideRepositoryLocalModule { .. }));
+    }
+
+    fn complete_go_environment() -> BTreeMap<String, String> {
+        FINGERPRINTED_GO_ENV_VARS
+            .iter()
+            .map(|name| ((*name).to_string(), String::new()))
+            .collect()
+    }
+
+    fn checkout_root(name: &str) -> AbsoluteSystemPathBuf {
+        let path = if cfg!(windows) {
+            format!(r"C:\checkout\{name}")
+        } else {
+            format!("/checkout/{name}")
+        };
+        AbsoluteSystemPathBuf::new(&path).expect("test checkout root is absolute")
+    }
+
+    #[test]
+    fn toolchain_fingerprint_covers_every_behavior_changing_go_environment_family() {
+        let root = checkout_root("repo");
+        let values = complete_go_environment();
+        let baseline =
+            normalized_go_toolchain_version(&root, "go version go1.24.0 linux/amd64", &values)
+                .unwrap();
+
+        for variable in FINGERPRINTED_GO_ENV_VARS {
+            let mut changed = values.clone();
+            changed.insert((*variable).to_string(), format!("changed-{variable}"));
+            assert_ne!(
+                normalized_go_toolchain_version(
+                    &root,
+                    "go version go1.24.0 linux/amd64",
+                    &changed,
+                )
+                .unwrap(),
+                baseline,
+                "{variable} must invalidate the Go resolution fingerprint"
+            );
+        }
+        assert_ne!(
+            normalized_go_toolchain_version(&root, "go version go1.25.0 linux/amd64", &values,)
+                .unwrap(),
+            baseline,
+            "the selected Go compiler version must invalidate the fingerprint"
+        );
+
+        for variable in [
+            "GOOS",
+            "GOARCH",
+            "GOTOOLCHAIN",
+            "GOFLAGS",
+            "GODEBUG",
+            "CC",
+            "CGO_CFLAGS",
+        ] {
+            assert!(
+                FINGERPRINTED_GO_ENV_VARS.contains(&variable),
+                "{variable} represents a required target, toolchain, build-tag/test, or cgo family"
+            );
+        }
+    }
+
+    #[test]
+    fn toolchain_fingerprint_normalizes_checkout_paths_and_ignores_local_state() {
+        let first_root = checkout_root("first");
+        let second_root = checkout_root("second");
+        let separator = std::path::MAIN_SEPARATOR;
+        let first_prefix = first_root.as_str();
+        let mut first = complete_go_environment();
+        first.extend([
+            (
+                "CC".to_string(),
+                format!(
+                    "{first_prefix}{separator}tools{separator}compiler{}",
+                    std::env::consts::EXE_SUFFIX
+                ),
+            ),
+            (
+                "GOFLAGS".to_string(),
+                format!(
+                    "-tags=integration \
+                     -overlay={first_prefix}{separator}config{separator}overlay.json"
+                ),
+            ),
+            (
+                "GOWORK".to_string(),
+                format!("{first_prefix}{separator}go.work"),
+            ),
+        ]);
+        let mut second = first.clone();
+        for value in second.values_mut() {
+            *value = value.replace(first_root.as_str(), second_root.as_str());
+        }
+        let normalized_first =
+            normalized_go_toolchain_version(&first_root, "go version go1.24.0 linux/amd64", &first)
+                .unwrap();
+        assert_eq!(
+            normalized_first,
+            normalized_go_toolchain_version(
+                &second_root,
+                "go version go1.24.0 linux/amd64",
+                &second,
+            )
+            .unwrap(),
+        );
+        assert!(
+            normalized_first.contains(&format!("compiler{}", std::env::consts::EXE_SUFFIX)),
+            "normalization must preserve the selected executable suffix"
+        );
+        for variable in [
+            "AR",
+            "CC",
+            "CXX",
+            "GCCGO",
+            "GOCACHEPROG",
+            "GOFLAGS",
+            "GOWORK",
+            "CGO_CFLAGS",
+            "CGO_CPPFLAGS",
+            "CGO_CXXFLAGS",
+            "CGO_FFLAGS",
+            "CGO_LDFLAGS",
+            "PKG_CONFIG",
+        ] {
+            assert!(FINGERPRINTED_GO_ENV_VARS.contains(&variable));
+            assert!(
+                !HASHED_ENV_VARS.contains(&variable),
+                "{variable} must not be hashed with its raw checkout path"
+            );
+            assert!(
+                PROJECTED_ONLY_ENV_VARS.contains(&variable),
+                "{variable} must remain available to Go task I/O"
+            );
+        }
+
+        // Each tuple names one excluded family and its documented members:
+        // mutable caches/temp paths; install/config/toolchain locations;
+        // credentials and network resolution policy; host-derived duplicates;
+        // telemetry and cosmetic output.
+        const EXCLUDED_FAMILIES: &[(&str, &[&str])] = &[
+            (
+                "mutable cache and temporary paths",
+                &["GOCACHE", "GOMODCACHE", "GOPATH", "GOTMPDIR"],
+            ),
+            (
+                "install, configuration, and toolchain locations",
+                &["GOBIN", "GOENV", "GOMOD", "GOROOT", "GOTOOLDIR"],
+            ),
+            (
+                "credentials and network resolution policy",
+                &[
+                    "GOAUTH",
+                    "GOINSECURE",
+                    "GONOPROXY",
+                    "GONOSUMDB",
+                    "GOPRIVATE",
+                    "GOPROXY",
+                    "GOSUMDB",
+                    "GOVCS",
+                ],
+            ),
+            (
+                "host-derived duplicate values",
+                &["GOEXE", "GOGCCFLAGS", "GOHOSTARCH", "GOHOSTOS", "GOVERSION"],
+            ),
+            (
+                "telemetry and cosmetic output",
+                &["GOTELEMETRY", "GOTRACEBACK"],
+            ),
+        ];
+        let selected = fingerprinted_go_environment(&first).unwrap();
+        for (family, variables) in EXCLUDED_FAMILIES {
+            for variable in *variables {
+                assert!(
+                    !FINGERPRINTED_GO_ENV_VARS.contains(variable),
+                    "{variable} from {family} must remain excluded"
+                );
+                let mut with_local_state = first.clone();
+                with_local_state.insert((*variable).to_string(), "machine-specific".to_string());
+                assert_eq!(
+                    fingerprinted_go_environment(&with_local_state).unwrap(),
+                    selected,
+                    "{variable} from {family} must not affect the identity"
+                );
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn toolchain_fingerprint_normalizes_windows_drive_case_and_path_separators() {
+        let root = AbsoluteSystemPathBuf::new(r"C:\checkout\repo").unwrap();
+        let mut values = complete_go_environment();
+        values.insert(
+            "CC".to_string(),
+            r"c:/checkout/repo/tools\compiler.exe".to_string(),
+        );
+        values.insert(
+            "GOFLAGS".to_string(),
+            r"-overlay=c:\checkout\repo/config\overlay.json".to_string(),
+        );
+
+        let normalized =
+            normalized_go_toolchain_version(&root, "go version go1.24.0 windows/amd64", &values)
+                .unwrap();
+        let identity: BTreeMap<String, String> = serde_json::from_str(&normalized).unwrap();
+
+        assert_eq!(identity["CC"], "$REPO/tools/compiler.exe");
+        assert_eq!(identity["GOFLAGS"], "-overlay=$REPO/config/overlay.json");
+    }
+
+    fn resolution_module(root: &AbsoluteSystemPath, path: &str) -> GoModule {
+        let directory = path.rsplit('/').next().expect("module path component");
+        GoModule {
+            module_path: path.to_string(),
+            manifest_path: root.join_components(&[directory, GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
+        }
+    }
+
+    fn resolution_root(tempdir: &tempfile::TempDir) -> AbsoluteSystemPathBuf {
+        // Canonicalized onto the path `go` reports: `go list -m all` emits
+        // canonical replacement directories, so a tempdir behind a symlink
+        // (for example `/var` -> `/private/var` on macOS) would otherwise
+        // look outside this repository to the authoritative resolver.
+        AbsoluteSystemPathBuf::try_from(tempdir.path())
+            .expect("temporary repository root is absolute")
+            .to_realpath()
+            .expect("temporary repository root canonicalizes")
+    }
+
+    fn listed_module(path: &str, version: &str, sum: &str) -> GoListModule {
+        GoListModule {
+            path: path.to_string(),
+            version: version.to_string(),
+            sum: sum.to_string(),
+            go_mod_sum: format!("{sum}-mod"),
+            main: false,
+            directory: None,
+            replace: None,
+        }
+    }
+
+    fn resolution_keys<'a>(
+        resolutions: &'a [PackageResolution],
+        package: &str,
+    ) -> HashSet<&'a str> {
+        resolution_for(resolutions, package)
+            .identities()
+            .iter()
+            .map(ExternalPackageIdentity::key)
+            .collect()
+    }
+
+    fn resolution_for<'a>(
+        resolutions: &'a [PackageResolution],
+        package: &str,
+    ) -> &'a PackageResolution {
+        resolutions
+            .iter()
+            .find(|resolution| resolution.package() == package)
+            .expect("package resolution")
+    }
+
+    #[test]
+    fn external_resolution_scopes_shared_and_disjoint_closures() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![
+            resolution_module(&root, "example.com/app"),
+            resolution_module(&root, "example.com/lib"),
+            resolution_module(&root, "example.com/other"),
+        ];
+        let graph = "example.com/app example.com/lib@v0.0.0\nexample.com/lib \
+                     example.net/shared@v1.0.0\nexample.com/other example.net/disjoint@v2.0.0\n";
+        let listed = vec![
+            listed_module("example.net/shared", "v1.0.0", "h1:shared"),
+            listed_module("example.net/disjoint", "v2.0.0", "h1:disjoint"),
+        ];
+
+        let resolutions = external_resolutions(
+            graph,
+            &modules,
+            &listed,
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect("resolution succeeds");
+        let app = resolution_keys(&resolutions, "app");
+        let lib = resolution_keys(&resolutions, "lib");
+        let other = resolution_keys(&resolutions, "other");
+        let aggregate = resolution_keys(&resolutions, GO_WORKSPACE_NAME);
+
+        for closure in [&app, &lib, &other, &aggregate] {
+            assert!(closure.contains("go"));
+        }
+        for closure in [&app, &lib] {
+            assert!(closure.contains("example.net/shared"));
+            assert!(!closure.contains("example.net/disjoint"));
+            assert!(!closure.contains("example.com/lib"));
+        }
+        assert!(other.contains("example.net/disjoint"));
+        assert!(!other.contains("example.net/shared"));
+        assert_eq!(
+            aggregate,
+            HashSet::from(["go", "example.net/shared", "example.net/disjoint"])
+        );
+
+        let changed = external_resolutions(
+            graph,
+            &modules,
+            &[
+                listed_module("example.net/shared", "v1.0.0", "h1:changed"),
+                listed_module("example.net/disjoint", "v2.0.0", "h1:disjoint"),
+            ],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect("changed resolution succeeds");
+        for package in ["app", "lib", GO_WORKSPACE_NAME] {
+            assert_ne!(
+                resolution_for(&resolutions, package).identities(),
+                resolution_for(&changed, package).identities()
+            );
+        }
+        assert_eq!(
+            resolution_for(&resolutions, "other").identities(),
+            resolution_for(&changed, "other").identities()
+        );
+
+        let changed_toolchain = external_resolutions(
+            graph,
+            &modules,
+            &listed,
+            &ExternalPackageIdentity::new("go", "go1.25"),
+        )
+        .expect("changed toolchain resolution succeeds");
+        for package in ["app", "lib", "other", GO_WORKSPACE_NAME] {
+            assert_ne!(
+                resolution_for(&resolutions, package).identities(),
+                resolution_for(&changed_toolchain, package).identities(),
+                "toolchain identity must participate in every Go resolution row"
+            );
+        }
+    }
+
+    #[test]
+    fn replacement_and_integrity_facts_change_external_identity() {
+        let module = listed_module("example.net/dependency", "v1.0.0", "h1:archive");
+        let original = module_identity(&module);
+        let replaced = module_identity(&GoListModule {
+            replace: Some(Box::new(GoListModule {
+                path: "example.net/fork".to_string(),
+                version: "v1.0.1".to_string(),
+                sum: "h1:fork-archive".to_string(),
+                go_mod_sum: "h1:fork-manifest".to_string(),
+                main: false,
+                directory: None,
+                replace: None,
+            })),
+            ..module
+        });
+
+        assert_ne!(original, replaced);
+        assert!(replaced.version().contains("replace=path=example.net/fork"));
+        assert!(replaced.version().contains("sum=h1:fork-archive"));
+        assert!(replaced.version().contains("go_mod_sum=h1:fork-manifest"));
+    }
+
+    #[test]
+    fn external_resolution_rejects_unresolved_graph_modules() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let modules = vec![resolution_module(&root, "example.com/app")];
+        let error = external_resolutions(
+            "example.com/app example.net/missing@v1.0.0\n",
+            &modules,
+            &[],
+            &ExternalPackageIdentity::new("go", "go1.24"),
+        )
+        .expect_err("unknown module graph nodes fail");
+
+        assert!(matches!(
+            error,
+            Error::UnknownResolutionModule { module }
+                if module == "example.net/missing@v1.0.0"
+        ));
+    }
+
+    #[test]
+    fn external_resolution_accepts_windows_line_endings() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let resolutions = external_resolutions(
+            "example.com/app example.net/dependency@v1.0.0\r\n",
+            &[resolution_module(&root, "example.com/app")],
+            &[listed_module(
+                "example.net/dependency",
+                "v1.0.0",
+                "h1:dependency",
+            )],
+            &ExternalPackageIdentity::new("go", "go1.24 windows/amd64"),
+        )
+        .expect("CRLF resolution succeeds");
+
+        let app = resolution_keys(&resolutions, "app");
+        assert_eq!(app, HashSet::from(["go", "example.net/dependency"]));
+    }
+
+    fn task_context<'a>(
+        root: &'a AbsoluteSystemPath,
+        name: &str,
+        directory: &'a str,
+        tasks: Vec<crate::native_tasks::NativeTask>,
+        kind: crate::package_graph::PackageTaskContextKind,
+        contract: crate::task_contracts::ScopeTaskContract,
+    ) -> crate::package_graph::PackageTaskContext<'a> {
+        crate::package_graph::PackageTaskContext::new_for_test_with_native_tasks(
+            name.into(),
+            root,
+            turbopath::AnchoredSystemPath::new(directory).unwrap(),
+            kind,
+            Some(&ToolchainId::GO),
+            Some(tasks),
+            Some(contract),
+        )
+    }
+
+    fn resolve_go_cmd(
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+        pass_through_args: Option<&[String]>,
+        override_command: Option<&[String]>,
+    ) -> crate::toolchain::TaskCommand {
+        let native_task = context.native_tasks().get(task).expect("native Go task");
+        crate::native_tasks::resolve_task_command(
+            context,
+            native_task,
+            None,
+            None,
+            Some(Path::new("go")),
+            pass_through_args,
+            override_command,
+        )
+        .unwrap()
+        .expect("Go command resolves")
+    }
+
+    fn task_cache(
+        context: &crate::package_graph::PackageTaskContext<'_>,
+        task: &str,
+    ) -> Option<bool> {
+        context
+            .native_tasks()
+            .get(task)
+            .expect("native Go task")
+            .contract()
+            .defaults()
+            .cache
+    }
+
+    #[test]
+    fn module_task_table_renders_commands_and_argument_placement() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        assert!(root.as_std_path().is_absolute());
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: Some("./cmd/api".to_string()),
+            root_source_inputs: Some(HashSet::new()),
+        };
+        let context = task_context(
+            &root,
+            module.package_name(),
+            "apps/api",
+            native_tasks_for_module(&module),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                &module,
+                "linux",
+                &[],
+            )),
+        );
+
+        let build = resolve_go_cmd(&context, "build", Some(&["-race".to_string()]), None);
+        assert_eq!(
+            build.args,
+            ["build", "-race", "./cmd/api"].map(std::ffi::OsString::from)
+        );
+        let custom = resolve_go_cmd(
+            &context,
+            "build",
+            Some(&["-o".to_string(), "custom".to_string()]),
+            None,
+        );
+        assert_eq!(
+            custom.args,
+            ["build", "-o", "custom", "./cmd/api"].map(std::ffi::OsString::from)
+        );
+        let test = resolve_go_cmd(
+            &context,
+            "test",
+            Some(&["-args".to_string(), "custom".to_string()]),
+            None,
+        );
+        assert_eq!(
+            test.args,
+            ["test", "./...", "-args", "custom"].map(std::ffi::OsString::from)
+        );
+        assert_eq!(build.program, std::ffi::OsString::from("go"));
+        assert_eq!(build.cwd, root.join_components(&["apps", "api"]));
+        let lint = resolve_go_cmd(&context, "lint", Some(&["-json".to_string()]), None);
+        assert_eq!(
+            lint.args,
+            ["vet", "-json", "./..."].map(std::ffi::OsString::from)
+        );
+        let format = resolve_go_cmd(&context, "format", Some(&["-n".to_string()]), None);
+        assert_eq!(format.program, std::ffi::OsString::from("go"));
+        assert_eq!(
+            format.args,
+            ["fmt", "-n", "./..."].map(std::ffi::OsString::from)
+        );
+        assert_eq!(format.cwd, root.join_components(&["apps", "api"]));
+        assert_eq!(task_cache(&context, "format"), Some(false));
+        assert!(context.native_tasks().get("vet").is_none());
+        let workspace_tasks = native_tasks_for_workspace();
+        assert_eq!(workspace_tasks.len(), 1);
+        assert_eq!(workspace_tasks[0].name(), "build");
+        assert!(!workspace_tasks[0].participates());
+        assert_eq!(
+            workspace_tasks[0].contract().entrypoint(),
+            Some(TaskEntrypoint::Excluded)
+        );
+        assert_eq!(
+            context
+                .native_tasks()
+                .get("build")
+                .unwrap()
+                .contract()
+                .entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Preferred)
+        );
+
+        let dev = resolve_go_cmd(
+            &context,
+            "dev",
+            Some(&["--port".to_string(), "3000".to_string()]),
+            None,
+        );
+        assert_eq!(
+            dev.args,
+            ["run", "./cmd/api", "--port", "3000"].map(std::ffi::OsString::from)
+        );
+        assert!(context.native_tasks().get("run").is_none());
+    }
+
+    #[test]
+    fn executable_names_match_go_import_path_rules() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let mut cases = vec![
+            ("example.com/api".to_string(), ".".to_string(), "api"),
+            ("v2".to_string(), ".".to_string(), "v2"),
+            (
+                "example.com/api/v2".to_string(),
+                "./cmd/server".to_string(),
+                "server",
+            ),
+            ("example.com/api".to_string(), "./v2".to_string(), "api"),
+            ("example.com/api/v2".to_string(), "./v3".to_string(), "v2"),
+            ("gopkg.in/api.v2".to_string(), ".".to_string(), "api.v2"),
+        ];
+        for (suffix, expected) in [
+            ("v2", "api"),
+            ("v10", "api"),
+            ("v999999999999999999999999999999", "api"),
+            ("v1", "v1"),
+            ("v0", "v0"),
+            ("v01", "v01"),
+            ("v02", "v02"),
+            ("v", "v"),
+            ("v2beta", "v2beta"),
+            ("v2.0", "v2.0"),
+            ("v-2", "v-2"),
+            ("v２", "v２"),
+            ("V2", "V2"),
+        ] {
+            cases.push((
+                format!("example.com/api/{suffix}"),
+                ".".to_string(),
+                expected,
+            ));
+            cases.push((
+                "example.com/module/v3".to_string(),
+                format!("./cmd/api/{suffix}"),
+                expected,
+            ));
+        }
+        for (module_path, target, expected) in cases {
+            let module = GoModule {
+                module_path,
+                // The checkout directory must not determine the executable name.
+                manifest_path: root.join_components(&["checkout", GO_MOD]),
+                relationships: Vec::new(),
+                runnable_target: Some(target.clone()),
+                root_source_inputs: Some(HashSet::new()),
+            };
+            assert_eq!(
+                runnable_output_name(&module).as_deref(),
+                Some(expected),
+                "{module:?}"
+            );
+            for (target_os, extension) in [("linux", ""), ("darwin", ""), ("windows", ".exe")] {
+                let contract = GoTaskContract::module(&module, target_os, &[]);
+                let package = task_context(
+                    &root,
+                    module.package_name(),
+                    "checkout",
+                    native_tasks_for_module(&module),
+                    crate::package_graph::PackageTaskContextKind::Package,
+                    crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+                );
+                let build = resolve_go_cmd(&package, "build", None, None);
+                assert_eq!(build.args, ["build", &target].map(std::ffi::OsString::from));
+                assert_eq!(build.cwd, root.join_component("checkout"));
+                let environment = toolchain::TaskIOEnvironment::default();
+                let context = toolchain::TaskIOContext {
+                    task_args: None,
+                    environment: &environment,
+                };
+                let io = contract
+                    .derived_task_io(&package, "build", "..", &[], true, &context)
+                    .unwrap();
+                assert_eq!(
+                    io.outputs,
+                    DerivedOutputs::Resolved(vec![format!("{expected}{extension}")]),
+                    "{module:?}, {target_os}"
+                );
+                for binary in [expected.to_string(), format!("{expected}.exe")] {
+                    assert!(io.input_globs.contains(&format!("!{binary}")));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn windows_module_executable_contract_uses_exe_suffix() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: Some(".".to_string()),
+            root_source_inputs: Some(HashSet::new()),
+        };
+        let contract = GoTaskContract::module(&module, "windows", &[]);
+        let package = task_context(
+            &root,
+            module.package_name(),
+            "apps/api",
+            native_tasks_for_module(&module),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+        );
+
+        let build = resolve_go_cmd(&package, "build", None, None);
+        assert_eq!(build.args, ["build", "."].map(std::ffi::OsString::from));
+
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        let io = contract
+            .derived_task_io(&package, "build", "../..", &[], true, &context)
+            .expect("Windows executable build derives IO");
+        assert_eq!(
+            io.outputs,
+            DerivedOutputs::Resolved(vec!["api.exe".to_string()])
+        );
+    }
+
+    #[test]
+    fn automatic_inputs_exclude_own_and_transitive_binaries_without_pruning_sources() {
+        for directory_suffix in [None, Some(""), Some(".exe")] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            let mut modules = Vec::new();
+            for (directory, module_path, target, binary) in [
+                ("app", "example.com/api/v2", Some("."), Some("api")),
+                ("bridge", "example.com/bridge", None, None),
+                (
+                    "worker",
+                    "example.com/tools",
+                    Some("./cmd/worker/v3"),
+                    Some("worker"),
+                ),
+            ] {
+                let module_dir = root.join_component(directory);
+                module_dir.create_dir_all().unwrap();
+                module_dir
+                    .join_component("source.go")
+                    .create_with_contents("package main\n")
+                    .unwrap();
+                // dist is ordinary source input now, not an inferred output directory.
+                module_dir.join_component("dist").create_dir_all().unwrap();
+                module_dir
+                    .join_components(&["dist", "data.txt"])
+                    .create_with_contents("source data")
+                    .unwrap();
+                if let Some(binary) = binary {
+                    for suffix in ["", ".exe"] {
+                        let path = module_dir.join_component(&format!("{binary}{suffix}"));
+                        if directory_suffix == Some(suffix) {
+                            path.create_dir_all().unwrap();
+                            path.join_component("source.go")
+                                .create_with_contents("package source\n")
+                                .unwrap();
+                        } else {
+                            path.create_with_contents("built executable").unwrap();
+                        }
+                    }
+                }
+                modules.push(GoModule {
+                    module_path: module_path.to_string(),
+                    manifest_path: module_dir.join_component(GO_MOD),
+                    relationships: Vec::new(),
+                    runnable_target: target.map(str::to_string),
+                    root_source_inputs: Some(HashSet::new()),
+                });
+            }
+            let contract = GoTaskContract::module(&modules[0], "linux", &[]);
+            let mut packages = modules
+                .iter()
+                .zip(["app", "bridge", "worker"])
+                .map(|(module, directory)| {
+                    task_context(
+                        &root,
+                        module.package_name(),
+                        directory,
+                        native_tasks_for_module(module),
+                        crate::package_graph::PackageTaskContextKind::Package,
+                        crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                            module,
+                            "linux",
+                            &[],
+                        )),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let package = packages.remove(0);
+            // The caller supplies the full source dependency closure: app ->
+            // bridge (library) -> worker (sole main in a nested package).
+            let dependencies = packages;
+            let environment = toolchain::TaskIOEnvironment::default();
+            let context = toolchain::TaskIOContext {
+                task_args: None,
+                environment: &environment,
+            };
+            for task in ["build", "test", "lint", "format", "dev"] {
+                let io = contract
+                    .derived_task_io(&package, task, "..", &dependencies, true, &context)
+                    .unwrap();
+                assert_eq!(io.package_default_inputs, Some(true));
+                for (prefix, binary) in [("", "api"), ("../worker/", "worker")] {
+                    for suffix in ["", ".exe"] {
+                        assert_eq!(
+                            io.input_globs
+                                .contains(&format!("!{prefix}{binary}{suffix}")),
+                            directory_suffix != Some(suffix)
+                        );
+                    }
+                }
+                assert!(io.input_globs.contains(&"../bridge/**".to_string()));
+                assert!(io.input_globs.contains(&"../worker/**".to_string()));
+                assert!(!io.input_globs.iter().any(|glob| glob.contains("dist")));
+                let mut includes = vec!["**".parse::<globwalk::ValidatedGlob>().unwrap()];
+                let mut excludes = Vec::new();
+                for glob in &io.input_globs {
+                    if let Some(exclude) = glob.strip_prefix('!') {
+                        excludes.push(exclude.parse().unwrap());
+                    } else {
+                        includes.push(glob.parse().unwrap());
+                    }
+                }
+                let files = globwalk::globwalk(
+                    &root.join_component("app"),
+                    &includes,
+                    &excludes,
+                    globwalk::WalkType::Files,
+                )
+                .unwrap();
+                for directory in ["app", "bridge", "worker"] {
+                    assert!(files.contains(&root.join_components(&[directory, "source.go"])));
+                    assert!(
+                        files.contains(&root.join_components(&[directory, "dist", "data.txt"]))
+                    );
+                }
+                for (directory, binary) in [("app", "api"), ("worker", "worker")] {
+                    for suffix in ["", ".exe"] {
+                        let path = root.join_components(&[directory, &format!("{binary}{suffix}")]);
+                        if directory_suffix == Some(suffix) {
+                            assert!(files.contains(&path.join_component("source.go")));
+                        } else {
+                            assert!(!files.contains(&path));
+                        }
+                    }
+                }
+                let explicit_io = contract
+                    .derived_task_io(&package, task, "..", &dependencies, false, &context)
+                    .unwrap();
+                assert_eq!(explicit_io.package_default_inputs, None);
+                assert!(
+                    !explicit_io
+                        .input_globs
+                        .iter()
+                        .any(|glob| glob.starts_with('!'))
+                );
+            }
+        }
+    }
+
+    fn source_input_snapshot(
+        directory: &AbsoluteSystemPath,
+        io: &toolchain::DerivedTaskIO,
+    ) -> BTreeMap<AbsoluteSystemPathBuf, Vec<u8>> {
+        let mut includes = Vec::<globwalk::ValidatedGlob>::new();
+        if io.package_default_inputs == Some(true) {
+            includes.push("**".parse().unwrap());
+        }
+        let mut excludes = Vec::new();
+        for glob in &io.input_globs {
+            if let Some(exclude) = glob.strip_prefix('!') {
+                excludes.push(exclude.parse().unwrap());
+            } else {
+                includes.push(glob.parse().unwrap());
+            }
+        }
+        globwalk::globwalk(directory, &includes, &excludes, globwalk::WalkType::Files)
+            .unwrap()
+            .into_iter()
+            .map(|path| {
+                let contents = fs::read(path.as_std_path()).unwrap();
+                (path, contents)
+            })
+            .collect()
+    }
+
+    fn module_and_dependency_io(
+        root: &AbsoluteSystemPath,
+        module: &GoModule,
+        task: &str,
+    ) -> [toolchain::DerivedTaskIO; 2] {
+        let contract = GoTaskContract::module(module, "linux", &[]);
+        let package = task_context(
+            root,
+            module.package_name(),
+            "app",
+            native_tasks_for_module(module),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+        );
+        let aggregate_contract = GoTaskContract::workspace("linux", &[]);
+        let aggregate = task_context(
+            root,
+            GO_WORKSPACE_NAME,
+            "",
+            native_tasks_for_workspace(),
+            crate::package_graph::PackageTaskContextKind::Aggregate,
+            crate::task_contracts::ScopeTaskContract::go(aggregate_contract.clone()),
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        [
+            contract
+                .derived_task_io(&package, task, "..", &[], true, &context)
+                .unwrap(),
+            aggregate_contract
+                .derived_task_io(&aggregate, task, "", &[package], true, &context)
+                .unwrap(),
+        ]
+    }
+
+    fn git_for_source_fixture(root: &AbsoluteSystemPath, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
+    fn go_hash_inputs_track_sources_and_sums_without_siblings_or_native_outputs() {
+        fn observe(
+            root: &AbsoluteSystemPath,
+        ) -> (toolchain::DerivedTaskIO, BTreeMap<String, Vec<u8>>) {
+            let api = GoModule {
+                module_path: "example.com/api".to_string(),
+                manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+                relationships: vec![Relationship::internal("lib", DependencyKind::Production)],
+                runnable_target: Some(".".to_string()),
+                root_source_inputs: Some(HashSet::new()),
+            };
+            let lib = GoModule {
+                module_path: "example.com/lib".to_string(),
+                manifest_path: root.join_components(&["packages", "lib", GO_MOD]),
+                relationships: Vec::new(),
+                runnable_target: None,
+                root_source_inputs: Some(HashSet::new()),
+            };
+            let contract = GoTaskContract::module(&api, "linux", &[".cache/build".to_string()]);
+            let app_context = task_context(
+                root,
+                "api",
+                "apps/api",
+                native_tasks_for_module(&api),
+                crate::package_graph::PackageTaskContextKind::Package,
+                crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+            );
+            let dep_context = task_context(
+                root,
+                "lib",
+                "packages/lib",
+                native_tasks_for_module(&lib),
+                crate::package_graph::PackageTaskContextKind::Package,
+                crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                    &lib,
+                    "linux",
+                    &[],
+                )),
+            );
+            let environment = toolchain::TaskIOEnvironment::default();
+            let io = contract
+                .derived_task_io(
+                    &app_context,
+                    "build",
+                    "../..",
+                    &[dep_context],
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: None,
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            let snapshot = source_input_snapshot(&root.join_components(&["apps", "api"]), &io)
+                .into_iter()
+                .map(|(path, value)| {
+                    (
+                        AnchoredSystemPathBuf::new(root, &path)
+                            .unwrap()
+                            .to_unix()
+                            .to_string(),
+                        value,
+                    )
+                })
+                .collect();
+            (io, snapshot)
+        }
+
+        fn fixture(root: &AbsoluteSystemPath) {
+            for (path, contents) in [
+                ("go.work", "go 1.22\n"),
+                ("apps/api/go.mod", "module example.com/api\n"),
+                ("apps/api/main.go", "package main\nfunc main() {}\n"),
+                ("packages/lib/go.mod", "module example.com/lib\n"),
+                ("packages/lib/lib.go", "package lib\n"),
+            ] {
+                let file = join_relative_path(root, path).unwrap();
+                file.parent().unwrap().create_dir_all().unwrap();
+                file.create_with_contents(contents).unwrap();
+            }
+        }
+
+        let first = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(first.path()).unwrap();
+        fixture(&root);
+        let (io, baseline) = observe(&root);
+        assert_eq!(
+            io.outputs,
+            DerivedOutputs::Resolved(vec!["api".to_string()])
+        );
+        assert!(baseline.contains_key("apps/api/main.go"));
+        assert!(baseline.contains_key("packages/lib/lib.go"));
+
+        let second = tempfile::tempdir().unwrap();
+        let second_root = AbsoluteSystemPathBuf::try_from(second.path()).unwrap();
+        fixture(&second_root);
+        assert_eq!(
+            (io.clone(), baseline.clone()),
+            observe(&second_root),
+            "equivalent checkout roots"
+        );
+
+        for path in ["unrelated.txt", "apps/api/api", ".cache/build/output"] {
+            let file = join_relative_path(&root, path).unwrap();
+            file.parent().unwrap().create_dir_all().unwrap();
+            file.create_with_contents("generated or unrelated").unwrap();
+            assert_eq!(
+                observe(&root).1,
+                baseline,
+                "{path} must not become an input"
+            );
+        }
+        for path in [
+            "apps/api/main.go",
+            "packages/lib/lib.go",
+            "packages/lib/go.sum",
+            GO_WORK_SUM,
+        ] {
+            let file = join_relative_path(&root, path).unwrap();
+            let previous = file.read_to_string().ok();
+            file.create_with_contents("changed input\n").unwrap();
+            assert_ne!(observe(&root).1, baseline, "{path} must invalidate inputs");
+            if let Some(previous) = previous {
+                file.create_with_contents(previous).unwrap();
+            } else {
+                fs::remove_file(file.as_std_path()).unwrap();
+            }
+        }
+    }
+
+    /// File-level north-star inputs for a Go build: the module's own manifest
+    /// and checksums, every connected workspace dependency (including local
+    /// replacements), and no disconnected module. Graph edits reach this layer
+    /// as a different set of dependency contexts after rediscovery.
+    #[test]
+    fn go_hash_inputs_follow_dependency_edges_manifests_and_checksums() {
+        const DEPENDENCIES: &[(&str, &str)] = &[
+            ("example.com/lib", "packages/lib"),
+            ("example.net/message", "third_party/message"),
+            ("example.com/independent", "tools/independent"),
+        ];
+
+        fn module(root: &AbsoluteSystemPath, path: &str, directory: &str) -> GoModule {
+            GoModule {
+                module_path: path.to_string(),
+                manifest_path: join_relative_path(root, &format!("{directory}/{GO_MOD}")).unwrap(),
+                relationships: Vec::new(),
+                runnable_target: None,
+                root_source_inputs: Some(HashSet::new()),
+            }
+        }
+
+        fn observe(root: &AbsoluteSystemPath, connected: usize) -> BTreeMap<String, Vec<u8>> {
+            let dependencies = DEPENDENCIES[..connected]
+                .iter()
+                .map(|(path, directory)| (module(root, path, directory), *directory))
+                .collect::<Vec<_>>();
+            let api = GoModule {
+                relationships: dependencies
+                    .iter()
+                    .map(|(dependency, _)| {
+                        Relationship::internal(
+                            dependency.package_name(),
+                            DependencyKind::Production,
+                        )
+                    })
+                    .collect(),
+                runnable_target: Some(".".to_string()),
+                ..module(root, "example.com/api", "apps/api")
+            };
+            let contract = GoTaskContract::module(&api, "linux", &[]);
+            let app_context = task_context(
+                root,
+                "api",
+                "apps/api",
+                native_tasks_for_module(&api),
+                crate::package_graph::PackageTaskContextKind::Package,
+                crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+            );
+            let dependency_contexts = dependencies
+                .iter()
+                .map(|(dependency, directory)| {
+                    task_context(
+                        root,
+                        dependency.package_name(),
+                        directory,
+                        native_tasks_for_module(dependency),
+                        crate::package_graph::PackageTaskContextKind::Package,
+                        crate::task_contracts::ScopeTaskContract::go(GoTaskContract::module(
+                            dependency,
+                            "linux",
+                            &[],
+                        )),
+                    )
+                })
+                .collect::<Vec<_>>();
+            let environment = toolchain::TaskIOEnvironment::default();
+            let io = contract
+                .derived_task_io(
+                    &app_context,
+                    "build",
+                    "../..",
+                    &dependency_contexts,
+                    true,
+                    &toolchain::TaskIOContext {
+                        task_args: None,
+                        environment: &environment,
+                    },
+                )
+                .unwrap();
+            source_input_snapshot(&root.join_components(&["apps", "api"]), &io)
+                .into_iter()
+                .map(|(path, value)| {
+                    (
+                        AnchoredSystemPathBuf::new(root, &path)
+                            .unwrap()
+                            .to_unix()
+                            .to_string(),
+                        value,
+                    )
+                })
+                .collect()
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        for (path, contents) in [
+            ("go.work", "go 1.22\n"),
+            ("apps/api/go.mod", "module example.com/api\n"),
+            ("apps/api/go.sum", ""),
+            ("apps/api/main.go", "package main\nfunc main() {}\n"),
+            ("packages/lib/go.mod", "module example.com/lib\n"),
+            ("packages/lib/lib.go", "package lib\n"),
+            ("third_party/message/go.mod", "module example.net/message\n"),
+            ("third_party/message/message.go", "package message\n"),
+            (
+                "tools/independent/go.mod",
+                "module example.com/independent\n",
+            ),
+            ("tools/independent/independent.go", "package independent\n"),
+        ] {
+            let file = join_relative_path(&root, path).unwrap();
+            file.parent().unwrap().create_dir_all().unwrap();
+            file.create_with_contents(contents).unwrap();
+        }
+        let change = |path: &str, contents: &str| {
+            join_relative_path(&root, path)
+                .unwrap()
+                .create_with_contents(contents)
+                .unwrap();
+        };
+
+        let mut baseline = observe(&root, 2);
+        change(
+            "tools/independent/independent.go",
+            "package independent\nconst Value = 1\n",
+        );
+        assert_eq!(
+            observe(&root, 2),
+            baseline,
+            "a disconnected workspace module must not become an input"
+        );
+
+        for (path, contents, reason) in [
+            (
+                "apps/api/main.go",
+                "package main\nfunc main() { println() }\n",
+                "module source",
+            ),
+            (
+                "packages/lib/lib.go",
+                "package lib\nconst Value = 1\n",
+                "internal dependency source",
+            ),
+            (
+                "third_party/message/message.go",
+                "package message\nconst Value = 1\n",
+                "local replacement source",
+            ),
+            (
+                "apps/api/go.mod",
+                "module example.com/api\n\ngo 1.22\n",
+                "module manifest",
+            ),
+            (
+                "apps/api/go.sum",
+                "example.org/checksum-only v1.0.1/go.mod \
+                 h1:47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=\n",
+                "external checksum",
+            ),
+        ] {
+            change(path, contents);
+            let changed = observe(&root, 2);
+            assert_ne!(changed, baseline, "{reason} change must invalidate inputs");
+            baseline = changed;
+        }
+
+        let connected = observe(&root, 3);
+        assert!(connected.contains_key("tools/independent/independent.go"));
+        change(
+            "tools/independent/independent.go",
+            "package independent\nconst Value = 2\n",
+        );
+        assert_ne!(
+            observe(&root, 3),
+            connected,
+            "a newly connected dependency's source must invalidate inputs"
+        );
+    }
+
+    #[test]
+    fn embedded_binary_names_remain_own_and_dependency_source_inputs() {
+        if !go_available() {
+            return;
+        }
+        for (file, package, pattern, nested_main) in [
+            ("embed.go", "main", "api.exe", false),
+            ("embed_test.go", "main", "api.exe", false),
+            ("external_test.go", "main_test", "api.exe", false),
+            ("embed.go", "main", "all:api.exe", false),
+            ("embed_test.go", "main", "*.exe", false),
+            ("embed.go", "data", "api.exe", true),
+            ("tagged.go", "main", "api.exe", false),
+            // go list omits this entirely tagged root package. Its asset must
+            // still be hashed when task-level tags activate the root library.
+            ("tagged.go", "data", "api.exe", true),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = resolution_root(&tempdir);
+            write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+            let module_dir = root.join_component("app");
+            let main_dir = if nested_main {
+                module_dir.join_components(&["cmd", "api"])
+            } else {
+                module_dir.clone()
+            };
+            main_dir.create_dir_all().unwrap();
+            main_dir
+                .join_component("main.go")
+                .create_with_contents("package main\nfunc main() {}\n")
+                .unwrap();
+            if file == "tagged.go" && nested_main {
+                // A genuinely source-free root must retain artifact inference.
+                assert_eq!(
+                    module_package_inputs(&module_dir).unwrap().1,
+                    Some(HashSet::new())
+                );
+            }
+            let build_constraint = if file == "tagged.go" {
+                "//go:build alternate\n\n"
+            } else {
+                ""
+            };
+            module_dir
+                .join_component(file)
+                .create_with_contents(format!(
+                    "{build_constraint}package {package}\nimport _ \"embed\"\n//go:embed \
+                     {pattern}\nvar data string\n"
+                ))
+                .unwrap();
+            let asset = module_dir.join_component("api.exe");
+            asset.create_with_contents("embedded input before").unwrap();
+            let (runnable_target, root_source_inputs) = module_package_inputs(&module_dir).unwrap();
+            let module = GoModule {
+                module_path: "example.com/api/v2".to_string(),
+                manifest_path: module_dir.join_component(GO_MOD),
+                relationships: Vec::new(),
+                runnable_target,
+                root_source_inputs,
+            };
+            assert!(module.runnable_target.is_some());
+            if file == "tagged.go" && nested_main {
+                assert_eq!(module.runnable_target.as_deref(), Some("./cmd/api"));
+                assert!(module.root_source_inputs.is_none());
+            }
+            // On Windows the inferred output is this very source file, so
+            // restoring it would overwrite an input rather than an artifact.
+            assert!(GoTaskContract::module(&module, "windows", &[]).output_overlaps_source);
+            for task in ["build", "test"] {
+                let ios = module_and_dependency_io(&root, &module, task);
+                if task == "build" && module.root_source_inputs.is_some() {
+                    assert_eq!(
+                        ios[0].outputs,
+                        DerivedOutputs::Resolved(vec!["api".to_string()])
+                    );
+                }
+                for (directory, io) in [(&*module_dir, &ios[0]), (&*root, &ios[1])] {
+                    let before = source_input_snapshot(directory, io);
+                    assert!(before.contains_key(&asset), "{file}: {pattern}");
+                    asset.create_with_contents("embedded input after").unwrap();
+                    let after = source_input_snapshot(directory, io);
+                    assert_ne!(before, after, "embedded input contents must affect hashing");
+                    asset.create_with_contents("embedded input before").unwrap();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tracked_binary_names_remain_sources_even_when_missing_or_mutated() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        for name in ["api", "api.exe"] {
+            module_dir
+                .join_component(name)
+                .create_with_contents("checked-in source")
+                .unwrap();
+        }
+        git_for_source_fixture(&root, &["init", "--quiet"]);
+        git_for_source_fixture(&root, &["add", "app/api", "app/api.exe"]);
+        for contents in [None, Some("mutated source"), Some("restored source")] {
+            for name in ["api", "api.exe"] {
+                let path = module_dir.join_component(name);
+                if let Some(contents) = contents {
+                    path.create_with_contents(contents).unwrap();
+                } else {
+                    fs::remove_file(path.as_std_path()).unwrap();
+                }
+            }
+            let workspace = discover_workspace(&root).unwrap();
+            let module = &workspace.modules[0];
+            let contract = GoTaskContract::module(module, "linux", &[]);
+            assert!(contract.source_input_exclusions().is_empty());
+            let ios = module_and_dependency_io(&root, module, "build");
+            assert_eq!(ios[0].outputs, DerivedOutputs::Unavailable);
+            assert_eq!(ios[0].input_safety, DerivedInputSafety::Untracked);
+            for (directory, io) in [(&*module_dir, &ios[0]), (&*root, &ios[1])] {
+                let inputs = source_input_snapshot(directory, io);
+                for name in ["api", "api.exe"] {
+                    assert_eq!(
+                        inputs
+                            .get(&module_dir.join_component(name))
+                            .map(Vec::as_slice),
+                        contents.map(str::as_bytes)
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn untracked_artifact_exclusions_are_stable_when_absent_warm_or_mutated() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        git_for_source_fixture(&root, &["init", "--quiet"]);
+        let mut cold = None;
+        for contents in [
+            None,
+            Some("built output"),
+            Some("deliberately corrupted output"),
+        ] {
+            if let Some(contents) = contents {
+                for name in ["api", "api.exe"] {
+                    module_dir
+                        .join_component(name)
+                        .create_with_contents(contents)
+                        .unwrap();
+                }
+            }
+            let workspace = discover_workspace(&root).unwrap();
+            let module = &workspace.modules[0];
+            let ios = module_and_dependency_io(&root, module, "build");
+            assert_eq!(
+                ios[0].outputs,
+                DerivedOutputs::Resolved(vec!["api".to_string()])
+            );
+            let snapshots = [
+                source_input_snapshot(&module_dir, &ios[0]),
+                source_input_snapshot(&root, &ios[1]),
+            ];
+            if let Some(cold) = &cold {
+                assert_eq!(cold, &snapshots);
+            } else {
+                cold = Some(snapshots);
+            }
+        }
+    }
+
+    #[test]
+    fn unavailable_index_knowledge_does_not_exclude_potential_sources() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        module_dir
+            .join_component("api.exe")
+            .create_with_contents("unclassified source")
+            .unwrap();
+        assert!(tracked_source_files(&root).is_none());
+        let workspace = discover_workspace(&root).unwrap();
+        let module = &workspace.modules[0];
+        assert!(module.root_source_inputs.is_none());
+        let ios = module_and_dependency_io(&root, module, "build");
+        assert_eq!(ios[0].outputs, DerivedOutputs::Unavailable);
+        assert_eq!(ios[0].input_safety, DerivedInputSafety::Untracked);
+        for (directory, io) in [(&*module_dir, &ios[0]), (&*root, &ios[1])] {
+            assert!(
+                source_input_snapshot(directory, io)
+                    .contains_key(&module_dir.join_component("api.exe"))
+            );
+        }
+    }
+
+    #[test]
+    fn embed_patterns_preserve_not_yet_created_binary_names() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/api/v2", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("main.go")
+            .create_with_contents(
+                "package main\nimport _ \"embed\"\n//go:embed api*\nvar data string\nfunc main() \
+                 {}\n",
+            )
+            .unwrap();
+        module_dir
+            .join_component("api.txt")
+            .create_with_contents("source input")
+            .unwrap();
+        git_for_source_fixture(&root, &["init", "--quiet"]);
+        for warm in [false, true] {
+            if warm {
+                module_dir
+                    .join_component("api.exe")
+                    .create_with_contents("new matching input")
+                    .unwrap();
+            }
+            let workspace = discover_workspace(&root).unwrap();
+            let module = &workspace.modules[0];
+            assert!(module.root_source_inputs.is_none());
+            assert!(
+                GoTaskContract::module(module, "linux", &[])
+                    .source_input_exclusions()
+                    .is_empty()
+            );
+            let ios = module_and_dependency_io(&root, module, "build");
+            assert_eq!(ios[0].outputs, DerivedOutputs::Unavailable);
+            assert_eq!(ios[0].input_safety, DerivedInputSafety::Untracked);
+        }
+    }
+
+    #[test]
+    fn ambiguous_main_packages_do_not_register_dev_default() {
+        if !go_available() {
+            return;
+        }
+
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("apps/api", "example.com/api", "")]);
+        for command in ["first", "second"] {
+            join_relative_path(&root, &format!("apps/api/cmd/{command}"))
+                .unwrap()
+                .create_dir_all()
+                .unwrap();
+            join_relative_path(&root, &format!("apps/api/cmd/{command}/main.go"))
+                .unwrap()
+                .create_with_contents("package main\nfunc main() {}\n")
+                .unwrap();
+        }
+
+        let workspace = discover_workspace(&root).expect("workspace discovery succeeds");
+        let module = &workspace.modules[0];
+        assert_eq!(module.runnable_target, None);
+        let tasks = native_tasks_for_module(module);
+        assert!(!tasks.iter().any(|task| task.name() == "dev"));
+        assert!(!tasks.iter().any(|task| task.name() == "run"));
+        assert_eq!(
+            tasks
+                .iter()
+                .find(|task| task.name() == "build")
+                .unwrap()
+                .contract()
+                .entrypoint(),
+            Some(crate::native_tasks::TaskEntrypoint::Candidate)
+        );
+        let contract = GoTaskContract::module(module, "linux", &[]);
+        let package = task_context(
+            &root,
+            module.package_name(),
+            "apps/api",
+            tasks,
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+        );
+        assert_eq!(
+            resolve_go_cmd(&package, "build", None, None).args,
+            ["build", "./..."].map(std::ffi::OsString::from)
+        );
+        assert_eq!(task_cache(&package, "build"), Some(false));
+        assert!(contract.source_input_exclusions().is_empty());
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        assert_eq!(
+            contract
+                .derived_task_io(&package, "build", "../..", &[], true, &context)
+                .unwrap()
+                .outputs,
+            DerivedOutputs::Unavailable
+        );
+    }
+
+    #[test]
+    fn sole_main_target_is_selected_even_with_other_library_packages() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/app", "")]);
+        let module_dir = root.join_component("app");
+        module_dir
+            .join_component("lib.go")
+            .create_with_contents("package lib\n")
+            .unwrap();
+        module_dir
+            .join_components(&["cmd", "server", "v2"])
+            .create_dir_all()
+            .unwrap();
+        module_dir
+            .join_components(&["cmd", "server", "v2", "main.go"])
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        assert_eq!(
+            module_package_inputs(&module_dir).unwrap().0.as_deref(),
+            Some("./cmd/server/v2")
+        );
+    }
+
+    #[test]
+    fn task_contracts_derive_module_executable_and_workspace_io() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let executable = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: Some(".".to_string()),
+            root_source_inputs: Some(HashSet::new()),
+        };
+        let library = GoModule {
+            module_path: "example.com/lib".to_string(),
+            manifest_path: root.join_components(&["packages", "lib", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
+        };
+        let cache_prefixes = vec![".cache/go-build".to_string(), ".cache/go-mod".to_string()];
+        let executable_contract = GoTaskContract::module(&executable, "linux", &cache_prefixes);
+        let library_contract = GoTaskContract::module(&library, "linux", &cache_prefixes);
+        let package = task_context(
+            &root,
+            executable.package_name(),
+            "apps/api",
+            native_tasks_for_module(&executable),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(executable_contract.clone()),
+        );
+        assert!(package.task_contract().env_vars().contains(&"GOCACHE"));
+        let dependency = task_context(
+            &root,
+            library.package_name(),
+            "packages/lib",
+            native_tasks_for_module(&library),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(library_contract.clone()),
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+
+        let executable_io = executable_contract
+            .derived_task_io(&package, "build", "../..", &[dependency], true, &context)
+            .expect("executable build derives IO");
+        assert_eq!(executable_io.package_default_inputs, Some(true));
+        for input in [
+            "../../go.work",
+            "../../packages/lib/**",
+            "!../../.cache/go-build/**",
+        ] {
+            assert!(executable_io.input_globs.iter().any(|glob| glob == input));
+        }
+        assert!(executable_io.env.contains(&"GOOS".to_string()));
+        assert!(!executable_io.env.contains(&"GOCACHE".to_string()));
+        assert!(!executable_io.env.contains(&"GOPROXY".to_string()));
+        assert_eq!(
+            executable_io.outputs,
+            DerivedOutputs::Resolved(vec!["api".to_string()])
+        );
+        assert!(
+            executable_io
+                .forbidden_output_prefixes
+                .contains(&"../../.cache/go-build".to_string())
+        );
+        assert_eq!(task_cache(&package, "build"), None);
+
+        let library_context = task_context(
+            &root,
+            library.package_name(),
+            "packages/lib",
+            native_tasks_for_module(&library),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(library_contract.clone()),
+        );
+        let library_io = library_contract
+            .derived_task_io(&library_context, "build", "../..", &[], true, &context)
+            .expect("library build derives IO");
+        assert_eq!(library_io.outputs, DerivedOutputs::Unavailable);
+        assert_eq!(task_cache(&library_context, "build"), Some(false));
+        assert_eq!(
+            resolve_go_cmd(&library_context, "build", None, None).args,
+            ["build", "./..."].map(std::ffi::OsString::from)
+        );
+        assert!(library_contract.source_input_exclusions().is_empty());
+        assert!(library_context.native_tasks().get("dev").is_none());
+
+        let workspace_contract = GoTaskContract::workspace("linux", &cache_prefixes);
+        let workspace = task_context(
+            &root,
+            GO_WORKSPACE_NAME,
+            "",
+            native_tasks_for_workspace(),
+            crate::package_graph::PackageTaskContextKind::Aggregate,
+            crate::task_contracts::ScopeTaskContract::go(workspace_contract.clone()),
+        );
+        let aggregate_io = workspace_contract
+            .derived_task_io(
+                &workspace,
+                "lint",
+                "",
+                &[package, library_context],
+                true,
+                &context,
+            )
+            .expect("workspace lint derives IO");
+        assert_eq!(aggregate_io.package_default_inputs, Some(false));
+        for input in ["apps/api/**", "packages/lib/**"] {
+            assert!(aggregate_io.input_globs.iter().any(|glob| glob == input));
+        }
+        assert_eq!(aggregate_io.outputs, DerivedOutputs::Resolved(Vec::new()));
+        assert!(workspace.native_tasks().get("lint").is_none());
+    }
+
+    #[test]
+    fn cache_prefixes_remain_inside_the_repository() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let build_cache = root.join_components(&[".cache", "go-build"]).to_string();
+        let module_cache_tempdir = tempfile::tempdir().unwrap();
+        let module_cache = AbsoluteSystemPathBuf::try_from(module_cache_tempdir.path())
+            .unwrap()
+            .join_components(&["go", "pkg", "mod"])
+            .to_string();
+        let environment = GoEnvironment {
+            target_os: "linux".to_string(),
+            build_cache,
+            module_cache,
+            fingerprint_values: BTreeMap::new(),
+        };
+        assert_eq!(
+            go_cache_prefixes(&root, &environment),
+            vec![".cache/go-build".to_string()]
+        );
+    }
+
+    #[test]
+    fn change_observation_covers_workspace_modules_sums_and_caches() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["apps", "api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
+        };
+
+        let observation =
+            go_change_observation(&root, &[module], &[".cache/go-build".to_string()]).unwrap();
+
+        assert_eq!(
+            observation,
+            ChangeObservation::new()
+                .with_rediscovery_file_name(GO_WORK)
+                .with_rediscovery_file_name(GO_MOD)
+                .with_resolution_path(GO_WORK_SUM)
+                .with_resolution_path("apps/api/go.sum")
+                .with_ignore_prefix(".cache/go-build")
+        );
+    }
+
+    #[test]
+    fn go_execution_projection_covers_fingerprints_and_config_selection() {
+        for name in FINGERPRINTED_GO_ENV_VARS {
+            assert!(
+                HASHED_ENV_VARS.contains(name) || PROJECTED_ONLY_ENV_VARS.contains(name),
+                "effective {name} must also reach task execution"
+            );
+        }
+        for name in ["GOENV", "GOPATH", "GOROOT", "GOTMPDIR"] {
+            assert!(PROJECTED_ONLY_ENV_VARS.contains(&name));
+        }
+    }
+
+    fn go_argument_test_io(
+        workspace: bool,
+        task: &str,
+        args: &[String],
+        persisted_flags: &str,
+        projected_flags: Option<&str>,
+    ) -> toolchain::DerivedTaskIO {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: root.join_components(&["api", GO_MOD]),
+            relationships: Vec::new(),
+            runnable_target: Some(".".to_string()),
+            root_source_inputs: Some(HashSet::new()),
+        };
+        let contract = if workspace {
+            GoTaskContract::workspace("linux", &[])
+        } else {
+            GoTaskContract::module(&module, "linux", &[])
+        }
+        .with_go_flags(persisted_flags);
+        let package = task_context(
+            &root,
+            module.package_name(),
+            "api",
+            native_tasks_for_module(&module),
+            crate::package_graph::PackageTaskContextKind::Package,
+            crate::task_contracts::ScopeTaskContract::go(contract.clone()),
+        );
+        let environment = toolchain::TaskIOEnvironment::new(
+            projected_flags
+                .into_iter()
+                .map(|flags| ("GOFLAGS".to_string(), flags.to_string()))
+                .collect(),
+        );
+        contract
+            .derived_task_io(
+                &package,
+                task,
+                "..",
+                &[],
+                true,
+                &toolchain::TaskIOContext {
+                    task_args: Some(args),
+                    environment: &environment,
+                },
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn go_derived_io_rejects_untracked_module_and_workspace_arguments() {
+        for workspace in [false, true] {
+            for task in ["build", "test", "lint", "format", "dev"] {
+                for flag in [
+                    "-C",
+                    "-mod",
+                    "-modfile",
+                    "-overlay",
+                    "-pkgdir",
+                    "-toolexec",
+                    "-coverprofile",
+                    "-cpuprofile",
+                    "-memprofile",
+                    "-buildmode",
+                    "-o",
+                    "-args",
+                ] {
+                    for args in [
+                        vec![flag.to_string(), "elsewhere".to_string()],
+                        vec![format!("{flag}=elsewhere")],
+                    ] {
+                        let io = go_argument_test_io(workspace, task, &args, "", None);
+                        assert_eq!(io.input_safety, DerivedInputSafety::Untracked, "{flag}");
+                        assert_eq!(io.outputs, DerivedOutputs::Unavailable);
+                        assert!(io.cache_reason.is_some());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn go_derived_io_checks_persisted_and_projected_goflags() {
+        for workspace in [false, true] {
+            for flags in [
+                "-overlay=other.json",
+                "-buildmode=c-shared",
+                "-coverprofile=coverage.out",
+                "'-modfile=other file.mod'",
+                "\"-pkgdir=other dir\"",
+            ] {
+                for (persisted, projected) in [(flags, None), ("", Some(flags)), (flags, Some(""))]
+                {
+                    let io = go_argument_test_io(workspace, "test", &[], persisted, projected);
+                    assert_eq!(io.input_safety, DerivedInputSafety::Untracked);
+                    assert_eq!(io.outputs, DerivedOutputs::Unavailable);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn go_derived_io_preserves_ordinary_flags() {
+        for workspace in [false, true] {
+            for flag in [
+                "-race",
+                "-tags=integration",
+                "-count=1",
+                "-run=TestExample",
+                "-v",
+            ] {
+                let io =
+                    go_argument_test_io(workspace, "test", &[flag.to_string()], flag, Some(flag));
+                assert_eq!(io.input_safety, DerivedInputSafety::Tracked);
+                assert_eq!(io.outputs, DerivedOutputs::Resolved(Vec::new()));
+            }
+        }
+    }
+
+    fn observed_environment(root: &AbsoluteSystemPath) -> GoEnvironment {
+        GoEnvironment {
+            target_os: "linux".to_string(),
+            build_cache: join_relative_path(root, ".cache/build")
+                .unwrap()
+                .to_string(),
+            module_cache: join_relative_path(root, ".cache/mod").unwrap().to_string(),
+            fingerprint_values: complete_go_environment(),
+        }
+    }
+
+    // Planning tests below exercise the subprocess-free half of Go support:
+    // in-memory observation inputs (workspace facts plus `go env`) contributed
+    // through [`contributed_packages`] and the repository graph boundary. They
+    // never invoke `go` or `turbo`.
+
+    /// Files whose *existence* the contribution reads (workspace definitions
+    /// and module sums). Contents are irrelevant to planning facts.
+    fn write_observation_file(root: &AbsoluteSystemPath, path: &str, contents: &str) {
+        let file = join_relative_path(root, path).unwrap();
+        file.parent().unwrap().create_dir_all().unwrap();
+        file.create_with_contents(contents).unwrap();
+    }
+
+    fn memory_module(
+        root: &AbsoluteSystemPath,
+        directory: &str,
+        module_path: &str,
+        relationships: Vec<Relationship>,
+        runnable_target: Option<&str>,
+    ) -> GoModule {
+        GoModule {
+            module_path: module_path.to_string(),
+            manifest_path: join_relative_path(root, directory)
+                .unwrap()
+                .join_component(GO_MOD),
+            relationships,
+            runnable_target: runnable_target.map(str::to_string),
+            // No source index was observed, so potential output names stay
+            // sources rather than becoming exclusions.
+            root_source_inputs: Some(HashSet::new()),
+        }
+    }
+
+    /// Observed `go env` values. Caches live inside the repository so their
+    /// ignore prefixes are observable.
+    fn memory_environment(root: &AbsoluteSystemPath) -> GoEnvironment {
+        let cache = root.join_component(".cache");
+        GoEnvironment {
+            target_os: "linux".to_string(),
+            build_cache: cache.join_component("go-build").to_string(),
+            module_cache: cache.join_component("go-mod").to_string(),
+            fingerprint_values: complete_go_environment(),
+        }
+    }
+
+    #[derive(Clone)]
+    struct MemoryGoPrune {
+        go: String,
+        toolchain: Option<String>,
+        directories: Vec<(String, String)>,
+        relationships: Vec<(String, Vec<String>)>,
+    }
+
+    impl MemoryGoPrune {
+        fn knowledge(&self) -> GoPruneKnowledge {
+            GoPruneKnowledge {
+                domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+                go: self.go.clone(),
+                toolchain: self.toolchain.clone(),
+                package_directories: self.directories.iter().cloned().collect(),
+                relationships: self.relationships.iter().cloned().collect(),
+                replacements: Vec::new(),
+            }
+        }
+    }
+
+    /// A `RepositoryContributor` double that supplies Go observation inputs in
+    /// memory at the production injection boundary. Nothing here runs `go`.
+    struct MemoryGoContributor {
+        root: AbsoluteSystemPathBuf,
+        modules: Vec<GoModule>,
+        graph: String,
+        listed: Vec<(&'static str, &'static str, &'static str)>,
+        prune: Option<MemoryGoPrune>,
+    }
+
+    impl RepositoryContributor for MemoryGoContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::GO
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let workspace = DiscoveredWorkspace {
+                    modules: self.modules.clone(),
+                    graph: self.graph.clone(),
+                    listed: self
+                        .listed
+                        .iter()
+                        .map(|(path, version, sum)| listed_module(path, version, sum))
+                        .collect(),
+                    prune: Some(self.prune.as_ref().map_or_else(
+                        || {
+                            GoPruneKnowledge {
+                                domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+                                go: "1.22".to_string(),
+                                toolchain: None,
+                                package_directories: self
+                                    .modules
+                                    .iter()
+                                    .map(|module| {
+                                        let relative = AnchoredSystemPathBuf::new(
+                                            &self.root,
+                                            module.manifest_path.parent().unwrap(),
+                                        )
+                                        .unwrap();
+                                        (
+                                            module.package_name().to_string(),
+                                            relative.to_unix().to_string(),
+                                        )
+                                    })
+                                    .collect(),
+                                relationships: self
+                                    .modules
+                                    .iter()
+                                    .map(|module| {
+                                        (
+                                            module.package_name().to_string(),
+                                            module
+                                                .relationships
+                                                .iter()
+                                                .filter_map(|relationship| {
+                                                    match relationship.target() {
+                                                        RelationshipTarget::Internal(name) => {
+                                                            Some(name.clone())
+                                                        }
+                                                        _ => None,
+                                                    }
+                                                })
+                                                .collect(),
+                                        )
+                                    })
+                                    .collect(),
+                                replacements: Vec::new(),
+                            }
+                        },
+                        MemoryGoPrune::knowledge,
+                    )),
+                };
+                let environment = memory_environment(&self.root);
+                contributed_packages(&self.root, workspace, &environment, || {
+                    Ok(
+                        ExternalPackageIdentity::new("go", "go version go1.24.0 fixture/planning")
+                            .with_human_name("go"),
+                    )
+                })
+                .map_err(contribution_failure)
+            })
+        }
+
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
+                ))
+            })
+        }
+    }
+
+    /// `api` depends on `lib`; both reach one external module.
+    fn memory_workspace(
+        root: &AbsoluteSystemPath,
+        prune: Option<MemoryGoPrune>,
+    ) -> DiscoveredWorkspace {
+        DiscoveredWorkspace {
+            modules: vec![
+                memory_module(
+                    root,
+                    "apps/api",
+                    "example.com/api",
+                    vec![Relationship::internal("lib", DependencyKind::Production)],
+                    Some("."),
+                ),
+                memory_module(root, "packages/lib", "example.com/lib", Vec::new(), None),
+            ],
+            graph: "example.com/api example.com/lib@v0.0.0\nexample.com/api \
+                    example.net/message@v1.0.0\nexample.com/lib example.net/message@v1.0.0\n"
+                .to_string(),
+            listed: vec![listed_module("example.net/message", "v1.0.0", "h1:message")],
+            prune: prune.map(|plan| plan.knowledge()),
+        }
+    }
+
+    fn write_memory_workspace_files(root: &AbsoluteSystemPath) {
+        write_observation_file(
+            root,
+            GO_WORK,
+            "go 1.22\n\nuse (\n\t./apps/api\n\t./packages/lib\n)\n",
+        );
+        write_observation_file(root, GO_WORK_SUM, "");
+        write_observation_file(root, "apps/api/go.mod", "module example.com/api\n");
+        write_observation_file(root, "apps/api/go.sum", "");
+        write_observation_file(root, "packages/lib/go.mod", "module example.com/lib\n");
+    }
+
+    #[test]
+    fn contribution_reports_identity_resolution_and_prune_facts_without_a_toolchain() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_memory_workspace_files(&root);
+        let prune = MemoryGoPrune {
+            go: "1.22".to_string(),
+            toolchain: Some("go1.24.0".to_string()),
+            directories: vec![
+                ("api".to_string(), "apps/api".to_string()),
+                ("lib".to_string(), "packages/lib".to_string()),
+                ("unused".to_string(), "tools/unused".to_string()),
+            ],
+            relationships: vec![
+                ("api".to_string(), vec!["lib".to_string()]),
+                ("lib".to_string(), Vec::new()),
+            ],
+        };
+        let workspace = memory_workspace(&root, Some(prune));
+        let environment = memory_environment(&root);
+        let identity = ExternalPackageIdentity::new("go", "go version go1.24.0 fixture/planning");
+
+        let (packages, workspace_roots, resolutions, observations, prune_domains) =
+            contributed_packages(&root, workspace, &environment, || Ok(identity))
+                .unwrap()
+                .into_parts();
+
+        let mut names = packages
+            .iter()
+            .map(|package| package.name().expect("every Go scope is named"))
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(names, ["api", GO_WORKSPACE_NAME, "lib"]);
+        let manifest = |name: &str| {
+            packages
+                .iter()
+                .find(|package| package.name() == Some(name))
+                .unwrap_or_else(|| panic!("{name} package"))
+                .manifest_path()
+                .to_owned()
+        };
+        assert_eq!(
+            manifest("api"),
+            root.join_components(&["apps", "api", GO_MOD])
+        );
+        assert_eq!(
+            manifest("lib"),
+            root.join_components(&["packages", "lib", GO_MOD])
+        );
+        assert_eq!(manifest(GO_WORKSPACE_NAME), root.join_component(GO_WORK));
+
+        assert_eq!(workspace_roots.len(), 1);
+        assert_eq!(workspace_roots[0].kind(), "go");
+        assert_eq!(workspace_roots[0].path().as_str(), root.as_str());
+
+        // One resolution domain claims exactly the Go scopes, and its
+        // definition sources cover the workspace plus every observed module
+        // manifest and sum.
+        assert_eq!(resolutions.len(), 1);
+        let domain = &resolutions[0];
+        assert_eq!(domain.id(), &GO_RESOLUTION_DOMAIN);
+        assert_eq!(domain.toolchain(), &ToolchainId::GO);
+        assert_eq!(domain.members(), ["api", "lib", GO_WORKSPACE_NAME]);
+        let sources = domain
+            .definition_sources()
+            .iter()
+            .map(|path| path.to_unix().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            sources,
+            [
+                GO_WORK,
+                GO_WORK_SUM,
+                "apps/api/go.mod",
+                "apps/api/go.sum",
+                "packages/lib/go.mod"
+            ]
+        );
+        let ExternalResolutionData::Resolved {
+            completeness,
+            packages: resolved,
+        } = domain.data()
+        else {
+            panic!("a discovered Go workspace resolves completely");
+        };
+        assert_eq!(*completeness, ResolutionCompleteness::Complete);
+        assert_eq!(
+            resolution_keys(resolved, "api"),
+            HashSet::from(["go", "example.net/message"])
+        );
+        assert_eq!(
+            resolution_keys(resolved, "lib"),
+            HashSet::from(["go", "example.net/message"])
+        );
+        assert_eq!(
+            resolution_keys(resolved, GO_WORKSPACE_NAME),
+            HashSet::from(["go", "example.net/message"]),
+            "the aggregate inherits every module's external closure"
+        );
+
+        // Watch facts: membership files force rediscovery, sums are resolution
+        // inputs, and Go's own caches never become task inputs.
+        assert_eq!(observations.len(), 1);
+        let observation = &observations[0];
+        assert_eq!(
+            observation,
+            &ChangeObservation::new()
+                .with_rediscovery_file_name(GO_WORK)
+                .with_rediscovery_file_name(GO_MOD)
+                .with_resolution_path(GO_WORK_SUM)
+                .with_resolution_path("apps/api/go.sum")
+                .with_resolution_path("packages/lib/go.sum")
+                .with_ignore_prefix(".cache/go-build")
+                .with_ignore_prefix(".cache/go-mod")
+        );
+
+        // The prune plan keeps requested modules, expands their internal
+        // dependencies, and drops unrequested workspace members.
+        assert_eq!(prune_domains.len(), 1);
+        let plan = prune_domains[0]
+            .plan(&["api".to_string()])
+            .unwrap()
+            .expect("a requested Go scope has a prune plan");
+        assert_eq!(
+            plan.root_files,
+            [(
+                GO_WORK.to_string(),
+                "go 1.22\n\ntoolchain go1.24.0\n\nuse (\n\t./apps/api\n\t./packages/lib\n)\n"
+                    .to_string()
+            )]
+        );
+        assert_eq!(plan.extra_packages, ["lib"]);
+        assert_eq!(
+            plan.copy_paths,
+            [GO_WORK_SUM, "apps/api/go.sum", "packages/lib/go.sum"]
+        );
+    }
+
+    #[tokio::test]
+    async fn contribution_builds_a_rootless_graph_from_in_memory_observation() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_memory_workspace_files(&root);
+        let inventory = GoContributor::new(root.clone())
+            .discover_package_scopes()
+            .await
+            .unwrap();
+        let contributed = contributed_packages(
+            &root,
+            memory_workspace(&root, None),
+            &memory_environment(&root),
+            || {
+                Ok(ExternalPackageIdentity::new(
+                    "go",
+                    "go version go1.24.0 fixture",
+                ))
+            },
+        )
+        .unwrap();
+        let mut inventory_scopes = inventory
+            .scopes()
+            .iter()
+            .map(|scope| {
+                (
+                    scope.name().unwrap().to_string(),
+                    scope.manifest_path().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut contributed_scopes = contributed
+            .packages()
+            .iter()
+            .map(|package| {
+                (
+                    package.name().unwrap().to_string(),
+                    package.manifest_path().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+        inventory_scopes.sort();
+        contributed_scopes.sort();
+        assert_eq!(inventory_scopes, contributed_scopes);
+
+        let contributor = MemoryGoContributor {
+            root: root.clone(),
+            modules: memory_workspace(&root, None).modules,
+            graph: "example.com/api example.com/lib@v0.0.0\nexample.com/api \
+                    example.net/message@v1.0.0\n"
+                .to_string(),
+            listed: vec![("example.net/message", "v1.0.0", "h1:message")],
+            prune: None,
+        };
+
+        // A pure Go repository has no root `package.json` at all, so the graph
+        // is built without a JavaScript root scope.
+        let graph = PackageGraph::builder_optional(&root, None)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(std::sync::Arc::new(contributor))
+            .build()
+            .await
+            .unwrap();
+
+        assert!(!graph.has_root_javascript_scope());
+        assert!(graph.package_view(&PackageName::Root).is_none());
+        let scopes = graph
+            .package_scope_directories()
+            .map(|(name, _)| name)
+            .collect::<HashSet<_>>();
+        assert!(scopes.contains(&PackageName::from("api")), "{scopes:?}");
+        assert!(scopes.contains(&PackageName::from("lib")), "{scopes:?}");
+        assert!(
+            scopes.contains(&PackageName::from(GO_WORKSPACE_NAME)),
+            "{scopes:?}"
+        );
+
+        let api = graph
+            .package_task_context(&PackageName::from("api"))
+            .expect("api task context");
+        assert_eq!(
+            api.kind(),
+            crate::package_graph::PackageTaskContextKind::Package
+        );
+        assert_eq!(api.toolchain(), Some(&ToolchainId::GO));
+        assert_eq!(api.directory().to_unix().as_str(), "apps/api");
+        assert!(api.native_tasks().get("dev").is_some());
+
+        // Module relationships and the aggregate's edges are graph facts, not
+        // query-time inference.
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from("api"))
+                .unwrap(),
+            [PackageName::from("lib")]
+        );
+        assert_eq!(
+            graph
+                .filtering_relationships()
+                .transitive_dependencies(&PackageName::from(GO_WORKSPACE_NAME))
+                .unwrap(),
+            [PackageName::from("api"), PackageName::from("lib")]
+        );
+
+        let aggregate = graph
+            .package_task_context(&PackageName::from(GO_WORKSPACE_NAME))
+            .expect("aggregate task context");
+        assert_eq!(
+            aggregate.kind(),
+            crate::package_graph::PackageTaskContextKind::Aggregate
+        );
+        assert!(aggregate.native_tasks().get("build").is_some());
+        // Verification and formatting are module-scoped: `go fmt` has no
+        // cross-module workspace pattern, so the aggregate must not claim them.
+        assert!(aggregate.native_tasks().get("test").is_none());
+        assert!(aggregate.native_tasks().get("lint").is_none());
+        assert!(aggregate.native_tasks().get("format").is_none());
+    }
+
+    #[tokio::test]
+    async fn contribution_merges_javascript_and_go_scopes_without_colliding() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_observation_file(&root, GO_WORK, "go 1.22\n");
+        write_observation_file(&root, "apps/api/go.mod", "module example.com/js-pkg/v2\n");
+        write_observation_file(&root, "packages/lib/go.mod", "module example.com/lib\n");
+        let contributor = MemoryGoContributor {
+            root: root.clone(),
+            modules: vec![
+                memory_module(
+                    &root,
+                    "apps/api",
+                    "example.com/js-pkg/v2",
+                    vec![Relationship::internal("lib", DependencyKind::Production)],
+                    Some("."),
+                ),
+                memory_module(&root, "packages/lib", "example.com/lib", Vec::new(), None),
+            ],
+            graph: "example.com/js-pkg/v2 example.com/lib@v0.0.0\n".to_string(),
+            listed: Vec::new(),
+            prune: None,
+        };
+
+        // A major-version suffix stays part of the Go identity, so it does not
+        // collide with the unversioned JavaScript name.
+        let javascript = root.join_components(&["packages", "js-pkg", "package.json"]);
+        let lib_javascript = root.join_components(&["packages", "lib", "package.json"]);
+        let response = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: vec![
+                crate::discovery::WorkspaceData::new(javascript.clone(), None).unwrap(),
+                crate::discovery::WorkspaceData::new(lib_javascript.clone(), None).unwrap(),
+            ],
+        };
+        let manifests = HashMap::from([
+            (
+                javascript.clone(),
+                PackageJson::from_value(serde_json::json!({ "name": "js-pkg" })).unwrap(),
+            ),
+            (
+                lib_javascript.clone(),
+                PackageJson::from_value(serde_json::json!({ "name": "@repo/lib" })).unwrap(),
+            ),
+        ]);
+        let graph = PackageGraph::builder(&root, PackageJson::default())
+            .with_package_discovery(move || {
+                let response = response.clone();
+                async move { Ok(response) }
+            })
+            .with_package_json_loader(move |path: &AbsoluteSystemPath| {
+                manifests.get(path).cloned().ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "missing fixture manifest")
+                        .into()
+                })
+            })
+            .without_external_dependencies()
+            .with_contributor(std::sync::Arc::new(contributor))
+            .build()
+            .await
+            .unwrap();
+
+        let scopes = graph
+            .package_scope_directories()
+            .map(|(name, _)| name)
+            .collect::<HashSet<_>>();
+        for name in ["js-pkg", "js-pkg/v2", "@repo/lib", "lib", GO_WORKSPACE_NAME] {
+            assert!(scopes.contains(&PackageName::from(name)), "{scopes:?}");
+        }
+
+        // Co-located scopes keep distinct identities and one physical directory.
+        let directory = |name: &str| {
+            graph
+                .package_task_context(&PackageName::from(name))
+                .unwrap_or_else(|| panic!("{name} task context"))
+                .directory()
+                .to_unix()
+                .to_string()
+        };
+        assert_eq!(directory("@repo/lib"), "packages/lib");
+        assert_eq!(directory("lib"), "packages/lib");
+    }
+
+    #[tokio::test]
+    async fn contribution_reports_go_identity_collisions_with_both_manifests() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_observation_file(&root, GO_WORK, "go 1.22\n");
+        write_observation_file(&root, "apps/api/go.mod", "module example.com/api\n");
+        write_observation_file(&root, "tools/other-api/go.mod", "module example.net/api\n");
+        let contributor = MemoryGoContributor {
+            root: root.clone(),
+            modules: vec![
+                memory_module(&root, "apps/api", "example.com/api", Vec::new(), Some(".")),
+                memory_module(
+                    &root,
+                    "tools/other-api",
+                    "example.net/api",
+                    Vec::new(),
+                    Some("."),
+                ),
+            ],
+            graph: String::new(),
+            listed: Vec::new(),
+            prune: None,
+        };
+
+        let error = PackageGraph::builder_optional(&root, None)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(std::sync::Arc::new(contributor))
+            .build()
+            .await
+            .expect_err("distinct module paths may not share one Turborepo identity");
+        let message = error.to_string().replace('\\', "/");
+        assert!(
+            message.contains("Failed to add workspace \"api\""),
+            "{message}"
+        );
+        assert!(message.contains("apps/api/go.mod"), "{message}");
+        assert!(message.contains("tools/other-api/go.mod"), "{message}");
+        assert!(
+            message.contains("Rename one package or module"),
+            "{message}"
+        );
+    }
+
+    #[tokio::test]
+    async fn contribution_reports_cross_language_identity_collisions_with_both_manifests() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        write_observation_file(&root, GO_WORK, "go 1.22\n");
+        write_observation_file(&root, "apps/api/go.mod", "module example.com/js-pkg\n");
+        let contributor = MemoryGoContributor {
+            root: root.clone(),
+            modules: vec![memory_module(
+                &root,
+                "apps/api",
+                "example.com/js-pkg",
+                Vec::new(),
+                Some("."),
+            )],
+            graph: String::new(),
+            listed: Vec::new(),
+            prune: None,
+        };
+        let javascript = root.join_components(&["packages", "js-pkg", "package.json"]);
+        let response = DiscoveryResponse {
+            package_manager: PackageManager::Npm,
+            workspaces: vec![
+                crate::discovery::WorkspaceData::new(javascript.clone(), None).unwrap(),
+            ],
+        };
+        let manifests = HashMap::from([(
+            javascript.clone(),
+            PackageJson::from_value(serde_json::json!({ "name": "js-pkg" })).unwrap(),
+        )]);
+
+        let error = PackageGraph::builder(&root, PackageJson::default())
+            .with_package_discovery(move || {
+                let response = response.clone();
+                async move { Ok(response) }
+            })
+            .with_package_json_loader(move |path: &AbsoluteSystemPath| {
+                manifests.get(path).cloned().ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "missing fixture manifest")
+                        .into()
+                })
+            })
+            .without_external_dependencies()
+            .with_contributor(std::sync::Arc::new(contributor))
+            .build()
+            .await
+            .expect_err("one identity cannot name both a Go module and a JavaScript package");
+        let message = error.to_string().replace('\\', "/");
+        assert!(
+            message.contains("Failed to add workspace \"js-pkg\""),
+            "{message}"
+        );
+        assert!(message.contains("apps/api/go.mod"), "{message}");
+        assert!(
+            message.contains("packages/js-pkg/package.json"),
+            "{message}"
+        );
+        assert!(
+            message.contains("Rename one package or module"),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn empty_contribution_does_not_observe_toolchain_identity() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        let environment = observed_environment(&root);
+        let discovered =
+            contributed_packages(&root, DiscoveredWorkspace::default(), &environment, || {
+                panic!("empty workspace must not invoke go version")
+            })
+            .unwrap();
+        let (packages, roots, resolutions, observations, prune) = discovered.into_parts();
+        assert!(packages.is_empty());
+        assert!(roots.is_empty());
+        assert!(resolutions.is_empty());
+        assert!(prune.is_empty());
+        assert_eq!(
+            observations,
+            vec![
+                ChangeObservation::new()
+                    .with_rediscovery_file_name(GO_WORK)
+                    .with_rediscovery_file_name(GO_MOD)
+                    .with_resolution_path(GO_WORK_SUM)
+                    .with_ignore_prefix(".cache/build")
+                    .with_ignore_prefix(".cache/mod")
+            ]
+        );
+    }
+
+    #[test]
+    fn contribution_assembles_observed_packages_resolution_and_prune_without_go() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+        let manifest = join_relative_path(&root, "apps/api/go.mod").unwrap();
+        manifest.parent().unwrap().create_dir_all().unwrap();
+        manifest
+            .create_with_contents("module example.com/api\n")
+            .unwrap();
+        let module = GoModule {
+            module_path: "example.com/api".to_string(),
+            manifest_path: manifest,
+            relationships: Vec::new(),
+            runnable_target: None,
+            root_source_inputs: Some(HashSet::new()),
+        };
+        let workspace = DiscoveredWorkspace {
+            modules: vec![module],
+            graph: String::new(),
+            listed: Vec::new(),
+            prune: Some(GoPruneKnowledge {
+                domain: crate::prune_knowledge::GO_PRUNE_DOMAIN.clone(),
+                go: "1.22".to_string(),
+                toolchain: None,
+                package_directories: HashMap::from([("api".to_string(), "apps/api".to_string())]),
+                relationships: HashMap::new(),
+                replacements: Vec::new(),
+            }),
+        };
+        let environment = observed_environment(&root);
+        let identity = ExternalPackageIdentity::new("go", "go version go1.22.0 fixture");
+        let discovered =
+            contributed_packages(&root, workspace, &environment, || Ok(identity)).unwrap();
+        let (packages, roots, resolutions, observations, prune) = discovered.into_parts();
+        assert_eq!(
+            packages
+                .iter()
+                .map(DiscoveredPackage::name)
+                .collect::<Vec<_>>(),
+            vec![Some("api"), Some(GO_WORKSPACE_NAME)]
+        );
+        assert_eq!(roots.len(), 1);
+        assert_eq!(resolutions.len(), 1);
+        assert_eq!(prune.len(), 1);
+        assert_eq!(
+            observations,
+            vec![
+                ChangeObservation::new()
+                    .with_rediscovery_file_name(GO_WORK)
+                    .with_rediscovery_file_name(GO_MOD)
+                    .with_resolution_path(GO_WORK_SUM)
+                    .with_resolution_path("apps/api/go.sum")
+                    .with_ignore_prefix(".cache/build")
+                    .with_ignore_prefix(".cache/mod")
+            ]
+        );
+
+        let error = contributed_packages(
+            &root,
+            DiscoveredWorkspace {
+                modules: vec![GoModule {
+                    module_path: "example.com/api".to_string(),
+                    manifest_path: join_relative_path(&root, "apps/api/go.mod").unwrap(),
+                    relationships: Vec::new(),
+                    runnable_target: None,
+                    root_source_inputs: Some(HashSet::new()),
+                }],
+                graph: "malformed".to_string(),
+                ..Default::default()
+            },
+            &environment,
+            || Ok(ExternalPackageIdentity::new("go", "fixture")),
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::MalformedModGraphLine { .. }));
+    }
+}

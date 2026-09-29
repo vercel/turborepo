@@ -1,0 +1,14 @@
+{
+    "name": "repro",
+    "version": "0.1.0",
+    "private": true,
+    "packageManager": "bun@1.4.2",
+    "devDependencies": {
+        "turbo": "2.10.11",
+        "typescript": "^7.0.2"
+    },
+    "workspaces": ["apps/*", "packages/*"],
+    "scripts": {
+        "build": "turbo run build"
+    }
+}

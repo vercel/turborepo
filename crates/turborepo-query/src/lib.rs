@@ -1,5 +1,4 @@
-#![allow(clippy::result_large_err)]
-
+pub mod affected_query;
 pub mod affected_tasks;
 mod boundaries;
 mod external_package;
@@ -10,12 +9,13 @@ mod server;
 mod task;
 
 use std::{
+    collections::{HashMap, HashSet},
     io,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
 
-use async_graphql::{http::GraphiQLSource, *};
+use async_graphql::*;
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
 use itertools::Itertools;
@@ -27,7 +27,7 @@ use turbo_trace::TraceError;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 pub use turborepo_query_api::{
     AffectedPackagesError, BoundariesFuture, QueryErrorLocation, QueryResult, QueryRun,
-    SCHEMA_QUERY,
+    QueryTaskId, SCHEMA_QUERY,
 };
 use turborepo_repository::{
     change_mapper::{AllPackageChangeReason, PackageInclusionReason},
@@ -56,14 +56,11 @@ pub enum Error {
     Serde(#[from] serde_json::Error),
     #[error("Failed to parse file: {0}")]
     Parse(String),
+    #[error("Failed to determine affected tasks.")]
+    AffectedTasks,
 }
 
 // Conversions from constituent error types into Error via the Api variant.
-impl From<turborepo_boundaries::Error> for Error {
-    fn from(e: turborepo_boundaries::Error) -> Self {
-        Error::Api(e.into())
-    }
-}
 impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         Error::Api(e.into())
@@ -76,11 +73,6 @@ impl From<turbopath::PathError> for Error {
 }
 impl From<AffectedPackagesError> for Error {
     fn from(e: AffectedPackagesError) -> Self {
-        Error::Api(e.into())
-    }
-}
-impl From<turborepo_scope::filter::ResolutionError> for Error {
-    fn from(e: turborepo_scope::filter::ResolutionError) -> Self {
         Error::Api(e.into())
     }
 }
@@ -142,6 +134,9 @@ impl RepositoryQuery {
             PackageInclusionReason::All(AllPackageChangeReason::ScmError { error }) => {
                 PackageChangeReason::ScmError(ScmError { error })
             }
+            PackageInclusionReason::All(AllPackageChangeReason::ConservativeFallback) => {
+                PackageChangeReason::AllPackagesChanged(AllPackagesChanged { empty: false })
+            }
             PackageInclusionReason::RootTask { task } => PackageChangeReason::RootTask(RootTask {
                 task_name: task.to_string(),
             }),
@@ -196,7 +191,6 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "RepositoryTasks", params(task::RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
-#[graphql(concrete(name = "ChangedTasks", params(ChangedTask)))]
 #[graphql(concrete(name = "Files", params(file::File)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 #[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
@@ -471,6 +465,12 @@ struct ScmError {
 }
 
 #[derive(SimpleObject)]
+struct AllPackagesChanged {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
 struct IncludedByFilter {
     filters: Vec<String>,
 }
@@ -524,6 +524,7 @@ enum PackageChangeReason {
     NonPackageFileChanged(NonPackageFileChanged),
     GitRefNotFound(GitRefNotFound),
     ScmError(ScmError),
+    AllPackagesChanged(AllPackagesChanged),
     IncludedByFilter(IncludedByFilter),
     RootTask(RootTask),
     ConservativeRootLockfileChanged(ConservativeRootLockfileChanged),
@@ -532,6 +533,74 @@ enum PackageChangeReason {
     DependentChanged(DependentChanged),
     FileChanged(FileChanged),
     InFilteredDirectory(InFilteredDirectory),
+}
+
+/// Collapse task owners without changing the ChangedPackage reason union. The
+/// lexicographically first affected task in each package supplies its reason,
+/// independent of the raw calculator's hash-map iteration order.
+fn project_affected_task_packages(
+    mut tasks: Vec<affected_tasks::AffectedTask>,
+    legacy_packages: &HashMap<PackageName, PackageInclusionReason>,
+    convert_reason: impl Fn(PackageInclusionReason) -> PackageChangeReason,
+) -> HashMap<PackageName, PackageChangeReason> {
+    use affected_tasks::TaskChangeReason;
+
+    let global_reason = legacy_packages
+        .values()
+        .find(|reason| matches!(reason, PackageInclusionReason::All(_)));
+    tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+    let mut packages = HashMap::new();
+    for task in tasks {
+        packages
+            .entry(PackageName::from(task.task_id.package.as_str()))
+            .or_insert_with(|| match task.reason {
+                TaskChangeReason::FileChanged { file_path } => {
+                    PackageChangeReason::FileChanged(FileChanged { file_path })
+                }
+                TaskChangeReason::DependencyTaskChanged { package_name, .. } => {
+                    PackageChangeReason::DependencyChanged(DependencyChanged {
+                        dependency_name: package_name,
+                    })
+                }
+                TaskChangeReason::PackageDependencyChanged { package_name } => {
+                    // This seeds the owner's own tasks from a lockfile change,
+                    // not from a dependency on itself. Retain added/removed
+                    // external packages (or the conservative lockfile reason).
+                    legacy_packages
+                        .get(&PackageName::from(package_name))
+                        .cloned()
+                        .map(&convert_reason)
+                        .unwrap_or_else(|| {
+                            PackageChangeReason::AllPackagesChanged(AllPackagesChanged {
+                                empty: false,
+                            })
+                        })
+                }
+                TaskChangeReason::GlobalFileChanged { file_path } => {
+                    PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                        file_path,
+                    })
+                }
+                TaskChangeReason::GlobalDepsChanged { file_path } => {
+                    PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged { file_path })
+                }
+                TaskChangeReason::AllTasksChanged { .. } => {
+                    // The raw calculator uses a description for global changes.
+                    // Keep the original structured reason, even for task owners
+                    // absent from the legacy package map. With no global reason,
+                    // this is the input matcher's conservative fallback.
+                    global_reason
+                        .cloned()
+                        .map(&convert_reason)
+                        .unwrap_or_else(|| {
+                            PackageChangeReason::AllPackagesChanged(AllPackagesChanged {
+                                empty: false,
+                            })
+                        })
+                }
+            });
+    }
+    packages
 }
 
 #[derive(SimpleObject)]
@@ -590,6 +659,48 @@ struct ChangedTask {
     task: task::RepositoryTask,
 }
 
+#[derive(SimpleObject)]
+#[graphql(complex)]
+struct ChangedTasks {
+    items: Vec<ChangedTask>,
+    length: usize,
+}
+
+#[ComplexObject]
+impl ChangedTasks {
+    /// The collection and all its transitive dependencies, with each task once.
+    /// Includes non-executable task nodes and sorts by package name, then task
+    /// name.
+    async fn with_dependencies(&self) -> Result<Array<task::RepositoryTask>, Error> {
+        let Some(first) = self.items.first() else {
+            return Ok(Vec::new().into());
+        };
+        let run = first.task.package.run();
+        let mut task_ids: HashSet<_> = self
+            .items
+            .iter()
+            .map(|item| {
+                QueryTaskId::new(
+                    item.task.package.get_name().to_string(),
+                    item.task.name.clone(),
+                )
+            })
+            .collect();
+        task_ids.extend(run.collect_task_dependencies(&task_ids));
+        let mut tasks = task_ids
+            .into_iter()
+            .map(|task_id| task::RepositoryTask::new(&task_id, run))
+            .collect::<Result<Array<_>, _>>()?;
+        tasks.sort_by(|a, b| {
+            a.package
+                .get_name()
+                .cmp(b.package.get_name())
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        Ok(tasks)
+    }
+}
+
 fn resolve_file_path(
     repo_root: &AbsoluteSystemPath,
     path: String,
@@ -625,14 +736,50 @@ impl RepositoryQuery {
         head: Option<String>,
         filter: Option<PackagePredicate>,
     ) -> Result<Array<ChangedPackage>, Error> {
-        let mut packages = self
+        let affected_packages = if self
             .run
-            .calculate_affected_packages(base, head)?
+            .repo_context()
+            .root_turbo_json()
+            .future_flags
+            .affected_using_task_inputs
+        {
+            // Project raw affectedness, not the affectedTasks resolver's scheduled
+            // tasks: unchanged prerequisites are not affected packages. Keep the
+            // QueryRun method legacy, since the raw calculator calls it itself.
+            let legacy_packages = self
+                .run
+                .calculate_affected_packages(base.clone(), head.clone())?;
+            let tasks = affected_tasks::calculate_affected_tasks_with_packages(
+                &self.run,
+                base,
+                head,
+                &legacy_packages,
+            )?;
+            project_affected_task_packages(tasks, &legacy_packages, |reason| {
+                self.convert_change_reason(reason)
+            })
+        } else {
+            self.run
+                .calculate_affected_packages(base, head)?
+                .into_iter()
+                .map(|(package, reason)| (package, self.convert_change_reason(reason)))
+                .collect()
+        };
+        let mut packages = affected_packages
             .into_iter()
+            .filter(|(package, _)| {
+                package != &PackageName::Root
+                    || self
+                        .run
+                        .repo_context()
+                        .pkg_dep_graph()
+                        .package_view(package)
+                        .is_some()
+            })
             .map(|(package, reason)| {
                 Ok(ChangedPackage {
                     package: Package::new(self.run.clone(), package)?,
-                    reason: self.convert_change_reason(reason),
+                    reason,
                 })
             })
             .filter(|package: &Result<ChangedPackage, Error>| {
@@ -666,33 +813,84 @@ impl RepositoryQuery {
         #[graphql(desc = "Filter to specific task names (e.g. [\"test\", \"typecheck\"])")]
         tasks: Option<Vec<String>>,
         filter: Option<PackagePredicate>,
-    ) -> Result<Array<ChangedTask>, Error> {
-        let results = affected_tasks::calculate_affected_tasks(&self.run, base, head)?;
-
-        let mut changed_tasks: Array<ChangedTask> = results
+    ) -> Result<ChangedTasks, Error> {
+        let task_level_results =
+            affected_tasks::calculate_affected_tasks(&self.run, base.clone(), head.clone())?;
+        let mut reasons: HashMap<_, _> = task_level_results
             .into_iter()
-            .map(|at| {
-                let task = task::RepositoryTask::new(&at.task_id, &self.run)?;
-                let reason = convert_task_change_reason(at.reason);
-                Ok(ChangedTask { reason, task })
+            .map(|affected| (affected.task_id, affected.reason))
+            .collect();
+        let task_level_affected = self
+            .run
+            .repo_context()
+            .root_turbo_json()
+            .future_flags
+            .affected_using_task_inputs
+            || self
+                .run
+                .repo_context()
+                .root_turbo_json()
+                .future_flags
+                .filter_using_tasks;
+        if !task_level_affected {
+            let affected_packages: HashSet<_> = self
+                .run
+                .calculate_affected_packages(base, head)?
+                .into_keys()
+                .collect();
+            for task_id in self.run.task_ids().into_iter().filter(|task_id| {
+                affected_packages.contains(&PackageName::from(task_id.package.as_str()))
+            }) {
+                reasons.entry(task_id).or_insert_with(|| {
+                    affected_tasks::TaskChangeReason::AllTasksChanged {
+                        description: "package is affected".to_string(),
+                    }
+                });
+            }
+        }
+
+        let selected: HashSet<_> = reasons
+            .keys()
+            .filter(|task_id| {
+                tasks.as_ref().is_none_or(|names| {
+                    names.is_empty()
+                        || names
+                            .iter()
+                            .any(|name| name == &task_id.task || name == &task_id.full_name())
+                })
+            })
+            .filter_map(|task_id| {
+                let task = task::RepositoryTask::new(task_id, &self.run).ok()?;
+                filter
+                    .as_ref()
+                    .is_none_or(|predicate| predicate.check(&task.package))
+                    .then(|| task_id.clone())
+            })
+            .collect();
+
+        let mut scheduled = selected.clone();
+        scheduled.extend(self.run.collect_task_dependencies(&selected));
+
+        let mut changed_tasks: Vec<ChangedTask> = scheduled
+            .into_iter()
+            .map(|task_id| {
+                let task = task::RepositoryTask::new(&task_id, &self.run).map_err(|error| {
+                    tracing::error!(?error, task = %task_id, "failed to represent affected task");
+                    Error::AffectedTasks
+                });
+                let reason = reasons.remove(&task_id).unwrap_or_else(|| {
+                    affected_tasks::TaskChangeReason::AllTasksChanged {
+                        description: "required by an affected task".to_string(),
+                    }
+                });
+                task.map(|task| ChangedTask {
+                    reason: convert_task_change_reason(reason),
+                    task,
+                })
             })
             .collect::<Result<Vec<_>, Error>>()?
             .into_iter()
-            .filter(|ct| {
-                let executes = ct.task.executes();
-                let task_ok = tasks.as_ref().is_none_or(|names| {
-                    if names.is_empty() {
-                        true
-                    } else {
-                        let full_name = format!("{}#{}", ct.task.package.get_name(), ct.task.name);
-                        names
-                            .iter()
-                            .any(|n| n.as_str() == ct.task.name || n == &full_name)
-                    }
-                });
-                let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
-                executes && task_ok && package_ok
-            })
+            .filter(|changed| changed.task.participates_in_run())
             .collect();
 
         changed_tasks.sort_by(|a, b| {
@@ -702,7 +900,20 @@ impl RepositoryQuery {
                 .cmp(b.task.package.get_name())
                 .then_with(|| a.task.name.cmp(&b.task.name))
         });
-        Ok(changed_tasks)
+        Ok(ChangedTasks {
+            length: changed_tasks.len(),
+            items: changed_tasks,
+        })
+    }
+
+    /// Configured global environment patterns, without expanding names or
+    /// values.
+    async fn global_environment(&self) -> task::Environment {
+        let config = self.run.repo_context().root_turbo_json();
+        task::Environment {
+            env: config.global_env.clone(),
+            pass_through_env: config.global_pass_through_env.clone().unwrap_or_default(),
+        }
     }
 
     /// Gets a single package by name
@@ -712,17 +923,16 @@ impl RepositoryQuery {
     }
 
     async fn version(&self) -> &'static str {
-        self.run.version()
+        self.run.repo_context().version()
     }
 
     /// Check boundaries for all packages.
     async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
         match self.run.check_boundaries(false).await {
-            Ok(result) => Ok(result
-                .diagnostics
+            Ok(diagnostics) => Ok(diagnostics
                 .into_iter()
-                .map(|b| b.into())
-                .sorted_by(|a: &Diagnostic, b: &Diagnostic| {
+                .map(Diagnostic::from)
+                .sorted_by(|a, b| {
                     a.message
                         .cmp(&b.message)
                         .then_with(|| a.import.cmp(&b.import))
@@ -741,7 +951,7 @@ impl RepositoryQuery {
     }
 
     async fn file(&self, path: String) -> Result<file::File, Error> {
-        let abs_path = resolve_file_path(self.run.repo_root(), path)?;
+        let abs_path = resolve_file_path(self.run.repo_context().repo_root(), path)?;
 
         file::File::new(self.run.clone(), abs_path)
     }
@@ -751,6 +961,7 @@ impl RepositoryQuery {
         let Some(filter) = filter else {
             let mut packages = self
                 .run
+                .repo_context()
                 .pkg_dep_graph()
                 .package_scope_directories()
                 .map(|(name, _)| Package::new(self.run.clone(), name))
@@ -761,6 +972,7 @@ impl RepositoryQuery {
 
         let mut packages = self
             .run
+            .repo_context()
             .pkg_dep_graph()
             .package_scope_directories()
             .map(|(name, _)| Package::new(self.run.clone(), name))
@@ -772,15 +984,14 @@ impl RepositoryQuery {
     }
 
     async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
-        let pkg_dep_graph = self.run.pkg_dep_graph();
-        let all_package_names: Vec<_> = pkg_dep_graph
-            .package_scope_directories()
-            .map(|(name, _)| name)
-            .collect();
-        let mut packages = pkg_dep_graph
-            .transitive_external_dependencies(all_package_names.iter())
-            .into_iter()
-            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
+        let mut packages = self
+            .run
+            .repo_context()
+            .pkg_dep_graph()
+            .external_package_identities()
+            .iter()
+            .cloned()
+            .map(|identity| ExternalPackage::from_identity(self.run.clone(), identity))
             .collect::<Array<_>>();
         packages.sort_by_key(|pkg| pkg.human_name());
         Ok(packages)
@@ -817,12 +1028,9 @@ fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskC
 }
 
 pub async fn graphiql() -> impl IntoResponse {
-    response::Html(
-        GraphiQLSource::build()
-            .version("5.0.0-rc.1")
-            .endpoint("/")
-            .finish(),
-    )
+    // GraphiQLSource always rendered the same HTML for this fixed version and
+    // endpoint; embedding that output avoids compiling its template per request.
+    response::Html(include_str!("query_ide.html"))
 }
 
 pub async fn run_query_server(run: Arc<dyn QueryRun>, signal: SignalHandler) -> Result<(), Error> {
@@ -896,7 +1104,46 @@ mod tests {
 
     use turbopath::AbsoluteSystemPath;
 
-    use super::{resolve_file_path, Error};
+    use super::{Error, resolve_file_path};
+
+    #[test]
+    fn affected_package_projection_chooses_first_task_reason_regardless_of_order() {
+        use super::{
+            PackageChangeReason, PackageName, QueryTaskId,
+            affected_tasks::{AffectedTask, TaskChangeReason},
+            project_affected_task_packages,
+        };
+
+        for reverse in [false, true] {
+            let mut tasks = vec![
+                AffectedTask {
+                    task_id: QueryTaskId::new("app", "build"),
+                    reason: TaskChangeReason::DependencyTaskChanged {
+                        package_name: "lib".to_string(),
+                        task_name: "build".to_string(),
+                    },
+                },
+                AffectedTask {
+                    task_id: QueryTaskId::new("app", "test"),
+                    reason: TaskChangeReason::FileChanged {
+                        file_path: "app/test.ts".to_string(),
+                    },
+                },
+            ];
+            if reverse {
+                tasks.reverse();
+            }
+            let packages = project_affected_task_packages(tasks, &Default::default(), |_| {
+                unreachable!("task dependency reasons do not use legacy package reasons")
+            });
+            assert_eq!(packages.len(), 1);
+            assert!(matches!(
+                packages.get(&PackageName::from("app")),
+                Some(PackageChangeReason::DependencyChanged(reason))
+                    if reason.dependency_name == "lib"
+            ));
+        }
+    }
 
     #[test]
     fn resolve_file_path_allows_repo_relative_files() {

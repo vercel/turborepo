@@ -75,42 +75,40 @@ impl RepoState {
     /// returns: Result<RepoState, Error>
     #[tracing::instrument(skip_all)]
     pub fn infer(reference_dir: &AbsoluteSystemPath) -> Result<Self, Error> {
-        reference_dir
-            .ancestors()
-            .filter_map(|path| {
-                PackageJson::load(&path.join_component("package.json"))
-                    .ok()
-                    .map(|package_json| {
-                        // FIXME: We should save this package manager that we detected
-                        let package_manager =
-                            PackageManager::read_or_detect_package_manager(&package_json, path);
-                        let workspace_globs = package_manager
-                            .as_ref()
-                            .ok()
-                            .and_then(|mgr| mgr.get_workspace_globs(path).ok());
+        let candidates = reference_dir.ancestors().filter_map(|path| {
+            PackageJson::load(&path.join_component("package.json"))
+                .ok()
+                .map(|package_json| {
+                    let package_manager =
+                        PackageManager::read_or_detect_package_manager(&package_json, path);
+                    let workspace_globs = package_manager
+                        .as_ref()
+                        .ok()
+                        .and_then(|mgr| mgr.get_workspace_globs(path).ok());
 
-                        InferInfo {
-                            path: path.to_owned(),
-                            workspace_globs,
-                            package_manager,
-                            package_json,
-                        }
-                    })
-            })
-            .reduce(|current, candidate| {
-                if current.repo_mode() == RepoMode::MultiPackage {
-                    // We already have a multi-package root, go with that
-                    current
-                } else if candidate.is_workspace_root_of(&current.path) {
-                    // The next candidate is a multipackage root, and it contains current so it's
-                    // our root.
-                    candidate
-                } else {
-                    // keep the current single package, it's the closest in
-                    current
-                }
-            })
-            .map(|root| root.into())
+                    InferInfo {
+                        path: path.to_owned(),
+                        workspace_globs,
+                        package_manager,
+                        package_json,
+                    }
+                })
+        });
+        let mut root: Option<InferInfo> = None;
+        for candidate in candidates {
+            let selected = match root {
+                Some(current) if !candidate.is_workspace_root_of(&current.path) => current,
+                _ => candidate,
+            };
+            // Once a multi-package root is selected, no ancestor can replace
+            // it. Stop here rather than loading manifests and compiling globs
+            // for outer repositories whose results would be discarded.
+            if selected.repo_mode() == RepoMode::MultiPackage {
+                return Ok(selected.into());
+            }
+            root = Some(selected);
+        }
+        root.map(Into::into)
             .ok_or_else(|| Error::NotFound(reference_dir.to_owned()))
     }
 }
@@ -129,6 +127,47 @@ mod test {
             .to_realpath()
             .unwrap();
         (tmp_dir, dir)
+    }
+
+    #[test]
+    fn nested_workspace_keeps_nearest_selected_root() {
+        let (_tmp, root) = tmp_dir();
+        root.join_component("package.json")
+            .create_with_contents(
+                r#"{"name":"outer","packageManager":"npm@10.0.0","workspaces":["**"]}"#,
+            )
+            .unwrap();
+        let inner = root.join_component("inner");
+        inner.create_dir_all().unwrap();
+        inner
+            .join_component("package.json")
+            .create_with_contents(
+                r#"{"name":"inner","packageManager":"npm@10.0.0","workspaces":["packages/*"]}"#,
+            )
+            .unwrap();
+        let member = inner.join_components(&["packages", "app"]);
+        member.create_dir_all().unwrap();
+        member
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"app"}"#)
+            .unwrap();
+        let src = member.join_component("src");
+        src.create_dir_all().unwrap();
+        for invocation in [&inner, &member, &src] {
+            let inferred = RepoState::infer(invocation).unwrap();
+            assert_eq!(inferred.root, inner);
+            assert_eq!(inferred.mode, RepoMode::MultiPackage);
+        }
+
+        // Merely encountering a workspace isn't enough to stop: a standalone
+        // package excluded from the inner workspace may belong to the outer one.
+        let standalone = inner.join_component("standalone");
+        standalone.create_dir_all().unwrap();
+        standalone
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"standalone"}"#)
+            .unwrap();
+        assert_eq!(RepoState::infer(&standalone).unwrap().root, root);
     }
 
     #[test]

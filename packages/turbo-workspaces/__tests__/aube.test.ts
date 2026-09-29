@@ -79,6 +79,19 @@ describe("aube", () => {
       );
     });
 
+    it("prefers its native lockfile over a co-present nub lockfile", () => {
+      const workspaceRoot = makeWorkspace({
+        "package.json": { packageManager: "aube@0.1.0" },
+        "aube-lock.yaml": "lockfileVersion: '9.0'\n",
+        "nub.lock": "lockfileVersion: '9.0'\n"
+      });
+
+      expect(getUnderlyingLockfileManager({ workspaceRoot })).toEqual("pnpm");
+      expect(getUnderlyingLockfileName({ workspaceRoot })).toEqual(
+        "aube-lock.yaml"
+      );
+    });
+
     it("prefers bun over non-native foreign lockfiles", () => {
       const workspaceRoot = makeWorkspace({
         "package.json": { packageManager: "aube@0.1.0" },

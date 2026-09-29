@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use camino::Utf8Path;
 use miette::{NamedSource, SourceSpan};
@@ -9,8 +12,8 @@ use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::{
+    external_resolution::PackageExternalDeclarations,
     package_graph::{PackageName, PackageNode},
-    package_json::PackageJson,
 };
 use unrs_resolver::{ResolveError, Resolver};
 
@@ -22,8 +25,7 @@ pub struct DependencyLocations<'a> {
     // The containing package's name. We allow a package to import itself per JavaScript convention
     pub(crate) package: &'a PackageName,
     pub(crate) internal_dependencies: &'a HashSet<&'a PackageNode>,
-    pub(crate) package_json: &'a PackageJson,
-    pub(crate) unresolved_external_dependencies: Option<&'a BTreeMap<String, String>>,
+    pub(crate) external_declarations: PackageExternalDeclarations<'a>,
     pub(crate) implicit_dependencies: &'a HashMap<String, Spanned<()>>,
     pub(crate) global_implicit_dependencies: &'a HashMap<String, Spanned<()>>,
 }
@@ -37,39 +39,11 @@ impl<'a> DependencyLocations<'a> {
         // JavaScript convention
         self.package == package_name.as_package_name()
             || self.internal_dependencies.contains(package_name)
-            || self
-                .unresolved_external_dependencies
-                .is_some_and(|external_dependencies| {
-                    external_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .dependencies
-                .as_ref()
-                .is_some_and(|dependencies| {
-                    dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .dev_dependencies
-                .as_ref()
-                .is_some_and(|dev_dependencies| {
-                    dev_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .peer_dependencies
-                .as_ref()
-                .is_some_and(|peer_dependencies| {
-                    peer_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
-            || self
-                .package_json
-                .optional_dependencies
-                .as_ref()
-                .is_some_and(|optional_dependencies| {
-                    optional_dependencies.contains_key(package_name.as_package_name().as_str())
-                })
+            || self.external_declarations.iter().any(|declaration| {
+                let package_name = package_name.as_package_name().as_str();
+                declaration.declaration_name() == package_name
+                    || declaration.package_name() == package_name
+            })
             || self
                 .implicit_dependencies
                 .contains_key(package_name.as_package_name().as_str())
@@ -96,14 +70,13 @@ impl<'a> DependencyLocations<'a> {
 /// Returns `Ok((false, None))` if the resolved path goes through
 /// `node_modules` (a real npm package) or if the resolver could not resolve
 /// the import. The caller should then fall through to `check_package_import`.
-#[allow(clippy::too_many_arguments)]
 fn check_import_as_tsconfig_path_alias(
     resolver: &Resolver,
     package_name: &PackageName,
     package_root: &AbsoluteSystemPath,
     span: SourceSpan,
     file_path: &AbsoluteSystemPath,
-    file_content: &str,
+    file_content: &Arc<str>,
     import: &str,
 ) -> Result<(bool, Option<BoundariesDiagnostic>), Error> {
     // Safety guard — relative imports are resolved as file imports elsewhere.
@@ -193,7 +166,7 @@ fn check_import_as_tsconfig_path_alias(
 ///    aliases — skipped (no diagnostic).
 ///
 /// Respects `@boundaries-ignore` comments placed above the import statement.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn check_import(
     comments: &[Comment],
     source_text: &str,
@@ -206,7 +179,7 @@ pub(crate) fn check_import(
     span: &Span,
     statement_span: &Span,
     file_path: &AbsoluteSystemPath,
-    file_content: &str,
+    file_content: &Arc<str>,
     dependency_locations: DependencyLocations<'_>,
     resolver: &Resolver,
 ) -> Result<(), Error> {
@@ -295,7 +268,6 @@ pub(crate) fn check_import(
 ///
 /// Returns `Some(BoundariesDiagnostic::ImportLeavesPackage)` if the resolved
 /// path falls outside `package_path`, `None` otherwise.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_file_import(
     file_path: &AbsoluteSystemPath,
     package_path: &AbsoluteSystemPath,
@@ -303,7 +275,7 @@ pub(crate) fn check_file_import(
     import: &str,
     resolved_import_path: &AbsoluteSystemPath,
     source_span: SourceSpan,
-    file_content: &str,
+    file_content: &Arc<str>,
 ) -> Result<Option<BoundariesDiagnostic>, Error> {
     // We have to check for this case because `relation_to_path` returns `Parent` if
     // the paths are equal and there's nothing wrong with importing the
@@ -339,7 +311,7 @@ pub(crate) fn check_file_import(
             resolved_import_path,
             package_name: package_name.to_owned(),
             span: source_span,
-            text: NamedSource::new(file_path.as_str(), file_content.to_string()),
+            text: NamedSource::new(file_path.as_str(), file_content.clone()),
         }))
     } else {
         Ok(None)
@@ -388,13 +360,12 @@ pub(crate) fn get_package_name(import: &str) -> &str {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_package_import(
     import: &str,
     import_type: ImportType,
     span: SourceSpan,
     file_path: &AbsoluteSystemPath,
-    file_content: &str,
+    file_content: &Arc<str>,
     dependency_locations: DependencyLocations<'_>,
     resolver: &Resolver,
 ) -> Option<BoundariesDiagnostic> {
@@ -405,7 +376,7 @@ pub(crate) fn check_package_import(
             path: file_path.to_owned(),
             import: import.to_string(),
             span,
-            text: NamedSource::new(file_path.as_str(), file_content.to_string()),
+            text: NamedSource::new(file_path.as_str(), file_content.clone()),
         });
     }
     let package_node = PackageNode::Workspace(PackageName::Other(package_name.to_string()));
@@ -432,7 +403,7 @@ pub(crate) fn check_package_import(
                     path: file_path.to_owned(),
                     import: import.to_string(),
                     span,
-                    text: NamedSource::new(file_path.as_str(), file_content.to_string()),
+                    text: NamedSource::new(file_path.as_str(), file_content.clone()),
                 }),
             };
         }
@@ -441,7 +412,7 @@ pub(crate) fn check_package_import(
             path: file_path.to_owned(),
             name: package_node.to_string(),
             span,
-            text: NamedSource::new(file_path.as_str(), file_content.to_string()),
+            text: NamedSource::new(file_path.as_str(), file_content.clone()),
         });
     }
 
@@ -450,11 +421,66 @@ pub(crate) fn check_package_import(
 
 #[cfg(test)]
 mod test {
+    use std::collections::BTreeMap;
+
     use test_case::test_case;
     use turbo_trace::Tracer;
+    use turborepo_repository::{
+        external_resolution::ExternalDeclaration, package_json::PackageJson,
+    };
 
     use super::*;
     use crate::BoundariesResult;
+
+    fn declarations(package_json: &PackageJson) -> Vec<ExternalDeclaration> {
+        package_json
+            .dependencies_with_kind()
+            .map(|(name, specifier, kind)| {
+                ExternalDeclaration::new("my-app", name, name, specifier, kind)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn declaration_projection_accepts_alias_targets_and_all_dependency_kinds() {
+        let package = PackageName::from("my-app");
+        let declarations = vec![
+            ExternalDeclaration::new(
+                "my-app",
+                "alias",
+                "target",
+                "npm:target@1",
+                turborepo_repository::relationships::DependencyKind::Production,
+            ),
+            ExternalDeclaration::new(
+                "my-app",
+                "optional",
+                "optional",
+                "1",
+                turborepo_repository::relationships::DependencyKind::Optional,
+            ),
+            ExternalDeclaration::new(
+                "my-app",
+                "peer",
+                "peer",
+                "1",
+                turborepo_repository::relationships::DependencyKind::Peer { optional: false },
+            ),
+        ];
+        let locations = DependencyLocations {
+            package: &package,
+            internal_dependencies: &HashSet::new(),
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
+            implicit_dependencies: &HashMap::new(),
+            global_implicit_dependencies: &HashMap::new(),
+        };
+
+        for dependency in ["alias", "target", "optional", "peer"] {
+            assert!(
+                locations.is_dependency(&PackageNode::Workspace(PackageName::from(dependency)))
+            );
+        }
+    }
 
     #[test_case("bun", true ; "bun bare import")]
     #[test_case("bun:test", true ; "bun test module")]
@@ -490,11 +516,17 @@ mod test {
 
     fn make_tsconfig_alias_test_args(
         import: &str,
-    ) -> (Resolver, PackageName, SourceSpan, String, BoundariesResult) {
+    ) -> (
+        Resolver,
+        PackageName,
+        SourceSpan,
+        Arc<str>,
+        BoundariesResult,
+    ) {
         let resolver = Tracer::create_resolver(None);
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
-        let file_content = format!("import {{ x }} from \"{import}\";");
+        let file_content: Arc<str> = format!("import {{ x }} from \"{import}\";").into();
         let result = BoundariesResult::default();
         (resolver, package_name, span, file_content, result)
     }
@@ -515,7 +547,7 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = package_root.join_component("index.ts");
-        std::fs::write(file_path.as_std_path(), &file_content).unwrap();
+        std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -544,7 +576,7 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = package_root.join_component("index.ts");
-        std::fs::write(file_path.as_std_path(), &file_content).unwrap();
+        std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -569,8 +601,8 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = root.join_component("index.ts");
-        let file_content = "import { $, which } from \"bun\";";
-        std::fs::write(file_path.as_std_path(), file_content).unwrap();
+        let file_content: Arc<str> = "import { $, which } from \"bun\";".into();
+        std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
         let resolver = Tracer::create_resolver(None);
         let package_name = PackageName::from("my-app");
@@ -586,12 +618,12 @@ mod test {
         let internal_deps = HashSet::new();
         let implicit_deps = HashMap::new();
         let global_implicit_deps = HashMap::new();
+        let declarations = declarations(&package_json);
 
         let dependency_locations = DependencyLocations {
             package: &package_name,
             internal_dependencies: &internal_deps,
-            package_json: &package_json,
-            unresolved_external_dependencies: None,
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
             implicit_dependencies: &implicit_deps,
             global_implicit_dependencies: &global_implicit_deps,
         };
@@ -602,7 +634,7 @@ mod test {
             ImportType::Value,
             span,
             &file_path,
-            file_content,
+            &file_content,
             dependency_locations,
             &resolver,
         );
@@ -618,8 +650,8 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = root.join_component("extension.ts");
-        let file_content = "import { window, commands } from \"vscode\";";
-        std::fs::write(file_path.as_std_path(), file_content).unwrap();
+        let file_content: Arc<str> = "import { window, commands } from \"vscode\";".into();
+        std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
         let resolver = Tracer::create_resolver(None);
         let package_name = PackageName::from("my-vscode-ext");
@@ -634,12 +666,12 @@ mod test {
         let internal_deps = HashSet::new();
         let implicit_deps = HashMap::new();
         let global_implicit_deps = HashMap::new();
+        let declarations = declarations(&package_json);
 
         let dependency_locations = DependencyLocations {
             package: &package_name,
             internal_dependencies: &internal_deps,
-            package_json: &package_json,
-            unresolved_external_dependencies: None,
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
             implicit_dependencies: &implicit_deps,
             global_implicit_dependencies: &global_implicit_deps,
         };
@@ -650,7 +682,7 @@ mod test {
             ImportType::Value,
             span,
             &file_path,
-            file_content,
+            &file_content,
             dependency_locations,
             &resolver,
         );
@@ -666,8 +698,8 @@ mod test {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
         let file_path = root.join_component("index.ts");
-        let file_content = "import { Ship } from \"ship\";";
-        std::fs::write(file_path.as_std_path(), file_content).unwrap();
+        let file_content: Arc<str> = "import { Ship } from \"ship\";".into();
+        std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
         let resolver = Tracer::create_resolver(None);
         let package_name = PackageName::from("my-app");
@@ -683,12 +715,12 @@ mod test {
         let internal_deps = HashSet::new();
         let implicit_deps = HashMap::new();
         let global_implicit_deps = HashMap::new();
+        let declarations = declarations(&package_json);
 
         let dependency_locations = DependencyLocations {
             package: &package_name,
             internal_dependencies: &internal_deps,
-            package_json: &package_json,
-            unresolved_external_dependencies: None,
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
             implicit_dependencies: &implicit_deps,
             global_implicit_dependencies: &global_implicit_deps,
         };
@@ -699,7 +731,7 @@ mod test {
             ImportType::Value,
             span,
             &file_path,
-            file_content,
+            &file_content,
             dependency_locations,
             &resolver,
         );
@@ -732,8 +764,8 @@ mod test {
         std::fs::write(root.join("utils").join("helper.ts"), "export const x = 1;").unwrap();
 
         // Create the source file
-        let file_content = "import { x } from \"@/utils/helper\";";
-        std::fs::write(root.join("index.ts"), file_content).unwrap();
+        let file_content: Arc<str> = "import { x } from \"@/utils/helper\";".into();
+        std::fs::write(root.join("index.ts"), file_content.as_bytes()).unwrap();
 
         let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
         let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
@@ -749,7 +781,7 @@ mod test {
             package_root,
             span,
             &file_path,
-            file_content,
+            &file_content,
             "@/utils/helper",
         )
         .unwrap();
@@ -793,8 +825,8 @@ mod test {
         .unwrap();
 
         // Create the source file that imports via the alias
-        let file_content = "import { featureA } from \"features/feature-a\";";
-        std::fs::write(root.join("index.ts"), file_content).unwrap();
+        let file_content: Arc<str> = "import { featureA } from \"features/feature-a\";".into();
+        std::fs::write(root.join("index.ts"), file_content.as_bytes()).unwrap();
 
         let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
         let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
@@ -810,7 +842,7 @@ mod test {
             package_root,
             span,
             &file_path,
-            file_content,
+            &file_content,
             "features/feature-a",
         )
         .unwrap();
@@ -856,8 +888,8 @@ mod test {
         std::fs::create_dir_all(root.join("utils")).unwrap();
         std::fs::write(root.join("utils").join("helper.ts"), "export const x = 1;").unwrap();
 
-        let file_content = "import { x } from \"@/utils/helper\";";
-        std::fs::write(root.join("index.ts"), file_content).unwrap();
+        let file_content: Arc<str> = "import { x } from \"@/utils/helper\";".into();
+        std::fs::write(root.join("index.ts"), file_content.as_bytes()).unwrap();
 
         let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
         let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
@@ -873,7 +905,7 @@ mod test {
             package_root,
             span,
             &file_path,
-            file_content,
+            &file_content,
             "@/utils/helper",
         )
         .unwrap();
@@ -920,8 +952,8 @@ mod test {
         )
         .unwrap();
 
-        let file_content = r#"import { x } from "some-pkg";"#;
-        std::fs::write(root.join("index.ts"), file_content).unwrap();
+        let file_content: Arc<str> = r#"import { x } from "some-pkg";"#.into();
+        std::fs::write(root.join("index.ts"), file_content.as_bytes()).unwrap();
 
         let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
         let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
@@ -937,7 +969,7 @@ mod test {
             package_root,
             span,
             &file_path,
-            file_content,
+            &file_content,
             "some-pkg",
         )
         .unwrap();
@@ -973,8 +1005,8 @@ mod test {
         )
         .unwrap();
 
-        let file_content = r#"import { x } from "@shared/utils";"#;
-        std::fs::write(pkg_dir.join("index.ts"), file_content).unwrap();
+        let file_content: Arc<str> = r#"import { x } from "@shared/utils";"#.into();
+        std::fs::write(pkg_dir.join("index.ts"), file_content.as_bytes()).unwrap();
 
         let package_root = AbsoluteSystemPath::new(pkg_dir.to_str().unwrap()).unwrap();
         let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
@@ -990,7 +1022,7 @@ mod test {
             package_root,
             span,
             &file_path,
-            file_content,
+            &file_content,
             "@shared/utils",
         )
         .unwrap();
@@ -1028,8 +1060,8 @@ mod test {
             .expect("create target directory");
         std::fs::write(&target_path, "export const x = 1;").expect("write target file");
 
-        let file_content = format!(r#"import {{ x }} from "{import}";"#);
-        std::fs::write(root.join("index.ts"), &file_content).expect("write source file");
+        let file_content: Arc<str> = format!(r#"import {{ x }} from "{import}";"#).into();
+        std::fs::write(root.join("index.ts"), file_content.as_bytes()).expect("write source file");
 
         let package_root = AbsoluteSystemPath::new(root.to_str().expect("root path is utf-8"))
             .expect("root path is absolute");
@@ -1090,7 +1122,7 @@ mod test {
             "../../../../node_modules/@sveltejs/kit/src/runtime/components/error.svelte",
             &resolved_import_path,
             SourceSpan::new(0.into(), 0),
-            "",
+            &Arc::from(""),
         )
         .expect("check file import");
 
@@ -1120,7 +1152,7 @@ mod test {
             "../docs/utils",
             &resolved_import_path,
             SourceSpan::new(0.into(), 0),
-            "",
+            &Arc::from(""),
         )
         .expect("check file import");
 
@@ -1128,5 +1160,52 @@ mod test {
             matches!(diag, Some(BoundariesDiagnostic::ImportLeavesPackage { .. })),
             "imports resolving outside the package should still be flagged"
         );
+    }
+
+    /// Every diagnostic produced for a file must share the same source
+    /// allocation, so retaining N errors costs one copy of the file, not N.
+    #[test]
+    fn diagnostics_share_file_source() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let file_path = root.join_component("index.ts");
+        let file_content: Arc<str> =
+            "import { a } from \"undeclared-a\"; import { b } from \"undeclared-b\";".into();
+
+        let resolver = Tracer::create_resolver(None);
+        let package_name = PackageName::from("my-app");
+        let package_json = PackageJson::default();
+        let internal_deps = HashSet::new();
+        let implicit_deps = HashMap::new();
+        let global_implicit_deps = HashMap::new();
+        let declarations = declarations(&package_json);
+        let dependency_locations = DependencyLocations {
+            package: &package_name,
+            internal_dependencies: &internal_deps,
+            external_declarations: PackageExternalDeclarations::new(&declarations, "my-app"),
+            implicit_dependencies: &implicit_deps,
+            global_implicit_dependencies: &global_implicit_deps,
+        };
+
+        let mut sources = Vec::new();
+        for import in ["undeclared-a", "undeclared-b"] {
+            if let Some(diag) = check_package_import(
+                import,
+                ImportType::Value,
+                SourceSpan::new(0.into(), 0),
+                &file_path,
+                &file_content,
+                dependency_locations,
+                &resolver,
+            ) {
+                let BoundariesDiagnostic::PackageNotFound { text, .. } = diag else {
+                    panic!("expected PackageNotFound");
+                };
+                sources.push(text);
+            }
+        }
+
+        assert_eq!(sources.len(), 2);
+        assert!(Arc::ptr_eq(sources[0].inner(), sources[1].inner()));
     }
 }

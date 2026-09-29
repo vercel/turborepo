@@ -1,5 +1,5 @@
 import type { PackageManager } from "@turbo/utils";
-import { getAvailablePackageManagers, validateDirectory } from "@turbo/utils";
+import { validateDirectory } from "@turbo/utils";
 import { input, select } from "@inquirer/prompts";
 import type { CreateCommandArgument } from "./types";
 
@@ -26,17 +26,19 @@ export async function directory({ dir }: { dir: CreateCommandArgument }) {
 
 export async function packageManager({
   manager,
-  skipTransforms
+  skipTransforms,
+  availablePackageManagers
 }: {
   manager: CreateCommandArgument;
   skipTransforms?: boolean;
+  /** Detected once by the caller, so the create flow never spawns the
+   * package-manager version checks twice. */
+  availablePackageManagers: Record<PackageManager, string | undefined>;
 }) {
   // if skip transforms is passed, we don't need to ask about the package manager (because that requires a transform)
   if (skipTransforms) {
     return undefined;
   }
-
-  const availablePackageManagers = await getAvailablePackageManagers();
 
   if (manager && availablePackageManagers[manager as PackageManager]) {
     return {

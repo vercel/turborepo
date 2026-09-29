@@ -1,0 +1,1913 @@
+// Run orchestration returns rich, shared errors through 28 production methods.
+// Narrow annotations would duplicate this API-wide decision; revisit error
+// layout separately before changing its size or introducing allocations.
+#![allow(clippy::result_large_err)]
+
+pub mod boundaries;
+pub mod builder;
+pub mod engine_loader;
+mod error;
+pub(crate) mod scope;
+#[cfg(test)]
+mod task_definition_test;
+
+use std::{
+    collections::{BTreeMap, HashSet},
+    future::Future,
+    io::{self, IsTerminal, Write},
+    process::Command,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::Duration,
+};
+
+use chrono::{DateTime, Local};
+use itertools::Itertools;
+use shared_child::SharedChild;
+use tokio::{pin, select, task::JoinHandle};
+use tracing::{debug, error, info, instrument, warn};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_api_client::APIAuth;
+
+#[derive(Clone)]
+pub struct RunBuilderInput {
+    pub repo_root: AbsoluteSystemPathBuf,
+    pub color_config: ColorConfig,
+    pub opts: Opts,
+    pub version: &'static str,
+    pub api_auth: Option<APIAuth>,
+}
+
+use turborepo_ci::Vendor;
+use turborepo_engine::{Built, Engine};
+use turborepo_env::EnvironmentVariableMap;
+use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
+use turborepo_microfrontends_proxy::ProxyServer;
+use turborepo_process::ProcessManager;
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
+pub use turborepo_run_cache::RunCache;
+use turborepo_run_context::RepoContext;
+use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
+use turborepo_run_summary::{ObservabilityHandle, RunTracker};
+use turborepo_scm::{RepoGitIndex, SCM};
+use turborepo_signals::{ShutdownReason, SignalHandler};
+use turborepo_task_access::TaskAccess;
+use turborepo_task_graph::Visitor;
+use turborepo_task_hash::{
+    GlobalHashableInputs, PackageInputsHashes, collect_global_file_hash_inputs,
+    compute_external_deps_hashes, get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY,
+};
+use turborepo_telemetry::events::generic::GenericEventBuilder;
+use turborepo_turbo_json::TurboJson;
+use turborepo_types::{EnvMode, TaskDefinition, UIMode};
+use turborepo_ui::{ColorConfig, LIGHT_GREY, TerminalSink, sender::UISender, tui, tui::TuiSender};
+
+pub use crate::error::Error;
+
+/// Whether the `• turbo <version>` line should be shown. Disabled in CI and
+/// when `TURBO_PRINT_VERSION_DISABLED` is `1` or `true`.
+pub fn should_print_version() -> bool {
+    let disabled = std::env::var("TURBO_PRINT_VERSION_DISABLED")
+        .is_ok_and(|var| matches!(var.as_str(), "1" | "true"));
+    !disabled && !turborepo_ci::is_ci()
+}
+
+/// Live status of the remote cache, determined by a preflight API check
+/// that runs concurrently with graph building.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RemoteCacheUnavailableReason {
+    CouldNotConnect,
+    UsageLimitExceeded,
+    SpendingPaused,
+    DisabledForTeam,
+    AuthenticationFailed,
+    UnexpectedServerError,
+}
+
+/// Resolved remote cache status for the run prelude display.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RemoteCacheStatus {
+    Disabled(RemoteCacheDisabledReason),
+    Enabled,
+    Unavailable(RemoteCacheUnavailableReason),
+}
+
+/// A repo index whose untracked-file scan may still be running in the
+/// background. Holding this instead of the finished index lets `Run`
+/// construction complete without waiting for the scan; consumers await
+/// [`PendingRepoIndex::get`] at their barrier point and share the result.
+///
+/// A scan task that fails to join (panic/cancellation) resolves to `None`:
+/// every consumer treats the index as an optimization and has a slower
+/// index-free fallback.
+#[derive(Clone)]
+pub struct PendingRepoIndex {
+    index: futures::future::Shared<futures::future::BoxFuture<'static, Arc<Option<RepoGitIndex>>>>,
+}
+
+impl PendingRepoIndex {
+    pub(crate) fn new(task: tokio::task::JoinHandle<Option<RepoGitIndex>>) -> Self {
+        use futures::FutureExt;
+        Self {
+            index: async move {
+                Arc::new(task.await.unwrap_or_else(|e| {
+                    tracing::debug!("repo index task failed to join: {e}");
+                    None
+                }))
+            }
+            .boxed()
+            .shared(),
+        }
+    }
+
+    pub(crate) async fn get(&self) -> Arc<Option<RepoGitIndex>> {
+        self.index.clone().await
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ExecutionContext {
+    pub(crate) start_at: DateTime<Local>,
+    pub(crate) opts: Arc<Opts>,
+    pub(crate) env_at_execution_start: EnvironmentVariableMap,
+    pub(crate) filtered_pkgs: HashSet<PackageName>,
+    pub(crate) remote_cache_status: RemoteCacheStatus,
+    pub(crate) engine: Arc<Engine<Built, TaskDefinition>>,
+    pub(crate) task_access: TaskAccess,
+    pub(crate) micro_frontend_configs: Option<MicrofrontendsConfigs>,
+}
+
+#[derive(Clone)]
+pub(crate) struct RunServices {
+    pub(crate) processes: ProcessManager,
+    pub(crate) run_telemetry: GenericEventBuilder,
+    // Auth is used to configure cache and analytics during build; retain the
+    // run-owned value until its lifecycle/telemetry contract is reviewed.
+    #[allow(dead_code)]
+    pub(crate) api_auth: Option<APIAuth>,
+    pub(crate) run_cache: Arc<RunCache>,
+    pub(crate) signal_handler: SignalHandler,
+    pub(crate) repo_index: PendingRepoIndex,
+    pub(crate) observability_handle: Option<ObservabilityHandle>,
+    // CLI and watch pass this in; keep it alive for the duration of the run
+    // until query-server ownership and shutdown behavior are reviewed.
+    #[allow(dead_code)]
+    pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+    pub(crate) shutdown_started_emitted: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
+pub struct Run {
+    repo: Arc<RepoContext>,
+    execution: ExecutionContext,
+    services: RunServices,
+}
+
+// The join handle covers the render thread plus its sink-restoring
+// watchdog; render errors are logged there, not surfaced to the caller.
+type UIResult<T> = Result<Option<(T, JoinHandle<()>)>, Error>;
+
+type TuiResult = UIResult<TuiSender>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ForceShutdownReason {
+    Signal,
+    Timeout,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CacheShutdownOutcome {
+    Complete,
+    ForcedShutdown,
+}
+
+const SLOW_SHUTDOWN_STATUS_INTERVAL: Duration = Duration::from_secs(2);
+
+fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (String, bool) {
+    match status {
+        RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+        RemoteCacheStatus::Disabled(reason) => {
+            let msg = match reason {
+                RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
+                RemoteCacheDisabledReason::TokenWithoutTeam => {
+                    "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
+                }
+                RemoteCacheDisabledReason::InConfig => {
+                    "Remote caching disabled (in configuration)".to_string()
+                }
+                RemoteCacheDisabledReason::ByFlags => {
+                    "Remote caching disabled (by flags)".to_string()
+                }
+                RemoteCacheDisabledReason::RequestedWithoutCredentials => {
+                    "Remote caching disabled (remote cache requested \u{2014} set TURBO_TOKEN and \
+                     TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                        .to_string()
+                }
+            };
+            (msg, false)
+        }
+        RemoteCacheStatus::Unavailable(reason) => {
+            let msg = match reason {
+                RemoteCacheUnavailableReason::CouldNotConnect => {
+                    format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
+                }
+                RemoteCacheUnavailableReason::AuthenticationFailed => {
+                    "Remote caching unavailable (Authentication failed \u{2014} check TURBO_TOKEN \
+                     or run \"turbo login\")"
+                        .to_string()
+                }
+                RemoteCacheUnavailableReason::UsageLimitExceeded => {
+                    "Remote caching unavailable (Usage limit exceeded)".to_string()
+                }
+                RemoteCacheUnavailableReason::SpendingPaused => {
+                    "Remote caching unavailable (Spending paused)".to_string()
+                }
+                RemoteCacheUnavailableReason::DisabledForTeam => {
+                    "Remote caching unavailable (Disabled for this team)".to_string()
+                }
+                RemoteCacheUnavailableReason::UnexpectedServerError => {
+                    format!("Remote caching unavailable (Unexpected server error at \"{api_url}\")")
+                }
+            };
+            (msg, true)
+        }
+    }
+}
+
+impl Run {
+    fn shutdown_started_message(force_shutdown_timeout: Option<Duration>) -> String {
+        #[cfg(windows)]
+        let message = {
+            let _ = force_shutdown_timeout;
+            "Shutting down Turborepo tasks..."
+        };
+
+        #[cfg(not(windows))]
+        let message = match force_shutdown_timeout {
+            Some(_) => "Shutting down Turborepo tasks...",
+            None => " - Shutting down Turborepo tasks...Press CTRL+C again to exit forcefully.",
+        };
+
+        LIGHT_GREY.apply_to(message).to_string()
+    }
+
+    pub fn force_shutdown_timeout() -> Option<Duration> {
+        (!std::io::stdin().is_terminal()).then_some(Duration::from_secs(10))
+    }
+
+    fn emit_shutdown_started(force_shutdown_timeout: Option<Duration>) {
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            Self::shutdown_started_message(force_shutdown_timeout),
+        )
+        .emit();
+    }
+
+    fn emit_shutdown_started_once(
+        shutdown_started_emitted: &AtomicBool,
+        force_shutdown_timeout: Option<Duration>,
+    ) {
+        if shutdown_started_emitted
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            Self::emit_shutdown_started(force_shutdown_timeout);
+        }
+    }
+
+    pub fn emit_shutdown_started_once_for_run(&self, force_shutdown_timeout: Option<Duration>) {
+        Self::emit_shutdown_started_once(
+            self.services.shutdown_started_emitted.as_ref(),
+            force_shutdown_timeout,
+        );
+    }
+
+    fn emit_shutdown_status(task_names: &[String]) {
+        if task_names.is_empty() {
+            return;
+        }
+
+        let task_description = match task_names.len() {
+            1 => "1 task".to_string(),
+            count => format!("{count} tasks"),
+        };
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            LIGHT_GREY
+                .apply_to(format!("{task_description} shutting down..."))
+                .to_string(),
+        )
+        .emit();
+    }
+
+    fn emit_force_shutdown_message(
+        reason: ForceShutdownReason,
+        is_interactive: bool,
+        task_names: &[String],
+    ) {
+        let message = match (reason, task_names.is_empty()) {
+            (ForceShutdownReason::Signal, false) if is_interactive => {
+                format!(" - Force killed Turborepo tasks: {}", task_names.join(", "))
+            }
+            (ForceShutdownReason::Signal, false) => {
+                format!("Force killed Turborepo tasks: {}", task_names.join(", "))
+            }
+            (ForceShutdownReason::Timeout, false) => format!(
+                "Graceful shutdown timed out. Force killed Turborepo tasks: {}",
+                task_names.join(", ")
+            ),
+            (ForceShutdownReason::Signal, true) if is_interactive => {
+                " - Force killed remaining Turborepo tasks...".to_string()
+            }
+            (ForceShutdownReason::Signal, true) => {
+                "Force killed remaining Turborepo tasks...".to_string()
+            }
+            (ForceShutdownReason::Timeout, true) => {
+                "Graceful shutdown timed out. Force killed remaining Turborepo tasks...".to_string()
+            }
+        };
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            LIGHT_GREY.apply_to(message).to_string(),
+        )
+        .emit();
+    }
+
+    async fn wait_for_forced_shutdown(
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+    ) -> ForceShutdownReason {
+        let signal = async move {
+            let Some(mut signals) = signals else {
+                std::future::pending::<()>().await;
+                return;
+            };
+
+            loop {
+                if *signals.borrow_and_update() > 1 {
+                    return;
+                }
+                if signals.changed().await.is_err() {
+                    std::future::pending::<()>().await;
+                }
+            }
+        };
+        pin!(signal);
+
+        match force_shutdown_timeout {
+            Some(timeout) => {
+                select! {
+                    _ = tokio::time::sleep(timeout) => ForceShutdownReason::Timeout,
+                    _ = &mut signal => ForceShutdownReason::Signal,
+                }
+            }
+            None => {
+                signal.await;
+                ForceShutdownReason::Signal
+            }
+        }
+    }
+
+    async fn wait_for_cache_shutdown<FClosed, FProgress>(
+        shutdown_reason: Option<ShutdownReason>,
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+        closed: FClosed,
+        progress: FProgress,
+    ) -> CacheShutdownOutcome
+    where
+        FClosed: Future<Output = ()> + Send,
+        FProgress: Future<Output = ()> + Send,
+    {
+        if shutdown_reason == Some(ShutdownReason::Signal) {
+            select! {
+                _ = closed => CacheShutdownOutcome::Complete,
+                _ = progress => CacheShutdownOutcome::Complete,
+                _ = Self::wait_for_forced_shutdown(force_shutdown_timeout, signals) => {
+                    CacheShutdownOutcome::ForcedShutdown
+                }
+            }
+        } else {
+            select! {
+                _ = closed => CacheShutdownOutcome::Complete,
+                _ = progress => CacheShutdownOutcome::Complete,
+            }
+        }
+    }
+
+    async fn wait_for_process_manager_shutdown<F>(
+        process_manager: ProcessManager,
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+        graceful_shutdown: F,
+    ) where
+        F: Future<Output = ()> + Send,
+    {
+        let is_interactive = force_shutdown_timeout.is_none();
+        let mut shutdown_status = tokio::time::interval_at(
+            tokio::time::Instant::now() + SLOW_SHUTDOWN_STATUS_INTERVAL,
+            SLOW_SHUTDOWN_STATUS_INTERVAL,
+        );
+        shutdown_status.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let force_shutdown = Self::wait_for_forced_shutdown(force_shutdown_timeout, signals);
+        pin!(graceful_shutdown, force_shutdown);
+
+        loop {
+            select! {
+                _ = &mut graceful_shutdown => break,
+                _ = shutdown_status.tick() => {
+                    let tasks = process_manager.running_task_ids();
+                    Self::emit_shutdown_status(&tasks);
+                }
+                reason = &mut force_shutdown => {
+                    let tasks = process_manager.running_task_ids();
+                    Self::emit_force_shutdown_message(reason, is_interactive, &tasks);
+                    process_manager.kill_all().await;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Emit run prelude through `turborepo_log`. In stream mode,
+    /// `TerminalSink` writes these to stdout; in TUI mode, `TuiSink`
+    /// captures them for the log panel.
+    pub fn emit_run_prelude_logs(&self) {
+        let pad = "   ";
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            "",
+        )
+        .emit();
+
+        if should_print_version() {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• turbo {}", self.repo.version),
+            )
+            .emit();
+        }
+
+        let targets_list = self.execution.opts.run_opts.tasks.join(", ");
+        if self.execution.opts.run_opts.single_package {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• Running {targets_list}"),
+            )
+            .emit();
+        } else {
+            let mut packages = self
+                .execution
+                .filtered_pkgs
+                .iter()
+                .map(|workspace_name| workspace_name.to_string())
+                .collect::<Vec<String>>();
+            packages.sort();
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• Packages in scope: {}", packages.join(", ")),
+            )
+            .emit();
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!(
+                    "{pad}• Running {targets_list} in {package_count} {package_label}",
+                    package_count = self.execution.filtered_pkgs.len(),
+                    package_label = if self.execution.filtered_pkgs.len() == 1 {
+                        "package"
+                    } else {
+                        "packages"
+                    }
+                ),
+            )
+            .emit();
+        }
+
+        let (base_msg, is_warning) = remote_cache_status_message(
+            self.execution.remote_cache_status,
+            &self.execution.opts.api_client_opts.api_url,
+        );
+
+        let cache_status = if self.execution.opts.run_opts.is_shared_worktree_cache {
+            format!("{pad}• {base_msg}, using shared worktree cache")
+        } else {
+            format!("{pad}• {base_msg}")
+        };
+
+        if is_warning {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                cache_status,
+            )
+            .emit();
+        } else {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                cache_status,
+            )
+            .emit();
+        }
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            "",
+        )
+        .emit();
+    }
+
+    pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
+        &self.repo.turbo_json_loader
+    }
+
+    pub fn opts(&self) -> &Opts {
+        &self.execution.opts
+    }
+
+    pub fn repo_root(&self) -> &AbsoluteSystemPath {
+        &self.repo.repo_root
+    }
+
+    pub fn scm(&self) -> &SCM {
+        &self.repo.scm
+    }
+
+    pub fn root_turbo_json(&self) -> &TurboJson {
+        &self.repo.root_turbo_json
+    }
+
+    // Produces the transitive closure of the filtered packages,
+    // i.e. the packages relevant for this run.
+    #[instrument(skip(self), ret)]
+    pub fn get_relevant_packages(&self) -> HashSet<PackageName> {
+        let packages: Vec<_> = self
+            .execution
+            .filtered_pkgs
+            .iter()
+            .map(|pkg| PackageNode::Workspace(pkg.clone()))
+            .collect();
+        self.pkg_dep_graph()
+            .transitive_closure(&packages)
+            .into_iter()
+            .filter_map(|node| match node {
+                PackageNode::Root => None,
+                PackageNode::Workspace(pkg) => Some(pkg.clone()),
+            })
+            .collect()
+    }
+
+    // Produces a map of tasks to the packages where they're defined.
+    // Used to print a list of potential tasks to run. Obeys the `--filter` flag
+    pub fn get_potential_tasks(&self) -> Result<BTreeMap<String, Vec<String>>, Error> {
+        let mut tasks = BTreeMap::new();
+        for context in self.pkg_dep_graph().package_task_contexts() {
+            let name = context.package();
+            if !self.execution.filtered_pkgs.contains(name) {
+                continue;
+            }
+            // Authored scripts and registered native tasks both come from the
+            // native-task catalog produced at repository construction.
+            for native_task in context.native_tasks().tasks() {
+                if !native_task.participates() && !native_task.registered() {
+                    continue;
+                }
+                tasks
+                    .entry(native_task.name().to_string())
+                    .or_insert_with(Vec::new)
+                    .push(name.to_string());
+            }
+        }
+
+        Ok(tasks)
+    }
+
+    pub fn pkg_dep_graph(&self) -> &PackageGraph {
+        &self.repo.pkg_dep_graph
+    }
+
+    /// The package graph as a shared handle so watch-mode partial reruns can
+    /// reuse it when no graph-defining file (manifests, lockfile, workspace
+    /// configuration) changed between runs.
+    pub fn pkg_dep_graph_handle(&self) -> Arc<PackageGraph> {
+        self.repo.pkg_dep_graph.clone()
+    }
+
+    pub fn engine(&self) -> &Engine<Built, TaskDefinition> {
+        &self.execution.engine
+    }
+
+    pub fn filtered_pkgs(&self) -> &HashSet<PackageName> {
+        &self.execution.filtered_pkgs
+    }
+
+    pub fn color_config(&self) -> ColorConfig {
+        self.repo.color_config
+    }
+
+    pub fn has_tui(&self) -> bool {
+        self.execution.opts.run_opts.ui_mode.use_tui()
+    }
+
+    pub fn should_start_ui(&self) -> Result<bool, Error> {
+        Ok(self.execution.opts.run_opts.ui_mode.use_tui()
+            && self.execution.opts.run_opts.dry_run.is_none()
+            && tui::terminal_big_enough()?)
+    }
+
+    pub fn start_ui(self: &Arc<Self>, terminal_sink: Arc<TerminalSink>) -> UIResult<UISender> {
+        match self.execution.opts.run_opts.ui_mode {
+            UIMode::Tui => self
+                .start_terminal_ui(terminal_sink)
+                .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
+            UIMode::Stream | UIMode::StreamWithTimestamps => Ok(None),
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn start_terminal_ui(&self, terminal_sink: Arc<TerminalSink>) -> TuiResult {
+        if !self.should_start_ui()? {
+            return Ok(None);
+        }
+
+        let task_names = self
+            .execution
+            .engine
+            .tasks_with_command(self.pkg_dep_graph());
+        // If there aren't any tasks to run, then shouldn't start the UI
+        if task_names.is_empty() {
+            return Ok(None);
+        }
+
+        let (sender, receiver) = TuiSender::new();
+        let color_config = self.color_config();
+        let scrollback_len = self.execution.opts.tui_opts.scrollback_length;
+        let repo_root = self.repo_root().to_owned();
+        let signal_handler = self.services.signal_handler.clone();
+        let interrupt = Arc::new(move || signal_handler.notify_signal());
+        let handle = tui::spawn_run_app(
+            task_names,
+            receiver,
+            color_config,
+            repo_root,
+            scrollback_len,
+            Some(interrupt),
+            terminal_sink.clone(),
+        )?;
+
+        // The terminal sink is disabled while the TUI owns the screen.
+        // Whatever ends the render thread — normal shutdown, a render
+        // error, a panic — output must return to the stream sink
+        // immediately: a mid-run TUI death would otherwise leave the rest
+        // of the run executing in silence, with every task's output
+        // dropped. Task output must always have a live sink.
+        let handle = tokio::spawn(async move {
+            match handle.await {
+                Ok(Err(e)) => tracing::error!("error encountered rendering tui: {e}"),
+                Err(e) => tracing::error!("render thread panicked: {e}"),
+                Ok(Ok(())) => {}
+            }
+            terminal_sink.enable();
+        });
+
+        Ok(Some((sender, handle)))
+    }
+
+    /// Returns a handle that can be used to stop a run
+    pub fn stopper(&self) -> RunStopper {
+        RunStopper {
+            manager: self.services.processes.clone(),
+            run_cache: self.services.run_cache.clone(),
+            skip_cache_writes: self.execution.opts.cache_opts.cache.skip_writes(),
+        }
+    }
+
+    async fn start_proxy_if_needed(
+        &self,
+        register_shutdown_handler: bool,
+    ) -> Result<
+        Option<(
+            tokio::sync::broadcast::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+        Error,
+    > {
+        let Some(mfe_configs) = &self.execution.micro_frontend_configs else {
+            return Ok(None);
+        };
+
+        if !mfe_configs.should_use_turborepo_proxy()
+            || !mfe_configs.has_dev_task(self.execution.engine.task_ids())
+        {
+            return Ok(None);
+        }
+
+        info!("Starting Turborepo microfrontends proxy");
+
+        let config = self.load_proxy_config(mfe_configs).await?;
+        let (mut server, shutdown_handle) = self.start_proxy_server(config).await?;
+
+        let signal_handler_complete_rx = self.setup_shutdown_handlers(
+            &mut server,
+            shutdown_handle.clone(),
+            register_shutdown_handler,
+        );
+
+        tokio::spawn(async move {
+            if let Err(e) = server.run().await {
+                error!("Turborepo proxy error: {}", e);
+            }
+        });
+
+        info!("Turborepo proxy started successfully");
+        Ok(Some((shutdown_handle, signal_handler_complete_rx)))
+    }
+
+    async fn load_proxy_config(
+        &self,
+        mfe_configs: &MicrofrontendsConfigs,
+    ) -> Result<turborepo_microfrontends::Config, Error> {
+        let config_path = mfe_configs
+            .configs()
+            .sorted_by(|(a, _), (b, _)| a.cmp(b))
+            .find_map(|(pkg, _tasks)| mfe_configs.config_filename(pkg));
+
+        let Some(config_path) = config_path else {
+            return Err(Error::Proxy(
+                "No microfrontends config file found".to_string(),
+            ));
+        };
+
+        let full_path = self.repo_root().join_unix_path(config_path);
+        let contents = std::fs::read_to_string(&full_path).map_err(|e| {
+            Error::Proxy(format!("Failed to read microfrontends config file: {}", e))
+        })?;
+
+        let config = turborepo_microfrontends::TurborepoMfeConfig::from_str(
+            &contents,
+            full_path.as_str(),
+        )
+        .map_err(|e| Error::Proxy(format!("Failed to parse microfrontends config: {}", e)))?;
+
+        Ok(config.into_config())
+    }
+
+    async fn start_proxy_server(
+        &self,
+        config: turborepo_microfrontends::Config,
+    ) -> Result<(ProxyServer, tokio::sync::broadcast::Sender<()>), Error> {
+        let server = ProxyServer::new(config)
+            .map_err(|e| Error::Proxy(format!("Failed to create Turborepo proxy: {}", e)))?;
+
+        if !server.check_port_available().await {
+            return Err(Error::Proxy("Port is not available.".to_string()));
+        }
+
+        let shutdown_handle = server.shutdown_handle();
+        Ok((server, shutdown_handle))
+    }
+
+    fn setup_shutdown_handlers(
+        &self,
+        server: &mut ProxyServer,
+        shutdown_handle: tokio::sync::broadcast::Sender<()>,
+        register_signal_handler: bool,
+    ) -> tokio::sync::oneshot::Receiver<()> {
+        let (proxy_shutdown_complete_tx, proxy_shutdown_complete_rx) =
+            tokio::sync::oneshot::channel();
+        let (cleanup_complete_tx, cleanup_complete_rx) = tokio::sync::oneshot::channel();
+        let (signal_handler_complete_tx, signal_handler_complete_rx) = register_signal_handler
+            .then(tokio::sync::oneshot::channel)
+            .map(|(tx, rx)| (Some(tx), Some(rx)))
+            .unwrap_or((None, None));
+
+        server.set_shutdown_complete_tx(proxy_shutdown_complete_tx);
+
+        tokio::spawn(async move {
+            if proxy_shutdown_complete_rx.await.is_ok() {
+                let _ = cleanup_complete_tx.send(());
+                if let Some(signal_handler_complete_tx) = signal_handler_complete_tx {
+                    let _ = signal_handler_complete_tx.send(());
+                }
+            }
+        });
+
+        if let Some(signal_handler_complete_rx) = signal_handler_complete_rx {
+            self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
+        }
+
+        cleanup_complete_rx
+    }
+
+    fn register_proxy_signal_handler(
+        &self,
+        shutdown_handle: tokio::sync::broadcast::Sender<()>,
+        shutdown_complete_rx: tokio::sync::oneshot::Receiver<()>,
+    ) {
+        if let Some(subscriber) = self.services.signal_handler.subscribe() {
+            let signal_handler = self.services.signal_handler.clone();
+            let process_manager = self.services.processes.clone();
+            let force_shutdown_timeout = Self::force_shutdown_timeout();
+            let shutdown_started_emitted = self.services.shutdown_started_emitted.clone();
+            tokio::spawn(async move {
+                info!("Proxy signal handler registered and waiting");
+                let Ok(_guard) = subscriber.listen().await else {
+                    debug!("proxy signal handler exited before notifying subscriber");
+                    return;
+                };
+
+                let shutdown_reason = signal_handler.shutdown_reason();
+
+                if shutdown_reason != Some(ShutdownReason::Signal) {
+                    let _ = shutdown_handle.send(());
+                    let _ = tokio::time::timeout(Duration::from_millis(1000), shutdown_complete_rx)
+                        .await;
+                    process_manager.stop().await;
+                    debug!("Child processes stopped");
+                    return;
+                }
+
+                Self::emit_shutdown_started_once(
+                    shutdown_started_emitted.as_ref(),
+                    force_shutdown_timeout,
+                );
+
+                let graceful_process_manager = process_manager.clone();
+                let graceful_shutdown = async move {
+                    info!("Signal received! Shutting down proxy BEFORE process manager stops");
+                    let _ = shutdown_handle.send(());
+                    debug!(
+                        "Proxy shutdown signal sent, waiting for shutdown completion notification"
+                    );
+
+                    match tokio::time::timeout(
+                        tokio::time::Duration::from_millis(1000),
+                        shutdown_complete_rx,
+                    )
+                    .await
+                    {
+                        Ok(Ok(())) => {
+                            info!("Proxy websocket close complete, now stopping child processes");
+                        }
+                        Ok(Err(_)) => {
+                            warn!("Proxy shutdown notification channel closed unexpectedly");
+                        }
+                        Err(_) => {
+                            info!("Proxy shutdown notification timed out after 1000 milliseconds");
+                        }
+                    }
+
+                    graceful_process_manager.shutdown(None).await;
+                };
+                Self::wait_for_process_manager_shutdown(
+                    process_manager.clone(),
+                    force_shutdown_timeout,
+                    Some(signal_handler.subscribe_signals()),
+                    graceful_shutdown,
+                )
+                .await;
+
+                debug!("Child processes stopped");
+            });
+        } else {
+            warn!("Could not subscribe to signal handler for proxy shutdown");
+        }
+    }
+
+    fn setup_cache_shutdown_handler(&self) {
+        let skip_cache_writes = self.execution.opts.cache_opts.cache.skip_writes();
+        if skip_cache_writes {
+            return;
+        }
+
+        let Some(subscriber) = self.services.signal_handler.subscribe() else {
+            return;
+        };
+
+        let run_cache = self.services.run_cache.clone();
+        let signal_handler = self.services.signal_handler.clone();
+        let force_shutdown_timeout = Self::force_shutdown_timeout();
+        let shutdown_started_emitted = self.services.shutdown_started_emitted.clone();
+        let use_tui = self.execution.opts.run_opts.ui_mode.use_tui();
+        tokio::spawn(async move {
+            let Ok(_guard) = subscriber.listen().await else {
+                tracing::debug!(
+                    "signal handler exited before cache shutdown subscriber was notified"
+                );
+                return;
+            };
+            let shutdown_reason = signal_handler.shutdown_reason();
+
+            if shutdown_reason == Some(ShutdownReason::Signal) {
+                Self::emit_shutdown_started_once(
+                    shutdown_started_emitted.as_ref(),
+                    force_shutdown_timeout,
+                );
+            }
+
+            let spinner =
+                (!use_tui).then(|| turborepo_ui::start_spinner("...Finishing writing to cache..."));
+            if use_tui {
+                turborepo_log::info(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                    "Finishing writing to cache...",
+                )
+                .emit();
+            }
+
+            if let Ok((status, closed)) = run_cache.shutdown_cache().await {
+                let fut = async {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+                        let (bytes_per_second, bytes_uploaded, bytes_total) = {
+                            let status = status
+                                .lock()
+                                .unwrap_or_else(|poisoned| poisoned.into_inner());
+                            let total_bps: f64 =
+                                status.values().filter_map(|task| task.average_bps()).sum();
+                            let bytes_uploaded: usize =
+                                status.values().filter_map(|task| task.bytes()).sum();
+                            let bytes_total: usize = status
+                                .iter()
+                                .filter(|(_hash, task)| !task.done())
+                                .filter_map(|(_hash, task)| task.size())
+                                .sum();
+                            (total_bps, bytes_uploaded, bytes_total)
+                        };
+
+                        if bytes_total == 0 {
+                            continue;
+                        }
+
+                        let mut formatter = human_format::Formatter::new();
+                        let formatter = formatter.with_decimals(2).with_separator("");
+                        let bytes_per_second = formatter.with_units("B/s").format(bytes_per_second);
+                        let bytes_remaining = formatter
+                            .with_units("B")
+                            .format(bytes_total.saturating_sub(bytes_uploaded) as f64);
+
+                        if let Some(spinner) = spinner.as_ref() {
+                            spinner.set_message(format!(
+                                "...Finishing writing to cache... ({bytes_remaining} remaining, \
+                                 {bytes_per_second})"
+                            ));
+                        }
+                    }
+                };
+
+                if Self::wait_for_cache_shutdown(
+                    shutdown_reason,
+                    force_shutdown_timeout,
+                    Some(signal_handler.subscribe_signals()),
+                    async {
+                        let _ = closed.await;
+                    },
+                    fut,
+                )
+                .await
+                    == CacheShutdownOutcome::ForcedShutdown
+                {
+                    tracing::debug!("received force shutdown while flushing cache, exiting");
+                }
+            } else {
+                tracing::warn!("could not start shutdown, exiting");
+            }
+            if let Some(spinner) = spinner {
+                spinner.finish_and_clear();
+            }
+        });
+    }
+
+    fn setup_process_manager_shutdown_handler(&self) {
+        let Some(subscriber) = self.services.signal_handler.subscribe() else {
+            return;
+        };
+
+        let signal_handler = self.services.signal_handler.clone();
+        let process_manager = self.services.processes.clone();
+        let force_shutdown_timeout = Self::force_shutdown_timeout();
+        let shutdown_started_emitted = self.services.shutdown_started_emitted.clone();
+        tokio::spawn(async move {
+            let Ok(_guard) = subscriber.listen().await else {
+                debug!("signal handler exited before process manager subscriber was notified");
+                return;
+            };
+            let shutdown_reason = signal_handler.shutdown_reason();
+
+            if shutdown_reason != Some(ShutdownReason::Signal) {
+                process_manager.stop().await;
+                debug!("Child processes stopped");
+                return;
+            }
+
+            Self::emit_shutdown_started_once(
+                shutdown_started_emitted.as_ref(),
+                force_shutdown_timeout,
+            );
+            debug!("Signal received, stopping child processes");
+            let graceful_process_manager = process_manager.clone();
+            let graceful_shutdown = async move {
+                graceful_process_manager.shutdown(None).await;
+            };
+            Self::wait_for_process_manager_shutdown(
+                process_manager.clone(),
+                force_shutdown_timeout,
+                Some(signal_handler.subscribe_signals()),
+                graceful_shutdown,
+            )
+            .await;
+
+            debug!("Child processes stopped");
+        });
+    }
+
+    async fn cleanup_proxy(
+        &self,
+        proxy_shutdown: Option<(
+            tokio::sync::broadcast::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+    ) {
+        let Some((shutdown_tx, shutdown_complete_rx)) = proxy_shutdown else {
+            return;
+        };
+
+        info!("Shutting down Turborepo proxy gracefully BEFORE stopping child processes");
+        let _ = shutdown_tx.send(());
+        debug!("Sent shutdown signal to proxy, waiting for completion signal");
+
+        match tokio::time::timeout(tokio::time::Duration::from_secs(2), shutdown_complete_rx).await
+        {
+            Ok(Ok(())) => {
+                info!("Proxy shutdown completed successfully");
+            }
+            Ok(Err(_)) => {
+                warn!("Proxy shutdown channel closed unexpectedly");
+            }
+            Err(_) => {
+                warn!("Proxy shutdown timed out after 2 seconds");
+            }
+        }
+
+        info!("Proxy shutdown complete, proceeding with visitor cleanup");
+    }
+
+    #[instrument(skip_all)]
+    async fn execute_visitor(
+        &self,
+        ui_sender: Option<UISender>,
+        is_watch: bool,
+        proxy_shutdown: Option<(
+            tokio::sync::broadcast::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+    ) -> Result<i32, Error> {
+        // Barrier for the untracked-file scan: file hashing below needs the
+        // complete index. Nothing executes before this resolves, so hash
+        // error semantics are unchanged from when `Run` construction waited.
+        let repo_index_arc = {
+            use tracing::Instrument;
+            self.services
+                .repo_index
+                .get()
+                .instrument(tracing::info_span!("repo_index_untracked_await"))
+                .await
+        };
+        let repo_index = repo_index_arc.as_ref().as_ref();
+
+        self.pkg_dep_graph()
+            .package_task_context(&PackageName::Root)
+            .ok_or(Error::MissingRootWorkspace)?;
+
+        let is_monorepo = !self.execution.opts.run_opts.single_package;
+
+        // Run four expensive operations concurrently using rayon::scope:
+        // 1. Package file hashing - walks every package's files and computes hashes
+        // 2. Internal deps hashing - walks root internal dependency packages
+        // 3. Global file hash inputs - globwalks global deps and hashes them
+        // 4. External deps hashing - hashes every package's transitive lockfile
+        //    dependencies (consumed later by the task hasher)
+        //
+        // These are completely independent and dominate the pre-execution phase.
+        // Running them in parallel can significantly reduce wall-clock time.
+        let internal_dep_paths = is_monorepo.then(|| {
+            self.pkg_dep_graph()
+                .root_internal_package_dependencies_paths()
+        });
+
+        let env_mode = self.execution.opts.run_opts.env_mode;
+
+        let mut file_hash_result = None;
+        let mut internal_deps_result = None;
+        let mut global_file_result = None;
+        let mut external_deps_hashes = None;
+
+        let _hash_scope_span = tracing::info_span!("hash_scope").entered();
+        turborepo_rayon_compat::block_in_place(|| {
+            rayon::scope(|s| {
+                s.spawn(|_| {
+                    let _span = tracing::info_span!("calculate_file_hashes_task").entered();
+                    let needs_expanded = self.execution.opts.run_opts.dry_run.is_some()
+                        || self.execution.opts.run_opts.summarize
+                        || self.services.observability_handle.is_some();
+                    file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
+                        self.scm(),
+                        self.execution.engine.tasks(),
+                        self.pkg_dep_graph(),
+                        self.execution.engine.task_definitions(),
+                        self.repo_root(),
+                        repo_index,
+                        needs_expanded,
+                    ));
+                });
+                s.spawn(|_| {
+                    let _span = tracing::info_span!("get_internal_deps_hash_task").entered();
+                    internal_deps_result = Some(
+                        internal_dep_paths
+                            .map(|dep_paths| {
+                                get_internal_deps_hash(
+                                    self.scm(),
+                                    self.repo_root(),
+                                    dep_paths,
+                                    repo_index,
+                                )
+                            })
+                            .transpose(),
+                    );
+                });
+                s.spawn(|_| {
+                    let _span =
+                        tracing::info_span!("collect_global_file_hash_inputs_task").entered();
+                    let resolution_file_fallback = self
+                        .pkg_dep_graph()
+                        .external_resolution_fallback_inputs()
+                        .unwrap_or_default();
+                    let root_engines = self.pkg_dep_graph().root_engines();
+                    let root_engines = (!root_engines.is_empty()).then_some(root_engines);
+                    global_file_result = Some(collect_global_file_hash_inputs(
+                        root_engines,
+                        self.repo_root(),
+                        self.pkg_dep_graph().package_manager(),
+                        &resolution_file_fallback,
+                        self.root_turbo_json().global_deps_for_hash(),
+                        &self.execution.env_at_execution_start,
+                        &self.root_turbo_json().global_env,
+                        self.scm(),
+                    ));
+                });
+                if is_monorepo {
+                    s.spawn(|_| {
+                        let _span =
+                            tracing::info_span!("compute_external_deps_hashes_task").entered();
+                        external_deps_hashes =
+                            Some(compute_external_deps_hashes(self.pkg_dep_graph()));
+                    });
+                }
+            });
+        });
+
+        drop(_hash_scope_span);
+
+        let _setup_span = tracing::debug_span!("post_hashing_setup").entered();
+
+        let package_inputs_hashes = file_hash_result.ok_or(Error::FileHashTaskIncomplete)??;
+        let root_internal_dependencies_hash =
+            internal_deps_result.ok_or(Error::InternalDepsTaskIncomplete)??;
+        let global_file_inputs =
+            global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
+        let external_deps_hashes = external_deps_hashes.transpose()?;
+
+        let root_external_dependencies_hash = if is_monorepo {
+            let cache = external_deps_hashes.as_ref().ok_or_else(|| {
+                turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+            })?;
+            Some(
+                cache
+                    .get(PackageName::Root.as_str())
+                    .cloned()
+                    .ok_or_else(|| {
+                        turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+                    })?,
+            )
+        } else {
+            None
+        };
+
+        let pass_through_env = match env_mode {
+            EnvMode::Loose => {
+                // Remove the passthroughs from hash consideration if we're explicitly loose.
+                None
+            }
+            EnvMode::Strict => self.root_turbo_json().global_pass_through_env.as_deref(),
+        };
+
+        let global_hash_inputs = GlobalHashableInputs {
+            global_cache_key: GLOBAL_CACHE_KEY,
+            global_file_hash_map: global_file_inputs.global_file_hash_map,
+            root_external_dependencies_hash: root_external_dependencies_hash.as_deref(),
+            root_internal_dependencies_hash: root_internal_dependencies_hash.as_deref(),
+            engines: global_file_inputs.engines,
+            env: &self.root_turbo_json().global_env,
+            resolved_env_vars: Some(global_file_inputs.global_hashable_env_vars),
+            pass_through_env,
+            env_mode,
+            framework_inference: self.execution.opts.run_opts.framework_inference,
+            env_at_execution_start: &self.execution.env_at_execution_start,
+            global_configuration: self.execution.opts.future_flags.global_configuration,
+        };
+        let global_hash = global_hash_inputs.calculate_global_hash();
+
+        let global_env = {
+            let mut env = self
+                .execution
+                .env_at_execution_start
+                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())
+                .map_err(Error::Env)?;
+            if let Some(resolved_global) = &global_hash_inputs.resolved_env_vars {
+                env.union(&resolved_global.all);
+            }
+            env
+        };
+
+        let run_tracker = RunTracker::new(
+            self.execution.start_at,
+            self.execution.opts.synthesize_command(),
+            self.repo.version,
+            Vendor::get_user(),
+            self.services.observability_handle.clone(),
+        );
+
+        drop(_setup_span);
+
+        let mut visitor = Visitor::new(
+            self.repo.as_ref(),
+            self.services.run_cache.clone(),
+            run_tracker,
+            &self.execution.task_access,
+            &self.execution.opts.run_opts,
+            package_inputs_hashes,
+            &self.execution.env_at_execution_start,
+            &global_hash,
+            self.services.processes.clone(),
+            repo_index,
+            global_env,
+            &self.root_turbo_json().global_env,
+            ui_sender,
+            is_watch,
+            self.execution.micro_frontend_configs.as_ref(),
+            external_deps_hashes,
+        )
+        .await?;
+
+        if self.execution.opts.run_opts.dry_run.is_some() {
+            visitor.dry_run();
+        }
+
+        debug!("running visitor");
+
+        let errors = visitor
+            .visit(self.execution.engine.clone(), &self.services.run_telemetry)
+            .await?;
+
+        debug!("visitor completed, calculating exit code");
+
+        let exit_code = errors
+            .iter()
+            .filter_map(|err| err.exit_code())
+            .max()
+            .unwrap_or(if errors.is_empty() { 0 } else { 1 });
+
+        // Task-scoped so sinks can attribute the failure to its task — e.g.
+        // the single-task stream filter drops errors from other tasks.
+        for err in &errors {
+            turborepo_log::error(
+                turborepo_log::Source::task(err.task_id()),
+                err.cause().to_string(),
+            )
+            .emit();
+        }
+
+        self.cleanup_proxy(proxy_shutdown).await;
+
+        // When a proxy is present, the signal handler only stops processes on OS
+        // signal. For normal completion without user interruption, we need an
+        // explicit stop here.
+        //
+        // In watch mode, persistent tasks run as fire-and-forget background
+        // processes that outlive the visit() call. The watch coordinator
+        // manages their lifecycle via RunStopper, so we must not kill them here.
+        if !is_watch {
+            self.services.processes.stop().await;
+        }
+
+        visitor
+            .finish(
+                exit_code,
+                &self.execution.filtered_pkgs,
+                global_hash_inputs,
+                &self.execution.engine,
+                &self.execution.env_at_execution_start,
+                self.execution.opts.scope_opts.pkg_inference_root.as_deref(),
+            )
+            .await?;
+
+        debug!("visitor.finish() completed, run cleanup done");
+
+        Ok(exit_code)
+    }
+
+    #[instrument(skip_all)]
+    pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
+        let proxy_shutdown = self.start_proxy_if_needed(!is_watch).await?;
+        if !is_watch {
+            self.setup_cache_shutdown_handler();
+        }
+
+        // If there's no proxy, we need a fallback signal handler for the process
+        // manager When a proxy is present, register_proxy_signal_handler
+        // handles process manager shutdown
+        if proxy_shutdown.is_none() && !is_watch {
+            self.setup_process_manager_shutdown_handler();
+        }
+
+        if let Some(graph_opts) = &self.execution.opts.run_opts.graph {
+            let spawner = SharedChildSpawner;
+            let graphviz_warning: turborepo_engine::GraphvizWarningFn =
+                Box::new(emit_graphviz_warning);
+            turborepo_engine::write_graph(
+                graph_opts,
+                &self.execution.engine,
+                self.execution.opts.run_opts.single_package,
+                self.repo_root(),
+                &spawner,
+                Some(graphviz_warning),
+                Some(&|filename: &AbsoluteSystemPath| {
+                    turborepo_log::info(
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                        format!("\n✓ Generated task graph in {filename}"),
+                    )
+                    .emit();
+                }),
+            )?;
+            return Ok(0);
+        }
+
+        self.execute_visitor(ui_sender, is_watch, proxy_shutdown)
+            .await
+    }
+}
+
+#[derive(Clone)]
+pub struct RunStopper {
+    manager: ProcessManager,
+    run_cache: Arc<RunCache>,
+    skip_cache_writes: bool,
+}
+
+impl RunStopper {
+    pub async fn stop(&self) {
+        self.manager.stop().await;
+    }
+
+    pub async fn shutdown(
+        &self,
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+    ) {
+        let process_manager = self.manager.clone();
+        let graceful_process_manager = process_manager.clone();
+        let graceful_shutdown = async move {
+            graceful_process_manager.shutdown(None).await;
+        };
+        Run::wait_for_process_manager_shutdown(
+            process_manager,
+            force_shutdown_timeout,
+            signals,
+            graceful_shutdown,
+        )
+        .await;
+    }
+
+    pub async fn shutdown_cache(
+        &self,
+        shutdown_reason: Option<ShutdownReason>,
+        force_shutdown_timeout: Option<Duration>,
+        signals: Option<tokio::sync::watch::Receiver<u64>>,
+    ) {
+        if self.skip_cache_writes {
+            return;
+        }
+
+        let shutdown = async {
+            if let Ok((_status, closed)) = self.run_cache.shutdown_cache().await {
+                let _ = closed.await;
+            }
+        };
+        if shutdown_reason == Some(ShutdownReason::Signal) {
+            select! {
+                _ = shutdown => {}
+                _ = Run::wait_for_forced_shutdown(force_shutdown_timeout, signals) => {}
+            }
+        } else {
+            shutdown.await;
+        }
+    }
+
+    pub fn cache_writes_enabled(&self) -> bool {
+        !self.skip_cache_writes
+    }
+
+    pub async fn stop_tasks(&self, task_ids: &[turborepo_task_id::TaskId<'static>]) {
+        self.manager.stop_tasks(task_ids).await;
+    }
+}
+
+// Graph visualizer helper types and functions
+
+/// Implementation of `ChildSpawner` for graph visualizer using `SharedChild`.
+struct SharedChildSpawner;
+
+impl turborepo_engine::ChildSpawner for SharedChildSpawner {
+    type Child = SharedChildWrapper;
+
+    fn spawn(&self, command: Command) -> Result<Self::Child, io::Error> {
+        turborepo_process::spawn_child(command).map(SharedChildWrapper)
+    }
+}
+
+/// Wrapper around `Arc<SharedChild>` to implement `ChildProcess` trait.
+struct SharedChildWrapper(Arc<SharedChild>);
+
+impl turborepo_engine::ChildProcess for SharedChildWrapper {
+    fn take_stdin(&self) -> Option<Box<dyn Write + Send>> {
+        self.0
+            .take_stdin()
+            .map(|s| Box::new(s) as Box<dyn Write + Send>)
+    }
+
+    fn wait(&self) -> Result<(), io::Error> {
+        self.0.wait().map(|_| ())
+    }
+}
+
+fn query_task_id(task_id: &turborepo_task_id::TaskId) -> turborepo_query_api::QueryTaskId {
+    turborepo_query_api::QueryTaskId::new(task_id.package(), task_id.task())
+}
+
+fn engine_task_id(
+    task_id: &turborepo_query_api::QueryTaskId,
+) -> turborepo_task_id::TaskId<'static> {
+    turborepo_task_id::TaskId::from_static(task_id.package.clone(), task_id.task.clone())
+}
+
+fn query_task_nodes<'a>(
+    nodes: impl IntoIterator<Item = &'a turborepo_engine::TaskNode>,
+) -> Vec<turborepo_query_api::QueryTaskId> {
+    nodes
+        .into_iter()
+        .filter_map(|node| match node {
+            turborepo_engine::TaskNode::Root => None,
+            turborepo_engine::TaskNode::Task(task_id) => Some(query_task_id(task_id)),
+        })
+        .collect()
+}
+
+fn query_boundary_diagnostic(
+    diagnostic: turborepo_boundaries::BoundariesDiagnostic,
+) -> turborepo_query_api::BoundaryDiagnostic {
+    let message = diagnostic.to_string();
+    match diagnostic {
+        turborepo_boundaries::BoundariesDiagnostic::NotTypeOnlyImport {
+            import,
+            span,
+            text: _,
+            path,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(path.to_string()),
+            start: Some(span.offset()),
+            end: Some(span.offset() + span.len()),
+            import: Some(import),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::PackageNotFound {
+            name,
+            span,
+            text: _,
+            path,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(path.to_string()),
+            start: Some(span.offset()),
+            end: Some(span.offset() + span.len()),
+            import: Some(name.to_string()),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::ImportLeavesPackage {
+            import,
+            span,
+            text: _,
+            path,
+            ..
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(path.to_string()),
+            start: Some(span.offset()),
+            end: Some(span.offset() + span.len()),
+            import: Some(import),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::ParseError(_, _) => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                start: None,
+                end: None,
+                import: None,
+                path: None,
+                reason: None,
+            }
+        }
+        turborepo_boundaries::BoundariesDiagnostic::NoTagInAllowlist {
+            source_package_name: _,
+            help: _,
+            secondary: _,
+            package_name,
+            span,
+            text,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(text.name().to_string()),
+            start: span.map(|span| span.offset()),
+            end: span.map(|span| span.offset() + span.len()),
+            import: Some(package_name.to_string()),
+            reason: None,
+        },
+        turborepo_boundaries::BoundariesDiagnostic::DeniedTag {
+            source_package_name: _,
+            secondary: _,
+            package_name,
+            tag,
+            span,
+            text,
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: Some(text.name().to_string()),
+            start: span.map(|span| span.offset()),
+            end: span.map(|span| span.offset() + span.len()),
+            import: Some(package_name.to_string()),
+            reason: Some(tag),
+        },
+        turborepo_boundaries::BoundariesDiagnostic::InvalidPath { path } => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                path: Some(path),
+                start: None,
+                end: None,
+                import: None,
+                reason: None,
+            }
+        }
+        turborepo_boundaries::BoundariesDiagnostic::TagSharesPackageName {
+            tag, tag_span, ..
+        } => turborepo_query_api::BoundaryDiagnostic {
+            message,
+            path: None,
+            start: tag_span.map(|span| span.offset()),
+            end: tag_span.map(|span| span.offset() + span.len()),
+            import: None,
+            reason: Some(tag),
+        },
+        turborepo_boundaries::BoundariesDiagnostic::PackageBoundariesHasTags { span, text: _ } => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                path: None,
+                start: span.map(|span| span.offset()),
+                end: span.map(|span| span.offset() + span.len()),
+                import: None,
+                reason: None,
+            }
+        }
+        turborepo_boundaries::BoundariesDiagnostic::CircularDependency { .. } => {
+            turborepo_query_api::BoundaryDiagnostic {
+                message,
+                path: None,
+                start: None,
+                end: None,
+                import: None,
+                reason: None,
+            }
+        }
+    }
+}
+
+impl turborepo_query_api::QueryRun for Run {
+    fn repo_context(&self) -> &RepoContext {
+        &self.repo
+    }
+
+    fn task_ids(&self) -> Vec<turborepo_query_api::QueryTaskId> {
+        self.execution
+            .engine
+            .task_ids()
+            .map(query_task_id)
+            .collect()
+    }
+
+    fn task_ids_for_package(&self, package: &str) -> Vec<turborepo_query_api::QueryTaskId> {
+        self.execution
+            .engine
+            .task_ids_for_packages(&HashSet::from([PackageName::from(package)]))
+            .iter()
+            .map(query_task_id)
+            .collect()
+    }
+
+    fn task_definition(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Option<&turborepo_types::TaskDefinition> {
+        self.execution
+            .engine
+            .task_definition(&engine_task_id(task_id))
+    }
+
+    fn task_dependencies(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(
+            self.execution
+                .engine
+                .dependencies(&engine_task_id(task_id))
+                .into_iter()
+                .flatten(),
+        )
+    }
+
+    fn task_dependents(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(
+            self.execution
+                .engine
+                .dependents(&engine_task_id(task_id))
+                .into_iter()
+                .flatten(),
+        )
+    }
+
+    fn transitive_task_dependencies(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(
+            self.execution
+                .engine
+                .transitive_dependencies(&engine_task_id(task_id)),
+        )
+    }
+
+    fn transitive_task_dependents(
+        &self,
+        task_id: &turborepo_query_api::QueryTaskId,
+    ) -> Vec<turborepo_query_api::QueryTaskId> {
+        query_task_nodes(
+            self.execution
+                .engine
+                .transitive_dependents(&engine_task_id(task_id)),
+        )
+    }
+
+    fn collect_task_dependencies(
+        &self,
+        task_ids: &HashSet<turborepo_query_api::QueryTaskId>,
+    ) -> HashSet<turborepo_query_api::QueryTaskId> {
+        let task_ids = task_ids.iter().map(engine_task_id).collect();
+        self.execution
+            .engine
+            .collect_task_dependencies(&task_ids)
+            .iter()
+            .map(query_task_id)
+            .collect()
+    }
+
+    fn calculate_affected_packages(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<
+        std::collections::HashMap<
+            turborepo_repository::package_graph::PackageName,
+            turborepo_repository::change_mapper::PackageInclusionReason,
+        >,
+        turborepo_query_api::AffectedPackagesError,
+    > {
+        let mut opts = self.execution.opts.as_ref().clone();
+        opts.scope_opts.affected_range = Some((base, head));
+        builder::RunBuilder::calculate_filtered_packages(
+            self.repo_root(),
+            &opts,
+            self.pkg_dep_graph(),
+            self.scm(),
+            self.root_turbo_json(),
+        )
+        .map(|(packages, _, _)| packages)
+        .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
+    }
+
+    fn changed_files(
+        &self,
+        base: Option<&str>,
+        head: Option<&str>,
+    ) -> Result<
+        std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        turborepo_query_api::AffectedPackagesError,
+    > {
+        match builder::changed_files_for_affected_range(self.scm(), self.repo_root(), base, head)
+            .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
+        {
+            Ok(files) => Ok(files),
+            Err(_invalid_range) => {
+                // If git range is invalid, return empty set — the affected packages
+                // computation will handle reporting all-packages-changed separately.
+                Ok(std::collections::HashSet::new())
+            }
+        }
+    }
+
+    fn match_tasks_against_changed_files(
+        &self,
+        changed_files: &std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+    ) -> Result<
+        std::collections::HashMap<turborepo_query_api::QueryTaskId, String>,
+        turborepo_query_api::AffectedPackagesError,
+    > {
+        turborepo_engine::match_tasks_against_changed_files(
+            &self.execution.engine,
+            self.pkg_dep_graph(),
+            changed_files,
+        )
+        .map(|matched| {
+            matched
+                .into_iter()
+                .map(|(task_id, file)| (query_task_id(&task_id), file))
+                .collect()
+        })
+        .map_err(|error| turborepo_query_api::AffectedPackagesError::Other(Box::new(error)))
+    }
+
+    fn check_boundaries(&self, show_progress: bool) -> turborepo_query_api::BoundariesFuture<'_> {
+        let turbo_json_provider =
+            crate::boundaries::RunTurboJsonProvider::new(self.turbo_json_loader());
+        let root_boundaries_config = self
+            .root_turbo_json()
+            .boundaries
+            .as_ref()
+            .map(|spanned| spanned.as_inner());
+        let ctx = turborepo_boundaries::BoundariesContext {
+            repo_root: self.repo_root(),
+            pkg_dep_graph: self.pkg_dep_graph(),
+            turbo_json_provider: &turbo_json_provider,
+            root_boundaries_config,
+            filtered_pkgs: self.filtered_pkgs(),
+        };
+        let result = turborepo_boundaries::BoundariesChecker::check_boundaries(&ctx, show_progress)
+            .map(|result| {
+                result
+                    .diagnostics
+                    .into_iter()
+                    .map(query_boundary_diagnostic)
+                    .collect()
+            })
+            .map_err(|error| turborepo_query_api::Error::Boundaries(Box::new(error)));
+        Box::pin(std::future::ready(result))
+    }
+}
+
+fn emit_graphviz_warning() -> Result<(), io::Error> {
+    turborepo_log::warn(
+        turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+        "`turbo` uses Graphviz to generate an image of your graph, but Graphviz isn't installed \
+         on this machine.\n\nNote: --graph output to .png, .jpg, .pdf, and .json is deprecated \
+         and will be removed in version 3.0. Use .svg, .html, .mermaid, or .dot instead.\n\nIn \
+         the meantime, you can use this string output with an online Dot graph viewer.",
+    )
+    .emit();
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{future::pending, time::Duration};
+
+    use turborepo_run_opts::RemoteCacheDisabledReason;
+    use turborepo_signals::ShutdownReason;
+
+    use super::{
+        CacheShutdownOutcome, ForceShutdownReason, RemoteCacheStatus, RemoteCacheUnavailableReason,
+        Run, remote_cache_status_message,
+    };
+
+    #[test]
+    fn remote_cache_status_messages_match_prelude_contract() {
+        assert_eq!(
+            remote_cache_status_message(RemoteCacheStatus::Enabled, "https://cache.example.com"),
+            ("Remote caching enabled".to_string(), false)
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::InConfig),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (in configuration)".to_string(),
+                false
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Disabled(RemoteCacheDisabledReason::RequestedWithoutCredentials),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching disabled (remote cache requested — set TURBO_TOKEN and \
+                 TURBO_TEAM, or run \"turbo login\" and \"turbo link\")"
+                    .to_string(),
+                false,
+            )
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect),
+                "https://cache.example.com",
+            ),
+            (
+                "Remote caching unavailable (Could not connect to \"https://cache.example.com\")"
+                    .to_string(),
+                true,
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn cache_shutdown_close_does_not_arm_force_timeout() {
+        let result = tokio::time::timeout(
+            Duration::from_millis(30),
+            Run::wait_for_cache_shutdown(
+                Some(ShutdownReason::Close),
+                Some(Duration::from_millis(10)),
+                None,
+                pending::<()>(),
+                pending::<()>(),
+            ),
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "close-driven cache shutdown should not be cut off by the force timeout"
+        );
+    }
+
+    #[tokio::test]
+    async fn cache_shutdown_signal_uses_force_timeout() {
+        let result = Run::wait_for_cache_shutdown(
+            Some(ShutdownReason::Signal),
+            Some(Duration::from_millis(10)),
+            None,
+            pending::<()>(),
+            pending::<()>(),
+        )
+        .await;
+
+        assert_eq!(result, CacheShutdownOutcome::ForcedShutdown);
+    }
+
+    #[tokio::test]
+    async fn forced_shutdown_accepts_retained_second_signal_before_timeout() {
+        let (tx, rx) = tokio::sync::watch::channel(1);
+        tx.send(2).unwrap();
+
+        let result = Run::wait_for_forced_shutdown(Some(Duration::from_secs(60)), Some(rx)).await;
+
+        assert_eq!(result, ForceShutdownReason::Signal);
+    }
+
+    #[tokio::test]
+    async fn cache_shutdown_accepts_retained_second_signal() {
+        let (tx, rx) = tokio::sync::watch::channel(1);
+        tx.send(2).unwrap();
+
+        let result = Run::wait_for_cache_shutdown(
+            Some(ShutdownReason::Signal),
+            Some(Duration::from_secs(60)),
+            Some(rx),
+            pending::<()>(),
+            pending::<()>(),
+        )
+        .await;
+
+        assert_eq!(result, CacheShutdownOutcome::ForcedShutdown);
+    }
+}

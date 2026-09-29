@@ -67,7 +67,7 @@ Using export paths to split a package into framework-specific entrypoints is the
 The example below shows a library with two entrypoints, each for a different type of link component. These abstractions likely contain your own styles, APIs, and other adjustments on top of the element they're wrapping.
 
 - `./link`: An `<a>` HTML tag with some default styles from your design system
-- `./next-js/link`: A customized version of [the Next.js `Link` component](https://nextjs.org/docs/app/building-your-application/routing/linking-and-navigating#link-component) with props that are preset to your organization's preferences
+- `./next-js/link`: A customized version of [the Next.js `Link` component](https://nextjs.org/docs/app/getting-started/linking-and-navigating#link-component) with props that are preset to your organization's preferences
 - `./svelte/link`: A customized version of an [`a` tag for Svelte](https://svelte.dev/docs/kit/link-options) with presets.
 
 ```json title="./packages/ui/package.json"

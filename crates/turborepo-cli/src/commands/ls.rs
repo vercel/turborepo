@@ -1,0 +1,412 @@
+//! A command for outputting info about packages and tasks in a turborepo.
+//!
+//! Both `turbo ls` and `turbo query ls` are backed by this module. Data
+//! retrieval is done through the query server (GraphQL execution), keeping
+//! the ls command in sync with `turbo query` semantics.
+
+use std::{fmt::Write, sync::Arc};
+
+use miette::Diagnostic;
+use serde::Serialize;
+use thiserror::Error;
+use turborepo_query::affected_query::escape_graphql_string;
+use turborepo_query_api::{QueryRun, QueryServer};
+use turborepo_repository::package_graph::PackageName;
+use turborepo_run::builder::RunBuilder;
+use turborepo_signals::{SignalHandler, listeners::get_signal};
+use turborepo_telemetry::events::command::CommandEventBuilder;
+use turborepo_ui::{BOLD, BOLD_GREEN, ColorConfig, GREY, color, cprint, cprintln};
+
+use crate::{cli, cli::OutputFormat, commands::CommandBase};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
+    #[error("Package `{package}` not found.")]
+    PackageNotFound { package: String },
+    #[error("Query returned errors")]
+    QueryError,
+}
+
+// GraphQL query: list all packages with name and path
+const PACKAGES_QUERY: &str = "{ packages { items { name path } length } }";
+
+const PACKAGE_DETAIL_FIELDS: &str = "name path tasks { items { name command } length } \
+                                     allDependencies { items { name } length } allDependents { \
+                                     items { name } length }";
+
+fn package_details_query(packages: &[String]) -> String {
+    let mut query = String::from("{");
+    for (index, package) in packages.iter().enumerate() {
+        let escaped = escape_graphql_string(package);
+        let _ = write!(
+            query,
+            r#" package{index}: package(name: "{escaped}") {{ {PACKAGE_DETAIL_FIELDS} }}"#
+        );
+    }
+    query.push_str(" }");
+    query
+}
+
+#[derive(Serialize)]
+struct ItemsWithCount<T> {
+    count: usize,
+    items: Vec<T>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RepositoryDetailsDisplay {
+    package_manager: String,
+    packages: ItemsWithCount<PackageDetailDisplay>,
+}
+
+#[derive(Serialize)]
+struct PackageDetailDisplay {
+    name: String,
+    path: String,
+}
+
+#[derive(Clone, Serialize)]
+struct PackageTask {
+    name: String,
+    command: String,
+}
+
+#[derive(Serialize)]
+struct PackageDetailsDisplay {
+    name: String,
+    path: String,
+    tasks: ItemsWithCount<PackageTask>,
+    dependencies: Vec<String>,
+    dependents: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct PackageDetailsList {
+    packages: Vec<PackageDetailsDisplay>,
+}
+
+pub async fn run(
+    base: CommandBase,
+    packages: Vec<String>,
+    telemetry: CommandEventBuilder,
+    output: Option<OutputFormat>,
+    query_server: &dyn QueryServer,
+) -> Result<(), cli::Error> {
+    let signal = get_signal()?;
+    let handler = SignalHandler::new(signal);
+
+    let color_config = base.color_config;
+
+    // Git-aware filters use lockfile changes while resolving package scope.
+    // Plain listings and package details only query workspace relationships.
+    let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
+        || !base.opts.scope_opts.filter_patterns.is_empty();
+    let run_builder =
+        RunBuilder::new(base.run_builder_input()?, None)?.skip_repo_index_and_scm_state();
+    // Package details include tasks, so build the complete engine just as the
+    // general-purpose query command does. A repository-only listing does not
+    // need to pay that cost.
+    let run_builder = if packages.is_empty() {
+        run_builder
+    } else {
+        run_builder.add_all_tasks().do_not_validate_engine()
+    };
+    let run_builder = if needs_external_dependencies {
+        run_builder
+    } else {
+        run_builder.skip_external_dependencies()
+    };
+    let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
+
+    // A pure Cargo workspace has no JavaScript package manager to display.
+    let package_manager_name = run
+        .pkg_dep_graph()
+        .package_manager()
+        .map(|pm| pm.name().to_string())
+        .unwrap_or_default();
+    let filtered_pkgs = run.filtered_pkgs().clone();
+    let run: Arc<dyn QueryRun> = Arc::new(run);
+
+    if packages.is_empty() {
+        let repo = query_packages(run, query_server, &filtered_pkgs, &package_manager_name).await?;
+        print_repo_details(&repo, color_config, output)?;
+    } else {
+        match output {
+            Some(OutputFormat::Json) => {
+                let details_list =
+                    query_package_details(run.clone(), query_server, &packages).await?;
+                let list = PackageDetailsList {
+                    packages: details_list,
+                };
+                println!("{}", serde_json::to_string_pretty(&list)?);
+            }
+            Some(OutputFormat::Pretty) | None => {
+                // Preserve the existing partial-output behavior when an argument is missing:
+                // print every valid package before reporting the first missing package.
+                let valid_count = packages
+                    .iter()
+                    .position(|package| {
+                        run.repo_context()
+                            .pkg_dep_graph()
+                            .package_view(&PackageName::from(package.as_str()))
+                            .is_none()
+                    })
+                    .unwrap_or(packages.len());
+                if valid_count > 0 {
+                    let details =
+                        query_package_details(run.clone(), query_server, &packages[..valid_count])
+                            .await?;
+                    for detail in &details {
+                        print_package_detail(detail, color_config);
+                    }
+                }
+                if let Some(package) = packages.get(valid_count) {
+                    return Err(Error::PackageNotFound {
+                        package: package.clone(),
+                    }
+                    .into());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+async fn query_packages(
+    run: Arc<dyn QueryRun>,
+    query_server: &dyn QueryServer,
+    filtered_pkgs: &std::collections::HashSet<PackageName>,
+    package_manager_name: &str,
+) -> Result<RepositoryDetailsDisplay, cli::Error> {
+    let result = query_server
+        .execute_query(run, PACKAGES_QUERY, None)
+        .await?;
+
+    if !result.errors.is_empty() {
+        return Err(Error::QueryError.into());
+    }
+
+    let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
+    let items = value
+        .pointer("/data/packages/items")
+        .and_then(|v| v.as_array())
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+
+    let mut packages: Vec<PackageDetailDisplay> = items
+        .iter()
+        .filter_map(|item| {
+            let name = item.get("name")?.as_str()?.to_string();
+            let path = item.get("path")?.as_str()?.to_string();
+            let package_name = PackageName::from(name.as_str());
+            if package_name == PackageName::Root {
+                return None;
+            }
+            if !filtered_pkgs.contains(&package_name) {
+                return None;
+            }
+            Some(PackageDetailDisplay { name, path })
+        })
+        .collect();
+    packages.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(RepositoryDetailsDisplay {
+        package_manager: package_manager_name.to_string(),
+        packages: ItemsWithCount {
+            count: packages.len(),
+            items: packages,
+        },
+    })
+}
+
+async fn query_package_details(
+    run: Arc<dyn QueryRun>,
+    query_server: &dyn QueryServer,
+    packages: &[String],
+) -> Result<Vec<PackageDetailsDisplay>, cli::Error> {
+    for package in packages {
+        if run
+            .repo_context()
+            .pkg_dep_graph()
+            .package_view(&PackageName::from(package.as_str()))
+            .is_none()
+        {
+            return Err(Error::PackageNotFound {
+                package: package.clone(),
+            }
+            .into());
+        }
+    }
+
+    let query = package_details_query(packages);
+    let result = query_server.execute_query(run, &query, None).await?;
+    if !result.errors.is_empty() {
+        return Err(Error::QueryError.into());
+    }
+
+    let value: serde_json::Value = serde_json::from_str(&result.result_json)?;
+    packages
+        .iter()
+        .enumerate()
+        .map(|(index, package)| {
+            let pointer = format!("/data/package{index}");
+            let pkg = value
+                .pointer(&pointer)
+                .ok_or_else(|| Error::PackageNotFound {
+                    package: package.clone(),
+                })?;
+            parse_package_detail(pkg, package)
+        })
+        .collect()
+}
+
+fn parse_package_detail(
+    pkg: &serde_json::Value,
+    package: &str,
+) -> Result<PackageDetailsDisplay, cli::Error> {
+    let name = pkg
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(package)
+        .to_string();
+    let path = pkg
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let tasks: Vec<PackageTask> = pkg
+        .pointer("/tasks/items")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|t| {
+                    let name = t.get("name")?.as_str()?.to_string();
+                    let command = t
+                        .get("command")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    Some(PackageTask { name, command })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let dependencies: Vec<String> = pkg
+        .pointer("/allDependencies/items")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            let mut deps: Vec<String> = arr
+                .iter()
+                .filter_map(|d| {
+                    let dep_name = d.get("name")?.as_str()?;
+                    if dep_name == "//" || dep_name == name {
+                        return None;
+                    }
+                    Some(dep_name.to_string())
+                })
+                .collect();
+            deps.sort();
+            deps
+        })
+        .unwrap_or_default();
+
+    let dependents: Vec<String> = pkg
+        .pointer("/allDependents/items")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            let mut deps: Vec<String> = arr
+                .iter()
+                .filter_map(|d| {
+                    let dep_name = d.get("name")?.as_str()?;
+                    if dep_name == "//" || dep_name == name {
+                        return None;
+                    }
+                    Some(dep_name.to_string())
+                })
+                .collect();
+            deps.sort();
+            deps
+        })
+        .unwrap_or_default();
+
+    Ok(PackageDetailsDisplay {
+        name,
+        path,
+        tasks: ItemsWithCount {
+            count: tasks.len(),
+            items: tasks,
+        },
+        dependencies,
+        dependents,
+    })
+}
+
+fn print_repo_details(
+    repo: &RepositoryDetailsDisplay,
+    color_config: ColorConfig,
+    output: Option<OutputFormat>,
+) -> Result<(), cli::Error> {
+    match output {
+        Some(OutputFormat::Json) => {
+            println!("{}", serde_json::to_string_pretty(repo)?);
+        }
+        Some(OutputFormat::Pretty) | None => {
+            let package_copy = match repo.packages.count {
+                0 => "no packages",
+                1 => "package",
+                _ => "packages",
+            };
+            cprint!(
+                color_config,
+                BOLD,
+                "{} {} ",
+                repo.packages.count,
+                package_copy
+            );
+            cprintln!(color_config, GREY, "({})\n", repo.package_manager);
+
+            for pkg in &repo.packages.items {
+                println!("  {} {}", pkg.name, GREY.apply_to(&pkg.path));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn print_package_detail(detail: &PackageDetailsDisplay, color_config: ColorConfig) {
+    let name = color!(color_config, BOLD_GREEN, "{}", detail.name);
+    let depends_on = color!(color_config, BOLD, "depends on");
+    let dependencies = if detail.dependencies.is_empty() {
+        "<no packages>".to_string()
+    } else {
+        detail.dependencies.join(", ")
+    };
+
+    cprintln!(color_config, GREY, "{} ", detail.path);
+    println!(
+        "{} {}: {}",
+        name,
+        depends_on,
+        color!(color_config, GREY, "{}", dependencies)
+    );
+    println!();
+
+    cprint!(color_config, BOLD, "tasks:");
+    if detail.tasks.items.is_empty() {
+        println!(" <no tasks>");
+    } else {
+        println!();
+    }
+    for task in &detail.tasks.items {
+        println!(
+            "  {}: {}",
+            task.name,
+            color!(color_config, GREY, "{}", task.command)
+        );
+    }
+    println!();
+}

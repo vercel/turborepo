@@ -4,6 +4,9 @@ lint = "clippy --workspace --features rustls-tls --all-targets -- -D warnings"
 [env]
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
 TURBO_PNPM_WORKSPACE_DIR = { value = "", relative = true }
+# Keep Rust and native dependencies aligned with the oldest macOS version we support.
+# This applies to local builds and CI, including release cross-compilation.
+MACOSX_DEPLOYMENT_TARGET = { value = "11.0", force = true }
 
 [build]
 rustflags = [

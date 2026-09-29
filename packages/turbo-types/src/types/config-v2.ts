@@ -64,6 +64,14 @@ export interface WorkspaceSchema extends BaseSchema {
 
 export interface RootSchema extends BaseSchema {
   /**
+   * Controls whether turbo maintains a root AGENTS.md block for AI agents.
+   * Set to false to opt out of future automatic updates.
+   *
+   * @defaultValue `true`
+   */
+  agentGuidance?: boolean;
+
+  /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
    * The contents of these files will be included in the global hashing
@@ -95,8 +103,8 @@ export interface RootSchema extends BaseSchema {
   globalEnv?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
@@ -267,6 +275,14 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
+   * When GitHub Actions reports a base branch that is not available as a
+   * local ref, fall back to `origin/<branch>`. This supports detached
+   * checkouts where only remote-tracking refs are present.
+   *
+   * @defaultValue `false`
+   */
+  githubActionsRemoteBaseRefFallback?: boolean;
+  /**
    * Use task-level `inputs` globs to determine which tasks to re-run when
    * files change in `turbo watch`. When enabled, only tasks whose declared
    * inputs match the changed files are re-executed, rather than re-running
@@ -320,8 +336,8 @@ export interface FutureFlags {
    * expressions, propagate `--affected`, and appear in `turbo query`.
    * Filtered builds execute each selected crate. Unfiltered builds prefer
    * entrypoints, falling back to libraries when no entrypoints exist.
-   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `clippy`/`lint`, `bench`, and
-   * `doc`/`docs` tasks are selectable per crate with `--filter`. An
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`, and
+   * `format` tasks are selectable per crate with `--filter`. An
    * unfiltered run executes one workspace-wide Cargo verification command;
    * filtered runs use the selected crates, or the workspace command when the
    * workspace package is selected directly.
@@ -333,12 +349,43 @@ export interface FutureFlags {
    * exclude them with `extends: false`.
    *
    * Task caching uses Cargo-derived inputs and caches entrypoint build
-   * deliverables. Library builds default to uncached. This feature is
-   * experimental.
+   * deliverables. Library builds and formatting default to uncached. This
+   * feature is experimental.
    *
    * @defaultValue `false`
    */
   experimentalCargoWorkspaces?: boolean;
+
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python packages are discovered from the root
+   * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
+   * package graph: they resolve in `--filter` expressions, propagate
+   * `--affected`, and appear in `turbo query`. Buildable packages register `build`
+   * (`uv build --package`), and all packages register `format` and `check`.
+   * Direct pytest declarations register ownership-scoped `test` tasks; the
+   * user-named workspace package registers workspace-wide quality tasks.
+   * External dependencies hash from `uv.lock` per
+   * package, and `turbo prune` produces a reachability-pruned `uv.lock`
+   * and root `pyproject.toml`. uv is the only supported Python package
+   * manager. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalPythonWorkspaces?: boolean;
+
+  /**
+   * Treat the modules listed in a `go.work` file as Turborepo packages.
+   *
+   * When enabled, Go modules are discovered from the repository-root
+   * `go.work` via the Go toolchain and participate in the package graph:
+   * they resolve in `--filter` expressions, propagate `--affected`, and
+   * appear in `turbo query`. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalGoWorkspaces?: boolean;
 }
 
 export interface GlobalConfig {
@@ -365,8 +412,8 @@ export interface GlobalConfig {
   env?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key.
    *
    * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
    *

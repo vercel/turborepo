@@ -1,0 +1,37 @@
+---
+source: crates/turborepo/tests/cargo_workspace_test.rs
+expression: "json[\"packages\"][0][\"tasks\"]"
+---
+{
+  "count": 7,
+  "items": [
+    {
+      "name": "build",
+      "command": "cargo build --package=app --locked"
+    },
+    {
+      "name": "check",
+      "command": "cargo check --package=app --locked"
+    },
+    {
+      "name": "dev",
+      "command": "cargo run --package=app --locked"
+    },
+    {
+      "name": "format",
+      "command": "cargo fmt --package=app"
+    },
+    {
+      "name": "lint",
+      "command": "cargo clippy --package=app --locked"
+    },
+    {
+      "name": "run",
+      "command": "cargo run --package=app --locked"
+    },
+    {
+      "name": "test",
+      "command": "cargo test --package=app --locked"
+    }
+  ]
+}

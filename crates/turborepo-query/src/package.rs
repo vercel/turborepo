@@ -9,7 +9,7 @@ use itertools::Itertools;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
-use crate::{task::RepositoryTask, Array, Error, QueryRun};
+use crate::{Array, Error, QueryRun, task::RepositoryTask};
 
 #[derive(Clone)]
 pub struct Package {
@@ -25,8 +25,18 @@ impl fmt::Debug for Package {
 
 impl Package {
     pub fn new(run: Arc<dyn QueryRun>, name: PackageName) -> Result<Self, Error> {
-        run.pkg_dep_graph()
+        run.repo_context()
+            .pkg_dep_graph()
             .package_view(&name)
+            .ok_or_else(|| Error::PackageNotFound(name.clone()))?;
+
+        Ok(Self { run, name })
+    }
+
+    pub fn for_task(run: Arc<dyn QueryRun>, name: PackageName) -> Result<Self, Error> {
+        run.repo_context()
+            .pkg_dep_graph()
+            .package_task_context(&name)
             .ok_or_else(|| Error::PackageNotFound(name.clone()))?;
 
         Ok(Self { run, name })
@@ -69,41 +79,45 @@ impl Package {
 
     pub fn get_tasks(&self) -> HashMap<String, Spanned<String>> {
         self.run
+            .repo_context()
             .pkg_dep_graph()
-            .package_json(&self.name)
-            .map(|json| {
-                json.scripts
+            .package_task_context(&self.name)
+            .map(|context| {
+                context
+                    .native_tasks()
+                    .tasks()
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .filter_map(|task| {
+                        task.script()
+                            .cloned()
+                            .map(|script| (task.name().to_string(), script))
+                    })
                     .collect()
             })
             .unwrap_or_default()
     }
 
     pub fn get_task_names(&self) -> BTreeSet<String> {
-        let packages = HashSet::from([self.name.clone()]);
         let registered_tasks: HashSet<_> = self
             .run
+            .repo_context()
             .pkg_dep_graph()
             .package_task_context(&self.name)
-            .and_then(|context| {
-                self.run
-                    .pkg_dep_graph()
-                    .toolchains()
-                    .get(context.toolchain()?)
-                    .map(|toolchain| toolchain.registered_tasks(&context))
+            .map(|context| {
+                context
+                    .native_tasks()
+                    .registered_names()
+                    .into_iter()
+                    .collect()
             })
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+            .unwrap_or_default();
         self.get_tasks()
             .into_keys()
             .chain(
                 self.run
-                    .engine()
-                    .task_ids_for_packages(&packages)
+                    .task_ids_for_package(self.name.as_str())
                     .into_iter()
-                    .map(|task| task.task().to_string())
+                    .map(|task| task.task)
                     .filter(|task| registered_tasks.contains(task)),
             )
             .collect()
@@ -111,6 +125,7 @@ impl Package {
 
     pub fn direct_dependents_count(&self) -> usize {
         self.run
+            .repo_context()
             .pkg_dep_graph()
             .immediate_ancestors(&PackageNode::Workspace(self.name.clone()))
             .map_or(0, |packages| self.count_nodes(packages))
@@ -118,6 +133,7 @@ impl Package {
 
     pub fn direct_dependencies_count(&self) -> usize {
         self.run
+            .repo_context()
             .pkg_dep_graph()
             .immediate_dependencies(&PackageNode::Workspace(self.name.clone()))
             .map_or(0, |packages| self.count_nodes(packages))
@@ -125,7 +141,7 @@ impl Package {
 
     pub fn indirect_dependents_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        let graph = self.run.pkg_dep_graph();
+        let graph = self.run.repo_context().pkg_dep_graph();
         let immediate = graph.immediate_ancestors(&node);
         self.count_nodes(graph.ancestors(&node).into_iter().filter(|package| {
             immediate
@@ -136,7 +152,7 @@ impl Package {
 
     pub fn indirect_dependencies_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        let graph = self.run.pkg_dep_graph();
+        let graph = self.run.repo_context().pkg_dep_graph();
         let immediate = graph.immediate_dependencies(&node);
         self.count_nodes(graph.dependencies(&node).into_iter().filter(|package| {
             immediate
@@ -148,6 +164,7 @@ impl Package {
     pub fn all_dependents_count(&self) -> usize {
         self.count_nodes(
             self.run
+                .repo_context()
                 .pkg_dep_graph()
                 .ancestors(&PackageNode::Workspace(self.name.clone())),
         )
@@ -156,6 +173,7 @@ impl Package {
     pub fn all_dependencies_count(&self) -> usize {
         self.count_nodes(
             self.run
+                .repo_context()
                 .pkg_dep_graph()
                 .dependencies(&PackageNode::Workspace(self.name.clone())),
         )
@@ -173,11 +191,11 @@ impl Package {
     async fn path(&self) -> Result<String, Error> {
         Ok(self
             .run
+            .repo_context()
             .pkg_dep_graph()
-            .package_view(&self.name)
+            .package_task_context(&self.name)
             .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?
             .directory()
-            .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?
             .to_unix()
             .to_string())
     }
@@ -187,6 +205,7 @@ impl Package {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self.collect_nodes(
             self.run
+                .repo_context()
                 .pkg_dep_graph()
                 .immediate_ancestors(&node)
                 .into_iter()
@@ -199,6 +218,7 @@ impl Package {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         Ok(self.collect_nodes(
             self.run
+                .repo_context()
                 .pkg_dep_graph()
                 .immediate_dependencies(&node)
                 .into_iter()
@@ -208,12 +228,12 @@ impl Package {
 
     async fn all_dependents(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        Ok(self.collect_nodes(self.run.pkg_dep_graph().ancestors(&node)))
+        Ok(self.collect_nodes(self.run.repo_context().pkg_dep_graph().ancestors(&node)))
     }
 
     async fn all_dependencies(&self) -> Result<Array<Package>, Error> {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        Ok(self.collect_nodes(self.run.pkg_dep_graph().dependencies(&node)))
+        Ok(self.collect_nodes(self.run.repo_context().pkg_dep_graph().dependencies(&node)))
     }
 
     /// The downstream packages that depend on this package, indirectly
@@ -221,12 +241,14 @@ impl Package {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         let immediate_dependents = self
             .run
+            .repo_context()
             .pkg_dep_graph()
             .immediate_ancestors(&node)
             .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?;
 
         Ok(self.collect_nodes(
             self.run
+                .repo_context()
                 .pkg_dep_graph()
                 .ancestors(&node)
                 .into_iter()
@@ -239,12 +261,14 @@ impl Package {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
         let immediate_dependencies = self
             .run
+            .repo_context()
             .pkg_dep_graph()
             .immediate_dependencies(&node)
             .ok_or_else(|| Error::PackageNotFound(self.name.clone()))?;
 
         Ok(self.collect_nodes(
             self.run
+                .repo_context()
                 .pkg_dep_graph()
                 .dependencies(&node)
                 .into_iter()

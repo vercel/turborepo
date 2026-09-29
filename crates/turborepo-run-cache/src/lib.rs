@@ -6,9 +6,6 @@
 //! - Log file handling and output mode management
 //! - Integration with output watchers for output tracking
 //! - Task definition-aware output glob handling
-//! - Incremental cache management for tool-specific artifacts
-
-pub mod incremental;
 
 use std::{
     collections::HashSet,
@@ -50,8 +47,6 @@ pub enum Error {
     Glob(#[from] globwalk::GlobError),
     #[error("Error with output watcher: {0}")]
     OutputWatcher(#[from] OutputWatcherError),
-    #[error("Task spawn failed: {0}")]
-    SpawnBlocking(String),
     #[error("Task output resolves outside of repository root: {0}")]
     OutputOutsideRepo(String),
     #[error(
@@ -123,6 +118,7 @@ pub struct RunCache {
     warnings: Arc<Mutex<Vec<String>>>,
     reads_disabled: bool,
     writes_disabled: bool,
+    is_dry_run: bool,
     repo_root: AbsoluteSystemPathBuf,
     output_watcher: Option<Arc<dyn OutputWatcher>>,
     ui: ColorConfig,
@@ -130,9 +126,18 @@ pub struct RunCache {
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
     /// flag.
     errors_only_show_hash: bool,
-    /// True when `--remote-only` is active, skips on-disk file checks for
-    /// incremental.
-    remote_only: bool,
+}
+
+/// Task-specific context used to create cache operations.
+pub struct TaskCacheContext<'task, 'package> {
+    /// Fully resolved task configuration.
+    pub task_definition: &'task TaskDefinition,
+    /// Package identity and directory used to validate and locate outputs.
+    pub package_context: &'task PackageTaskContext<'package>,
+    /// Identity of the task being cached.
+    pub task_id: TaskId<'static>,
+    /// Hash produced for this task execution.
+    pub hash: &'task str,
 }
 
 /// Trait used to output cache information to user
@@ -151,30 +156,30 @@ impl RunCache {
         } else {
             run_cache_opts.task_output_logs_override
         };
-        let remote_only = cache_opts.cache == turborepo_cache::CacheConfig::remote_only()
-            || cache_opts.cache == turborepo_cache::CacheConfig::remote_read_only();
         RunCache {
             task_output_logs,
             cache,
             warnings: Default::default(),
             reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.local.read,
             writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.local.write,
+            is_dry_run,
             repo_root: repo_root.to_owned(),
             output_watcher,
             ui,
             errors_only_show_hash: run_cache_opts.errors_only_show_hash,
-            remote_only,
         }
     }
 
     pub fn task_cache(
         self: &Arc<Self>,
-        // TODO: Group these in a struct
-        task_definition: &TaskDefinition,
-        package_context: &PackageTaskContext<'_>,
-        task_id: TaskId<'static>,
-        hash: &str,
+        context: TaskCacheContext<'_, '_>,
     ) -> Result<TaskCache, Error> {
+        let TaskCacheContext {
+            task_definition,
+            package_context,
+            task_id,
+            hash,
+        } = context;
         if package_context.repository_root() != self.repo_root.as_ref() {
             return Err(Error::ContextRepositoryRootMismatch {
                 context_root: package_context.repository_root().to_owned(),
@@ -188,12 +193,17 @@ impl RunCache {
             });
         }
         let package_directory = package_context.directory();
-        let log_file_path = self
-            .repo_root
-            .resolve(package_directory)
-            .resolve(&TaskDefinition::workspace_relative_log_file(task_id.task()));
-        let repo_relative_globs =
-            task_definition.repo_relative_hashable_outputs(&task_id, package_directory);
+        let log_file_path = self.repo_root.resolve(package_directory).resolve(
+            &TaskDefinition::workspace_relative_log_file(
+                task_id.task(),
+                package_context.log_namespace(),
+            ),
+        );
+        let repo_relative_globs = task_definition.repo_relative_hashable_outputs(
+            &task_id,
+            package_directory,
+            package_context.log_namespace(),
+        );
 
         let mut task_output_logs = task_definition.output_logs;
         if let Some(task_output_logs_override) = self.task_output_logs {
@@ -201,19 +211,6 @@ impl RunCache {
         }
 
         let caching_disabled = !task_definition.cache;
-
-        let incremental_cache = task_definition.incremental.as_ref().map(|partitions| {
-            let package_dir = self.repo_root.resolve(package_directory);
-            incremental::IncrementalTaskCache::new(
-                partitions.clone(),
-                task_id.package().to_string(),
-                task_id.task().to_string(),
-                self.cache.clone(),
-                self.repo_root.clone(),
-                package_dir,
-                self.remote_only,
-            )
-        });
 
         Ok(TaskCache {
             expanded_outputs: Vec::new(),
@@ -224,11 +221,12 @@ impl RunCache {
             task_output_logs,
             caching_disabled,
             log_file_path,
+            scoped_log: package_context.log_namespace().is_some(),
+            shared_physical_directories: package_context.shared_physical_directories(),
             output_watcher: self.output_watcher.clone(),
             ui: self.ui,
             warnings: self.warnings.clone(),
             errors_only_show_hash: self.errors_only_show_hash,
-            incremental_cache,
         })
     }
 
@@ -243,6 +241,24 @@ impl RunCache {
         // Ignore errors coming from cache already shutting down
         self.cache.start_shutdown().await
     }
+}
+
+/// Recognize managed, identity-suffixed log files inside .turbo.
+/// Ordinary user artifacts (including other .log files) are not filtered out.
+fn is_scoped_task_log(path: &AbsoluteSystemPath) -> bool {
+    let Some(parent) = path.as_std_path().parent() else {
+        return false;
+    };
+    let in_log_directory =
+        parent.file_name() == Some(std::ffi::OsStr::new(turborepo_types::LOG_DIR));
+    in_log_directory && has_scoped_task_log_name(path)
+}
+
+fn has_scoped_task_log_name(path: &AbsoluteSystemPath) -> bool {
+    path.as_std_path()
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(turborepo_types::is_scoped_task_log_filename)
 }
 
 fn expand_symlinked_output_roots(
@@ -363,7 +379,6 @@ fn exclusions_for_symlinked_prefix(
 /// Created by `RunCache::task_cache()`, this handles:
 /// - Checking and restoring cached outputs
 /// - Saving outputs after task execution
-/// - Incremental cache fetch/upload for tool-specific artifacts
 pub struct TaskCache {
     expanded_outputs: Vec<AnchoredSystemPathBuf>,
     run_cache: Arc<RunCache>,
@@ -372,6 +387,10 @@ pub struct TaskCache {
     task_output_logs: OutputLogsMode,
     caching_disabled: bool,
     log_file_path: AbsoluteSystemPathBuf,
+    /// Use authoritative scope metadata: a legacy task name can resemble a
+    /// scoped filename without opting into scoped-log behavior.
+    scoped_log: bool,
+    shared_physical_directories: Arc<HashSet<std::path::PathBuf>>,
     output_watcher: Option<Arc<dyn OutputWatcher>>,
     ui: ColorConfig,
     task_id: TaskId<'static>,
@@ -380,9 +399,6 @@ pub struct TaskCache {
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
     /// flag.
     errors_only_show_hash: bool,
-    /// Incremental cache for tool-specific artifacts, present only when the
-    /// task has `incremental` partitions configured.
-    incremental_cache: Option<incremental::IncrementalTaskCache>,
 }
 
 impl TaskCache {
@@ -474,6 +490,51 @@ impl TaskCache {
         Ok(log_writer)
     }
 
+    fn is_managed_scoped_log(&self, path: &AbsoluteSystemPath) -> bool {
+        is_scoped_task_log(path)
+            && path
+                .as_std_path()
+                .parent()
+                .and_then(std::path::Path::parent)
+                .is_some_and(|directory| self.shared_physical_directories.contains(directory))
+    }
+
+    fn scoped_log_glob(&self) -> Option<String> {
+        self.scoped_log.then(|| {
+            AnchoredSystemPathBuf::relative_path_between(
+                &self.run_cache.repo_root,
+                &self.log_file_path,
+            )
+            .to_unix()
+            .to_string()
+        })
+    }
+
+    async fn notify_outputs_written(
+        &self,
+        watcher: &dyn OutputWatcher,
+        inclusions: Vec<String>,
+        exclusions: Vec<String>,
+        time_saved: u64,
+    ) -> Result<(), OutputWatcherError> {
+        watcher
+            .notify_outputs_written(self.hash.clone(), inclusions, exclusions, time_saved)
+            .await?;
+        if let Some(log) = self.scoped_log_glob() {
+            // A separate registration lets the implicit log override user
+            // exclusions without weakening exclusions for ordinary artifacts.
+            watcher
+                .notify_outputs_written(
+                    format!("{}-task-log", self.hash),
+                    vec![log],
+                    Vec::new(),
+                    time_saved,
+                )
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Check if a cache entry exists for this task.
     ///
     /// Used by dry runs to report cache status without restoring outputs.
@@ -483,7 +544,11 @@ impl TaskCache {
         if self.caching_disabled || self.run_cache.reads_disabled {
             return Ok(None);
         }
-        self.run_cache.cache.exists(&self.hash).await
+        if self.run_cache.is_dry_run {
+            self.run_cache.cache.dry_run_exists(&self.hash).await
+        } else {
+            self.run_cache.cache.exists(&self.hash).await
+        }
     }
 
     pub async fn restore_outputs(
@@ -553,7 +618,23 @@ impl TaskCache {
             self.repo_relative_globs.inclusions.len()
         };
 
-        let has_changed_outputs = changed_output_count > 0;
+        let scoped_log_changed =
+            if let (Some(watcher), Some(log)) = (&self.output_watcher, self.scoped_log_glob()) {
+                match watcher
+                    .get_changed_outputs(format!("{}-task-log", self.hash), vec![log])
+                    .await
+                {
+                    Ok(changed) => !changed.is_empty(),
+                    Err(error) => {
+                        telemetry.track_error(TrackedErrors::DaemonSkipOutputRestoreCheckFailed);
+                        debug!(%error, "Failed to check scoped task log; restoring from cache");
+                        true
+                    }
+                }
+            } else {
+                false
+            };
+        let has_changed_outputs = changed_output_count > 0 || scoped_log_changed;
 
         let cache_status = if has_changed_outputs {
             // Note that we currently don't use the output globs when restoring, but we
@@ -599,9 +680,9 @@ impl TaskCache {
                     .iter()
                     .map(|g| g.as_ref().to_string())
                     .collect();
-                if let Err(err) = output_watcher
+                if let Err(err) = self
                     .notify_outputs_written(
-                        self.hash.clone(),
+                        output_watcher.as_ref(),
                         inclusion_strings.clone(),
                         exclusion_strings,
                         cache_hit_metadata.time_saved,
@@ -699,14 +780,39 @@ impl TaskCache {
             &validated_exclusions,
             globwalk::WalkType::All,
         )?;
-        let files_to_be_cached = files_to_be_cached
+        let followed_outputs = expand_symlinked_output_roots(
+            &self.run_cache.repo_root,
+            &validated_inclusions,
+            &validated_exclusions,
+        )?;
+        let mut files_to_be_cached = files_to_be_cached
             .into_iter()
-            .chain(expand_symlinked_output_roots(
-                &self.run_cache.repo_root,
-                &validated_inclusions,
-                &validated_exclusions,
-            )?)
+            .chain(followed_outputs.iter().cloned())
             .collect::<HashSet<_>>();
+
+        // Broad user output globs must not bundle a peer's managed task log,
+        // including through an output-directory symlink. Only followed outputs
+        // and digest-named log candidates need physical-path lookups; ordinary
+        // artifacts stay cheap. Literal alias paths need the same protection.
+        if !self.shared_physical_directories.is_empty() {
+            files_to_be_cached.retain(|path| {
+                if path == &self.log_file_path {
+                    return true;
+                }
+                if self.is_managed_scoped_log(path) {
+                    return false;
+                }
+                (!followed_outputs.contains(path) && !has_scoped_task_log_name(path))
+                    || path
+                        .to_realpath()
+                        .map(|physical| !self.is_managed_scoped_log(&physical))
+                        .unwrap_or(true)
+            });
+        }
+        // Scoped logs are implicit outputs, even when a user glob excludes them.
+        if self.scoped_log && self.log_file_path.exists() {
+            files_to_be_cached.insert(self.log_file_path.clone());
+        }
 
         for path in &files_to_be_cached {
             if !self.run_cache.repo_root.contains(path) {
@@ -752,9 +858,9 @@ impl TaskCache {
                 .iter()
                 .map(|g| g.as_ref().to_string())
                 .collect();
-            if let Err(err) = output_watcher
+            if let Err(err) = self
                 .notify_outputs_written(
-                    self.hash.to_string(),
+                    output_watcher.as_ref(),
                     inclusion_strings,
                     exclusion_strings,
                     duration.as_millis() as u64,
@@ -774,63 +880,6 @@ impl TaskCache {
 
     pub fn expanded_outputs(&self) -> &[AnchoredSystemPathBuf] {
         &self.expanded_outputs
-    }
-
-    /// Returns true if this task has incremental cache partitions configured
-    /// AND caching is not fully disabled. Read/write flag checks are handled
-    /// independently by `fetch_incremental` and `upload_incremental`.
-    pub fn has_incremental(&self) -> bool {
-        self.incremental_cache.is_some() && !self.caching_disabled
-    }
-
-    /// Fetch incremental artifacts for all partitions. Must complete before
-    /// task execution begins. Returns the restore status for summary output.
-    /// Respects --force (reads disabled) and --no-cache flags. Times out
-    /// after 30 seconds to prevent blocking task execution on slow remote
-    /// cache.
-    pub async fn fetch_incremental(&self) -> incremental::IncrementalRestoreStatus {
-        if self.caching_disabled || self.run_cache.reads_disabled {
-            return incremental::IncrementalRestoreStatus::default();
-        }
-        let Some(incremental) = &self.incremental_cache else {
-            return incremental::IncrementalRestoreStatus::default();
-        };
-        match tokio::time::timeout(std::time::Duration::from_secs(30), incremental.fetch_all())
-            .await
-        {
-            Ok(status) => status,
-            Err(_) => {
-                warn!(
-                    "incremental fetch timed out after 30s, proceeding without incremental state"
-                );
-                incremental::IncrementalRestoreStatus::default()
-            }
-        }
-    }
-
-    /// Upload incremental artifacts for all partitions after successful
-    /// task execution. Failures are logged as warnings but do not affect
-    /// the task result. Respects --no-cache flag (skips when writes are
-    /// disabled). Not affected by --force (which only disables reads).
-    /// Times out after 60 seconds to prevent hanging process exit on slow
-    /// remote cache. Returns the number of partition upload failures
-    /// (0 = all succeeded or none configured).
-    pub async fn upload_incremental(&self) -> usize {
-        if self.caching_disabled || self.run_cache.writes_disabled {
-            return 0;
-        }
-        let Some(incremental) = &self.incremental_cache else {
-            return 0;
-        };
-        match tokio::time::timeout(std::time::Duration::from_secs(60), incremental.upload_all())
-            .await
-        {
-            Ok(failures) => failures,
-            Err(_) => {
-                warn!("incremental upload timed out after 60s, skipping remaining uploads");
-                1
-            }
-        }
     }
 }
 
@@ -940,6 +989,8 @@ fn format_sha_context(meta: Option<&CacheHitMetadata>) -> Option<String> {
 
 #[cfg(test)]
 mod test {
+    mod scoped_logs;
+
     use std::{
         collections::HashSet,
         io::Write,
@@ -957,18 +1008,17 @@ mod test {
     use turborepo_cache::{AsyncCache, CacheActions, CacheConfig, CacheOpts, LazyScmState};
     use turborepo_log::{LogSink, Logger, OutputChannel, grouping::GroupingLayer};
     use turborepo_repository::{
-        cargo::CargoToolchain,
         package_graph::{PackageGraph, PackageName},
         package_json::PackageJson,
     };
     use turborepo_task_id::TaskId;
     use turborepo_telemetry::events::task::PackageTaskEventBuilder;
     use turborepo_types::{
-        IncrementalPartition, OutputLogsMode, RunCacheOpts, TaskDefinition, TaskOutputs,
+        OutputLogsMode, RunCacheOpts, TaskDefinition, TaskDefinitionExt, TaskOutputs,
     };
     use turborepo_ui::ColorConfig;
 
-    use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache};
+    use super::{OutputWatcher, OutputWatcherError, RunCache, TaskCache, TaskCacheContext};
 
     fn local_cache_opts(repo_root: &AbsoluteSystemPathBuf) -> CacheOpts {
         CacheOpts {
@@ -1038,7 +1088,7 @@ mod test {
             )
             .unwrap();
         PackageGraph::builder_optional(repo_root, None)
-            .with_toolchain(CargoToolchain::new(repo_root.clone()))
+            .with_cargo()
             .build()
             .await
             .unwrap()
@@ -1066,45 +1116,22 @@ mod test {
         ))
     }
 
-    async fn assert_incremental_roundtrip(task_cache: &TaskCache, output: &AbsoluteSystemPathBuf) {
-        output.ensure_dir().unwrap();
-        output.create_with_contents("state").unwrap();
-        assert_eq!(task_cache.upload_incremental().await, 0);
-        task_cache.run_cache.cache.wait().await.unwrap();
-        output.remove_file().unwrap();
-        assert!(task_cache.fetch_incremental().await.any_restored());
-        assert!(output.exists());
-    }
-
     #[tokio::test]
-    async fn task_cache_uses_context_and_ignores_stale_or_missing_payload() {
+    async fn task_cache_uses_authoritative_context() {
         let tmp = tempdir().unwrap();
         let repo_root =
             AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
-        let mut graph = javascript_graph(&repo_root, "packages").await;
-        assert!(graph.set_package_json_path_for_test(
-            &PackageName::from("app"),
-            AnchoredSystemPathBuf::from_raw(format!("stale{MAIN_SEPARATOR}package.json")).unwrap(),
-        ));
+        let graph = javascript_graph(&repo_root, "packages").await;
         let cache = run_cache(&repo_root);
-        let definition = TaskDefinition {
-            incremental: Some(vec![IncrementalPartition {
-                outputs: TaskOutputs {
-                    inclusions: vec![".incremental/**".to_string()],
-                    exclusions: Vec::new(),
-                },
-                inputs: Vec::new(),
-            }]),
-            ..Default::default()
-        };
+        let definition = TaskDefinition::default();
 
         let root = cache
-            .task_cache(
-                &definition,
-                &graph.package_task_context(&PackageName::Root).unwrap(),
-                TaskId::new("//", "build"),
-                "root-hash",
-            )
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph.package_task_context(&PackageName::Root).unwrap(),
+                task_id: TaskId::new("//", "build"),
+                hash: "root-hash",
+            })
             .unwrap();
         assert_eq!(
             root.log_file_path,
@@ -1112,14 +1139,14 @@ mod test {
         );
         let app_task = TaskId::from_static("app".to_string(), "build#variant".to_string());
         let app = cache
-            .task_cache(
-                &definition,
-                &graph
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
                     .package_task_context(&PackageName::from("app"))
                     .unwrap(),
-                app_task.clone(),
-                "app-hash",
-            )
+                task_id: app_task.clone(),
+                hash: "app-hash",
+            })
             .unwrap();
         assert_eq!(
             app.log_file_path,
@@ -1133,35 +1160,133 @@ mod test {
                     .starts_with(&format!("packages{MAIN_SEPARATOR}app{MAIN_SEPARATOR}")))
         );
         assert_eq!(app.task_id, app_task);
-        assert_incremental_roundtrip(
-            &app,
-            &repo_root.join_components(&["packages", "app", ".incremental", "state.bin"]),
-        )
-        .await;
-
         assert!(matches!(
-            cache.task_cache(
-                &definition,
-                &graph.package_task_context(&PackageName::Root).unwrap(),
-                TaskId::new("app", "build"),
-                "hash",
-            ),
+            cache.task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph.package_task_context(&PackageName::Root).unwrap(),
+                task_id: TaskId::new("app", "build"),
+                hash: "hash",
+            }),
             Err(super::Error::TaskPackageMismatch { .. })
         ));
 
-        graph.remove_package_info_for_test(&PackageName::from("app"));
         assert!(
             cache
-                .task_cache(
-                    &definition,
-                    &graph
+                .task_cache(TaskCacheContext {
+                    task_definition: &definition,
+                    package_context: &graph
                         .package_task_context(&PackageName::from("app"))
                         .unwrap(),
-                    TaskId::new("app", "build"),
-                    "hash",
-                )
+                    task_id: TaskId::new("app", "build"),
+                    hash: "hash",
+                })
                 .is_ok()
         );
+    }
+
+    #[tokio::test]
+    async fn unshared_task_name_resembling_scoped_log_keeps_legacy_behavior() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = javascript_graph(&root, "packages").await;
+        let cache = run_cache(&root);
+        let name = "build-app-444eee26cd60b933";
+        let definition = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: Vec::new(),
+                exclusions: vec![".turbo/**".to_string()],
+            },
+            ..Default::default()
+        };
+        let mut task = cache
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
+                    .package_task_context(&PackageName::from("app"))
+                    .unwrap(),
+                task_id: TaskId::new("app", name),
+                hash: "ordinary-task",
+            })
+            .unwrap();
+        assert!(super::is_scoped_task_log(&task.log_file_path));
+        assert!(task.scoped_log_glob().is_none());
+        let mut writer = task.output_writer(std::io::sink()).unwrap();
+        writeln!(writer, "ordinary log").unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        task.save_outputs(
+            Duration::from_millis(1),
+            &PackageTaskEventBuilder::new("app", name),
+        )
+        .await
+        .unwrap();
+        // Compare with an ordinary legacy task instead of imposing different
+        // output-exclusion semantics on the lookalike filename.
+        let mut control = cache
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
+                    .package_task_context(&PackageName::from("app"))
+                    .unwrap(),
+                task_id: TaskId::new("app", "build"),
+                hash: "ordinary-control",
+            })
+            .unwrap();
+        let mut writer = control.output_writer(std::io::sink()).unwrap();
+        writeln!(writer, "ordinary log").unwrap();
+        writer.flush().unwrap();
+        drop(writer);
+        control
+            .save_outputs(
+                Duration::from_millis(1),
+                &PackageTaskEventBuilder::new("app", "build"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            task.expanded_outputs.is_empty(),
+            control.expanded_outputs.is_empty()
+        );
+
+        // Nor should a broad legacy output glob lose an ordinary artifact that
+        // happens to resemble the scoped naming convention.
+        let artifact = root.join_components(&[
+            "packages",
+            "app",
+            ".turbo",
+            "turbo-build-other-1234567890abcdef.log",
+        ]);
+        artifact.create_with_contents("ordinary artifact").unwrap();
+        let definition = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec![".turbo/**".to_string()],
+                exclusions: Vec::new(),
+            },
+            ..Default::default()
+        };
+        let mut broad_task = cache
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &graph
+                    .package_task_context(&PackageName::from("app"))
+                    .unwrap(),
+                task_id: TaskId::new("app", name),
+                hash: "ordinary-broad-task",
+            })
+            .unwrap();
+        broad_task
+            .save_outputs(
+                Duration::from_millis(1),
+                &PackageTaskEventBuilder::new("app", name),
+            )
+            .await
+            .unwrap();
+        assert!(
+            broad_task
+                .expanded_outputs
+                .contains(&root.anchor(&artifact).unwrap())
+        );
+        cache.cache.wait().await.unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1171,50 +1296,37 @@ mod test {
             .unwrap()
             .to_realpath()
             .unwrap();
-        let mut graph = cargo_graph(&repo_root).await;
-        graph.remove_package_info_for_test(&PackageName::Root);
-        graph.remove_package_info_for_test(&PackageName::from("cargo-workspace"));
+        let graph = cargo_graph(&repo_root).await;
         let cache = run_cache(&repo_root);
         let definition = TaskDefinition {
             outputs: TaskOutputs {
                 inclusions: vec!["dist/**".to_string()],
                 exclusions: Vec::new(),
             },
-            incremental: Some(vec![IncrementalPartition {
-                outputs: TaskOutputs {
-                    inclusions: vec![".incremental/**".to_string()],
-                    exclusions: Vec::new(),
-                },
-                inputs: Vec::new(),
-            }]),
             ..Default::default()
         };
 
+        let mut log_paths = HashSet::new();
         for package in [PackageName::Root, PackageName::from("cargo-workspace")] {
             let task_cache = cache
-                .task_cache(
-                    &definition,
-                    &graph.package_task_context(&package).unwrap(),
-                    TaskId::new(package.as_str(), "build").into_owned(),
-                    "hash",
-                )
+                .task_cache(TaskCacheContext {
+                    task_definition: &definition,
+                    package_context: &graph.package_task_context(&package).unwrap(),
+                    task_id: TaskId::new(package.as_str(), "build").into_owned(),
+                    hash: "hash",
+                })
                 .unwrap();
-            assert_eq!(
-                task_cache.log_file_path,
-                repo_root.join_components(&[".turbo", "turbo-build.log"])
-            );
+            let relative =
+                TaskDefinition::workspace_relative_log_file("build", Some(package.as_str()));
+            assert_eq!(task_cache.log_file_path, repo_root.resolve(&relative));
+            assert!(log_paths.insert(task_cache.log_file_path.clone()));
             assert_eq!(
                 task_cache.repo_relative_globs,
                 TaskOutputs {
-                    inclusions: vec![".turbo/turbo-build.log".to_string(), "dist/**".to_string(),],
+                    inclusions: vec![relative.to_unix().to_string(), "dist/**".to_string()],
                     exclusions: Vec::new(),
                 }
             );
-            assert_incremental_roundtrip(
-                &task_cache,
-                &repo_root.join_components(&[".incremental", "state.bin"]),
-            )
-            .await;
         }
     }
 
@@ -1239,12 +1351,12 @@ mod test {
                 .unwrap()
                 .directory()
         );
-        let result = run_cache(&second_root).task_cache(
-            &TaskDefinition::default(),
-            &first_graph.package_task_context(&package).unwrap(),
-            TaskId::new("app", "build"),
-            "hash",
-        );
+        let result = run_cache(&second_root).task_cache(TaskCacheContext {
+            task_definition: &TaskDefinition::default(),
+            package_context: &first_graph.package_task_context(&package).unwrap(),
+            task_id: TaskId::new("app", "build"),
+            hash: "hash",
+        });
         assert!(matches!(
             result,
             Err(super::Error::ContextRepositoryRootMismatch { .. })
@@ -1282,11 +1394,11 @@ mod test {
             warnings: warnings.clone(),
             reads_disabled: false,
             writes_disabled: false,
+            is_dry_run: false,
             repo_root: repo_root.to_owned(),
             output_watcher: None,
             ui,
             errors_only_show_hash,
-            remote_only: false,
         });
 
         TaskCache {
@@ -1301,11 +1413,12 @@ mod test {
             task_output_logs,
             caching_disabled: false,
             log_file_path: repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]),
+            scoped_log: false,
+            shared_physical_directories: Arc::default(),
             output_watcher: None,
             ui,
             warnings,
             errors_only_show_hash,
-            incremental_cache: None,
         }
     }
 

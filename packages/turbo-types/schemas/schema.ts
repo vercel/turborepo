@@ -95,8 +95,8 @@ export interface RootSchema extends BaseSchema {
   globalEnv?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
@@ -338,8 +338,8 @@ export interface GlobalConfig {
   env?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key.
    *
    * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
    *

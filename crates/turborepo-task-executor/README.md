@@ -23,4 +23,4 @@ Uses trait abstractions for decoupling:
 
 ## Notes
 
-Designed to be decoupled from `turborepo-lib` through traits. The executor doesn't know about the broader CLI context - it just runs individual tasks according to configuration.
+Designed to be decoupled from `turborepo-run` through traits. The executor doesn't know about the broader CLI context - it just runs individual tasks according to configuration.

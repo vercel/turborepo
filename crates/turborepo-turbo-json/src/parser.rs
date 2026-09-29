@@ -13,9 +13,7 @@ use biome_deserialize::{
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
-use convert_case::{Case, Casing};
 use miette::Diagnostic;
-use struct_iterable::Iterable;
 use thiserror::Error;
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_task_id::TaskName;
@@ -56,22 +54,6 @@ impl BiomeParseError {
             backtrace: backtrace::Backtrace::capture(),
         }
     }
-}
-
-/// Creates an unknown key diagnostic from a struct that implements Iterable
-#[allow(dead_code)]
-pub fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
-    struct_iterable: &T,
-    unknown_key: &str,
-    range: TextRange,
-) -> DeserializationDiagnostic {
-    let allowed_keys = struct_iterable
-        .iter()
-        .map(|(k, _)| k.to_case(Case::Camel))
-        .collect::<Vec<_>>();
-    let allowed_keys_borrowed = allowed_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-
-    DeserializationDiagnostic::new_unknown_key(unknown_key, range, &allowed_keys_borrowed)
 }
 
 impl Deserializable for Pipeline {
@@ -478,6 +460,7 @@ impl WithMetadata for RawGlobalConfig {
 impl WithMetadata for RawRootTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
         self.span.add_text(text.clone());
+        self.agent_guidance.add_text(text.clone());
         self.tags.add_text(text.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_text(text.clone());
@@ -511,6 +494,7 @@ impl WithMetadata for RawRootTurboJson {
 
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
+        self.agent_guidance.add_path(path.clone());
         self.tags.add_path(path.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_path(path.clone());
@@ -770,6 +754,41 @@ mod tests {
             result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
             Some(true),
             "noUpdateNotifier should be parsed from a full turbo.json"
+        );
+    }
+
+    #[test]
+    fn test_agent_guidance_parses_and_defaults_to_true() {
+        let default = RawRootTurboJson::parse(r#"{"tasks": {}}"#, "turbo.json").unwrap();
+        assert_eq!(default.agent_guidance, None);
+        let enabled = RawRootTurboJson::parse(r#"{"agentGuidance": true}"#, "turbo.json").unwrap();
+        assert_eq!(
+            enabled.agent_guidance.map(|value| *value.as_inner()),
+            Some(true)
+        );
+        let disabled =
+            RawRootTurboJson::parse(r#"{"agentGuidance": false}"#, "turbo.json").unwrap();
+        assert_eq!(
+            disabled.agent_guidance.map(|value| *value.as_inner()),
+            Some(false)
+        );
+    }
+
+    #[test_case(r#"{"agentGuidance": "false"}"#)]
+    #[test_case(r#"{"agentGuidance": 0}"#)]
+    #[test_case(r#"{"agentGuidance": null}"#)]
+    fn test_agent_guidance_rejects_non_booleans(json: &str) {
+        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
+    }
+
+    #[test]
+    fn test_agent_guidance_is_root_only() {
+        assert!(
+            RawPackageTurboJson::parse(
+                r#"{"extends": ["//"], "agentGuidance": false}"#,
+                "packages/app/turbo.json"
+            )
+            .is_err()
         );
     }
 

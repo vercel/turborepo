@@ -8,7 +8,7 @@ use serde_json::Value;
 ///   metadata)
 /// - `ts`: timestamp in microseconds
 /// - `name`: span or event name
-/// - `cat`: category (tracing target, e.g. "turborepo_lib::run")
+/// - `cat`: category (tracing target, e.g. "turborepo_run")
 /// - `tid`: thread ID
 /// - `id`: async span correlation ID (only for "b"/"e" phases)
 /// - `.file` / `.line`: source location (when include_locations is true)
@@ -51,10 +51,10 @@ mod tests {
     fn parse_async_trace() {
         let json = r#"[
             {"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{"name":"main"}},
-            {"ph":"b","pid":1,"ts":100.0,"name":"run","cat":"turborepo_lib::run","tid":0,"id":1,".file":"src/run/mod.rs",".line":42},
+            {"ph":"b","pid":1,"ts":100.0,"name":"run","cat":"turborepo_run","tid":0,"id":1,".file":"src/run/mod.rs",".line":42},
             {"ph":"b","pid":1,"ts":200.0,"name":"hash","cat":"turborepo_task_hash","tid":0,"id":2,".file":"src/lib.rs",".line":10},
             {"ph":"e","pid":1,"ts":350.0,"name":"hash","cat":"turborepo_task_hash","tid":0,"id":2},
-            {"ph":"e","pid":1,"ts":500.0,"name":"run","cat":"turborepo_lib::run","tid":0,"id":1}
+            {"ph":"e","pid":1,"ts":500.0,"name":"run","cat":"turborepo_run","tid":0,"id":1}
         ]"#;
 
         let events = parse_trace(json).unwrap();

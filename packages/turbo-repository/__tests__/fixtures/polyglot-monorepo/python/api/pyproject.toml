@@ -1,0 +1,7 @@
+[project]
+name = "py-api"
+version = "0.1.0"
+dependencies = ["py-shared"]
+
+[tool.uv.sources]
+py-shared = { workspace = true }

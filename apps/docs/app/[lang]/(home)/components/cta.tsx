@@ -1,5 +1,5 @@
 import DynamicLink from "fumadocs-core/dynamic-link";
-import { Button } from "@/components/ui/button";
+import { Button } from "@vercel/geistdocs/components/button";
 
 type CTAProps = {
   title: string;

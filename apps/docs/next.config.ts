@@ -1,14 +1,29 @@
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
-import { createMDX } from "fumadocs-mdx/next";
+import { createGeistdocs } from "@vercel/geistdocs/next";
 import type { NextConfig } from "next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 
-const withMDX = createMDX();
+const withGeistdocs = createGeistdocs();
 const vercelToolbar = withVercelToolbar();
 
 const config: NextConfig = {
+  cacheComponents: true,
+  partialPrefetching: true,
   experimental: {
     turbopackFileSystemCacheForDev: true
+  },
+  async headers() {
+    const installerHeaders = [
+      { key: "Content-Type", value: "text/plain; charset=utf-8" },
+      {
+        key: "Cache-Control",
+        value: "public, max-age=0, must-revalidate"
+      }
+    ];
+    return [
+      { source: "/install", headers: installerHeaders },
+      { source: "/install.ps1", headers: installerHeaders }
+    ];
   },
   typescript: {
     ignoreBuildErrors: true
@@ -562,4 +577,4 @@ const config: NextConfig = {
   }
 };
 
-export default withMDX(vercelToolbar(config));
+export default withGeistdocs(vercelToolbar(config));

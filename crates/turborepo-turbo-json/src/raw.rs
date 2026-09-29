@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 use biome_deserialize_macros::Deserializable;
 use schemars::JsonSchema;
 use serde::Serialize;
-use struct_iterable::Iterable;
 use ts_rs::TS;
 use turbopath::AbsoluteSystemPath;
 use turborepo_boundaries::BoundariesConfig;
@@ -110,7 +109,7 @@ pub trait HasConfigBeyondExtends {
 /// cache.
 ///
 /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
-#[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable, JsonSchema, TS)]
+#[derive(Clone, Debug, Default, Serialize, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "RemoteCache", rename_all = "camelCase")]
 #[ts(export, rename = "RemoteCache")]
@@ -194,7 +193,7 @@ pub struct RawRemoteCacheOptions {
 }
 
 /// OpenTelemetry exporter configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtel {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -218,7 +217,7 @@ pub struct RawObservabilityOtel {
 }
 
 /// Experimental observability configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawExperimentalObservability {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -226,7 +225,7 @@ pub struct RawExperimentalObservability {
 }
 
 /// OTel metrics configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtelMetrics {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -240,7 +239,7 @@ pub struct RawObservabilityOtelMetrics {
 }
 
 /// OTel run attribute configuration for run-level metrics.
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtelRunAttributes {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -250,7 +249,7 @@ pub struct RawObservabilityOtelRunAttributes {
 }
 
 /// OTel task attribute configuration for task detail metrics.
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct RawObservabilityOtelTaskAttributes {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -272,7 +271,7 @@ pub struct RawObservabilityOtelTaskAttributes {
 /// 4. `WithMetadata` impl in `parser.rs`
 /// 5. `GlobalConfig` in `config-v2.ts` and `generate_global_config_interface()`
 ///    in schema-gen
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "GlobalConfig", rename_all = "camelCase")]
 #[ts(export, rename = "GlobalConfig")]
@@ -296,8 +295,8 @@ pub struct RawGlobalConfig {
     #[ts(optional)]
     pub env: Option<Vec<Spanned<UnescapedString>>>,
 
-    /// An allowlist of environment variables that should be made to all tasks,
-    /// but should not contribute to the task's cache key.
+    /// An allowlist of environment variables that should be made available to
+    /// all tasks, but should not contribute to the task's cache key.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
@@ -379,12 +378,14 @@ pub struct RawGlobalConfig {
 }
 
 // Root turbo.json
-#[derive(Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Default, Debug, Clone, Deserializable)]
 pub struct RawRootTurboJson {
     pub span: Spanned<()>,
 
     #[deserializable(rename = "$schema")]
     pub schema: Option<UnescapedString>,
+    /// Controls whether turbo maintains a root `AGENTS.md` block for AI agents.
+    pub agent_guidance: Option<Spanned<bool>>,
     // Global root filesystem dependencies
     pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
@@ -419,7 +420,7 @@ pub struct RawRootTurboJson {
 }
 
 // Package turbo.json
-#[derive(Default, Debug, Clone, Iterable, Deserializable)]
+#[derive(Default, Debug, Clone, Deserializable)]
 pub struct RawPackageTurboJson {
     pub span: Spanned<()>,
     #[deserializable(rename = "$schema")]
@@ -440,7 +441,7 @@ pub struct RawPackageTurboJson {
 /// the outputs of tasks in your project.
 ///
 /// Documentation: https://turborepo.dev/docs/reference/configuration
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, Clone, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename_all = "camelCase")]
 #[ts(export)]
@@ -455,6 +456,14 @@ pub struct RawTurboJson {
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     #[ts(optional, rename = "$schema")]
     pub schema: Option<UnescapedString>,
+
+    /// Controls whether turbo maintains a root `AGENTS.md` block for AI agents.
+    ///
+    /// Defaults to `true`. Set to `false` to opt out of future automatic
+    /// updates.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent_guidance: Option<Spanned<bool>>,
 
     /// This key is only available in Workspace Configs and cannot be used in
     /// your root turbo.json.
@@ -492,8 +501,8 @@ pub struct RawTurboJson {
     #[ts(optional)]
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
 
-    /// An allowlist of environment variables that should be made to all tasks,
-    /// but should not contribute to the task's cache key, e.g.
+    /// An allowlist of environment variables that should be made available to
+    /// all tasks, but should not contribute to the task's cache key, e.g.
     /// `AWS_SECRET_KEY`.
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
@@ -648,30 +657,6 @@ pub struct RawTurboJson {
     pub _comment: Option<String>,
 }
 
-/// A single incremental cache partition.
-///
-/// Each partition represents a distinct set of tool-managed incremental
-/// artifacts (e.g. `.tsbuildinfo`, Rust `target/debug/incremental/`) that
-/// turbo will persist across runs via remote cache to speed up cache misses.
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Deserializable, JsonSchema, TS)]
-#[serde(rename_all = "camelCase")]
-#[schemars(rename = "IncrementalPartition", rename_all = "camelCase")]
-#[ts(export, rename = "IncrementalPartition")]
-#[deserializable(unknown_fields = "deny")]
-pub struct RawIncrementalPartition {
-    /// Glob patterns of incremental artifact files to cache. Paths are
-    /// relative to the package directory. Supports exclusion patterns.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub outputs: Option<Vec<Spanned<UnescapedString>>>,
-
-    /// Glob patterns of files that invalidate this partition's incremental
-    /// cache. When omitted, the partition key does not include an input hash.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub inputs: Option<Vec<Spanned<UnescapedString>>>,
-}
-
 #[derive(Serialize, Default, Debug, PartialEq, Clone, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "StructuredInput", rename_all = "camelCase")]
@@ -751,7 +736,7 @@ impl Serialize for RawCommand {
 /// workspace package with a `package.json` scripts object with a matching
 /// key, it will apply the pipeline task configuration to that npm script
 /// during execution.
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable, Deserializable, JsonSchema, TS)]
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "Pipeline", rename_all = "camelCase")]
 #[ts(export, rename = "Pipeline")]
@@ -879,7 +864,7 @@ pub struct RawTaskDefinition {
     pub interactive: Option<Spanned<bool>>,
 
     // Internal field - excluded from schema
-    #[serde(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
     #[ts(skip)]
     pub env_mode: Option<Spanned<EnvMode>>,
@@ -901,19 +886,6 @@ pub struct RawTaskDefinition {
     #[schemars(skip)]
     #[ts(skip)]
     pub experimental_ci: Option<Spanned<ExperimentalCIConfig>>,
-
-    /// Incremental cache partitions for tool-specific incremental artifacts.
-    ///
-    /// Each partition specifies a set of files to persist across runs via
-    /// remote cache, enabling faster re-execution on cache misses by
-    /// restoring prior incremental state before the tool runs.
-    ///
-    /// The user asserts that the underlying tool is resilient to bad,
-    /// partial, stale, or corrupted incremental state.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[schemars(skip)]
-    #[ts(skip)]
-    pub incremental: Option<Vec<RawIncrementalPartition>>,
 
     /// The command this task runs, replacing the toolchain's own resolution
     /// (package.json scripts, Cargo verb tables). See [`RawCommand`].
@@ -938,7 +910,6 @@ impl HasConfigBeyondExtends for RawTaskDefinition {
             || self.output_logs.is_some()
             || self.interactive.is_some()
             || self.with.is_some()
-            || self.incremental.is_some()
             || self.experimental_ci.is_some()
             || self.command.is_some()
     }
@@ -960,6 +931,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
             Ok(RawTurboJson {
                 span: root.span,
                 schema: root.schema,
+                agent_guidance: root.agent_guidance,
                 tasks: root.tasks,
                 pipeline: root.pipeline,
                 tags: root.tags,
@@ -993,6 +965,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
             Ok(RawTurboJson {
                 span: root.span,
                 schema: root.schema,
+                agent_guidance: root.agent_guidance,
                 global_dependencies: root.global_dependencies,
                 global_env: root.global_env,
                 global_pass_through_env: root.global_pass_through_env,
@@ -1141,6 +1114,15 @@ impl RawTurboJson {
         path: &AbsoluteSystemPath,
         is_root: bool,
     ) -> Result<Option<RawTurboJson>, Error> {
+        Self::read_with_root_check(repo_root, path, || is_root)
+    }
+
+    /// Resolve the schema only after successfully reading the file contents.
+    pub(crate) fn read_with_root_check(
+        repo_root: &AbsoluteSystemPath,
+        path: &AbsoluteSystemPath,
+        is_root: impl FnOnce() -> bool,
+    ) -> Result<Option<RawTurboJson>, Error> {
         let Some(contents) = path.read_existing_to_string()? else {
             return Ok(None);
         };
@@ -1152,7 +1134,7 @@ impl RawTurboJson {
             |relative| relative.to_string(),
         );
 
-        Ok(Some(if is_root {
+        Ok(Some(if is_root() {
             RawRootTurboJson::parse(&contents, &root_relative_path)?.try_into()?
         } else {
             RawTurboJson::from(RawPackageTurboJson::parse(&contents, &root_relative_path)?)
@@ -1175,9 +1157,9 @@ impl RawTurboJson {
         this
     }
 
-    // NOTE: This method depends on turborepo-lib types (TaskAccessTraceFile)
-    // and has been commented out for now. It will be re-enabled when the
-    // dependency structure is resolved.
+    // NOTE: This method depends on turborepo-task-access types
+    // (`TaskAccessTraceFile`) and has been commented out for now. It will be
+    // re-enabled when the dependency structure is resolved.
     //
     // pub fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>)
     // -> Option<Self> {     if trace.is_empty() {

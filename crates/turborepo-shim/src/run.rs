@@ -1,7 +1,7 @@
 //! Shim run logic with trait-based dependency injection.
 //!
 //! This module contains the main entry point for the shim, refactored to use
-//! injected traits instead of direct `crate::` imports from `turborepo-lib`.
+//! injected traits instead of direct `crate::` imports from `turborepo-cli`.
 
 use std::{env, process, process::Stdio, sync::Arc, time::Duration};
 
@@ -10,7 +10,6 @@ use dunce::canonicalize as fs_canonicalize;
 use miette::Diagnostic;
 use shared_child::SharedChild;
 use thiserror::Error;
-use tiny_gradient::{GradientStr, RGB};
 use tracing::{debug, warn};
 use turbo_updater::{UpdateCheckConfig, display_update_check};
 use turbopath::AbsoluteSystemPathBuf;
@@ -43,7 +42,7 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 ///
 /// This struct holds all the trait implementations needed by the shim to
 /// execute. By using trait objects, we avoid circular dependencies with
-/// `turborepo-lib`.
+/// `turborepo-cli`.
 ///
 /// # Type Parameters
 ///
@@ -601,12 +600,7 @@ fn try_check_for_updates(
     let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
 
     if args.should_check_for_update() {
-        // custom footer for update message
-        let footer = format!(
-            "Follow {username} for updates: {url}",
-            username = "@turborepo".gradient([RGB::new(0, 153, 247), RGB::new(241, 23, 18)]),
-            url = "https://x.com/turborepo"
-        );
+        let footer = "Follow @turborepo for updates: https://x.com/turborepo";
 
         let interval = if args.force_update_check {
             // force update check
@@ -619,7 +613,7 @@ fn try_check_for_updates(
         let _ = display_update_check(UpdateCheckConfig {
             package_name: "turbo",
             github_repo: "https://github.com/vercel/turborepo",
-            footer: Some(&footer),
+            footer: Some(footer),
             current_version,
             // use default for timeout (800ms)
             timeout: None,

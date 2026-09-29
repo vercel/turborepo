@@ -1,0 +1,101 @@
+use miette::Diagnostic;
+use thiserror::Error;
+use turborepo_daemon::{DaemonConnectorError, DaemonError};
+use turborepo_engine::{BuilderError, GraphVisualizerError, ValidateError};
+use turborepo_repository::package_graph;
+use turborepo_run_opts::Error as OptsError;
+use turborepo_scope::filter::ResolutionError;
+use turborepo_task_graph::VisitorError;
+use turborepo_task_hash::{Error as TaskHashError, global_hash};
+use turborepo_ui::tui;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
+    #[error("Invalid task configuration")]
+    EngineValidation(#[related] Vec<ValidateError>),
+    #[error(transparent)]
+    Graph(#[from] GraphVisualizerError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Builder(#[from] BuilderError),
+    #[error(transparent)]
+    Env(#[from] turborepo_env::Error),
+    #[error(transparent)]
+    Opts(#[from] OptsError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageJson(#[from] turborepo_repository::package_json::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageManager(#[from] turborepo_repository::package_manager::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Config(#[from] turborepo_config::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PackageGraphBuilder(#[from] package_graph::builder::Error),
+    #[error(transparent)]
+    DaemonConnector(#[from] DaemonConnectorError),
+    #[error(transparent)]
+    Cache(#[from] turborepo_cache::CacheError),
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    Scope(#[from] ResolutionError),
+    #[error(transparent)]
+    GlobalHash(#[from] global_hash::Error),
+    #[error(transparent)]
+    TaskHash(#[from] TaskHashError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Visitor(#[from] VisitorError),
+    #[error(transparent)]
+    SignalHandler(#[from] turborepo_signals::listeners::Error),
+    #[error(transparent)]
+    Daemon(#[from] DaemonError),
+    #[error(transparent)]
+    UI(#[from] turborepo_ui::Error),
+    #[error(transparent)]
+    Tui(#[from] tui::Error),
+    #[error(transparent)]
+    MicroFrontends(#[from] turborepo_microfrontends::Error),
+    #[error("Microfrontends proxy error: {0}")]
+    Proxy(String),
+    #[error(transparent)]
+    ApiClient(#[from] turborepo_api_client::Error),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
+    #[error("Background task failed: {0}")]
+    Join(#[from] tokio::task::JoinError),
+    #[error("Missing root workspace")]
+    MissingRootWorkspace,
+    #[error("File hash task did not complete")]
+    FileHashTaskIncomplete,
+    #[error("Internal dependency hash task did not complete")]
+    InternalDepsTaskIncomplete,
+    #[error("Global file hash task did not complete")]
+    GlobalFileHashTaskIncomplete,
+    #[error("Affected range was not configured")]
+    MissingAffectedRange,
+    #[error("No package found with name '{name}' in workspace")]
+    #[diagnostic(help(
+        "This repository contains a Cargo workspace, but Cargo package support is not enabled. \
+         Rust crates become packages when `futureFlags.experimentalCargoWorkspaces` is set in the \
+         root turbo.json."
+    ))]
+    PackageMayBeCargoCrate { name: String },
+    #[error("No package found with name '{name}' in workspace")]
+    #[diagnostic(help(
+        "This repository contains a pyproject.toml, but Python package support is not enabled. uv \
+         workspace members become packages when `futureFlags.experimentalPythonWorkspaces` is set \
+         in the root turbo.json."
+    ))]
+    PackageMayBePythonPackage { name: String },
+    #[error("No package found with name '{name}' in workspace")]
+    #[diagnostic(help(
+        "This repository contains a go.work file, but Go workspace support is not enabled. Go \
+         modules become packages when `futureFlags.experimentalGoWorkspaces` is set in the root \
+         turbo.json."
+    ))]
+    PackageMayBeGoModule { name: String },
+}

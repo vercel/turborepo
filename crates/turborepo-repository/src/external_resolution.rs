@@ -1,0 +1,1284 @@
+//! Parser-neutral external dependency declarations and exact resolutions.
+
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    fmt,
+    ops::Range,
+    sync::Arc,
+};
+
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
+
+use crate::{
+    knowledge::{RelationshipKnowledge, RepositoryKnowledge},
+    relationships::{DependencyKind, RelationshipTarget},
+    toolchain::ToolchainId,
+};
+
+/// One effective unresolved external declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalDeclaration {
+    source: String,
+    declaration_name: String,
+    package_name: String,
+    specifier: String,
+    kind: DependencyKind,
+}
+
+impl ExternalDeclaration {
+    pub fn new(
+        source: impl Into<String>,
+        declaration_name: impl Into<String>,
+        package_name: impl Into<String>,
+        specifier: impl Into<String>,
+        kind: DependencyKind,
+    ) -> Self {
+        Self {
+            source: source.into(),
+            declaration_name: declaration_name.into(),
+            package_name: package_name.into(),
+            specifier: specifier.into(),
+            kind,
+        }
+    }
+
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    pub fn declaration_name(&self) -> &str {
+        &self.declaration_name
+    }
+
+    pub fn package_name(&self) -> &str {
+        &self.package_name
+    }
+
+    pub fn specifier(&self) -> &str {
+        &self.specifier
+    }
+
+    pub fn kind(&self) -> DependencyKind {
+        self.kind
+    }
+}
+
+/// Immutable declaration-side input to external resolution producers.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExternalDeclarations {
+    declarations: Box<[ExternalDeclaration]>,
+    ranges: HashMap<String, Range<usize>>,
+}
+
+impl ExternalDeclarations {
+    pub(crate) fn build(relationships: &RelationshipKnowledge) -> Self {
+        let mut declarations = Vec::new();
+        let mut ranges = HashMap::new();
+        for group in relationships.groups() {
+            let start = declarations.len();
+            let mut seen = HashSet::new();
+            for relationship in group.relationships() {
+                if !seen.insert(relationship.declaration_name()) {
+                    continue;
+                }
+                let RelationshipTarget::UnresolvedExternal { name, specifier } =
+                    relationship.target()
+                else {
+                    continue;
+                };
+                declarations.push(ExternalDeclaration::new(
+                    group.source(),
+                    relationship.declaration_name(),
+                    name,
+                    specifier,
+                    relationship.kind(),
+                ));
+            }
+            ranges.insert(group.source().to_string(), start..declarations.len());
+        }
+        Self {
+            declarations: declarations.into_boxed_slice(),
+            ranges,
+        }
+    }
+
+    pub fn declarations(&self) -> &[ExternalDeclaration] {
+        &self.declarations
+    }
+
+    pub fn for_package<'a>(&'a self, source: &'a str) -> PackageExternalDeclarations<'a> {
+        let declarations = self
+            .ranges
+            .get(source)
+            .map(|range| &self.declarations[range.clone()])
+            .unwrap_or_default();
+        PackageExternalDeclarations::new(declarations, source)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct PackageExternalDeclarations<'a> {
+    declarations: &'a [ExternalDeclaration],
+    source: &'a str,
+}
+
+impl<'a> PackageExternalDeclarations<'a> {
+    pub fn new(declarations: &'a [ExternalDeclaration], source: &'a str) -> Self {
+        Self {
+            declarations,
+            source,
+        }
+    }
+
+    pub fn iter(self) -> impl DoubleEndedIterator<Item = &'a ExternalDeclaration> + Clone + 'a {
+        self.declarations
+            .iter()
+            .filter(move |declaration| declaration.source() == self.source)
+    }
+}
+
+/// An exact, opaque external package identity.
+///
+/// Equality, ordering, and hashing are defined by `(key, version)` only.
+/// `human_name` is display metadata captured at observation time so query
+/// consumers do not re-read native lockfiles.
+#[derive(Debug, Clone)]
+pub struct ExternalPackageIdentity {
+    key: Arc<str>,
+    version: Arc<str>,
+    human_name: Option<Arc<str>>,
+}
+
+impl PartialEq for ExternalPackageIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key && self.version == other.version
+    }
+}
+
+impl Eq for ExternalPackageIdentity {}
+
+impl PartialOrd for ExternalPackageIdentity {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ExternalPackageIdentity {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        (&self.key, &self.version).cmp(&(&other.key, &other.version))
+    }
+}
+
+impl std::hash::Hash for ExternalPackageIdentity {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
+        self.version.hash(state);
+    }
+}
+
+impl ExternalPackageIdentity {
+    pub fn new(key: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
+        Self {
+            key: key.into(),
+            version: version.into(),
+            human_name: None,
+        }
+    }
+
+    pub fn with_human_name(mut self, human_name: impl Into<Arc<str>>) -> Self {
+        self.human_name = Some(human_name.into());
+        self
+    }
+
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
+    /// Prefer the producer-supplied display name; otherwise the opaque key.
+    pub fn display_name(&self) -> &str {
+        self.human_name.as_deref().unwrap_or(&self.key)
+    }
+}
+
+/// Why a resolved generation is incomplete.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolutionIncompleteReason {
+    code: String,
+    message: String,
+}
+
+impl ResolutionIncompleteReason {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+        }
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+}
+
+/// Whether all declarations in a resolution domain were resolved.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolutionCompleteness {
+    Complete,
+    Partial(ResolutionIncompleteReason),
+}
+
+/// Why no terminal resolution data is available for a domain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolutionUnavailableReason {
+    code: String,
+    message: String,
+}
+
+impl ResolutionUnavailableReason {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+        }
+    }
+
+    pub fn code(&self) -> &str {
+        &self.code
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+/// Generation-owned, byte-compatible fingerprint for one package resolution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolutionFingerprint(String);
+
+impl ResolutionFingerprint {
+    pub fn new(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Exact external identities attributed to one authoritative package.
+///
+/// The identity list is immutable once constructed (`new` sorts and
+/// dedups) and stored behind an `Arc` so packages with identical
+/// resolutions — common when many workspaces share the same external
+/// closure — can share one materialized list via
+/// [`PackageResolution::from_shared`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackageResolution {
+    package: String,
+    identities: Arc<[ExternalPackageIdentity]>,
+    fingerprint: Option<ResolutionFingerprint>,
+}
+
+impl PackageResolution {
+    pub fn new(
+        package: impl Into<String>,
+        identities: impl IntoIterator<Item = ExternalPackageIdentity>,
+    ) -> Self {
+        Self {
+            package: package.into(),
+            identities: Self::shared_identity_list(identities),
+            fingerprint: None,
+        }
+    }
+
+    /// Build a sorted, deduplicated identity list in shareable form. This is
+    /// the single source of truth for the invariant `new` and `from_shared`
+    /// rely on, so a caller that constructs the list separately (e.g. in
+    /// parallel) and attributes it via `from_shared` stays consistent.
+    pub(crate) fn shared_identity_list(
+        identities: impl IntoIterator<Item = ExternalPackageIdentity>,
+    ) -> Arc<[ExternalPackageIdentity]> {
+        let mut identities: Vec<_> = identities.into_iter().collect();
+        identities.sort_unstable();
+        identities.dedup();
+        identities.into()
+    }
+
+    /// Attribute an already-materialized identity list to another package.
+    /// The list carries `new`'s sorted/deduped invariant with it.
+    pub(crate) fn from_shared(
+        package: impl Into<String>,
+        identities: Arc<[ExternalPackageIdentity]>,
+    ) -> Self {
+        Self {
+            package: package.into(),
+            identities,
+            fingerprint: None,
+        }
+    }
+
+    pub fn package(&self) -> &str {
+        &self.package
+    }
+
+    pub fn identities(&self) -> &[ExternalPackageIdentity] {
+        &self.identities
+    }
+
+    pub fn fingerprint(&self) -> Option<&ResolutionFingerprint> {
+        self.fingerprint.as_ref()
+    }
+
+    pub(crate) fn set_fingerprint(&mut self, fingerprint: ResolutionFingerprint) {
+        self.fingerprint = Some(fingerprint);
+    }
+}
+
+/// Terminal resolution data for one domain.
+///
+/// `Resolved` with an empty package set is intentionally distinct from
+/// `Unavailable`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalResolutionData {
+    Resolved {
+        completeness: ResolutionCompleteness,
+        packages: Vec<PackageResolution>,
+    },
+    Unavailable(ResolutionUnavailableReason),
+}
+
+impl ExternalResolutionData {
+    /// Finds a package resolution using the ordering established when a
+    /// generation is built.
+    pub(crate) fn package_resolution(&self, package: &str) -> Option<&PackageResolution> {
+        let Self::Resolved { packages, .. } = self else {
+            return None;
+        };
+        packages
+            .binary_search_by(|candidate| candidate.package().cmp(package))
+            .ok()
+            .map(|index| &packages[index])
+    }
+}
+
+/// Resolution knowledge available to package-scoped consumers.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PackageResolutionState {
+    Resolved {
+        completeness: ResolutionCompleteness,
+        fingerprint: ResolutionFingerprint,
+    },
+    /// Resolution was attempted and failed. For contributor-supplied domains
+    /// the failure's conservative fallback is routed per-consumer: `fallback`
+    /// carries a fingerprint hashed from the domain's declared fallback
+    /// inputs, and the domain is excluded from the repo-wide fallback, so
+    /// co-selection cannot change unrelated task hashes based on this
+    /// domain's availability. The core lockfile-pipeline domain keeps the
+    /// historical behavior: `fallback: None`, a stable empty fingerprint, and
+    /// the global file fallback.
+    Unavailable {
+        reason: ResolutionUnavailableReason,
+        fallback: Option<ResolutionFingerprint>,
+    },
+    Missing,
+    NotApplicable,
+}
+
+impl PackageResolutionState {
+    /// Existing unavailable and non-applicable states remain cache-eligible.
+    /// Partial resolution is explicit and cannot safely participate in caching.
+    pub fn cache_eligible(&self) -> bool {
+        !matches!(
+            self,
+            Self::Resolved {
+                completeness: ResolutionCompleteness::Partial(_),
+                ..
+            }
+        )
+    }
+
+    pub fn task_hash(&self) -> Option<&str> {
+        match self {
+            Self::Resolved { fingerprint, .. } => Some(fingerprint.as_str()),
+            // Contributor-supplied attempted failures contribute a
+            // consumer-scoped conservative fingerprint — hashed from the
+            // domain's declared fallback inputs — so consumers of the
+            // domain's members invalidate when the underlying files change.
+            // They never fail the external-deps map; a domain with no
+            // fallback inputs keeps the stable empty fingerprint. The core
+            // lockfile domain keeps its historical stable empty fingerprint.
+            Self::Unavailable { fallback, .. } => Some(match fallback {
+                Some(fingerprint) => fingerprint.as_str(),
+                None => "",
+            }),
+            Self::NotApplicable => Some(""),
+            Self::Missing => None,
+        }
+    }
+}
+
+/// Open, stable identity for one external-resolution behavior domain.
+///
+/// IDs are unique within a generation. Built-in IDs are reserved to their
+/// canonical producers; custom producers may define other IDs.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ExternalResolutionDomainId(Cow<'static, str>);
+
+impl ExternalResolutionDomainId {
+    /// Creates an open domain ID from borrowed static or owned text.
+    pub fn new(value: impl Into<Cow<'static, str>>) -> Self {
+        Self(value.into())
+    }
+
+    /// Stable text used to identify the domain during composition and lookup.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ExternalResolutionDomainId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// Built-in JavaScript package-manager lockfile domain.
+pub const JAVASCRIPT_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
+    ExternalResolutionDomainId(Cow::Borrowed("javascript"));
+/// Built-in Cargo lockfile and compiler-identity domain.
+pub const CARGO_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
+    ExternalResolutionDomainId(Cow::Borrowed("cargo"));
+/// Built-in uv lockfile domain.
+pub const PYTHON_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
+    ExternalResolutionDomainId(Cow::Borrowed("python"));
+/// Built-in Go module and toolchain identity domain.
+pub const GO_RESOLUTION_DOMAIN: ExternalResolutionDomainId =
+    ExternalResolutionDomainId(Cow::Borrowed("go"));
+
+/// One parser-neutral external resolution domain contributed by a producer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalResolutionDomain {
+    id: ExternalResolutionDomainId,
+    toolchain: ToolchainId,
+    root: AnchoredSystemPathBuf,
+    members: Vec<String>,
+    definition_sources: Vec<AnchoredSystemPathBuf>,
+    /// Conservative files to hash when exact resolution is unavailable.
+    /// Paths are relative to `root` and apply uniformly to every toolchain.
+    fallback_inputs: Vec<AnchoredSystemPathBuf>,
+    data: ExternalResolutionData,
+    /// Whether a repository contributor supplied this domain, as opposed to
+    /// core's own lockfile pipeline. Provenance, not identity — no toolchain
+    /// is named — and it does not move with selection the way preparation
+    /// state does. Contributor-supplied unavailable domains route their
+    /// conservative fallback per-consumer (member fallback fingerprints) so
+    /// that co-selection cannot change unrelated task hashes regardless of
+    /// the domain's availability; the core lockfile domain keeps its
+    /// historical global fallback.
+    contributor_supplied: bool,
+}
+
+impl ExternalResolutionDomain {
+    /// Creates a domain with explicit identity, provenance, root, and exclusive
+    /// package membership. Complete resolved data must contain exactly one row
+    /// for every member; member names use authoritative repository identities.
+    pub fn new(
+        id: ExternalResolutionDomainId,
+        toolchain: ToolchainId,
+        root: AnchoredSystemPathBuf,
+        members: impl IntoIterator<Item = String>,
+        definition_sources: impl IntoIterator<Item = AnchoredSystemPathBuf>,
+        data: ExternalResolutionData,
+    ) -> Self {
+        let definition_sources: Vec<_> = definition_sources.into_iter().collect();
+        Self {
+            id,
+            toolchain,
+            root,
+            members: members.into_iter().collect(),
+            fallback_inputs: definition_sources.clone(),
+            definition_sources,
+            data,
+            contributor_supplied: false,
+        }
+    }
+
+    /// Marks this domain as supplied by a repository contributor (as opposed
+    /// to core's own lockfile pipeline). Set by the package graph builder when
+    /// collecting contributor observations; not part of the producer API.
+    pub(crate) fn mark_contributor_supplied(&mut self) {
+        self.contributor_supplied = true;
+    }
+
+    /// Whether a repository contributor supplied this domain. See the field
+    /// documentation for the fallback routing this provenance drives.
+    pub(crate) fn is_contributor_supplied(&self) -> bool {
+        self.contributor_supplied
+    }
+
+    /// Adds conservative inputs used when this domain cannot provide exact
+    /// package-level resolution. This keeps fallback policy on the generic
+    /// contributor boundary rather than in JavaScript-specific engine code.
+    pub fn with_fallback_inputs(
+        mut self,
+        inputs: impl IntoIterator<Item = AnchoredSystemPathBuf>,
+    ) -> Self {
+        self.fallback_inputs.extend(inputs);
+        self
+    }
+
+    /// Behavioral domain identity, independent from retained provenance.
+    pub fn id(&self) -> &ExternalResolutionDomainId {
+        &self.id
+    }
+
+    pub fn toolchain(&self) -> &ToolchainId {
+        &self.toolchain
+    }
+
+    pub fn root(&self) -> &AnchoredSystemPath {
+        &self.root
+    }
+
+    /// Authoritative package identities exclusively claimed by this domain.
+    pub fn members(&self) -> &[String] {
+        &self.members
+    }
+
+    pub fn definition_sources(&self) -> &[AnchoredSystemPathBuf] {
+        &self.definition_sources
+    }
+
+    pub fn fallback_inputs(&self) -> &[AnchoredSystemPathBuf] {
+        &self.fallback_inputs
+    }
+
+    pub fn data(&self) -> &ExternalResolutionData {
+        &self.data
+    }
+}
+
+/// A validated, immutable generation of external resolution knowledge.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ExternalResolutionGeneration {
+    domains: Box<[ExternalResolutionDomain]>,
+}
+
+impl ExternalResolutionGeneration {
+    pub(crate) fn build(
+        repository: &RepositoryKnowledge,
+        mut domains: Vec<ExternalResolutionDomain>,
+    ) -> Result<Self, ExternalResolutionError> {
+        for domain in &mut domains {
+            domain.members.sort();
+            domain.members.dedup();
+            domain.definition_sources.sort();
+            domain.definition_sources.dedup();
+            domain.fallback_inputs.sort();
+            domain.fallback_inputs.dedup();
+            if let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data {
+                // Identity lists are sorted and deduped at construction
+                // (`PackageResolution::new`) and immutable afterward, and
+                // packages sharing one list (via `from_shared`) share its
+                // `Arc`. Fingerprint each *distinct* list exactly once —
+                // keyed by slice address — and hash those distinct lists in
+                // parallel, since each is an independent Cap'n Proto
+                // canonicalization plus xxHash. On a monorepo with thousands
+                // of workspaces this is the dominant cost of building a
+                // generation. Output is unchanged: the canonical bytes are
+                // deterministic per input, and packages are re-sorted
+                // deterministically below.
+                use rayon::prelude::*;
+
+                // First-seen distinct lists, and each package's index into
+                // them. Raw pointers stay on this sequential side; only the
+                // borrowed slices cross into the parallel hash.
+                let mut index_of: HashMap<*const [ExternalPackageIdentity], usize> = HashMap::new();
+                let mut distinct: Vec<&[ExternalPackageIdentity]> = Vec::new();
+                for package in packages.iter() {
+                    let slice_ptr = Arc::as_ptr(&package.identities);
+                    index_of.entry(slice_ptr).or_insert_with(|| {
+                        distinct.push(&package.identities);
+                        distinct.len() - 1
+                    });
+                }
+
+                let fingerprints = distinct
+                    .par_iter()
+                    .map(|identities| {
+                        Ok(ResolutionFingerprint::new(
+                            turborepo_lockfile_hash::hash(
+                                identities
+                                    .iter()
+                                    .map(|identity| (identity.key(), identity.version())),
+                            )
+                            .map_err(ExternalResolutionError::Fingerprint)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, ExternalResolutionError>>()?;
+                drop(distinct);
+
+                for package in packages.iter_mut() {
+                    let slice_ptr = Arc::as_ptr(&package.identities);
+                    package.set_fingerprint(fingerprints[index_of[&slice_ptr]].clone());
+                }
+                packages.sort_by(|left, right| left.package.cmp(&right.package));
+            }
+        }
+        domains.sort_by(|left, right| left.id.cmp(&right.id));
+
+        if let Some(duplicate) = domains.windows(2).find(|pair| pair[0].id == pair[1].id) {
+            return Err(ExternalResolutionError::DuplicateDomain {
+                id: duplicate[0].id.clone(),
+            });
+        }
+
+        let mut claimed = HashMap::<String, ExternalResolutionDomainId>::new();
+        for domain in &mut domains {
+            let valid_builtin = if domain.id == JAVASCRIPT_RESOLUTION_DOMAIN {
+                domain.toolchain == ToolchainId::JAVASCRIPT
+                    && domain.root.as_str().is_empty()
+                    && repository.root_javascript_scope().is_some()
+            } else if domain.id == CARGO_RESOLUTION_DOMAIN {
+                domain.toolchain == ToolchainId::RUST && domain.root.as_str().is_empty()
+            } else if domain.id == PYTHON_RESOLUTION_DOMAIN {
+                domain.toolchain == ToolchainId::PYTHON && domain.root.as_str().is_empty()
+            } else if domain.id == GO_RESOLUTION_DOMAIN {
+                domain.toolchain == ToolchainId::GO && domain.root.as_str().is_empty()
+            } else {
+                true
+            };
+            if !valid_builtin {
+                return Err(ExternalResolutionError::InvalidBuiltinDomain {
+                    id: domain.id.clone(),
+                    toolchain: domain.toolchain.clone(),
+                    root: domain.root.clone(),
+                });
+            }
+            if !repository.workspace_roots().any(|root| {
+                root.toolchain() == &domain.toolchain && root.path() == domain.root.as_ref()
+            }) {
+                return Err(ExternalResolutionError::UnknownDomain {
+                    id: domain.id.clone(),
+                    root: domain.root.clone(),
+                });
+            }
+
+            for member in &domain.members {
+                let is_authoritative = (member == "//"
+                    && repository.root_javascript_scope().is_some())
+                    || repository.scope(member).is_some();
+                if !is_authoritative {
+                    return Err(ExternalResolutionError::UnknownPackage {
+                        id: domain.id.clone(),
+                        identity: member.clone(),
+                    });
+                }
+                if let Some(existing) = claimed.insert(member.clone(), domain.id.clone()) {
+                    return Err(ExternalResolutionError::DuplicateMembership {
+                        identity: member.clone(),
+                        first: existing,
+                        second: domain.id.clone(),
+                    });
+                }
+            }
+
+            let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data else {
+                continue;
+            };
+            if let Some(duplicate) = packages
+                .windows(2)
+                .find(|pair| pair[0].package == pair[1].package)
+            {
+                return Err(ExternalResolutionError::DuplicatePackage {
+                    id: domain.id.clone(),
+                    identity: duplicate[0].package.clone(),
+                });
+            }
+            for package in packages {
+                if domain
+                    .members
+                    .binary_search_by(|member| member.as_str().cmp(package.package()))
+                    .is_err()
+                {
+                    return Err(ExternalResolutionError::PackageOutsideDomain {
+                        id: domain.id.clone(),
+                        identity: package.package.clone(),
+                    });
+                }
+            }
+            if let ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Complete,
+                packages,
+                ..
+            } = &domain.data
+            {
+                let package_names = packages
+                    .iter()
+                    .map(|package| package.package())
+                    .collect::<Vec<_>>();
+                let members = domain
+                    .members
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>();
+                if package_names != members {
+                    return Err(ExternalResolutionError::IncompleteDomain {
+                        id: domain.id.clone(),
+                    });
+                }
+            }
+        }
+        Ok(Self {
+            domains: domains.into_boxed_slice(),
+        })
+    }
+
+    pub(crate) fn domains(&self) -> &[ExternalResolutionDomain] {
+        &self.domains
+    }
+
+    pub(crate) fn domain(
+        &self,
+        id: &ExternalResolutionDomainId,
+    ) -> Option<&ExternalResolutionDomain> {
+        self.domains
+            .binary_search_by(|domain| domain.id.cmp(id))
+            .ok()
+            .map(|index| &self.domains[index])
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ExternalResolutionError {
+    #[error("failed to fingerprint normalized package resolution")]
+    Fingerprint(#[source] turborepo_lockfile_hash::Error),
+    #[error("external resolution domain {id} was contributed more than once")]
+    DuplicateDomain { id: ExternalResolutionDomainId },
+    #[error("external resolution domain {id} has unknown root {root}")]
+    UnknownDomain {
+        id: ExternalResolutionDomainId,
+        root: AnchoredSystemPathBuf,
+    },
+    #[error("built-in resolution domain {id} has invalid producer {toolchain} or root {root}")]
+    InvalidBuiltinDomain {
+        id: ExternalResolutionDomainId,
+        toolchain: ToolchainId,
+        root: AnchoredSystemPathBuf,
+    },
+    #[error("external resolution domain {id} claims unknown package {identity}")]
+    UnknownPackage {
+        id: ExternalResolutionDomainId,
+        identity: String,
+    },
+    #[error("external resolution domain {id} resolved package {identity} outside its membership")]
+    PackageOutsideDomain {
+        id: ExternalResolutionDomainId,
+        identity: String,
+    },
+    #[error("package {identity} is claimed by both resolution domains {first} and {second}")]
+    DuplicateMembership {
+        identity: String,
+        first: ExternalResolutionDomainId,
+        second: ExternalResolutionDomainId,
+    },
+    #[error("external resolution domain {id} resolved package {identity} more than once")]
+    DuplicatePackage {
+        id: ExternalResolutionDomainId,
+        identity: String,
+    },
+    #[error("complete external resolution domain {id} does not contain exactly one row per member")]
+    IncompleteDomain { id: ExternalResolutionDomainId },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ExternalResolutionChanges {
+    All,
+    Packages(Vec<PackageResolutionChange>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PackageResolutionChange {
+    pub package: String,
+    pub added: Vec<ExternalPackageIdentity>,
+    pub removed: Vec<ExternalPackageIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum ExternalResolutionComparisonError {
+    #[error("external resolution unavailable")]
+    Unavailable,
+    #[error("previous external resolution is missing package {0}")]
+    MissingPackage(String),
+}
+
+/// Compares two complete, normalized resolution domains without knowing which
+/// ecosystem produced them.
+pub(crate) fn compare_resolution_data(
+    current: &ExternalResolutionData,
+    previous: &ExternalResolutionData,
+    invalidate_all: bool,
+    root_package: &str,
+) -> Result<ExternalResolutionChanges, ExternalResolutionComparisonError> {
+    fn resolved_packages(
+        data: &ExternalResolutionData,
+    ) -> Result<&[PackageResolution], ExternalResolutionComparisonError> {
+        match data {
+            ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Complete,
+                packages,
+                ..
+            } => Ok(packages),
+            ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Partial(_),
+                ..
+            }
+            | ExternalResolutionData::Unavailable(_) => {
+                Err(ExternalResolutionComparisonError::Unavailable)
+            }
+        }
+    }
+    let current = resolved_packages(current)?;
+    let previous = resolved_packages(previous)?;
+    if invalidate_all {
+        return Ok(ExternalResolutionChanges::All);
+    }
+
+    let previous_by_package: BTreeMap<_, _> = previous
+        .iter()
+        .map(|package| (package.package(), package))
+        .collect();
+    let mut changes = Vec::new();
+    for package in current {
+        let previous = previous_by_package.get(package.package()).ok_or_else(|| {
+            ExternalResolutionComparisonError::MissingPackage(package.package().to_string())
+        })?;
+        if package.identities() == previous.identities() {
+            continue;
+        }
+        if package.package() == root_package {
+            return Ok(ExternalResolutionChanges::All);
+        }
+
+        let previous: BTreeSet<_> = previous.identities().iter().collect();
+        let current: BTreeSet<_> = package.identities().iter().collect();
+        changes.push(PackageResolutionChange {
+            package: package.package().to_string(),
+            added: current
+                .difference(&previous)
+                .map(|identity| (*identity).clone())
+                .collect(),
+            removed: previous
+                .difference(&current)
+                .map(|identity| (*identity).clone())
+                .collect(),
+        });
+    }
+    Ok(ExternalResolutionChanges::Packages(changes))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{hint::black_box, time::Instant};
+
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::*;
+    use crate::{
+        knowledge::{
+            PackageScopeObservation, RelationshipGroup, ScopeKind, WorkspaceRootObservation,
+        },
+        relationships::Relationship,
+        toolchain::WorkspaceRoot,
+    };
+
+    fn repository() -> RepositoryKnowledge {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        RepositoryKnowledge::build(
+            &root,
+            Some(Some("root".to_string())),
+            &[
+                PackageScopeObservation {
+                    identity: Some("app".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["apps", "app", "package.json"]),
+                    toolchain: ToolchainId::JAVASCRIPT,
+                    scope_kind: ScopeKind::Package,
+                },
+                PackageScopeObservation {
+                    identity: Some("crate".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["crates", "crate", "Cargo.toml"]),
+                    toolchain: ToolchainId::RUST,
+                    scope_kind: ScopeKind::Package,
+                },
+            ],
+            &[
+                WorkspaceRootObservation::new(
+                    WorkspaceRoot::new("npm", root.clone()),
+                    ToolchainId::JAVASCRIPT,
+                ),
+                WorkspaceRootObservation::new(
+                    WorkspaceRoot::new("cargo", root.clone()),
+                    ToolchainId::RUST,
+                ),
+            ],
+        )
+        .unwrap()
+    }
+
+    fn resolved(packages: Vec<PackageResolution>) -> ExternalResolutionData {
+        ExternalResolutionData::Resolved {
+            completeness: ResolutionCompleteness::Complete,
+            packages,
+        }
+    }
+
+    #[test]
+    fn declaration_view_preserves_effective_external_declarations() {
+        let repository = repository();
+        let relationships = RelationshipKnowledge::build(
+            &repository,
+            vec![RelationshipGroup::new(
+                "app",
+                vec![
+                    Relationship::new(
+                        "alias",
+                        DependencyKind::Production,
+                        RelationshipTarget::UnresolvedExternal {
+                            name: "package".to_string(),
+                            specifier: "1.0.0".to_string(),
+                        },
+                    ),
+                    Relationship::new(
+                        "alias",
+                        DependencyKind::Development,
+                        RelationshipTarget::UnresolvedExternal {
+                            name: "ignored-duplicate".to_string(),
+                            specifier: "2.0.0".to_string(),
+                        },
+                    ),
+                    Relationship::new(
+                        "peer",
+                        DependencyKind::Peer { optional: false },
+                        RelationshipTarget::UnresolvedExternal {
+                            name: "peer".to_string(),
+                            specifier: "3.0.0".to_string(),
+                        },
+                    ),
+                ],
+            )],
+        )
+        .unwrap();
+
+        let view = ExternalDeclarations::build(&relationships);
+        assert_eq!(view.declarations().len(), 2);
+        let declaration = &view.declarations()[0];
+        assert_eq!(declaration.source(), "app");
+        assert_eq!(declaration.declaration_name(), "alias");
+        assert_eq!(declaration.package_name(), "package");
+        assert_eq!(declaration.specifier(), "1.0.0");
+        assert_eq!(declaration.kind(), DependencyKind::Production);
+    }
+
+    #[test]
+    fn resolved_package_lookup_uses_sorted_package_names() {
+        let data = resolved(vec![
+            PackageResolution::new("alpha", Vec::new()),
+            PackageResolution::new("middle", Vec::new()),
+            PackageResolution::new("zebra", Vec::new()),
+        ]);
+
+        assert_eq!(
+            data.package_resolution("alpha")
+                .map(PackageResolution::package),
+            Some("alpha")
+        );
+        assert_eq!(
+            data.package_resolution("middle")
+                .map(PackageResolution::package),
+            Some("middle")
+        );
+        assert_eq!(
+            data.package_resolution("zebra")
+                .map(PackageResolution::package),
+            Some("zebra")
+        );
+        assert_eq!(data.package_resolution("missing"), None);
+        assert_eq!(
+            ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new("missing", ""))
+                .package_resolution("alpha"),
+            None
+        );
+    }
+
+    #[test]
+    #[ignore = "benchmark; run with cargo test --release -p turborepo-repository \
+                resolved_package_lookup_benchmark -- --ignored --nocapture"]
+    fn resolved_package_lookup_benchmark() {
+        for package_count in [100, 1_000, 5_000, 20_000] {
+            let data = resolved(
+                (0..package_count)
+                    .map(|index| PackageResolution::new(format!("package-{index:05}"), Vec::new()))
+                    .collect(),
+            );
+            let ExternalResolutionData::Resolved { packages, .. } = &data else {
+                unreachable!("resolved helper always returns resolved data");
+            };
+            let queries = (0..1_000)
+                .map(|index| format!("package-{:05}", index * package_count / 1_000))
+                .collect::<Vec<_>>();
+
+            let linear_started = Instant::now();
+            for package in &queries {
+                assert!(
+                    black_box(
+                        packages
+                            .iter()
+                            .find(|candidate| candidate.package() == package)
+                    )
+                    .is_some()
+                );
+            }
+            let linear_elapsed = linear_started.elapsed();
+
+            let binary_started = Instant::now();
+            for package in &queries {
+                assert!(black_box(data.package_resolution(package)).is_some());
+            }
+            let binary_elapsed = binary_started.elapsed();
+
+            println!(
+                "{package_count:>6} packages: linear {linear_elapsed:?}, binary \
+                 {binary_elapsed:?}, {:.1}x faster",
+                linear_elapsed.as_secs_f64() / binary_elapsed.as_secs_f64(),
+            );
+        }
+    }
+
+    #[test]
+    fn resolved_empty_is_distinct_from_unavailable() {
+        let complete_empty = ExternalResolutionGeneration::build(
+            &repository(),
+            vec![ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::JAVASCRIPT,
+                AnchoredSystemPathBuf::default(),
+                Vec::new(),
+                [AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap()],
+                resolved(Vec::new()),
+            )],
+        )
+        .unwrap();
+        let unavailable = ExternalResolutionGeneration::build(
+            &repository(),
+            vec![ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::JAVASCRIPT,
+                AnchoredSystemPathBuf::default(),
+                Vec::new(),
+                [AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap()],
+                ExternalResolutionData::Unavailable(ResolutionUnavailableReason::new(
+                    "missing-definition",
+                    "package-lock.json does not exist",
+                )),
+            )],
+        )
+        .unwrap();
+
+        assert_ne!(complete_empty, unavailable);
+    }
+
+    #[test]
+    fn package_resolution_state_preserves_hash_and_cache_semantics() {
+        let core_unavailable = PackageResolutionState::Unavailable {
+            reason: ResolutionUnavailableReason::new("missing", "missing lockfile"),
+            fallback: None,
+        };
+        let contributor_unavailable = PackageResolutionState::Unavailable {
+            reason: ResolutionUnavailableReason::new("missing", "missing native lockfile"),
+            fallback: Some(ResolutionFingerprint::new("fallback-hash")),
+        };
+        let partial = PackageResolutionState::Resolved {
+            completeness: ResolutionCompleteness::Partial(ResolutionIncompleteReason::new(
+                "partial",
+                "partial resolution",
+            )),
+            fingerprint: ResolutionFingerprint::new("partial-hash"),
+        };
+
+        // The core lockfile domain keeps its historical semantics: a stable
+        // empty fingerprint, with its fallback delivered globally instead.
+        assert_eq!(core_unavailable.task_hash(), Some(""));
+        assert!(core_unavailable.cache_eligible());
+        // Contributor-supplied attempted failures contribute a consumer-scoped
+        // conservative fingerprint instead, so consumers of the domain's
+        // members invalidate on the underlying files — the domain's
+        // availability can no longer move co-selected task hashes.
+        assert_eq!(contributor_unavailable.task_hash(), Some("fallback-hash"));
+        assert!(contributor_unavailable.cache_eligible());
+        assert_eq!(PackageResolutionState::Missing.task_hash(), None);
+        assert!(!partial.cache_eligible());
+    }
+
+    #[test]
+    fn resolution_domain_id_is_open_and_constants_are_distinct() {
+        let custom = ExternalResolutionDomainId::new("custom");
+        assert_eq!(custom.as_str(), "custom");
+        assert_ne!(JAVASCRIPT_RESOLUTION_DOMAIN, CARGO_RESOLUTION_DOMAIN);
+    }
+
+    #[test]
+    fn generation_normalizes_all_ordering() {
+        let source_a = AnchoredSystemPathBuf::from_raw("a.lock").unwrap();
+        let source_z = AnchoredSystemPathBuf::from_raw("z.lock").unwrap();
+        let identity_a = ExternalPackageIdentity::new("a", "1");
+        let identity_z = ExternalPackageIdentity::new("z", "2");
+        let make = |reverse: bool| {
+            let (sources, identities) = if reverse {
+                (
+                    vec![source_z.clone(), source_a.clone(), source_z.clone()],
+                    vec![identity_z.clone(), identity_a.clone(), identity_z.clone()],
+                )
+            } else {
+                (
+                    vec![source_a.clone(), source_z.clone()],
+                    vec![identity_a.clone(), identity_z.clone()],
+                )
+            };
+            let javascript = ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::JAVASCRIPT,
+                AnchoredSystemPathBuf::default(),
+                vec!["app".to_string()],
+                sources,
+                resolved(vec![PackageResolution::new("app", identities)]),
+            );
+            let rust = ExternalResolutionDomain::new(
+                CARGO_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::RUST,
+                AnchoredSystemPathBuf::default(),
+                vec!["crate".to_string()],
+                [AnchoredSystemPathBuf::from_raw("Cargo.lock").unwrap()],
+                resolved(vec![PackageResolution::new("crate", Vec::new())]),
+            );
+            let domains = if reverse {
+                vec![rust, javascript]
+            } else {
+                vec![javascript, rust]
+            };
+            ExternalResolutionGeneration::build(&repository(), domains).unwrap()
+        };
+
+        let ordered = make(false);
+        let reversed = make(true);
+        assert_eq!(ordered, reversed);
+        assert_eq!(ordered.domains()[0].id(), &CARGO_RESOLUTION_DOMAIN);
+        let javascript = ordered.domain(&JAVASCRIPT_RESOLUTION_DOMAIN).unwrap();
+        let ExternalResolutionData::Resolved { packages, .. } = javascript.data() else {
+            panic!("expected resolved data")
+        };
+        assert_eq!(packages[0].identities(), &[identity_a, identity_z]);
+    }
+
+    #[test]
+    fn generation_rejects_duplicate_domains_and_unknown_packages() {
+        let domain = || {
+            ExternalResolutionDomain::new(
+                JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+                ToolchainId::JAVASCRIPT,
+                AnchoredSystemPathBuf::default(),
+                Vec::new(),
+                Vec::new(),
+                resolved(Vec::new()),
+            )
+        };
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![domain(), domain()]),
+            Err(ExternalResolutionError::DuplicateDomain { id })
+                if id == JAVASCRIPT_RESOLUTION_DOMAIN
+        ));
+
+        let outside = ExternalResolutionDomain::new(
+            JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("crate", Vec::new())]),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![outside]),
+            Err(ExternalResolutionError::PackageOutsideDomain { identity, .. })
+                if identity == "crate"
+        ));
+
+        let first = ExternalResolutionDomain::new(
+            ExternalResolutionDomainId::new("first"),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("app", Vec::new())]),
+        );
+        let second = ExternalResolutionDomain::new(
+            ExternalResolutionDomainId::new("second"),
+            ToolchainId::RUST,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("app", Vec::new())]),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![first, second]),
+            Err(ExternalResolutionError::DuplicateMembership { identity, .. })
+                if identity == "app"
+        ));
+
+        let spoofed_builtin = ExternalResolutionDomain::new(
+            JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::RUST,
+            AnchoredSystemPathBuf::default(),
+            vec!["crate".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("crate", Vec::new())]),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![spoofed_builtin]),
+            Err(ExternalResolutionError::InvalidBuiltinDomain { .. })
+        ));
+
+        let incomplete = ExternalResolutionDomain::new(
+            ExternalResolutionDomainId::new("custom"),
+            ToolchainId::JAVASCRIPT,
+            AnchoredSystemPathBuf::default(),
+            vec!["app".to_string()],
+            Vec::new(),
+            resolved(Vec::new()),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![incomplete]),
+            Err(ExternalResolutionError::IncompleteDomain { .. })
+        ));
+
+        let unknown = ExternalResolutionDomain::new(
+            CARGO_RESOLUTION_DOMAIN.clone(),
+            ToolchainId::RUST,
+            AnchoredSystemPathBuf::default(),
+            vec!["missing".to_string()],
+            Vec::new(),
+            resolved(vec![PackageResolution::new("missing", Vec::new())]),
+        );
+        assert!(matches!(
+            ExternalResolutionGeneration::build(&repository(), vec![unknown]),
+            Err(ExternalResolutionError::UnknownPackage { identity, .. })
+                if identity == "missing"
+        ));
+    }
+}

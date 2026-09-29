@@ -17,12 +17,99 @@ fn version_txt() -> String {
 }
 
 #[test]
+fn test_no_args_prints_help() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let output = run_turbo(tempdir.path(), &[]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    // `arg_required_else_help` prints help to stderr (clap parity).
+    assert!(
+        stderr.contains("The build system that makes ship happen")
+            && stderr.contains("Usage: turbo")
+            && stderr.contains("Commands:"),
+        "expected top-level help in stderr, got: {stderr}"
+    );
+}
+
+#[test]
 fn test_version_flag_matches_version_txt() {
     let tempdir = tempfile::tempdir().unwrap();
     let output = run_turbo(tempdir.path(), &["--version"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let version = stdout.trim();
     assert_eq!(version, version_txt());
+}
+
+#[test]
+fn test_parser_exits_before_starting_worker_pools() {
+    let tempdir = tempfile::tempdir().unwrap();
+    // Tokio rejects zero workers when constructing a runtime. Parser-only
+    // invocations must still succeed (or report their own argument error).
+    for (args, code, expected) in [
+        (vec!["--version"], 0, version_txt()),
+        (vec!["--help"], 0, "Usage: turbo".to_string()),
+        (vec!["run", "--help"], 0, "Usage:".to_string()),
+        (vec!["--bad-flag"], 1, "--bad-flag".to_string()),
+    ] {
+        let output = common::run_turbo_with_env(
+            tempdir.path(),
+            &args,
+            &[
+                ("TOKIO_WORKER_THREADS", "0"),
+                ("TURBO_LOG_VERBOSITY", "info"),
+            ],
+        );
+        let combined = common::combined_output(&output);
+        assert_eq!(output.status.code(), Some(code), "{args:?}: {combined}");
+        assert!(combined.contains(&expected), "{args:?}: {combined}");
+        assert!(
+            !combined.contains("initializing rayon global pool"),
+            "parser-only invocation initialized rayon: {combined}"
+        );
+    }
+}
+
+#[test]
+fn test_leading_run_flags_execute_task() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "-F",
+            "my-app",
+            "build",
+            "--env-mode",
+            "loose",
+            "--output-logs=errors-only",
+            "--log-order=stream",
+        ],
+    );
+    let combined = common::combined_output(&output);
+    assert_eq!(output.status.code(), Some(0), "{combined}");
+    assert!(combined.contains("1 successful, 1 total"), "{combined}");
+}
+
+#[test]
+fn test_leading_run_flags_help() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let explicit = run_turbo(tempdir.path(), &["run", "--help"]);
+    assert!(explicit.status.success());
+    for args in [
+        vec!["-F", "web", "build", "--help"],
+        vec!["--filter=web", "build", "--help"],
+        vec!["--filter=web", "--help"],
+        vec!["--single-package", "-F", "web", "build", "--help"],
+    ] {
+        let output = run_turbo(tempdir.path(), &args);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{args:?}: {}",
+            common::combined_output(&output)
+        );
+        assert_eq!(output.stdout, explicit.stdout, "{args:?}");
+    }
 }
 
 #[test]
@@ -91,7 +178,9 @@ fn test_conflicting_daemon_flags() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("the argument '--daemon' cannot be used with '--no-daemon'"),
+        stderr.contains("cannot be used with")
+            && stderr.contains("--daemon")
+            && stderr.contains("--no-daemon"),
         "expected conflict error in stderr, got: {stderr}"
     );
 }

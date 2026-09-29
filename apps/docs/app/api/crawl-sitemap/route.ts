@@ -1,5 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 import { crawlPages } from "@/lib/sitemap/crawler";
 import { getAllPageUrls } from "@/lib/sitemap/pages";
 import {
@@ -11,7 +11,6 @@ import {
 } from "@/lib/sitemap/redis";
 import { SITEMAP_CONFIG } from "@/lib/sitemap/types";
 
-export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes max for crawling
 
 function isValidCronRequest(request: Request, cronSecret: string): boolean {
@@ -39,6 +38,8 @@ function isValidCronRequest(request: Request, cronSecret: string): boolean {
  * Crawls all pages and updates sitemap state in Redis
  */
 export async function GET(request: Request): Promise<Response> {
+  await connection();
+
   const cronSecret = process.env.CRON_SECRET;
 
   if (!cronSecret) {

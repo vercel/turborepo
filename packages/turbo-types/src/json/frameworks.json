@@ -47,7 +47,7 @@
   {
     "slug": "nextjs",
     "name": "Next.js",
-    "envWildcards": ["NEXT_PUBLIC_*"],
+    "envWildcards": ["NEXT_PUBLIC_*", "NEXT_DEPLOYMENT_ID"],
     "envConditionals": [
       {
         "when": { "key": "VERCEL_SKEW_PROTECTION_ENABLED", "value": "1" },
@@ -91,6 +91,7 @@
     "name": "Nuxt.js",
     "envWildcards": [
       "NUXT_*",
+      "NUXT_ENV_*",
       "NITRO_*",
       "SERVER_*",
       "AWS_APP_ID",
@@ -117,6 +118,20 @@
     "dependencyMatch": {
       "strategy": "all",
       "dependencies": ["@redwoodjs/core"]
+    }
+  },
+  {
+    "slug": "remix",
+    "name": "Remix",
+    "envWildcards": ["REMIX_*"],
+    "dependencyMatch": {
+      "strategy": "some",
+      "dependencies": [
+        "@remix-run/dev",
+        "@remix-run/react",
+        "@remix-run/serve",
+        "@react-router/dev"
+      ]
     }
   },
   {

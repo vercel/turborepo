@@ -2,7 +2,7 @@
 
 mod common;
 
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 use common::{combined_output, run_turbo, setup};
 
@@ -15,33 +15,272 @@ fn ls_dir(dir: &Path) -> Vec<String> {
     entries
 }
 
-#[test]
-fn test_prune_production_excludes_dev_dependencies() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(
-        tempdir.path(),
-        "monorepo_with_root_dep",
-        "pnpm@7.25.1",
-        false,
+/// Golden inventory of a pruned tree: relative path, content hash, and kind.
+///
+/// Directories are recorded as `dir`; files include a sha256 of their bytes
+/// and a portable permission class (`ro` / `rw`). Paths use forward slashes.
+fn inventory_tree(root: &Path) -> String {
+    fn walk(base: &Path, current: &Path, out: &mut BTreeMap<String, String>) {
+        let mut entries: Vec<_> = fs::read_dir(current)
+            .unwrap_or_else(|error| panic!("read_dir {}: {error}", current.display()))
+            .map(|entry| entry.expect("dir entry"))
+            .collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let rel = path
+                .strip_prefix(base)
+                .expect("path under base")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let meta = entry.metadata().expect("metadata");
+            if meta.is_dir() {
+                out.insert(rel, "dir".to_string());
+                walk(base, &path, out);
+            } else if meta.is_file() {
+                let bytes = fs::read(&path).expect("read file");
+                // Stable FNV-1a fingerprint — good enough for golden inventories
+                // without pulling a crypto hash into the turbo test crate.
+                let mut hash: u64 = 0xcbf29ce484222325;
+                for byte in &bytes {
+                    hash ^= u64::from(*byte);
+                    hash = hash.wrapping_mul(0x100000001b3);
+                }
+                let perms = if meta.permissions().readonly() {
+                    "ro"
+                } else {
+                    "rw"
+                };
+                out.insert(rel, format!("file\t{hash:016x}\t{perms}"));
+            }
+        }
+    }
+
+    let mut inventory = BTreeMap::new();
+    walk(root, root, &mut inventory);
+    inventory
+        .into_iter()
+        .map(|(path, kind)| format!("{path}\t{kind}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn prune_retained_packages(stdout: &str) -> Vec<String> {
+    let mut packages: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix(" - Added ").map(str::to_string))
+        .collect();
+    packages.sort();
+    packages
+}
+
+/// An installable, registry-free workspace with task-only dependency owners.
+fn setup_task_aware_prune(dir: &Path, flag: Option<bool>) {
+    use serde_json::json;
+
+    let root = json!({
+        "name": "task-aware-prune",
+        "private": true,
+        "packageManager": "npm@10.5.0",
+        "workspaces": ["packages/*"],
+        "dependencies": {"root-dep": "*"}
+    });
+    let mut lock_packages = serde_json::Map::new();
+    lock_packages.insert(String::new(), root.clone());
+    fs::write(dir.join("package.json"), root.to_string()).unwrap();
+    for name in [
+        "web",
+        "install",
+        "dev-only",
+        "tool",
+        "leaf",
+        "tool-install",
+        "peer",
+        "optional-peer",
+        "final",
+        "root-dep",
+        "root-tool",
+        "unrelated",
+        "config",
+    ] {
+        let mut package = json!({
+            "name": name,
+            "version": "1.0.0",
+            "scripts": {"build": "echo built", "generate": "echo generated", "prepare": "echo prepared"}
+        });
+        if name == "web" {
+            package["dependencies"] = json!({"install": "*"});
+            package["devDependencies"] = json!({"dev-only": "*"});
+        } else if name == "tool" {
+            package["dependencies"] = json!({"tool-install": "*"});
+            package["peerDependencies"] = json!({"peer": "*", "optional-peer": "*"});
+            package["peerDependenciesMeta"] = json!({"optional-peer": {"optional": true}});
+        }
+        let path = format!("packages/{name}");
+        fs::create_dir_all(dir.join(&path)).unwrap();
+        fs::write(dir.join(&path).join("package.json"), package.to_string()).unwrap();
+        lock_packages.insert(path.clone(), package);
+        lock_packages.insert(
+            format!("node_modules/{name}"),
+            json!({"resolved": path, "link": true}),
+        );
+    }
+    fs::write(
+        dir.join("package-lock.json"),
+        json!({
+            "name": "task-aware-prune", "lockfileVersion": 3, "requires": true,
+            "packages": lock_packages
+        })
+        .to_string(),
     )
     .unwrap();
+    let mut config = json!({"tasks": {
+        "build": {}, "generate": {}, "prepare": {},
+        "web#build": {"dependsOn": ["tool#generate"]},
+        "tool#generate": {"dependsOn": ["leaf#generate"]},
+        // A valid task DAG whose projection has a web -> tool -> leaf -> web cycle.
+        "leaf#generate": {"dependsOn": ["web#prepare"]},
+        "web#prepare": {"dependsOn": ["//#prepare"]},
+        "//#prepare": {"dependsOn": ["root-tool#generate"]},
+        "//#unrelated": {"dependsOn": ["missing#build"]},
+        "unrelated#build": {"dependsOn": ["missing#build"]}
+    }});
+    if let Some(flag) = flag {
+        config["futureFlags"] = json!({"affectedUsingTaskInputs": flag});
+    }
+    fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+    // This task is not reached by tool#generate. It becomes an entrypoint only
+    // after the install closure retains tool-install in a subsequent pass.
+    fs::write(
+        dir.join("packages/tool-install/turbo.json"),
+        json!({
+            "extends": ["//"], "tasks": {"extra": {"dependsOn": ["final#generate"]}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(dir.join("packages/unrelated/turbo.json"), "not JSON").unwrap();
+    fs::write(dir.join(".gitignore"), "node_modules\nout\n").unwrap();
+    setup::setup_git(dir).unwrap();
+}
 
-    let output = run_turbo(tempdir.path(), &["prune", "web", "--production"]);
+#[test]
+fn test_prune_task_aware_flag_off_preserves_package_closure() {
+    // Keep pairwise CLI coverage for omitted versus explicit-off flags and
+    // production mode. The full planning matrix now lives in the prune crate.
+    for (flag, production) in [(None, false), (Some(false), true)] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_task_aware_prune(tempdir.path(), flag);
+        fs::write(tempdir.path().join("packages/web/turbo.json"), "not JSON").unwrap();
+        let mut args = vec!["prune", "web"];
+        if production {
+            args.push("--production");
+        }
+        let output = run_turbo(tempdir.path(), &args);
+        assert!(output.status.success(), "{}", combined_output(&output));
+        let mut expected = vec!["install", "root-dep", "web"];
+        if !production {
+            expected.insert(0, "dev-only");
+        }
+        assert_eq!(
+            prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+            expected
+        );
+    }
+}
+
+#[test]
+fn test_prune_task_aware_fixed_point() {
+    for production in [false, true] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            setup_task_aware_prune(tempdir.path(), Some(true));
+            let mut args = vec!["prune", "web"];
+            if production {
+                args.push("--production");
+            }
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(tempdir.path(), &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+            let mut expected = vec![
+                "final",
+                "install",
+                "leaf",
+                "peer",
+                "root-dep",
+                "root-tool",
+                "tool",
+                "tool-install",
+                "web",
+            ];
+            if !production {
+                expected.insert(0, "dev-only");
+            }
+            assert_eq!(
+                prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+                expected
+            );
+            let out = tempdir.path().join(if docker { "out/full" } else { "out" });
+            assert_eq!(ls_dir(&out.join("packages")), expected);
+            if docker {
+                assert_eq!(ls_dir(&tempdir.path().join("out/json/packages")), expected);
+            }
+            let output = run_turbo(&out, &["run", "build", "--filter=web", "--dry=json"]);
+            assert!(
+                output.status.success(),
+                "pruned task graph: {}",
+                combined_output(&output)
+            );
+        }
+    }
+}
+
+#[test]
+fn test_prune_task_aware_inherited_package_configuration() {
+    use serde_json::json;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_task_aware_prune(dir, Some(true));
+    // Override web#build with an inherited package configuration, including an
+    // array extension. The config owner has no manifest or task edge from web.
+    fs::write(
+        dir.join("packages/config/turbo.json"),
+        json!({
+            "extends": ["//"], "tasks": {"build": {"dependsOn": ["leaf#generate"]}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(dir.join("packages/web/turbo.json"), json!({
+        "extends": ["//", "config"], "tasks": {"build": {"dependsOn": ["$TURBO_EXTENDS$", "final#generate"]}}
+    }).to_string()).unwrap();
+    let output = run_turbo(dir, &["prune", "web"]);
+    assert!(output.status.success(), "{}", combined_output(&output));
+    assert_eq!(
+        prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+        [
+            "config",
+            "dev-only",
+            "final",
+            "install",
+            "leaf",
+            "root-dep",
+            "root-tool",
+            "web"
+        ]
+    );
+    let output = run_turbo(
+        &dir.join("out"),
+        &["run", "build", "--filter=web", "--dry=json"],
+    );
     assert!(
         output.status.success(),
-        "prune --production failed: {}",
+        "inherited pruned task graph: {}",
         combined_output(&output)
     );
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Added web"));
-    assert!(stdout.contains("Added shared"));
-    assert!(!stdout.contains("Added util"));
-
-    let packages_dir = tempdir.path().join("out/packages");
-    let package_entries = ls_dir(&packages_dir);
-    assert_eq!(package_entries, vec!["shared".to_string()]);
-    assert!(!packages_dir.join("util").exists());
 }
 
 #[test]
@@ -138,6 +377,39 @@ fn test_prune_docker() {
         pkg_json["pnpm"]["patchedDependencies"]["is-number@7.0.0"],
         "patches/is-number@7.0.0.patch"
     );
+}
+
+#[test]
+fn test_prune_docker_preserves_task_env_mode() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path).unwrap().replace(
+        r#""build": {"#,
+        r#""build": {
+      "envMode": "loose","#,
+    );
+    fs::write(&turbo_json_path, turbo_json).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let pruned_turbo_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/full/turbo.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pruned_turbo_json["tasks"]["build"]["envMode"], "loose");
 }
 
 #[test]
@@ -520,8 +792,12 @@ fn test_prune_respects_root_gitignore_in_workspaces() {
         "module.exports = {};\n",
     )
     .unwrap();
+    fs::remove_dir_all(tempdir.path().join(".git")).unwrap();
 
-    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--docker", "--use-gitignore"],
+    );
     assert!(
         output.status.success(),
         "prune failed: {}",
@@ -650,10 +926,10 @@ fn test_prune_composable_config() {
     assert!(stdout.contains("1 successful, 1 total"));
 }
 
-// --- includes-root-deps.t ---
+// --- JSONC configuration materialization ---
 
 #[test]
-fn test_prune_includes_root_deps() {
+fn test_prune_copies_jsonc_configuration() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(
         tempdir.path(),
@@ -663,20 +939,13 @@ fn test_prune_includes_root_deps() {
     )
     .unwrap();
 
-    let output = run_turbo(tempdir.path(), &["prune", "web"]);
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Added web"));
-
-    // Rename to turbo.jsonc, prune again
     fs::rename(
         tempdir.path().join("turbo.json"),
         tempdir.path().join("turbo.jsonc"),
     )
     .unwrap();
-    let _ = fs::remove_dir_all(tempdir.path().join("out"));
     let output = run_turbo(tempdir.path(), &["prune", "web"]);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", combined_output(&output));
 
     let out_entries = ls_dir(&tempdir.path().join("out"));
     assert!(
@@ -1165,4 +1434,215 @@ fn test_prune_pnpm_v11_multi_document_lockfile() {
         !root_lockfile.contains("apps/docs:"),
         "pruned lockfile should still trim workspaces from the dependency document"
     );
+}
+
+/// Golden fixture covering retained packages, relative file set, content
+/// hashes, and standard/Docker layer placement for the separated JS render +
+/// layout path.
+#[test]
+fn test_prune_docker_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_docker_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+
+    let out = tempdir.path().join("out");
+    insta::assert_snapshot!("prune_docker_out_top_level", ls_dir(&out).join("\n"));
+    insta::assert_snapshot!(
+        "prune_docker_full_inventory",
+        inventory_tree(&out.join("full"))
+    );
+    insta::assert_snapshot!(
+        "prune_docker_json_inventory",
+        inventory_tree(&out.join("json"))
+    );
+}
+
+#[test]
+fn test_prune_standard_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_standard_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+    insta::assert_snapshot!(
+        "prune_standard_out_inventory",
+        inventory_tree(&tempdir.path().join("out"))
+    );
+}
+
+// --- file: dependencies ---
+
+/// Prepare the shared file-dependency fixture for a prune run: the shared
+/// vendored package gains a symlink, a read-only file, and a `.gitignore` with
+/// an ignored sibling.
+///
+/// The read-only file is the observable for "copied once per destination":
+/// re-copying the same source over an existing read-only destination file
+/// fails with `EACCES`, so a prune that duplicates shared `file:` dependency
+/// copies cannot succeed.
+///
+/// The ignore files are written here, after `setup_integration_test` has
+/// committed the fixture, so they don't affect how the fixture itself is
+/// checked into the repository.
+fn setup_shared_file_dependency(dir: &Path) {
+    let vendored_lib = dir.join("vendored/sdk/lib");
+    fs::write(vendored_lib.join(".gitignore"), "ignored.txt\n").unwrap();
+    fs::write(
+        vendored_lib.join("ignored.txt"),
+        "this file is gitignored and must not be copied\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            vendored_lib.join("readonly.txt"),
+            fs::Permissions::from_mode(0o444),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("index.js", vendored_lib.join("link.js")).unwrap();
+    }
+}
+
+fn assert_shared_file_dependency_copied(root: &Path, vendored_dir: &Path) {
+    // Shared dependency contents are identical to the source in every
+    // destination, including the read-only file.
+    for file in [
+        "package.json",
+        "lib/index.js",
+        "lib/data.txt",
+        "lib/readonly.txt",
+    ] {
+        let expected = fs::read_to_string(root.join("vendored/sdk").join(file)).unwrap();
+        let copied = fs::read_to_string(vendored_dir.join("vendored/sdk").join(file))
+            .unwrap_or_else(|error| {
+                panic!("missing {file} in {}: {error}", vendored_dir.display())
+            });
+        assert_eq!(copied, expected, "{file} should match the source");
+    }
+
+    // Ignore rules inside the vendored package are still respected.
+    assert!(
+        !vendored_dir.join("vendored/sdk/lib/ignored.txt").exists(),
+        "gitignored vendored file should not be copied into {}",
+        vendored_dir.display()
+    );
+    // The vendored .gitignore itself travels with the package.
+    assert!(vendored_dir.join("vendored/sdk/lib/.gitignore").exists());
+
+    // Symlinks inside the vendored package are copied as symlinks.
+    #[cfg(unix)]
+    {
+        let link = vendored_dir.join("vendored/sdk/lib/link.js");
+        assert!(
+            link.symlink_metadata().unwrap().file_type().is_symlink(),
+            "vendored symlink should be copied as a symlink"
+        );
+        assert_eq!(fs::read_link(&link).unwrap(), Path::new("index.js"));
+    }
+
+    // A `file:` dependency referenced by only one workspace is not
+    // over-deduplicated away.
+    assert!(
+        vendored_dir.join("vendored/other/asset.txt").exists(),
+        "single-workspace file: dependency should be copied into {}",
+        vendored_dir.display()
+    );
+}
+
+#[test]
+fn test_prune_docker_copies_shared_file_dependency_once_per_destination() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_shared_file_deps",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+    setup_shared_file_dependency(tempdir.path());
+
+    // Retains web and docs, which both depend on `file:../../vendored/sdk`.
+    // Before shared sources were deduplicated, the second copy of the
+    // read-only vendored file into the same destination failed with
+    // `EACCES` on Unix.
+    let output = run_turbo(tempdir.path(), &["prune", "web", "docs", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+    assert!(stdout.contains("Added docs"));
+
+    let out = tempdir.path().join("out");
+    for destination in ["full", "json"] {
+        assert_shared_file_dependency_copied(tempdir.path(), &out.join(destination));
+    }
+    // Both retained workspaces are present in both destinations.
+    for destination in ["full", "json"] {
+        for app in ["web", "docs"] {
+            assert!(out.join(destination).join("apps").join(app).exists());
+        }
+    }
+}
+
+#[test]
+fn test_prune_copies_shared_file_dependency() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_shared_file_deps",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+    setup_shared_file_dependency(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "docs"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+
+    assert_shared_file_dependency_copied(tempdir.path(), &tempdir.path().join("out"));
+    assert!(tempdir.path().join("out/apps/web").exists());
+    assert!(tempdir.path().join("out/apps/docs").exists());
 }

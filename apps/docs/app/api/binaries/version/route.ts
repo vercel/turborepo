@@ -1,4 +1,4 @@
-import type { NextRequest } from "next/server";
+import { connection, type NextRequest } from "next/server";
 
 type NonEmptyArray<T> = Array<T> & { 0: T };
 
@@ -8,24 +8,24 @@ const SUPPORTED_PACKAGES: NonEmptyArray<string> = ["turbo"];
 const SUPPORTED_METHODS = ["GET"];
 const [DEFAULT_NAME] = SUPPORTED_PACKAGES;
 
-// There are other properties returned
-// but this is the one we care about.
-interface FetchDistTags {
-  "dist-tags": {
-    latest: string;
-    next: string;
-    canary: string;
-  };
+// There are other tags returned
+// but these are the ones we care about.
+interface DistTags {
+  latest?: string;
+  next?: string;
+  canary?: string;
 }
 
 export async function fetchDistTags({
   name
 }: {
   name: string;
-}): Promise<FetchDistTags["dist-tags"]> {
-  const result = await fetch(`${REGISTRY}/${name}`);
-  const json = (await result.json()) as FetchDistTags;
-  return json["dist-tags"];
+}): Promise<DistTags> {
+  // The registry's dist-tags endpoint returns only the tag-to-version map.
+  // The full package document contains every published version's metadata,
+  // which is megabytes of transfer and parsing for a single tag lookup.
+  const result = await fetch(`${REGISTRY}/-/package/${name}/dist-tags`);
+  return (await result.json()) as DistTags;
 }
 
 function errorResponse({
@@ -77,6 +77,8 @@ Errors (400 | 404 | 500):
 */
 
 export async function GET(req: NextRequest): Promise<Response> {
+  await connection();
+
   if (!SUPPORTED_METHODS.includes(req.method)) {
     return errorResponse({
       status: 404,
@@ -87,8 +89,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   try {
     const { searchParams } = new URL(req.url);
     const name = searchParams.get("name") || DEFAULT_NAME;
-    const tag = (searchParams.get("tag") ||
-      DEFAULT_TAG) as keyof FetchDistTags["dist-tags"];
+    const tag = (searchParams.get("tag") || DEFAULT_TAG) as keyof DistTags;
 
     if (!SUPPORTED_PACKAGES.includes(name)) {
       return errorResponse({

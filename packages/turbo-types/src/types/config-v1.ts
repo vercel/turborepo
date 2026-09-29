@@ -241,8 +241,8 @@ export interface RootSchemaV1 extends BaseSchemaV1 {
   globalEnv?: Array<EnvWildcardV1>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *

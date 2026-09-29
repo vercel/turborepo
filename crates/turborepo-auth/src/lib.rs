@@ -108,13 +108,13 @@ impl Token {
     pub fn existing_secret(token: SecretString) -> Self {
         Self::Existing(token)
     }
-    /// Reads a token from a file. If the file is a JSON object with a
-    /// `token` field, we read that in. If no such field exists, we error out.
+    /// Reads a non-empty token from a JSON file.
     ///
     /// ## Errors
-    /// * `Error::TokenNotFound` - If the file does not exist.
-    /// * `Error::InvalidTokenFileFormat` - If the file does not contain a
-    ///   properly formatted JSON object with a `token` field.
+    /// * `Error::TokenNotFound` - If the file is missing or has no non-empty
+    ///   token.
+    /// * `Error::InvalidTokenFileFormat` - If the file is not a valid JSON
+    ///   object with an optional string `token` field.
     pub fn from_file(path: &AbsoluteSystemPath) -> Result<Self, Error> {
         #[derive(Deserialize)]
         struct TokenWrapper {
@@ -129,7 +129,7 @@ impl Token {
                         source: err,
                     }
                 })?;
-                if let Some(token) = wrapper.token {
+                if let Some(token) = wrapper.token.filter(|token| !token.is_empty()) {
                     Ok(Self::Existing(SecretString::new(token)))
                 } else {
                     Err(Error::TokenNotFound)
@@ -1413,16 +1413,15 @@ mod tests {
     }
 
     #[test]
-    fn test_from_file_with_empty_token() {
+    fn test_from_file_rejects_empty_token() {
         let tmp_dir = tempdir().expect("Failed to create temp dir");
         let tmp_path = tmp_dir.path().join("empty_token.json");
         let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
             .expect("Failed to create AbsoluteSystemPathBuf");
-        // TODO: This should probably be failing. An empty string is an empty token.
         file_path.create_with_contents(r#"{"token": ""}"#).unwrap();
 
-        let result = Token::from_file(&file_path).expect("Failed to read token from file");
-        assert!(matches!(result, Token::Existing(ref t) if t.expose().is_empty()));
+        let result = Token::from_file(&file_path);
+        assert!(matches!(result, Err(Error::TokenNotFound)));
     }
 
     #[test]

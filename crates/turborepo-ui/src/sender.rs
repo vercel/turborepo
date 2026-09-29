@@ -117,9 +117,7 @@ impl TaskSender {
     }
 
     pub fn status(&self, status: &str, result: CacheResult, output_logs: OutputLogs) {
-        // Since this will be rendered via ratatui we any ANSI escape codes will not be
-        // handled.
-        // TODO: prevent the status from having ANSI codes in this scenario
+        // Ratatui does not render ANSI escape codes in the status, so strip them.
         let status = console::strip_ansi_codes(status).into_owned();
         self.handle
             .status(self.name.clone(), status, result, output_logs);

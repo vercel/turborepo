@@ -103,6 +103,44 @@ impl WorktreeInfo {
     }
 }
 
+/// Resolve the git directory for a repository root, handling both a main
+/// worktree (`.git` is a directory) and a linked worktree (`.git` is a
+/// `gitdir: <path>` pointer file). The per-worktree files — most notably
+/// `index` — live in the resolved directory.
+pub fn resolve_git_dir(worktree_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBuf, Error> {
+    let dot_git = worktree_root.join_component(".git");
+    let dot_git_meta = std::fs::symlink_metadata(dot_git.as_std_path())
+        .map_err(|e| Error::git_error(format!("failed to stat .git: {}", e)))?;
+
+    if dot_git_meta.is_dir() {
+        return Ok(dot_git);
+    }
+    if !dot_git_meta.is_file() {
+        return Err(Error::git_error(
+            ".git exists but is neither a directory nor a file",
+        ));
+    }
+
+    let content = std::fs::read_to_string(dot_git.as_std_path())
+        .map_err(|e| Error::git_error(format!("failed to read .git file: {}", e)))?;
+    let gitdir_path = content
+        .strip_prefix("gitdir: ")
+        .ok_or_else(|| {
+            Error::git_error(format!(
+                ".git file has unexpected format (expected 'gitdir: ...'): {:?}",
+                content.trim()
+            ))
+        })?
+        .trim();
+
+    if std::path::Path::new(gitdir_path).is_absolute() {
+        Ok(AbsoluteSystemPathBuf::try_from(gitdir_path)?)
+    } else {
+        let resolved = worktree_root.as_std_path().join(gitdir_path);
+        Ok(AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?)
+    }
+}
+
 /// Walk up from `path` looking for a directory that contains a `.git` entry.
 fn find_git_ancestor(path: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBuf, Error> {
     let mut current = path.to_owned();
@@ -229,6 +267,67 @@ mod tests {
         assert_eq!(info.main_worktree_root, repo_root);
         assert_eq!(info.git_root, worktree_path);
         assert!(info.is_linked_worktree());
+    }
+
+    #[test]
+    fn test_resolve_git_dir_main_and_linked() {
+        let (_tmp, repo_root) = tmp_dir();
+        setup_repository(&repo_root);
+
+        // Main worktree: .git directory.
+        let main_git_dir = resolve_git_dir(&repo_root).unwrap();
+        assert_eq!(main_git_dir, repo_root.join_component(".git"));
+
+        let worktree_path = repo_root.join_component("worktree-gitdir");
+        require_git_cmd(
+            &repo_root,
+            &[
+                "worktree",
+                "add",
+                worktree_path.as_str(),
+                "-b",
+                "test-branch-gitdir",
+            ],
+        );
+
+        // Linked worktree: .git is a pointer file; the resolved gitdir holds
+        // the per-worktree index.
+        let linked_git_dir = resolve_git_dir(&worktree_path).unwrap();
+        assert_ne!(linked_git_dir, worktree_path.join_component(".git"));
+        assert!(linked_git_dir.join_component("index").exists());
+    }
+
+    #[test]
+    fn test_gix_repo_index_works_in_linked_worktree() {
+        let (_tmp, repo_root) = tmp_dir();
+        setup_repository(&repo_root);
+
+        let worktree_path = repo_root.join_component("worktree-index");
+        require_git_cmd(
+            &repo_root,
+            &[
+                "worktree",
+                "add",
+                worktree_path.as_str(),
+                "-b",
+                "test-branch-index",
+            ],
+        );
+
+        // The gix fast path must work from a linked worktree; before the
+        // `.git` pointer file was resolved, this returned None and every
+        // package fell back to git subprocesses.
+        let scm = crate::SCM::new(&worktree_path);
+        let index = scm
+            .build_tracked_repo_index_eager()
+            .expect("tracked repo index should build in a linked worktree");
+        let (hashes, _to_hash) = index
+            .get_package_hashes(&turbopath::RelativeUnixPathBuf::new("").unwrap())
+            .unwrap();
+        assert!(
+            hashes.keys().any(|path| path.as_str() == "README.md"),
+            "committed file should be present in the worktree index: {hashes:?}"
+        );
     }
 
     #[test]

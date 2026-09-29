@@ -8,8 +8,26 @@
     "lint:prettier": {
       "inputs": []
     },
+    "check-types": {
+      "command": null
+    },
     "check-examples": {
-      "passThroughEnv": ["VERCEL_TOKEN"]
+      "passThroughEnv": ["VERCEL_TOKEN"],
+      "command": [
+        "pnpm",
+        "exec",
+        "tsx",
+        "--env-file=.env.local",
+        "check-examples.ts"
+      ]
+    },
+    "install-all": {
+      "cache": false,
+      "command": ["pnpm", "exec", "tsx", "install-all.ts"]
+    },
+    "update-turbo": {
+      "cache": false,
+      "command": ["pnpm", "exec", "tsx", "update-turbo.ts"]
     }
   }
 }

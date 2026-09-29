@@ -17,51 +17,72 @@
 //! turbo-schema-gen typescript -o types.ts
 //! ```
 
-use std::{fs, io::Write, path::PathBuf};
+use std::{fs, io::Write, path::PathBuf, str::FromStr};
 
-use clap::{Parser, Subcommand};
 use schemars::{schema::RootSchema, schema_for};
 use ts_rs::TS;
 use turborepo_turbo_json::RawTurboJson;
 use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
+use usage::{Cli as UsageCli, Subcommands};
 
 /// Generate JSON Schema and TypeScript types for turbo.json
-#[derive(Parser)]
-#[command(name = "turbo-schema-gen")]
-#[command(about = "Generate JSON Schema and TypeScript types from Rust types")]
+#[derive(UsageCli, Debug)]
+#[usage(name = "turbo-schema-gen")]
+#[usage(about = "Generate JSON Schema and TypeScript types from Rust types")]
 struct Cli {
-    #[command(subcommand)]
+    #[usage(subcommand)]
     command: Commands,
 }
 
-#[derive(Subcommand)]
+// A value-taking boolean, rather than usage-rs's default boolean switch.
+#[derive(Debug)]
+struct Pretty(bool);
+
+impl std::fmt::Display for Pretty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl FromStr for Pretty {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value
+            .parse::<bool>()
+            .map(Self)
+            .map_err(|_| format!("invalid boolean value: {value}"))
+    }
+}
+
+#[derive(Subcommands, Debug)]
 enum Commands {
     /// Generate JSON Schema for turbo.json
     Schema {
         /// Output file path (defaults to stdout)
-        #[arg(short, long)]
+        #[usage(short = 'o', long)]
         output: Option<PathBuf>,
 
         /// Pretty print the JSON (default: true)
-        #[arg(long, default_value = "true")]
-        pretty: bool,
+        #[usage(long, default_value_t = Pretty(true), default = "true")]
+        pretty: Pretty,
     },
 
     /// Generate TypeScript type definitions
     Typescript {
         /// Output file path (defaults to stdout)
-        #[arg(short, long)]
+        #[usage(short = 'o', long)]
         output: Option<PathBuf>,
     },
 
     /// Verify generated files match current Rust types
     Verify {
         /// Path to existing schema.json
-        #[arg(long)]
+        #[usage(long)]
         schema: Option<PathBuf>,
 
         /// Path to existing TypeScript types
-        #[arg(long)]
+        #[usage(long)]
         typescript: Option<PathBuf>,
     },
 }
@@ -72,7 +93,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Commands::Schema { output, pretty } => {
             let schema = generate_schema();
-            let json = if pretty {
+            let json = if pretty.0 {
                 serde_json::to_string_pretty(&schema)?
             } else {
                 serde_json::to_string(&schema)?
@@ -566,6 +587,14 @@ export interface WorkspaceSchema extends BaseSchema {
 fn generate_root_schema_interface() -> String {
     r#"export interface RootSchema extends BaseSchema {
   /**
+   * Controls whether turbo maintains a root AGENTS.md block for AI agents.
+   * Set to false to opt out of future automatic updates.
+   *
+   * @defaultValue `true`
+   */
+  agentGuidance?: boolean;
+
+  /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
    * The contents of these files will be included in the global hashing
@@ -597,8 +626,8 @@ fn generate_root_schema_interface() -> String {
   globalEnv?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
@@ -769,6 +798,14 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
+   * When GitHub Actions reports a base branch that is not available as a
+   * local ref, fall back to `origin/<branch>`. This supports detached
+   * checkouts where only remote-tracking refs are present.
+   *
+   * @defaultValue `false`
+   */
+  githubActionsRemoteBaseRefFallback?: boolean;
+  /**
    * Use task-level `inputs` globs to determine which tasks to re-run when
    * files change in `turbo watch`. When enabled, only tasks whose declared
    * inputs match the changed files are re-executed, rather than re-running
@@ -822,8 +859,8 @@ export interface FutureFlags {
    * expressions, propagate `--affected`, and appear in `turbo query`.
    * Filtered builds execute each selected crate. Unfiltered builds prefer
    * entrypoints, falling back to libraries when no entrypoints exist.
-   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `clippy`/`lint`, `bench`, and
-   * `doc`/`docs` tasks are selectable per crate with `--filter`. An
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`, and
+   * `format` tasks are selectable per crate with `--filter`. An
    * unfiltered run executes one workspace-wide Cargo verification command;
    * filtered runs use the selected crates, or the workspace command when the
    * workspace package is selected directly.
@@ -835,12 +872,43 @@ export interface FutureFlags {
    * exclude them with `extends: false`.
    *
    * Task caching uses Cargo-derived inputs and caches entrypoint build
-   * deliverables. Library builds default to uncached. This feature is
-   * experimental.
+   * deliverables. Library builds and formatting default to uncached. This
+   * feature is experimental.
    *
    * @defaultValue `false`
    */
   experimentalCargoWorkspaces?: boolean;
+
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python packages are discovered from the root
+   * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
+   * package graph: they resolve in `--filter` expressions, propagate
+   * `--affected`, and appear in `turbo query`. Buildable packages register `build`
+   * (`uv build --package`), and all packages register `format` and `check`.
+   * Direct pytest declarations register ownership-scoped `test` tasks; the
+   * user-named workspace package registers workspace-wide quality tasks.
+   * External dependencies hash from `uv.lock` per
+   * package, and `turbo prune` produces a reachability-pruned `uv.lock`
+   * and root `pyproject.toml`. uv is the only supported Python package
+   * manager. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalPythonWorkspaces?: boolean;
+
+  /**
+   * Treat the modules listed in a `go.work` file as Turborepo packages.
+   *
+   * When enabled, Go modules are discovered from the repository-root
+   * `go.work` via the Go toolchain and participate in the package graph:
+   * they resolve in `--filter` expressions, propagate `--affected`, and
+   * appear in `turbo query`. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalGoWorkspaces?: boolean;
 }
 
 "#
@@ -873,8 +941,8 @@ fn generate_global_config_interface() -> String {
   env?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key.
    *
    * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
    *
@@ -1067,5 +1135,106 @@ fn verify_typescript(path: &PathBuf) -> Result<bool, Box<dyn std::error::Error>>
             path.display()
         );
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use std::{ffi::OsStr, path::PathBuf};
+
+    use super::{Cli, Commands};
+
+    #[test]
+    fn schema_defaults_and_explicit_values() {
+        let Cli {
+            command: Commands::Schema { output, pretty },
+        } = Cli::parse_from(&[OsStr::new("schema")]).unwrap()
+        else {
+            panic!("expected schema command");
+        };
+        assert!(output.is_none());
+        assert!(pretty.0);
+
+        let Cli {
+            command: Commands::Schema { output, pretty },
+        } = Cli::parse_from(&[
+            OsStr::new("schema"),
+            OsStr::new("-o"),
+            OsStr::new("schema.json"),
+            OsStr::new("--pretty"),
+            OsStr::new("false"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected schema command");
+        };
+        assert_eq!(output, Some(PathBuf::from("schema.json")));
+        assert!(!pretty.0);
+    }
+
+    #[test]
+    fn typescript_and_verify_flags() {
+        let Cli {
+            command: Commands::Typescript { output },
+        } = Cli::parse_from(&[
+            OsStr::new("typescript"),
+            OsStr::new("--output"),
+            OsStr::new("types.ts"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected typescript command");
+        };
+        assert_eq!(output, Some(PathBuf::from("types.ts")));
+
+        let Cli {
+            command: Commands::Verify { schema, typescript },
+        } = Cli::parse_from(&[
+            OsStr::new("verify"),
+            OsStr::new("--schema"),
+            OsStr::new("schema.json"),
+            OsStr::new("--typescript"),
+            OsStr::new("types.ts"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected verify command");
+        };
+        assert_eq!(schema, Some(PathBuf::from("schema.json")));
+        assert_eq!(typescript, Some(PathBuf::from("types.ts")));
+    }
+
+    #[test]
+    fn help_and_invalid_arguments() {
+        use usage::embedded::Outcome;
+
+        for args in [
+            vec![OsStr::new("--help")],
+            vec![OsStr::new("schema"), OsStr::new("--help")],
+        ] {
+            let argv: Vec<_> = args.iter().map(|arg| arg.to_os_string()).collect();
+            let Outcome::Exit(exit) = Cli::embedded_outcome(&argv) else {
+                panic!("expected help");
+            };
+            assert_eq!(exit.code, 0);
+            assert!(exit.text.contains("--output") || exit.text.contains("schema"));
+        }
+
+        for args in [
+            vec![OsStr::new("unknown")],
+            vec![
+                OsStr::new("schema"),
+                OsStr::new("--pretty"),
+                OsStr::new("no"),
+            ],
+            vec![OsStr::new("verify"), OsStr::new("--unknown")],
+        ] {
+            let argv: Vec<_> = args.iter().map(|arg| arg.to_os_string()).collect();
+            let Outcome::Exit(exit) = Cli::embedded_outcome(&argv) else {
+                panic!("expected parse error");
+            };
+            assert_ne!(exit.code, 0);
+            assert!(exit.stderr);
+        }
     }
 }

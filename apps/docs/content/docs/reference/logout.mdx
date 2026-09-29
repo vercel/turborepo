@@ -14,3 +14,15 @@ Log out of the account associated with your Remote Cache provider.
 ```bash title="Terminal"
 turbo logout
 ```
+
+## Flags
+
+### `--invalidate [<BOOL>]`
+
+Invalidate the token on the server. Defaults to `true`.
+
+Pass `--invalidate=false` to remove the local token without revoking it on the server.
+
+```bash title="Terminal"
+turbo logout --invalidate=false
+```

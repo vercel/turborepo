@@ -26,8 +26,8 @@ Thank you for your interest in contributing to Turborepo!
 You will need to have these dependencies installed on your machine to work on this repository:
 
 - [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
-- [Node.js](https://nodejs.org/en) v22
-- [pnpm](https://pnpm.io/) v10
+- [Node.js](https://nodejs.org/en) v24
+- [pnpm](https://pnpm.io/) v12
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
 - [Zig](https://ziglang.org/download/) 0.15.2 or newer — required to build `libghostty-vt` for the TUI (`libghostty-vt-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
@@ -35,6 +35,7 @@ You will need to have these dependencies installed on your machine to work on th
 ### Optional dependencies
 
 - [Bun](https://bun.sh) is required to build `@turbo/gen` (the `turbo gen` code generator). The `@turbo/gen` package is compiled into a standalone binary using `bun build --compile`.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) is required to run the Python workspace integration tests (`crates/turborepo/tests/uv_workspace_test.rs`); tests that execute uv skip when it is not installed.
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
   - Linux: `sudo apt update && sudo apt install jq zstd`
@@ -53,7 +54,13 @@ In general, there are two major areas in the repository:
 ## Building Turborepo
 
 1. Run `pnpm install` at the root of the repository
-2. Run `cargo build`
+2. Run `cargo build -p turbo`
+
+The focused `cargo build -p turbo` builds just the `turbo` CLI and its
+dependencies, skipping the workspace's other top-level targets (such as the
+LSP, schema generator, and N-API addon) that you don't need for CLI
+development. Use a plain `cargo build` when you want to build and verify every
+workspace member.
 
 ### TLS Implementation
 

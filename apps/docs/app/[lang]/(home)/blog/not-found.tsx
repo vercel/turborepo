@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { blog, externalBlog } from "@/lib/geistdocs/source";
+import { getLocalizedPath } from "@/lib/geistdocs/public-path";
+import { getRootLang } from "@/lib/geistdocs/root-params";
 
-export default function NotFound() {
+export default async function NotFound() {
+  const lang = await getRootLang();
   const posts = [...blog.getPages(), ...externalBlog.getPages()]
     .sort((a, b) => {
       return Number(new Date(b.data.date)) - Number(new Date(a.data.date));
@@ -9,7 +12,7 @@ export default function NotFound() {
     .slice(0, 3);
 
   return (
-    <main className="mx-auto mt-8 flex w-full min-w-0 max-w-6xl flex-col gap-4 px-6 pt-14 md:px-12">
+    <div className="mx-auto mt-8 flex w-full min-w-0 max-w-6xl flex-col gap-4 px-6 pt-14 md:px-12">
       <div className="w-screen-lg mx-auto mb-16 w-full border-b border-gray-alpha-400 pb-8 pt-4">
         <h1 className="mb-6 mt-2 text-center text-4xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 lg:text-5xl">
           Blog post not found
@@ -46,8 +49,9 @@ export default function NotFound() {
           return (
             <Link
               className="block text-2xl font-semibold hover:underline"
-              href={`/blog/${post.slugs.join("/")}`}
+              href={getLocalizedPath(lang, `/blog/${post.slugs.join("/")}`)}
               key={post.data.title}
+              prefetch
             >
               <h2>{post.data.title}</h2>
               <p className="mt-2 text-base font-normal opacity-80">
@@ -63,10 +67,16 @@ export default function NotFound() {
           );
         })}
         <p className="prose dark:prose-invert">
-          <Link href="/blog">Find more posts</Link> or{" "}
-          <Link href="/">head back to home</Link>.
+          <Link href={getLocalizedPath(lang, "/blog")} prefetch>
+            Find more posts
+          </Link>{" "}
+          or{" "}
+          <Link href={getLocalizedPath(lang, "/")} prefetch>
+            head back to home
+          </Link>
+          .
         </p>
       </div>
-    </main>
+    </div>
   );
 }

@@ -1,0 +1,17 @@
+[package]
+name = "turborepo-lockfile-hash"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+capnp = "0.24"
+hex = "0.4.3"
+thiserror = { workspace = true }
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
+
+[build-dependencies]
+capnpc = "0.24"

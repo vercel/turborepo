@@ -88,6 +88,26 @@ describe("nub", () => {
 
       expect(getUnderlyingLockfileManager({ workspaceRoot })).toEqual("pnpm");
     });
+
+    it("uses nub.lock as a pnpm-compatible native lockfile", () => {
+      const workspaceRoot = makeWorkspace({
+        "package.json": { packageManager: "nub@0.6.0" },
+        "nub.lock": "lockfileVersion: '9.0'\n"
+      });
+
+      expect(getUnderlyingLockfileManager({ workspaceRoot })).toEqual("pnpm");
+      expect(getUnderlyingLockfileName({ workspaceRoot })).toEqual("nub.lock");
+    });
+
+    it("continues to support the legacy lock.yaml filename", () => {
+      const workspaceRoot = makeWorkspace({
+        "package.json": { packageManager: "nub@0.1.0" },
+        "lock.yaml": "lockfileVersion: '9.0'\n"
+      });
+
+      expect(getUnderlyingLockfileManager({ workspaceRoot })).toEqual("pnpm");
+      expect(getUnderlyingLockfileName({ workspaceRoot })).toEqual("lock.yaml");
+    });
   });
 
   describe("detection", () => {
@@ -118,6 +138,25 @@ describe("nub", () => {
   });
 
   describe("getWorkspaceDetails", () => {
+    it("returns nub.lock for a native nub project", async () => {
+      const workspaceRoot = makeWorkspace({
+        "package.json": {
+          name: "nub-project",
+          packageManager: "nub@0.6.0",
+          workspaces: ["packages/*"]
+        },
+        "nub.lock": "lockfileVersion: '9.0'\n"
+      });
+
+      const project = await getWorkspaceDetails({ root: workspaceRoot });
+
+      expect(project.packageManager).toEqual("nub");
+      expect(project.paths.lockfile).toEqual(
+        path.join(workspaceRoot, "nub.lock")
+      );
+      expect(project.workspaceData.globs).toEqual(["packages/*"]);
+    });
+
     it("returns nub as the package manager", async () => {
       const workspaceRoot = makeWorkspace({
         "package.json": {

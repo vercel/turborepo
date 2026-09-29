@@ -790,7 +790,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_login_existing_token() {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let api_server = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -821,7 +821,7 @@ mod tests {
 
         let color_config = turborepo_ui::ColorConfig::new(false);
         let api_client = MockApiClient::new();
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let callback = spawn_login_callback(port, "fresh-login-token", "test-login-state");
 
         let options = LoginOptions {

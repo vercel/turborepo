@@ -35,6 +35,25 @@ pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 
 pub const EXPECTED_CLIENT_ID: &str = "cl_kyUx2zVvA4MGptBohkmtYHJly2XltXzD";
 
+/// Ask the OS for an ephemeral port, then release it for a test server to bind.
+/// Like the previous port scanner, this does not reserve the port for the
+/// server.
+pub fn request_open_port() -> Option<u16> {
+    std::net::TcpListener::bind("0.0.0.0:0")
+        .ok()?
+        .local_addr()
+        .ok()
+        .map(|addr| addr.port())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn requests_ephemeral_port() {
+        assert_ne!(super::request_open_port().unwrap(), 0);
+    }
+}
+
 #[derive(Deserialize)]
 struct VercelAppTokenIntrospectRequest {
     token: String,
@@ -50,6 +69,11 @@ struct VercelAppTokenRevokeRequest {
 /// Per-artifact SCM metadata: (sha, dirty_hash).
 type ArtifactScmMetadata = HashMap<String, (Option<String>, Option<String>)>;
 
+#[derive(Deserialize)]
+struct ArtifactQueryRequest {
+    hashes: Vec<String>,
+}
+
 pub async fn start_test_server(
     port: u16,
     ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -57,10 +81,12 @@ pub async fn start_test_server(
     let get_durations_ref = Arc::new(Mutex::new(HashMap::new()));
     let head_durations_ref = get_durations_ref.clone();
     let put_durations_ref = get_durations_ref.clone();
+    let query_durations_ref = get_durations_ref.clone();
 
     let get_metadata_ref: Arc<Mutex<ArtifactScmMetadata>> = Arc::new(Mutex::new(HashMap::new()));
     let head_metadata_ref = get_metadata_ref.clone();
     let put_metadata_ref = get_metadata_ref.clone();
+    let query_metadata_ref = get_metadata_ref.clone();
     let put_tempdir_ref = Arc::new(tempfile::tempdir()?);
     let get_tempdir_ref = put_tempdir_ref.clone();
 
@@ -129,6 +155,31 @@ pub async fn start_test_server(
                     token: EXPECTED_TOKEN.to_string(),
                     team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
                 })
+            }),
+        )
+        .route(
+            "/v8/artifacts",
+            post(|Json(query): Json<ArtifactQueryRequest>| async move {
+                let durations = query_durations_ref.lock().await;
+                let metadata = query_metadata_ref.lock().await;
+                let entries: HashMap<_, _> = query
+                    .hashes
+                    .into_iter()
+                    .map(|hash| {
+                        let hit = durations.get(&hash).map(|duration| {
+                            let (sha, dirty_hash) =
+                                metadata.get(&hash).cloned().unwrap_or_default();
+                            serde_json::json!({
+                                "size": 0,
+                                "taskDurationMs": duration,
+                                "sha": sha,
+                                "dirtyHash": dirty_hash,
+                            })
+                        });
+                        (hash, hit)
+                    })
+                    .collect();
+                Json(entries)
             }),
         )
         .route(

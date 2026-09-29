@@ -2,6 +2,6 @@
 source: crates/turborepo/tests/graph_test.rs
 expression: stderr.to_string()
 ---
- ERROR  invalid value 'graph.mdx' for '--graph [<GRAPH>]': Invalid file extension: 'mdx'. Allowed extensions are: ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"]
+ ERROR  invalid value 'graph.mdx' for '--graph': Unsupported file extension: mdx. Supported extensions are: svg, png, jpg, pdf, json, html, mermaid, dot
 
 For more information, try '--help'.

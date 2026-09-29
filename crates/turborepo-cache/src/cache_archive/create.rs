@@ -16,6 +16,42 @@ use crate::CacheError;
 /// Combined with PID, this guarantees uniqueness across concurrent tasks.
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(unix)]
+struct ArchiveAnchor {
+    directory: fs::File,
+    real_path: AbsoluteSystemPathBuf,
+}
+
+#[cfg(unix)]
+impl ArchiveAnchor {
+    fn open(anchor: &AbsoluteSystemPath) -> Result<Self, CacheError> {
+        Ok(Self {
+            directory: fs::File::open(anchor.as_std_path())?,
+            real_path: anchor.to_realpath()?,
+        })
+    }
+}
+
+#[cfg(windows)]
+struct WindowsArchiveAnchor {
+    requested_path: AbsoluteSystemPathBuf,
+    real_path: AbsoluteSystemPathBuf,
+}
+
+#[cfg(windows)]
+impl WindowsArchiveAnchor {
+    fn open(anchor: &AbsoluteSystemPath) -> Result<Self, CacheError> {
+        Ok(Self {
+            requested_path: anchor.to_owned(),
+            real_path: anchor.to_realpath()?,
+        })
+    }
+
+    fn matches(&self, anchor: &AbsoluteSystemPath) -> bool {
+        self.requested_path.as_str() == anchor.as_str()
+    }
+}
+
 enum ArchiveSource {
     Regular {
         file: fs::File,
@@ -61,6 +97,12 @@ pub struct CacheWriter<'a> {
     temp_path: Option<AbsoluteSystemPathBuf>,
     /// The final destination path for the archive.
     final_path: Option<AbsoluteSystemPathBuf>,
+    // Retains a verified anchor for this archive so every output does not need
+    // to reopen and canonicalize the same root directory.
+    #[cfg(unix)]
+    anchor: Option<ArchiveAnchor>,
+    #[cfg(windows)]
+    windows_anchor: Option<WindowsArchiveAnchor>,
 }
 
 impl Drop for CacheWriter<'_> {
@@ -131,12 +173,20 @@ impl<'a> CacheWriter<'a> {
                 builder: tar::Builder::new(Box::new(zw)),
                 temp_path: None,
                 final_path: None,
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(windows)]
+                windows_anchor: None,
             })
         } else {
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(writer)),
                 temp_path: None,
                 final_path: None,
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(windows)]
+                windows_anchor: None,
             })
         }
     }
@@ -168,13 +218,53 @@ impl<'a> CacheWriter<'a> {
                 builder: tar::Builder::new(Box::new(zw)),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(windows)]
+                windows_anchor: None,
             })
         } else {
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(file_buffer)),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(windows)]
+                windows_anchor: None,
             })
+        }
+    }
+
+    #[cfg(unix)]
+    fn archive_anchor(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+    ) -> Result<&ArchiveAnchor, CacheError> {
+        if self.anchor.is_none() {
+            self.anchor = Some(ArchiveAnchor::open(anchor)?);
+        }
+        match self.anchor.as_ref() {
+            Some(anchor) => Ok(anchor),
+            None => unreachable!("archive anchor must be initialized"),
+        }
+    }
+
+    #[cfg(windows)]
+    fn windows_archive_anchor(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+    ) -> Result<&WindowsArchiveAnchor, CacheError> {
+        if self
+            .windows_anchor
+            .as_ref()
+            .is_none_or(|cached| !cached.matches(anchor))
+        {
+            self.windows_anchor = Some(WindowsArchiveAnchor::open(anchor)?);
+        }
+        match self.windows_anchor.as_ref() {
+            Some(anchor) => Ok(anchor),
+            None => unreachable!("Windows archive anchor must be initialized"),
         }
     }
 
@@ -184,6 +274,11 @@ impl<'a> CacheWriter<'a> {
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
     ) -> Result<(), CacheError> {
+        #[cfg(unix)]
+        let source = archive_source(self.archive_anchor(anchor)?, file_path)?;
+        #[cfg(windows)]
+        let source = archive_source(self.windows_archive_anchor(anchor)?, file_path)?;
+        #[cfg(not(any(unix, windows)))]
         let source = archive_source(anchor, file_path)?;
         let mut file_path = file_path.to_unix();
 
@@ -273,24 +368,24 @@ fn archive_source(
 
 #[cfg(windows)]
 fn archive_source(
-    anchor: &AbsoluteSystemPath,
+    anchor: &WindowsArchiveAnchor,
     file_path: &AnchoredSystemPath,
 ) -> Result<ArchiveSource, CacheError> {
-    let source_path = anchor.resolve(file_path);
+    let source_path = anchor.requested_path.resolve(file_path);
     let path_info = source_path.symlink_metadata()?;
 
     if path_info.is_file() {
         let (file, file_info) = open_regular_file_for_archive(&source_path)?;
-        ensure_windows_handle_is_under_anchor(anchor, &file)?;
+        ensure_windows_handle_is_under_anchor(&anchor.real_path, &file)?;
         let header = CacheWriter::create_header(&file_info)?;
         Ok(ArchiveSource::Regular { file, header })
     } else if path_info.is_symlink() {
-        ensure_windows_parent_is_under_anchor(anchor, &source_path)?;
+        ensure_windows_parent_is_under_anchor(&anchor.real_path, &source_path)?;
         let target = source_path.read_link()?.into_unix();
         let header = CacheWriter::create_header(&path_info)?;
         Ok(ArchiveSource::Symlink { target, header })
     } else {
-        ensure_windows_path_is_under_anchor(anchor, &source_path)?;
+        ensure_windows_path_is_under_anchor(&anchor.real_path, &source_path)?;
         let header = CacheWriter::create_header(&path_info)?;
         Ok(ArchiveSource::Other { header })
     }
@@ -298,7 +393,7 @@ fn archive_source(
 
 #[cfg(unix)]
 fn archive_source(
-    anchor: &AbsoluteSystemPath,
+    anchor: &ArchiveAnchor,
     file_path: &AnchoredSystemPath,
 ) -> Result<ArchiveSource, CacheError> {
     use std::os::unix::io::AsRawFd;
@@ -328,14 +423,13 @@ fn archive_source(
 
 #[cfg(unix)]
 fn open_parent_dir(
-    anchor: &AbsoluteSystemPath,
+    anchor: &ArchiveAnchor,
     file_path: &AnchoredSystemPath,
 ) -> Result<(fs::File, String), CacheError> {
     use std::os::unix::io::AsRawFd;
 
-    let mut dir = fs::File::open(anchor.as_std_path())?;
-    let real_anchor = anchor.to_realpath()?;
-    let mut dir_path = real_anchor.clone();
+    let mut dir = anchor.directory.try_clone()?;
+    let mut dir_path = anchor.real_path.clone();
     let mut components = file_path.components().peekable();
 
     while let Some(component) = components.next() {
@@ -345,7 +439,7 @@ fn open_parent_dir(
         }
 
         let (next_dir, next_dir_path) = open_dir_at_allowing_internal_symlink(
-            &real_anchor,
+            &anchor.real_path,
             &dir_path,
             dir.as_raw_fd(),
             component,
@@ -593,12 +687,11 @@ fn open_regular_file_for_archive(
 
 #[cfg(windows)]
 fn ensure_windows_handle_is_under_anchor(
-    anchor: &AbsoluteSystemPath,
+    real_anchor: &AbsoluteSystemPath,
     file: &fs::File,
 ) -> Result<(), CacheError> {
-    let anchor = anchor.to_realpath()?;
     let file_path = windows_final_path(file)?;
-    if windows_path_is_under(file_path.as_path(), anchor.as_std_path()) {
+    if windows_path_is_under(file_path.as_path(), real_anchor.as_std_path()) {
         Ok(())
     } else {
         Err(CacheError::LinkOutsideOfDirectory(
@@ -610,23 +703,22 @@ fn ensure_windows_handle_is_under_anchor(
 
 #[cfg(windows)]
 fn ensure_windows_parent_is_under_anchor(
-    anchor: &AbsoluteSystemPath,
+    real_anchor: &AbsoluteSystemPath,
     source_path: &AbsoluteSystemPath,
 ) -> Result<(), CacheError> {
     let parent = source_path.parent().ok_or_else(|| {
         CacheError::InvalidFilePath(source_path.to_string(), Backtrace::capture())
     })?;
-    ensure_windows_path_is_under_anchor(anchor, parent)
+    ensure_windows_path_is_under_anchor(real_anchor, parent)
 }
 
 #[cfg(windows)]
 fn ensure_windows_path_is_under_anchor(
-    anchor: &AbsoluteSystemPath,
+    real_anchor: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
 ) -> Result<(), CacheError> {
-    let anchor = anchor.to_realpath()?;
     let path = path.to_realpath()?;
-    if windows_path_is_under(path.as_std_path(), anchor.as_std_path()) {
+    if windows_path_is_under(path.as_std_path(), real_anchor.as_std_path()) {
         Ok(())
     } else {
         Err(CacheError::LinkOutsideOfDirectory(
@@ -1285,6 +1377,61 @@ mod tests {
             "No temp files should remain after finish(): {:?}",
             temp_files
         );
+
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cache_writer_refreshes_windows_anchor_before_checking_junction() -> Result<()> {
+        let root_dir = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root_dir.path())?;
+        let first_file = AnchoredSystemPathBuf::from_raw("first.txt")?;
+        root.resolve(&first_file).create_with_contents("first")?;
+
+        let input = root.join_component("input");
+        input.create_dir_all()?;
+        let outside = root.join_component("outside");
+        outside.create_dir_all()?;
+        outside
+            .join_component("secret.txt")
+            .create_with_contents("secret")?;
+
+        let junction = input.join_component("linked");
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J", junction.as_str(), outside.as_str()])
+            .status()?;
+        assert!(status.success(), "failed to create test junction");
+
+        let mut writer = CacheWriter::from_writer(std::io::sink(), false)?;
+        writer.add_file(&root, &first_file)?;
+        let escaping_file = AnchoredSystemPathBuf::from_raw("linked/secret.txt")?;
+        assert!(writer.add_file(&input, &escaping_file).is_err());
+
+        std::fs::remove_dir(junction.as_std_path())?;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cache_writer_refreshes_windows_anchor() -> Result<()> {
+        let first_dir = tempdir()?;
+        let first_dir_path = AbsoluteSystemPathBuf::try_from(first_dir.path())?;
+        let second_dir = tempdir()?;
+        let second_dir_path = AbsoluteSystemPathBuf::try_from(second_dir.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("output.txt")?;
+
+        first_dir_path
+            .resolve(&file)
+            .create_with_contents("first")?;
+        second_dir_path
+            .resolve(&file)
+            .create_with_contents("second")?;
+
+        let mut writer = CacheWriter::from_writer(std::io::sink(), false)?;
+        writer.add_file(&first_dir_path, &file)?;
+        writer.add_file(&second_dir_path, &file)?;
+        writer.finish()?;
 
         Ok(())
     }

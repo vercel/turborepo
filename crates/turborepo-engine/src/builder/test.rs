@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use insta::{assert_json_snapshot, assert_snapshot};
@@ -12,13 +12,16 @@ use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     discovery::PackageDiscovery,
+    native_tasks::{
+        NativeCommandArguments, NativeCommandProgram, NativeTask, WorkingDirectoryPolicy,
+    },
     package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME},
     package_json::PackageJson,
     package_manager::PackageManager,
     toolchain::{
-        DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackagesFuture,
-        DiscoveredPackage, DiscoveredPackages, TaskIOContext, Toolchain, ToolchainId,
-        WorkspaceRoot,
+        DerivedInputSafety, DerivedOutputs, DerivedTaskIO, DiscoverPackageScopesFuture,
+        DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackageScopes, DiscoveredPackages,
+        RepositoryContributor, ToolchainId, WorkspaceRoot,
     },
 };
 use turborepo_task_id::{TaskId, TaskName};
@@ -120,101 +123,102 @@ impl PackageDiscovery for MockDiscovery {
     }
 }
 
-struct AggregateToolchain {
+struct AggregateContributor {
     repo_root: AbsoluteSystemPathBuf,
 }
 
-impl Toolchain for AggregateToolchain {
+impl RepositoryContributor for AggregateContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::new("aggregate-test")
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
+            let command = |name: &str| {
+                NativeTask::command_task(
+                    name,
+                    format!("tool {name}"),
+                    NativeCommandProgram::Tool("tool".to_string()),
+                    NativeCommandArguments::new(vec![name.to_string()]),
+                    None,
+                    WorkingDirectoryPolicy::RepositoryRoot,
+                )
+            };
             Ok(DiscoveredPackages::new(
-                vec![DiscoveredPackage::aggregate(
-                    "cargo-workspace".to_owned(),
-                    PackageJson::default(),
-                    self.repo_root.join_component("Cargo.toml"),
-                    Some(HashSet::new()),
-                )],
+                vec![
+                    DiscoveredPackage::aggregate(
+                        "cargo-workspace".to_owned(),
+                        PackageJson::default(),
+                        self.repo_root.join_component("Cargo.toml"),
+                    )
+                    .with_native_tasks(vec![
+                        NativeTask::aggregate("all", ["check", "lint"]),
+                        command("check"),
+                        command("lint"),
+                    ]),
+                    DiscoveredPackage::aggregate(
+                        "other-workspace".to_owned(),
+                        PackageJson::default(),
+                        self.repo_root.join_component("Other.toml"),
+                    )
+                    .with_native_tasks(vec![
+                        NativeTask::aggregate("all", ["check"]),
+                        command("check"),
+                    ]),
+                ],
                 vec![WorkspaceRoot::new("aggregate-test", self.repo_root.clone())],
             ))
         })
     }
 
-    fn task_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-        _pass_through_args: Option<&[String]>,
-        _override_command: Option<&[String]>,
-    ) -> Result<
-        Option<turborepo_repository::toolchain::TaskCommand>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
-    }
-
-    fn task_display_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-    ) -> Option<String> {
-        None
-    }
-
-    fn defines_task(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-    ) -> bool {
-        false
-    }
-
-    fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
-        turborepo_repository::toolchain::WatchSpec::default()
-    }
-
-    fn prune_plan(
-        &self,
-        _kept_packages: &[String],
-    ) -> Result<
-        Option<turborepo_repository::toolchain::PrunePlan>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let output = self.discover_packages().await?;
+            Ok(DiscoveredPackageScopes::from_full_observation(
+                output.packages(),
+                output.workspace_roots(),
+            ))
+        })
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct SeenTaskIO {
-    args: Option<Vec<String>>,
-    layout_env: Option<String>,
+fn mock_aggregate_package_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime
+        .block_on(
+            PackageGraph::builder_optional(repo_root, None)
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(HashMap::new()))
+                .with_contributor(Arc::new(AggregateContributor {
+                    repo_root: repo_root.clone(),
+                }))
+                .build(),
+        )
+        .unwrap()
 }
 
-type StubIOEngineResult = (
-    Engine<Built, TaskDefinition>,
-    Arc<Mutex<HashMap<String, SeenTaskIO>>>,
-);
+type StubIOEngineResult = Engine<Built, TaskDefinition>;
 
-struct StubIOToolchain {
+struct StubIOContributor {
     repo_root: AbsoluteSystemPathBuf,
     outputs: DerivedOutputs,
     input_safety: DerivedInputSafety,
     environment: Vec<&'static str>,
-    seen: Arc<Mutex<HashMap<String, SeenTaskIO>>>,
 }
 
-impl Toolchain for StubIOToolchain {
+impl RepositoryContributor for StubIOContributor {
     fn id(&self) -> ToolchainId {
         ToolchainId::new("stub-io")
     }
 
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
-            let package = |name: &str, dependencies: &[(&str, &str)]| {
-                DiscoveredPackage::package(
+            let package =
+                |name: &str, dependencies: &[(&str, &str)]| {
+                    DiscoveredPackage::package(
                     Some(name.to_string()),
                     PackageJson {
                         name: Some(Spanned::new(name.to_string())),
@@ -228,9 +232,33 @@ impl Toolchain for StubIOToolchain {
                     },
                     self.repo_root
                         .join_components(&["packages", name, "stub.json"]),
-                    Some(HashSet::new()),
                 )
-            };
+                .with_task_contract(
+                    turborepo_repository::task_contracts::ScopeTaskContract::derived(
+                        ToolchainId::new("stub-io"),
+                        Some(turborepo_repository::task_contracts::TaskEnvironmentRequirement::new(
+                            turborepo_repository::task_contracts::TaskEnvironmentDomain::new(
+                                "stub-io",
+                            ),
+                            self.environment.clone(),
+                        )),
+                        std::collections::BTreeMap::new(),
+                        ["build", "test"]
+                            .into_iter()
+                            .map(|task| {
+                                (
+                                    task.to_string(),
+                                    DerivedTaskIO {
+                                        outputs: self.outputs.clone(),
+                                        input_safety: self.input_safety.clone(),
+                                        ..Default::default()
+                                    },
+                                )
+                            })
+                            .collect(),
+                    ),
+                )
+                };
             Ok(DiscoveredPackages::new(
                 vec![
                     package("app", &[("lib", "workspace:*")]),
@@ -241,89 +269,20 @@ impl Toolchain for StubIOToolchain {
         })
     }
 
-    fn task_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-        _pass_through_args: Option<&[String]>,
-        _override_command: Option<&[String]>,
-    ) -> Result<
-        Option<turborepo_repository::toolchain::TaskCommand>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
-    }
-
-    fn task_display_command(
-        &self,
-        _context: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        _task: &str,
-    ) -> Option<String> {
-        None
-    }
-
-    fn defines_task(
-        &self,
-        _package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        matches!(task, "build" | "test")
-    }
-
-    fn watch_spec(&self) -> turborepo_repository::toolchain::WatchSpec {
-        turborepo_repository::toolchain::WatchSpec::default()
-    }
-
-    fn prune_plan(
-        &self,
-        _kept_packages: &[String],
-    ) -> Result<
-        Option<turborepo_repository::toolchain::PrunePlan>,
-        turborepo_repository::toolchain::Error,
-    > {
-        Ok(None)
-    }
-
-    fn derives_task_io(
-        &self,
-        package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        task: &str,
-    ) -> bool {
-        self.defines_task(package, task)
-    }
-
-    fn task_io_env_vars(&self) -> &[&str] {
-        &self.environment
-    }
-
-    fn derived_task_io(
-        &self,
-        package: &turborepo_repository::package_graph::PackageTaskContext<'_>,
-        task: &str,
-        _path_to_root: &str,
-        _dependencies: &[turborepo_repository::package_graph::PackageTaskContext<'_>],
-        _wants_automatic_inputs: bool,
-        context: &TaskIOContext<'_>,
-    ) -> Option<DerivedTaskIO> {
-        let package_name = package.package().as_ref();
-        self.seen.lock().unwrap().insert(
-            format!("{package_name}#{task}"),
-            SeenTaskIO {
-                args: context.task_args.map(<[String]>::to_vec),
-                layout_env: context.environment.get("STUB_LAYOUT").map(str::to_string),
-            },
-        );
-        Some(DerivedTaskIO {
-            outputs: self.outputs.clone(),
-            input_safety: self.input_safety.clone(),
-            ..Default::default()
+    fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+        Box::pin(async move {
+            let output = self.discover_packages().await?;
+            Ok(DiscoveredPackageScopes::from_full_observation(
+                output.packages(),
+                output.workspace_roots(),
+            ))
         })
     }
 }
 
 fn stub_io_package_graph(
     repo_root: &turbopath::AbsoluteSystemPath,
-    toolchain: Arc<StubIOToolchain>,
+    toolchain: Arc<StubIOContributor>,
 ) -> PackageGraph {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -334,7 +293,7 @@ fn stub_io_package_graph(
             .with_package_discovery(MockDiscovery)
             .with_lockfile(Some(Box::new(MockLockfile)))
             .with_package_jsons(Some(HashMap::new()))
-            .with_toolchain(toolchain)
+            .with_contributor(toolchain)
             .build(),
     )
     .unwrap()
@@ -353,7 +312,7 @@ fn task_definition_repo_enumeration_uses_authoritative_scopes() {
             PackageGraph::builder_optional(&repo_root, None)
                 .with_package_discovery(MockDiscovery)
                 .with_package_jsons(Some(HashMap::new()))
-                .with_toolchain(Arc::new(AggregateToolchain {
+                .with_contributor(Arc::new(AggregateContributor {
                     repo_root: repo_root.clone(),
                 }))
                 .build(),
@@ -403,7 +362,7 @@ fn task_definition_repo_enumeration_uses_authoritative_scopes() {
                 .with_package_discovery(MockDiscovery)
                 .with_lockfile(Some(Box::new(MockLockfile)))
                 .with_package_jsons(Some(HashMap::new()))
-                .with_toolchain(Arc::new(AggregateToolchain {
+                .with_contributor(Arc::new(AggregateContributor {
                     repo_root: repo_root.clone(),
                 }))
                 .build(),
@@ -640,7 +599,12 @@ fn task_names(tasks: &[Spanned<TaskName<'static>>]) -> Vec<String> {
 }
 
 mod core;
+mod dependency_outputs;
 mod extends;
+mod go;
 mod inheritance;
+mod jit_dependency;
+mod lazy_loading;
+mod structured_inputs;
 mod syntax;
 mod workspace;

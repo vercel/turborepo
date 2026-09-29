@@ -19,7 +19,7 @@ After installing `turbo` and configuring your tasks in `turbo.json`, you'll noti
 
 ## Preparing a single-package workspace
 
-A [single-package workspace](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) is, for example, what you get after running `npx create-next-app` or `npm create vite`. You don't need to do any extra work for Turborepo to handle your repo so you can jump to the first step below.
+A [single-package workspace](https://vercel.com/docs/glossary#single-package-workspace) is, for example, what you get after running `npx create-next-app` or `npm create vite`. You don't need to do any extra work for Turborepo to handle your repo so you can jump to the first step below.
 
 To learn more about Turborepo in single-package workspaces, visit [the dedicated guide](/docs/guides/single-package-workspaces).
 
@@ -46,16 +46,36 @@ familiar with Turborepo.
 <Step>
 ### Install `turbo`
 
-We recommend you install `turbo` both globally and into your repository's root for the best developer experience.
+Install `turbo` globally.
+
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
+
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh
+```
+
+  </Tab>
+  <Tab value="Windows x64">
+
+```powershell title="PowerShell"
+irm https://turborepo.dev/install.ps1 | iex
+```
+
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  The binaries are also available in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
+</Callout>
+
+Then pin `turbo` in your repository's root:
 
 <PackageManagerTabs>
   <Tab value="pnpm">
       Ensure you have created a `pnpm-workspace.yaml` file before you begin the installation. Failure to have this file will result in an error that says: ` --workspace-root may only be used inside a workspace`.
 
     ```bash title="Terminal"
-    # Global install
-    pnpm add turbo --global
-    # Install in repository
     pnpm add turbo --save-dev --workspace-root
     ```
 
@@ -63,9 +83,6 @@ We recommend you install `turbo` both globally and into your repository's root f
   <Tab value="yarn">
 
     ```bash title="Terminal"
-    # Global install
-    yarn global add turbo
-    # Install in repository
     yarn add turbo --dev
     ```
 
@@ -73,9 +90,6 @@ We recommend you install `turbo` both globally and into your repository's root f
   <Tab value="npm">
 
     ```bash title="Terminal"
-    # Global install
-    npm install turbo --global
-    # Install in repository
     npm install turbo --save-dev
     ```
 
@@ -83,16 +97,30 @@ We recommend you install `turbo` both globally and into your repository's root f
   <Tab value="bun">
 
     ```bash title="Terminal"
-    # Global install
-    bun install turbo --global
-    # Install in repository
     bun install turbo --dev
     ```
 
   </Tab>
+
+<Tab value="nub">
+
+    ```bash title="Terminal"
+    nub add turbo --save-dev
+    ```
+
+  </Tab>
+
+<Tab value="aube">
+
+    ```bash title="Terminal"
+    aube add turbo --save-dev
+    ```
+
+  </Tab>
+
 </PackageManagerTabs>
 
-To learn more about why we recommend both installations, visit the [Installation page](/docs/getting-started/installation).
+The installed local version takes precedence when you run the global binary in your repository. See [Installation](/docs/getting-started/installation#repository-installation) for details.
 
 </Step>
 <Step>
@@ -262,6 +290,37 @@ Turborepo optimizes your repository using information from your package manager.
 
 </Tab>
 
+
+<Tab value="nub">
+
+```diff title="package.json"
+{
++  "devEngines": {
++    "packageManager": {
++      "name": "nub",
++      "version": "0.8.3"
++    }
++  }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```diff title="package.json"
+{
++  "devEngines": {
++    "packageManager": {
++      "name": "aube",
++      "version": "2.2.9"
++    }
++  }
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 <Callout type="info">
@@ -333,6 +392,31 @@ The `workspaces` field tells your package manager which directories contain your
   ```
 
   <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun workspace documentation" />
+  </Tab>
+
+
+<Tab value="nub">
+  ```json title="./package.json"
+  {
+    "workspaces": [
+      "apps/*",
+      "packages/*"
+    ]
+  }
+  ```
+
+  <LinkToDocumentation href="https://nub.dev" text="nub documentation" />
+  </Tab>
+
+<Tab value="aube">
+
+```yaml title="aube-workspace.yaml"
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+  <LinkToDocumentation href="https://aube.jdx.dev" text="aube workspace documentation" />
   </Tab>
 
 </PackageManagerTabs>

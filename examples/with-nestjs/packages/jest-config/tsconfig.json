@@ -1,15 +1,12 @@
 {
   "extends": "@repo/typescript-config/base.json",
   "compilerOptions": {
+    "allowJs": true,
     "declaration": true,
     "declarationMap": true,
-    "allowJs": true,
-    "esModuleInterop": true,
     "incremental": false,
-    "module": "commonjs",
-    "moduleResolution": "Node10",
     "outDir": "dist",
-    "baseUrl": "src",
+    "rootDir": "src",
     "strictNullChecks": true
   },
   "include": ["src"],

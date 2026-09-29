@@ -1,0 +1,25 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "echo building app"
+  },
+  "dependencies": {
+    "prod-lib": "*"
+  },
+  "devDependencies": {
+    "dev-lib": "*"
+  },
+  "optionalDependencies": {
+    "optional-lib": "*"
+  },
+  "peerDependencies": {
+    "optional-peer": "*",
+    "required-peer": "*"
+  },
+  "peerDependenciesMeta": {
+    "optional-peer": {
+      "optional": true
+    }
+  }
+}

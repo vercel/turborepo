@@ -9,7 +9,7 @@
 //! - Running update checks for new turbo versions
 //!
 //! The crate uses trait-based dependency injection to avoid circular
-//! dependencies with `turborepo-lib`.
+//! dependencies with `turborepo-cli`.
 
 mod local_turbo_config;
 mod local_turbo_state;
@@ -104,7 +104,7 @@ impl ChildSpawner for DefaultChildSpawner {
 ///
 /// This trait abstracts over the configuration loading mechanism, allowing
 /// the shim to access configuration without directly depending on the full
-/// configuration infrastructure in `turborepo-lib`.
+/// configuration infrastructure in `turborepo-cli`.
 pub trait ConfigProvider: Send + Sync {
     /// Get configuration options for the given repository root.
     ///
@@ -128,7 +128,7 @@ pub trait ConfigProvider: Send + Sync {
 ///
 /// This struct contains only the configuration fields that the shim needs,
 /// avoiding a dependency on the full `ConfigurationOptions` from
-/// `turborepo-lib`.
+/// `turborepo-cli`.
 #[derive(Debug, Default, Clone)]
 pub struct ShimConfigurationOptions {
     no_update_notifier: Option<bool>,

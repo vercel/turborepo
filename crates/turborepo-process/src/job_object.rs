@@ -6,11 +6,18 @@
 // `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, we ensure the entire process tree
 // is terminated when the job handle is closed.
 
-use std::{collections::HashSet, io, os::windows::io::RawHandle};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt, io,
+    os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle, RawHandle},
+};
 
 use tracing::debug;
 use windows_sys::Win32::{
-    Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
+    Foundation::{
+        CloseHandle, DuplicateHandle, FILETIME, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0,
+        WAIT_TIMEOUT,
+    },
     System::{
         Diagnostics::ToolHelp::{
             CreateToolhelp32Snapshot, PROCESSENTRY32, Process32First, Process32Next,
@@ -23,14 +30,67 @@ use windows_sys::Win32::{
             QueryInformationJobObject, SetInformationJobObject, TerminateJobObject,
         },
         Threading::{
-            GetProcessId, OpenProcess, OpenThread, PROCESS_SET_QUOTA, PROCESS_TERMINATE,
-            ResumeThread, THREAD_SUSPEND_RESUME, TerminateProcess,
+            GetCurrentProcess, GetProcessId, GetProcessTimes, OpenProcess, OpenThread,
+            PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA, PROCESS_TERMINATE, ResumeThread,
+            THREAD_SUSPEND_RESUME, TerminateProcess, WaitForSingleObject,
         },
     },
 };
 
+use crate::process_tree::{ProcessEntry, ProcessTimes, descendants};
+
+const PROCESS_SYNCHRONIZE: u32 = 0x0010_0000;
+
 pub struct JobObject {
     handle: HANDLE,
+}
+
+/// A query-only handle retained from spawn so the root PID cannot be reused
+/// while descendant cleanup is still pending.
+pub(crate) struct ProcessIdentity {
+    pid: u32,
+    handle: OwnedHandle,
+}
+
+// OwnedHandle closes the handle on drop and is Send + Sync. Windows process
+// handles are valid in every thread of the owning process.
+
+impl fmt::Debug for ProcessIdentity {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ProcessIdentity")
+            .field("pid", &self.pid)
+            .finish_non_exhaustive()
+    }
+}
+
+impl ProcessIdentity {
+    pub(crate) fn duplicate_from(pid: u32, handle: RawHandle) -> io::Result<Self> {
+        let current_process = unsafe { GetCurrentProcess() };
+        let mut duplicate = std::ptr::null_mut();
+        let result = unsafe {
+            DuplicateHandle(
+                current_process,
+                handle as HANDLE,
+                current_process,
+                &mut duplicate,
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+                0,
+                0,
+            )
+        };
+        if result == 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        // SAFETY: DuplicateHandle returned a new owned process handle.
+        let handle = unsafe { OwnedHandle::from_raw_handle(duplicate as RawHandle) };
+        Ok(Self { pid, handle })
+    }
+
+    fn times(&self) -> io::Result<ProcessTimes> {
+        process_times(self.handle.as_raw_handle() as HANDLE)
+    }
 }
 
 // SAFETY: Job object handles can be sent between threads.
@@ -143,17 +203,20 @@ impl JobObject {
     }
 }
 
-pub fn has_descendant_processes(root_pid: u32) -> io::Result<bool> {
-    Ok(!descendant_processes(root_pid)?.is_empty())
+pub fn has_descendant_processes(root: &ProcessIdentity) -> io::Result<bool> {
+    Ok(!descendant_processes(root)?.0.is_empty())
 }
 
-pub fn terminate_descendant_processes(root_pid: u32) -> io::Result<()> {
+pub fn terminate_descendant_processes(root: &ProcessIdentity) -> io::Result<()> {
     let mut first_error = None;
-    let mut descendants = descendant_processes(root_pid)?;
-    descendants.reverse();
+    let (mut descendant_pids, mut candidates) = descendant_processes(root)?;
+    descendant_pids.reverse();
 
-    for pid in descendants {
-        if let Err(err) = terminate_process(pid) {
+    for pid in descendant_pids {
+        let Some(candidate) = candidates.remove(&pid) else {
+            continue;
+        };
+        if let Err(err) = candidate.terminate() {
             debug!("failed to terminate descendant process {pid}: {err}");
             first_error.get_or_insert(err);
         }
@@ -191,24 +254,92 @@ fn resume_threads(process_handle: HANDLE) -> io::Result<()> {
     result
 }
 
-pub fn descendant_processes(root_pid: u32) -> io::Result<Vec<u32>> {
-    let entries = process_entries()?;
+struct CandidateProcess {
+    handle: OwnedHandle,
+}
+
+impl CandidateProcess {
+    fn open(pid: u32) -> io::Result<Self> {
+        let handle = unsafe {
+            OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE,
+                0,
+                pid,
+            )
+        };
+        if handle.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+
+        // SAFETY: OpenProcess returned a new owned process handle.
+        let handle = unsafe { OwnedHandle::from_raw_handle(handle as RawHandle) };
+        Ok(Self { handle })
+    }
+
+    fn times(&self) -> io::Result<ProcessTimes> {
+        process_times(self.handle.as_raw_handle() as HANDLE)
+    }
+
+    fn terminate(self) -> io::Result<()> {
+        if unsafe { TerminateProcess(self.handle.as_raw_handle() as HANDLE, 1) } == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(())
+    }
+}
+
+fn descendant_processes(
+    root: &ProcessIdentity,
+) -> io::Result<(Vec<u32>, HashMap<u32, CandidateProcess>)> {
+    let initial_entries = process_entries()?;
+    let mut candidates = HashMap::new();
+
+    for pid in candidate_pids(root.pid, &initial_entries) {
+        match CandidateProcess::open(pid) {
+            Ok(candidate) => {
+                candidates.insert(pid, candidate);
+            }
+            Err(err) => debug!("failed to pin descendant candidate {pid}: {err}"),
+        }
+    }
+
+    // Re-snapshot after candidates are pinned. Entries absent from the first
+    // snapshot have no retained handle and cannot participate in traversal.
+    let entries = process_entries()?
+        .into_iter()
+        .map(|(pid, parent_pid)| ProcessEntry {
+            pid,
+            parent_pid,
+            times: candidates.get(&pid).and_then(|candidate| {
+                candidate
+                    .times()
+                    .map_err(|err| debug!("failed to query descendant candidate {pid}: {err}"))
+                    .ok()
+            }),
+        })
+        .collect::<Vec<_>>();
+    let descendant_pids = descendants(root.pid, root.times()?, &entries);
+
+    Ok((descendant_pids, candidates))
+}
+
+fn candidate_pids(root_pid: u32, entries: &[(u32, u32)]) -> Vec<u32> {
     let mut visited = HashSet::from([root_pid]);
     let mut current_generation = vec![root_pid];
-    let mut descendants = Vec::new();
+    let mut candidates = Vec::new();
 
     while !current_generation.is_empty() {
         let mut next_generation = Vec::new();
-        for (pid, parent_pid) in &entries {
+        for (pid, parent_pid) in entries {
             if current_generation.contains(parent_pid) && visited.insert(*pid) {
-                descendants.push(*pid);
+                candidates.push(*pid);
                 next_generation.push(*pid);
             }
         }
         current_generation = next_generation;
     }
 
-    Ok(descendants)
+    candidates
 }
 
 fn process_entries() -> io::Result<Vec<(u32, u32)>> {
@@ -248,24 +379,37 @@ fn process_entries_from_snapshot(snapshot: HANDLE) -> io::Result<Vec<(u32, u32)>
     Ok(entries)
 }
 
-fn terminate_process(pid: u32) -> io::Result<()> {
-    let process_handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
-    if process_handle.is_null() {
+fn process_times(handle: HANDLE) -> io::Result<ProcessTimes> {
+    let mut creation = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let mut exit = creation;
+    let mut kernel = creation;
+    let mut user = creation;
+    if unsafe { GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user) } == 0 {
         return Err(io::Error::last_os_error());
     }
 
-    let terminate_result = unsafe { TerminateProcess(process_handle, 1) };
-    let terminate_error = (terminate_result == 0).then(io::Error::last_os_error);
-    let close_result = unsafe { CloseHandle(process_handle) };
-
-    if let Some(err) = terminate_error {
-        return Err(err);
-    }
-    if close_result == 0 {
+    let exited = match unsafe { WaitForSingleObject(handle, 0) } {
+        WAIT_OBJECT_0 => true,
+        WAIT_TIMEOUT => false,
+        _ => return Err(io::Error::last_os_error()),
+    };
+    if exited
+        && unsafe { GetProcessTimes(handle, &mut creation, &mut exit, &mut kernel, &mut user) } == 0
+    {
         return Err(io::Error::last_os_error());
     }
 
-    Ok(())
+    Ok(ProcessTimes {
+        creation: filetime_to_u64(creation),
+        exit: exited.then(|| filetime_to_u64(exit)),
+    })
+}
+
+fn filetime_to_u64(time: FILETIME) -> u64 {
+    (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime)
 }
 
 fn resume_threads_from_snapshot(snapshot: HANDLE, process_id: u32) -> io::Result<()> {

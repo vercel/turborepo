@@ -26,6 +26,5 @@ opentelemetry_sdk = { version = "0.31", default-features = false, features = [
 ] }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["full"] }
 tonic = { version = "0.14", default-features = false }
 tracing = { workspace = true }

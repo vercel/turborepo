@@ -1,0 +1,23 @@
+{
+  "$schema": "../../docs/public/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "command": ["pnpm", "exec", "bunchee"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
+    },
+    "package:types": {
+      "command": ["pnpm", "exec", "attw", "--profile", "node16", "--pack"]
+    }
+  }
+}

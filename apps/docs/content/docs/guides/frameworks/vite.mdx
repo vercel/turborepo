@@ -49,6 +49,23 @@ bunx create-turbo@latest -e with-vite
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest -e with-vite
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest -e with-vite
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Adding a Vite application to an existing repository
@@ -88,6 +105,23 @@ bun create vite@latest apps/my-app
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-vite@latest apps/my-app
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-vite@latest apps/my-app
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Integrating with your repository
@@ -147,6 +181,33 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.
@@ -204,6 +265,23 @@ bunx create-turbo@latest -e with-vite-module-federation
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest -e with-vite-module-federation
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest -e with-vite-module-federation
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 The example includes a `react-host` Vite app, a `react-remote` Vite app, and an `@mf-vite-example/shared-ui` package. The host consumes the remote's exposed `./remote-app` module and both apps share React dependencies through [Module Federation](https://module-federation.io/).

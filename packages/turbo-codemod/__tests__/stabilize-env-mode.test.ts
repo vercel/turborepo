@@ -71,7 +71,7 @@ describe("stabilize-env-mode", () => {
 
   it("migrates env-mode has-both", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "has-both"
     });
 
@@ -81,7 +81,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
@@ -108,7 +108,7 @@ describe("stabilize-env-mode", () => {
 
   it("migrates env-mode has-duplicates", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "has-duplicates"
     });
 
@@ -118,7 +118,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [
         "DUPLICATE_GLOBAL",
@@ -150,7 +150,7 @@ describe("stabilize-env-mode", () => {
 
   it("migrates env-mode has-empty", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "has-empty"
     });
 
@@ -160,7 +160,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [],
       pipeline: {
@@ -184,7 +184,7 @@ describe("stabilize-env-mode", () => {
 
   it("migrates env-mode has-neither", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "has-neither"
     });
 
@@ -194,7 +194,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {}
@@ -215,7 +215,7 @@ describe("stabilize-env-mode", () => {
 
   it("migrates env-mode has-new", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "has-new"
     });
 
@@ -225,7 +225,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
       pipeline: {
@@ -249,7 +249,7 @@ describe("stabilize-env-mode", () => {
 
   it("migrates env-mode has-old", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "has-old"
     });
 
@@ -259,7 +259,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
       pipeline: {
@@ -283,7 +283,7 @@ describe("stabilize-env-mode", () => {
 
   it("migrates env-mode workspace-configs", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "workspace-configs"
     });
 
@@ -293,7 +293,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
@@ -306,7 +306,7 @@ describe("stabilize-env-mode", () => {
       }
     });
 
-    expect(JSON.parse(read("apps/docs/turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("apps/docs/turbo.json"))).toStrictEqual({
       extends: ["//"],
       pipeline: {
         build: {
@@ -318,7 +318,7 @@ describe("stabilize-env-mode", () => {
       }
     });
 
-    expect(JSON.parse(read("apps/website/turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("apps/website/turbo.json"))).toStrictEqual({
       extends: ["//"],
       pipeline: {
         build: {
@@ -354,11 +354,11 @@ describe("stabilize-env-mode", () => {
 
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
+    const { root, read, readOptional } = useFixture({
       fixture: "no-turbo-json"
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // run the transformer
     const result = transformer({
@@ -366,7 +366,7 @@ describe("stabilize-env-mode", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
       /No turbo\.json or turbo\.jsonc found at .*?\. Is the path correct\?/

@@ -3,6 +3,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["DATABASE_URL"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
@@ -25,8 +26,12 @@
     },
     "generate": {
       "dependsOn": ["^generate"],
-      "cache": false
+      "env": ["DATABASE_URL"],
+      "outputs": ["generated/**"]
     },
-    "lint": {}
+    "lint": {
+      "dependsOn": ["^lint"],
+      "env": ["DATABASE_URL"]
+    }
   }
 }

@@ -17,8 +17,8 @@
 //! to `endpoint`: once an endpoint is set by a source, credentials from
 //! lower-priority sources are discarded. See `ExperimentalOtelOptions::merge`.
 
-// Match the lint settings from turborepo-lib
-#![allow(clippy::needless_lifetimes)]
+// Structured config errors are returned throughout configuration resolution;
+// Clippy reports 29 sites. Keep the shared diagnostic error type unchanged.
 #![allow(clippy::result_large_err)]
 
 mod env;
@@ -34,20 +34,21 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use derive_setters::Setters;
 use env::EnvVars;
+pub use file::ConfigurationFileInputs;
 use file::{AuthFile, ConfigFile};
-use merge::Merge;
 use miette::Diagnostic;
 use override_env::OverrideEnvVars;
 use serde::{Deserialize, Serialize};
-use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::{
+    discovery::{MultipleTurboConfigsError, select_turbo_config_path},
+    package_graph::PackageName,
+};
 use turborepo_scm::WorktreeInfo;
 use turborepo_turbo_json::FutureFlags;
 use turborepo_types::{ConfigurationSource, EnvMode, LogOrder, UIMode};
@@ -60,16 +61,52 @@ pub use experimental_otel::{
     ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
 };
 
-/// Wrapper for observability-related config. Uses `recurse` on `otel` so that
+// The first Some value wins as config sources are merged highest-priority
+// first.
+fn merge_option<T>(left: &mut Option<T>, right: Option<T>) {
+    if left.is_none() {
+        *left = right;
+    }
+}
+
+trait Merge {
+    fn merge(&mut self, other: Self);
+}
+
+fn merge_nested<T: Merge>(left: &mut Option<T>, right: Option<T>) {
+    if let Some(right) = right {
+        if let Some(left) = left {
+            left.merge(right);
+        } else {
+            *left = Some(right);
+        }
+    }
+}
+
+// Destructure every field so adding a new configuration field requires an
+// explicit merge strategy rather than silently dropping it.
+macro_rules! merge_fields {
+    ($left:ident, $right:ident; $($field:ident),+; nested = $nested:ident) => {
+        let Self { $($field,)+ $nested } = $right;
+        $(merge_option(&mut $left.$field, $field);)+
+        merge_nested(&mut $left.$nested, $nested);
+    };
+}
+
+/// Wrapper for observability-related config. Deep-merges `otel` so that
 /// a partial `ExperimentalOtelOptions` from one source (e.g. a single env var)
 /// does not shadow the entire block from a lower-priority source.
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::recurse)]
     pub otel: Option<ExperimentalOtelOptions>,
+}
+
+impl Merge for ExperimentalObservabilityOptions {
+    fn merge(&mut self, other: Self) {
+        merge_nested(&mut self.otel, other.otel);
+    }
 }
 
 /// Configuration for structured log file output.
@@ -96,12 +133,6 @@ impl<'de> Deserialize<'de> for LogFileConfig {
                 "expected true or a file path string",
             )),
         }
-    }
-}
-
-impl Merge for LogFileConfig {
-    fn merge(&mut self, _other: Self) {
-        // CLI/env takes precedence, no merging needed
     }
 }
 
@@ -157,8 +188,6 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
     #[error("Encountered an I/O error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
@@ -187,8 +216,6 @@ pub enum Error {
     Encoding(String),
     #[error("TURBO_SIGNATURE should be either 1 or 0.")]
     InvalidSignature,
-    #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
-    InvalidRemoteCacheEnabled,
     #[error("TURBO_REMOTE_CACHE_TIMEOUT: Error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: Error parsing timeout.")]
@@ -247,14 +274,8 @@ impl From<turborepo_turbo_json::LoaderError> for Error {
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
-#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
-// Generate setters for the builder type that set these values on its override_config field
-#[setters(
-    prefix = "with_",
-    generate_delegates(ty = "TurborepoConfigBuilder", field = "override_config")
-)]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
     #[serde(alias = "ApiUrl")]
@@ -314,6 +335,9 @@ pub struct ConfigurationOptions {
     pub tui_scrollback_length: Option<u64>,
     pub concurrency: Option<String>,
     pub no_update_notifier: Option<bool>,
+    /// Whether turbo should maintain its managed guidance block in `AGENTS.md`.
+    #[serde(skip)]
+    pub agent_guidance: Option<bool>,
     pub sso_login_callback_port: Option<u16>,
     #[serde(skip)]
     pub future_flags: Option<FutureFlags>,
@@ -321,12 +345,27 @@ pub struct ConfigurationOptions {
     /// entire observability block from turbo.json. See
     /// `ExperimentalOtelOptions::merge` for credential-locking semantics.
     #[serde(rename = "experimentalObservability")]
-    #[merge(strategy = merge::option::recurse)]
     pub experimental_observability: Option<ExperimentalObservabilityOptions>,
     /// Structured log file destination, configured via `logFile` in
     /// turbo.json or `TURBO_LOG_FILE` env var.
     #[serde(rename = "logFile")]
     pub log_file: Option<LogFileConfig>,
+}
+
+impl Merge for ConfigurationOptions {
+    fn merge(&mut self, other: Self) {
+        merge_fields!(self, other;
+            api_url, api_url_source, login_url, login_url_source,
+            team_slug, team_id, token, signature, preflight, timeout,
+            upload_timeout, enabled, ui, allow_no_package_manager, daemon,
+            env_mode, scm_base, scm_head, cache_dir, cache_max_age,
+            cache_max_size, root_turbo_json_path, force, log_order, cache,
+            remote_only, remote_cache_read_only, run_summary,
+            allow_no_turbo_json, tui_scrollback_length, concurrency,
+            no_update_notifier, agent_guidance, sso_login_callback_port, future_flags,
+            log_file; nested = experimental_observability
+        );
+    }
 }
 
 #[derive(Default)]
@@ -335,6 +374,69 @@ pub struct TurborepoConfigBuilder {
     override_config: ConfigurationOptions,
     global_config_path: Option<AbsoluteSystemPathBuf>,
     environment: Option<HashMap<OsString, OsString>>,
+}
+
+// Keep the fluent setters on both types in sync. Each setter accepts the full
+// Option<T>, including None, and the builder writes to its override layer.
+macro_rules! configuration_setters {
+    ($($method:ident: $field:ident: $ty:ty),* $(,)?) => {
+        impl ConfigurationOptions {
+            $(
+                pub fn $method(mut self, value: $ty) -> Self {
+                    self.$field = value;
+                    self
+                }
+            )*
+        }
+
+        impl TurborepoConfigBuilder {
+            $(
+                pub fn $method(mut self, value: $ty) -> Self {
+                    self.override_config.$field = value;
+                    self
+                }
+            )*
+        }
+    };
+}
+
+configuration_setters! {
+    with_api_url: api_url: Option<String>,
+    with_api_url_source: api_url_source: Option<ConfigurationSource>,
+    with_login_url: login_url: Option<String>,
+    with_login_url_source: login_url_source: Option<ConfigurationSource>,
+    with_team_slug: team_slug: Option<String>,
+    with_team_id: team_id: Option<String>,
+    with_token: token: Option<String>,
+    with_signature: signature: Option<bool>,
+    with_preflight: preflight: Option<bool>,
+    with_timeout: timeout: Option<u64>,
+    with_upload_timeout: upload_timeout: Option<u64>,
+    with_enabled: enabled: Option<bool>,
+    with_ui: ui: Option<UIMode>,
+    with_allow_no_package_manager: allow_no_package_manager: Option<bool>,
+    with_daemon: daemon: Option<bool>,
+    with_env_mode: env_mode: Option<EnvMode>,
+    with_scm_base: scm_base: Option<String>,
+    with_scm_head: scm_head: Option<String>,
+    with_cache_dir: cache_dir: Option<Utf8PathBuf>,
+    with_cache_max_age: cache_max_age: Option<String>,
+    with_cache_max_size: cache_max_size: Option<String>,
+    with_root_turbo_json_path: root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    with_force: force: Option<bool>,
+    with_log_order: log_order: Option<LogOrder>,
+    with_cache: cache: Option<CacheConfig>,
+    with_remote_only: remote_only: Option<bool>,
+    with_remote_cache_read_only: remote_cache_read_only: Option<bool>,
+    with_run_summary: run_summary: Option<bool>,
+    with_allow_no_turbo_json: allow_no_turbo_json: Option<bool>,
+    with_tui_scrollback_length: tui_scrollback_length: Option<u64>,
+    with_concurrency: concurrency: Option<String>,
+    with_no_update_notifier: no_update_notifier: Option<bool>,
+    with_sso_login_callback_port: sso_login_callback_port: Option<u16>,
+    with_future_flags: future_flags: Option<FutureFlags>,
+    with_experimental_observability: experimental_observability: Option<ExperimentalObservabilityOptions>,
+    with_log_file: log_file: Option<LogFileConfig>,
 }
 
 // Getters
@@ -605,6 +707,10 @@ impl ConfigurationOptions {
         self.no_update_notifier.unwrap_or_default()
     }
 
+    pub fn agent_guidance(&self) -> bool {
+        self.agent_guidance.unwrap_or(true)
+    }
+
     pub fn sso_login_callback_port(&self) -> Option<u16> {
         self.sso_login_callback_port
     }
@@ -635,7 +741,7 @@ pub(crate) trait ResolvedConfigurationOptions {
 }
 
 // Used for global config and local config.
-impl<'a> ResolvedConfigurationOptions for &'a ConfigurationOptions {
+impl ResolvedConfigurationOptions for &ConfigurationOptions {
     fn get_configuration_options(
         &self,
         _existing_config: &ConfigurationOptions,
@@ -678,6 +784,28 @@ impl TurborepoConfigBuilder {
     }
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
+        self.build_with_optional_inputs(self.get_environment(), None)
+    }
+
+    /// Resolves configuration against an explicit environment snapshot and
+    /// explicit global config/auth file paths.
+    pub fn build_with_inputs(
+        &self,
+        environment: HashMap<OsString, OsString>,
+        file_inputs: ConfigurationFileInputs,
+    ) -> Result<ConfigurationOptions, Error> {
+        self.build_with_optional_inputs(environment, Some(file_inputs))
+    }
+
+    fn build_with_optional_inputs(
+        &self,
+        environment: HashMap<OsString, OsString>,
+        file_inputs: Option<ConfigurationFileInputs>,
+    ) -> Result<ConfigurationOptions, Error> {
+        let environment = environment
+            .into_iter()
+            .map(|(key, value)| (key.to_ascii_lowercase(), value))
+            .collect::<HashMap<_, _>>();
         // Sources are listed highest-to-lowest priority. The fold merges each
         // source into the accumulator; `overwrite_none` keeps the first `Some`
         // it sees, so processing highest-priority first gives it precedence.
@@ -694,10 +822,25 @@ impl TurborepoConfigBuilder {
         // See `test_experimental_observability_otel_precedence` for coverage.
 
         let turbo_json = TurboJsonReader::new(&self.repo_root);
-        let global_config = ConfigFile::global_config(self.global_config_path.clone())?;
-        let global_auth = AuthFile::global_auth(self.global_config_path.clone())?;
+        let (global_config, global_auth) = match &file_inputs {
+            Some(file_inputs) => {
+                let global_config_path = file_inputs.global_config_path.clone();
+                (
+                    ConfigFile::from_path(global_config_path.clone()),
+                    AuthFile::from_paths(
+                        file_inputs.global_auth_path.clone(),
+                        Some(global_config_path),
+                        file_inputs.legacy_auth_path.clone(),
+                    ),
+                )
+            }
+            None => (
+                ConfigFile::global_config(self.global_config_path.clone())?,
+                AuthFile::global_auth(self.global_config_path.clone())?,
+            ),
+        };
         let local_config = ConfigFile::local_config(&self.repo_root);
-        let env_vars = self.get_environment();
+        let env_vars = environment;
         let env_var_config = EnvVars::new(&env_vars)?;
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 
@@ -741,20 +884,15 @@ pub fn resolve_turbo_config_path(
     let turbo_json_path = dir_path.join_component(CONFIG_FILE);
     let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
 
-    let turbo_json_exists = turbo_json_path.try_exists()?;
-    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-    match (turbo_json_exists, turbo_jsonc_exists) {
-        (true, true) => Err(Error::TurboJsonError(
-            turborepo_turbo_json::Error::MultipleTurboConfigs {
-                directory: dir_path.to_string(),
-            },
-        )),
-        (true, false) => Ok(turbo_json_path),
-        (false, true) => Ok(turbo_jsonc_path),
-        // Default to turbo.json if neither exists
-        (false, false) => Ok(turbo_json_path),
-    }
+    select_turbo_config_path(
+        dir_path,
+        turbo_json_path.try_exists()?,
+        turbo_jsonc_path.try_exists()?,
+    )
+    .map(|path| path.unwrap_or(turbo_json_path))
+    .map_err(|MultipleTurboConfigsError { directory }| {
+        Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs { directory })
+    })
 }
 
 #[cfg(test)]
@@ -768,8 +906,53 @@ mod test {
     use crate::{
         CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
         DEFAULT_TIMEOUT, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
-        ExperimentalOtelOptions, ExperimentalOtelProtocol, TurborepoConfigBuilder,
+        ExperimentalOtelOptions, ExperimentalOtelProtocol, Merge, TurborepoConfigBuilder,
     };
+
+    #[test]
+    fn test_generated_setters() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\fake\\repo"
+        } else {
+            "/fake/repo"
+        })
+        .unwrap();
+        let config = ConfigurationOptions::default()
+            .with_api_url(Some("https://api.example".into()))
+            .with_timeout(Some(42))
+            .with_daemon(Some(false))
+            .with_api_url(None)
+            .with_log_file(Some(crate::LogFileConfig::Enabled));
+
+        assert_eq!(config.api_url, None);
+        assert_eq!(config.timeout, Some(42));
+        assert_eq!(config.daemon, Some(false));
+        assert_eq!(config.log_file, Some(crate::LogFileConfig::Enabled));
+
+        let builder = TurborepoConfigBuilder::new(repo_root)
+            .with_api_url(Some("https://api.example".into()))
+            .with_timeout(Some(42))
+            .with_daemon(Some(false))
+            .with_api_url(None)
+            .with_log_file(Some(crate::LogFileConfig::Enabled));
+        assert_eq!(builder.override_config, config);
+    }
+
+    #[test]
+    fn test_agent_guidance_merge() {
+        let mut config = ConfigurationOptions::default();
+        config.merge(ConfigurationOptions {
+            agent_guidance: Some(false),
+            ..Default::default()
+        });
+        assert!(!config.agent_guidance());
+
+        config.merge(ConfigurationOptions {
+            agent_guidance: Some(true),
+            ..Default::default()
+        });
+        assert!(!config.agent_guidance());
+    }
 
     #[test]
     fn test_defaults() {

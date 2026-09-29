@@ -87,15 +87,19 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
 /// Configures user, writes .npmrc, adds all files, and commits.
 pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     let git = |args: &[&str]| -> Result<(), anyhow::Error> {
-        let status = cmd("git")
+        let output = cmd("git")
             .args(args)
             .current_dir(target_dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
+            .output()
             .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
-        if !status.success() {
-            anyhow::bail!("git {:?} failed with {}", args, status);
+        if !output.status.success() {
+            anyhow::bail!(
+                "git {:?} failed with {}\nstdout:\n{}\nstderr:\n{}",
+                args,
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
         }
         Ok(())
     };
@@ -252,12 +256,18 @@ pub fn install_deps(
     }
 
     // Stage and commit installed deps
-    let _ = cmd("git")
+    let output = cmd("git")
         .args(["add", "."])
         .current_dir(target_dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git add failed with {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
 
     git_commit_if_changed(target_dir, "Install dependencies")?;
 
@@ -313,18 +323,32 @@ fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(
 }
 
 fn git_commit_if_changed(dir: &Path, message: &str) -> Result<(), anyhow::Error> {
-    let output = cmd("git")
+    let status_output = cmd("git")
         .args(["status", "--porcelain"])
         .current_dir(dir)
         .output()?;
+    if !status_output.status.success() {
+        anyhow::bail!(
+            "git status failed with {}\nstdout:\n{}\nstderr:\n{}",
+            status_output.status,
+            String::from_utf8_lossy(&status_output.stdout),
+            String::from_utf8_lossy(&status_output.stderr),
+        );
+    }
 
-    if !output.stdout.is_empty() {
-        let _ = cmd("git")
+    if !status_output.stdout.is_empty() {
+        let commit_output = cmd("git")
             .args(["commit", "-am", message, "--quiet"])
             .current_dir(dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .output()?;
+        if !commit_output.status.success() {
+            anyhow::bail!(
+                "git commit failed with {}\nstdout:\n{}\nstderr:\n{}",
+                commit_output.status,
+                String::from_utf8_lossy(&commit_output.stdout),
+                String::from_utf8_lossy(&commit_output.stderr),
+            );
+        }
     }
     Ok(())
 }

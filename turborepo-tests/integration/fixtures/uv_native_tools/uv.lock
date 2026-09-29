@@ -1,0 +1,25 @@
+version = 1
+revision = 3
+requires-python = ">=3.9"
+
+[manifest]
+members = [
+    "py-app",
+    "py-lib",
+]
+
+[[package]]
+name = "py-app"
+version = "0.1.0"
+source = { editable = "packages/py-app" }
+dependencies = [
+    { name = "py-lib" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "py-lib", editable = "packages/py-lib" }]
+
+[[package]]
+name = "py-lib"
+version = "0.1.0"
+source = { editable = "packages/py-lib" }

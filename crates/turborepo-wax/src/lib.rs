@@ -2,8 +2,18 @@
 //! paths and directory trees. Globs use a familiar syntax and support
 //! expressive features with semantics that emphasize component boundaries.
 //!
+//! # Pattern syntax
+//!
+//! Patterns use forward slashes to separate path components. `*` matches any
+//! sequence of characters within one component, while `**` can match across
+//! components. `?` matches one character within a component; character classes
+//! such as `[a-z]`, alternatives such as `{jpg,jpeg}`, and bounded repetitions
+//! such as `<pattern:n,m>` provide additional matching options. Backslash
+//! escapes glob metacharacters. Use `(?i)` for case-insensitive matching and
+//! `(?-i)` for case-sensitive matching.
+//!
 //! See the [repository documentation](https://github.com/olson-sean-k/wax/blob/master/README.md)
-//! for details about glob expressions and patterns.
+//! for more details about glob expressions and patterns.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
@@ -22,7 +32,6 @@
     clippy::explicit_into_iter_loop,
     clippy::filter_map_next,
     clippy::flat_map_option,
-    clippy::from_iter_instead_of_collect,
     clippy::if_not_else,
     clippy::manual_ok_or,
     clippy::map_unwrap_or,
@@ -353,10 +362,6 @@ impl From<WalkError> for GlobError {
     }
 }
 
-// TODO: `Diagnostic` is implemented with macros for brevity and to ensure
-// complete coverage of       features. However, this means that documentation
-// does not annotate the implementation with       a feature flag requirement.
-// If possible, perhaps in a later version of Rust, close this       gap.
 /// Describes errors that occur when building a [`Program`] from a glob
 /// expression.
 ///
@@ -612,9 +617,10 @@ impl<'t> Glob<'t> {
         encode::compile(tokens)
     }
 
-    // TODO: Document pattern syntax in the crate documentation and refer to it
-    // here.
     /// Constructs a [`Glob`] from a glob expression.
+    ///
+    /// See the crate-level [pattern syntax](crate#pattern-syntax) for supported
+    /// operators.
     ///
     /// A glob expression is UTF-8 encoded text that resembles a Unix path
     /// consisting of nominal components delimited by separators and
@@ -845,6 +851,16 @@ pub struct Any<'t> {
 }
 
 impl<'t> Any<'t> {
+    /// Clones borrowed token text into an owning combinator without recompiling
+    /// its regex. Useful when combining dynamically constructed expressions.
+    pub fn into_owned(self) -> Any<'static> {
+        let Any { tree, program } = self;
+        Any {
+            tree: tree.into_owned(),
+            program,
+        }
+    }
+
     fn compile(token: &Token<'t, ()>) -> Result<Regex, CompileError> {
         encode::compile([token])
     }
@@ -1087,6 +1103,23 @@ mod tests {
         );
         assert_eq!(crate::escape("左{}右"), "左\\{\\}右");
         assert_eq!(crate::escape("*中*"), "\\*中\\*");
+    }
+
+    #[test]
+    fn owned_any_outlives_source_expressions() {
+        let owned = {
+            let expressions = [String::from("packages/*"), String::from("工具/**")];
+            crate::any(expressions.iter().map(String::as_str))
+                .unwrap()
+                .into_owned()
+        };
+        assert!(owned.is_match("packages/web"));
+        assert!(owned.is_match("工具/猫/file"));
+        assert!(!owned.is_match("apps/web"));
+        // The owned token tree must remain usable by another combinator.
+        let nested = crate::any([owned]).unwrap();
+        assert!(nested.is_match("工具/猫/file"));
+        assert!(!nested.is_match("apps/web"));
     }
 
     #[test]

@@ -6,7 +6,7 @@ use miette::SourceCode;
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
-use crate::{confine_file_path, Array, Diagnostic, Error, QueryRun};
+use crate::{Array, Diagnostic, Error, QueryRun, confine_file_path};
 
 pub struct File {
     run: Arc<dyn QueryRun>,
@@ -16,7 +16,7 @@ pub struct File {
 
 impl File {
     pub fn new(run: Arc<dyn QueryRun>, path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
-        let path = confine_file_path(run.repo_root(), path)?;
+        let path = confine_file_path(&run.repo_context().repo_root, path)?;
 
         Ok(Self {
             run,
@@ -155,7 +155,8 @@ impl File {
     async fn path(&self) -> Result<String, Error> {
         Ok(self
             .run
-            .repo_root()
+            .repo_context()
+            .repo_root
             .anchor(&self.path)
             .map(|path| path.to_string())?)
     }
@@ -166,15 +167,27 @@ impl File {
 
     async fn dependencies(
         &self,
+        ctx: &async_graphql::Context<'_>,
         depth: Option<usize>,
         ts_config: Option<String>,
         import_type: Option<ImportType>,
         emit_errors: Option<bool>,
     ) -> Result<TraceResult, Error> {
         let mut tracer = Tracer::new(
-            self.run.repo_root().to_owned(),
+            self.run.repo_context().repo_root.clone(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
+        );
+
+        // Only serialize every traced file's AST when the query actually
+        // selects it; path-only selections skip the most expensive part of
+        // tracing entirely.
+        tracer.set_include_ast(
+            ctx.look_ahead()
+                .field("files")
+                .field("items")
+                .field("ast")
+                .exists(),
         );
 
         if let Some(import_type) = import_type {
@@ -191,13 +204,24 @@ impl File {
 
     async fn dependents(
         &self,
+        ctx: &async_graphql::Context<'_>,
         ts_config: Option<String>,
         import_type: Option<ImportType>,
     ) -> Result<TraceResult, Error> {
         let mut tracer = Tracer::new(
-            self.run.repo_root().to_owned(),
+            self.run.repo_context().repo_root.clone(),
             vec![self.path.clone()],
             ts_config.map(Utf8PathBuf::from),
+        );
+
+        // Reverse tracing parses every candidate file; only pay for AST
+        // serialization when the selection asks for it.
+        tracer.set_include_ast(
+            ctx.look_ahead()
+                .field("files")
+                .field("items")
+                .field("ast")
+                .exists(),
         );
 
         if let Some(import_type) = import_type {

@@ -4,7 +4,7 @@
 //!
 //! # Architecture
 //!
-//! The executor is designed to be decoupled from the rest of turborepo-lib
+//! The executor is designed to be decoupled from turborepo-run
 //! through trait abstractions:
 //!
 //! - [`MfeConfigProvider`]: Abstraction for microfrontends configuration
@@ -38,8 +38,7 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
 use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
 pub use visitor::{
-    EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider,
-    command_invokes_turbo,
+    EngineExecutor, EngineMessage, EngineProvider, TaskCallback, command_invokes_turbo,
 };
 
 /// Configuration for task execution.
@@ -74,10 +73,10 @@ pub struct ExecutorConfig {
 ///
 /// This trait abstracts the microfrontends configuration to allow the executor
 /// to work with MFE features without depending on the full
-/// MicrofrontendsConfigs implementation in turborepo-lib.
+/// MicrofrontendsConfigs implementation in turborepo-microfrontends-config.
 ///
 /// # Implementors
-/// - `MicrofrontendsConfigs` in turborepo-lib
+/// - `MicrofrontendsConfigs` in turborepo-microfrontends-config
 pub trait MfeConfigProvider: Send + Sync {
     /// Returns true if the task has an associated microfrontends proxy
     fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool;
@@ -106,10 +105,10 @@ pub trait MfeConfigProvider: Send + Sync {
 ///
 /// This trait abstracts task access tracing to allow the executor to work with
 /// automatic caching features without depending on the full TaskAccess
-/// implementation in turborepo-lib.
+/// implementation in `turborepo-task-access`.
 ///
 /// # Implementors
-/// - `TaskAccess` in turborepo-lib
+/// - `TaskAccess` in `turborepo-task-access`
 pub trait TaskAccessProvider: Clone + Send + Sync {
     /// Returns true if task access tracing is enabled
     fn is_enabled(&self) -> bool;

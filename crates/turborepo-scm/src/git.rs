@@ -35,7 +35,10 @@ impl SCM {
         _path: &AbsoluteSystemPath,
     ) -> (Option<String>, Option<String>) {
         match self {
-            Self::Git(git) => (git.get_current_branch().ok(), git.get_current_sha().ok()),
+            Self::Git(git) => git.get_current_branch_and_sha().unwrap_or_else(|_| {
+                // Preserve partial results for unusual states such as an unborn branch.
+                (git.get_current_branch().ok(), git.get_current_sha().ok())
+            }),
             Self::Manual => (None, None),
         }
     }
@@ -197,6 +200,30 @@ impl CIEnv {
 }
 
 impl GitRepo {
+    fn get_current_branch_and_sha(&self) -> Result<(Option<String>, Option<String>), Error> {
+        let output =
+            self.execute_git_command(&["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"], "")?;
+        let output = String::from_utf8(output)?;
+        let mut lines = output.lines();
+        let sha = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git did not return HEAD"))?;
+        let branch = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git did not return the current branch"))?;
+        if lines.next().is_some() {
+            return Err(Error::git_error("git returned unexpected revision output"));
+        }
+
+        // Match `git branch --show-current`: only a local branch is reported, without
+        // its `refs/heads/` prefix. Detached HEAD and other symbolic refs are empty.
+        let branch = branch
+            .strip_prefix("refs/heads/")
+            .unwrap_or_default()
+            .to_owned();
+        Ok((Some(branch), Some(sha.to_owned())))
+    }
+
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
         let output = String::from_utf8(output)?;
@@ -491,21 +518,36 @@ impl GitRepo {
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return match self
-                .execute_git_command(&["rev-parse", "--end-of-options", &github_base_ref], "")
-            {
+            let local_result =
+                self.execute_git_command(&["rev-parse", "--end-of-options", &github_base_ref], "");
+            match local_result {
                 Ok(_) => {
                     eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
-                    Ok(github_base_ref)
+                    return Ok(github_base_ref);
                 }
-                Err(e) => {
+                Err(local_error) if self.github_actions_remote_base_ref_fallback => {
+                    let remote_ref = format!("origin/{github_base_ref}");
+                    match self
+                        .execute_git_command(&["rev-parse", "--end-of-options", &remote_ref], "")
+                    {
+                        Ok(_) => {
+                            eprintln!("Resolved base ref from GitHub Actions event: {remote_ref}");
+                            return Ok(remote_ref);
+                        }
+                        Err(remote_error) => eprintln!(
+                            "Failed to resolve base ref '{github_base_ref}' ({local_error}) or \
+                             '{remote_ref}' ({remote_error}) from GitHub Actions event"
+                        ),
+                    }
+                }
+                Err(error) => {
                     eprintln!(
                         "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
-                         event: {e}"
+                         event: {error}"
                     );
-                    Err(Error::UnableToResolveRef)
                 }
-            };
+            }
+            return Err(Error::UnableToResolveRef);
         }
 
         default_base_ref(|branch| self.execute_git_command(&["rev-parse", branch], "").is_ok())
@@ -778,6 +820,43 @@ mod tests {
         run_git(repo_root, &["add", &dest.to_string_lossy()]);
         run_git(repo_root, &["commit", "-m", "Commit"]);
         run_git(repo_root, &["rev-parse", "HEAD"])
+    }
+
+    #[test]
+    fn test_current_branch_and_sha() -> Result<(), Error> {
+        let (_repo, root) = setup_repository(Some("main"))?;
+        fs::write(root.join("file.txt"), "contents")?;
+        let sha = commit_file(&root, Path::new("file.txt"), None);
+        // A tag that shadows the branch name must not make Git disambiguate the
+        // reported branch as `heads/main`.
+        run_git(&root, &["tag", "main"]);
+        let root = AbsoluteSystemPath::from_std_path(&root)?;
+        let scm = SCM::new(root);
+
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some("main".to_owned()), Some(sha.clone()))
+        );
+
+        run_git(root.as_std_path(), &["checkout", "--detach", &sha]);
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some(String::new()), Some(sha))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_current_branch_and_sha_on_unborn_branch() -> Result<(), Error> {
+        let (_repo, root) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPath::from_std_path(&root)?;
+        let scm = SCM::new(root);
+
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some("main".to_owned()), None)
+        );
+        Ok(())
     }
 
     #[test]
@@ -1252,6 +1331,7 @@ mod tests {
         for (branches, expected) in [
             (vec!["main"], Some("main")),
             (vec!["master"], Some("master")),
+            (vec!["origin/main"], None),
             (vec!["ziltoid"], None),
             (vec!["ziltoid", "main"], Some("main")),
             (vec!["ziltoid", "master"], Some("master")),
@@ -1262,6 +1342,65 @@ mod tests {
 
             assert_eq!(actual.as_deref(), expected);
         }
+    }
+
+    #[test]
+    fn test_github_base_ref_remote_fallback_respects_flag() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("test remote base ref fallback")?;
+        let commit = commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        run_git(&repo_path, &["checkout", "--detach", &commit]);
+        run_git(&repo_path, &["branch", "-D", "main"]);
+        run_git(
+            &repo_path,
+            &["update-ref", "refs/remotes/origin/main", &commit],
+        );
+
+        let github_env = || CIEnv {
+            is_github_actions: true,
+            github_base_ref: Ok("main".to_string()),
+            github_event_path: Err(VarError::NotPresent),
+        };
+        let mut git = GitRepo::find(&root).unwrap();
+
+        assert_matches!(
+            git.resolve_base(None, github_env()),
+            Err(Error::UnableToResolveRef)
+        );
+        git.github_actions_remote_base_ref_fallback = true;
+        assert_matches!(
+            git.resolve_base(None, CIEnv::none()),
+            Err(Error::UnableToResolveRef)
+        );
+        assert_eq!(
+            git.resolve_base(None, github_env())?,
+            "origin/main".to_string()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_github_base_ref_remote_fallback_errors_when_refs_are_missing() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("test missing base refs")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        let mut git = GitRepo::find(&root).unwrap();
+        git.github_actions_remote_base_ref_fallback = true;
+        let env = CIEnv {
+            is_github_actions: true,
+            github_base_ref: Ok("missing".to_string()),
+            github_event_path: Err(VarError::NotPresent),
+        };
+
+        assert_matches!(git.resolve_base(None, env), Err(Error::UnableToResolveRef));
+        Ok(())
     }
 
     #[test]
@@ -2351,6 +2490,7 @@ mod tests {
             root: root.to_owned(),
             bin,
             attrs: std::sync::OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
         }
     }

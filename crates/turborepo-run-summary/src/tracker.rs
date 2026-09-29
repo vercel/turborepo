@@ -26,7 +26,7 @@ use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln
 
 use crate::{
     GlobalHashSummary, SCMState, TaskTracker,
-    execution::{ExecutionSummary, ExecutionTracker, IncrementalCacheSummary, TaskState},
+    execution::{ExecutionSummary, ExecutionTracker, TaskState},
     observability::Handle as ObservabilityHandle,
     task::{SinglePackageTaskSummary, TaskSummary},
     task_factory::TaskSummaryFactory,
@@ -118,7 +118,7 @@ impl RunTracker {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         repo_root,
         package_inference_root,
@@ -217,7 +217,7 @@ impl RunTracker {
         env_at_execution_start,
         scm,
     ))]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn finish<'a, E, H, R>(
         self,
         exit_code: i32,
@@ -235,7 +235,6 @@ impl RunTracker {
         scm: &SCM,
         is_watch: bool,
         external_deps_hashes: Option<&HashMap<String, String>>,
-        incremental_cache: Option<IncrementalCacheSummary>,
     ) -> Result<(), Error>
     where
         E: EngineInfo + Sync,
@@ -245,8 +244,8 @@ impl RunTracker {
         let end_time = Local::now();
 
         // For the common case (no --dry, no --summarize, no observability),
-        // skip the expensive TaskSummary construction, SCMState::get (2 git
-        // subprocesses), and full RunSummary assembly. We only need execution
+        // skip the expensive TaskSummary construction, SCMState::get (a git
+        // subprocess), and full RunSummary assembly. We only need execution
         // stats and failed task identification for terminal output.
         if run_opts.dry_run().is_none()
             && run_opts.summarize().is_none()
@@ -275,7 +274,7 @@ impl RunTracker {
                 );
 
                 let path = repo_root.join_components(&[".turbo", "runs", "dummy.json"]);
-                execution.print(ui, path, failed_tasks.iter().collect(), incremental_cache);
+                execution.print(ui, path, failed_tasks.iter().collect());
             }
 
             return Ok(());
@@ -308,14 +307,7 @@ impl RunTracker {
             .await?;
 
         run_summary
-            .finish(
-                end_time,
-                exit_code,
-                pkg_dep_graph,
-                ui,
-                is_watch,
-                incremental_cache,
-            )
+            .finish(end_time, exit_code, pkg_dep_graph, ui, is_watch)
             .await
     }
 
@@ -406,7 +398,6 @@ impl<'a> RunSummary<'a> {
         pkg_dep_graph: &PackageGraph,
         ui: ColorConfig,
         is_watch: bool,
-        incremental_cache: Option<IncrementalCacheSummary>,
     ) -> Result<(), Error> {
         // Handle observability shutdown before the dry run check to ensure graceful
         // cleanup even when metrics are not being emitted.
@@ -437,7 +428,7 @@ impl<'a> RunSummary<'a> {
         if !is_watch && let Some(execution) = &self.execution {
             let path = self.get_path();
             let failed_tasks = self.get_failed_tasks();
-            execution.print(ui, path, failed_tasks, incremental_cache);
+            execution.print(ui, path, failed_tasks);
         }
 
         Ok(())
@@ -465,9 +456,17 @@ impl<'a> RunSummary<'a> {
         ui: ColorConfig,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson) {
-            let rendered = self.format_json()?;
+            self.normalize();
 
-            println!("{rendered}");
+            let stdout = io::stdout();
+            let mut writer = io::BufWriter::new(stdout.lock());
+            if self.monorepo {
+                write_pretty_json(&mut writer, &*self)?;
+            } else {
+                let summary = SinglePackageRunSummary::from(&*self);
+                write_pretty_json(&mut writer, &summary)?;
+            }
+            writer.flush()?;
             return Ok(());
         }
 
@@ -843,5 +842,43 @@ impl<'a> RunSummary<'a> {
         .map_err(Error::StateThread)??;
 
         Ok(())
+    }
+}
+
+fn write_pretty_json(writer: &mut impl Write, value: &impl Serialize) -> Result<(), Error> {
+    serde_json::to_writer_pretty(&mut *writer, value)?;
+    // Match the two trailing newlines produced by `println!` and `format_json`.
+    writer.write_all(b"\n\n")?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pretty_json_preserves_terminator_bytes() {
+        let mut output = Vec::new();
+        write_pretty_json(&mut output, &serde_json::json!({ "key": "value" })).unwrap();
+
+        assert_eq!(output, b"{\n  \"key\": \"value\"\n}\n\n");
+    }
+
+    #[test]
+    fn pretty_json_propagates_write_errors() {
+        struct BrokenWriter;
+
+        impl Write for BrokenWriter {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed stdout"))
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let error = write_pretty_json(&mut BrokenWriter, &serde_json::json!({})).unwrap_err();
+        assert!(matches!(error, Error::Serde(_)));
     }
 }

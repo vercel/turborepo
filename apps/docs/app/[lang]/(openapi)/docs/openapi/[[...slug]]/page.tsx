@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { cacheLife } from "next/cache";
 import {
   DocsBody,
   DocsDescription,
@@ -7,15 +8,15 @@ import {
 } from "@/components/geistdocs/docs-page";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
 import { APIPage } from "@/components/api-page";
+import { createMetadata } from "@/lib/create-metadata";
+import { getLocalizedPath } from "@/lib/geistdocs/public-path";
 import { openapiPages } from "@/lib/geistdocs/source";
 import "./openapi.css";
 
-const Page = async ({
-  params
-}: {
-  params: Promise<{ slug?: Array<string> }>;
-}) => {
-  const { slug } = await params;
+const CachedPage = async ({ slug }: { slug?: string[] }) => {
+  "use cache";
+  cacheLife("max");
+
   const page = openapiPages.getPage(slug);
 
   if (!page) {
@@ -41,6 +42,34 @@ const Page = async ({
   );
 };
 
+const Page = async ({
+  params
+}: PageProps<"/[lang]/docs/openapi/[[...slug]]">) => {
+  const { slug } = await params;
+
+  return <CachedPage slug={slug} />;
+};
+
 export const generateStaticParams = () => openapiPages.generateParams();
+
+export const generateMetadata = async ({
+  params
+}: PageProps<"/[lang]/docs/openapi/[[...slug]]">) => {
+  const { lang, slug } = await params;
+  const page = openapiPages.getPage(slug);
+
+  if (!page) {
+    notFound();
+  }
+
+  return createMetadata({
+    title: page.data.title,
+    description: page.data.description,
+    canonicalPath: getLocalizedPath(
+      lang,
+      `/docs/openapi${slug?.length ? `/${slug.join("/")}` : ""}`
+    )
+  });
+};
 
 export default Page;

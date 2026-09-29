@@ -265,21 +265,6 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
-    // ============================================================
-    // Incremental configuration errors
-    // ============================================================
-    #[error(
-        "`{value}` is not supported in incremental partition inputs. Incremental inputs are \
-         independent of the task's regular input configuration."
-    )]
-    InvalidIncrementalInput {
-        value: String,
-        #[label("unsupported token in incremental inputs")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-
     #[error(
         "The `command` field requires `futureFlags.experimentalTaskCommand` in the root \
          turbo.json."
@@ -314,11 +299,10 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
-    #[error(
-        "The {key:?} toolchain in `command` requires `futureFlags.experimentalCargoWorkspaces`."
-    )]
+    #[error("The {key:?} toolchain in `command` requires `futureFlags.{flag}`.")]
     TaskCommandToolchainRequiresFlag {
         key: String,
+        flag: &'static str,
         #[label("toolchain is not enabled")]
         span: Option<SourceSpan>,
         #[source_code]

@@ -1,0 +1,2374 @@
+use std::{assert_matches, ffi::OsString};
+
+use camino::Utf8PathBuf;
+use insta::assert_snapshot;
+use itertools::Itertools;
+use pretty_assertions::assert_eq;
+use turborepo_run_opts::{ExecutionSelector, RunSelector};
+use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsMode};
+
+use crate::cli::{
+    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
+    GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
+    RunArgs, should_maintain_agent_guidance,
+};
+
+fn parse_args<I, S>(args: I) -> Result<Args, String>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<OsString>,
+{
+    Args::parse_args(args.into_iter().map(Into::into).collect())
+}
+
+#[test]
+fn agent_guidance_requires_repository_context_and_detected_agent() {
+    assert!(should_maintain_agent_guidance(true, false, true));
+    assert!(should_maintain_agent_guidance(false, true, true));
+    assert!(!should_maintain_agent_guidance(false, false, true));
+    assert!(!should_maintain_agent_guidance(true, false, false));
+}
+
+fn get_subcommand(name: &str) -> &'static usage::Command<'static> {
+    Args::command()
+        .subcommands
+        .iter()
+        .find(|command| command.name == name)
+        .unwrap_or_else(|| panic!("subcommand '{name}' not found"))
+}
+
+#[test]
+fn selectors_convert_run_command_arguments() {
+    let run_args = RunArgs {
+        graph: Some(GraphOutput("graph.svg".into())),
+        parallel: true,
+        profile: Some("profile.json".into()),
+        dry_run: Some(DryRunModeArg::Json),
+        no_cache: true,
+        cache_workers: 20,
+        ..Default::default()
+    };
+    let execution_args = ExecutionArgs {
+        output_logs: Some(OutputLogsModeArg::ErrorsOnly),
+        log_prefix: LogPrefixArg::None,
+        json: true,
+        log_file: Some(Some("turbo.log".into())),
+        tasks: vec!["build".into()],
+        framework_inference: Some(false),
+        continue_execution: ContinueModeArg::Always,
+        pass_through_args: vec!["--watch".into()],
+        only: true,
+        single_package: true,
+        affected: true,
+        global_deps: vec![".env".into()],
+        pkg_inference_root: Some("apps/web".into()),
+        filter: vec!["web".into()],
+        ..Default::default()
+    };
+    let args = Args {
+        command: Some(Command::Run {
+            run_args,
+            execution_args,
+        }),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        args.selectors(),
+        (
+            RunSelector {
+                graph: Some("graph.svg".into()),
+                parallel: true,
+                profile: Some("profile.json".into()),
+                dry_run: Some(DryRunMode::Json),
+                no_cache: true,
+                cache_workers: 20,
+            },
+            ExecutionSelector {
+                output_logs: Some(OutputLogsMode::ErrorsOnly),
+                log_prefix: LogPrefix::None,
+                json: true,
+                log_file: Some(Some("turbo.log".into())),
+                tasks: vec!["build".into()],
+                framework_inference: Some(false),
+                continue_execution: ContinueMode::Always,
+                pass_through_args: vec!["--watch".into()],
+                only: true,
+                single_package: true,
+                affected: true,
+                global_deps: vec![".env".into()],
+                pkg_inference_root: Some("apps/web".into()),
+                filter: vec!["web".into()],
+            },
+        )
+    );
+}
+
+#[test]
+fn selectors_normalize_watch_command() {
+    let args = parse_args(["turbo", "watch", "build", "--filter", "web"]).unwrap();
+
+    assert_eq!(
+        args.selectors(),
+        (
+            RunSelector::default(),
+            ExecutionSelector {
+                tasks: vec!["build".into()],
+                framework_inference: Some(true),
+                filter: vec!["web".into()],
+                ..Default::default()
+            }
+        )
+    );
+}
+
+#[test_case::test_case(&["turbo", "ls", "--affected", "--filter", "web"] ; "ls")]
+#[test_case::test_case(&["turbo", "boundaries", "--filter", "web"] ; "boundaries")]
+#[test_case::test_case(&["turbo", "query", "ls", "--affected", "--filter", "web"] ; "query ls")]
+fn selectors_normalize_non_execution_commands(argv: &[&str]) {
+    let args = parse_args(argv).unwrap();
+    let (run_selector, execution_selector) = args.selectors();
+
+    assert_eq!(run_selector, RunSelector::default());
+    assert_eq!(execution_selector.filter, ["web"]);
+    assert_eq!(
+        execution_selector.affected,
+        !matches!(args.command, Some(Command::Boundaries { .. }))
+    );
+    assert_eq!(
+        execution_selector,
+        ExecutionSelector {
+            filter: vec!["web".into()],
+            affected: execution_selector.affected,
+            ..Default::default()
+        }
+    );
+}
+
+#[test]
+fn selectors_preserve_root_single_package_for_other_commands() {
+    let args = Args {
+        single_package: true,
+        command: Some(Command::Bin),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        args.selectors(),
+        (
+            RunSelector::default(),
+            ExecutionSelector {
+                single_package: true,
+                ..Default::default()
+            }
+        )
+    );
+}
+
+#[test_case::test_case("", None ; "root")]
+#[test_case::test_case("apps/web", Some("apps/web") ; "workspace")]
+#[test_case::test_case("crates", Some("crates") ; "plain directory")]
+#[test_case::test_case("crates/super-crate/tests/test-package", Some("crates/super-crate/tests/test-package") ; "nested package")]
+#[test_case::test_case("packages/ui-library/src", Some("packages/ui-library/src") ; "nested source directory")]
+fn inferred_package_root_returns_repo_relative_invocation_path(
+    invocation_suffix: &str,
+    expected: Option<&str>,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    let repo_root = turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+    let invocation_path = if invocation_suffix.is_empty() {
+        repo_root.clone()
+    } else {
+        repo_root.join_unix_path(turbopath::RelativeUnixPathBuf::new(invocation_suffix).unwrap())
+    };
+    invocation_path.ensure_dir().unwrap();
+    let invocation_path = camino::Utf8Path::from_path(invocation_path.as_std_path()).unwrap();
+
+    assert_eq!(
+        super::inferred_package_root(invocation_path, &repo_root),
+        expected.map(str::to_string)
+    );
+}
+
+#[test_case::test_case(vec!["turbo", "run", "build"], None ; "missing")]
+#[test_case::test_case(vec!["turbo", "run", "build", "--summarize"], Some(true) ; "bare flag")]
+#[test_case::test_case(vec!["turbo", "run", "build", "--summarize=true"], Some(true) ; "enabled")]
+#[test_case::test_case(vec!["turbo", "run", "build", "--summarize=false"], Some(false) ; "disabled")]
+fn run_args_summarize_parses_optional_boolean(args: Vec<&str>, expected: Option<bool>) {
+    let args = parse_args(args).unwrap();
+    let Command::Run { run_args, .. } = args.command.unwrap() else {
+        panic!("expected run command");
+    };
+
+    assert_eq!(run_args.summarize(), expected);
+}
+
+#[test_case::test_case(&["-F", "api-proxy", "test:integration"] ; "short filter")]
+#[test_case::test_case(&["-Fapi-proxy", "test:integration"] ; "attached short filter")]
+#[test_case::test_case(&["-F=api-proxy", "test:integration"] ; "equals short filter")]
+#[test_case::test_case(&["--filter", "api-proxy", "test:integration"] ; "long filter")]
+#[test_case::test_case(&["--filter=api-proxy", "test:integration"] ; "equals long filter")]
+#[test_case::test_case(&["-F", "api-proxy", "test:integration", "--env-mode", "loose", "--output-logs=errors-only", "--log-order=stream"] ; "api integration regression")]
+#[test_case::test_case(&["--cwd", "run", "-F", "api-proxy", "build"] ; "global flag before filter")]
+#[test_case::test_case(&["-F", "run", "--cwd", "watch", "build"] ; "command names as flag values")]
+#[test_case::test_case(&["-vFapi-proxy", "build"] ; "bundled global and run flags")]
+#[test_case::test_case(&["-F", "web", "-F", "api", "build", "test"] ; "repeated filters and tasks")]
+#[test_case::test_case(&["--affected", "build"] ; "execution switch")]
+#[test_case::test_case(&["--concurrency", "2", "build"] ; "execution value")]
+#[test_case::test_case(&["--force=true", "build"] ; "run boolean")]
+#[test_case::test_case(&["--dry=json", "build"] ; "run alias")]
+#[test_case::test_case(&["--graph", "run", "build"] ; "optional value")]
+#[test_case::test_case(&["--affected", "build", "run"] ; "command name after task")]
+#[test_case::test_case(&["-F", "web", "build", "--", "-F", "untouched", "--help"] ; "pass through")]
+#[test_case::test_case(&["--single-package", "-F", "web", "build"] ; "legacy single package")]
+#[test_case::test_case(&["--affected"] ; "flags only")]
+fn leading_run_flags_match_explicit_run(words: &[&str]) {
+    let explicit = parse_args(["turbo", "run"].into_iter().chain(words.iter().copied())).unwrap();
+    let implicit = parse_args(["turbo"].into_iter().chain(words.iter().copied())).unwrap();
+    assert_eq!(implicit, explicit);
+}
+
+#[test_case::test_case(&["-F", "web", "run", "build"] ; "explicit run")]
+#[test_case::test_case(&["-F", "web", "watch", "build"] ; "explicit watch")]
+#[test_case::test_case(&["--filter=web", "boundaries"] ; "explicit boundaries")]
+#[test_case::test_case(&["--affected", "g"] ; "explicit alias")]
+#[test_case::test_case(&["-F"] ; "missing value")]
+#[test_case::test_case(&["-Z", "build"] ; "unknown short flag")]
+#[test_case::test_case(&["--unknown", "build"] ; "unknown long flag")]
+#[test_case::test_case(&["--env-mode=invalid", "build"] ; "invalid value")]
+#[test_case::test_case(&["--concurrency=1", "--concurrency=2", "build"] ; "duplicate scalar")]
+fn leading_run_flags_preserve_errors(words: &[&str]) {
+    assert!(parse_args(["turbo"].into_iter().chain(words.iter().copied())).is_err());
+}
+
+#[test_case::test_case(&["build"], None ; "absent")]
+#[test_case::test_case(&["build", "--force"], Some(true) ; "bare flag after task")]
+#[test_case::test_case(&["--force=true", "build"], Some(true) ; "attached true before task")]
+#[test_case::test_case(&["--force=false", "build"], Some(false) ; "attached false before task")]
+#[test_case::test_case(&["--force", "true", "build"], Some(true) ; "detached true before task")]
+#[test_case::test_case(&["--force", "false", "build"], Some(false) ; "detached false before task")]
+fn force_preserves_optional_boolean_semantics(words: &[&str], expected: Option<bool>) {
+    for prefix in [&["turbo"][..], &["turbo", "run"][..]] {
+        let args = parse_args(prefix.iter().chain(words).copied()).unwrap();
+        let Command::Run {
+            run_args,
+            execution_args,
+        } = args.command.unwrap()
+        else {
+            panic!("expected run command");
+        };
+        assert_eq!(run_args.force.flatten(), expected);
+        assert_eq!(execution_args.tasks, ["build"]);
+    }
+}
+
+#[test]
+fn config_accepts_run_configuration_flags_before_command() {
+    let args = parse_args([
+        "turbo",
+        "--concurrency=5",
+        "--env-mode=loose",
+        "--cache-dir=.turbo",
+        "config",
+    ])
+    .unwrap();
+
+    assert_eq!(args.command, Some(Command::Config));
+    let execution_args = args.execution_args().unwrap();
+    assert_eq!(execution_args.concurrency.as_deref(), Some("5"));
+    assert_eq!(execution_args.env_mode, Some(EnvModeArg::Loose));
+    assert_eq!(
+        execution_args
+            .cache_dir
+            .as_ref()
+            .map(|path| path.0.as_str()),
+        Some(".turbo")
+    );
+
+    let task = parse_args(["turbo", "build", "config"]).unwrap();
+    assert!(matches!(
+        task.command,
+        Some(Command::Run {
+            execution_args: ExecutionArgs { ref tasks, .. },
+            ..
+        }) if tasks == &["build", "config"]
+    ));
+}
+
+#[test]
+fn turbo_short_help() {
+    assert_snapshot!(Args::render_help(Args::command(), false).unwrap());
+}
+
+#[test]
+fn turbo_long_help() {
+    assert_snapshot!(Args::render_help(Args::command(), true).unwrap());
+}
+
+#[test]
+fn flag_help_is_greppable_on_one_line() {
+    let run = get_subcommand("run");
+    let help = super::args::unwrap_flag_help(&Args::render_help(run, false).unwrap());
+    let remote_only = help
+        .lines()
+        .find(|line| line.contains("--remote-only"))
+        .expect("remote-only help line");
+
+    assert!(remote_only.contains("Ignore the local filesystem cache for all tasks."));
+    assert!(remote_only.contains("Equivalent to `--cache=remote:rw`"));
+}
+
+#[test]
+fn link_short_help() {
+    let cmd = get_subcommand("link");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn unlink_short_help() {
+    let cmd = get_subcommand("unlink");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn login_short_help() {
+    let cmd = get_subcommand("login");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn logout_short_help() {
+    let cmd = get_subcommand("logout");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn devtools_short_help() {
+    let cmd = get_subcommand("devtools");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+struct CommandTestCase {
+    command: &'static str,
+    command_args: Vec<Vec<&'static str>>,
+    global_args: Vec<Vec<&'static str>>,
+    expected_output: Args,
+}
+
+fn get_default_run_args() -> RunArgs {
+    RunArgs {
+        cache_workers: 10,
+        ..RunArgs::default()
+    }
+}
+
+fn get_default_execution_args() -> ExecutionArgs {
+    ExecutionArgs {
+        output_logs: None,
+        framework_inference: Some(true),
+        ..ExecutionArgs::default()
+    }
+}
+
+impl CommandTestCase {
+    fn test(&self) {
+        let permutations = self.create_all_arg_permutations();
+        for command in permutations {
+            assert_eq!(parse_args(command).unwrap(), self.expected_output)
+        }
+    }
+
+    fn create_all_arg_permutations(&self) -> Vec<Vec<&'static str>> {
+        let mut permutations = Vec::new();
+        let mut global_args = vec![vec![self.command]];
+        global_args.extend(self.global_args.clone());
+        let global_args_len = global_args.len();
+        let command_args_len = self.command_args.len();
+
+        // Iterate through all the different permutations of args
+        for global_args_permutation in global_args.into_iter().permutations(global_args_len) {
+            let command_args = self.command_args.clone();
+            for command_args_permutation in command_args.into_iter().permutations(command_args_len)
+            {
+                let mut command = vec![vec!["turbo"]];
+                command.extend(global_args_permutation.clone());
+                command.extend(command_args_permutation);
+                permutations.push(command.into_iter().flatten().collect())
+            }
+        }
+
+        permutations
+    }
+}
+
+use crate::cli::{Args, Command};
+
+#[test_case::test_case(
+    &["turbo", "run", "build"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "default case"
+)]
+#[test_case::test_case(
+    &["turbo", "run", "build"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                framework_inference: Some(true),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "framework_inference: default to true"
+)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--framework-inference"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                 tasks: vec!["build".to_string()],
+                 framework_inference: Some(true),
+                 ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "framework_inference: flag only"
+)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--framework-inference", "true"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                framework_inference: Some(true),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+		} ;
+    "framework_inference: flag set to true"
+)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--framework-inference",
+"false"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                framework_inference: Some(false),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+		} ;
+    "framework_inference: flag set to false"
+	)]
+#[test_case::test_case(
+    &["turbo", "run", "build", "--env-mode"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                env_mode: Some(EnvModeArg::Strict),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "env_mode: not fully-specified"
+)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--env-mode", "loose"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                env_mode: Some(EnvModeArg::Loose),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+		} ;
+    "env_mode: specified loose"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--env-mode", "strict"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                env_mode: Some(EnvModeArg::Strict),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+		} ;
+    "env_mode: specified strict"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "lint", "test"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "multiple tasks"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--cache-dir", "foobar"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                cache_dir: Some(NonEmptyPath(Utf8PathBuf::from("foobar"))),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "cache dir"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--cache-workers", "100"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec ! ["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                cache_workers: 100,
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "cache workers"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--concurrency", "20"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                concurrency: Some("20".to_string()),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "concurrency"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--continue"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                continue_execution: ContinueModeArg::Always,
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "continue option with no value"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "--continue", "build"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                continue_execution: ContinueModeArg::Always,
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "continue option with no value before task"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--continue=dependencies-successful"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                continue_execution: ContinueModeArg::DependenciesSuccessful,
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "continue option with explicit value"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--dry-run"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                dry_run: Some(DryRunModeArg::Text),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "dry run"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--dry-run", "json"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                dry_run: Some(DryRunModeArg::Json),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "dry run json"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--filter", "water", "--filter", "earth", "--filter", "fire", "--filter", "air"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                filter: vec![
+                    "water".to_string(),
+                    "earth".to_string(),
+                    "fire".to_string(),
+                    "air".to_string()
+                ],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "multiple filters"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "-F", "water", "-F", "earth", "-F", "fire", "-F", "air"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                filter: vec![
+                    "water".to_string(),
+                    "earth".to_string(),
+                    "fire".to_string(),
+                    "air".to_string()
+                ],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "multiple filters short"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--filter", "water", "-F", "earth", "--filter", "fire", "-F", "air"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                filter: vec![
+                    "water".to_string(),
+                    "earth".to_string(),
+                    "fire".to_string(),
+                    "air".to_string()
+                ],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "multiple filters short and long"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--force"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                force: Some(Some(true)),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "force"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--global-deps", ".env"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                global_deps: vec![".env".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "global deps"
+	)]
+#[test_case::test_case(
+		&[ "turbo", "run", "build", "--global-deps", ".env", "--global-deps", ".env.development"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                global_deps: vec![".env".to_string(), ".env.development".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "multiple global deps"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--graph"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                graph: Some(GraphOutput("".to_string())),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "graph"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--graph", "out.html"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                graph: Some(GraphOutput("out.html".to_string())),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "graph with output"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--no-cache"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                no_cache: true,
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "no cache"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--only"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                only: true,
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "only"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--no-daemon"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                no_daemon: true,
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "no daemon"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--daemon"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                daemon: true,
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "daemon"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--output-logs", "full"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                output_logs: Some(OutputLogsModeArg::Full),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "output logs full"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--output-logs", "none"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                output_logs: Some(OutputLogsModeArg::None),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "output logs none"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--output-logs", "hash-only"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                output_logs: Some(OutputLogsModeArg::HashOnly),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "output logs hash only"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--log-order", "stream"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                log_order: Some(LogOrderArg::Stream),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "log order stream"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--log-order", "grouped"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                log_order: Some(LogOrderArg::Grouped),
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    };
+    "log order grouped"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--log-prefix", "auto"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                log_prefix: LogPrefixArg::Auto,
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "log prefix auto"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--log-prefix", "none"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                log_prefix: LogPrefixArg::None,
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "log prefix none"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--log-prefix", "task"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                 tasks: vec!["build".to_string()],
+                 log_prefix: LogPrefixArg::Task,
+                 ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "log prefix task"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: get_default_run_args()
+        }),
+        ..Args::default()
+    } ;
+    "just build"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--parallel"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                parallel: true,
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "parallel"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--profile", "profile_out"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+              profile: Some("profile_out".to_string()),
+              ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "profile"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--profile"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+              profile: Some(String::new()),
+              ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+    } ;
+    "profile_no_value"
+	)]
+// remote-only flag tests
+#[test_case::test_case(
+		&["turbo", "run", "build"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                remote_only: None,
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+		} ;
+    "remote_only default to false"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--remote-only"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                remote_only: Some(Some(true)),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+		} ;
+    "remote_only with no value, means true"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--remote-only", "true"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                remote_only: Some(Some(true)),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+		} ;
+    "remote_only=true works"
+	)]
+#[test_case::test_case(
+		&["turbo", "run", "build", "--remote-only", "false"],
+    Args {
+        command: Some(Command::Run {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            run_args: RunArgs {
+                remote_only: Some(Some(false)),
+                ..get_default_run_args()
+            }
+        }),
+        ..Args::default()
+		} ;
+    "remote_only=false works"
+	)]
+#[test_case::test_case(
+		&["turbo", "build"],
+    Args {
+        command: Some(Command::Run { execution_args: ExecutionArgs { tasks: vec!["build".to_string()], ..get_default_execution_args() }, run_args: get_default_run_args() }),
+        ..Args::default()
+    } ;
+    "build no run prefix"
+)]
+#[test_case::test_case(
+	&["turbo", "build", "lint", "test"],
+    Args {
+        command: Some(Command::Run { execution_args: ExecutionArgs { tasks: vec!["build".to_string(), "lint".to_string(), "test".to_string()], ..get_default_execution_args() }, run_args: get_default_run_args() }),
+        ..Args::default()
+    } ;
+    "multiple tasks no run prefix"
+)]
+fn test_parse_run(args: &[&str], expected: Args) {
+    assert_eq!(parse_args(args).unwrap(), expected);
+}
+
+#[test_case::test_case(
+    &["turbo", "watch", "build"],
+    Args {
+        command: Some(Command::Watch {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                ..get_default_execution_args()
+            },
+            experimental_write_cache: false
+        }),
+        ..Args::default()
+    };
+    "default watch"
+)]
+#[test_case::test_case(
+    &["turbo", "watch", "build", "--cache-dir", "foobar"],
+    Args {
+        command: Some(Command::Watch {
+            execution_args: ExecutionArgs {
+                tasks: vec!["build".to_string()],
+                cache_dir: Some(NonEmptyPath(Utf8PathBuf::from("foobar"))),
+                ..get_default_execution_args()
+            },
+            experimental_write_cache: false
+        }),
+        ..Args::default()
+    };
+    "with cache-dir"
+)]
+#[test_case::test_case(
+    &["turbo", "watch", "build", "lint", "check"],
+    Args {
+        command: Some(Command::Watch {
+            execution_args: ExecutionArgs {
+              tasks: vec!["build".to_string(), "lint".to_string(), "check".to_string()],
+              ..get_default_execution_args()
+            },
+            experimental_write_cache: false
+        }),
+        ..Args::default()
+    };
+    "with multiple tasks"
+)]
+#[test_case::test_case(
+    &["turbo", "watch", "build", "--experimental-write-cache"],
+    Args {
+        command: Some(Command::Watch {
+            execution_args: ExecutionArgs {
+              tasks: vec!["build".to_string()],
+              ..get_default_execution_args()
+            },
+            experimental_write_cache: true
+        }),
+        ..Args::default()
+    };
+    "with experimental-write-cache"
+)]
+fn test_parse_watch(args: &[&str], expected: Args) {
+    assert_eq!(parse_args(args).unwrap(), expected);
+}
+
+#[test_case::test_case(
+    &["turbo", "run", "build", "--daemon", "--no-daemon"],
+    "cannot be used with" ;
+    "daemon and no-daemon at the same time"
+)]
+#[test_case::test_case(
+    &["turbo", "run", "build", "--since", "foo"],
+    "unexpected argument '--since' found" ;
+    "since without filter or scope"
+)]
+#[test_case::test_case(
+    &["turbo", "run", "build", "--include-dependencies"],
+    "unexpected argument '--include-dependencies' found" ;
+    "include-dependencies without filter or scope"
+)]
+#[test_case::test_case(
+    &["turbo", "run", "build", "--no-deps"],
+    "unexpected argument '--no-deps' found" ;
+    "no-deps without filter or scope"
+)]
+#[test_case::test_case(
+    &["turbo", "run", "build", "--log-prefix=blah"],
+    "invalid value 'blah' for '--log-prefix" ;
+    "invalid log prefix"
+)]
+#[test_case::test_case(
+    &["turbo", "run", "build", "--log-prefix"],
+    "a value is required for '--log-prefix" ;
+    "missing log prefix value"
+)]
+#[test_case::test_case(
+    &["turbo", "run", "build", "-v", "--verbosity=1"],
+    "cannot be used with" ;
+    "verbosity flags conflict"
+)]
+fn test_parse_run_failures(args: &[&str], expected: &str) {
+    assert_matches!(
+        parse_args(args),
+        Err(err) if err.contains(expected)
+    );
+}
+
+#[test_case::test_case(&["turbo", "run", "build", "-v"], 1 ; "short once")]
+#[test_case::test_case(&["turbo", "run", "build", "-vv"], 2 ; "short twice")]
+#[test_case::test_case(&["turbo", "run", "build", "--verbosity=1"], 1 ; "long one")]
+#[test_case::test_case(&["turbo", "run", "build", "--verbosity=2"], 2 ; "long two")]
+fn test_parse_verbosity(args: &[&str], expected: u8) {
+    let args = parse_args(args).unwrap();
+
+    assert_eq!(u8::from(args.verbosity), expected);
+}
+
+#[test]
+fn test_parse_bin() {
+    assert_eq!(
+        parse_args(["turbo", "bin"]).unwrap(),
+        Args {
+            command: Some(Command::Bin {}),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "bin",
+        command_args: vec![],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Bin {}),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+}
+
+#[test]
+fn test_parse_link() {
+    assert_eq!(
+        parse_args(["turbo", "link"]).unwrap(),
+        Args {
+            command: Some(Command::Link {
+                no_gitignore: false,
+                scope: None,
+                yes: false,
+            }),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "link",
+        command_args: vec![],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Link {
+                no_gitignore: false,
+                scope: None,
+                yes: false,
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "link",
+        command_args: vec![vec!["--yes"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Link {
+                yes: true,
+                no_gitignore: false,
+                scope: None,
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "link",
+        command_args: vec![vec!["--scope", "foo"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Link {
+                yes: false,
+                no_gitignore: false,
+                scope: Some("foo".to_string()),
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "link",
+        command_args: vec![vec!["--no-gitignore"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Link {
+                yes: false,
+                no_gitignore: true,
+                scope: None,
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+}
+
+#[test]
+fn test_parse_login() {
+    assert_eq!(
+        parse_args(["turbo", "login"]).unwrap(),
+        Args {
+            command: Some(Command::Login {
+                sso_team: None,
+                force: false,
+                manual: false,
+            }),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "login",
+        command_args: vec![],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Login {
+                sso_team: None,
+                force: false,
+                manual: false,
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "login",
+        command_args: vec![vec!["--sso-team", "my-team"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Login {
+                sso_team: Some("my-team".to_string()),
+                force: false,
+                manual: false,
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+}
+
+#[test]
+fn test_parse_logout() {
+    assert_eq!(
+        parse_args(["turbo", "logout"]).unwrap(),
+        Args {
+            command: Some(Command::Logout {
+                invalidate: Some(true)
+            }),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "logout",
+        command_args: vec![],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Logout {
+                invalidate: Some(true),
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    assert_eq!(
+        parse_args(["turbo", "logout", "--invalidate=false"]).unwrap(),
+        Args {
+            command: Some(Command::Logout {
+                invalidate: Some(false)
+            }),
+            ..Args::default()
+        }
+    );
+}
+
+#[test]
+fn test_parse_unlink() {
+    assert_eq!(
+        parse_args(["turbo", "unlink"]).unwrap(),
+        Args {
+            command: Some(Command::Unlink),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "unlink",
+        command_args: vec![],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Unlink),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+}
+
+#[test]
+fn test_parse_prune() {
+    let default_prune = Command::Prune {
+        scope: None,
+        scope_arg: Some(vec!["foo".into()]),
+        docker: false,
+        production: false,
+        output_dir: "out".to_string(),
+        use_gitignore: None,
+    };
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "foo"]).unwrap(),
+        Args {
+            command: Some(default_prune.clone()),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "prune",
+        command_args: vec![vec!["foo"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(default_prune),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "--scope", "bar"]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: Some(vec!["bar".to_string()]),
+                scope_arg: None,
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "--scope", "foo", "--scope", "bar",]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: Some(vec!["foo".to_string(), "bar".to_string()]),
+                scope_arg: None,
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "foo", "bar"]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".to_string(), "bar".to_string()]),
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "--docker", "foo"]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".into()]),
+                docker: true,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "--out-dir", "dist", "foo"]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".into()]),
+                docker: false,
+                production: false,
+                output_dir: "dist".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    CommandTestCase {
+        command: "prune",
+        command_args: vec![vec!["foo"], vec!["--out-dir", "dist"], vec!["--docker"]],
+        global_args: vec![],
+        expected_output: Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".into()]),
+                docker: true,
+                production: false,
+                output_dir: "dist".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "prune",
+        command_args: vec![vec!["foo"], vec!["--out-dir", "dist"], vec!["--docker"]],
+        global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
+        expected_output: Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".into()]),
+                docker: true,
+                production: false,
+                output_dir: "dist".to_string(),
+                use_gitignore: None,
+            }),
+            cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "prune",
+        command_args: vec![
+            vec!["--out-dir", "dist"],
+            vec!["--docker"],
+            vec!["--scope", "foo"],
+        ],
+        global_args: vec![],
+        expected_output: Args {
+            command: Some(Command::Prune {
+                scope: Some(vec!["foo".to_string()]),
+                scope_arg: None,
+                docker: true,
+                production: false,
+                output_dir: "dist".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "prune",
+        command_args: vec![vec!["foo"], vec!["--use-gitignore"]],
+        global_args: vec![],
+        expected_output: Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".to_string()]),
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: Some(true),
+            }),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "prune",
+        command_args: vec![vec!["foo"], vec!["--use-gitignore=true"]],
+        global_args: vec![],
+        expected_output: Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".to_string()]),
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: Some(true),
+            }),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    CommandTestCase {
+        command: "prune",
+        command_args: vec![vec!["foo"], vec!["--use-gitignore=false"]],
+        global_args: vec![],
+        expected_output: Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".to_string()]),
+                docker: false,
+                production: false,
+                output_dir: "out".to_string(),
+                use_gitignore: Some(false),
+            }),
+            ..Args::default()
+        },
+    }
+    .test();
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "--production", "foo"]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".to_string()]),
+                docker: false,
+                production: true,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args(["turbo", "prune", "--docker", "--production", "foo"]).unwrap(),
+        Args {
+            command: Some(Command::Prune {
+                scope: None,
+                scope_arg: Some(vec!["foo".to_string()]),
+                docker: true,
+                production: true,
+                output_dir: "out".to_string(),
+                use_gitignore: None,
+            }),
+            ..Args::default()
+        }
+    );
+}
+
+#[test]
+fn test_pass_through_args() {
+    assert_eq!(
+        parse_args(["turbo", "run", "build", "--", "--script-arg=42"]).unwrap(),
+        Args {
+            command: Some(Command::Run {
+                run_args: RunArgs {
+                    ..get_default_run_args()
+                },
+                execution_args: ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    pass_through_args: vec!["--script-arg=42".to_string()],
+                    ..get_default_execution_args()
+                },
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args([
+            "turbo",
+            "run",
+            "build",
+            "--",
+            "--script-arg=42",
+            "--foo",
+            "--bar",
+            "bat"
+        ])
+        .unwrap(),
+        Args {
+            command: Some(Command::Run {
+                run_args: RunArgs {
+                    ..get_default_run_args()
+                },
+                execution_args: ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    pass_through_args: vec![
+                        "--script-arg=42".to_string(),
+                        "--foo".to_string(),
+                        "--bar".to_string(),
+                        "bat".to_string()
+                    ],
+                    ..get_default_execution_args()
+                },
+            }),
+            ..Args::default()
+        }
+    );
+}
+
+#[test]
+fn test_parse_prune_no_mixed_arg_and_flag() {
+    assert!(parse_args(["turbo", "prune", "foo", "--scope", "bar"]).is_err(),);
+}
+
+#[test]
+fn test_parse_gen() {
+    let default_gen = Command::Generate {
+        tag: None,
+        generator_name: None,
+        config: None,
+        root: None,
+        args: vec![],
+        command: None,
+    };
+
+    assert_eq!(
+        parse_args(["turbo", "gen"]).unwrap(),
+        Args {
+            command: Some(default_gen.clone()),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args([
+            "turbo",
+            "gen",
+            "--args",
+            "my long arg string",
+            "my-second-arg"
+        ])
+        .unwrap(),
+        Args {
+            command: Some(Command::Generate {
+                tag: None,
+                generator_name: None,
+                config: None,
+                root: None,
+                args: vec![
+                    "my long arg string".to_string(),
+                    "my-second-arg".to_string()
+                ],
+                command: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args(["turbo", "gen", "--args", "first", "--args", "second",]).unwrap(),
+        Args {
+            command: Some(Command::Generate {
+                tag: None,
+                generator_name: None,
+                config: None,
+                root: None,
+                args: vec!["first".to_string(), "second".to_string()],
+                command: None,
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args([
+            "turbo",
+            "gen",
+            "run",
+            "my-generator",
+            "--args",
+            "first",
+            "--args",
+            "second",
+        ])
+        .unwrap(),
+        Args {
+            command: Some(Command::Generate {
+                tag: None,
+                generator_name: None,
+                config: None,
+                root: None,
+                args: vec![],
+                command: Some(GenerateCommand::Run(GeneratorCustomArgs {
+                    generator_name: Some("my-generator".to_string()),
+                    config: None,
+                    root: None,
+                    args: vec!["first".to_string(), "second".to_string()],
+                })),
+            }),
+            ..Args::default()
+        }
+    );
+
+    assert_eq!(
+        parse_args([
+            "turbo",
+            "gen",
+            "--tag",
+            "canary",
+            "--config",
+            "~/custom-gen-config/gen",
+            "my-generator"
+        ])
+        .unwrap(),
+        Args {
+            command: Some(Command::Generate {
+                tag: Some("canary".to_string()),
+                generator_name: Some("my-generator".to_string()),
+                config: Some("~/custom-gen-config/gen".to_string()),
+                root: None,
+                args: vec![],
+                command: None,
+            }),
+            ..Args::default()
+        }
+    );
+}
+
+#[test]
+fn test_gen_default_tag_is_not_latest() {
+    let args = parse_args(["turbo", "gen"]).unwrap();
+    let tag = match args.command {
+        Some(Command::Generate { tag, .. }) => tag,
+        _ => panic!("expected Generate command"),
+    };
+    assert_eq!(tag, None, "default tag should be None, not \"latest\"");
+}
+
+#[test]
+fn test_gen_default_tag_resolves_to_current_version() {
+    let args = parse_args(["turbo", "gen"]).unwrap();
+    let tag = match args.command {
+        Some(Command::Generate { tag, .. }) => tag,
+        _ => panic!("expected Generate command"),
+    };
+    let resolved = tag.unwrap_or_else(|| crate::get_version().to_string());
+    assert_eq!(
+        resolved,
+        crate::get_version(),
+        "gen tag should resolve to the turbo binary version, not \"latest\""
+    );
+}
+
+#[test]
+fn test_gen_explicit_tag_is_preserved() {
+    let args = parse_args(["turbo", "gen", "--tag", "1.2.3"]).unwrap();
+    let tag = match args.command {
+        Some(Command::Generate { tag, .. }) => tag,
+        _ => panic!("expected Generate command"),
+    };
+    assert_eq!(tag, Some("1.2.3".to_string()));
+    let resolved = tag.unwrap_or_else(|| crate::get_version().to_string());
+    assert_eq!(
+        resolved, "1.2.3",
+        "explicit --tag should override the default version"
+    );
+}
+
+#[test]
+fn test_profile_usage() {
+    // Without a filename, profile should still be accepted
+    assert!(parse_args(["turbo", "build", "--profile"]).is_ok());
+    assert!(parse_args(["turbo", "build", "--anon-profile"]).is_ok());
+    // With a filename, profile should be accepted
+    assert!(parse_args(["turbo", "build", "--profile", "foo.json"]).is_ok());
+    assert!(parse_args(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
+    // Both flags simultaneously should be rejected
+    assert!(
+        parse_args([
+            "turbo",
+            "build",
+            "--profile",
+            "foo.json",
+            "--anon-profile",
+            "bar.json"
+        ])
+        .is_err()
+    );
+}
+
+#[test]
+fn test_profile_default_filename() {
+    let run_args = RunArgs {
+        profile: Some(String::new()),
+        ..get_default_run_args()
+    };
+    let (file, include_args) = run_args.profile_file_and_include_args().unwrap();
+    assert!(
+        file.starts_with("profile."),
+        "expected default profile filename, got: {file}"
+    );
+    assert!(include_args);
+
+    let run_args = RunArgs {
+        anon_profile: Some(String::new()),
+        ..get_default_run_args()
+    };
+    let (file, include_args) = run_args.profile_file_and_include_args().unwrap();
+    assert!(
+        file.starts_with("profile."),
+        "expected default profile filename, got: {file}"
+    );
+    assert!(!include_args);
+
+    let run_args = RunArgs {
+        profile: Some("custom.json".to_string()),
+        ..get_default_run_args()
+    };
+    let (file, include_args) = run_args.profile_file_and_include_args().unwrap();
+    assert_eq!(file, "custom.json");
+    assert!(include_args);
+}
+
+#[test]
+fn test_empty_cache_dir() {
+    assert!(parse_args(["turbo", "build", "--cache-dir"]).is_err());
+    assert!(parse_args(["turbo", "build", "--cache-dir="]).is_err());
+    assert!(parse_args(["turbo", "build", "--cache-dir", ""]).is_err());
+}
+
+#[test]
+fn test_preflight() {
+    assert!(!parse_args(["turbo", "build",]).unwrap().preflight);
+    assert!(
+        parse_args(["turbo", "build", "--preflight"])
+            .unwrap()
+            .preflight
+    );
+    assert!(parse_args(["turbo", "build", "--preflight=true"]).is_err());
+}
+
+#[test]
+fn test_log_stream_tui_compatibility() {
+    assert!(LogOrder::Auto.compatible_with_tui());
+    assert!(!LogOrder::Stream.compatible_with_tui());
+    assert!(!LogOrder::Grouped.compatible_with_tui());
+}
+
+#[test]
+fn test_dangerously_allow_no_package_manager() {
+    assert!(
+        !parse_args(["turbo", "build",])
+            .unwrap()
+            .dangerously_disable_package_manager_check
+    );
+    assert!(
+        parse_args([
+            "turbo",
+            "build",
+            "--dangerously-disable-package-manager-check"
+        ])
+        .unwrap()
+        .dangerously_disable_package_manager_check
+    );
+}
+
+#[test]
+fn test_affected_and_filter_can_be_combined() {
+    assert!(parse_args(["turbo", "run", "build", "--affected", "--filter", "foo"]).is_ok(),);
+    assert!(parse_args(["turbo", "build", "--affected", "--filter", "foo"]).is_ok(),);
+    assert!(parse_args(["turbo", "build", "--filter", "foo", "--affected"]).is_ok(),);
+    assert!(parse_args(["turbo", "ls", "--filter", "foo", "--affected"]).is_ok(),);
+}
+
+struct SinglePackageTestCase {
+    args: &'static [&'static str],
+    expected_is_single: bool,
+    expected: &'static [&'static str],
+}
+
+impl SinglePackageTestCase {
+    pub const fn new<const N: usize>(args: &'static [&'static str; N]) -> Self {
+        let args = args.as_slice();
+        Self {
+            args,
+            expected_is_single: false,
+            expected: args,
+        }
+    }
+
+    pub const fn expected<const N: usize>(mut self, expected: &'static [&'static str; N]) -> Self {
+        self.expected_is_single = true;
+        self.expected = expected.as_slice();
+        self
+    }
+
+    pub fn os_args(&self) -> Vec<OsString> {
+        self.args.iter().map(|s| OsString::from(*s)).collect()
+    }
+
+    pub fn assert_actual(&self, actual: (bool, impl Iterator<Item = OsString>)) {
+        let (is_single, args) = actual;
+        assert_eq!(is_single, self.expected_is_single);
+        assert_eq!(
+            args.map(|s| s.to_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+                .as_slice(),
+            self.expected
+        );
+    }
+}
+
+const NO_SINGLE_PKG: SinglePackageTestCase = SinglePackageTestCase::new(&["turbo", "--version"]);
+const SINGLE_PKG_AFTER_PASS: SinglePackageTestCase =
+    SinglePackageTestCase::new(&["turbo", "--", "--single-package"]);
+const SINGLE_PKG: SinglePackageTestCase =
+    SinglePackageTestCase::new(&["turbo", "--single-package", "run", "build"])
+        .expected(&["turbo", "run", "build"]);
+const SINGLE_PKG_BEFORE_AFTER: SinglePackageTestCase = SinglePackageTestCase::new(&[
+    "turbo",
+    "--single-package",
+    "run",
+    "build",
+    "--",
+    "--single-package",
+])
+.expected(&["turbo", "run", "build", "--", "--single-package"]);
+
+#[test_case::test_case(NO_SINGLE_PKG)]
+#[test_case::test_case(SINGLE_PKG_AFTER_PASS)]
+#[test_case::test_case(SINGLE_PKG)]
+#[test_case::test_case(SINGLE_PKG_BEFORE_AFTER)]
+fn test_single_package_removal(test: SinglePackageTestCase) {
+    let os_args = test.os_args();
+    let actual = Args::remove_single_package(os_args);
+    test.assert_actual(actual);
+}
+
+#[test]
+fn test_set_single_package() {
+    let inferred_run = Args::parse_args(
+        ["turbo", "--single-package", "build"]
+            .iter()
+            .map(|s| OsString::from(*s))
+            .collect(),
+    )
+    .unwrap();
+    let explicit_run = Args::parse_args(
+        ["turbo", "run", "--single-package", "build"]
+            .iter()
+            .map(|s| OsString::from(*s))
+            .collect(),
+    )
+    .unwrap();
+    assert!(
+        inferred_run
+            .execution_args()
+            .is_some_and(|e| e.single_package)
+    );
+    assert!(
+        explicit_run
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false)
+    );
+    assert!(explicit_run.execution_args().is_some());
+
+    let watch = Args::parse_args(
+        ["turbo", "watch", "--single-package", "build"]
+            .iter()
+            .map(|s| OsString::from(*s))
+            .collect(),
+    )
+    .unwrap();
+    assert!(
+        watch
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Watch { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false)
+    );
+    assert!(watch.execution_args().is_some());
+}
+
+#[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
+#[test_case::test_case(&["turbo", "--no-daemon", "watch", "build"]; "before watch")]
+fn test_no_run_args_outside_of_run(args: &[&str]) {
+    let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+    let err = Args::parse_args(os_args).unwrap_err();
+    assert_snapshot!(args.join("-").as_str(), err);
+}
+
+#[test_case::test_case(&["turbo", "--filter=foo", "run", "build"], false; "execution args")]
+#[test_case::test_case(&["turbo", "--no-daemon", "run", "build"], false; "run args")]
+#[test_case::test_case(&["turbo", "build", "run"], true; "task")]
+#[test_case::test_case(&["turbo", "--filter=web", "watch", "build"], false; "execution before watch")]
+fn test_no_run_args_before_run(args: &[&str], is_okay: bool) {
+    let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+    let cli = Args::parse_args(os_args);
+    if is_okay {
+        cli.unwrap();
+    } else {
+        let err = cli.unwrap_err();
+        assert_snapshot!(args.join("-").as_str(), err);
+    }
+}
+
+#[test_case::test_case(&["turbo", "--filter=foo", "boundaries"], false; "execution args")]
+#[test_case::test_case(&["turbo", "--no-daemon", "boundaries"], false; "run args")]
+fn test_no_run_args_before_boundaries(args: &[&str], is_okay: bool) {
+    let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+    let cli = Args::parse_args(os_args);
+    if is_okay {
+        cli.unwrap();
+    } else {
+        let err = cli.unwrap_err();
+        assert_snapshot!(args.join("-").as_str(), err);
+    }
+}
+
+#[test_case::test_case(&["turbo", "boundaries"], true; "empty")]
+#[test_case::test_case(&["turbo", "boundaries", "--ignore"], true; "with ignore")]
+#[test_case::test_case(&["turbo", "boundaries", "--ignore=all"], true; "with ignore all")]
+#[test_case::test_case(&["turbo", "boundaries", "--ignore=prompt"], true; "with ignore prompt")]
+#[test_case::test_case(&["turbo", "boundaries", "--filter", "ui"], true; "with filter")]
+fn test_boundaries(args: &[&str], is_okay: bool) {
+    let os_args = args.iter().map(|s| OsString::from(*s)).collect();
+    let cli = Args::parse_args(os_args);
+    if is_okay {
+        cli.unwrap();
+    } else {
+        let err = cli.unwrap_err();
+        assert_snapshot!(args.join("-").as_str(), err);
+    }
+}
+
+#[test]
+fn test_query_affected_no_args() {
+    let args = parse_args(["turbo", "query", "affected"]).unwrap();
+    assert_eq!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(super::AffectedArgs {
+                packages: None,
+                tasks: None,
+                base: None,
+                head: None,
+                exit_code: false,
+            })),
+            query: None,
+            variables: None,
+            schema: false,
+        })
+    );
+}
+
+#[test]
+fn test_query_affected_bare_packages_flag() {
+    let args = parse_args(["turbo", "query", "affected", "--packages"]).unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.packages == Some(vec![])
+    );
+}
+
+#[test]
+fn test_query_affected_with_packages() {
+    let args = parse_args(["turbo", "query", "affected", "--packages", "web"]).unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.packages == Some(vec!["web".to_string()])
+    );
+}
+
+#[test]
+fn test_query_affected_with_multiple_packages() {
+    let args = parse_args(["turbo", "query", "affected", "--packages", "web", "docs"]).unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.packages == Some(vec!["web".to_string(), "docs".to_string()])
+    );
+}
+
+#[test]
+fn test_query_affected_bare_tasks_flag() {
+    let args = parse_args(["turbo", "query", "affected", "--tasks"]).unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.tasks == Some(vec![])
+    );
+}
+
+#[test]
+fn test_query_affected_with_tasks() {
+    let args = parse_args(["turbo", "query", "affected", "--tasks", "build"]).unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.tasks == Some(vec!["build".to_string()])
+    );
+}
+
+#[test]
+fn test_query_affected_with_base_head() {
+    let args = parse_args([
+        "turbo", "query", "affected", "--base", "main", "--head", "HEAD",
+    ])
+    .unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.base == Some("main".to_string()) && a.head == Some("HEAD".to_string())
+    );
+}
+
+#[test]
+fn test_query_affected_combined_packages_and_tasks() {
+    let args = parse_args([
+        "turbo",
+        "query",
+        "affected",
+        "--packages",
+        "web",
+        "--tasks",
+        "build",
+    ])
+    .unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.packages == Some(vec!["web".to_string()])
+            && a.tasks == Some(vec!["build".to_string()])
+    );
+}
+
+#[test]
+fn test_query_affected_combined_bare_packages_and_bare_tasks() {
+    let args = parse_args(["turbo", "query", "affected", "--packages", "--tasks"]).unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.packages == Some(vec![]) && a.tasks == Some(vec![])
+    );
+}
+
+#[test]
+fn test_query_affected_exit_code_flag() {
+    let args = parse_args(["turbo", "query", "affected", "--exit-code"]).unwrap();
+    assert_matches!(
+        args.command,
+        Some(Command::Query {
+            subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+            ..
+        }) if a.exit_code
+    );
+}
+
+#[test]
+fn test_query_raw_graphql_still_works() {
+    let args = parse_args(["turbo", "query", "{ packages { items { name } } }"]).unwrap();
+    assert_eq!(
+        args.command,
+        Some(Command::Query {
+            subcommand: None,
+            query: Some("{ packages { items { name } } }".to_string()),
+            variables: None,
+            schema: false,
+        })
+    );
+}
+
+#[test]
+fn test_query_schema_still_works() {
+    let args = parse_args(["turbo", "query", "--schema"]).unwrap();
+    assert_eq!(
+        args.command,
+        Some(Command::Query {
+            subcommand: None,
+            query: None,
+            variables: None,
+            schema: true,
+        })
+    );
+}

@@ -144,37 +144,11 @@ impl BunLockfile {
             return Ok(Some(pkg));
         }
 
-        // Search for nested/aliased versions that match
-        // Only search explicitly nested entries (with '/' in key), not bundled deps
-        for (lockfile_key, entry) in &self.data.packages {
-            // Only consider explicitly nested entries (not bundled)
-            if !lockfile_key.contains('/') {
-                continue;
-            }
-
-            // Skip bundled dependencies
-            if let Some(info) = &entry.info
-                && info
-                    .other
-                    .get("bundled")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-            {
-                continue;
-            }
-
-            let ident = PackageIdent::parse(&entry.ident);
-
-            // Skip if the name doesn't match
-            if ident.name() != name {
-                continue;
-            }
-
-            // Skip workspace mappings
-            if ident.is_workspace() {
-                continue;
-            }
-
+        // Search for nested/aliased versions that match.
+        // The index pre-filters to entries with '/' in the key whose ident
+        // name matches, excluding bundled deps and workspace mappings, so
+        // this only visits actual candidates instead of every package.
+        for (lockfile_key, entry) in self.index.nested_candidates(name) {
             if let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
                 && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
@@ -194,10 +168,12 @@ impl BunLockfile {
     }
 
     pub(super) fn apply_overrides<'a>(&'a self, name: &str, version: &'a str) -> &'a str {
+        // Keys carrying a parent range (`"webpack@^4"`) never match a bare
+        // name, so only unscoped rules (and their `"."` entry) apply here.
         self.data
             .overrides
             .get(name)
-            .map(|s| s.as_str())
+            .and_then(|rule| rule.version())
             .unwrap_or(version)
     }
 

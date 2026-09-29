@@ -3,11 +3,16 @@
   "license": "MIT",
   "version": "0.0.0",
   "private": true,
-  "devDependencies": {
-    "@nuxtjs/eslint-config-typescript": "^12.1.0",
-    "@vercel/style-guide": "^5.2.0",
-    "@vue/eslint-config-typescript": "^12.0.0",
-    "eslint-config-turbo": "^2.0.0",
-    "typescript": "5.5.4"
+  "type": "module",
+  "exports": {
+    "./vue": "./vue.js"
+  },
+  "dependencies": {
+    "@eslint/js": "10.0.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@vue/eslint-config-typescript": "14.9.0",
+    "eslint-config-turbo": "2.10.12",
+    "eslint-plugin-vue": "10.10.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   }
 }

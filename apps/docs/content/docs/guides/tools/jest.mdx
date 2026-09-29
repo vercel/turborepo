@@ -71,6 +71,25 @@ cd packages/ui && bun install jest --dev
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+cd apps/web && nub add jest --save-dev
+cd packages/ui && nub add jest --save-dev
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+cd apps/web && aube add jest --save-dev
+cd packages/ui && aube add jest --save-dev
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 Both the `apps/web` and `packages/ui` have their own test suites, so we'll add a `test` script to their `package.json`:

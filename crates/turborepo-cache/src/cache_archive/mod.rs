@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 mod create;
 mod restore;
 mod restore_directory;

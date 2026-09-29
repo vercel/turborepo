@@ -19,9 +19,6 @@ turborepo-ui = { workspace = true }
 miette = { workspace = true }
 thiserror = { workspace = true }
 
-# Async runtime
-tokio = { workspace = true }
-
 # Logging
 tracing = { workspace = true }
 
@@ -43,7 +40,6 @@ itertools = { workspace = true }
 
 # Display
 const_format = "0.2.32"
-tiny-gradient = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

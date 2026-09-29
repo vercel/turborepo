@@ -61,8 +61,6 @@ pub enum TrackedErrors {
     /// Currently only indicates a package being
     /// reported when it does not exist.
     InvalidPackageDiscovery,
-    IncrementalFetchFailed,
-    IncrementalUploadFailed,
 }
 
 impl Display for TrackedErrors {
@@ -81,8 +79,6 @@ impl Display for TrackedErrors {
             TrackedErrors::FailedToPipeOutputs => write!(f, "failed_to_pipe_outputs"),
             TrackedErrors::UnknownChildExit => write!(f, "unknown_child_exit"),
             TrackedErrors::InvalidPackageDiscovery => write!(f, "invalid_package_discovery"),
-            TrackedErrors::IncrementalFetchFailed => write!(f, "incremental_fetch_failed"),
-            TrackedErrors::IncrementalUploadFailed => write!(f, "incremental_upload_failed"),
         }
     }
 }

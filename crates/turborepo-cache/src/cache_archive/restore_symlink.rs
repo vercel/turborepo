@@ -31,7 +31,13 @@ pub fn restore_symlink(
         ));
     }
 
-    actually_restore_symlink(dir_cache, anchor, &processed_name, entry)?;
+    actually_restore_symlink(
+        dir_cache,
+        anchor,
+        &processed_name,
+        &processed_linkname,
+        entry,
+    )?;
 
     Ok(processed_name)
 }
@@ -46,9 +52,15 @@ pub fn restore_symlink_allow_missing_target(
     let linkname = entry
         .link_name()?
         .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
-    validate_linkname(anchor, &processed_name, &linkname)?;
+    let processed_linkname = validate_linkname(anchor, &processed_name, &linkname)?;
 
-    actually_restore_symlink(dir_cache, anchor, &processed_name, entry)?;
+    actually_restore_symlink(
+        dir_cache,
+        anchor,
+        &processed_name,
+        &processed_linkname,
+        entry,
+    )?;
 
     Ok(processed_name)
 }
@@ -124,14 +136,9 @@ fn actually_restore_symlink<'a>(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     processed_name: &'a AnchoredSystemPath,
+    processed_linkname: &AbsoluteSystemPath,
     entry: &tar::Entry<impl Read>,
 ) -> Result<&'a AnchoredSystemPath, CacheError> {
-    dir_cache.safe_mkdir_file(anchor, processed_name)?;
-
-    let symlink_from = anchor.resolve(processed_name);
-
-    _ = symlink_from.remove();
-
     let link_name = entry
         .link_name()?
         .ok_or_else(|| CacheError::MalformedTar(Backtrace::capture()))?;
@@ -141,22 +148,30 @@ fn actually_restore_symlink<'a>(
             Backtrace::capture(),
         )
     })?;
+    let anchored_target = anchor.anchor(processed_linkname)?;
+    let physical_target =
+        dir_cache.record_symlink(processed_name.to_owned(), anchored_target, symlink_to)?;
+    #[cfg(any(unix, windows))]
+    let target_is_dir = dir_cache.symlink_target_is_dir(&physical_target);
+    #[cfg(not(any(unix, windows)))]
+    let target_is_dir = processed_linkname.as_path().is_dir();
 
-    if Utf8Path::new(symlink_to).is_dir() {
-        symlink_from.symlink_to_dir(symlink_to)?;
-    } else {
-        symlink_from.symlink_to_file(symlink_to)?;
+    #[cfg(any(unix, windows))]
+    {
+        let destination = dir_cache.destination(processed_name)?;
+        destination.write_symlink(symlink_to, target_is_dir)?;
     }
 
-    dir_cache.record_symlink(processed_name.to_owned());
-
-    #[cfg(target_os = "macos")]
+    #[cfg(not(any(unix, windows)))]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let metadata = symlink_from.symlink_metadata()?;
-        let mut permissions = metadata.permissions();
-        if let Ok(mode) = entry.header().mode() {
-            permissions.set_mode(mode);
+        dir_cache.safe_mkdir_file(anchor, processed_name)?;
+        let symlink_from = anchor.resolve(processed_name);
+        _ = symlink_from.remove();
+
+        if target_is_dir {
+            symlink_from.symlink_to_dir(symlink_to)?;
+        } else {
+            symlink_from.symlink_to_file(symlink_to)?;
         }
     }
 

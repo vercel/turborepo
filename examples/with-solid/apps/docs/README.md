@@ -1,6 +1,6 @@
 # SolidStart
 
-Everything you need to build a Solid project, powered by [`solid-start`](https://start.solidjs.com);
+Everything you need to build a Solid project, powered by [SolidStart](https://docs.solidjs.com/solid-start);
 
 ## Creating a project
 
@@ -25,9 +25,9 @@ npm run dev -- --open
 
 ## Building
 
-Solid apps are built with _presets_, which optimise your project for deployment to different environments.
+SolidStart v2 apps are built with [Vite](https://vite.dev/) and deployed with [Nitro](https://nitro.build/) presets, which optimise your project for deployment to different environments.
 
-By default, `npm run build` will generate a Node app that you can run with `npm start`. To use a different preset, add it to the `devDependencies` in `package.json` and specify in your `app.config.js`.
+By default, `npm run build` will generate a Node app that you can run with `npm start`. To use a different preset, configure the `nitro` plugin in your `vite.config.ts`.
 
 ## Testing
 

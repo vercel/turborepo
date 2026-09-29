@@ -16,6 +16,8 @@ mod child;
 mod command;
 #[cfg(windows)]
 mod job_object;
+#[cfg(any(windows, test))]
+mod process_tree;
 
 use std::{
     collections::HashMap,
@@ -30,6 +32,37 @@ use tracing::{debug, trace};
 use turborepo_task_id::TaskId;
 
 pub use self::child::{Child, ChildExit, ChildStdin};
+
+/// Spawns a child in a way where SIGINT is correctly forwarded to the child.
+pub fn spawn_child(
+    mut command: std::process::Command,
+) -> io::Result<Arc<shared_child::SharedChild>> {
+    let shared_child = Arc::new(shared_child::SharedChild::spawn(&mut command)?);
+
+    #[cfg(not(target_os = "windows"))]
+    let handler_shared_child = shared_child.clone();
+
+    ctrlc::set_handler(move || {
+        // On Windows the child shares our console, so the OS delivers the
+        // CTRL_C_EVENT to it directly and it can run its own graceful
+        // shutdown. Killing the child here would race ahead of that
+        // shutdown and terminate it immediately, so this handler only
+        // swallows the event to keep this process alive long enough to
+        // collect the child's exit status.
+
+        // on unix, we should send a SIGTERM to the child
+        // so that go can gracefully shut down process groups
+        // SAFETY: we could pull in the nix crate to handle this
+        // 'safely' but nix::sys::signal::kill just calls libc::kill
+        #[cfg(not(target_os = "windows"))]
+        unsafe {
+            libc::kill(handler_shared_child.id() as i32, libc::SIGTERM);
+        }
+    })
+    .map_err(io::Error::other)?;
+
+    Ok(shared_child)
+}
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned
@@ -468,9 +501,8 @@ mod test {
 
         let code = child.wait().await;
         assert_eq!(code, Some(ChildExit::Finished(Some(0))));
+        assert!(manager.running_task_ids().is_empty());
 
-        // TODO: maybe we should do some assertion that there was nothing to shut down
-        // and this is a noop?
         manager.stop().await;
     }
 
@@ -516,9 +548,11 @@ mod test {
             assert!(lock.children.is_empty());
         }
 
-        // TODO: actually do some check that this is idempotent
-        // idempotent
         manager.stop().await;
+
+        let lock = manager.state.lock().unwrap();
+        assert!(lock.is_closing);
+        assert!(lock.children.is_empty());
     }
 
     #[test_case("stop", "sleep_5_interruptable.js", STOPPED_EXIT)]

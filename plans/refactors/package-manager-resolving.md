@@ -149,10 +149,10 @@ nub would implement `TaskExecutor` as nub and `LockfileProvider` /
   resolution
 - `crates/turborepo-repository/src/package_graph/builder.rs` —
   `with_resolved_nub_lockfile` after discovery
-- `crates/turborepo-lib/src/run/package_discovery/mod.rs` — daemon client
+- `crates/turborepo-daemon/src/package_discovery.rs` — daemon client
   re-resolution
 - `crates/turborepo-daemon/src/proto/turbod.proto` — `Nub = 7` wire value
-- `crates/turborepo-lib/src/commands/prune.rs` — `is_pnpm_family()` usage
+- `crates/turborepo-cli/src/commands/prune.rs` — `is_pnpm_family()` usage
 
 ## Open questions
 

@@ -1,6 +1,5 @@
 #![feature(error_generic_member_access)]
 #![deny(clippy::all)]
-#![allow(clippy::result_large_err)]
 
 //! Turborepo's library for interacting with source control management (SCM).
 //! Currently we only support git. We use SCM for finding changed files,
@@ -18,7 +17,10 @@ use std::{
 use bstr::io::BufReadExt;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
+    RelativeUnixPathBuf,
+};
 
 pub(crate) mod crlf;
 pub mod git;
@@ -55,6 +57,14 @@ pub enum Error {
     GitVersion(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    #[error("I/O error while hashing {path}: {source}")]
+    HashFile {
+        path: AbsoluteSystemPathBuf,
+        #[source]
+        source: std::io::Error,
+        #[backtrace]
+        backtrace: backtrace::Backtrace,
+    },
     #[error("Path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
     #[error("Could not find git binary")]
@@ -123,11 +133,21 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
+    pub(crate) fn hash_file(path: AbsoluteSystemPathBuf, source: std::io::Error) -> Self {
+        tracing::info!(%path, error = %source, "file hashing failed");
+        Error::HashFile {
+            path,
+            source,
+            backtrace: Backtrace::capture(),
+        }
+    }
+
     /// Returns true if this error indicates OS resource exhaustion (e.g. too
     /// many open files) where a fallback to manual hashing would also fail.
     pub fn is_resource_exhaustion(&self) -> bool {
         match self {
             Error::Io(e, _) => is_os_resource_error(e),
+            Error::HashFile { source, .. } => is_os_resource_error(source),
             Error::Walk(e) => walk_error_is_resource_exhaustion(e),
             _ => false,
         }
@@ -231,6 +251,7 @@ pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
     attrs: OnceLock<Option<crlf::GitAttrs>>,
+    github_actions_remote_base_ref_fallback: bool,
     /// Optional recorder for the slowest-to-hash files. Set by long-running
     /// consumers (the file watcher) so they can diagnose a stalled startup.
     slowest_files: Option<std::sync::Arc<SlowestFiles>>,
@@ -250,6 +271,7 @@ impl Clone for GitRepo {
             root: self.root.clone(),
             bin: self.bin.clone(),
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
             slowest_files: self.slowest_files.clone(),
         }
     }
@@ -273,6 +295,10 @@ enum GitError {
 }
 
 impl GitRepo {
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve the structured git-root error without boxing on this error path"
+    )]
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
@@ -284,6 +310,7 @@ impl GitRepo {
             root,
             bin,
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
         })
     }
@@ -355,6 +382,7 @@ impl SCM {
                 root: git_root,
                 bin,
                 attrs: OnceLock::new(),
+                github_actions_remote_base_ref_fallback: false,
                 slowest_files: None,
             }),
             Err(e) => {
@@ -365,6 +393,13 @@ impl SCM {
                 SCM::Manual
             }
         }
+    }
+
+    pub fn with_github_actions_remote_base_ref_fallback(mut self, enabled: bool) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.github_actions_remote_base_ref_fallback = enabled;
+        }
+        self
     }
 
     /// Attach a recorder that tracks the slowest-to-hash files. Long-running
@@ -384,6 +419,48 @@ impl SCM {
     pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
         match self {
             SCM::Git(git) => Some(&git.root),
+            SCM::Manual => None,
+        }
+    }
+
+    /// Builds a repo index scoped to the given packages for one logical
+    /// transaction (e.g. one watch-mode debounce window): tracked state plus
+    /// untracked-file discovery limited to those package prefixes. Untracked
+    /// entries are required so that newly added files still change the
+    /// package hash. Returns `None` for manual SCM mode or on failure;
+    /// callers should fall back to per-package git subprocesses.
+    pub fn build_repo_index_for_packages(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        package_paths: &[AnchoredSystemPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => {
+                let mut index = match RepoGitIndex::new_tracked(git) {
+                    Ok(index) => index,
+                    Err(e) => {
+                        debug!("failed to build repo index: {e}. Hashing per-package.");
+                        return None;
+                    }
+                };
+                let prefixes: Vec<RelativeUnixPathBuf> = package_paths
+                    .iter()
+                    .filter_map(|package_path| {
+                        git.root
+                            .anchor(repo_root.resolve(package_path))
+                            .ok()
+                            .map(|anchored| anchored.to_unix())
+                    })
+                    .collect();
+                if let Err(e) = index.populate_untracked_for_prefixes(git, &prefixes) {
+                    debug!(
+                        "failed to populate untracked files in repo index: {e}. Hashing \
+                         per-package."
+                    );
+                    return None;
+                }
+                Some(index)
+            }
             SCM::Manual => None,
         }
     }

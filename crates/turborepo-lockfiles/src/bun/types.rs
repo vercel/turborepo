@@ -178,8 +178,8 @@ pub enum PackageIdent {
     Link { name: String, path: String },
     /// File package: name@file:path
     File { name: String, path: String },
-    /// Tarball package: name@tarball
-    Tarball { name: String },
+    /// Tarball package: name@./local.tgz or name@https://host/remote.tgz
+    Tarball { name: String, url: String },
     /// Root package: name@root:
     Root { name: String },
 }
@@ -221,10 +221,13 @@ impl PackageIdent {
                 };
             }
 
-            // Handle tarball
-            if rest == "tarball" {
+            // Handle tarballs. Bun classifies a resolution as a tarball purely
+            // by extension; local ones are stored as the relative path given in
+            // package.json (`./vendor/foo.tgz`), remote ones as the URL.
+            if rest.ends_with(".tgz") || rest.ends_with(".tar.gz") {
                 return Self::Tarball {
                     name: name.to_string(),
+                    url: rest.to_string(),
                 };
             }
 
@@ -257,7 +260,7 @@ impl PackageIdent {
             | Self::Git { name, .. }
             | Self::Link { name, .. }
             | Self::File { name, .. }
-            | Self::Tarball { name }
+            | Self::Tarball { name, .. }
             | Self::Root { name } => name,
         }
     }
@@ -285,12 +288,19 @@ impl PackageIdent {
     }
 
     /// Returns true if this is a file, link, or tarball ident.
-    /// These package types use 2-element arrays: [ident, INFO]
+    /// These package types are written without a registry element:
+    /// `[ident, INFO]`, plus a trailing integrity for tarballs.
     pub fn is_local_package(&self) -> bool {
         matches!(
             self,
             Self::File { .. } | Self::Link { .. } | Self::Tarball { .. }
         )
+    }
+
+    /// Returns true if this is a `name@root:` ident, i.e. a dependency on the
+    /// root package itself. Written as `[ident, { bin, binDir }]`.
+    pub fn is_root(&self) -> bool {
+        matches!(self, Self::Root { .. })
     }
 }
 
@@ -302,7 +312,7 @@ impl fmt::Display for PackageIdent {
             Self::Git { name, url, .. } => write!(f, "{name}@{url}"),
             Self::Link { name, path } => write!(f, "{name}@link:{path}"),
             Self::File { name, path } => write!(f, "{name}@file:{path}"),
-            Self::Tarball { name } => write!(f, "{name}@tarball"),
+            Self::Tarball { name, url } => write!(f, "{name}@{url}"),
             Self::Root { name } => write!(f, "{name}@root:"),
         }
     }
@@ -601,6 +611,40 @@ mod tests {
             }
         );
         assert_eq!(ident.name(), "some-package");
+        assert!(ident.is_root());
+        assert!(!ident.is_local_package());
+    }
+
+    #[test]
+    fn test_package_ident_local_tarball() {
+        let ident = PackageIdent::parse("bar@./vendor/bar-0.0.2.tgz");
+        assert_eq!(
+            ident,
+            PackageIdent::Tarball {
+                name: "bar".to_string(),
+                url: "./vendor/bar-0.0.2.tgz".to_string()
+            }
+        );
+        assert_eq!(ident.name(), "bar");
+        assert!(ident.is_local_package());
+        assert_eq!(ident.to_string(), "bar@./vendor/bar-0.0.2.tgz");
+
+        let ident = PackageIdent::parse("@scope/baz@../baz.tar.gz");
+        assert_eq!(ident.name(), "@scope/baz");
+        assert!(ident.is_local_package());
+    }
+
+    #[test]
+    fn test_package_ident_remote_tarball() {
+        let ident = PackageIdent::parse("foo@https://example.com/foo-1.0.0.tgz");
+        assert_eq!(
+            ident,
+            PackageIdent::Tarball {
+                name: "foo".to_string(),
+                url: "https://example.com/foo-1.0.0.tgz".to_string()
+            }
+        );
+        assert!(ident.is_local_package());
     }
 
     #[test]

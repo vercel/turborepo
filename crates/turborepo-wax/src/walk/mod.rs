@@ -1088,10 +1088,6 @@ impl From<EntryResidue> for TreeResidue<()> {
     }
 }
 
-// TODO: Rust's testing framework does not provide a mechanism for maintaining
-// shared state. This       means that tests that write to the file system must
-// do so individually rather than writing       before and after all tests have
-// run. This should probably be avoided.
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, path::PathBuf};

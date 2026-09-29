@@ -1,0 +1,18 @@
+---
+source: crates/turborepo/tests/prune_test.rs
+expression: "inventory_tree(&out.join(\"full\"))"
+---
+.npmrc	file	196da013f9ded0fa	rw
+apps	dir
+apps/web	dir
+apps/web/package.json	file	2481da4712c9aca1	rw
+package.json	file	c54a5bbdc116d12f	rw
+packages	dir
+packages/shared	dir
+packages/shared/package.json	file	67befcf30aa75b2a	rw
+packages/util	dir
+packages/util/package.json	file	4bebcc6f0ac3be5d	rw
+patches	dir
+patches/is-number@7.0.0.patch	file	d6022cf83b3da40d	rw
+pnpm-workspace.yaml	file	7262bc3c890b9e1b	rw
+turbo.json	file	375cc1d0558b7fc7	rw

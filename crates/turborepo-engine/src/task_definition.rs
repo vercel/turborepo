@@ -8,7 +8,7 @@ use turborepo_errors::Spanned;
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::{
     ProcessedTaskDefinition, TOPOLOGICAL_PIPELINE_DELIMITER, TaskInputsFromProcessed,
-    incremental_partitions_from_processed, task_outputs_from_processed,
+    task_outputs_from_processed,
 };
 use turborepo_types::{TaskDefinition, TaskInputs};
 
@@ -103,12 +103,6 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
 
         let with = processed.with.map(|with_tasks| with_tasks.tasks);
 
-        let incremental = processed
-            .incremental
-            .map(|partitions| incremental_partitions_from_processed(partitions, path_to_repo_root))
-            .transpose()
-            .map_err(BuilderError::TurboJson)?;
-
         Ok(TaskDefinition {
             outputs,
             cache,
@@ -123,7 +117,6 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
             interactive,
             env_mode: processed.env_mode.map(|mode| *mode.as_inner()),
             with,
-            incremental,
             experimental_ci: processed.experimental_ci.map(Spanned::into_inner),
             // Deliberately not converted here: the engine builder resolves
             // the override across the whole chain (scoped vs unscoped
@@ -184,6 +177,7 @@ pub fn prepend_global_inputs(
         .collect();
     global_globs.append(&mut inputs.globs);
     inputs.globs = global_globs;
+    inputs.eager = true;
 }
 
 #[cfg(test)]
@@ -217,6 +211,54 @@ mod tests {
         assert!(
             !inputs.default,
             "default should remain false when task had explicit inputs"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_marks_jit_only_task_eager() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec![],
+            default: false,
+            jit_globs: vec!["src/**".to_string()],
+            jit_default: false,
+            eager: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(
+            &mut inputs,
+            true,
+            &["config.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(inputs.globs, vec!["../../config.txt"]);
+        assert!(
+            inputs.eager,
+            "task is no longer jit only once global inputs are prepended, so the eager pass has \
+             to run or those globs never get hashed"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_leaves_jit_only_task_alone_without_global_inputs() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec![],
+            default: false,
+            jit_globs: vec!["src/**".to_string()],
+            jit_default: false,
+            eager: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(&mut inputs, true, &[], &path_to_root);
+
+        assert!(inputs.globs.is_empty());
+        assert!(
+            !inputs.eager,
+            "a task that is still jit only should not start hashing eagerly"
         );
     }
 

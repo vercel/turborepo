@@ -2,30 +2,30 @@
   "name": "web",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite --port 3000",
     "build": "run-p check-types \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
     "check-types": "vue-tsc --noEmit -p tsconfig.app.json --composite false",
-    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix --ignore-path .gitignore"
+    "lint": "eslint ."
   },
   "dependencies": {
     "ui": "workspace:*",
-    "vue": "^3.4.21"
+    "vue": "3.5.42"
   },
   "devDependencies": {
-    "@rushstack/eslint-patch": "^1.7.2",
-    "@tsconfig/node18": "^18.2.2",
-    "@types/node": "^20.11.24",
-    "@vitejs/plugin-vue": "^5.0.4",
-    "eslint": "^8.57.0",
+    "@tsconfig/node24": "24.0.5",
+    "@types/node": "26.4.0",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "@vitejs/plugin-vue": "6.0.8",
+    "eslint": "10.9.1",
     "eslint-config-custom": "workspace:*",
-    "eslint-plugin-vue": "^9.22.0",
-    "npm-run-all2": "^6.1.2",
+    "npm-run-all2": "9.0.3",
     "tsconfig": "workspace:*",
-    "typescript": "5.5.4",
-    "vite": "^5.1.4",
-    "vue-tsc": "^2.0.4"
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "vite": "8.2.2",
+    "vue-tsc": "3.3.11"
   }
 }

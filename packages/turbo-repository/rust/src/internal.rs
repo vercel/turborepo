@@ -1,14 +1,258 @@
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
+
 use napi::Status;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
+use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     inference::{self, RepoMode as WorkspaceType, RepoState as WorkspaceState},
-    package_graph::PackageGraphBuilder,
-    package_json::PackageJson,
+    package_graph::{PackageGraph, PackageGraphBuilder, lockfile_closure},
+    package_json::{DependencyKind, PackageJson},
     package_manager,
 };
+use turborepo_turbo_json::{
+    RawTurboJson, TurboJson, TurboJsonPath, TurboJsonReader, load_from_path,
+};
 
-use crate::{Package, PackageManager, Workspace};
+use crate::{
+    LockfileError, LockfileErrorKind, LockfilePackage, LockfilePackages, LockfilePackagesMetadata,
+    Package, PackageManager, Workspace, package_source_name, split_identity,
+};
+
+enum DirectLockfileRead {
+    Loaded(Box<dyn Lockfile>),
+    /// The parsed lockfile was moved into the package graph, which owns and
+    /// serves it. Reports success for error-kind purposes; the direct
+    /// listing path is never reached in this state because lockfilePackages()
+    /// prefers the graph's resolution whenever a graph exists.
+    TransferredToGraph,
+    Missing(String),
+    Unreadable {
+        kind: LockfileErrorKind,
+        message: String,
+    },
+}
+
+/// Resolves the workspace lockfile directly from the root `package.json`,
+/// bypassing the package graph. Used for single-package repositories (whose
+/// core graph intentionally skips lockfile resolution) and for multi-package
+/// repositories opened with `skipPackageGraph`.
+pub(crate) struct DirectLockfile {
+    workspace_root: AbsoluteSystemPathBuf,
+    package_manager: package_manager::PackageManager,
+    root_package_json: PackageJson,
+    lockfile: DirectLockfileRead,
+}
+
+impl DirectLockfile {
+    fn new(
+        workspace_root: &turbopath::AbsoluteSystemPath,
+        package_manager: &package_manager::PackageManager,
+        package_json: &PackageJson,
+    ) -> Self {
+        let lockfile = match package_manager.read_lockfile(workspace_root, package_json) {
+            Ok(lockfile) => DirectLockfileRead::Loaded(lockfile),
+            Err(package_manager::Error::LockfileMissing(_))
+                if matches!(
+                    package_manager.lockfile_manager(),
+                    package_manager::PackageManager::Bun
+                ) && workspace_root.join_component("bun.lockb").exists() =>
+            {
+                DirectLockfileRead::Unreadable {
+                    kind: LockfileErrorKind::UnsupportedBunLockfile,
+                    message: "Only found bun.lockb, please run `bun install --save-text-lockfile`"
+                        .to_string(),
+                }
+            }
+            Err(package_manager::Error::LockfileMissing(path)) => {
+                DirectLockfileRead::Missing(format!("Lockfile not found at {path}"))
+            }
+            Err(error) => DirectLockfileRead::Unreadable {
+                kind: classify_package_manager_error(&error),
+                message: error.to_string(),
+            },
+        };
+        Self {
+            workspace_root: workspace_root.to_owned(),
+            package_manager: package_manager.clone(),
+            root_package_json: package_json.clone(),
+            lockfile,
+        }
+    }
+
+    /// Moves a successfully parsed lockfile out for transfer to the package
+    /// graph. Returns None (and changes nothing) when the lockfile failed to
+    /// load, so typed failure metadata stays intact.
+    pub(crate) fn take_loaded(&mut self) -> Option<Box<dyn Lockfile>> {
+        if matches!(self.lockfile, DirectLockfileRead::Loaded(_)) {
+            match std::mem::replace(&mut self.lockfile, DirectLockfileRead::TransferredToGraph) {
+                DirectLockfileRead::Loaded(lockfile) => Some(lockfile),
+                _ => unreachable!("checked Loaded above"),
+            }
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn error_kind(&self) -> Option<LockfileErrorKind> {
+        match &self.lockfile {
+            DirectLockfileRead::Loaded(_) | DirectLockfileRead::TransferredToGraph => None,
+            DirectLockfileRead::Missing(_) => Some(LockfileErrorKind::NoLockfile),
+            DirectLockfileRead::Unreadable { kind, .. } => Some(*kind),
+        }
+    }
+
+    pub(crate) fn error_message(&self) -> Option<String> {
+        match &self.lockfile {
+            DirectLockfileRead::Loaded(_) | DirectLockfileRead::TransferredToGraph => None,
+            DirectLockfileRead::Missing(message)
+            | DirectLockfileRead::Unreadable { message, .. } => Some(message.clone()),
+        }
+    }
+
+    /// The transitive closure of the root `package.json` declarations only.
+    /// Single-package repositories have no other manifests.
+    fn root_closure(
+        &self,
+        lockfile: &dyn Lockfile,
+    ) -> Result<Vec<turborepo_lockfiles::Package>, String> {
+        let mut dependencies = BTreeMap::new();
+        for (name, specifier, kind) in self.root_package_json.dependencies_with_kind() {
+            if !matches!(kind, DependencyKind::Peer { .. }) {
+                dependencies
+                    .entry(name.clone())
+                    .or_insert_with(|| specifier.clone());
+            }
+        }
+        let mut closures = turborepo_lockfiles::all_transitive_closures_sorted(
+            lockfile,
+            HashMap::from([(String::new(), dependencies)]),
+            false,
+        )
+        .map_err(|error| error.to_string())?;
+        Ok(closures
+            .remove("")
+            .unwrap_or_default()
+            .into_iter()
+            .map(|package| (*package).clone())
+            .collect())
+    }
+
+    pub(crate) fn packages(
+        &self,
+        is_multi_package: bool,
+        lockfile_path: &str,
+        lockfile_format: &str,
+        package_manager: &PackageManager,
+    ) -> LockfilePackages {
+        let metadata = |lockfile_version| LockfilePackagesMetadata {
+            lockfile_path: lockfile_path.to_string(),
+            lockfile_format: lockfile_format.to_string(),
+            lockfile_version,
+            package_manager: package_manager.name.clone(),
+            package_manager_version: package_manager.version.clone(),
+        };
+        let lockfile = match &self.lockfile {
+            DirectLockfileRead::Loaded(lockfile) => lockfile.as_ref(),
+            DirectLockfileRead::TransferredToGraph => {
+                // Unreachable: lockfilePackages() serves from the graph
+                // whenever it exists, and this state only exists when the
+                // graph holds the lockfile.
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: LockfileErrorKind::LockfileUnreadable,
+                        message: "lockfile is owned by the package graph".to_string(),
+                    }],
+                    metadata(None),
+                );
+            }
+            DirectLockfileRead::Missing(message) => {
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: LockfileErrorKind::NoLockfile,
+                        message: message.clone(),
+                    }],
+                    metadata(None),
+                );
+            }
+            DirectLockfileRead::Unreadable { kind, message } => {
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: *kind,
+                        message: message.clone(),
+                    }],
+                    metadata(None),
+                );
+            }
+        };
+
+        let closure = if is_multi_package {
+            lockfile_closure::external_packages(
+                &self.workspace_root,
+                &self.package_manager,
+                &self.root_package_json,
+                lockfile,
+            )
+            .map_err(|error| error.to_string())
+        } else {
+            self.root_closure(lockfile)
+        };
+        let closure = match closure {
+            Ok(closure) => closure,
+            Err(message) => {
+                return LockfilePackages::new(
+                    Vec::new(),
+                    vec![LockfileError {
+                        kind: LockfileErrorKind::ResolutionFailed,
+                        message,
+                    }],
+                    metadata(lockfile.format_version()),
+                );
+            }
+        };
+
+        let mut packages = Vec::new();
+        let mut errors = Vec::new();
+        for package in &closure {
+            let display_name = lockfile
+                .human_name(package)
+                .unwrap_or_else(|| package.key.clone());
+            match split_identity(&display_name) {
+                Some((name, version)) => packages.push(LockfilePackage {
+                    name,
+                    version,
+                    source: package_source_name(lockfile.package_source(package)),
+                }),
+                None => errors.push(LockfileError {
+                    kind: LockfileErrorKind::UnparseableEntry,
+                    message: format!(
+                        "could not parse name and version from lockfile entry '{display_name}'"
+                    ),
+                }),
+            }
+        }
+        packages
+            .sort_by(|left, right| (&left.name, &left.version).cmp(&(&right.name, &right.version)));
+        packages.dedup_by(|left, right| left.name == right.name && left.version == right.version);
+        LockfilePackages::new(packages, errors, metadata(lockfile.format_version()))
+    }
+}
+
+fn classify_package_manager_error(error: &package_manager::Error) -> LockfileErrorKind {
+    match error {
+        package_manager::Error::Lockfile(turborepo_lockfiles::Error::UnsupportedNpmVersion) => {
+            LockfileErrorKind::UnsupportedNpmLockfileVersion
+        }
+        package_manager::Error::BunBinaryLockfile => LockfileErrorKind::UnsupportedBunLockfile,
+        _ => LockfileErrorKind::LockfileUnreadable,
+    }
+}
 
 /// This module is used to isolate code with defined errors
 /// from code in lib.rs that needs to have errors coerced to strings /
@@ -29,19 +273,17 @@ pub(crate) enum Error {
         error: String,
         path: AbsoluteSystemPathBuf,
     },
-    #[error("Failed to discover packages from root {workspace_root}: {error}")]
-    PackageJsons {
-        error: package_manager::Error,
-        workspace_root: AbsoluteSystemPathBuf,
-    },
-    #[error("Failed to join package discovery task: {0}")]
-    PackageDiscoveryJoin(#[from] tokio::task::JoinError),
-    #[error("Package directory {0} has no parent")]
-    MissingParent(AbsoluteSystemPathBuf),
     #[error("Package graph error: {0}")]
     PackageGraph(#[from] turborepo_repository::package_graph::Error),
     #[error("package.json error: {0}")]
     PackageJson(#[from] turborepo_repository::package_json::Error),
+    #[error("turbo.json error: {0}")]
+    TurboJson(#[from] turborepo_turbo_json::Error),
+    #[error(
+        "package graph is unavailable because the workspace was opened with skipPackageGraph; \
+         only lockfilePackages() is supported"
+    )]
+    PackageGraphSkipped,
 }
 
 impl From<Error> for napi::Error<Status> {
@@ -50,8 +292,33 @@ impl From<Error> for napi::Error<Status> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DiscoveryMode {
+    Full,
+    SkipPackageGraph,
+    Static,
+}
+
 impl Workspace {
-    pub(crate) async fn find_internal(path: Option<String>) -> Result<Self, Error> {
+    pub(crate) async fn find_internal(
+        path: Option<String>,
+        skip_package_graph: bool,
+    ) -> Result<Self, Error> {
+        Self::find_with_mode(
+            path,
+            if skip_package_graph {
+                DiscoveryMode::SkipPackageGraph
+            } else {
+                DiscoveryMode::Full
+            },
+        )
+        .await
+    }
+
+    pub(crate) async fn find_with_mode(
+        path: Option<String>,
+        mode: DiscoveryMode,
+    ) -> Result<Self, Error> {
         let reference_dir = match path {
             Some(path) => {
                 AbsoluteSystemPathBuf::from_cwd(&path).map_err(|path_error| Error::StartingPath {
@@ -99,76 +366,453 @@ impl Workspace {
         let package_manager_name = package_manager.name();
 
         let workspace_root = &workspace_state.root;
+        let lockfile_manager = package_manager.lockfile_manager();
+        let lockfile_path = if matches!(lockfile_manager, package_manager::PackageManager::Bun)
+            && !workspace_root.join_component("bun.lock").exists()
+            && workspace_root.join_component("bun.lockb").exists()
+        {
+            workspace_root.join_component("bun.lockb")
+        } else {
+            package_manager.lockfile_path(workspace_root)
+        }
+        .to_string();
+        let lockfile_format = match lockfile_manager {
+            package_manager::PackageManager::Npm => "npm",
+            package_manager::PackageManager::Pnpm
+            | package_manager::PackageManager::Pnpm6
+            | package_manager::PackageManager::Pnpm9 => "pnpm",
+            package_manager::PackageManager::Yarn => "yarn",
+            package_manager::PackageManager::Berry => "yarn",
+            package_manager::PackageManager::Bun => "bun",
+            package_manager::PackageManager::Nub { .. }
+            | package_manager::PackageManager::Aube { .. } => {
+                unreachable!("lockfile_manager returns a concrete package manager")
+            }
+        }
+        .to_string();
+        let initial_turbo_json = match load_from_path(
+            &TurboJsonReader::new(workspace_root.clone()),
+            TurboJsonPath::Dir(workspace_root),
+            true,
+        ) {
+            Ok(turbo_json) => turbo_json,
+            Err(turborepo_turbo_json::Error::NoTurboJSON) => TurboJson::default(),
+            Err(error) => return Err(error.into()),
+        };
+        let future_flags = initial_turbo_json
+            .path()
+            .map(|path| workspace_root.join_component(path.as_ref()))
+            .map(|path| RawTurboJson::read(workspace_root, &path, true))
+            .transpose()?
+            .flatten()
+            .and_then(|raw| raw.future_flags.map(|flags| flags.into_inner()))
+            .unwrap_or_default();
+        let turbo_json = if initial_turbo_json.path().is_some() {
+            load_from_path(
+                &TurboJsonReader::new(workspace_root.clone()).with_future_flags(future_flags),
+                TurboJsonPath::Dir(workspace_root),
+                true,
+            )?
+        } else {
+            initial_turbo_json
+        };
         let root_package_json = PackageJson::load(&workspace_root.join_component("package.json"))?;
-        let package_graph = PackageGraphBuilder::new(workspace_root, root_package_json)
-            .with_single_package_mode(!is_multi_package)
-            .with_package_manager(package_manager.clone())
-            .build()
-            .await?;
+        let package_manager_version = detect_package_manager_version(&root_package_json);
+        let mut lockfile = DirectLockfile::new(workspace_root, package_manager, &root_package_json);
+        let mut static_affectedness = None;
+        let package_graph = if mode == DiscoveryMode::SkipPackageGraph {
+            None
+        } else {
+            let mut package_graph_builder =
+                PackageGraphBuilder::new(workspace_root, root_package_json)
+                    .with_single_package_mode(!is_multi_package)
+                    .with_package_manager(package_manager.clone());
+            // Hand the already-parsed lockfile to the graph so it is not read
+            // and parsed a second time. Single-package graphs skip lockfile
+            // resolution entirely, so direct ownership is kept there. The
+            // nub-family managers resolve to a different lockfile manager
+            // inside the builder, so the transfer is only valid when that
+            // resolution is an identity.
+            if is_multi_package
+                && package_manager
+                    .clone()
+                    .with_resolved_nub_lockfile(workspace_root)
+                    == *package_manager
+                && let Some(loaded) = lockfile.take_loaded()
+            {
+                package_graph_builder = package_graph_builder.with_lockfile(Some(loaded));
+            }
+            if turbo_json.future_flags.experimental_cargo_workspaces {
+                package_graph_builder = package_graph_builder.with_cargo();
+            }
+            if turbo_json.future_flags.experimental_python_workspaces {
+                package_graph_builder = package_graph_builder.with_uv();
+            }
+            if turbo_json.future_flags.experimental_go_workspaces {
+                package_graph_builder = package_graph_builder.with_go();
+            }
+            Some(if mode == DiscoveryMode::Static {
+                let (graph, plan) = package_graph_builder.build_lazy().await?.into_parts();
+                static_affectedness = Some(plan.static_affectedness(&graph).await?);
+                graph
+            } else {
+                Arc::new(package_graph_builder.build().await?)
+            })
+        };
 
         Ok(Self {
             absolute_path: workspace_state.root.to_string(),
-            workspace_state,
             is_multi_package,
             package_manager: PackageManager {
                 name: package_manager_name.to_string(),
+                version: package_manager_version,
             },
             graph: package_graph,
+            global_inputs: turbo_json.global_deps,
+            static_affectedness,
+            lockfile,
+            lockfile_path,
+            lockfile_format,
         })
     }
 
+    /// The package graph, or an error when the workspace was opened with
+    /// `skipPackageGraph`.
+    pub(crate) fn graph(&self) -> Result<&PackageGraph, Error> {
+        self.graph.as_deref().ok_or(Error::PackageGraphSkipped)
+    }
+
     pub(crate) async fn packages_internal(&self) -> Result<Vec<Package>, Error> {
-        // Note: awkward error handling because we memoize the error from package
-        // manager discovery. That probably isn't the best design. We should
-        // address it when we decide how we want to handle possibly finding a
-        // repo root but not finding a package manager.
-        let package_manager = self
-            .workspace_state
-            .package_manager
-            .as_ref()
-            .map_err(|error| Error::PackageManager {
-                error: error.to_string(),
-                path: self.workspace_state.root.clone(),
-            })?;
+        packages_from_graph(self.graph()?)
+    }
+}
 
-        let package_manager = package_manager.clone();
-        let workspace_root = self.workspace_state.root.clone();
+/// Best-effort extraction of the declared package manager version from the
+/// root `package.json`. Prefers the `packageManager` field (e.g.
+/// `pnpm@9.12.3`), falling back to `devEngines.packageManager.version`. Returns
+/// `None` when neither is present or when the version points at a URL rather
+/// than a concrete version. This is metadata only, so any failure to parse is
+/// swallowed rather than surfaced as an error.
+fn detect_package_manager_version(package_json: &PackageJson) -> Option<String> {
+    if let Some(field) = &package_json.package_manager
+        && let Ok((_, version)) =
+            package_manager::PackageManager::parse_package_manager_string(field)
+        && !version.starts_with("http")
+    {
+        return Some(version.to_string());
+    }
 
-        let package_json_paths =
-            tokio::task::spawn(async move { package_manager.get_package_jsons(&workspace_root) })
-                .await
-                .map_err(Error::PackageDiscoveryJoin)?
-                .map_err(|error| Error::PackageJsons {
-                    error,
-                    workspace_root: self.workspace_state.root.clone(),
-                })?;
+    let dev_engines = package_json.dev_engines.as_ref()?;
+    let version = dev_engines
+        .as_object()?
+        .get("packageManager")?
+        .as_object()?
+        .get("version")?
+        .as_str()?;
+    Some(version.to_string())
+}
 
-        let packages = package_json_paths
-            .filter_map(|path| {
-                // Return an error if we fail to load the package.json
-                let pkg_json = match PackageJson::load(&path) {
-                    Ok(pkg) => pkg,
-                    Err(err) => return Some(Err(err.into())),
-                };
+fn packages_from_graph(graph: &PackageGraph) -> Result<Vec<Package>, Error> {
+    let mut packages = graph
+        .package_task_contexts()
+        .filter(|context| graph.is_real_package(context.package()))
+        .map(|context| {
+            let path = graph.repo_root().resolve(context.directory());
+            Package::new(
+                context.package().as_str().to_owned(),
+                graph.repo_root(),
+                &path,
+            )
+            .map_err(Error::from)
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    packages.sort_by(|left, right| left.relative_path.cmp(&right.relative_path));
+    Ok(packages)
+}
 
-                // Skip packages that don't have names
-                let name = pkg_json.name?;
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
 
-                // Get the package path and turn it into a package
-                // Error if we fail to get the package path (parent to
-                // package_json_path)
-                path.parent()
-                    .map(|package_path| {
-                        Ok(Package::new(
-                            name.into_inner(),
-                            &self.workspace_state.root,
-                            package_path,
-                        )?)
-                    })
-                    .or_else(|| Some(Err(Error::MissingParent(path.to_owned()))))
+    use turborepo_errors::Spanned;
+    use turborepo_repository::toolchain::{
+        DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackage,
+        DiscoveredPackageScopes, DiscoveredPackages, RepositoryContributor, ToolchainId,
+        WorkspaceRoot,
+    };
+
+    use super::*;
+
+    struct CustomPackageJsonContributor {
+        root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for CustomPackageJsonContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::new("custom")
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                Ok(DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some("custom-package".to_string()),
+                            PackageJson::default(),
+                            self.root.join_components(&["custom", "package.json"]),
+                        ),
+                        DiscoveredPackage::package(
+                            Some("native-package".to_string()),
+                            PackageJson::default(),
+                            self.root.join_components(&["native", "Cargo.toml"]),
+                        ),
+                        DiscoveredPackage::aggregate(
+                            "custom-aggregate".to_string(),
+                            PackageJson::default(),
+                            self.root.join_components(&["aggregate", "package.json"]),
+                        ),
+                    ],
+                    vec![WorkspaceRoot::new("custom", self.root.clone())],
+                ))
             })
-            .collect::<Result<Vec<Package>, Error>>()?;
+        }
 
-        Ok(packages)
+        fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(DiscoveredPackageScopes::from_full_observation(
+                    output.packages(),
+                    output.workspace_roots(),
+                ))
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn package_listing_uses_retained_graph_generation() {
+        let root = AbsoluteSystemPathBuf::new(std::env::temp_dir().to_string_lossy()).unwrap();
+        let package_jsons = HashMap::from([
+            (
+                root.join_components(&["z", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("z".into())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("a".into())),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_manager(package_manager::PackageManager::Npm)
+            .with_package_jsons(Some(package_jsons))
+            .with_allow_no_package_manager(true)
+            .build()
+            .await
+            .unwrap();
+
+        let packages = packages_from_graph(&graph).unwrap();
+        assert_eq!(
+            packages
+                .iter()
+                .map(|package| package.name.as_str())
+                .collect::<Vec<_>>(),
+            ["a", "z"]
+        );
+    }
+
+    #[tokio::test]
+    async fn package_listing_uses_scope_kind_not_provenance() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::new(temp.path().to_string_lossy().to_string()).unwrap();
+        let graph = PackageGraphBuilder::new(&root, PackageJson::default())
+            .with_package_manager(package_manager::PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_allow_no_package_manager(true)
+            .with_contributor(Arc::new(CustomPackageJsonContributor {
+                root: root.clone(),
+            }))
+            .build()
+            .await
+            .unwrap();
+
+        let packages = packages_from_graph(&graph).unwrap();
+        assert_eq!(
+            packages
+                .iter()
+                .map(|package| package.name.as_str())
+                .collect::<Vec<_>>(),
+            ["custom-package", "native-package"]
+        );
+        assert_eq!(
+            graph.package_toolchain(&"custom-package".into()),
+            Some(&ToolchainId::new("custom"))
+        );
+    }
+
+    /// A multi-package workspace with a pnpm lockfile on disk.
+    fn pnpm_workspace_fixture() -> tempfile::TempDir {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"root","private":true,"packageManager":"pnpm@9.12.2"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("pnpm-workspace.yaml"),
+            "packages:\n  - 'packages/*'\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("packages/a")).unwrap();
+        std::fs::write(
+            root.join("packages/a/package.json"),
+            r#"{"name":"a","version":"1.0.0"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("pnpm-lock.yaml"),
+            "lockfileVersion: '9.0'\nsettings:\n  autoInstallPeers: true\n  \
+             excludeLinksFromLockfile: false\nimporters:\n  .: {}\n  packages/a: {}\n",
+        )
+        .unwrap();
+        temp
+    }
+
+    #[tokio::test]
+    async fn find_transfers_parsed_lockfile_to_graph() {
+        let temp = pnpm_workspace_fixture();
+        let workspace =
+            Workspace::find_internal(Some(temp.path().to_string_lossy().into_owned()), false)
+                .await
+                .unwrap();
+
+        // The graph owns the parsed lockfile...
+        let graph = workspace.graph.as_ref().expect("graph built");
+        assert!(graph.lockfile().is_some());
+        // ...and the direct read was transferred, not duplicated.
+        assert!(matches!(
+            workspace.lockfile.lockfile,
+            DirectLockfileRead::TransferredToGraph
+        ));
+        // Failure reporting still reads as success.
+        assert!(workspace.lockfile.error_kind().is_none());
+        assert!(workspace.lockfile.error_message().is_none());
+
+        // Lockfile listing keeps working, served from the graph.
+        let packages = workspace.lockfile_packages().await;
+        assert!(
+            packages.errors.is_empty(),
+            "unexpected errors: {}",
+            packages.errors.len()
+        );
+    }
+
+    #[tokio::test]
+    async fn find_with_skip_package_graph_keeps_direct_lockfile() {
+        let temp = pnpm_workspace_fixture();
+        let workspace =
+            Workspace::find_internal(Some(temp.path().to_string_lossy().into_owned()), true)
+                .await
+                .unwrap();
+
+        assert!(workspace.graph.is_none());
+        assert!(matches!(
+            workspace.lockfile.lockfile,
+            DirectLockfileRead::Loaded(_)
+        ));
+
+        let packages = workspace.lockfile_packages().await;
+        assert!(packages.errors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn find_single_package_keeps_direct_lockfile() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"single","version":"1.0.0","packageManager":"npm@10.5.0"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("package-lock.json"),
+            r#"{"name":"single","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{}}"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+
+        assert!(!workspace.is_multi_package);
+        // Single-package graphs skip lockfile resolution, so the direct read
+        // must stay owned by the workspace.
+        assert!(matches!(
+            workspace.lockfile.lockfile,
+            DirectLockfileRead::Loaded(_)
+        ));
+        let packages = workspace.lockfile_packages().await;
+        assert!(packages.errors.is_empty());
+    }
+
+    #[tokio::test]
+    async fn lockfile_packages_uses_resolved_name_for_npm_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"alias-test","version":"1.0.0","packageManager":"npm@10.5.0","dependencies":{"alias":"npm:JSONStream@1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("package-lock.json"),
+            r#"{"name":"alias-test","version":"1.0.0","lockfileVersion":3,"packages":{"":{"name":"alias-test","version":"1.0.0","dependencies":{"alias":"npm:JSONStream@1.0.0"}},"node_modules/alias":{"name":"JSONStream","version":"1.0.0"}}}"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+        let result = workspace.lockfile_packages().await;
+
+        assert!(result.errors.is_empty());
+        assert_eq!(result.packages.len(), 1);
+        assert_eq!(result.packages[0].name, "JSONStream");
+        assert_eq!(result.packages[0].version, "1.0.0");
+    }
+
+    #[tokio::test]
+    async fn lockfile_packages_uses_resolved_name_for_yarn_classic_alias() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::write(
+            root.join("package.json"),
+            r#"{"name":"alias-test","version":"1.0.0","packageManager":"yarn@1.22.22","dependencies":{"alias":"npm:JSONStream@1.0.0"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("yarn.lock"),
+            r#"# yarn lockfile v1
+
+"alias@npm:JSONStream@1.0.0":
+  version "1.0.0"
+"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), false)
+            .await
+            .unwrap();
+        let result = workspace.lockfile_packages().await;
+
+        assert!(result.errors.is_empty());
+        assert_eq!(result.packages.len(), 1);
+        assert_eq!(result.packages[0].name, "JSONStream");
+        assert_eq!(result.packages[0].version, "1.0.0");
     }
 }

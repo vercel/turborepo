@@ -1,4 +1,4 @@
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 
 use turborepo_ghostty as ghostty;
 
@@ -7,8 +7,19 @@ use super::{
     event::{CacheResult, Direction, OutputLogs, TaskResult},
 };
 
+/// Per-task raw output is kept in memory up to this size, then rolls over to
+/// an anonymous temporary file. The terminal parser already bounds visible
+/// scrollback; this bounds the retained raw stream independently so a verbose
+/// task cannot grow memory without limit.
+const OUTPUT_SPOOL_THRESHOLD: usize = 1024 * 1024;
+
 pub struct TerminalOutput<W> {
-    output: Vec<u8>,
+    /// The complete raw (newline-normalized) byte stream, spooled through a
+    /// bounded in-memory buffer that rolls over to disk.
+    output: tempfile::SpooledTempFile,
+    /// Total bytes written to `output` (its write position is disturbed by
+    /// replay reads, so length is tracked explicitly).
+    output_len: usize,
     pub parser: ghostty::Parser,
     pub stdin: Option<W>,
     pub status: Option<String>,
@@ -31,7 +42,8 @@ enum LogBehavior {
 impl<W> TerminalOutput<W> {
     pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Result<Self, Error> {
         Ok(Self {
-            output: Vec::new(),
+            output: tempfile::spooled_tempfile(OUTPUT_SPOOL_THRESHOLD),
+            output_len: 0,
             parser: ghostty::Parser::try_new(rows, cols, scrollback_len as usize)?,
             stdin,
             status: None,
@@ -43,11 +55,33 @@ impl<W> TerminalOutput<W> {
         })
     }
 
-    /// The raw (newline-normalized) byte stream this task has produced so
-    /// far. Used to backfill streamed logs when the user switches from the
-    /// TUI to streaming mid-run.
-    pub fn raw_output(&self) -> &[u8] {
-        &self.output
+    /// Total number of raw output bytes produced so far.
+    pub fn output_len(&self) -> usize {
+        self.output_len
+    }
+
+    /// Reads the raw (newline-normalized) output bytes from `offset` to the
+    /// end. Used to backfill streamed logs when the user switches from the
+    /// TUI to streaming mid-run. Reads come from the in-memory buffer or the
+    /// backing temp file, so replay never requires retaining the whole
+    /// stream in memory.
+    pub fn read_output_from(&mut self, offset: usize) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(self.output_len.saturating_sub(offset));
+        let result = self
+            .output
+            .seek(SeekFrom::Start(offset as u64))
+            .and_then(|_| {
+                // Restore the write position so later writes keep appending.
+                let result = std::io::Read::read_to_end(&mut self.output, &mut buf);
+                let _ = self.output.seek(SeekFrom::Start(self.output_len as u64));
+                result
+            });
+        if let Err(err) = result {
+            // Replay is best-effort; a failed spool read must not break the
+            // TUI.
+            tracing::debug!("failed to read spooled task output: {err}");
+        }
+        buf
     }
 
     pub fn title(&self, task_name: &str) -> String {
@@ -64,7 +98,12 @@ impl<W> TerminalOutput<W> {
     pub fn process(&mut self, bytes: &[u8]) {
         let normalized = normalize_newlines(bytes);
         self.parser.process(&normalized);
-        self.output.extend_from_slice(&normalized);
+        if let Err(err) = self.output.write_all(&normalized) {
+            // Spool writes are in-memory or to an anonymous temp file; a
+            // failure means replay data is lost, never that the TUI breaks.
+            tracing::debug!("failed to spool task output: {err}");
+        }
+        self.output_len += normalized.len();
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
@@ -244,7 +283,9 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn clear_logs(&mut self) {
-        self.output.clear();
+        // A fresh spool releases any rolled-over temp file.
+        self.output = tempfile::spooled_tempfile(OUTPUT_SPOOL_THRESHOLD);
+        self.output_len = 0;
         self.parser.reset();
     }
 }
@@ -271,6 +312,61 @@ fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
         result.push(byte);
     }
     result
+}
+
+#[cfg(test)]
+mod spool_tests {
+    use super::*;
+
+    /// Output far beyond the spool threshold must roll to disk and stay
+    /// byte-complete on replay, including partial replays from a watermark.
+    #[test]
+    fn rolled_output_replays_completely() -> Result<(), Error> {
+        let mut output = TerminalOutput::<std::io::Empty>::new(24, 80, None, 1000)?;
+
+        let mut expected = Vec::new();
+        // 2 MiB of line output, past the 1 MiB spool threshold.
+        for i in 0..32768u32 {
+            expected.extend_from_slice(format!("line number {i} of the build log\r\n").as_bytes());
+        }
+        output.process(&expected);
+
+        assert!(
+            output.output.is_rolled(),
+            "output beyond the threshold must be spooled to disk"
+        );
+        assert_eq!(output.output_len(), expected.len());
+        assert_eq!(output.read_output_from(0), expected);
+
+        let watermark = 500_000;
+        assert_eq!(output.read_output_from(watermark), expected[watermark..]);
+
+        Ok(())
+    }
+
+    /// Output under the threshold stays in memory (no temp file).
+    #[test]
+    fn small_output_stays_in_memory() -> Result<(), Error> {
+        let mut output = TerminalOutput::<std::io::Empty>::new(24, 80, None, 1000)?;
+        output.process(b"hello\r\n");
+        assert!(!output.output.is_rolled());
+        assert_eq!(output.read_output_from(0), b"hello\r\n");
+        Ok(())
+    }
+
+    /// Writing more output after a replay must append, not clobber.
+    #[test]
+    fn replay_does_not_disturb_appends() -> Result<(), Error> {
+        let mut output = TerminalOutput::<std::io::Empty>::new(24, 80, None, 1000)?;
+        output.process(b"first\r\n");
+        assert_eq!(output.read_output_from(0), b"first\r\n");
+        output.process(b"second\r\n");
+        assert_eq!(output.read_output_from(0), b"first\r\nsecond\r\n");
+        // Offset 6 is the trailing newline of \"first\"; the second write
+        // begins at offset 7.
+        assert_eq!(output.read_output_from(7), b"second\r\n");
+        Ok(())
+    }
 }
 
 #[cfg(test)]

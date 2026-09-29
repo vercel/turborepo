@@ -11,40 +11,6 @@ fn setup_framework(dir: &std::path::Path) {
 }
 
 #[test]
-fn test_no_inferred_vars_by_default() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_framework(tempdir.path());
-
-    let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let inferred = &json["tasks"][0]["environmentVariables"]["inferred"];
-    assert_eq!(inferred, &serde_json::json!([]));
-}
-
-#[test]
-fn test_next_public_var_inferred() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_framework(tempdir.path());
-
-    let output = run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--dry=json"],
-        &[("NEXT_PUBLIC_CHANGED", "true")],
-    );
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let inferred = json["tasks"][0]["environmentVariables"]["inferred"]
-        .as_array()
-        .unwrap();
-    assert_eq!(inferred.len(), 1);
-    assert!(
-        inferred[0]
-            .as_str()
-            .unwrap()
-            .starts_with("NEXT_PUBLIC_CHANGED=")
-    );
-}
-
-#[test]
 fn test_turbo_ci_vendor_env_key_excludes_var() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_framework(tempdir.path());
@@ -72,21 +38,6 @@ fn test_turbo_ci_vendor_env_key_excludes_var() {
 }
 
 #[test]
-fn test_framework_inference_disabled() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_framework(tempdir.path());
-
-    let output = run_turbo_with_env(
-        tempdir.path(),
-        &["run", "build", "--framework-inference=false", "--dry=json"],
-        &[("NEXT_PUBLIC_CHANGED", "true")],
-    );
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let inferred = &json["tasks"][0]["environmentVariables"]["inferred"];
-    assert_eq!(inferred, &serde_json::json!([]));
-}
-
-#[test]
 fn test_framework_inference_run_summary() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_framework(tempdir.path());
@@ -105,13 +56,18 @@ fn test_framework_inference_disabled_summary() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_framework(tempdir.path());
 
-    let output = run_turbo(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["run", "build", "--framework-inference=false", "--dry=json"],
+        &[("NEXT_PUBLIC_CHANGED", "true")],
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["frameworkInference"], false);
     assert_eq!(json["tasks"][0]["framework"], "");
+    assert_eq!(
+        json["tasks"][0]["environmentVariables"]["inferred"],
+        serde_json::json!([])
+    );
 }
 
 #[test]

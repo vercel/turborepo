@@ -1,0 +1,99 @@
+mod visitor;
+
+use turborepo_types::{
+    ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, RunOptsHashInfo, RunOptsInfo,
+    TaskArgs, TaskDefinition, UIMode,
+};
+pub use visitor::{Error as VisitorError, Visitor};
+
+type Engine = turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition>;
+
+/// Run options consumed while executing a task graph.
+///
+/// Keeping this interface in the task-graph crate lets CLI-specific option
+/// types provide execution settings without introducing a dependency on the CLI
+/// crate.
+pub trait TaskGraphRunOpts: RunOptsHashInfo + RunOptsInfo + Sync {
+    fn task_args(&self) -> TaskArgs<'_>;
+    fn concurrency(&self) -> u32;
+    fn env_mode(&self) -> EnvMode;
+    fn continue_on_error(&self) -> ContinueMode;
+    fn log_order(&self) -> ResolvedLogOrder;
+    fn log_prefix(&self) -> ResolvedLogPrefix;
+    fn single_package(&self) -> bool;
+    fn is_github_actions(&self) -> bool;
+    fn ui_mode(&self) -> UIMode;
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::MAIN_SEPARATOR_STR;
+
+    use pretty_assertions::assert_eq;
+    use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
+    use turborepo_task_id::TaskId;
+    use turborepo_types::{TaskDefinition, TaskDefinitionExt, TaskOutputs};
+
+    #[test]
+    fn test_relative_output_globs() {
+        let task_defn = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec![".next/**/*".to_string()],
+                exclusions: vec![".next/bad-file".to_string()],
+            },
+            ..Default::default()
+        };
+
+        let task_id = TaskId::new("foo", "build");
+        let workspace_dir = AnchoredSystemPath::new(match cfg!(windows) {
+            true => "apps\\foo",
+            false => "apps/foo",
+        })
+        .unwrap();
+
+        let relative_outputs =
+            task_defn.repo_relative_hashable_outputs(&task_id, workspace_dir, None);
+        let relative_prefix = match cfg!(windows) {
+            true => "apps\\foo\\",
+            false => "apps/foo/",
+        };
+        assert_eq!(
+            relative_outputs,
+            TaskOutputs {
+                inclusions: vec![
+                    format!("{relative_prefix}.next/**/*"),
+                    format!("{relative_prefix}.turbo/turbo-build.log"),
+                ],
+                exclusions: vec![format!("{relative_prefix}.next/bad-file")],
+            }
+        );
+    }
+
+    #[test]
+    fn test_escape_log_file() {
+        let build_log =
+            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build", None);
+        let build_expected =
+            AnchoredSystemPathBuf::from_raw([".turbo", "turbo-build.log"].join(MAIN_SEPARATOR_STR))
+                .unwrap();
+        assert_eq!(build_log, build_expected);
+
+        let build_log =
+            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build:prod", None);
+        let build_expected = AnchoredSystemPathBuf::from_raw(
+            [".turbo", "turbo-build$colon$prod.log"].join(MAIN_SEPARATOR_STR),
+        )
+        .unwrap();
+        assert_eq!(build_log, build_expected);
+
+        let build_log = <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file(
+            "build:prod:extra",
+            None,
+        );
+        let build_expected = AnchoredSystemPathBuf::from_raw(
+            [".turbo", "turbo-build$colon$prod$colon$extra.log"].join(MAIN_SEPARATOR_STR),
+        )
+        .unwrap();
+        assert_eq!(build_log, build_expected);
+    }
+}

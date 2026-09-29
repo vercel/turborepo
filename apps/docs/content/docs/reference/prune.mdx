@@ -18,6 +18,14 @@ Generate a partial monorepo for a target package. The output will be placed into
 turbo prune [package]
 ```
 
+### Task dependencies
+
+By default, `turbo prune` follows package dependencies, not task dependencies. An explicit dependency such as `"dependsOn": ["mycrate#build:types"]` does not by itself retain `mycrate` in the pruned output.
+
+Enable [`futureFlags.affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs) to also retain packages required by task dependencies, including dependencies across enabled toolchains. Their package dependencies and inherited Package Configurations are retained as well.
+
+The command still accepts package names, not task names. It considers all configured tasks of retained packages, not only `build`. With `--production`, package development dependencies are excluded unless they are otherwise required, for example by an explicit task dependency.
+
 ### Example
 
 Starting with a repository with the following structure:

@@ -183,7 +183,7 @@ To help with incremental migration or in situations where you cannot use a packa
 
 <Callout type="info">
   You may also opt out of this check using [configuration in
-  `turbo.json`](/docs/reference/configuration#dangerouslydisablepacakgemanagercheck)
+  `turbo.json`](/docs/reference/configuration#dangerouslydisablepackagemanagercheck)
   or the
   [`TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK`](/docs/reference/system-environment-variables)
   environment variable for broader coverage.
@@ -358,7 +358,7 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
 
 <Callout type="info">
   We recommend specifying file globs that you'd like to include your hashes in
-  [the `globalDependencies` key](/docs/reference/configuration#globaldeps) in
+  [the `globalDependencies` key](/docs/reference/configuration#globaldependencies) in
   `turbo.json` to make sure they are always accounted for.
 </Callout>
 
@@ -616,7 +616,7 @@ turbo run build --profile
 turbo run build --profile=my-profile
 ```
 
-### `---anon-profile`
+### `--anon-profile`
 
 This flag works the same as `--profile`, but attempts to redacts sensitive information. This is useful for sharing your profiles.
 

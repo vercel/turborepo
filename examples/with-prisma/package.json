@@ -1,9 +1,6 @@
 {
+  "name": "with-prisma",
   "private": true,
-  "prisma": {
-    "schema": "packages/database/prisma/schema.prisma",
-    "seed": "tsx packages/database/src/seed.ts"
-  },
   "scripts": {
     "build": "turbo run build",
     "db:migrate:deploy": "turbo run db:migrate:deploy",
@@ -16,18 +13,14 @@
     "lint": "turbo run lint"
   },
   "devDependencies": {
-    "prettier": "^3.2.5",
-    "prisma": "latest",
-    "tsx": "4.21.0",
-    "turbo": "2.9.6"
+    "pnpm": "12.4.2",
+    "prettier": "3.9.8",
+    "prisma": "8.0.0-rc.15",
+    "tsx": "4.23.13",
+    "turbo": "2.10.13"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24.21.0"
   },
-  "packageManager": "pnpm@9.15.1",
-  "name": "with-prisma",
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.2.0",
-    "@prisma/client": "latest"
-  }
+  "packageManager": "pnpm@12.4.2"
 }

@@ -1,7 +1,9 @@
-import { prisma } from "@repo/database";
+import { db } from "@repo/database";
+
+export const dynamic = "force-dynamic";
 
 export default async function IndexPage() {
-  const users = await prisma.user.findMany();
+  const users = await db.orm.public.User.all();
 
   return (
     <div>

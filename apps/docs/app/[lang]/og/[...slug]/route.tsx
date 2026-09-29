@@ -1,11 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { findPath } from "fumadocs-core/page-tree";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
-import { RepoLogo } from "@/components/logos/og/repo-logo";
-import { VercelLogo } from "@/components/logos/og/vercel-logo";
 import { getPageImage, source } from "@/lib/geistdocs/source";
 import { verifyOgSignature } from "@/lib/og/sign";
+
+const DOCS_OG_BACKGROUND_URL =
+  "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/docs-og-background.png";
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
@@ -39,67 +41,86 @@ export const GET = async (
   }
 
   const { title } = page.data;
+  const pageTreePath = findPath(
+    source.pageTree[lang].children,
+    (node) => node.type === "page" && node.url === page.url
+  );
+  const section =
+    pageTreePath?.find((node) => node.type === "folder")?.name ?? "Docs";
 
   const [geist, geistMono, backgroundImage] = await Promise.all([
     readFile(join(process.cwd(), "app/[lang]/og/[...slug]/Geist-Regular.ttf")),
     readFile(
       join(process.cwd(), "app/[lang]/og/[...slug]/GeistMono-Regular.ttf")
     ),
-    readFile(join(process.cwd(), "app/[lang]/og/[...slug]/bg.jpeg"))
+    fetch(DOCS_OG_BACKGROUND_URL).then((response) => {
+      if (!response.ok) {
+        throw new Error(
+          `Failed to load docs OG background: ${response.status}`
+        );
+      }
+
+      return response.arrayBuffer();
+    }),
   ]);
 
-  const bg = arrayBufferToBase64(backgroundImage.buffer as ArrayBuffer);
+  const bg = arrayBufferToBase64(backgroundImage);
 
   return new ImageResponse(
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "100%",
-        height: "100%",
-        fontFamily: "Geist Mono",
-        fontWeight: 700,
-        fontSize: 60,
-        backgroundImage: `url(data:image/jpeg;base64,${bg})`,
-        backgroundSize: "1200px 630px",
-        color: "#fff"
-      }}
-    >
-      <div style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}>
-        <RepoLogo />
-      </div>
-      {title ? (
-        <div
-          style={{
-            fontFamily: "Geist Mono",
-            fontSize: 36,
-            letterSpacing: -1.5,
-            padding: "40px 20px 30px",
-            textAlign: "center",
-            backgroundImage: "linear-gradient(to bottom, #fff, #aaa)",
-            backgroundClip: "text",
-            color: "transparent"
-          }}
-        >
-          {title}
-        </div>
-      ) : null}
+    (
       <div
         style={{
-          fontFamily: "Geist Mono",
-          fontSize: 18,
-          marginTop: 80,
           display: "flex",
+          flexDirection: "column",
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          fontFamily: "Geist Sans",
+          backgroundImage: `url(data:image/png;base64,${bg})`,
+          backgroundPosition: "center",
+          backgroundSize: "cover",
           color: "#fff",
-          alignItems: "center"
         }}
       >
-        <div style={{ marginRight: 12 }}>by</div>
-        <VercelLogo fill="white" height={25} />
+        <div
+          style={{
+            position: "absolute",
+            top: 198,
+            left: 55,
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {title ? (
+            <div
+              style={{
+                width: 550,
+                fontSize: 64,
+                fontWeight: 400,
+                letterSpacing: -2.7,
+                lineHeight: 1,
+                color: "#fff",
+              }}
+            >
+              {title}
+            </div>
+          ) : null}
+          <div
+            style={{
+              marginTop: 32,
+              fontFamily: "Geist Mono",
+              fontSize: 28,
+              fontWeight: 400,
+              letterSpacing: -1,
+              lineHeight: 1,
+              color: "#888",
+            }}
+          >
+            {section}
+          </div>
+        </div>
       </div>
-    </div>,
+    ),
     {
       width: 1200,
       height: 630,
@@ -107,27 +128,27 @@ export const GET = async (
         {
           name: "Geist Mono",
           data: geistMono,
-          weight: 700 as const,
-          style: "normal" as const
+          weight: 400 as const,
+          style: "normal" as const,
         },
         {
           name: "Geist Sans",
           data: geist,
           weight: 400 as const,
-          style: "normal" as const
-        }
-      ]
+          style: "normal" as const,
+        },
+      ],
     }
   );
 };
 
 export const generateStaticParams = async ({
-  params
+  params,
 }: RouteContext<"/[lang]/og/[...slug]">) => {
   const { lang } = await params;
 
   return source.getPages(lang).map((page) => ({
     lang: page.locale,
-    slug: getPageImage(page).segments
+    slug: getPageImage(page).segments,
   }));
 };

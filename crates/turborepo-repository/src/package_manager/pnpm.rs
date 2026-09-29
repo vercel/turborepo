@@ -39,6 +39,7 @@ impl<'a> PnpmDetector<'a> {
         }
     }
 
+    #[expect(clippy::expect_used, reason = "static semver ranges are valid")]
     pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager, Error> {
         let pnpm6_constraint: Range = "<7.0.0".parse().expect("valid version");
         let pnpm9_constraint: Range = ">=9.0.0-alpha.0".parse().expect("valid version");
@@ -131,7 +132,16 @@ pub fn prune_workspace_patches<R: AsRef<RelativeUnixPath>>(
         return Ok(());
     }
     let contents = workspace_yaml_path.read_to_string()?;
-    let mut doc: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents)
+    let output = prune_workspace_patches_contents(&contents, patches)?;
+    workspace_yaml_path.create_with_contents(output)?;
+    Ok(())
+}
+
+pub fn prune_workspace_patches_contents<R: AsRef<RelativeUnixPath>>(
+    contents: &str,
+    patches: &[R],
+) -> Result<String, std::io::Error> {
+    let mut doc: serde_yaml_ng::Value = serde_yaml_ng::from_str(contents)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     let patches_set: HashSet<&RelativeUnixPath> = patches.iter().map(|r| r.as_ref()).collect();
@@ -146,10 +156,8 @@ pub fn prune_workspace_patches<R: AsRef<RelativeUnixPath>>(
         });
     }
 
-    let output = serde_yaml_ng::to_string(&doc)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    workspace_yaml_path.create_with_contents(output)?;
-    Ok(())
+    serde_yaml_ng::to_string(&doc)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 pub fn patch_paths_for_keys(

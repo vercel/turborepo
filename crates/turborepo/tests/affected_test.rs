@@ -11,76 +11,6 @@ fn setup_affected(dir: &std::path::Path) {
     git(dir, &["checkout", "-b", "my-branch"]);
 }
 
-fn setup_nonsense_root_task_affected(dir: &Path) {
-    fs::create_dir_all(dir.join("flarble")).unwrap();
-    fs::create_dir_all(dir.join("packages/blorbo")).unwrap();
-
-    fs::write(
-        dir.join("package.json"),
-        r#"{
-  "name": "glorp",
-  "private": true,
-  "packageManager": "npm@10.5.0",
-  "workspaces": ["packages/*"],
-  "scripts": {
-    "zibble:zonk": "echo zibble"
-  }
-}
-"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.join("turbo.json"),
-        r#"{
-  "$schema": "https://turborepo.com/schema.json",
-  "tasks": {
-    "//#zibble:zonk": {
-      "cache": false,
-      "inputs": ["flarble/**"]
-    }
-  }
-}
-"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.join("packages/blorbo/package.json"),
-        r#"{
-  "name": "blorbo",
-  "version": "1.0.0"
-}
-"#,
-    )
-    .unwrap();
-    fs::write(
-        dir.join("package-lock.json"),
-        r#"{
-  "name": "glorp",
-  "lockfileVersion": 3,
-  "requires": true,
-  "packages": {
-    "": {
-      "name": "glorp",
-      "workspaces": ["packages/*"]
-    },
-    "node_modules/blorbo": {
-      "resolved": "packages/blorbo",
-      "link": true
-    },
-    "packages/blorbo": {
-      "name": "blorbo",
-      "version": "1.0.0"
-    }
-  }
-}
-"#,
-    )
-    .unwrap();
-
-    setup::setup_git(dir).unwrap();
-    git(dir, &["checkout", "-b", "my-branch"]);
-}
-
 fn setup_berry_catalog_affected(dir: &Path) {
     fs::create_dir_all(dir.join("packages/pkg-a")).unwrap();
     fs::create_dir_all(dir.join("packages/pkg-b")).unwrap();
@@ -486,6 +416,74 @@ fn test_affected_merge_base_diverged() {
     );
 }
 
+#[test]
+fn test_filter_merge_base_range_with_filter_using_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path).unwrap();
+    let turbo_json = turbo_json.replacen(
+        "{\n",
+        "{\n  \"futureFlags\": { \"filterUsingTasks\": true },\n",
+        1,
+    );
+    fs::write(&turbo_json_path, turbo_json).unwrap();
+    git(tempdir.path(), &["add", "turbo.json"]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "configure future flags", "--quiet"],
+    );
+    git(tempdir.path(), &["checkout", "-b", "my-branch", "--quiet"]);
+
+    let pkg_path = tempdir.path().join("apps/my-app/package.json");
+    let contents = fs::read_to_string(&pkg_path).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg["description"] = serde_json::Value::String("foo".to_string());
+    fs::write(&pkg_path, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "change my-app", "--quiet"],
+    );
+
+    git(tempdir.path(), &["checkout", "main", "--quiet"]);
+    let index_path = tempdir.path().join("packages/util/index.js");
+    let mut idx = fs::read_to_string(&index_path).unwrap_or_default();
+    idx.push_str("\nfoo");
+    fs::write(&index_path, idx).unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "change util on main", "--quiet"],
+    );
+    git(tempdir.path(), &["checkout", "my-branch", "--quiet"]);
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=[main...HEAD]", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks: std::collections::HashSet<String> = json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap().to_string())
+        .collect();
+
+    assert!(tasks.contains("my-app#build"), "{tasks:?}");
+    assert!(
+        !tasks.contains("util#build"),
+        "util changed on main after the branch point, a merge-base range must not select it: \
+         {tasks:?}"
+    );
+}
+
 // ── affectedTasks tests ──
 
 #[test]
@@ -580,9 +578,26 @@ fn test_affected_tasks_global_dep_change() {
     }
 }
 
-fn setup_affected_tasks_fixture(dir: &std::path::Path) {
+fn setup_affected_tasks_fixture_with_flags(dir: &std::path::Path, future_flags: serde_json::Value) {
     setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
+    if future_flags != serde_json::json!({}) {
+        let turbo_json_path = dir.join("turbo.json");
+        let mut turbo_json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&turbo_json_path).unwrap()).unwrap();
+        turbo_json["futureFlags"] = future_flags;
+        fs::write(
+            turbo_json_path,
+            serde_json::to_string_pretty(&turbo_json).unwrap(),
+        )
+        .unwrap();
+        git(dir, &["add", "turbo.json"]);
+        git(dir, &["commit", "-m", "configure future flags", "--quiet"]);
+    }
     git(dir, &["checkout", "-b", "my-branch"]);
+}
+
+fn setup_affected_tasks_fixture(dir: &std::path::Path) {
+    setup_affected_tasks_fixture_with_flags(dir, serde_json::json!({}));
 }
 
 #[test]
@@ -622,12 +637,21 @@ fn test_affected_tasks_filter_by_task_name() {
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
-    for item in items {
-        assert_eq!(
-            item["name"], "test",
-            "filter should only return test tasks: {item:?}"
-        );
-    }
+    let task_ids: std::collections::HashSet<_> = items
+        .iter()
+        .map(|item| {
+            format!(
+                "{}#{}",
+                item["package"]["name"].as_str().unwrap(),
+                item["name"].as_str().unwrap()
+            )
+        })
+        .collect();
+    assert!(task_ids.contains("lib-a#test"));
+    assert!(
+        task_ids.contains("lib-a#build"),
+        "task filter should retain execution dependencies: {items:?}"
+    );
 }
 
 #[test]
@@ -690,6 +714,425 @@ fn test_affected_tasks_excludes_packages_without_script() {
     assert!(has_typecheck, "lib-no-test#typecheck should be affected");
 }
 
+fn affected_query_task_ids(dir: &Path, tasks: &[&str]) -> std::collections::HashSet<String> {
+    let task_names = tasks
+        .iter()
+        .map(|task| format!("\"{task}\""))
+        .collect::<Vec<_>>()
+        .join(",");
+    let query =
+        format!("query {{ affectedTasks(tasks: [{task_names}]) {{ items {{ fullName }} }} }}");
+    let output = run_turbo(dir, &["query", &query]);
+    assert!(
+        output.status.success(),
+        "affected query failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    json["data"]["affectedTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["fullName"].as_str().unwrap().to_string())
+        .collect()
+}
+
+fn affected_run_task_ids(dir: &Path, tasks: &[&str]) -> std::collections::HashSet<String> {
+    let mut args = vec!["run"];
+    args.extend_from_slice(tasks);
+    args.extend_from_slice(&["--affected", "--dry=json"]);
+    let output = run_turbo(dir, &args);
+    assert!(
+        output.status.success(),
+        "affected run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn test_affected_tasks_matches_run_for_virtual_task() {
+    for future_flags in [
+        serde_json::json!({}),
+        serde_json::json!({ "affectedUsingTaskInputs": false }),
+        serde_json::json!({ "affectedUsingTaskInputs": true }),
+        serde_json::json!({ "filterUsingTasks": true }),
+        serde_json::json!({ "strictTaskEntrypointSelection": true }),
+    ] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_affected_tasks_fixture_with_flags(tempdir.path(), future_flags.clone());
+
+        fs::write(
+            tempdir.path().join("packages/lib-a/index.ts"),
+            "export const changed = true;",
+        )
+        .unwrap();
+
+        let query_tasks = affected_query_task_ids(tempdir.path(), &["aggregate"]);
+        let run_tasks = affected_run_task_ids(tempdir.path(), &["aggregate"]);
+        assert_eq!(
+            query_tasks, run_tasks,
+            "affected query and run differ with {future_flags}"
+        );
+        assert!(query_tasks.contains("lib-a#aggregate"));
+        assert!(query_tasks.contains("lib-a#build"));
+    }
+}
+
+#[test]
+fn test_affected_tasks_matches_run_with_command_overrides() {
+    for command in [
+        serde_json::json!(null),
+        serde_json::json!(["echo", "aggregate"]),
+    ] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup::setup_integration_test(tempdir.path(), "affected_tasks_inputs", "npm@10.5.0", false)
+            .unwrap();
+
+        let turbo_json_path = tempdir.path().join("turbo.json");
+        let mut turbo_json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&turbo_json_path).unwrap()).unwrap();
+        turbo_json["futureFlags"] = serde_json::json!({
+            "affectedUsingTaskInputs": true,
+            "experimentalTaskCommand": true
+        });
+        turbo_json["tasks"]["lib-a#aggregate"] = serde_json::json!({
+            "dependsOn": ["build"],
+            "command": command
+        });
+        fs::write(
+            &turbo_json_path,
+            serde_json::to_string_pretty(&turbo_json).unwrap(),
+        )
+        .unwrap();
+        git(tempdir.path(), &["add", "turbo.json"]);
+        git(
+            tempdir.path(),
+            &["commit", "-m", "configure command override", "--quiet"],
+        );
+        git(tempdir.path(), &["checkout", "-b", "my-branch"]);
+
+        fs::write(
+            tempdir.path().join("packages/lib-a/index.ts"),
+            "export const changed = true;",
+        )
+        .unwrap();
+
+        let query_tasks = affected_query_task_ids(tempdir.path(), &["aggregate"]);
+        let run_tasks = affected_run_task_ids(tempdir.path(), &["aggregate"]);
+        assert_eq!(
+            query_tasks, run_tasks,
+            "affected query and run differ with command override {command}"
+        );
+    }
+}
+
+// ── turbo run --affected + affectedUsingTaskInputs future flag ──
+
+const TURBO_JSON_WITH_TASK_INPUTS_FLAG: &str = r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/shared.txt", "!**/*.md"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!**/*.test.ts"]
+    }
+  },
+  "futureFlags": {
+    "affectedUsingTaskInputs": true
+  }
+}
+"#;
+
+/// Sets up the `affected_tasks_inputs` fixture with the
+/// `affectedUsingTaskInputs` future flag enabled.
+fn setup_task_level_affected(dir: &Path) {
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
+    // Enable the future flag before branching so it's on main.
+    fs::write(dir.join("turbo.json"), TURBO_JSON_WITH_TASK_INPUTS_FLAG).unwrap();
+    fs::write(dir.join("shared.txt"), "original").unwrap();
+    git(dir, &["add", "."]);
+    git(
+        dir,
+        &["commit", "-m", "enable task-level affected", "--quiet"],
+    );
+    git(dir, &["checkout", "-b", "my-branch"]);
+}
+
+#[test]
+fn test_task_level_affected_root_package_json_not_global() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // root package.json is not in the global hash when a lockfile exists,
+    // so changing it should not cause all tasks to be affected.
+    let root_pkg = tempdir.path().join("package.json");
+    let contents = fs::read_to_string(&root_pkg).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg["description"] = serde_json::Value::String("changed".to_string());
+    fs::write(&root_pkg, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "test",
+            "typecheck",
+            "--affected",
+            "--dry=json",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    assert!(
+        tasks.is_empty(),
+        "root package.json change should not globally affect tasks: {tasks:?}"
+    );
+}
+
+#[test]
+fn test_task_level_affected_filter_limits_scheduled_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // Both independent packages are affected, but only the filtered package
+    // should remain an execution entrypoint.
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("packages/lib-no-test/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--filter=lib-no-test",
+            "--dry=json",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .map(|task| task["taskId"].as_str().expect("task ID"))
+        .collect();
+    assert_eq!(task_ids, ["lib-no-test#build"]);
+}
+
+#[test]
+fn test_task_level_affected_filter_does_not_promote_execution_dependency() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // app-a#build is affected and depends on lib-a#build. Filtering to lib-a
+    // must not promote that unaffected execution dependency to an entrypoint.
+    fs::write(
+        tempdir.path().join("packages/app-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--affected", "--filter=lib-a", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["packages"], serde_json::json!([]));
+    assert_eq!(json["tasks"], serde_json::json!([]));
+}
+
+#[test]
+fn test_task_level_affected_filter_retains_execution_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/app-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--affected", "--filter=app-a", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let mut task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .map(|task| task["taskId"].as_str().expect("task ID"))
+        .collect();
+    task_ids.sort_unstable();
+    assert_eq!(task_ids, ["app-a#build", "lib-a#build"]);
+}
+
+#[test]
+fn test_task_level_affected_filter_reports_task_input_package() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // This root file is not a package-level change, but it is an explicit task
+    // input for test. Task-level affectedness must drive both scheduling and
+    // the reported package list.
+    fs::write(tempdir.path().join("shared.txt"), "changed").unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "test", "--affected", "--filter=lib-a", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["packages"], serde_json::json!(["lib-a"]));
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .map(|task| task["taskId"].as_str().expect("task ID"))
+        .collect();
+    assert_eq!(task_ids, ["lib-a#test"]);
+}
+
+#[test]
+fn test_task_level_affected_respects_inferred_package_scope() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("packages/lib-no-test/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "--affected",
+            "--pkg-inference-root=packages/lib-no-test",
+            "--dry=json",
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["packages"], serde_json::json!(["lib-no-test"]));
+    let task_ids: Vec<_> = json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .map(|task| task["taskId"].as_str().expect("task ID"))
+        .collect();
+    assert_eq!(task_ids, ["lib-no-test#build"]);
+}
+
+#[test]
+fn test_affected_tasks_matches_run_task_input_flag_behavior() {
+    for (future_flags, expected_lib_tasks) in [
+        (
+            serde_json::json!({}),
+            [
+                "lib-a#aggregate",
+                "lib-a#build",
+                "lib-a#test",
+                "lib-a#typecheck",
+            ]
+            .as_slice(),
+        ),
+        (
+            serde_json::json!({ "affectedUsingTaskInputs": false }),
+            [
+                "lib-a#aggregate",
+                "lib-a#build",
+                "lib-a#test",
+                "lib-a#typecheck",
+            ]
+            .as_slice(),
+        ),
+        (
+            serde_json::json!({ "affectedUsingTaskInputs": true }),
+            ["lib-a#aggregate", "lib-a#build"].as_slice(),
+        ),
+        (
+            serde_json::json!({ "filterUsingTasks": true }),
+            ["lib-a#aggregate", "lib-a#build"].as_slice(),
+        ),
+    ] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_affected_tasks_fixture_with_flags(tempdir.path(), future_flags.clone());
+        fs::write(tempdir.path().join("packages/lib-a/README.md"), "changed").unwrap();
+
+        let tasks = ["aggregate", "build", "test", "typecheck"];
+        let query_tasks = affected_query_task_ids(tempdir.path(), &tasks);
+        let run_tasks = affected_run_task_ids(tempdir.path(), &tasks);
+        assert_eq!(
+            query_tasks, run_tasks,
+            "affected query and run differ with {future_flags}"
+        );
+        for task in expected_lib_tasks {
+            assert!(
+                query_tasks.contains(*task),
+                "missing {task} with {future_flags}"
+            );
+        }
+    }
+}
+
 #[test]
 fn test_root_package_json_change_does_not_globally_affect_tasks() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -743,80 +1186,6 @@ fn test_affected_tasks_with_explicit_base() {
     );
 }
 
-// ── turbo run --affected + affectedUsingTaskInputs future flag ──
-
-const TURBO_JSON_WITH_TASK_INPUTS_FLAG: &str = r#"{
-  "$schema": "https://turborepo.dev/schema.json",
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "test": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
-    },
-    "typecheck": {
-      "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!**/*.test.ts"]
-    }
-  },
-  "futureFlags": {
-    "affectedUsingTaskInputs": true
-  }
-}
-"#;
-
-/// Sets up the `affected_tasks_inputs` fixture with the
-/// `affectedUsingTaskInputs` future flag enabled.
-fn setup_task_level_affected(dir: &Path) {
-    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
-    // Enable the future flag before branching so it's on main.
-    fs::write(dir.join("turbo.json"), TURBO_JSON_WITH_TASK_INPUTS_FLAG).unwrap();
-    git(dir, &["add", "."]);
-    git(
-        dir,
-        &["commit", "-m", "enable task-level affected", "--quiet"],
-    );
-    git(dir, &["checkout", "-b", "my-branch"]);
-}
-
-#[test]
-fn test_task_level_affected_root_package_json_not_global() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_task_level_affected(tempdir.path());
-
-    // root package.json is not in the global hash when a lockfile exists,
-    // so changing it should not cause all tasks to be affected.
-    let root_pkg = tempdir.path().join("package.json");
-    let contents = fs::read_to_string(&root_pkg).unwrap();
-    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
-    pkg["description"] = serde_json::Value::String("changed".to_string());
-    fs::write(&root_pkg, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
-
-    let output = run_turbo(
-        tempdir.path(),
-        &[
-            "run",
-            "build",
-            "test",
-            "typecheck",
-            "--affected",
-            "--dry=json",
-        ],
-    );
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let json: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
-
-    let tasks = json["tasks"].as_array().expect("tasks array");
-    assert!(
-        tasks.is_empty(),
-        "root package.json change should not globally affect tasks: {tasks:?}"
-    );
-}
-
 #[test]
 fn test_affected_with_nonexistent_task_errors() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -836,121 +1205,8 @@ fn test_affected_with_nonexistent_task_errors() {
     });
 }
 
-// -- turbo query affected shorthand tests --
-
-#[test]
-fn test_query_affected_shorthand_no_args() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_affected(tempdir.path());
-
-    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
-
-    // Default (no flags) returns affected tasks
-    let output = run_turbo(tempdir.path(), &["query", "affected"]);
-    assert!(output.status.success(), "query affected should succeed");
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
-    assert!(!items.is_empty(), "should have affected tasks");
-    let names: Vec<&str> = items
-        .iter()
-        .map(|i| i["fullName"].as_str().unwrap())
-        .collect();
-    assert!(
-        names.iter().any(|n| n.contains("my-app")),
-        "my-app tasks should be affected: {names:?}"
-    );
-}
-
-#[test]
-fn test_query_affected_shorthand_bare_packages() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_affected(tempdir.path());
-
-    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
-
-    // --packages with no value returns all affected packages
-    let output = run_turbo(tempdir.path(), &["query", "affected", "--packages"]);
-    assert!(
-        output.status.success(),
-        "query affected --packages should succeed"
-    );
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let items = json["data"]["affectedPackages"]["items"]
-        .as_array()
-        .unwrap();
-    assert_eq!(items.len(), 1);
-    assert_eq!(items[0]["name"], "my-app");
-    assert_eq!(items[0]["reason"]["__typename"], "FileChanged");
-    assert!(items[0]["path"].is_string(), "should include path field");
-}
-
-#[test]
-fn test_query_affected_shorthand_with_root_task() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_nonsense_root_task_affected(tempdir.path());
-
-    fs::write(tempdir.path().join("flarble/wibble.ts"), "// test").unwrap();
-
-    let output = run_turbo(
-        tempdir.path(),
-        &[
-            "query",
-            "affected",
-            "--tasks",
-            "//#zibble:zonk",
-            "--exit-code",
-        ],
-    );
-    assert_eq!(
-        output.status.code(),
-        Some(1),
-        "root task should be affected by its inputs\nstdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
-    assert_eq!(items.len(), 1, "expected one affected root task: {json}");
-    assert_eq!(items[0]["name"], "zibble:zonk");
-    assert_eq!(items[0]["fullName"], "//#zibble:zonk");
-    assert_eq!(items[0]["package"]["name"], "//");
-}
-
-// -- --exit-code tests --
-
-#[test]
-fn test_query_affected_exit_code_with_changes() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_affected(tempdir.path());
-
-    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
-
-    let output = run_turbo(tempdir.path(), &["query", "affected", "--exit-code"]);
-    assert_eq!(
-        output.status.code(),
-        Some(1),
-        "--exit-code should exit 1 when affected tasks are found"
-    );
-    // JSON should still be printed to stdout
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
-    assert!(!items.is_empty());
-}
-
-#[test]
-fn test_query_affected_exit_code_no_changes() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_affected(tempdir.path());
-
-    let output = run_turbo(tempdir.path(), &["query", "affected", "--exit-code"]);
-    assert!(
-        output.status.success(),
-        "--exit-code should exit 0 when nothing is affected"
-    );
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(json["data"]["affectedTasks"]["length"], 0);
-}
+// Query construction and success exit-code behavior are tested in-process.
+// Keep this binary smoke for the query-error exit code.
 
 #[test]
 fn test_query_affected_exit_code_error_returns_2() {
@@ -974,35 +1230,6 @@ fn test_query_affected_exit_code_error_returns_2() {
         Some(2),
         "--exit-code should exit 2 on query errors, not 1"
     );
-}
-
-#[test]
-fn test_affected_with_filter_intersects() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup_affected(tempdir.path());
-
-    // Change util → affected = {util, my-app} (my-app depends on util)
-    fs::write(tempdir.path().join("packages/util/new.js"), "hello").unwrap();
-
-    // --affected --filter=my-app should only run my-app (not util)
-    let output = run_turbo(
-        tempdir.path(),
-        &[
-            "run",
-            "build",
-            "--affected",
-            "--filter=my-app",
-            "--log-order",
-            "grouped",
-        ],
-    );
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("Packages in scope: my-app"),
-        "only my-app should be in scope: {stdout}"
-    );
-    assert!(stdout.contains("1 successful, 1 total"));
 }
 
 #[test]

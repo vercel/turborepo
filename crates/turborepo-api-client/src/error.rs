@@ -15,6 +15,8 @@ pub enum Error {
     TooManyFailures(#[from] Box<reqwest::Error>),
     #[error("Skipping HTTP Request. Too many failures have occurred without an error response.")]
     RetryExhaustedWithoutError,
+    #[error("Skipping artifact request: rate-limit wait exceeded the retry time budget.")]
+    RateLimitWaitExceeded,
     #[error("Unable to set up TLS.")]
     TlsError(#[source] reqwest::Error),
     #[error("HTTP client initialization was cancelled (runtime shutting down)")]

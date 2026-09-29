@@ -226,15 +226,6 @@ where
     W: TaskWarningCollector,
     A: TaskAccessProvider,
 {
-    /// Execute a dry run (only check cache status).
-    pub async fn execute_dry_run(&mut self, tracker: TaskTracker<()>) {
-        if let Ok(Some(status)) = self.task_cache.exists().await {
-            self.hash_tracker
-                .insert_cache_status(self.task_id.clone(), status);
-        }
-        tracker.dry_run().await;
-    }
-
     /// Execute the task.
     ///
     /// This is the main entry point for task execution. It:
@@ -311,15 +302,6 @@ where
                     self.task_cache.expanded_outputs().to_vec(),
                 );
             }
-
-            let incremental_upload_failures = self
-                .task_cache
-                .upload_incremental()
-                .instrument(tracing::info_span!("incremental_upload", task = %self.task_id))
-                .await;
-            if incremental_upload_failures > 0 {
-                telemetry.track_error(TrackedErrors::IncrementalUploadFailed);
-            }
         }
 
         // Tracker bookkeeping happens after the callback so dependents
@@ -394,27 +376,6 @@ where
                     turborepo_log::Level::Error,
                     turborepo_log::Source::task(&self.task_id_for_display),
                     format!("error fetching from cache: {e}"),
-                ));
-            }
-        }
-
-        // Fetch incremental artifacts before execution. This MUST complete
-        // before the task starts — we never start a task while an incremental
-        // fetch is in-flight.
-        if self.task_cache.has_incremental() {
-            let status = self
-                .task_cache
-                .fetch_incremental()
-                .instrument(tracing::info_span!("incremental_fetch", task = %self.task_id))
-                .await;
-            if status.skipped_partitions > 0 {
-                telemetry.track_error(TrackedErrors::IncrementalFetchFailed);
-            }
-            if status.any_restored() {
-                task_handle.emit(turborepo_log::LogEvent::new(
-                    turborepo_log::Level::Info,
-                    turborepo_log::Source::task(&self.task_id_for_display),
-                    "incremental state restored",
                 ));
             }
         }

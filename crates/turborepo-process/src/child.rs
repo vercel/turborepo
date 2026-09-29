@@ -57,6 +57,8 @@ pub struct Child {
     pid: Option<u32>,
     #[cfg(unix)]
     target_identity: Option<TargetIdentity>,
+    #[cfg(windows)]
+    root_identity: Option<Arc<super::job_object::ProcessIdentity>>,
     command_channel: ChildCommandChannel,
     exit_channel: watch::Receiver<Option<ChildExit>>,
     stdin: Arc<Mutex<Option<ChildInput>>>,
@@ -112,6 +114,8 @@ impl Child {
             handle: mut child,
             io: ChildIO { stdin, output },
             controller,
+            #[cfg(windows)]
+            root_identity,
         } = if let Some(size) = pty_size {
             #[cfg(unix)]
             {
@@ -167,6 +171,8 @@ impl Child {
             pid,
             #[cfg(unix)]
             target_identity,
+            #[cfg(windows)]
+            root_identity,
             command_channel: command_tx,
             exit_channel: exit_rx,
             stdin: Arc::new(Mutex::new(stdin)),
@@ -235,12 +241,15 @@ impl Child {
 
     #[cfg(windows)]
     fn cleanup_process_scope_after_success(&self) {
-        let Some(pid) = self.pid else {
+        let Some(identity) = &self.root_identity else {
             return;
         };
 
-        if let Err(err) = super::job_object::terminate_descendant_processes(pid) {
-            debug!("failed to clean up descendants after successful task {pid}: {err}");
+        if let Err(err) = super::job_object::terminate_descendant_processes(identity) {
+            debug!(
+                "failed to clean up descendants after successful task {:?}: {err}",
+                self.pid
+            );
         }
     }
 

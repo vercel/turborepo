@@ -1,0 +1,22 @@
+lockfileVersion: 5.4
+
+importers:
+
+  .:
+    specifiers: {}
+
+  apps/docs:
+    specifiers:
+      vendor-sdk: file:../../vendored/sdk
+      vendor-other: file:../../vendored/other
+    dependencies:
+      vendor-sdk: link:../../vendored/sdk
+      vendor-other: link:../../vendored/other
+
+  apps/web:
+    specifiers:
+      vendor-sdk: file:../../vendored/sdk
+    dependencies:
+      vendor-sdk: link:../../vendored/sdk
+
+packages:

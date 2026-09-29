@@ -506,19 +506,15 @@ where
         // root in invariant prefixes.
         prefix.push_str(separator);
     }
-    // TODO: Replace `map`, `take_while`, and `flatten` with `map_while` when it
-    // stabilizes.
     prefix.push_str(
         &token::components(tokens)
-            .map(|component| {
+            .map_while(|component| {
                 component
                     .variance::<InvariantText>()
                     .as_invariance()
                     .map(InvariantText::to_string)
                     .map(Cow::into_owned)
             })
-            .take_while(Option::is_some)
-            .flatten()
             .join(separator),
     );
     prefix

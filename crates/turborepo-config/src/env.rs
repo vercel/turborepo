@@ -3,8 +3,6 @@ use std::{
     ffi::{OsStr, OsString},
 };
 
-use clap::ValueEnum;
-use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::CacheConfig;
@@ -257,16 +255,13 @@ impl ResolvedConfigurationOptions for EnvVars {
             .output_map
             .get("log_order")
             .filter(|s| !s.is_empty())
-            .map(|s| LogOrder::from_str(s, true))
-            .transpose()
-            .map_err(|_| {
-                Error::InvalidLogOrder(
-                    LogOrder::value_variants()
-                        .iter()
-                        .map(|v| v.to_string())
-                        .join(", "),
-                )
-            })?;
+            .map(|s| match s.to_ascii_lowercase().as_str() {
+                "auto" => Ok(LogOrder::Auto),
+                "stream" => Ok(LogOrder::Stream),
+                "grouped" => Ok(LogOrder::Grouped),
+                _ => Err(Error::InvalidLogOrder("auto, stream, grouped".into())),
+            })
+            .transpose()?;
 
         let concurrency = self
             .output_map
@@ -325,6 +320,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             run_summary,
             allow_no_turbo_json,
             no_update_notifier,
+            // Agent guidance is configured only in root turbo.json.
+            agent_guidance: None,
             sso_login_callback_port,
 
             // Processed numbers
@@ -467,7 +464,7 @@ mod test {
     #[test]
     fn test_log_order_stream_env_setting() {
         let mut env: HashMap<OsString, OsString> = HashMap::new();
-        env.insert("turbo_log_order".into(), "stream".into());
+        env.insert("turbo_log_order".into(), "StReAm".into());
 
         let config = EnvVars::new(&env)
             .unwrap()

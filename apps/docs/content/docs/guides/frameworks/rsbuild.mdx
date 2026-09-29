@@ -49,6 +49,23 @@ bunx create-turbo@latest -e with-rsbuild
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest -e with-rsbuild
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest -e with-rsbuild
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Adding an Rsbuild application to an existing repository
@@ -88,6 +105,23 @@ bunx create-rsbuild@latest apps/my-app --template react
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-rsbuild@latest apps/my-app --template react
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-rsbuild@latest apps/my-app --template react
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Integrating with your repository
@@ -147,6 +181,33 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```diff title="./apps/my-app/package.json"
+{
+ "name": "my-app",
+  "dependencies": {
++   "@repo/ui": "workspace:*"
+  }
+}
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.
@@ -206,6 +267,23 @@ bunx create-turbo@latest -e with-rsbuild-module-federation
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest -e with-rsbuild-module-federation
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest -e with-rsbuild-module-federation
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 The example includes a `react-host` Rsbuild app, a `react-remote` Rsbuild app, and an `@mf-rsbuild-example/shared-ui` package. The host consumes the remote's exposed `./remote-app` module through `mf-manifest.json`, and both apps share React dependencies through [Module Federation](https://module-federation.io/).

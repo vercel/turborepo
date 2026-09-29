@@ -1,21 +1,10 @@
 import type { Metadata } from "next/types";
+import { siteUrl } from "@/lib/geistdocs/site-url";
 import { createSignedOgUrl } from "@/lib/og/sign";
-
-const getBaseURL = (): URL => {
-  if (process.env.VERCEL_ENV === "production") {
-    return new URL(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
-  }
-
-  if (process.env.VERCEL_ENV === "preview") {
-    return new URL(`https://${process.env.VERCEL_URL}`);
-  }
-
-  return new URL(`http://localhost:${process.env.PORT || 3000}`);
-};
 
 /**
  * Creates a signed OG image URL for the given title.
- * For index pages (home, /repo), the title is omitted to show just the logo.
+ * For index pages (home, /repo), the title is omitted.
  */
 const createOgImagePath = ({
   title,
@@ -27,10 +16,13 @@ const createOgImagePath = ({
   const isIndex = canonicalPath === "" || canonicalPath === "/";
   const isRepoIndex = canonicalPath === "/repo";
 
-  // For index pages, use empty title (logo only)
+  // For index pages, use an empty title.
   const ogTitle = isIndex || isRepoIndex ? "" : title || "";
 
-  return createSignedOgUrl(ogTitle);
+  return createSignedOgUrl(
+    ogTitle,
+    canonicalPath.startsWith("/blog/") ? "Blog" : undefined
+  );
 };
 
 /**
@@ -53,7 +45,7 @@ export const createMetadata = ({
   }
 
   return {
-    metadataBase: getBaseURL(),
+    metadataBase: siteUrl,
     title: title ? `${title} | Turborepo` : "Turborepo",
     description,
     openGraph: {

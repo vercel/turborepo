@@ -1,25 +1,18 @@
-#![allow(clippy::result_large_err)]
 //! Interface types for the turborepo query layer.
 //!
-//! This crate defines the traits that bridge `turborepo-lib` (the run
+//! This crate defines the traits that bridge `turborepo-run` (the run
 //! orchestrator) and `turborepo-query` (the GraphQL implementation).
-//! By placing the interface here, `turborepo-lib` and `turborepo-query`
+//! By placing the interface here, `turborepo-run` and `turborepo-query`
 //! can compile in parallel — neither depends on the other.
 //!
 //! ```text
 //! turborepo (binary)
-//!   ├── turborepo-lib ──────► turborepo-query-api (traits)
+//!   ├── turborepo-cli ──────► turborepo-run ──► turborepo-query-api (traits)
 //!   └── turborepo-query ────► turborepo-query-api (traits)
 //! ```
 //!
 //! The binary crate implements `QueryServer` and passes it to
-//! `turborepo_lib::main()`, connecting the two halves at runtime.
-//!
-//! Note: this crate's dependency list is larger than ideal for a pure
-//! interface crate because `QueryRun` methods expose types from crates
-//! like `turborepo-repository` and `turborepo-engine`. The benefit is
-//! still realized because the heavy async-graphql/axum/oxc stack in
-//! `turborepo-query` doesn't need to compile for `turborepo-lib`.
+//! `turborepo_cli::main()`, connecting the two halves at runtime.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -31,31 +24,67 @@ use std::{
 
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
-use turborepo_boundaries::BoundariesResult;
-use turborepo_engine::Built;
 use turborepo_repository::{change_mapper::PackageInclusionReason, package_graph::PackageName};
+use turborepo_run_context::RepoContext;
 use turborepo_types::TaskDefinition;
 
-pub type BoundariesFuture<'a> = Pin<
-    Box<
-        dyn std::future::Future<Output = Result<BoundariesResult, turborepo_boundaries::Error>>
-            + Send
-            + 'a,
-    >,
->;
+/// A task identity used by the query contract without exposing the engine's
+/// typestate or graph representation.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct QueryTaskId {
+    pub package: String,
+    pub task: String,
+}
 
-/// The interface that the query layer requires from a "run" context.
+impl QueryTaskId {
+    pub fn new(package: impl Into<String>, task: impl Into<String>) -> Self {
+        Self {
+            package: package.into(),
+            task: task.into(),
+        }
+    }
+
+    pub fn full_name(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl std::fmt::Display for QueryTaskId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}#{}", self.package, self.task)
+    }
+}
+
+/// A boundary violation projected into the data needed by the query schema.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BoundaryDiagnostic {
+    pub message: String,
+    pub reason: Option<String>,
+    pub path: Option<String>,
+    pub import: Option<String>,
+    pub start: Option<usize>,
+    pub end: Option<usize>,
+}
+
+pub type BoundariesFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Vec<BoundaryDiagnostic>, Error>> + Send + 'a>>;
+
+/// The interface that the query layer requires from a run context.
 ///
-/// Decouples the GraphQL query layer from the concrete `Run` type in
-/// turborepo-lib, allowing the heavy async-graphql/axum/oxc dependencies
-/// to compile in a separate crate.
+/// Repository data is exposed through `RepoContext`, while engine data is
+/// projected into task IDs, definitions, and graph traversals. This keeps the
+/// engine's built-state type and graph implementation out of the interface.
 pub trait QueryRun: Send + Sync + 'static {
-    fn version(&self) -> &'static str;
-    fn repo_root(&self) -> &turbopath::AbsoluteSystemPath;
-    fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph;
-    fn engine(&self) -> &turborepo_engine::Engine<Built, TaskDefinition>;
-    fn scm(&self) -> &turborepo_scm::SCM;
-    fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson;
+    fn repo_context(&self) -> &RepoContext;
+
+    fn task_ids(&self) -> Vec<QueryTaskId>;
+    fn task_ids_for_package(&self, package: &str) -> Vec<QueryTaskId>;
+    fn task_definition(&self, task_id: &QueryTaskId) -> Option<&TaskDefinition>;
+    fn task_dependencies(&self, task_id: &QueryTaskId) -> Vec<QueryTaskId>;
+    fn task_dependents(&self, task_id: &QueryTaskId) -> Vec<QueryTaskId>;
+    fn transitive_task_dependencies(&self, task_id: &QueryTaskId) -> Vec<QueryTaskId>;
+    fn transitive_task_dependents(&self, task_id: &QueryTaskId) -> Vec<QueryTaskId>;
+    fn collect_task_dependencies(&self, task_ids: &HashSet<QueryTaskId>) -> HashSet<QueryTaskId>;
 
     fn calculate_affected_packages(
         &self,
@@ -71,13 +100,17 @@ pub trait QueryRun: Send + Sync + 'static {
         head: Option<&str>,
     ) -> Result<HashSet<AnchoredSystemPathBuf>, AffectedPackagesError>;
 
+    /// Matches changed files against task inputs without exposing the engine.
+    fn match_tasks_against_changed_files(
+        &self,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> Result<HashMap<QueryTaskId, String>, AffectedPackagesError>;
+
     fn check_boundaries(&self, show_progress: bool) -> BoundariesFuture<'_>;
 }
 
 #[derive(Debug, Error)]
 pub enum AffectedPackagesError {
-    #[error(transparent)]
-    Resolution(#[from] turborepo_scope::filter::ResolutionError),
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
 }
@@ -85,7 +118,7 @@ pub enum AffectedPackagesError {
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum Error {
     #[error(transparent)]
-    Boundaries(#[from] turborepo_boundaries::Error),
+    Boundaries(Box<dyn std::error::Error + Send + Sync>),
     #[error("Failed to start GraphQL server.")]
     Server(#[from] io::Error),
     #[error(transparent)]
@@ -93,9 +126,6 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error("Failed to calculate affected packages: {0}")]
     AffectedPackages(#[from] AffectedPackagesError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Resolution(#[from] turborepo_scope::filter::ResolutionError),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
     /// Opaque error from the query implementation crate.
@@ -121,10 +151,10 @@ pub const SCHEMA_QUERY: &str = include_str!("schema_query.graphql");
 
 /// Abstraction over the query execution layer.
 ///
-/// `turborepo-lib` uses this trait to dispatch query operations without
+/// `turborepo-run` uses this trait to dispatch query operations without
 /// depending on `turborepo-query` directly. The concrete implementation
-/// lives in the binary crate, which depends on both `turborepo-lib` and
-/// `turborepo-query`.
+/// lives in the binary crate, which depends on `turborepo-cli`,
+/// `turborepo-run`, and `turborepo-query`.
 pub trait QueryServer: Send + Sync {
     /// Execute a single GraphQL query and return the result as JSON.
     ///

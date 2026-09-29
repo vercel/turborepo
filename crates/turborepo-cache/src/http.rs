@@ -1,8 +1,11 @@
 use std::{
     backtrace::Backtrace,
     collections::HashMap,
-    io::Write,
-    sync::{Arc, Mutex},
+    io::{Read, Seek, SeekFrom, Write},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use tracing::{debug, warn};
@@ -16,7 +19,8 @@ use turborepo_types::SecretString;
 
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
-    cache_archive::{CacheReader, CacheWriter},
+    artifact_body::{ARTIFACT_MEMORY_THRESHOLD, ArtifactBody},
+    cache_archive::CacheReader,
     signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
     upload_progress::{UploadProgress, UploadProgressQuery},
 };
@@ -37,6 +41,9 @@ pub struct HTTPCache {
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
     api_auth: Arc<Mutex<APIAuth>>,
+    recovery_lock: tokio::sync::Mutex<()>,
+    disabled: AtomicBool,
+    outage_breaker: crate::outage_breaker::OutageBreaker,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
     scm_state: LazyScmState,
@@ -91,36 +98,77 @@ impl HTTPCache {
             repo_root,
             uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth: Arc::new(Mutex::new(api_auth)),
+            recovery_lock: tokio::sync::Mutex::new(()),
+            disabled: AtomicBool::new(false),
+            outage_breaker: Default::default(),
             analytics_recorder,
             scm_state,
         })
     }
 
-    /// Attempts to refresh the auth token when a cache operation encounters a
-    /// 403 forbidden error. Returns true if the token was successfully
-    /// refreshed, false otherwise.
-    async fn try_refresh_token(&self) -> bool {
-        let current_token = match self.api_auth.lock() {
-            Ok(auth) => auth.token.clone(),
-            Err(_) => {
-                warn!("Failed to acquire lock for reading auth token");
-                return false;
-            }
-        };
+    #[cfg(test)]
+    pub(crate) fn trip_outage_for_test(&self) {
+        for _ in 0..3 {
+            self.outage_breaker
+                .enter()
+                .unwrap()
+                .finish(&Err(&CacheError::ConnectError));
+        }
+    }
 
-        match turborepo_auth::recover_token_after_forbidden(&current_token).await {
+    pub(crate) fn is_disabled(&self) -> bool {
+        self.disabled.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn disable_after_forbidden(&self) -> bool {
+        let first = !self.disabled.swap(true, Ordering::AcqRel);
+        if first {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                "Remote cache returned 403 and access could not be restored; disabling remote \
+                 caching for this run",
+            )
+            .emit();
+        }
+        first
+    }
+
+    /// Only one operation may recover a rejected token. Waiters whose request
+    /// used that token retry with the replacement instead of recovering again.
+    async fn try_refresh_token<F, Fut, E>(&self, rejected_token: &SecretString, recover: F) -> bool
+    where
+        F: FnOnce(SecretString) -> Fut,
+        Fut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        E: std::fmt::Debug,
+    {
+        let _recovery_guard = self.recovery_lock.lock().await;
+        if self.is_disabled() {
+            return false;
+        }
+
+        // Drop the std mutex guard before awaiting recovery.
+        let current_token = {
+            self.api_auth
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .token
+                .clone()
+        };
+        if current_token.expose() != rejected_token.expose() {
+            return true;
+        }
+
+        let recovered = match recover(current_token).await {
             Ok(Some(new_token)) => {
-                // Update the API auth with the new token
-                if let Ok(mut auth) = self.api_auth.lock() {
-                    if replace_api_auth_token(&mut auth, new_token) {
-                        debug!("Successfully recovered auth token for cache operations");
-                        true
-                    } else {
-                        debug!("Recovered auth token matched the current token; skipping retry");
-                        false
-                    }
+                let mut auth = self
+                    .api_auth
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if replace_api_auth_token(&mut auth, new_token) {
+                    debug!("Successfully recovered auth token for cache operations");
+                    true
                 } else {
-                    warn!("Failed to acquire lock for updating auth token");
+                    debug!("Recovered auth token matched the current token; skipping retry");
                     false
                 }
             }
@@ -132,7 +180,11 @@ impl HTTPCache {
                 warn!("Failed to recover token after forbidden response: {:?}", e);
                 false
             }
+        };
+        if !recovered {
+            self.disable_after_forbidden();
         }
+        recovered
     }
 
     /// Helper method to execute a cache operation with automatic token refresh
@@ -146,39 +198,87 @@ impl HTTPCache {
         F: Fn(APIAuth) -> Fut,
         Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
     {
-        // Try the operation with the current token
+        self.execute_with_token_refresh_and_recovery(hash, operation, |current_token| async move {
+            turborepo_auth::recover_token_after_forbidden(&current_token).await
+        })
+        .await
+    }
+
+    async fn execute_with_token_refresh_and_recovery<T, F, Fut, R, RecoveryFut, E>(
+        &self,
+        hash: &str,
+        operation: F,
+        recover: R,
+    ) -> Result<T, CacheError>
+    where
+        F: Fn(APIAuth) -> Fut,
+        Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
+        R: FnOnce(SecretString) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        E: std::fmt::Debug,
+    {
+        if self.is_disabled() {
+            return Err(CacheError::ForbiddenRemoteCacheWrite);
+        }
+        let permit = self
+            .outage_breaker
+            .enter()
+            .ok_or(CacheError::RemoteCacheUnavailable)?;
+        let result = self
+            .execute_with_token_refresh_inner(hash, operation, recover)
+            .await;
+        permit.finish(&result.as_ref().map(|_| ()));
+        result
+    }
+
+    async fn execute_with_token_refresh_inner<T, F, Fut, R, RecoveryFut, E>(
+        &self,
+        hash: &str,
+        operation: F,
+        recover: R,
+    ) -> Result<T, CacheError>
+    where
+        F: Fn(APIAuth) -> Fut,
+        Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
+        R: FnOnce(SecretString) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        E: std::fmt::Debug,
+    {
+        if self.is_disabled() {
+            return Err(CacheError::ForbiddenRemoteCacheWrite);
+        }
         let api_auth = self
             .api_auth
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
-        match operation(api_auth.clone()).await {
+        let rejected_token = api_auth.token.clone();
+        match operation(api_auth).await {
             Ok(result) => Ok(result),
             Err(turborepo_api_client::Error::UnknownStatus { code, .. }) if code == "forbidden" => {
-                // Try to refresh the token
-                if self.try_refresh_token().await {
-                    // Retry the operation with the refreshed token
+                if self.try_refresh_token(&rejected_token, recover).await {
                     let refreshed_auth = self
                         .api_auth
                         .lock()
                         .unwrap_or_else(|poisoned| poisoned.into_inner())
                         .clone();
-                    operation(refreshed_auth)
-                        .await
-                        .map_err(|err| Self::convert_api_error(hash, err))
+                    match operation(refreshed_auth).await {
+                        Err(turborepo_api_client::Error::UnknownStatus { code, .. })
+                            if code == "forbidden" =>
+                        {
+                            self.disable_after_forbidden();
+                            Err(CacheError::ForbiddenRemoteCacheWrite)
+                        }
+                        result => result.map_err(|err| Self::convert_api_error(hash, err)),
+                    }
                 } else {
-                    // Token refresh failed, return the original error
+                    self.disable_after_forbidden();
                     Err(CacheError::ForbiddenRemoteCacheWrite)
                 }
             }
             Err(e) => Err(Self::convert_api_error(hash, e)),
         }
     }
-
-    /// 256 KB upload chunk size. Larger chunks reduce per-chunk overhead
-    /// (mutex locks in UploadProgress, hyper body framing) which improves
-    /// throughput for large artifacts compared to the previous 8 KB default.
-    const UPLOAD_CHUNK_BYTES: usize = 256 * 1024;
 
     #[tracing::instrument(skip_all)]
     pub async fn put(
@@ -188,19 +288,35 @@ impl HTTPCache {
         files: &[AnchoredSystemPathBuf],
         duration: u64,
     ) -> Result<(), CacheError> {
-        let mut artifact_body = Vec::new();
-        self.write(&mut artifact_body, anchor, files).await?;
-        let body_len = artifact_body.len();
+        // Spool the compressed artifact: small artifacts stay in memory while
+        // large ones roll to an anonymous temporary file, so retained memory
+        // is bounded regardless of artifact size. Building it reads and
+        // compresses every output file, so it runs on the blocking pool
+        // rather than occupying a Tokio runtime worker.
+        let anchor = anchor.to_owned();
+        let files = files.to_vec();
+        let body = tokio::task::spawn_blocking(move || ArtifactBody::from_files(&anchor, &files))
+            .await??;
+        self.put_body(hash, Arc::new(body), duration).await
+    }
+
+    /// Uploads an already-built archive. Shared with the local cache so a
+    /// combined local+remote write builds and compresses the artifact exactly
+    /// once.
+    #[tracing::instrument(skip_all)]
+    pub(crate) async fn put_body(
+        &self,
+        hash: &str,
+        body: Arc<ArtifactBody>,
+        duration: u64,
+    ) -> Result<(), CacheError> {
+        let body_len = body.len();
 
         let tag = self
             .signer_verifier
             .as_ref()
-            .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
+            .map(|signer| body.generate_tag(signer, hash))
             .transpose()?;
-
-        // Convert to Bytes once so retries are a cheap Arc bump instead of
-        // a full deep-copy of the artifact.
-        let artifact_bytes = bytes::Bytes::from(artifact_body);
 
         let resolved_scm = self.scm_state.get_resolved().await;
         let sha = resolved_scm.and_then(|s| s.sha.clone());
@@ -216,13 +332,15 @@ impl HTTPCache {
         self.execute_with_token_refresh(hash, |api_auth| {
             let client = &self.client;
             let tag_ref = tag_clone.as_deref();
-            let artifact_bytes_ref = artifact_bytes.clone(); // Arc bump, not a deep copy
+            let body_ref = body.clone();
             let uploads_ref = uploads_clone.clone();
             let sha_ref = sha_clone.clone();
             let dirty_hash_ref = dirty_hash_clone.clone();
 
             async move {
-                let stream = chunked_byte_stream(artifact_bytes_ref, Self::UPLOAD_CHUNK_BYTES);
+                // Each attempt gets a fresh bounded stream over the same
+                // spooled bytes, so retries send identical content.
+                let stream = body_ref.stream()?;
 
                 let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(body_len));
 
@@ -255,19 +373,39 @@ impl HTTPCache {
         Ok(())
     }
 
-    #[tracing::instrument(skip_all)]
-    async fn write(
+    /// Query remote hits in one request; missing or invalid entries are left to
+    /// the caller to resolve with the single-artifact endpoint.
+    pub async fn batch_exists(
         &self,
-        writer: impl Write,
-        anchor: &AbsoluteSystemPath,
-        files: &[AnchoredSystemPathBuf],
-    ) -> Result<(), CacheError> {
-        let mut cache_archive = CacheWriter::from_writer(writer, true)?;
-        for file in files {
-            cache_archive.add_file(anchor, file)?;
-        }
-
-        Ok(())
+        hashes: &[String],
+    ) -> Result<HashMap<String, Option<CacheHitMetadata>>, CacheError> {
+        let response = self
+            .execute_with_token_refresh("batch", |api_auth| {
+                let client = &self.client;
+                async move {
+                    client
+                        .query_artifacts(
+                            hashes,
+                            &api_auth.token,
+                            api_auth.team_id.as_deref(),
+                            api_auth.team_slug.as_deref(),
+                        )
+                        .await
+                }
+            })
+            .await?;
+        Ok(response
+            .into_iter()
+            .map(|(hash, hit)| {
+                let metadata = hit.map(|hit| CacheHitMetadata {
+                    source: CacheSource::Remote,
+                    time_saved: hit.task_duration_ms,
+                    sha: hit.sha,
+                    dirty_hash: hit.dirty_hash,
+                });
+                (hash, metadata)
+            })
+            .collect())
     }
 
     #[tracing::instrument(skip_all)]
@@ -346,6 +484,23 @@ impl HTTPCache {
         &self,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        Ok(self
+            .fetch_with_archive(hash)
+            .await?
+            .map(|(metadata, files, _body)| (metadata, files)))
+    }
+
+    /// Fetches and restores the artifact, also returning the verified archive
+    /// bytes so a lower-priority local cache can install the exact same bytes
+    /// without re-encoding them. The signature check completes before both
+    /// the restore and the handoff, so a rejected artifact is never restored
+    /// or installed locally.
+    #[tracing::instrument(skip_all)]
+    pub(crate) async fn fetch_with_archive(
+        &self,
+        hash: &str,
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>, ArtifactBody)>, CacheError>
+    {
         let response = self
             .execute_with_token_refresh(hash, |api_auth| {
                 let client = &self.client;
@@ -371,40 +526,83 @@ impl HTTPCache {
         let sha = Self::get_header_string(&response, "x-artifact-sha");
         let dirty_hash = Self::get_header_string(&response, "x-artifact-dirty-hash");
 
-        let body = if let Some(signer_verifier) = &self.signer_verifier {
-            let expected_tag = response
+        let expected_tag = if self.signer_verifier.is_some() {
+            let tag = response
                 .headers()
                 .get("x-artifact-tag")
                 .ok_or(CacheError::ArtifactTagMissing(Backtrace::capture()))?;
 
-            let expected_tag = expected_tag
-                .to_str()
-                .map_err(|_| CacheError::InvalidTag(Backtrace::capture()))?
-                .to_string();
+            Some(
+                tag.to_str()
+                    .map_err(|_| CacheError::InvalidTag(Backtrace::capture()))?
+                    .to_string(),
+            )
+        } else {
+            None
+        };
 
-            let body = response.bytes().await.map_err(|e| {
-                CacheError::ApiClientError(
-                    Box::new(turborepo_api_client::Error::ReqwestError(e)),
-                    Backtrace::capture(),
-                )
-            })?;
-            let is_valid = signer_verifier.validate(hash.as_bytes(), &body, &expected_tag)?;
+        // Stream the response into a spool instead of collecting the whole
+        // body in memory. Small artifacts stay in memory; large ones roll to
+        // an anonymous temporary file that is cleaned up on drop. When the
+        // Content-Length is known (the common case) the signature is computed
+        // incrementally as chunks arrive.
+        let mut streaming_tag = match (&self.signer_verifier, response.content_length()) {
+            (Some(signer), Some(len)) => Some(signer.start_streaming_tag(hash.as_bytes(), len)?),
+            _ => None,
+        };
+        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
+        let mut body_len: u64 = 0;
+        {
+            use tokio_stream::StreamExt;
+            let mut body_stream = response.bytes_stream();
+            while let Some(chunk) = body_stream.next().await {
+                let chunk = chunk.map_err(|e| {
+                    CacheError::ApiClientError(
+                        Box::new(turborepo_api_client::Error::ReqwestError(e)),
+                        Backtrace::capture(),
+                    )
+                })?;
+                if let Some(tag) = &mut streaming_tag {
+                    tag.update(&chunk);
+                }
+                spool.write_all(&chunk)?;
+                body_len += chunk.len() as u64;
+            }
+        }
+
+        // Verify the signature before any extraction; a rejected artifact is
+        // dropped with the spool and nothing is restored.
+        if let (Some(signer_verifier), Some(expected_tag)) = (&self.signer_verifier, &expected_tag)
+        {
+            let is_valid = match streaming_tag {
+                Some(tag) => tag.verify(expected_tag)?,
+                // The body length was not known up front, so verify from the
+                // spooled bytes now that the total is known.
+                None => {
+                    spool.seek(SeekFrom::Start(0))?;
+                    signer_verifier.validate_reader(
+                        hash.as_bytes(),
+                        &mut spool,
+                        body_len,
+                        expected_tag,
+                    )?
+                }
+            };
 
             if !is_valid {
                 return Err(CacheError::InvalidTag(Backtrace::capture()));
             }
+        }
 
-            body
-        } else {
-            response.bytes().await.map_err(|e| {
-                CacheError::ApiClientError(
-                    Box::new(turborepo_api_client::Error::ReqwestError(e)),
-                    Backtrace::capture(),
-                )
-            })?
-        };
-
-        let files = Self::restore_tar(&self.repo_root, &body)?;
+        spool.seek(SeekFrom::Start(0))?;
+        let body = ArtifactBody::from_spool(spool)?;
+        // Decompression and extraction are synchronous CPU and filesystem
+        // work; run them on the blocking pool so a large restore does not
+        // occupy a runtime worker.
+        let repo_root = self.repo_root.clone();
+        let reader = body.reader()?;
+        let files =
+            tokio::task::spawn_blocking(move || Self::restore_tar(&repo_root, reader)).await??;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
         Ok(Some((
@@ -415,6 +613,7 @@ impl HTTPCache {
                 dirty_hash,
             },
             files,
+            body,
         )))
     }
 
@@ -425,7 +624,7 @@ impl HTTPCache {
     #[tracing::instrument(skip_all)]
     pub(crate) fn restore_tar(
         root: &AbsoluteSystemPath,
-        body: &[u8],
+        body: impl Read,
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
         let (files, _manifest) = cache_reader.restore(root, None)?;
@@ -448,24 +647,6 @@ impl HTTPCache {
     }
 }
 
-/// Yields zero-copy `Bytes` slices of `chunk_size` from an already-in-memory
-/// buffer. Each `.slice()` call is O(1) -- it bumps the `Bytes` refcount
-/// rather than copying data.
-fn chunked_byte_stream(
-    buf: bytes::Bytes,
-    chunk_size: usize,
-) -> impl futures::Stream<Item = Result<bytes::Bytes, turborepo_api_client::Error>> {
-    let len = buf.len();
-    futures::stream::unfold((buf, 0usize), move |(buf, offset)| async move {
-        if offset >= len {
-            return None;
-        }
-        let end = (offset + chunk_size).min(len);
-        let chunk = buf.slice(offset..end);
-        Some((Ok(chunk), (buf, end)))
-    })
-}
-
 #[cfg(test)]
 mod test {
     use std::{backtrace::Backtrace, time::Duration};
@@ -474,7 +655,7 @@ mod test {
     use futures::future::try_join_all;
     use insta::assert_snapshot;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_analytics::start_analytics;
     use turborepo_api_client::{APIClient, analytics};
     use turborepo_types::SecretString;
@@ -486,9 +667,45 @@ mod test {
         test_cases::{TestCase, get_test_cases, validate_analytics},
     };
 
+    fn cache_with_token(token: &str) -> HTTPCache {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new(token.to_string()),
+            team_slug: None,
+        };
+
+        HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::resolved(None),
+        )
+        .unwrap()
+    }
+
     #[tokio::test]
     async fn test_http_cache() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -586,9 +803,97 @@ mod test {
         Ok(())
     }
 
+    /// An artifact larger than the in-memory threshold must round-trip through
+    /// the disk-spooled upload and download paths byte-for-byte.
+    #[tokio::test]
+    async fn test_http_cache_large_artifact_spools_to_disk() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start within timeout"))??;
+
+        // 16 MiB of incompressible pseudo-random data, so the compressed
+        // artifact exceeds ARTIFACT_MEMORY_THRESHOLD and rolls to disk.
+        let mut contents = Vec::with_capacity(16 * 1024 * 1024);
+        let mut state: u64 = 0x9E3779B97F4A7C15;
+        while contents.len() < 16 * 1024 * 1024 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            contents.extend_from_slice(&state.to_le_bytes());
+        }
+
+        let put_root = tempdir()?;
+        let put_root_path = AbsoluteSystemPathBuf::try_from(put_root.path())?;
+        let file_path = AnchoredSystemPathBuf::from_raw("big.bin")?;
+        std::fs::write(put_root_path.resolve(&file_path), &contents)?;
+
+        let hash = "large-artifact-hash";
+        let duration = 42;
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+
+        let make_cache = |root: &AbsoluteSystemPathBuf| {
+            HTTPCache::new(
+                APIClient::new(
+                    format!("http://localhost:{port}"),
+                    Some(Duration::from_secs(200)),
+                    None,
+                    "2.0.0",
+                    true,
+                )
+                .unwrap(),
+                &opts,
+                root.to_owned(),
+                api_auth.clone(),
+                None,
+                LazyScmState::resolved(None),
+            )
+            .unwrap()
+        };
+
+        let put_cache = make_cache(&put_root_path);
+        put_cache
+            .put(
+                &put_root_path,
+                hash,
+                std::slice::from_ref(&file_path),
+                duration,
+            )
+            .await?;
+
+        // Restore into a different root so the bytes must actually travel.
+        let fetch_root = tempdir()?;
+        let fetch_root_path = AbsoluteSystemPathBuf::try_from(fetch_root.path())?;
+        let fetch_cache = make_cache(&fetch_root_path);
+
+        let (metadata, received_files) = fetch_cache.fetch(hash).await?.unwrap();
+        assert_eq!(metadata.time_saved, duration);
+        assert_eq!(received_files.len(), 1);
+        let restored = std::fs::read(fetch_root_path.resolve(&received_files[0]))?;
+        assert_eq!(restored, contents);
+
+        handle.abort();
+        Ok(())
+    }
+
     #[tokio::test]
     async fn test_http_cache_scm_metadata_round_trip() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -666,7 +971,7 @@ mod test {
 
     #[tokio::test]
     async fn test_http_cache_no_scm_metadata() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -773,118 +1078,525 @@ mod test {
         assert_snapshot!(err.to_string(), @"failed to contact remote cache: Cache disabled");
     }
 
-    #[tokio::test]
-    async fn test_token_refresh_on_403() {
-        // This test verifies that the HTTPCache can handle token refresh when
-        // encountering 403 errors. Note: This is an integration test that would
-        // need a mock server setup to fully verify the token refresh flow, but
-        // the logic structure is tested through the build validation.
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
-        let api_client = APIClient::new(
-            "http://localhost:8000",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            false,
-        )
-        .unwrap();
-        let opts = CacheOpts {
-            cache_dir: ".turbo/cache".into(),
-            cache: Default::default(),
-            workers: 0,
-            remote_cache_opts: None,
-            cache_max_age: None,
-            cache_max_size: None,
-        };
-
-        let api_auth = APIAuth {
-            team_id: Some("my-team".to_string()),
-            token: SecretString::new("expired-token".to_string()),
-            team_slug: None,
-        };
-
-        let cache = HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path,
-            api_auth,
-            None,
-            LazyScmState::resolved(None),
-        )
-        .unwrap();
-
-        // Verify that the cache has the token refresh capability
-        // The actual token refresh would be tested in integration tests with a proper
-        // mock server. The vca_ prefix check is now handled in the auth layer.
-        // The result depends on whether there are any tokens available in the system
-        //
-        // The result can be true or false depending on system state, but the method
-        // should not panic. The test will fail if it does.
-        cache.try_refresh_token().await;
+    fn forbidden() -> turborepo_api_client::Error {
+        turborepo_api_client::Error::UnknownStatus {
+            code: "forbidden".into(),
+            message: "expired".into(),
+            backtrace: Backtrace::capture(),
+        }
     }
 
     #[tokio::test]
-    async fn test_cache_token_update_after_refresh() {
-        // Test that the cache properly updates its internal token after a successful
-        // refresh
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
-        let api_client = APIClient::new(
-            "http://localhost:8000",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            false,
-        )
-        .unwrap();
-        let opts = CacheOpts {
-            cache_dir: ".turbo/cache".into(),
-            cache: Default::default(),
-            workers: 0,
-            remote_cache_opts: None,
-            cache_max_age: None,
-            cache_max_size: None,
+    async fn test_simultaneous_403_recovers_once_and_retries_each_operation() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
         };
 
-        let initial_api_auth = APIAuth {
-            team_id: Some("my-team".to_string()),
-            token: SecretString::new("initial-token".to_string()),
-            team_slug: None,
-        };
-
-        let cache = HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path,
-            initial_api_auth,
-            None,
-            LazyScmState::resolved(None),
-        )
-        .unwrap();
-
-        // Verify initial token
-        let initial_auth = cache.api_auth.lock().unwrap().clone();
-        assert_eq!(initial_auth.token.expose(), "initial-token");
-
-        // Test the token recovery mechanism (without actual HTTP call)
-        // In a real scenario, try_refresh_token would call
-        // turborepo_auth::recover_token_after_forbidden and update the internal
-        // token if successful.
-        let refresh_result = cache.try_refresh_token().await;
-
-        // The result depends on system state - could be true or false
-        let final_auth = cache.api_auth.lock().unwrap().clone();
-
-        if refresh_result {
-            // If refresh succeeded, token should have been updated
-            assert_ne!(final_auth.token.expose(), "initial-token");
-        } else {
-            // If refresh failed, token should remain unchanged
-            assert_eq!(final_auth.token.expose(), "initial-token");
+        const WORKERS: usize = 8;
+        let cache = Arc::new(cache_with_token("expired-token"));
+        let initial_attempts = Arc::new(tokio::sync::Barrier::new(WORKERS));
+        let recoveries = Arc::new(AtomicUsize::new(0));
+        let retries = Arc::new(AtomicUsize::new(0));
+        let (recovery_started, started) = tokio::sync::oneshot::channel();
+        let (release, recovery_release) = tokio::sync::oneshot::channel();
+        let recovery_signal = Arc::new(std::sync::Mutex::new(Some((
+            recovery_started,
+            recovery_release,
+        ))));
+        let tasks: Vec<_> = (0..WORKERS)
+            .map(|id| {
+                let cache = cache.clone();
+                let initial_attempts = initial_attempts.clone();
+                let recoveries = recoveries.clone();
+                let retries = retries.clone();
+                let recovery_signal = recovery_signal.clone();
+                tokio::spawn(async move {
+                    cache
+                        .execute_with_token_refresh_and_recovery(
+                            "hash",
+                            |auth| {
+                                let initial_attempts = initial_attempts.clone();
+                                let retries = retries.clone();
+                                async move {
+                                    if auth.token.expose() == "expired-token" {
+                                        initial_attempts.wait().await;
+                                        Err(forbidden())
+                                    } else {
+                                        assert_eq!(auth.token.expose(), "refreshed-token");
+                                        retries.fetch_add(1, Ordering::SeqCst);
+                                        Ok(id)
+                                    }
+                                }
+                            },
+                            |token| async move {
+                                recoveries.fetch_add(1, Ordering::SeqCst);
+                                assert_eq!(token.expose(), "expired-token");
+                                let signal = recovery_signal.lock().unwrap().take();
+                                if let Some((started, release)) = signal {
+                                    started.send(()).unwrap();
+                                    release.await.unwrap();
+                                }
+                                Ok::<_, ()>(Some(SecretString::new("refreshed-token".into())))
+                            },
+                        )
+                        .await
+                })
+            })
+            .collect();
+        started.await.unwrap();
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+        release.send(()).unwrap();
+        let results = futures::future::join_all(tasks).await;
+        for (id, result) in results.into_iter().enumerate() {
+            assert_eq!(result.unwrap().unwrap(), id);
         }
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+        assert_eq!(retries.load(Ordering::SeqCst), WORKERS);
+        assert!(!cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_simultaneous_403_failed_recovery_disables_without_retries() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        const WORKERS: usize = 8;
+        let cache = Arc::new(cache_with_token("expired-token"));
+        let initial_attempts = Arc::new(tokio::sync::Barrier::new(WORKERS));
+        let recoveries = Arc::new(AtomicUsize::new(0));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let tasks: Vec<_> = (0..WORKERS)
+            .map(|_| {
+                let cache = cache.clone();
+                let initial_attempts = initial_attempts.clone();
+                let recoveries = recoveries.clone();
+                let attempts = attempts.clone();
+                tokio::spawn(async move {
+                    cache
+                        .execute_with_token_refresh_and_recovery(
+                            "hash",
+                            |_| {
+                                let initial_attempts = initial_attempts.clone();
+                                attempts.fetch_add(1, Ordering::SeqCst);
+                                async move {
+                                    initial_attempts.wait().await;
+                                    Err::<(), _>(forbidden())
+                                }
+                            },
+                            |_| async move {
+                                recoveries.fetch_add(1, Ordering::SeqCst);
+                                tokio::task::yield_now().await;
+                                Err::<Option<SecretString>, _>("recovery failed")
+                            },
+                        )
+                        .await
+                })
+            })
+            .collect();
+        for result in futures::future::join_all(tasks).await {
+            assert!(matches!(
+                result.unwrap(),
+                Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+            ));
+        }
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+        assert_eq!(attempts.load(Ordering::SeqCst), WORKERS);
+        assert!(cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_stale_403_uses_changed_token_without_recovering_it() {
+        let cache = cache_with_token("old-token");
+        let (attempted, old_attempted) = tokio::sync::oneshot::channel();
+        let (release, old_release) = tokio::sync::oneshot::channel();
+        let attempted = std::sync::Mutex::new(Some(attempted));
+        let old_release = std::sync::Mutex::new(Some(old_release));
+        let operation = cache.execute_with_token_refresh_and_recovery(
+            "hash",
+            |auth| {
+                let (attempted, release) = if auth.token.expose() == "old-token" {
+                    (
+                        attempted.lock().unwrap().take(),
+                        old_release.lock().unwrap().take(),
+                    )
+                } else {
+                    (None, None)
+                };
+                async move {
+                    if auth.token.expose() == "old-token" {
+                        attempted.unwrap().send(()).unwrap();
+                        release.unwrap().await.unwrap();
+                        Err(forbidden())
+                    } else {
+                        assert_eq!(auth.token.expose(), "new-token");
+                        Ok("retried")
+                    }
+                }
+            },
+            |_| async {
+                panic!("stale 403 must not recover the replacement token");
+                #[allow(unreachable_code)]
+                Ok::<Option<SecretString>, ()>(None)
+            },
+        );
+        tokio::pin!(operation);
+        tokio::select! {
+            result = &mut operation => panic!("operation finished before token changed: {result:?}"),
+            result = old_attempted => result.unwrap(),
+        }
+        super::replace_api_auth_token(
+            &mut cache.api_auth.lock().unwrap(),
+            SecretString::new("new-token".into()),
+        );
+        release.send(()).unwrap();
+        assert_eq!(operation.await.unwrap(), "retried");
+        assert!(!cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_different_rejected_tokens_each_get_their_own_recovery() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache = cache_with_token("first-token");
+        let recoveries = AtomicUsize::new(0);
+        for (rejected, replacement) in [
+            ("first-token", "second-token"),
+            ("second-token", "third-token"),
+        ] {
+            let result = cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |auth| async move {
+                        if auth.token.expose() == rejected {
+                            Err(forbidden())
+                        } else {
+                            Ok(auth.token.expose().to_string())
+                        }
+                    },
+                    |token| {
+                        recoveries.fetch_add(1, Ordering::SeqCst);
+                        assert_eq!(token.expose(), rejected);
+                        async move { Ok::<_, ()>(Some(SecretString::new(replacement.into()))) }
+                    },
+                )
+                .await
+                .unwrap();
+            assert_eq!(result, replacement);
+        }
+        assert_eq!(recoveries.load(Ordering::SeqCst), 2);
+        assert_eq!(cache.api_auth.lock().unwrap().token.expose(), "third-token");
+        assert!(!cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_token_refresh_on_403_retries_with_recovered_token() {
+        let cache = cache_with_token("expired-token");
+        let attempted_tokens = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let operation_tokens = attempted_tokens.clone();
+
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                move |auth| {
+                    let operation_tokens = operation_tokens.clone();
+                    async move {
+                        operation_tokens
+                            .lock()
+                            .unwrap()
+                            .push(auth.token.expose().to_string());
+                        if auth.token.expose() == "expired-token" {
+                            Err(turborepo_api_client::Error::UnknownStatus {
+                                code: "forbidden".into(),
+                                message: "expired".into(),
+                                backtrace: Backtrace::capture(),
+                            })
+                        } else {
+                            Ok("retried")
+                        }
+                    }
+                },
+                |current_token| async move {
+                    assert_eq!(current_token.expose(), "expired-token");
+                    Ok::<_, ()>(Some(SecretString::new("refreshed-token".to_string())))
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result, "retried");
+        assert!(!cache.is_disabled());
+        assert_eq!(
+            *attempted_tokens.lock().unwrap(),
+            ["expired-token", "refreshed-token"]
+        );
+        assert_eq!(
+            cache.api_auth.lock().unwrap().token.expose(),
+            "refreshed-token"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_token_refresh_on_403_does_not_retry_without_replacement() {
+        let cache = cache_with_token("expired-token");
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let operation_attempts = attempts.clone();
+
+        let error = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                move |_| {
+                    operation_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async {
+                        Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                            code: "forbidden".into(),
+                            message: "expired".into(),
+                            backtrace: Backtrace::capture(),
+                        })
+                    }
+                },
+                |current_token| async move {
+                    assert_eq!(current_token.expose(), "expired-token");
+                    Ok::<_, ()>(None)
+                },
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            crate::CacheError::ForbiddenRemoteCacheWrite
+        ));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(cache.is_disabled());
+        assert_eq!(
+            cache.api_auth.lock().unwrap().token.expose(),
+            "expired-token"
+        );
+
+        // Once disabled, neither the operation nor recovery is attempted again.
+        let later_attempts = std::sync::atomic::AtomicUsize::new(0);
+        let later_recoveries = std::sync::atomic::AtomicUsize::new(0);
+        let error = cache
+            .execute_with_token_refresh_and_recovery(
+                "other-hash",
+                |_| {
+                    later_attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async { Ok::<(), turborepo_api_client::Error>(()) }
+                },
+                |_| {
+                    later_recoveries.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async { Ok::<_, ()>(None) }
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            error,
+            crate::CacheError::ForbiddenRemoteCacheWrite
+        ));
+        assert_eq!(later_attempts.load(std::sync::atomic::Ordering::SeqCst), 0);
+        assert_eq!(
+            later_recoveries.load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
+    }
+
+    #[tokio::test]
+    async fn test_token_refresh_failure_disables_remote_cache() {
+        let cache = cache_with_token("expired-token");
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                |_| async {
+                    Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                        code: "forbidden".into(),
+                        message: "expired".into(),
+                        backtrace: Backtrace::capture(),
+                    })
+                },
+                |_| async { Err::<Option<SecretString>, _>("recovery failed") },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(cache.is_disabled());
+    }
+
+    #[tokio::test]
+    async fn test_403_after_successful_refresh_disables_remote_cache() {
+        let cache = cache_with_token("expired-token");
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                |_| {
+                    attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    async {
+                        Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                            code: "forbidden".into(),
+                            message: "still forbidden".into(),
+                            backtrace: Backtrace::capture(),
+                        })
+                    }
+                },
+                |_| async { Ok::<_, ()>(Some(SecretString::new("new-token".into()))) },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
+        assert!(cache.is_disabled());
+        assert_eq!(cache.api_auth.lock().unwrap().token.expose(), "new-token");
+    }
+
+    #[test]
+    fn test_forbidden_warning_is_emitted_only_once_across_workers() {
+        let cache = std::sync::Arc::new(cache_with_token("expired-token"));
+        let workers: Vec<_> = (0..20)
+            .map(|_| {
+                let cache = cache.clone();
+                std::thread::spawn(move || cache.disable_after_forbidden())
+            })
+            .collect();
+        // Only the worker that transitioned the state emits the warning.
+        assert_eq!(
+            workers
+                .into_iter()
+                .map(|worker| worker.join().unwrap())
+                .filter(|first| *first)
+                .count(),
+            1
+        );
+        assert!(cache.is_disabled());
+    }
+
+    // The operation closure stands in for an artifact HTTP call, so these tests
+    // exercise the same admission and error classification as PUT/GET/HEAD.
+    async fn status_error(status: u16) -> turborepo_api_client::Error {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            // Drain the request before closing the socket: on Windows, dropping a
+            // socket with unread data can reset the connection before reqwest sees
+            // the response status.
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut byte = [0];
+                assert_ne!(socket.read(&mut byte).await.unwrap(), 0);
+                request.push(byte[0]);
+                assert!(request.len() < 8192);
+            }
+            socket
+                .write_all(
+                    format!("HTTP/1.1 {status} Test\r\nContent-Length: 0\r\n\r\n").as_bytes(),
+                )
+                .await
+                .unwrap();
+            socket.shutdown().await.unwrap();
+        });
+        let error = reqwest::Client::new()
+            .get(format!("http://{address}"))
+            .send()
+            .await
+            .unwrap()
+            .error_for_status()
+            .unwrap_err();
+        server.await.unwrap();
+        error.into()
+    }
+
+    #[tokio::test]
+    async fn test_outage_breaker_repeated_5xx_recovery_and_exclusions() {
+        let cache = cache_with_token("token");
+        let attempts = std::sync::atomic::AtomicUsize::new(0);
+        for status in [404, 401, 429, 503, 200, 503, 503, 503] {
+            let result = cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| {
+                        attempts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        async move {
+                            if status == 200 {
+                                Ok(())
+                            } else {
+                                Err(status_error(status).await)
+                            }
+                        }
+                    },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await;
+            assert_eq!(result.is_ok(), status == 200);
+        }
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 8);
+        assert!(!cache.is_disabled());
+        assert!(matches!(
+            cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| async { Ok::<_, turborepo_api_client::Error>(()) },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await,
+            Err(crate::CacheError::RemoteCacheUnavailable)
+        ));
+        cache.outage_breaker.expire_for_test();
+        assert!(
+            cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| async { Ok::<_, turborepo_api_client::Error>(()) },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await
+                .is_ok()
+        );
+        assert!(cache.outage_breaker.enter().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_forbidden_after_outage_stays_permanently_disabled() {
+        let cache = cache_with_token("token");
+        cache.trip_outage_for_test();
+        cache.outage_breaker.expire_for_test();
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "hash",
+                |_| async {
+                    Err::<(), _>(turborepo_api_client::Error::UnknownStatus {
+                        code: "forbidden".into(),
+                        message: "forbidden".into(),
+                        backtrace: Backtrace::capture(),
+                    })
+                },
+                |_| async { Ok::<_, ()>(None) },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(cache.is_disabled());
+        cache.outage_breaker.expire_for_test();
+        assert!(matches!(
+            cache
+                .execute_with_token_refresh_and_recovery(
+                    "hash",
+                    |_| async { Ok::<_, turborepo_api_client::Error>(()) },
+                    |_| async { Ok::<_, ()>(None) },
+                )
+                .await,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
     }
 
     #[test]

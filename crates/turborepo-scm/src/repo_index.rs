@@ -91,11 +91,11 @@ impl RepoGitIndex {
     fn new_from_gix_index(git: &GitRepo) -> Result<Self, Error> {
         use rayon::prelude::*;
 
-        let git_dir = git.root.join_component(".git");
+        let git_dir = crate::worktree::resolve_git_dir(&git.root)?;
         let index_path = git_dir.join_component("index");
 
         if !index_path.exists() {
-            return Err(Error::git_error("no .git/index file found"));
+            return Err(Error::git_error("no git index file found"));
         }
 
         let index = gix_index::File::at(
@@ -637,15 +637,11 @@ impl RepoGitIndex {
         let prefix_is_empty = prefix_str.is_empty();
 
         // Compute range bounds once for both ls_tree and status lookups
-        let range_start;
-        let range_end;
-        if !prefix_is_empty {
-            range_start = format!("{}/", prefix_str);
-            range_end = format!("{}0", prefix_str);
+        let (range_start, range_end) = if !prefix_is_empty {
+            (format!("{}/", prefix_str), format!("{}0", prefix_str))
         } else {
-            range_start = String::new();
-            range_end = String::new();
-        }
+            (String::new(), String::new())
+        };
 
         let mut hashes = if prefix_is_empty {
             let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
@@ -995,7 +991,7 @@ fn find_untracked_files(
                     .filter(|e| !e.is_delete)
                     .map(|e| e.path.as_str()),
             )
-            .filter(|s| *s == ".gitignore" || s.ends_with("/.gitignore"))
+            .filter(|s| is_gitignore_file(s))
             .collect();
         gitignore_paths.sort_unstable();
         gitignore_paths.dedup();
@@ -1225,7 +1221,7 @@ fn find_untracked_files(
     let untracked_gitignores: Vec<&RelativeUnixPathBuf> = untracked
         .paths
         .iter()
-        .filter(|p| p.as_str().ends_with(".gitignore"))
+        .filter(|p| is_gitignore_file(p.as_str()))
         .collect();
 
     if !untracked_gitignores.is_empty() {
@@ -1244,7 +1240,7 @@ fn find_untracked_files(
         }
         if !extra_matchers.is_empty() {
             let not_ignored = |p: &RelativeUnixPathBuf| {
-                if p.as_str().ends_with(".gitignore") {
+                if is_gitignore_file(p.as_str()) {
                     return true;
                 }
                 let abs = root.join(p.as_str());
@@ -1355,6 +1351,10 @@ impl UntrackedScope {
             rel_path == prefix || is_nested_path_bytes(rel_path, prefix)
         })
     }
+}
+
+fn is_gitignore_file(path: &str) -> bool {
+    path == ".gitignore" || path.ends_with("/.gitignore")
 }
 
 fn is_nested_path(path: &str, prefix: &str) -> bool {
@@ -1573,6 +1573,28 @@ fn verify_candidate(
             if !fs_meta.is_file() || fs_meta.is_symlink() {
                 return modified(rel_path);
             }
+            // When normalization is definitely disabled, the blob is the raw
+            // file bytes, so a raw-size mismatch proves the content changed.
+            // Skip the speculative full content hash in that case; the
+            // authoritative hash happens later during task-input hashing.
+            //
+            // Two guards keep the gate sound:
+            // - The index records the size truncated to u32 (`stat.len() as u32`), so
+            //   compare modulo 2^32 — an equal residue is inconclusive and falls through to
+            //   hashing.
+            // - Stat info must be present: `git read-tree` (and intent-to-add) zeroes it
+            //   out, so a zero mtime means the recorded size is absent, not that the blob
+            //   was empty.
+            let stat_present = entry.stat.mtime.secs != 0;
+            if stat_present
+                && matches!(
+                    text_attr,
+                    crate::crlf::TextAttr::Unset | crate::crlf::TextAttr::Unspecified
+                )
+                && fs_meta.len() % (u32::MAX as u64 + 1) != u64::from(entry.stat.size)
+            {
+                return modified(rel_path);
+            }
             let Ok((oid, outcome)) = crate::hash_object::with_emfile_retry(|| {
                 crate::crlf::hash_file_for_verification(abs_path, text_attr)
             }) else {
@@ -1691,8 +1713,134 @@ mod tests {
             root: root.clone(),
             bin: root,
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
         }
+    }
+
+    fn git(root: &std::path::Path, args: &[&str]) {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(root)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    /// A tracked file whose raw size changed since `git add` must classify as
+    /// Modified via the raw-size gate alone (no content read) when
+    /// normalization is disabled.
+    #[test]
+    fn test_size_changed_tracked_file_is_modified() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        git(root, &["init"]);
+        git(root, &["config", "--local", "core.autocrlf", "false"]);
+
+        write_file(root, "big.bin", "aaaaaaaa");
+        git(root, &["add", "big.bin"]);
+
+        // Same tracked path, larger raw content, normalization unspecified.
+        write_file(root, "big.bin", &"b".repeat(64));
+
+        let git_repo = test_git_repo(root);
+        let index = RepoGitIndex::new_tracked(&git_repo).unwrap();
+        assert!(
+            index
+                .status_entries
+                .iter()
+                .any(|entry| entry.path == path("big.bin") && !entry.is_delete),
+            "size-changed file must classify as modified: {:?}",
+            index.status_entries.len()
+        );
+    }
+
+    /// The raw-size gate must not fire when the `text` attribute is forced:
+    /// raw sizes differ but the normalized content still matches the index
+    /// blob, so the file verifies clean by content.
+    #[test]
+    fn test_size_gate_skipped_when_normalization_forced() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        git(root, &["init"]);
+        git(root, &["config", "--local", "core.autocrlf", "false"]);
+        write_file(root, ".gitattributes", "crlf.txt text\n");
+        git(root, &["add", ".gitattributes"]);
+
+        // Index with CRLF content (6 raw bytes; blob is normalized "a\nb\n").
+        write_file(root, "crlf.txt", "a\r\nb\r\n");
+        git(root, &["add", "crlf.txt"]);
+
+        // Rewrite with one LF line ending: raw size differs (5 bytes) but the
+        // normalized blob content is identical.
+        write_file(root, "crlf.txt", "a\nb\r\n");
+
+        let git_repo = test_git_repo(root);
+        let index = RepoGitIndex::new_tracked(&git_repo).unwrap();
+        assert!(
+            index
+                .status_entries
+                .iter()
+                .all(|entry| entry.path != path("crlf.txt")),
+            "normalized-content match must verify clean, not modified: {:?}",
+            index.status_entries.len()
+        );
+    }
+
+    /// A same-size content change still has to be caught by content hashing;
+    /// the size gate must never classify it clean.
+    #[test]
+    fn test_same_size_content_change_is_modified() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        git(root, &["init"]);
+        git(root, &["config", "--local", "core.autocrlf", "false"]);
+
+        write_file(root, "code.ts", "aaaaaaaa");
+        git(root, &["add", "code.ts"]);
+        write_file(root, "code.ts", "bbbbbbbb");
+
+        let git_repo = test_git_repo(root);
+        let index = RepoGitIndex::new_tracked(&git_repo).unwrap();
+        assert!(
+            index
+                .status_entries
+                .iter()
+                .any(|entry| entry.path == path("code.ts") && !entry.is_delete),
+            "same-size content change must classify as modified: {:?}",
+            index.status_entries.len()
+        );
+    }
+
+    /// Rewriting identical content (new mtime, same size) must still verify
+    /// clean through the content hash.
+    #[test]
+    fn test_same_size_same_content_is_clean() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        git(root, &["init"]);
+        git(root, &["config", "--local", "core.autocrlf", "false"]);
+
+        write_file(root, "code.ts", "aaaaaaaa");
+        git(root, &["add", "code.ts"]);
+        // Rewrite identical bytes so mtime changes but size and content don't.
+        write_file(root, "code.ts", "aaaaaaaa");
+
+        let git_repo = test_git_repo(root);
+        let index = RepoGitIndex::new_tracked(&git_repo).unwrap();
+        assert!(
+            index
+                .status_entries
+                .iter()
+                .all(|entry| entry.path != path("code.ts")),
+            "identical content must verify clean: {:?}",
+            index.status_entries.len()
+        );
     }
 
     fn add_gitignore(
@@ -2088,6 +2236,29 @@ mod tests {
         untracked.sort();
 
         assert_eq!(untracked, vec![path("pkg/debug.log")]);
+    }
+
+    #[test]
+    fn test_find_untracked_files_ignores_untracked_suffix_named_gitignore_files() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        let git = test_git_repo(root);
+
+        write_file(root, "pkg/Node.gitignore", "*.log\n");
+        write_file(root, "pkg/debug.log", "untracked");
+
+        let index = make_index(vec![], vec![]);
+
+        let mut untracked =
+            find_untracked_files(&git, &index.ls_tree_hashes, &index.status_entries, None)
+                .unwrap()
+                .paths;
+        untracked.sort();
+
+        assert_eq!(
+            untracked,
+            vec![path("pkg/Node.gitignore"), path("pkg/debug.log")]
+        );
     }
 
     #[test]

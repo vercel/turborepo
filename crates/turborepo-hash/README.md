@@ -4,6 +4,10 @@
 
 Hashing utilities for Turborepo cache keys. Uses Cap'n Proto for deterministic cross-platform serialization, then applies xxHash64 for fast hashing.
 
+Lockfile-package canonical serialization and hashing live in the cycle-free
+`turborepo-lockfile-hash` crate. This crate retains the existing owned and
+borrowed compatibility wrappers and delegates them to that primitive.
+
 ## Architecture
 
 ```
