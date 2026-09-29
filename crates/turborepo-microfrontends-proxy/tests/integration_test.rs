@@ -115,6 +115,53 @@ async fn test_router_with_config() {
 }
 
 #[tokio::test]
+async fn test_negative_lookahead_routing_matches_production_proxy() {
+    let config_json = r#"{
+        "applications": {
+            "vercel-marketing": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "vercel-landers": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    {
+                        "paths": [
+                            "/oss/:path((?!program-badge\\.svg|program-badge-).*)/:path*"
+                        ]
+                    }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let router = Router::new(&config).unwrap();
+
+    assert_eq!(
+        router
+            .match_route("/oss/program-badge.svg")
+            .app_name
+            .as_ref(),
+        "vercel-marketing"
+    );
+    assert_eq!(
+        router
+            .match_route("/oss/program-badge-2026.svg")
+            .app_name
+            .as_ref(),
+        "vercel-landers"
+    );
+    assert_eq!(
+        router.match_route("/oss/project").app_name.as_ref(),
+        "vercel-landers"
+    );
+}
+
+#[tokio::test]
 async fn test_multiple_child_apps() {
     let config_json = r#"{
         "applications": {
