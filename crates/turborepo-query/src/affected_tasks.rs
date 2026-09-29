@@ -929,6 +929,58 @@ mod tests {
         Arc::new(run)
     }
 
+    async fn tagged_filter_query_run(root: &AbsoluteSystemPath) -> Arc<MockQueryRun> {
+        let mut run = Arc::try_unwrap(
+            affected_packages_query_run(root, true, false, &["packages/lib-a/src/index.ts"]).await,
+        )
+        .ok()
+        .unwrap();
+        let definition = |tags: &[&str]| TaskDefinition {
+            tags: tags.iter().map(|tag| tag.to_string()).collect(),
+            command: Some(TaskCommandOverride::Argv(vec!["echo".to_string()])),
+            inputs: TaskInputs {
+                globs: vec!["src/**".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        run.engine = make_engine_with_edges(
+            &[
+                (
+                    TaskId::new("app-a", "build"),
+                    definition(&["deploy", "shared"]),
+                ),
+                (
+                    TaskId::new("lib-a", "build"),
+                    definition(&["compile", "shared"]),
+                ),
+                (TaskId::new("lib-b", "build"), definition(&[])),
+            ],
+            &[
+                (TaskId::new("app-a", "build"), TaskId::new("lib-a", "build")),
+                (TaskId::new("app-a", "build"), TaskId::new("lib-b", "build")),
+            ],
+        );
+        let config = |tags: &[&str]| {
+            let mut config = TurboJson::default();
+            config.tags = Some(turborepo_errors::Spanned::new(
+                tags.iter()
+                    .map(|tag| turborepo_errors::Spanned::new(tag.to_string()))
+                    .collect(),
+            ));
+            config
+        };
+        run.repo_context.turbo_json_loader = UnifiedTurboJsonLoader::noop(HashMap::from([
+            (PackageName::Root, run.repo_context.root_turbo_json.clone()),
+            (
+                PackageName::from("app-a"),
+                config(&["application", "shared"]),
+            ),
+            (PackageName::from("lib-a"), config(&["library", "shared"])),
+        ]));
+        Arc::new(run)
+    }
+
     #[tokio::test]
     async fn query_tags_metadata_keeps_task_and_package_labels_separate() {
         let tmp = tempfile::tempdir().unwrap();
@@ -967,6 +1019,125 @@ mod tests {
             data["untagged"],
             serde_json::json!({"tags": [], "tasks": {"items": [{"tags": []}]}})
         );
+    }
+
+    #[tokio::test]
+    async fn query_tags_exposure_and_package_predicates_are_distinct() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let run = tagged_filter_query_run(root).await;
+        let data = query_data(run, r#"{
+            packages(filter: {has: {field: TAG, value: "library"}}) {
+                length items { name tags }
+            }
+            taskOnly: packages(filter: {has: {field: TAG, value: "compile"}}) { length }
+            composed: packages(filter: {
+                or: [{has: {field: TAG, value: "library"}}, {has: {field: TAG, value: "application"}}],
+                not: {equal: {field: NAME, value: "app-a"}}
+            }) { length items { name } }
+            wrongType: packages(filter: {has: {field: TAG, value: 42}}) { length }
+            caseSensitive: packages(filter: {has: {field: TAG, value: "Library"}}) { length }
+            package(name: "lib-b") { tags }
+            packageGraph(filter: {has: {field: TAG, value: "library"}}) { nodes { length items { name } } }
+            affectedPackages(filter: {has: {field: TAG, value: "library"}}) { length items { name tags } }
+            affectedTasks(taskFilter: {has: {field: TAG, value: "library"}}) {
+                length items { fullName tags package { tags } }
+            }
+        }"#).await;
+        assert_eq!(
+            data["packages"],
+            serde_json::json!({
+                "length": 1, "items": [{"name": "lib-a", "tags": ["library", "shared"]}]
+            })
+        );
+        assert_eq!(data["taskOnly"]["length"], 0);
+        assert_eq!(
+            data["composed"]["items"],
+            serde_json::json!([{"name": "lib-a"}])
+        );
+        assert_eq!(data["wrongType"]["length"], 0);
+        assert_eq!(data["caseSensitive"]["length"], 0);
+        assert_eq!(data["package"]["tags"], serde_json::json!([]));
+        assert_eq!(
+            data["packageGraph"]["nodes"],
+            serde_json::json!({
+                "length": 1, "items": [{"name": "lib-a"}]
+            })
+        );
+        assert_eq!(data["affectedPackages"], data["packages"]);
+        assert_eq!(
+            data["affectedTasks"],
+            serde_json::json!({
+                "length": 1, "items": [{"fullName": "lib-a#build", "tags": ["compile", "shared"],
+                    "package": {"tags": ["library", "shared"]}}]
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn query_tags_task_predicates_select_before_prerequisite_expansion() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let run = tagged_filter_query_run(root).await;
+        let data = query_data(run, r#"{
+            affectedTasks(tasks: ["build"], filter: {equal: {field: NAME, value: "app-a"}},
+                taskFilter: {and: [{has: {field: TAG, value: "deploy"}},
+                    {or: [{has: {field: TAG, value: "application"}}, {has: {field: TAG, value: "missing"}}]}],
+                    not: {has: {field: TAG, value: "compile"}},
+                    equal: {field: FULL_NAME, value: "app-a#build"},
+                    notEqual: {field: NAME, value: "test"}}
+            ) {
+                length items {
+                    fullName tags
+                    directDependencies(filter: {has: {field: TAG, value: "compile"}}) { length items { fullName } }
+                    allDependencies(filter: {has: {field: TAG, value: "library"}}) { length }
+                    indirectDependencies(filter: {}) { length }
+                    directDependents(filter: {has: {field: TAG, value: "deploy"}}) { length }
+                    allDependents(filter: {has: {field: TAG, value: "application"}}) { length }
+                    indirectDependents(filter: {has: {field: TAG, value: "missing"}}) { length }
+                }
+                withDependencies(filter: {has: {field: TAG, value: "shared"}}) { length items { fullName } }
+            }
+            noMatch: affectedTasks(taskFilter: {has: {field: TAG, value: "missing"}}) { length }
+            wrongType: affectedTasks(taskFilter: {has: {field: TAG, value: 42}}) { length }
+            caseSensitive: affectedTasks(taskFilter: {has: {field: TAG, value: "Deploy"}}) { length }
+            intersect: affectedTasks(filter: {has: {field: TAG, value: "library"}},
+                taskFilter: {has: {field: TAG, value: "deploy"}}) { length }
+        }"#).await;
+        let affected = &data["affectedTasks"];
+        assert_eq!(
+            affected["length"], 3,
+            "unmatched prerequisites must remain scheduled"
+        );
+        let items = affected["items"].as_array().unwrap();
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item["fullName"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["app-a#build", "lib-a#build", "lib-b#build"]
+        );
+        assert_eq!(
+            items[0]["directDependencies"],
+            serde_json::json!({
+                "length": 1, "items": [{"fullName": "lib-a#build"}]
+            })
+        );
+        assert_eq!(items[0]["allDependencies"]["length"], 1);
+        assert_eq!(items[0]["indirectDependencies"]["length"], 0);
+        assert_eq!(items[1]["directDependents"]["length"], 1);
+        assert_eq!(items[1]["allDependents"]["length"], 1);
+        assert_eq!(items[1]["indirectDependents"]["length"], 0);
+        assert_eq!(items[2]["tags"], serde_json::json!([]));
+        assert_eq!(
+            affected["withDependencies"],
+            serde_json::json!({
+                "length": 2, "items": [{"fullName": "app-a#build"}, {"fullName": "lib-a#build"}]
+            })
+        );
+        for alias in ["noMatch", "wrongType", "caseSensitive", "intersect"] {
+            assert_eq!(data[alias]["length"], 0, "{alias}: {data}");
+        }
     }
 
     #[tokio::test]

@@ -9,7 +9,10 @@ use itertools::Itertools;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
-use crate::{Array, Error, QueryRun, task::RepositoryTask};
+use crate::{
+    Array, Error, QueryRun,
+    task::{RepositoryTask, TaskPredicate},
+};
 
 #[derive(Clone)]
 pub struct Package {
@@ -285,7 +288,7 @@ impl Package {
         ))
     }
 
-    async fn tasks(&self) -> Array<RepositoryTask> {
+    async fn tasks(&self, filter: Option<TaskPredicate>) -> Array<RepositoryTask> {
         let scripts = self.get_tasks();
         self.get_task_names()
             .into_iter()
@@ -293,6 +296,11 @@ impl Package {
                 script: scripts.get(&name).cloned(),
                 name,
                 package: self.clone(),
+            })
+            .filter(|task| {
+                filter
+                    .as_ref()
+                    .is_none_or(|predicate| predicate.check(task))
             })
             .collect()
     }
