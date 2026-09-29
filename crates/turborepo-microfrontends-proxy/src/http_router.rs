@@ -394,8 +394,12 @@ impl PathPattern {
                 }
 
                 // Proxy supports a limited regex subset and compares negative-lookahead
-                // alternatives as exact path segments.
-                if param_name.contains('(') && !param_name.contains("\\(") {
+                // alternatives as exact path segments. Negative lookaheads are checked
+                // first so escaped parentheses inside exclusions are not mistaken for a
+                // plain parameter name.
+                if param_name.contains("((?!")
+                    || (param_name.contains('(') && !param_name.contains("\\("))
+                {
                     match parse_negative_lookahead(param_name) {
                         Some(Ok(exclusions)) => {
                             segments.push(Segment::ParamExcluding(exclusions));
@@ -820,6 +824,15 @@ mod tests {
         assert!(!pattern.matches("/oss/program-badge-"));
         assert!(pattern.matches("/oss/program-badge-2026.svg"));
         assert!(pattern.matches("/oss/project/readme"));
+    }
+
+    #[test]
+    fn test_negative_lookahead_with_escaped_parens() {
+        let pattern = PathPattern::parse(r"/:path((?!hello-world|hello\(world\)).*)").unwrap();
+        assert!(!pattern.matches("/hello-world"));
+        assert!(!pattern.matches("/hello(world)"));
+        assert!(pattern.matches("/hello"));
+        assert!(pattern.matches("/hello-world-2"));
     }
 
     #[test]
