@@ -501,9 +501,8 @@ mod test {
 
         let code = child.wait().await;
         assert_eq!(code, Some(ChildExit::Finished(Some(0))));
+        assert!(manager.running_task_ids().is_empty());
 
-        // TODO: maybe we should do some assertion that there was nothing to shut down
-        // and this is a noop?
         manager.stop().await;
     }
 
@@ -549,9 +548,11 @@ mod test {
             assert!(lock.children.is_empty());
         }
 
-        // TODO: actually do some check that this is idempotent
-        // idempotent
         manager.stop().await;
+
+        let lock = manager.state.lock().unwrap();
+        assert!(lock.is_closing);
+        assert!(lock.children.is_empty());
     }
 
     #[test_case("stop", "sleep_5_interruptable.js", STOPPED_EXIT)]

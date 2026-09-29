@@ -16,10 +16,10 @@ use turborepo_repository::{
 use turborepo_types::TaskInputs;
 
 use super::{
+    Paths,
     connector::{DaemonConnector, DaemonConnectorError},
     endpoint::SocketOpenError,
     proto::{DiscoverPackagesResponse, GetFileHashesResponse},
-    Paths,
 };
 use crate::proto::{self, PackageChangeEvent};
 

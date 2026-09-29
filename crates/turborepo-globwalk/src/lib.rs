@@ -2336,9 +2336,25 @@ mod test {
         "/repos/some-app/",
         &["../spanish-inquisition/**", "dist/**"],
         &[],
-        &[],
-        &[]
-        ; "globs and traversal and globs do not cross base path"
+        &[
+            "/repos/some-app/dist",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+            "/repos/spanish-inquisition",
+            "/repos/spanish-inquisition/index.html",
+        ],
+        &[
+            "/repos/spanish-inquisition/index.html",
+            "/repos/some-app/dist/index.html",
+            "/repos/some-app/dist/js/index.js",
+            "/repos/some-app/dist/js/lib.js",
+            "/repos/some-app/dist/js/node_modules/browserify.js",
+        ]
+        ; "parent traversal includes files outside the starting directory"
     )]
     #[test_case(
         &[
@@ -2351,20 +2367,58 @@ mod test {
         "/repos/some-app/",
         &["**/../../spanish-inquisition/**"],
         &[],
-        &[],
-        &[]
-        ; "globs and traversal and globs do not cross base path doublestart up"
+        &[
+            "/repos/spanish-inquisition",
+            "/repos/spanish-inquisition/index.html",
+        ],
+        &["/repos/spanish-inquisition/index.html"]
+        ; "globstar parent traversal includes the matching parent path"
     )]
-    fn glob_walk_err(
+    fn glob_walk_parent_traversal(
         files: &[&str],
-        _base_path: &str,
-        _include: &[&str],
-        _exclude: &[&str],
-        _expected: &[&str],
-        _expected_files: &[&str],
+        base_path: &str,
+        include: &[&str],
+        exclude: &[&str],
+        expected: &[&str],
+        expected_files: &[&str],
     ) {
-        let _dir = setup_files(files);
-        // TODO: this test needs to be implemented...
+        let dir = setup_files(files);
+        let base_path = base_path.trim_start_matches('/');
+        let path = AbsoluteSystemPathBuf::try_from(dir.path().join(base_path)).unwrap();
+        let include: Vec<_> = include
+            .iter()
+            .map(|pattern| ValidatedGlob::from_str(pattern).expect("valid inputs"))
+            .collect();
+        let exclude: Vec<_> = exclude
+            .iter()
+            .map(|pattern| ValidatedGlob::from_str(pattern).expect("valid inputs"))
+            .collect();
+
+        for (walk_type, expected) in [
+            (crate::WalkType::Files, expected_files),
+            (crate::WalkType::All, expected),
+        ] {
+            let success = super::globwalk(&path, &include, &exclude, walk_type).unwrap();
+            let success = success
+                .iter()
+                .map(|path| path.as_path().strip_prefix(dir.path()).unwrap().as_str())
+                .sorted()
+                .collect::<Vec<_>>();
+
+            let expected = expected
+                .iter()
+                .map(|path| {
+                    path.trim_start_matches('/')
+                        .replace('/', std::path::MAIN_SEPARATOR_STR)
+                })
+                .sorted()
+                .collect::<Vec<_>>();
+
+            assert_eq!(
+                success, expected,
+                "\n\n{walk_type:?}: expected \n{expected:#?} but got \n{success:#?}"
+            );
+        }
     }
 
     fn setup_files(files: &[&str]) -> tempfile::TempDir {

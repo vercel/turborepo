@@ -15,7 +15,7 @@ use tonic::transport::Endpoint;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-use super::{proto::turbod_client::TurbodClient, DaemonClient, Paths};
+use super::{DaemonClient, Paths, proto::turbod_client::TurbodClient};
 use crate::DaemonError;
 
 #[derive(Error, Debug)]
@@ -451,7 +451,7 @@ mod test {
 
     use tokio::{
         select,
-        sync::{oneshot::Sender, Mutex},
+        sync::{Mutex, oneshot::Sender},
     };
     use tokio_stream::wrappers::ReceiverStream;
     use tonic::{Request, Response, Status};
@@ -739,7 +739,8 @@ mod test {
 
         // set up the server
         let stream = async_stream::stream! {
-            while let Some(item) = rx.recv().await {
+            loop {
+                let Some(item) = rx.recv().await else { break };
                 yield item;
             }
         };

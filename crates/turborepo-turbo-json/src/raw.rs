@@ -384,6 +384,8 @@ pub struct RawRootTurboJson {
 
     #[deserializable(rename = "$schema")]
     pub schema: Option<UnescapedString>,
+    /// Controls whether turbo maintains a root `AGENTS.md` block for AI agents.
+    pub agent_guidance: Option<Spanned<bool>>,
     // Global root filesystem dependencies
     pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
@@ -454,6 +456,14 @@ pub struct RawTurboJson {
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     #[ts(optional, rename = "$schema")]
     pub schema: Option<UnescapedString>,
+
+    /// Controls whether turbo maintains a root `AGENTS.md` block for AI agents.
+    ///
+    /// Defaults to `true`. Set to `false` to opt out of future automatic
+    /// updates.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub agent_guidance: Option<Spanned<bool>>,
 
     /// This key is only available in Workspace Configs and cannot be used in
     /// your root turbo.json.
@@ -921,6 +931,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
             Ok(RawTurboJson {
                 span: root.span,
                 schema: root.schema,
+                agent_guidance: root.agent_guidance,
                 tasks: root.tasks,
                 pipeline: root.pipeline,
                 tags: root.tags,
@@ -954,6 +965,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
             Ok(RawTurboJson {
                 span: root.span,
                 schema: root.schema,
+                agent_guidance: root.agent_guidance,
                 global_dependencies: root.global_dependencies,
                 global_env: root.global_env,
                 global_pass_through_env: root.global_pass_through_env,

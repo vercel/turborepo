@@ -63,7 +63,7 @@ pub fn startup_timeout_secs() -> u64 {
 }
 
 impl PackageChangesWatcher {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events: WatchSource,
@@ -383,7 +383,8 @@ impl RepoState {
             tracing::debug!("package change mapper not available, package watcher not available");
             return None;
         };
-        // TODO: Pass in global_deps and ignore_patterns
+        // Global dependencies are passed to the detector above; repository and
+        // watch-spec ignore rules are applied before files reach this mapper.
         Some(ChangeMapper::new(
             &self.pkg_dep_graph,
             vec![],
@@ -393,7 +394,7 @@ impl RepoState {
 }
 
 impl Subscriber {
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events: WatchSource,
@@ -503,9 +504,6 @@ impl Subscriber {
             match resolve_turbo_config_path(&self.repo_root) {
                 Ok(path) => path,
                 Err(_) => {
-                    // TODO: If both turbo.json and turbo.jsonc exist, log warning and default to
-                    // turbo.json to preserve existing behavior for file
-                    // watching prior to refactoring.
                     tracing::warn!(
                         "Found both turbo.json and turbo.jsonc in {}. Using turbo.json for \
                          watching.",
@@ -576,7 +574,8 @@ impl Subscriber {
             .hash_watcher
             .get_file_hashes(HashSpec {
                 package_path: package_path.clone(),
-                // TODO: Support inputs
+                // Keep package-level hashing broad; task-input filtering is
+                // applied downstream using the changed-file set.
                 inputs: InputGlobs::Default,
             })
             .await

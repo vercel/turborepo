@@ -110,26 +110,6 @@ impl TurborepoMfeConfig {
         }
     }
 
-    /// Reads config from given path using strict Turborepo schema.
-    /// Returns `Ok(None)` if the file does not exist
-    pub fn load(config_path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
-        let Some(contents) = config_path.read_existing_to_string()? else {
-            return Ok(None);
-        };
-        let config = Self::from_str(&contents, config_path.as_str())?;
-        Ok(Some(config))
-    }
-
-    /// Attempts to load a configuration file from the given directory using
-    /// strict schema Returns `Ok(None)` if no configuration is found in the
-    /// directory
-    pub fn load_from_dir(
-        repo_root: &AbsoluteSystemPath,
-        package_dir: &AnchoredSystemPath,
-    ) -> Result<Option<Self>, Error> {
-        Self::load_from_dir_with_mfe_dep(repo_root, package_dir, false)
-    }
-
     /// Attempts to load a configuration file from the given directory
     /// If `has_mfe_dependency` is true, uses the lenient ConfigV1 parser
     /// Otherwise uses the strict Turborepo parser
@@ -202,39 +182,8 @@ impl TurborepoMfeConfig {
         self.config_v1.port(name)
     }
 
-    pub fn filename(&self) -> &str {
-        &self.filename
-    }
-
     pub fn path(&self) -> Option<&AnchoredSystemPath> {
         self.path.as_deref()
-    }
-
-    pub fn local_proxy_port(&self) -> Option<u16> {
-        self.config_v1.local_proxy_port()
-    }
-
-    /// Returns the routing configuration for the given application.
-    ///
-    /// Note: delegates to `self.inner` (strict `TurborepoConfig`) because
-    /// `configv1::PathGroup` and `schema::PathGroup` differ (the former has
-    /// a `flag` field). On the lenient parser path (`has_mfe_dependency=true`),
-    /// `self.inner` is empty and this always returns `None`.
-    pub fn routing(&self, app_name: &str) -> Option<&[schema::PathGroup]> {
-        self.inner.routing(app_name)
-    }
-
-    /// Returns the fallback URL for the given application.
-    ///
-    /// Looks up `name` first as a config map key, then falls back to
-    /// scanning by `packageName`.
-    pub fn fallback(&self, app_name: &str) -> Option<&str> {
-        self.config_v1.fallback(app_name)
-    }
-
-    pub fn root_route_app(&self) -> Option<(&str, &str)> {
-        // Prefer config_v1 for compatibility with lenient parsing
-        self.config_v1.root_route_app()
     }
 
     pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = DevelopmentTask<'a>> + 'a> {
@@ -327,16 +276,6 @@ enum ConfigInner {
 }
 
 impl Config {
-    /// Reads config from given path.
-    /// Returns `Ok(None)` if the file does not exist
-    pub fn load(config_path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
-        let Some(contents) = config_path.read_existing_to_string()? else {
-            return Ok(None);
-        };
-        let config = Self::from_str(&contents, config_path.as_str())?;
-        Ok(Some(config))
-    }
-
     /// Attempts to load a configuration file from the given directory
     /// Returns `Ok(None)` if no configuration is found in the directory
     pub fn load_from_dir(
@@ -370,12 +309,6 @@ impl Config {
             filename: source.to_owned(),
             path: None,
         })
-    }
-
-    pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = DevelopmentTask<'a>> + 'a> {
-        match &self.inner {
-            ConfigInner::V1(config_v1) => Box::new(config_v1.development_tasks()),
-        }
     }
 
     pub fn applications<'a>(&'a self) -> Box<dyn Iterator<Item = Application<'a>> + 'a> {
@@ -425,15 +358,6 @@ impl Config {
     pub fn fallback(&self, app_name: &str) -> Option<&str> {
         match &self.inner {
             ConfigInner::V1(config_v1) => config_v1.fallback(app_name),
-        }
-    }
-
-    /// Returns the name and package of the application that serves the root
-    /// route. The root route app is the one without explicit routing
-    /// configuration.
-    pub fn root_route_app(&self) -> Option<(&str, &str)> {
-        match &self.inner {
-            ConfigInner::V1(config_v1) => config_v1.root_route_app(),
         }
     }
 

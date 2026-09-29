@@ -1,4 +1,4 @@
-pub use turborepo_prune::{Error, DEFAULT_OUTPUT_DIR};
+pub use turborepo_prune::{DEFAULT_OUTPUT_DIR, Error};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use super::CommandBase;

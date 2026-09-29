@@ -1,5 +1,5 @@
 use turborepo_telemetry::{config::TelemetryConfig, events::command::CommandEventBuilder};
-use turborepo_ui::{color, BOLD, BOLD_GREEN, BOLD_RED};
+use turborepo_ui::{BOLD, BOLD_GREEN, BOLD_RED, color};
 
 use super::CommandBase;
 use crate::cli::TelemetryCommand;

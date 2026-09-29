@@ -24,7 +24,7 @@ use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_microfrontends_config::MicrofrontendsConfigs;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageName, PackageTaskContext, ROOT_PKG_NAME};
-use turborepo_run_cache::RunCache;
+use turborepo_run_cache::{RunCache, TaskCacheContext};
 use turborepo_run_context::RepoContext;
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker, TaskTracker};
 use turborepo_scm::RepoGitIndex;
@@ -33,8 +33,8 @@ use turborepo_task_executor::{
     InternalError as TaskInternalError, TaskOutput, command_invokes_turbo,
 };
 use turborepo_task_hash::{
-    Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState,
-    TaskHasher,
+    DeferredHashInputs, Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes,
+    TaskHashRequest, TaskHasher,
 };
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
@@ -227,7 +227,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
     // Disabling this lint until we stop adding state to the visitor.
     // Once we have the full picture we will go about grouping these pieces of data
     // together
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn new(
         repo: &'a RepoContext,
         run_cache: Arc<RunCache>,
@@ -810,19 +810,23 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                     }
                                 };
                             match self.task_hasher.calculate_task_hash_with_deferred_inputs(
-                                &info,
-                                task_definition,
-                                task_env_mode,
-                                &package_context,
-                                &dependency_set,
-                                task_hash_telemetry,
-                                &self.repo.scm,
-                                &self.repo.repo_root,
-                                // Deferred inputs are hashed after dependencies run. Read them
-                                // from disk instead of consulting the run-start repo index.
-                                None,
-                                dependency_output_hashes,
-                                &dependency_output_producers,
+                                TaskHashRequest {
+                                    task_id: &info,
+                                    task_definition,
+                                    task_env_mode,
+                                    package_context: &package_context,
+                                    dependency_set: &dependency_set,
+                                    telemetry: task_hash_telemetry,
+                                },
+                                DeferredHashInputs {
+                                    scm: &self.repo.scm,
+                                    repo_root: &self.repo.repo_root,
+                                    // Deferred inputs are hashed after dependencies run. Read them
+                                    // from disk instead of consulting the run-start repo index.
+                                    repo_index: None,
+                                    dependency_output_hashes,
+                                    dependency_output_producers: &dependency_output_producers,
+                                },
                             ) {
                                 Ok(hash) => hash,
                                 Err(err) => {
@@ -871,12 +875,12 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
 
             let task_cache = {
                 let _span = tracing::info_span!("task_cache_new").entered();
-                match self.run_cache.task_cache(
+                match self.run_cache.task_cache(TaskCacheContext {
                     task_definition,
-                    &package_context,
-                    info.clone(),
-                    &task_hash,
-                ) {
+                    package_context: &package_context,
+                    task_id: info.clone(),
+                    hash: &task_hash,
+                }) {
                     Ok(task_cache) => task_cache,
                     Err(err) => {
                         dispatch_error = Some(Error::RunCache(err));
@@ -1073,7 +1077,6 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
 
     /// Finishes visiting the tasks, creates the run summary, and either
     /// prints, saves, or sends it to spaces.
-    #[allow(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         self,
         packages,
@@ -1081,7 +1084,6 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         engine,
         env_at_execution_start,
     ))]
-    #[allow(clippy::too_many_arguments)]
     pub async fn finish(
         self,
         exit_code: i32,
@@ -1162,12 +1164,6 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
         }
-    }
-
-    /// Only used for the hashing comparison between Rust and Go. After port,
-    /// should delete
-    pub fn into_task_hash_tracker(self) -> TaskHashTrackerState {
-        self.task_hasher.into_task_hash_tracker_state()
     }
 
     pub fn dry_run(&mut self) {

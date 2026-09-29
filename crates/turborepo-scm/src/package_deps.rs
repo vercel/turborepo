@@ -587,14 +587,14 @@ mod tests {
         git_root.join_component("inside").create_dir_all().unwrap();
         let link = git_root.join_component("link");
         link.symlink_to_dir("inside").unwrap();
-        let to_hash = vec![RelativeUnixPathBuf::new("link").unwrap()];
-        let mut hashes = GitHashes::new();
         // FIXME: This test verifies a bug: we don't hash symlinks.
-        // TODO: update this test to point at get_package_file_hashes
-        hash_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
+        let pkg_path = git_root.anchor(&git_root).unwrap();
+        let scm = SCM::new(&git_root);
+        let hashes = scm
+            .get_package_file_hashes(&git_root, &pkg_path, &["link"], false, None, None)
+            .unwrap();
         assert!(hashes.is_empty());
 
-        let pkg_path = git_root.anchor(&git_root).unwrap();
         let manual_hashes =
             get_package_file_hashes_without_git(&git_root, &pkg_path, &["l*"], false, None, None)
                 .unwrap();

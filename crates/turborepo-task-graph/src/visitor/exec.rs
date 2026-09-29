@@ -87,7 +87,6 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
         })
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub fn exec_context(
         &self,
         task_id: TaskId<'static>,

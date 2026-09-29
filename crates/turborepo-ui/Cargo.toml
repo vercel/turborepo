@@ -7,7 +7,6 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true }
-indoc = { workspace = true }
 serial_test = "3.0"
 tempfile = { workspace = true }
 test-case = { workspace = true }
@@ -34,7 +33,6 @@ tui = [
 [dependencies]
 async-graphql = { workspace = true, optional = true }
 base64 = { version = "0.22", optional = true }
-chrono = { workspace = true }
 console = { workspace = true }
 crossterm = { version = "0.29", features = ["event-stream"], optional = true }
 dialoguer = { workspace = true }
@@ -49,7 +47,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 turbopath = { workspace = true }
-turborepo-ci = { workspace = true }
 turborepo-ghostty = { workspace = true, optional = true }
 turborepo-log = { workspace = true }
 turborepo-types = { workspace = true }

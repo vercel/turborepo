@@ -98,8 +98,8 @@ impl ArtifactBody {
     ) -> Result<String, SignatureError> {
         match self {
             ArtifactBody::InMemory(bytes) => signer.generate_tag(hash.as_bytes(), bytes),
-            ArtifactBody::OnDisk(file) => {
-                signer.generate_tag_reader(hash.as_bytes(), file, self.len() as u64)
+            ArtifactBody::OnDisk(_) => {
+                signer.generate_tag_reader(hash.as_bytes(), self.reader()?, self.len() as u64)
             }
         }
     }
@@ -139,9 +139,8 @@ impl ArtifactBody {
                 ARTIFACT_CHUNK_BYTES,
             ))),
             ArtifactBody::OnDisk(file) => {
-                // `try_clone` hands us an independent handle; seek it to the
-                // start because signing (and any previous attempt) moved the
-                // shared offset.
+                // Clones share the file offset, so seek to the start before
+                // each upload attempt (signing and local writes also read it).
                 let mut handle = file.try_clone()?;
                 handle.seek(SeekFrom::Start(0))?;
                 let reader = tokio_util::io::ReaderStream::with_capacity(
@@ -172,4 +171,38 @@ fn chunked_byte_stream(
         let chunk = buf.slice(offset..end);
         Some((Ok(chunk), (buf, end)))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use anyhow::Result;
+
+    use super::*;
+
+    #[test]
+    fn signing_disk_artifact_after_local_copy_includes_body() -> Result<()> {
+        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
+        let bytes = vec![0x5a; ARTIFACT_MEMORY_THRESHOLD + 1];
+        spool.write_all(&bytes)?;
+        spool.rewind()?;
+        let body = ArtifactBody::from_spool(spool)?;
+        assert!(matches!(body, ArtifactBody::OnDisk(_)));
+
+        // The local cache consumes the body before the remote cache signs it.
+        let mut local_archive = Vec::new();
+        body.copy_to(&mut local_archive)?;
+        assert_eq!(local_archive, bytes);
+
+        let signer = ArtifactSignatureAuthenticator::new(
+            b"team".to_vec(),
+            Some(b"signature-secret-key-long-enough".to_vec()),
+        );
+        let tag = body.generate_tag(&signer, "hash")?;
+        assert!(signer.validate(b"hash", &local_archive, &tag)?);
+        assert_eq!(tag, signer.generate_tag(b"hash", &bytes)?);
+
+        Ok(())
+    }
 }

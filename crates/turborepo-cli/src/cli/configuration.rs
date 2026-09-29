@@ -3,7 +3,7 @@ use turborepo_config::ExperimentalObservabilityOptions;
 
 use super::Args;
 use crate::config::{
-    resolve_configuration_with_overrides, ConfigurationOptions, Error as ConfigError,
+    ConfigurationOptions, Error as ConfigError, resolve_configuration_with_overrides,
 };
 
 /// Converts CLI args into the top-precedence configuration override layer.
@@ -75,7 +75,7 @@ mod tests {
 
     use turborepo_types::LogOrder;
 
-    use super::{cli_overrides_from_args, Args};
+    use super::{Args, cli_overrides_from_args};
 
     fn parse_args(args: &[&str]) -> Args {
         Args::parse_args(args.iter().map(OsString::from).collect()).unwrap()

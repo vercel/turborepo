@@ -152,11 +152,6 @@ impl TurboJsonReader {
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
         &self.repo_root
     }
-
-    /// Get the future flags
-    pub fn future_flags(&self) -> FutureFlags {
-        self.future_flags
-    }
 }
 
 /// Represents where to look for a turbo.json file

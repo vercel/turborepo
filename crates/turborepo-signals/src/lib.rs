@@ -192,16 +192,6 @@ impl SignalHandler {
         self.close.closed().await;
     }
 
-    /// Wait until shutdown starts for any reason.
-    pub async fn started(&self) {
-        let started = self.started.notified();
-        if self.shutdown_reason().is_some() {
-            return;
-        }
-
-        started.await;
-    }
-
     /// Wait until shutdown starts because of a real OS signal.
     pub async fn signal_started(&self) {
         loop {

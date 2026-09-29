@@ -240,22 +240,24 @@ impl LspPackages {
                 // Native task locations are not yet normalized into repository
                 // knowledge. JavaScript source remains optional enrichment.
                 let source = package.source.as_deref()?;
-                // TODO: use jsonc_ast instead of text search.
-                let start = source.find(&format!("\"{task}\""))?;
-                let end = start + task.len() + 2;
+                let parse =
+                    jsonc_parser::parse_to_ast(source, &Default::default(), &Default::default())
+                        .ok()?;
+                let range = parse
+                    .value
+                    .as_ref()?
+                    .as_object()?
+                    .get_object("scripts")?
+                    .properties
+                    .iter()
+                    .find_map(|property| match &property.name {
+                        ObjectPropName::String(name) if name.value.as_ref() == task => {
+                            Some(name.range)
+                        }
+                        _ => None,
+                    })?;
                 let rope = crop::Rope::from(source);
-                let start_line = rope.line_of_byte(start);
-                let end_line = rope.line_of_byte(end);
-                let range = Range {
-                    start: Position {
-                        line: start_line as u32,
-                        character: (start - rope.byte_of_line(start_line)) as u32,
-                    },
-                    end: Position {
-                        line: end_line as u32,
-                        character: (end - rope.byte_of_line(end_line)) as u32,
-                    },
-                };
+                let range = convert_ranges(&rope, range);
                 let uri = Url::from_file_path(&package.source_path).ok()?;
                 Some(Location::new(uri, range))
             })
@@ -895,7 +897,10 @@ impl Backend {
         }
     }
 
-    #[allow(clippy::result_large_err)]
+    #[expect(
+        clippy::result_large_err,
+        reason = "retain structured repository discovery errors for LSP"
+    )]
     async fn package_discovery(&self) -> Result<Arc<LspPackages>, package_graph::Error> {
         if let Some(packages) = self.packages.get() {
             return Ok(packages);
@@ -1520,7 +1525,7 @@ mod tests {
         .expect("package graph");
         // Identity and definition path belong to graph knowledge, while the
         // current source payload owns scripts until native task APIs exist.
-        let stale_source = r#"{"name":"stale","scripts":{"source-task":"new command"}}"#;
+        let stale_source = r#"{"name":"stale","metadata":"\"source-task\"","scripts":{"source-task":"new command"}}"#;
         let packages = LspPackages::from_graph(
             &graph,
             HashMap::from([(
@@ -1549,6 +1554,15 @@ mod tests {
         );
         let references = packages.references("authoritative#source-task");
         assert_eq!(references.len(), 1);
+        let key_start = stale_source.rfind("\"source-task\"").unwrap();
+        assert_eq!(
+            references[0].range.start,
+            tower_lsp::lsp_types::Position::new(0, key_start as u32)
+        );
+        assert_eq!(
+            references[0].range.end,
+            tower_lsp::lsp_types::Position::new(0, (key_start + "\"source-task\"".len()) as u32)
+        );
         assert_eq!(
             references[0].uri.to_file_path().ok(),
             Some(definition_path.into())

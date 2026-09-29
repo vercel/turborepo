@@ -9,7 +9,7 @@ use itertools::Itertools;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
-use crate::{task::RepositoryTask, Array, Error, QueryRun};
+use crate::{Array, Error, QueryRun, task::RepositoryTask};
 
 #[derive(Clone)]
 pub struct Package {

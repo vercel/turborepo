@@ -118,7 +118,7 @@ impl RunTracker {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         repo_root,
         package_inference_root,
@@ -217,7 +217,7 @@ impl RunTracker {
         env_at_execution_start,
         scm,
     ))]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn finish<'a, E, H, R>(
         self,
         exit_code: i32,

@@ -8,9 +8,9 @@ use turborepo_run_opts::Opts;
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    cli::{self, resolve_configuration_from_args},
-    config::{resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError},
     Args,
+    cli::{self, resolve_configuration_from_args},
+    config::{ConfigurationOptions, Error as ConfigError, resolve_turbo_config_path},
 };
 
 pub(crate) mod bin;
@@ -60,6 +60,8 @@ impl CommandBase {
         })
     }
 
+    // Used by link's in-module API integration test to inject a mock client.
+    #[cfg(test)]
     pub fn from_opts(
         opts: Opts,
         repo_root: AbsoluteSystemPathBuf,
@@ -105,9 +107,6 @@ impl CommandBase {
     fn local_config_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_components(&[".turbo", "config.json"])
     }
-    fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("package.json")
-    }
     fn root_turbo_json_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
         resolve_turbo_config_path(&self.repo_root)
     }
@@ -147,39 +146,6 @@ impl CommandBase {
             self.opts.api_client_opts.preflight,
         )
         .map_err(ConfigError::ApiClient)
-    }
-
-    /// Creates an API client using a pre-built HTTP client to avoid
-    /// redundant TLS initialization.
-    pub fn api_client_with_http(&self, http_client: &reqwest::Client) -> APIClient {
-        let timeout = self.opts.api_client_opts.timeout;
-        let upload_timeout = self.opts.api_client_opts.upload_timeout;
-
-        APIClient::new_with_client(
-            http_client.clone(),
-            &self.opts.api_client_opts.api_url,
-            if timeout > 0 {
-                Some(Duration::from_secs(timeout))
-            } else {
-                None
-            },
-            if upload_timeout > 0 {
-                Some(Duration::from_secs(upload_timeout))
-            } else {
-                None
-            },
-            self.version,
-            self.opts.api_client_opts.preflight,
-        )
-    }
-
-    /// Current working directory for the turbo command
-    pub fn cwd(&self) -> &AbsoluteSystemPath {
-        // Earlier in execution
-        // self.cli_args.cwd = Some(repo_root.as_path())
-        // happens.
-        // We directly use repo_root to avoid converting back to absolute system path
-        &self.repo_root
     }
 
     pub fn version(&self) -> &'static str {

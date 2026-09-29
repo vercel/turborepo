@@ -17,11 +17,7 @@ use crate::toolchain::{TaskDefaults, ToolchainId};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TaskEntrypointDomain(Cow<'static, str>);
 
-impl TaskEntrypointDomain {
-    pub fn new(value: impl Into<Cow<'static, str>>) -> Self {
-        Self(value.into())
-    }
-}
+impl TaskEntrypointDomain {}
 
 /// Groups scopes that share one declared startup-environment projection.
 /// Deliberately independent from ecosystem provenance.
@@ -374,16 +370,6 @@ impl ScopeTaskContract {
 
     pub fn task_entrypoint_domain(&self) -> Option<&TaskEntrypointDomain> {
         self.entrypoint_domain.as_ref()
-    }
-
-    pub fn with_task_entrypoints(
-        mut self,
-        domain: TaskEntrypointDomain,
-        entrypoints: BTreeMap<String, TaskEntrypoint>,
-    ) -> Self {
-        self.entrypoint_domain = Some(domain);
-        self.static_entrypoints = entrypoints;
-        self
     }
 }
 

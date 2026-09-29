@@ -98,6 +98,7 @@ impl<'a> TurboJsonReader<'a> {
             .cache_max_size
             .map(|size| size.into_inner().to_string());
         opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
+        opts.agent_guidance = turbo_json.agent_guidance.map(|enabled| *enabled.as_inner());
 
         opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
 
@@ -342,6 +343,38 @@ mod test {
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
 
         assert!(config.no_update_notifier());
+    }
+
+    #[test]
+    fn test_agent_guidance_defaults_to_enabled() {
+        let turbo_json = RawRootTurboJson::parse("{}", "turbo.json")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+
+        assert!(config.agent_guidance());
+    }
+
+    #[test_case("turbo.json", r#"{"agentGuidance": false}"#)]
+    #[test_case(
+        "turbo.jsonc",
+        r#"{ // comment
+          "agentGuidance": false
+        }"#
+    )]
+    fn test_agent_guidance_opt_out_is_read_from_root_config(file_name: &str, contents: &str) {
+        let tmpdir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
+        repo_root
+            .join_component(file_name)
+            .create_with_contents(contents)
+            .unwrap();
+
+        let config = TurboJsonReader::new(repo_root)
+            .get_configuration_options(&ConfigurationOptions::default())
+            .unwrap();
+        assert!(!config.agent_guidance());
     }
 
     #[test]

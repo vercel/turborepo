@@ -160,14 +160,6 @@ impl PackageJson {
             .unwrap_or(false)
     }
 
-    /// Returns the command for script_name if it is non-empty
-    pub fn command(&self, script_name: &str) -> Option<&str> {
-        self.scripts
-            .get(script_name)
-            .filter(|command| !command.is_empty())
-            .map(|command| command.as_str())
-    }
-
     pub fn engines(&self) -> Option<HashMap<&str, &str>> {
         let engines = self.other.get("engines")?.as_object()?;
         Some(

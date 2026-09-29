@@ -11,9 +11,9 @@ use miette::{Diagnostic, Report, SourceSpan};
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{error, log::warn};
-use turborepo_run_opts::{ExecutionSelector, RunSelector, DEFAULT_CACHE_WORKERS};
+use turborepo_run_opts::{DEFAULT_CACHE_WORKERS, ExecutionSelector, RunSelector};
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventType},
+    events::{EventType, command::CommandEventBuilder, generic::GenericEventBuilder},
     track_usage,
 };
 use turborepo_types::{
@@ -455,13 +455,13 @@ pub struct GraphOutput(pub(crate) String);
 impl FromStr for GraphOutput {
     type Err = String;
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        if let Some(extension) = Utf8Path::new(value).extension() {
-            if !SUPPORTED_GRAPH_FILE_EXTENSIONS.contains(&extension) {
-                return Err(format!(
-                    "Unsupported file extension: {extension}. Supported extensions are: {}",
-                    SUPPORTED_GRAPH_FILE_EXTENSIONS.join(", ")
-                ));
-            }
+        if let Some(extension) = Utf8Path::new(value).extension()
+            && !SUPPORTED_GRAPH_FILE_EXTENSIONS.contains(&extension)
+        {
+            return Err(format!(
+                "Unsupported file extension: {extension}. Supported extensions are: {}",
+                SUPPORTED_GRAPH_FILE_EXTENSIONS.join(", ")
+            ));
         }
         Ok(Self(value.into()))
     }
@@ -598,19 +598,19 @@ fn duplicate_argument(os_args: &[OsString], error_text: &str) -> Option<Duplicat
 
 fn print_help(help: &str) {
     let result = io::stdout().write_all(unwrap_flag_help(help).as_bytes());
-    if let Err(error) = result {
-        if error.kind() != io::ErrorKind::BrokenPipe {
-            error!("failed to print help: {error}");
-        }
+    if let Err(error) = result
+        && error.kind() != io::ErrorKind::BrokenPipe
+    {
+        error!("failed to print help: {error}");
     }
 }
 
 fn eprint_help(help: &str) {
     let result = io::stderr().write_all(unwrap_flag_help(help).as_bytes());
-    if let Err(error) = result {
-        if error.kind() != io::ErrorKind::BrokenPipe {
-            error!("failed to print help: {error}");
-        }
+    if let Err(error) = result
+        && error.kind() != io::ErrorKind::BrokenPipe
+    {
+        error!("failed to print help: {error}");
     }
 }
 
@@ -746,13 +746,13 @@ impl Args {
             }
         }
 
-        if let Some(Command::Prune { ref scope, .. }) = parsed_args.command {
-            if scope.is_some() {
-                warn!(
-                    "--scope is deprecated and will be removed in a future major version. Use \
-                     positional arguments instead (e.g. `turbo prune web`)"
-                );
-            }
+        if let Some(Command::Prune { ref scope, .. }) = parsed_args.command
+            && scope.is_some()
+        {
+            warn!(
+                "--scope is deprecated and will be removed in a future major version. Use \
+                 positional arguments instead (e.g. `turbo prune web`)"
+            );
         }
 
         parsed_args
@@ -837,16 +837,8 @@ impl Args {
         // propagate it back. Preserve the optional global execution args;
         // creating them here conflicts with explicit run/watch arguments.
         args.single_package = is_single_package;
-        if let Some(
-            Command::Run {
-                ref mut execution_args,
-                ..
-            }
-            | Command::Watch {
-                ref mut execution_args,
-                ..
-            },
-        ) = args.command.as_mut()
+        if let Some(Command::Run { execution_args, .. } | Command::Watch { execution_args, .. }) =
+            args.command.as_mut()
         {
             execution_args.single_package = is_single_package;
         }
@@ -1492,65 +1484,6 @@ impl From<&ExecutionArgs> for ExecutionSelector {
             global_deps: args.global_deps.clone(),
             pkg_inference_root: args.pkg_inference_root.clone(),
             filter: args.filter.clone(),
-        }
-    }
-}
-
-impl ExecutionArgs {
-    fn track(&self, telemetry: &CommandEventBuilder) {
-        // default to false
-        track_usage!(
-            telemetry,
-            self.framework_inference.unwrap_or(true),
-            |val: bool| !val
-        );
-
-        track_usage!(telemetry, self.continue_execution, |val| matches!(
-            val,
-            ContinueModeArg::Always | ContinueModeArg::DependenciesSuccessful
-        ));
-        telemetry.track_arg_value(
-            "continue-execution-strategy",
-            self.continue_execution,
-            EventType::NonSensitive,
-        );
-
-        track_usage!(telemetry, self.single_package, |val| val);
-        track_usage!(telemetry, self.only, |val| val);
-        track_usage!(telemetry, &self.cache_dir, Option::is_some);
-        track_usage!(telemetry, &self.pkg_inference_root, Option::is_some);
-
-        if let Some(concurrency) = &self.concurrency {
-            telemetry.track_arg_value("concurrency", concurrency, EventType::NonSensitive);
-        }
-
-        if !self.global_deps.is_empty() {
-            telemetry.track_arg_value(
-                "global-deps",
-                self.global_deps.join(", "),
-                EventType::NonSensitive,
-            );
-        }
-
-        if let Some(env_mode) = self.env_mode {
-            telemetry.track_arg_value("env-mode", env_mode, EventType::NonSensitive);
-        }
-
-        if let Some(output_logs) = &self.output_logs {
-            telemetry.track_arg_value("output-logs", output_logs, EventType::NonSensitive);
-        }
-
-        if let Some(log_order) = self.log_order {
-            telemetry.track_arg_value("log-order", log_order, EventType::NonSensitive);
-        }
-
-        if self.log_prefix != LogPrefixArg::default() {
-            telemetry.track_arg_value("log-prefix", self.log_prefix, EventType::NonSensitive);
-        }
-
-        // track sizes
-        if !self.filter.is_empty() {
-            telemetry.track_arg_value("filter:length", self.filter.len(), EventType::NonSensitive);
         }
     }
 }

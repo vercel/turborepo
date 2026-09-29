@@ -181,7 +181,29 @@ Using global `turbo` is convenient in CI workflows, allowing you to easily run c
 
 However, in some cases, you may be running `turbo` commands or scripts that use `turbo` **before installing packages with your package manager**. One example of this is [using `turbo prune` to create a Docker image](/docs/guides/tools/docker#example). In this situation, global `turbo` will not be able to use the version from `package.json` because the binary for that version hasn't been installed yet.
 
-For this reason, we encourage you to **pin your global installation of `turbo` in CI to the major version in `package.json`** since breaking changes will not be introduced within a major version. You could additionally opt for added stability by pinning an exact version, trading off for maintenance burden to receive bug fixes in patch releases.
+For CI steps before dependencies are installed, pin the standalone binary to an exact version compatible with your repository's `turbo` dependency. Set `TURBO_VERSION` when running the [installer](/docs/getting-started/installation#global-installation):
+
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
+
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install | TURBO_VERSION=2.11.5 sh
+```
+
+  </Tab>
+  <Tab value="Windows x64">
+
+```powershell title="PowerShell"
+$env:TURBO_VERSION = '2.11.5'
+irm https://turborepo.dev/install.ps1 | iex
+```
+
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  Standalone releases start at 2.11.5. To use an older version, install it with your package manager instead.
+</Callout>
 
 ### Use `turbo run` in CI
 

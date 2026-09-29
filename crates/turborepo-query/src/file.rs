@@ -6,7 +6,7 @@ use miette::SourceCode;
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
-use crate::{confine_file_path, Array, Diagnostic, Error, QueryRun};
+use crate::{Array, Diagnostic, Error, QueryRun, confine_file_path};
 
 pub struct File {
     run: Arc<dyn QueryRun>,

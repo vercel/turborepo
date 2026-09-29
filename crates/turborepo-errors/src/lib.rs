@@ -283,12 +283,6 @@ impl<T> Spanned<T> {
     }
 }
 
-impl<T> Spanned<Option<T>> {
-    pub fn is_none(&self) -> bool {
-        self.value.is_none()
-    }
-}
-
 impl<T> Deref for Spanned<T> {
     type Target = T;
 

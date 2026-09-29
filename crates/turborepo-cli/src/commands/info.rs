@@ -1,17 +1,10 @@
-use std::{env, io, path::Path, process};
+use std::{env, path::Path, process};
 
 use sysinfo::{System, SystemExt};
-use thiserror::Error;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use super::CommandBase;
 use crate::{DaemonConnector, DaemonConnectorError};
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("Could not get path to `turbo` binary: {0}")]
-    NoCurrentExe(#[from] io::Error),
-}
 
 // https://superuser.com/questions/1749781/how-can-i-check-if-the-environment-is-wsl-from-a-shell-script/1749811#1749811
 fn is_wsl() -> bool {

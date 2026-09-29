@@ -1,0 +1,264 @@
+#!/bin/sh
+set -eu
+
+usage() {
+  cat <<'EOF'
+Install the standalone Turborepo CLI without Node.js or a JavaScript package manager.
+
+Usage: install [--version VERSION] [--install-dir DIRECTORY]
+
+By default, the installer uses the latest stable release and installs to
+~/.local/bin. Set TURBO_VERSION or TURBO_INSTALL_DIR to configure this in CI.
+EOF
+}
+
+fail() {
+  printf '%s\n' "$1" >&2
+  exit 1
+}
+
+version=${TURBO_VERSION:-}
+install_dir=${TURBO_INSTALL_DIR:-}
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --version)
+      [ "$#" -ge 2 ] || fail "--version requires a value"
+      version=$2
+      shift 2
+      ;;
+    --install-dir)
+      [ "$#" -ge 2 ] || fail "--install-dir requires a value"
+      install_dir=$2
+      shift 2
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      fail "unknown option: $1"
+      ;;
+  esac
+done
+[ "$#" -eq 0 ] || fail "unexpected argument: $1"
+
+[ -n "${HOME:-}" ] || fail 'HOME is not set'
+[ -n "$install_dir" ] || install_dir="$HOME/.local/bin"
+case "$install_dir" in
+  /*) ;;
+  *) fail "install directory must be an absolute path: $install_dir" ;;
+esac
+newline=$(printf '\n_')
+newline=${newline%_}
+carriage_return=$(printf '\r')
+case "$install_dir" in
+  *"$newline"*|*"$carriage_return"*|*:*)
+    fail 'install directory must not contain a colon or line break'
+    ;;
+esac
+
+os=$(uname -s)
+architecture=$(uname -m)
+case "$os:$architecture" in
+  Darwin:x86_64) target=x86_64-apple-darwin ;;
+  Darwin:arm64|Darwin:aarch64) target=aarch64-apple-darwin ;;
+  Linux:x86_64|Linux:amd64) target=x86_64-unknown-linux-musl ;;
+  Linux:arm64|Linux:aarch64) target=aarch64-unknown-linux-musl ;;
+  *) fail "unsupported platform: $os/$architecture" ;;
+esac
+
+binary_name=turbo
+destination="$install_dir/$binary_name"
+if existing_turbo=$(command -v turbo 2>/dev/null); then
+  if [ "$existing_turbo" != "$destination" ]; then
+    fail "Found an existing turbo on PATH at $existing_turbo.
+Uninstall it using the tool that installed it, then rerun:
+  curl -fsSL https://turborepo.dev/install | sh"
+  fi
+fi
+
+check_destination() {
+  if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+    fail "$destination is not a regular file; it was left untouched. Remove it yourself or choose another --install-dir."
+  fi
+}
+check_destination
+
+for utility in curl tar awk grep sed head mktemp mkdir cp chmod mv ln rm tr; do
+  command -v "$utility" >/dev/null 2>&1 || fail "required command not found: $utility"
+done
+
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/turbo-install.XXXXXX") || fail 'could not create a temporary directory'
+staged_binary=
+cleanup() {
+  if [ -n "$staged_binary" ]; then
+    rm -f "$staged_binary"
+  fi
+  rm -rf "$work_dir"
+}
+trap cleanup 0
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+shell_quote() {
+  quoted=$(printf '%s' "$1" | sed "s/'/'\\\\''/g")
+  printf "'%s'" "$quoted"
+}
+
+append_path_profile() {
+  profile=$1
+  marker="# Turborepo standalone installer PATH: $install_dir"
+  if [ -f "$profile" ] && grep -Fqx "$marker" "$profile"; then
+    return 0
+  fi
+
+  quoted_install_dir=$(shell_quote "$install_dir")
+  if ! {
+    printf '\n%s\n' "$marker"
+    printf 'case ":$PATH:" in\n'
+    printf '  *:%s:*) ;;\n' "$quoted_install_dir"
+    printf '  *) PATH=%s:"$PATH" ;;\n' "$quoted_install_dir"
+    printf 'esac\nexport PATH\n'
+  } >> "$profile"; then
+    return 1
+  fi
+}
+
+download() {
+  curl --fail --show-error --silent --location \
+    --proto '=https' --proto-redir '=https' "$@"
+}
+
+if [ -z "$version" ] || [ "$version" = latest ]; then
+  metadata="$work_dir/release.json"
+  if ! download --output "$metadata" \
+    --header 'Accept: application/vnd.github+json' \
+    --header 'X-GitHub-Api-Version: 2022-11-28' \
+    'https://api.github.com/repos/vercel/turborepo/releases/latest'; then
+    fail 'could not resolve the latest stable release from GitHub'
+  fi
+  version=$(sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p' "$metadata" | head -n 1)
+fi
+
+case "$version" in
+  v*) version=${version#v} ;;
+esac
+if ! printf '%s\n' "$version" | LC_ALL=C grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+  fail "invalid release version: ${version:-<empty>}"
+fi
+
+archive_name="turbo-$version-$target.tar.gz"
+release_url="https://github.com/vercel/turborepo/releases/download/v$version"
+manifest="$work_dir/SHA256SUMS"
+archive="$work_dir/$archive_name"
+if ! download --output "$manifest" "$release_url/SHA256SUMS"; then
+  fail "could not download the checksum manifest for v$version"
+fi
+if ! download --output "$archive" "$release_url/$archive_name"; then
+  fail "could not download the standalone archive for $target at v$version"
+fi
+
+expected_checksum=$(awk -v filename="$archive_name" '
+  $2 == filename {
+    count++
+    if (NF == 2) digest = $1
+    else digest = ""
+  }
+  END {
+    if (count == 1) print digest
+  }
+' "$manifest")
+if ! printf '%s\n' "$expected_checksum" | LC_ALL=C grep -Eq '^[[:xdigit:]]{64}$'; then
+  fail "checksum manifest must contain exactly one SHA-256 entry for $archive_name"
+fi
+if command -v sha256sum >/dev/null 2>&1; then
+  actual_checksum=$(sha256sum "$archive" | awk '{print $1}')
+elif command -v shasum >/dev/null 2>&1; then
+  actual_checksum=$(shasum -a 256 "$archive" | awk '{print $1}')
+else
+  fail 'a SHA-256 utility (sha256sum or shasum) is required'
+fi
+expected_checksum=$(printf '%s' "$expected_checksum" | tr '[:upper:]' '[:lower:]')
+actual_checksum=$(printf '%s' "$actual_checksum" | tr '[:upper:]' '[:lower:]')
+[ "$actual_checksum" = "$expected_checksum" ] || fail "SHA-256 verification failed for $archive_name"
+
+members=$(tar -tzf "$archive") || fail "could not inspect $archive_name"
+[ "$members" = "$binary_name" ] || fail "unexpected archive contents in $archive_name; expected only $binary_name"
+extracted_dir="$work_dir/extracted"
+mkdir "$extracted_dir"
+tar -xzf "$archive" -C "$extracted_dir" || fail "could not extract $archive_name"
+extracted_binary="$extracted_dir/$binary_name"
+[ -f "$extracted_binary" ] && [ ! -L "$extracted_binary" ] || fail 'archive did not contain a regular turbo executable'
+chmod 0755 "$extracted_binary"
+
+mkdir -p "$install_dir" || fail "could not create install directory: $install_dir"
+check_destination
+staged_binary=$(mktemp "$install_dir/.turbo-install.XXXXXX") || fail "could not create a staging file in $install_dir"
+if ! cp "$extracted_binary" "$staged_binary" || ! chmod 0755 "$staged_binary"; then
+  fail "could not stage turbo in $install_dir"
+fi
+check_destination
+if [ -e "$destination" ]; then
+  action=Upgraded
+  # A rename in the same directory replaces the old binary without a missing-file window.
+  if ! mv -f "$staged_binary" "$destination"; then
+    fail "could not replace $destination"
+  fi
+else
+  action=Installed
+  if ! ln "$staged_binary" "$destination"; then
+    fail "could not install $destination without replacing an existing file"
+  fi
+fi
+rm -f "$staged_binary"
+staged_binary=
+
+configure_path() {
+  if [ -n "${GITHUB_PATH:-}" ]; then
+    if ! grep -Fqx "$install_dir" "$GITHUB_PATH"; then
+      printf '%s\n' "$install_dir" >> "$GITHUB_PATH" || return 1
+    fi
+    return 0
+  fi
+  [ "${TURBO_NO_MODIFY_PATH:-0}" != 1 ] || return 1
+
+  shell_name=${SHELL:-}
+  shell_name=${shell_name##*/}
+  case "$shell_name" in
+    zsh)
+      append_path_profile "$HOME/.zprofile" || return 1
+      append_path_profile "$HOME/.zshrc" || return 1
+      ;;
+    bash)
+      if [ -f "$HOME/.bash_profile" ]; then
+        login_profile="$HOME/.bash_profile"
+      elif [ -f "$HOME/.bash_login" ]; then
+        login_profile="$HOME/.bash_login"
+      else
+        login_profile="$HOME/.profile"
+      fi
+      append_path_profile "$login_profile" || return 1
+      append_path_profile "$HOME/.bashrc" || return 1
+      ;;
+    fish)
+      return 1
+      ;;
+    *)
+      append_path_profile "$HOME/.profile" || return 1
+      ;;
+  esac
+}
+
+printf '%s turbo %s at %s\n' "$action" "$version" "$destination"
+if configure_path; then
+  case ":${PATH:-}:" in
+    *":$install_dir:"*) ;;
+    *) printf 'PATH configured for future shells; open a new shell to run `turbo` by name.\n' ;;
+  esac
+else
+  printf 'Add %s to PATH to run `turbo` by name.\n' "$install_dir"
+fi

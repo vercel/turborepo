@@ -3,8 +3,8 @@ mod manual;
 use manual::login_manual;
 use turborepo_api_client::APIClient;
 use turborepo_auth::{
-    login as auth_login, sso_login as auth_sso_login, AuthTokens, LoginOptions, Token, TokenSet,
-    TURBO_AUTH_FILE, TURBO_TOKEN_DIR,
+    AuthTokens, LoginOptions, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, Token, TokenSet,
+    login as auth_login, sso_login as auth_sso_login,
 };
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 use turborepo_types::SecretString;

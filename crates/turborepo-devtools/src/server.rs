@@ -86,26 +86,6 @@ pub struct DevtoolsServer<T: RepositoryGraphBuilder> {
 }
 
 impl<T: RepositoryGraphBuilder + 'static> DevtoolsServer<T> {
-    /// Creates a new devtools server with a task graph builder.
-    ///
-    /// The task graph builder should use the same logic as `turbo run`
-    /// to ensure consistency between what the devtools shows and what
-    /// turbo actually executes.
-    pub fn new(
-        repo_root: AbsoluteSystemPathBuf,
-        port: u16,
-        task_graph_builder: T,
-        allowed_origin: impl Into<String>,
-    ) -> Self {
-        Self::new_with_paths(
-            repo_root,
-            port,
-            task_graph_builder,
-            allowed_origin,
-            Vec::new(),
-        )
-    }
-
     /// Creates a server that watches additional exact configuration paths.
     pub fn new_with_paths(
         repo_root: AbsoluteSystemPathBuf,
@@ -122,11 +102,6 @@ impl<T: RepositoryGraphBuilder + 'static> DevtoolsServer<T> {
             auth_token: generate_auth_token(),
             allowed_origin: allowed_origin.into(),
         }
-    }
-
-    /// Returns the port the server will listen on
-    pub fn port(&self) -> u16 {
-        self.port
     }
 
     /// Returns the per-session token clients must present when connecting

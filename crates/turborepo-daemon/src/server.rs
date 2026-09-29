@@ -8,8 +8,8 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex, OnceLock,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -29,19 +29,19 @@ use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
 use turborepo_filewatch::{
+    FileSystemWatcher, WatchError, WatchScope,
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher, InputGlobs},
     package_watcher::PackageWatcher,
-    FileSystemWatcher, WatchError, WatchScope,
 };
 use turborepo_repository::package_manager;
 use turborepo_scm::SCM;
 
-use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto, PackageChangeEvent};
+use super::{PackageChangeEvent, bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
 use crate::{
-    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
-    endpoint::listen_socket, PackageChangesWatcher, PackageChangesWatcherArgs, Paths,
+    PackageChangesWatcher, PackageChangesWatcherArgs, Paths, bump_timeout_layer::BumpTimeoutLayer,
+    default_timeout_layer::DefaultTimeoutLayer, endpoint::listen_socket,
 };
 
 #[derive(Debug)]
@@ -845,8 +845,8 @@ mod test {
 
     use super::compare_versions;
     use crate::{
-        proto::VersionRange, CloseReason, PackageChangeEvent, PackageChangesWatcher, Paths,
-        TurboGrpcService,
+        CloseReason, PackageChangeEvent, PackageChangesWatcher, Paths, TurboGrpcService,
+        proto::VersionRange,
     };
 
     // A simple mock for PackageChangesWatcher for testing

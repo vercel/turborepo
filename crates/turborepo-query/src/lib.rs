@@ -1,5 +1,3 @@
-#![allow(clippy::result_large_err)]
-
 pub mod affected_query;
 pub mod affected_tasks;
 mod boundaries;
@@ -17,7 +15,7 @@ use std::{
     sync::Arc,
 };
 
-use async_graphql::{http::GraphiQLSource, *};
+use async_graphql::*;
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
 use itertools::Itertools;
@@ -1030,12 +1028,9 @@ fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskC
 }
 
 pub async fn graphiql() -> impl IntoResponse {
-    response::Html(
-        GraphiQLSource::build()
-            .version("5.0.0-rc.1")
-            .endpoint("/")
-            .finish(),
-    )
+    // GraphiQLSource always rendered the same HTML for this fixed version and
+    // endpoint; embedding that output avoids compiling its template per request.
+    response::Html(include_str!("query_ide.html"))
 }
 
 pub async fn run_query_server(run: Arc<dyn QueryRun>, signal: SignalHandler) -> Result<(), Error> {
@@ -1109,13 +1104,14 @@ mod tests {
 
     use turbopath::AbsoluteSystemPath;
 
-    use super::{resolve_file_path, Error};
+    use super::{Error, resolve_file_path};
 
     #[test]
     fn affected_package_projection_chooses_first_task_reason_regardless_of_order() {
         use super::{
+            PackageChangeReason, PackageName, QueryTaskId,
             affected_tasks::{AffectedTask, TaskChangeReason},
-            project_affected_task_packages, PackageChangeReason, PackageName, QueryTaskId,
+            project_affected_task_packages,
         };
 
         for reverse in [false, true] {

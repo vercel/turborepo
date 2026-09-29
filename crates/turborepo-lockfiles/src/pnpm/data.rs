@@ -1072,16 +1072,20 @@ impl crate::Lockfile for PnpmLockfile {
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
-        if matches!(self.version(), SupportedLockfileVersion::V7AndV9) {
-            // For v7/v9 the key is already the human-readable identity, so a
-            // `human_name` here would just duplicate it. `display_name()`
-            // falls back to the key when `human_name` is absent, while the
-            // resolution fingerprint hashes only `(key, version)`.
-            None
-        } else {
-            // TODO: this is really hacky and doesn't properly handle v5 as it uses `/` as
-            // the delimiter between name and version
-            Some(package.key.strip_prefix('/')?.to_owned())
+        match self.version() {
+            SupportedLockfileVersion::V7AndV9 => {
+                // For v7/v9 the key is already the human-readable identity, so a
+                // `human_name` here would just duplicate it. `display_name()`
+                // falls back to the key when `human_name` is absent, while the
+                // resolution fingerprint hashes only `(key, version)`.
+                None
+            }
+            SupportedLockfileVersion::V5 => {
+                let key = package.key.strip_prefix('/')?;
+                let (name, version) = key.rsplit_once('/')?;
+                Some(format!("{name}@{version}"))
+            }
+            SupportedLockfileVersion::V6 => Some(package.key.strip_prefix('/')?.to_owned()),
         }
     }
 
@@ -1302,6 +1306,20 @@ packages:
         let encoded = std::str::from_utf8(&encoded).unwrap();
         assert!(encoded.contains("importers:"));
         assert!(!encoded.starts_with("specifiers:"));
+    }
+
+    #[test]
+    fn test_v5_human_name_converts_slash_delimiter() {
+        let lockfile = PnpmLockfile::from_bytes(b"lockfileVersion: 5.4\n").unwrap();
+        let package = crate::Package {
+            key: "/@scope/pkg/1.2.3_peer@4.5.6".to_string(),
+            version: "1.2.3".to_string(),
+        };
+
+        assert_eq!(
+            lockfile.human_name(&package),
+            Some("@scope/pkg@1.2.3_peer@4.5.6".to_string())
+        );
     }
 
     #[test]

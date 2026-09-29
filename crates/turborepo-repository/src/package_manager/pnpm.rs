@@ -39,6 +39,7 @@ impl<'a> PnpmDetector<'a> {
         }
     }
 
+    #[expect(clippy::expect_used, reason = "static semver ranges are valid")]
     pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager, Error> {
         let pnpm6_constraint: Range = "<7.0.0".parse().expect("valid version");
         let pnpm9_constraint: Range = ">=9.0.0-alpha.0".parse().expect("valid version");

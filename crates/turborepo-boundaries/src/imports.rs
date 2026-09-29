@@ -70,7 +70,6 @@ impl<'a> DependencyLocations<'a> {
 /// Returns `Ok((false, None))` if the resolved path goes through
 /// `node_modules` (a real npm package) or if the resolver could not resolve
 /// the import. The caller should then fall through to `check_package_import`.
-#[allow(clippy::too_many_arguments)]
 fn check_import_as_tsconfig_path_alias(
     resolver: &Resolver,
     package_name: &PackageName,
@@ -167,7 +166,7 @@ fn check_import_as_tsconfig_path_alias(
 ///    aliases — skipped (no diagnostic).
 ///
 /// Respects `@boundaries-ignore` comments placed above the import statement.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 pub(crate) fn check_import(
     comments: &[Comment],
     source_text: &str,
@@ -269,7 +268,6 @@ pub(crate) fn check_import(
 ///
 /// Returns `Some(BoundariesDiagnostic::ImportLeavesPackage)` if the resolved
 /// path falls outside `package_path`, `None` otherwise.
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_file_import(
     file_path: &AbsoluteSystemPath,
     package_path: &AbsoluteSystemPath,
@@ -362,7 +360,6 @@ pub(crate) fn get_package_name(import: &str) -> &str {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn check_package_import(
     import: &str,
     import_type: ImportType,

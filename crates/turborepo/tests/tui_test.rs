@@ -1,4 +1,4 @@
-#![cfg(target_os = "linux")]
+#![cfg(any(target_os = "linux", target_os = "macos"))]
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 mod common;

@@ -5,9 +5,9 @@ use miette::{Report, SourceSpan};
 use turbopath::AbsoluteSystemPath;
 use turborepo_boundaries::{BoundariesChecker, BoundariesContext};
 use turborepo_run::{boundaries::RunTurboJsonProvider, builder::RunBuilder};
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{color, BOLD_GREEN};
+use turborepo_ui::{BOLD_GREEN, color};
 
 use crate::{cli, cli::BoundariesIgnore, commands::CommandBase};
 
@@ -101,9 +101,5 @@ pub async fn run(
         result.emit(run.color_config());
     }
 
-    if result.is_ok() {
-        Ok(0)
-    } else {
-        Ok(1)
-    }
+    if result.is_ok() { Ok(0) } else { Ok(1) }
 }

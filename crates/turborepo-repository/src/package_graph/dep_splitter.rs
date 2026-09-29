@@ -258,7 +258,6 @@ impl<'a> DependencyVersion<'a> {
         // version matches its an internal dependency which matches the existing
         // behavior before this additional logic was added.
 
-        // TODO: extend this to support the `enableTransparentWorkspaces` yarn option
         self.protocol.is_some_and(|p| p != "npm")
     }
 
@@ -418,6 +417,7 @@ mod test {
     #[test_case("1.2.3", Some("bar"), "workspace:../baz", Some("baz"), true ; "handles workspace protocol with path to differing package")]
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo"), true ; "handles npm protocol with satisfied semver range")]
     #[test_case("2.3.4", None, "npm:^1.2.3", None, true ; "handles npm protocol with not satisfied semver range")]
+    #[test_case("1.2.3", None, "npm:^1.2.3", None, false ; "transparent workspaces disabled")]
     #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None, true ; "handles pre-release versions")]
     // for backwards compatibility with the code before versions were verified
     #[test_case("sometag", None, "1.2.3", Some("@scope/foo"), true ; "handles non-semver package version")]

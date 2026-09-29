@@ -15,7 +15,6 @@ console.log("platform", platform);
 
 (async function () {
   try {
-    // TODO: version
     let version = JSON.parse(
       await fs.readFile(path.join(cwd, "js", "package.json"))
     ).version;

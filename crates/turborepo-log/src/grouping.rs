@@ -119,11 +119,6 @@ pub struct TaskHandle {
 }
 
 impl TaskHandle {
-    /// The task ID this handle is associated with.
-    pub fn task_id(&self) -> &str {
-        &self.task_id
-    }
-
     /// Emit a structured log event for this task.
     pub fn emit(&mut self, event: LogEvent) {
         match &mut self.buffer {

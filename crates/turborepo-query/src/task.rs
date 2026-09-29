@@ -4,7 +4,7 @@ use async_graphql::{Json, Object, SimpleObject};
 use turborepo_errors::Spanned;
 use turborepo_types::TaskCommandOverride;
 
-use crate::{package::Package, Array, Error, QueryRun, QueryTaskId};
+use crate::{Array, Error, QueryRun, QueryTaskId, package::Package};
 
 /// Configured environment patterns, without expanding names or reading values.
 #[derive(Default, SimpleObject)]

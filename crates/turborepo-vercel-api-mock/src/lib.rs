@@ -35,6 +35,25 @@ pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 
 pub const EXPECTED_CLIENT_ID: &str = "cl_kyUx2zVvA4MGptBohkmtYHJly2XltXzD";
 
+/// Ask the OS for an ephemeral port, then release it for a test server to bind.
+/// Like the previous port scanner, this does not reserve the port for the
+/// server.
+pub fn request_open_port() -> Option<u16> {
+    std::net::TcpListener::bind("0.0.0.0:0")
+        .ok()?
+        .local_addr()
+        .ok()
+        .map(|addr| addr.port())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn requests_ephemeral_port() {
+        assert_ne!(super::request_open_port().unwrap(), 0);
+    }
+}
+
 #[derive(Deserialize)]
 struct VercelAppTokenIntrospectRequest {
     token: String,

@@ -4,7 +4,7 @@ use async_graphql::{Object, SimpleObject};
 use itertools::Itertools;
 use turborepo_repository::package_graph::{DependencyKind, PackageName, PackageNode};
 
-use crate::{package::Package, Array, Error, PackagePredicate, QueryRun};
+use crate::{Array, Error, PackagePredicate, QueryRun, package::Package};
 
 pub struct PackageGraph {
     run: Arc<dyn QueryRun>,
@@ -79,13 +79,13 @@ impl PackageGraph {
                     .repo_context()
                     .pkg_dep_graph()
                     .get_package_by_index(idx)?;
-                if let Some(center) = &self.center {
-                    if center == package_node {
-                        return Some(Package::new(
-                            self.run.clone(),
-                            package_node.as_package_name().clone(),
-                        ));
-                    }
+                if let Some(center) = &self.center
+                    && center == package_node
+                {
+                    return Some(Package::new(
+                        self.run.clone(),
+                        package_node.as_package_name().clone(),
+                    ));
                 }
 
                 if matches!(package_node, PackageNode::Root)
@@ -93,10 +93,10 @@ impl PackageGraph {
                 {
                     return None;
                 }
-                if let Some(dependencies) = direct_dependencies.as_ref() {
-                    if !dependencies.contains(package_node) {
-                        return None;
-                    }
+                if let Some(dependencies) = direct_dependencies.as_ref()
+                    && !dependencies.contains(package_node)
+                {
+                    return None;
                 }
 
                 let package =
@@ -107,10 +107,10 @@ impl PackageGraph {
                         }
                     };
 
-                if let Some(filter) = &self.filter {
-                    if !filter.check(&package) {
-                        return None;
-                    }
+                if let Some(filter) = &self.filter
+                    && !filter.check(&package)
+                {
+                    return None;
                 }
 
                 Some(Ok(package))
@@ -159,19 +159,19 @@ impl PackageGraph {
                     return None;
                 }
 
-                if let Some(center) = &self.center {
-                    if center == source_node || center == target_node {
-                        return Some(Edge {
-                            source: source_node.as_package_name().to_string(),
-                            target: target_node.as_package_name().to_string(),
-                            kind: edge.weight.into(),
-                        });
-                    }
+                if let Some(center) = &self.center
+                    && (center == source_node || center == target_node)
+                {
+                    return Some(Edge {
+                        source: source_node.as_package_name().to_string(),
+                        target: target_node.as_package_name().to_string(),
+                        kind: edge.weight.into(),
+                    });
                 }
-                if let Some(dependencies) = direct_dependencies.as_ref() {
-                    if !dependencies.contains(source_node) || !dependencies.contains(target_node) {
-                        return None;
-                    }
+                if let Some(dependencies) = direct_dependencies.as_ref()
+                    && (!dependencies.contains(source_node) || !dependencies.contains(target_node))
+                {
+                    return None;
                 }
 
                 Some(Edge {

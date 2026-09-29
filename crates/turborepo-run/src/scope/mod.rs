@@ -31,21 +31,6 @@ pub fn change_detector<'a>(
         .map_err(ResolutionError::GlobalDependenciesGlob)
 }
 
-/// Resolve which packages should be included in the run based on scope options.
-///
-/// Delegates directly to `turborepo_scope::resolve_packages`.
-#[tracing::instrument(skip(opts, pkg_graph, scm))]
-pub fn resolve_packages(
-    opts: &ScopeOpts,
-    turbo_root: &AbsoluteSystemPath,
-    pkg_graph: &PackageGraph,
-    scm: &SCM,
-    root_turbo_json: &TurboJson,
-) -> Result<(HashMap<PackageName, PackageInclusionReason>, FilterMode), ResolutionError> {
-    let change_detector = change_detector(opts, turbo_root, pkg_graph, scm, root_turbo_json)?;
-    resolve_packages_with_change_detector(opts, turbo_root, pkg_graph, change_detector)
-}
-
 pub fn resolve_packages_with_change_detector<T: GitChangeDetector>(
     opts: &ScopeOpts,
     turbo_root: &AbsoluteSystemPath,

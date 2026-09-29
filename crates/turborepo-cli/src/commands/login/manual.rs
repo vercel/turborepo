@@ -4,7 +4,7 @@ use turborepo_auth::Token;
 use turborepo_json_rewrite::set_path;
 use turborepo_types::APIClientOpts;
 
-use super::{write_token, Error};
+use super::{Error, write_token};
 use crate::commands::CommandBase;
 
 #[derive(Default, Debug, PartialEq)]

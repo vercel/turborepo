@@ -4,12 +4,12 @@ use futures::FutureExt;
 use serde_json::json;
 use tokio::signal::ctrl_c;
 use turborepo_daemon::{
-    clean_daemon, follow_daemon_logs, serve, CloseReason, DaemonError, DaemonLifecycleCommand,
-    DaemonLifecycleOutput, Paths,
+    CloseReason, DaemonError, DaemonLifecycleCommand, DaemonLifecycleOutput, Paths, clean_daemon,
+    follow_daemon_logs, serve,
 };
 use turborepo_package_watcher::package_changes_watcher::PackageChangesWatcher;
 use turborepo_tracing::TurboSubscriber;
-use turborepo_ui::{color, BOLD_GREEN, BOLD_RED, GREY};
+use turborepo_ui::{BOLD_GREEN, BOLD_RED, GREY, color};
 
 use super::CommandBase;
 use crate::cli::DaemonCommand;

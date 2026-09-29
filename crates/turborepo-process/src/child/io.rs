@@ -145,8 +145,7 @@ impl Child {
         mut stdout_pipe: impl Write,
         mut stdout_lines: R,
     ) -> Result<Option<ChildExit>, std::io::Error> {
-        // TODO: in order to not impose that a stdout_pipe is Send we send the bytes
-        // across a channel
+        // A channel keeps this from requiring `stdout_pipe` to be `Send`.
         let (byte_tx, mut byte_rx) = mpsc::channel(48);
         tokio::task::spawn_blocking(move || {
             let mut buffer = [0; 1024];

@@ -348,10 +348,6 @@ pub struct NativeTaskKnowledge {
 }
 
 impl NativeTaskKnowledge {
-    pub fn empty() -> Self {
-        Self::default()
-    }
-
     pub(crate) fn build(
         repository: &RepositoryKnowledge,
         observations: Vec<NativeTaskObservation>,
@@ -450,12 +446,6 @@ impl NativeTaskKnowledge {
     pub fn for_scope(&self, scope: &str) -> &ScopeNativeTasks {
         static UNKNOWN: ScopeNativeTasks = ScopeNativeTasks::UnknownScope;
         self.by_scope.get(scope).unwrap_or(&UNKNOWN)
-    }
-
-    pub fn scopes(&self) -> impl Iterator<Item = (&str, &ScopeNativeTasks)> {
-        self.by_scope
-            .iter()
-            .map(|(scope, tasks)| (scope.as_str(), tasks))
     }
 }
 

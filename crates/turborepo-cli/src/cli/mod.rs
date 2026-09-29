@@ -9,22 +9,24 @@ use turborepo_config::ConfigurationFileInputs;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_shim::TurboState;
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder},
-    init_telemetry, TelemetryHandle,
+    TelemetryHandle,
+    events::{EventBuilder, command::CommandEventBuilder, generic::GenericEventBuilder},
+    init_telemetry,
 };
-use turborepo_tracing::{inject_trace_metadata, TurboSubscriber};
+use turborepo_tracing::{TurboSubscriber, inject_trace_metadata};
 use turborepo_ui::{ColorConfig, GREY};
 use turborepo_watch::WatchClient;
 
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, telemetry, unlink, CommandBase,
+        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
+        login, logout, ls, prune, query, run, telemetry, unlink,
     },
     get_version,
 };
 
+mod agent_guidance;
 mod args;
 mod configuration;
 mod error;
@@ -52,8 +54,8 @@ fn exit_with_heap_profile(code: i32) -> ! {
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
-pub(crate) fn configuration_inputs_from_process(
-) -> Result<(HashMap<OsString, OsString>, ConfigurationFileInputs), turborepo_config::Error> {
+pub(crate) fn configuration_inputs_from_process()
+-> Result<(HashMap<OsString, OsString>, ConfigurationFileInputs), turborepo_config::Error> {
     let environment = env::vars_os()
         .map(|(key, value)| (key.to_ascii_lowercase(), value))
         .collect();
@@ -177,6 +179,82 @@ fn set_run_flags<'a>(
         _ => {}
     }
     Ok(command)
+}
+
+fn should_maintain_agent_guidance(
+    has_repository: bool,
+    delegated_local_invocation: bool,
+    agent_detected: bool,
+) -> bool {
+    (has_repository || delegated_local_invocation) && agent_detected
+}
+
+fn maintain_agent_guidance(repo_root: &AbsoluteSystemPath, args: &Args, has_repository: bool) {
+    if !should_maintain_agent_guidance(
+        has_repository,
+        env::var_os(INVOCATION_DIR_ENV_VAR).is_some(),
+        turborepo_ai_agents::get_agent().is_some(),
+    ) {
+        return;
+    }
+
+    // This is best-effort startup guidance. Normal command configuration
+    // loading remains responsible for reporting configuration diagnostics.
+    let config = match CommandBase::load_config(repo_root, args) {
+        Ok(config) => config,
+        Err(error) => {
+            debug!("Skipping AGENTS.md update because configuration could not be read: {error}");
+            return;
+        }
+    };
+
+    let executable = match std::env::current_exe() {
+        Ok(executable) => executable,
+        Err(error) => {
+            warn!("Could not locate the selected turbo binary to find bundled docs: {error}");
+            return;
+        }
+    };
+
+    match agent_guidance::maintain(
+        repo_root.as_path().as_std_path(),
+        &executable,
+        true,
+        config.agent_guidance(),
+    ) {
+        Ok(agent_guidance::MaintenanceStatus::Updated) => {
+            debug!("Updated managed Turborepo guidance in AGENTS.md");
+        }
+        Ok(agent_guidance::MaintenanceStatus::Skipped)
+        | Ok(agent_guidance::MaintenanceStatus::Unchanged) => {}
+        Ok(agent_guidance::MaintenanceStatus::MissingDocs) => {
+            warn!(
+                "Could not update AGENTS.md because the selected turbo package has no bundled \
+                 docs/README.md"
+            );
+        }
+        Ok(agent_guidance::MaintenanceStatus::MalformedMarkers) => {
+            warn!(
+                "Could not update AGENTS.md because Turborepo's managed markers are malformed or \
+                 duplicated; existing content was left untouched"
+            );
+        }
+        Ok(agent_guidance::MaintenanceStatus::ConcurrentEdit) => {
+            warn!(
+                "Could not update AGENTS.md because it changed during the update; existing \
+                 content was left untouched"
+            );
+        }
+        Ok(agent_guidance::MaintenanceStatus::Locked) => {
+            warn!("Skipped AGENTS.md update because another turbo invocation is updating it");
+        }
+        Err(error) => {
+            warn!(
+                "Could not update AGENTS.md: {error}; continuing without changing the command \
+                 result"
+            );
+        }
+    }
 }
 
 fn inferred_package_root(
@@ -353,6 +431,8 @@ async fn run_main(
     };
 
     cli_args.command = Some(command);
+
+    maintain_agent_guidance(&repo_root, &cli_args, repo_state.is_some());
 
     let root_telemetry = GenericEventBuilder::new();
     root_telemetry.track_start();

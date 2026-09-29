@@ -656,7 +656,11 @@ fn module_package_inputs(
         root_source_inputs = None;
     }
     Ok((
-        (runnable.len() == 1).then(|| runnable.pop().unwrap()),
+        if runnable.len() == 1 {
+            runnable.pop()
+        } else {
+            None
+        },
         root_source_inputs,
     ))
 }
@@ -1609,6 +1613,7 @@ pub struct GoTaskContract {
 }
 
 impl GoTaskContract {
+    #[expect(clippy::expect_used, reason = "Go module manifests have a parent path")]
     fn module(module: &GoModule, target_os: &str, cache_prefixes: &[String]) -> Self {
         let output_name = runnable_output_name(module);
         let is_source = |name: &str| {

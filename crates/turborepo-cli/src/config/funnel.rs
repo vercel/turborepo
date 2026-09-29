@@ -4,28 +4,6 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use super::{ConfigurationFileInputs, ConfigurationOptions, Error, TurborepoConfigBuilder};
 
-/// Ordered from lowest to highest precedence.
-pub const CONFIGURATION_PRECEDENCE: &[ConfigurationSource] = &[
-    ConfigurationSource::TurboJson,
-    ConfigurationSource::GlobalConfig,
-    ConfigurationSource::GlobalAuth,
-    ConfigurationSource::LocalConfig,
-    ConfigurationSource::OverrideEnvironment,
-    ConfigurationSource::Environment,
-    ConfigurationSource::Cli,
-];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConfigurationSource {
-    TurboJson,
-    GlobalConfig,
-    GlobalAuth,
-    LocalConfig,
-    Environment,
-    OverrideEnvironment,
-    Cli,
-}
-
 pub fn resolve_configuration_with_overrides(
     repo_root: &AbsoluteSystemPath,
     overrides: ConfigurationOptions,
@@ -63,10 +41,10 @@ mod tests {
     use turborepo_types::{ConfigurationSource, EnvMode, LogOrder};
 
     use super::{
-        resolve_configuration_for_shim, resolve_configuration_with_overrides,
-        ConfigurationFileInputs,
+        ConfigurationFileInputs, resolve_configuration_for_shim,
+        resolve_configuration_with_overrides,
     };
-    use crate::config::{ConfigurationOptions, CONFIG_FILE};
+    use crate::config::{CONFIG_FILE, ConfigurationOptions};
 
     fn file_inputs(temp_dir: &TempDir) -> ConfigurationFileInputs {
         ConfigurationFileInputs {

@@ -1,7 +1,3 @@
-// Configuration errors retain structured context that is useful for CLI
-// diagnostics.
-#![allow(clippy::result_large_err)]
-
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
@@ -185,6 +181,10 @@ impl Opts {
 }
 
 impl Opts {
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve structured config errors in run option resolution"
+    )]
     pub fn new(
         repo_root: &AbsoluteSystemPath,
         run_selector: &RunSelector,
@@ -558,6 +558,10 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
     }
 }
 
+#[expect(
+    clippy::result_large_err,
+    reason = "retain the existing run-option error type for invalid concurrency"
+)]
 fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
     if let Some(percent) = concurrency_raw.strip_suffix('%') {
         let percent = percent.parse::<f64>()?;
@@ -580,6 +584,10 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
 ///
 /// This is a helper function since we can't implement `TryFrom` for a foreign
 /// type.
+#[expect(
+    clippy::result_large_err,
+    reason = "scope options preserve structured config errors"
+)]
 fn scope_opts_from_inputs(inputs: OptsInputs<'_>) -> Result<ScopeOpts, Error> {
     let pkg_inference_root = inputs
         .execution_selector

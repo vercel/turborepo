@@ -1,8 +1,8 @@
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_microfrontends_config::{
-    port::{resolve_port_for_directory, PortResolutionError},
     MicrofrontendsConfigs,
+    port::{PortResolutionError, resolve_port_for_directory},
 };
 use turborepo_repository::package_graph::PackageGraph;
 

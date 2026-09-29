@@ -141,8 +141,8 @@ pub fn affected_query_exit_code(json: &str) -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use super::{
-        affected_query_exit_code, affected_result_count, build_affected_query,
-        escape_graphql_string, ref_arg, AffectedQueryInput, AffectedQuerySelector,
+        AffectedQueryInput, AffectedQuerySelector, affected_query_exit_code, affected_result_count,
+        build_affected_query, escape_graphql_string, ref_arg,
     };
 
     fn affected(

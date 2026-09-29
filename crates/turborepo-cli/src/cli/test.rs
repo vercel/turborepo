@@ -10,7 +10,7 @@ use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsM
 use crate::cli::{
     ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
     GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
-    RunArgs,
+    RunArgs, should_maintain_agent_guidance,
 };
 
 fn parse_args<I, S>(args: I) -> Result<Args, String>
@@ -19,6 +19,14 @@ where
     S: Into<OsString>,
 {
     Args::parse_args(args.into_iter().map(Into::into).collect())
+}
+
+#[test]
+fn agent_guidance_requires_repository_context_and_detected_agent() {
+    assert!(should_maintain_agent_guidance(true, false, true));
+    assert!(should_maintain_agent_guidance(false, true, true));
+    assert!(!should_maintain_agent_guidance(false, false, true));
+    assert!(!should_maintain_agent_guidance(true, false, false));
 }
 
 fn get_subcommand(name: &str) -> &'static usage::Command<'static> {
@@ -1928,15 +1936,17 @@ fn test_profile_usage() {
     assert!(parse_args(["turbo", "build", "--profile", "foo.json"]).is_ok());
     assert!(parse_args(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
     // Both flags simultaneously should be rejected
-    assert!(parse_args([
-        "turbo",
-        "build",
-        "--profile",
-        "foo.json",
-        "--anon-profile",
-        "bar.json"
-    ])
-    .is_err());
+    assert!(
+        parse_args([
+            "turbo",
+            "build",
+            "--profile",
+            "foo.json",
+            "--anon-profile",
+            "bar.json"
+        ])
+        .is_err()
+    );
 }
 
 #[test]
@@ -2103,18 +2113,22 @@ fn test_set_single_package() {
             .collect(),
     )
     .unwrap();
-    assert!(inferred_run
-        .execution_args()
-        .is_some_and(|e| e.single_package));
-    assert!(explicit_run
-        .command
-        .as_ref()
-        .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
-            Some(execution_args.single_package)
-        } else {
-            None
-        })
-        .unwrap_or(false));
+    assert!(
+        inferred_run
+            .execution_args()
+            .is_some_and(|e| e.single_package)
+    );
+    assert!(
+        explicit_run
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false)
+    );
     assert!(explicit_run.execution_args().is_some());
 
     let watch = Args::parse_args(
@@ -2124,15 +2138,17 @@ fn test_set_single_package() {
             .collect(),
     )
     .unwrap();
-    assert!(watch
-        .command
-        .as_ref()
-        .and_then(|cmd| if let Command::Watch { execution_args, .. } = cmd {
-            Some(execution_args.single_package)
-        } else {
-            None
-        })
-        .unwrap_or(false));
+    assert!(
+        watch
+            .command
+            .as_ref()
+            .and_then(|cmd| if let Command::Watch { execution_args, .. } = cmd {
+                Some(execution_args.single_package)
+            } else {
+                None
+            })
+            .unwrap_or(false)
+    );
     assert!(watch.execution_args().is_some());
 }
 

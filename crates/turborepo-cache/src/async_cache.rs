@@ -348,7 +348,7 @@ mod tests {
     async fn dry_run_batch_preserves_remote_metadata_and_misses() -> Result<()> {
         use turborepo_api_client::{Bytes, CacheClient};
 
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let server = tokio::spawn(start_test_server(port, Some(ready_tx)));
         tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
@@ -413,7 +413,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_cache() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
 

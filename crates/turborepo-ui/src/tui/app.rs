@@ -1326,7 +1326,7 @@ fn should_start_terminal(event: &Event) -> bool {
 
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 async fn run_app_inner(
     terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
     display: &mut DisplayState,
@@ -1643,7 +1643,7 @@ fn enter_alt_screen(terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>) -
     match terminal.as_mut() {
         // Re-entering after a stream excursion: force a full repaint.
         Some(term) => {
-            term.clear()?;
+            clear_without_cursor_query(term)?;
             term.hide_cursor()?;
         }
         None => {
@@ -1677,6 +1677,16 @@ fn record_restore_error(first_error: &mut Option<io::Error>, result: io::Result<
     }
 }
 
+/// Clear the backend without querying the cursor position. Ratatui's
+/// `Terminal::clear` queries the terminal in 0.30.2, which can race with our
+/// input reader (and block in terminal emulators that don't answer). Swapping
+/// buffers forces a full repaint when we re-enter the alternate screen.
+fn clear_without_cursor_query(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
+    ratatui::backend::Backend::clear(terminal.backend_mut())?;
+    terminal.swap_buffers();
+    Ok(())
+}
+
 /// Leave the alternate screen, returning to the main screen with the cursor
 /// visible and mouse capture off (so native terminal scrollback/selection
 /// works while streaming). Does not touch raw mode.
@@ -1688,7 +1698,7 @@ fn record_restore_error(first_error: &mut Option<io::Error>, result: io::Result<
 fn leave_alt_screen(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Result<()> {
     let mut first_error = None;
 
-    record_restore_error(&mut first_error, terminal.clear());
+    record_restore_error(&mut first_error, clear_without_cursor_query(terminal));
 
     // On Windows, we must only call DisableMouseCapture if EnableMouseCapture
     // was called first, because crossterm requires the original console mode

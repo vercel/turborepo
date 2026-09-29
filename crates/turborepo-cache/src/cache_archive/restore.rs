@@ -367,10 +367,6 @@ mod tests {
         buf
     }
 
-    // Expected output of the cache
-    #[derive(Debug)]
-    struct ExpectedOutput(Vec<AnchoredSystemPathBuf>);
-
     enum TarFile {
         File {
             body: Vec<u8>,

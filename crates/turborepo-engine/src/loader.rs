@@ -18,6 +18,5 @@ pub trait TurboJsonLoader {
     /// Returns the TurboJson configuration or an error if loading fails.
     /// The error should indicate if no turbo.json exists (via
     /// is_no_turbo_json).
-    #[allow(clippy::result_large_err)]
     fn load(&self, package: &PackageName) -> Result<&TurboJson, BuilderError>;
 }

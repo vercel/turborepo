@@ -231,9 +231,14 @@ fn extract_file_path_from_error(
     repo_root: &AbsoluteSystemPath,
 ) -> AbsoluteSystemPathBuf {
     match error {
-        Error::PackageJsonMissingName(path) => path.clone(),
-        // TODO: We're handling every other error here. We could handle situations where the
-        // lockfile isn't the issue better.
+        Error::PackageJsonMissingName(path)
+        | Error::PackageManager(crate::package_manager::Error::LockfileMissing(path))
+        | Error::PackageManager(crate::package_manager::Error::UnrecognizedYarnLockfile(path)) => {
+            path.clone()
+        }
+        Error::PackageManager(crate::package_manager::Error::Yarnrc(_)) => {
+            repo_root.join_component(crate::package_manager::yarnrc::YARNRC_FILENAME)
+        }
         _ => package_manager.lockfile_path(repo_root),
     }
 }
@@ -1652,6 +1657,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
         Ok(())
     }
 
+    #[expect(
+        clippy::expect_used,
+        reason = "JavaScript package managers require the root package.json"
+    )]
     #[tracing::instrument(skip(self, package_manager))]
     async fn populate_lockfile(
         &mut self,
@@ -1989,6 +1998,14 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
 struct Relationships;
 
 impl Relationships {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "classification needs the workspace, dependency indexes, and dependency list"
+    )]
+    #[expect(
+        clippy::expect_used,
+        reason = "package.json paths have a parent directory"
+    )]
     fn classify<'a, I: IntoIterator<Item = (&'a String, &'a String, DependencyKind)>>(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPath,
@@ -4077,5 +4094,29 @@ mod test {
         );
 
         insta::assert_snapshot!("missing_name_field_warning_message", warning_message);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_package_manager_errors_report_their_source_file() {
+        let repo_root = AbsoluteSystemPathBuf::new("/my-project").unwrap();
+        let berry = crate::package_manager::PackageManager::Berry;
+        let yarnrc_error = Error::PackageManager(crate::package_manager::Error::Yarnrc(
+            crate::package_manager::yarnrc::Error::Io(std::io::Error::other("invalid yarnrc")),
+        ));
+        assert_eq!(
+            extract_file_path_from_error(&yarnrc_error, &berry, &repo_root),
+            repo_root.join_component(crate::package_manager::yarnrc::YARNRC_FILENAME)
+        );
+
+        let pnpm = crate::package_manager::PackageManager::Pnpm9;
+        let workspace_lockfile = repo_root.join_components(&["packages", "app", "pnpm-lock.yaml"]);
+        let missing_lockfile_error = Error::PackageManager(
+            crate::package_manager::Error::LockfileMissing(workspace_lockfile.clone()),
+        );
+        assert_eq!(
+            extract_file_path_from_error(&missing_lockfile_error, &pnpm, &repo_root),
+            workspace_lockfile
+        );
     }
 }

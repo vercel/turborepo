@@ -13,9 +13,9 @@ use turborepo_query::affected_query::escape_graphql_string;
 use turborepo_query_api::{QueryRun, QueryServer};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_run::builder::RunBuilder;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
+use turborepo_ui::{BOLD, BOLD_GREEN, ColorConfig, GREY, color, cprint, cprintln};
 
 use crate::{cli, cli::OutputFormat, commands::CommandBase};
 

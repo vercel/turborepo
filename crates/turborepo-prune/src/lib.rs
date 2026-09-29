@@ -3,7 +3,8 @@
 //! enters through package graph prune domains.
 
 // Prune errors carry rich diagnostics from repository, configuration, and
-// engine layers. Boxing them would complicate the CLI error boundary.
+// engine layers across 26 result-returning functions. Boxing them would change
+// the shared CLI error boundary without reducing the underlying error size.
 #![allow(clippy::result_large_err)]
 
 #[cfg(unix)]

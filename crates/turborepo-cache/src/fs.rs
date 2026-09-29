@@ -532,7 +532,7 @@ mod test {
 
     #[tokio::test]
     async fn test_fs_cache() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         tokio::spawn(start_test_server(port, Some(ready_tx)));
 

@@ -342,11 +342,11 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         changed_files: &HashSet<AnchoredSystemPathBuf>,
         lockfile_path: &AbsoluteSystemPath,
     ) -> bool {
-        let lockfile_path_relative = turbo_root
-            .anchor(lockfile_path)
-            .expect("lockfile should be in repo");
+        let Ok(lockfile_path_relative) = turbo_root.anchor(lockfile_path) else {
+            return false;
+        };
 
-        changed_files.iter().any(|f| f == &lockfile_path_relative)
+        changed_files.contains(&lockfile_path_relative)
     }
 }
 
@@ -408,6 +408,25 @@ mod test {
         assert_eq!(
             changes,
             PackageChanges::All(AllPackageChangeReason::ConservativeFallback)
+        );
+    }
+
+    #[test]
+    fn out_of_repo_lockfile_is_ignored() {
+        let repo = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(repo.path()).unwrap();
+        let outside_root = AbsoluteSystemPath::from_std_path(outside.path()).unwrap();
+        let lockfile_path = outside_root.join_component("package.lock");
+        let changed_files =
+            HashSet::from([AnchoredSystemPathBuf::from_raw("package.lock").unwrap()]);
+
+        assert!(
+            !ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
+                repo_root,
+                &changed_files,
+                &lockfile_path,
+            )
         );
     }
 

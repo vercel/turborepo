@@ -163,18 +163,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         self
     }
 
-    /// Sets the workspace set used to compute the `--only` allowed tasks,
-    /// independently of the entrypoint workspaces. Pass the repository's
-    /// full task-namespace set when constructing a package-scoped engine so
-    /// `^task` dependencies in dependency packages remain reachable.
-    pub fn with_allowed_workspaces<I: IntoIterator<Item = PackageName>>(
-        mut self,
-        workspaces: I,
-    ) -> Self {
-        self.allowed_workspaces = Some(workspaces.into_iter().collect());
-        self
-    }
-
     pub fn with_tasks<I: IntoIterator<Item = Spanned<TaskName<'static>>>>(
         mut self,
         tasks: I,

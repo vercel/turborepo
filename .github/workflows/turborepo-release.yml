@@ -417,6 +417,11 @@ jobs:
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
+      - name: Test Windows standalone installer
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/install.windows.test.ps1
+
       - name: Build
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
 
@@ -519,6 +524,45 @@ jobs:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
 
+  standalone-archives:
+    name: "Package Standalone Archives"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [stage, build-rust]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          package-install: false
+
+      - name: Download Rust artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: turbo-*
+          path: rust-artifacts
+
+      - name: Test standalone archive layout and POSIX installer
+        run: node --test scripts/package-standalone-archives.test.mjs scripts/install.test.mjs
+
+      - name: Package standalone archives
+        run: node scripts/package-standalone-archives.mjs "${{ needs.stage.outputs.version }}"
+
+      - name: Upload standalone archives
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: standalone-turbo-${{ needs.stage.outputs.version }}
+          path: |
+            standalone-artifacts/*.tar.gz
+            standalone-artifacts/SHA256SUMS
+          if-no-files-found: error
+
   npm-publish:
     name: "Publish To NPM"
     runs-on: ubuntu-24.04
@@ -529,8 +573,8 @@ jobs:
     env:
       NPM_CONFIG_PROVENANCE: "true"
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
-    needs: [stage, build-rust, js-smoke-test]
-    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    needs: [stage, build-rust, js-smoke-test, standalone-archives]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' && needs.standalone-archives.result == 'success' }}
     outputs:
       publish-started: ${{ steps.publish-state.outputs.started }}
     steps:
@@ -549,6 +593,7 @@ jobs:
       - name: Download Rust artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
+          pattern: turbo-*
           path: rust-artifacts
 
       - name: Install Global Turbo
@@ -663,9 +708,45 @@ jobs:
             gh release create "v${VERSION}" \
               --title "Turborepo v${VERSION}" \
               --generate-notes \
+              --draft \
               "${NOTES_START_TAG_FLAG[@]}" \
               "${PRERELEASE_FLAG[@]}"
           fi
+
+  publish-standalone-assets:
+    name: "Publish Standalone Release Assets"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    needs: [stage, standalone-archives, create-release-tag]
+    if: ${{ always() && !inputs.dry_run && needs.stage.result == 'success' && needs.standalone-archives.result == 'success' && needs.create-release-tag.result == 'success' }}
+    steps:
+      - name: Download standalone release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: standalone-turbo-${{ needs.stage.outputs.version }}
+          path: standalone-artifacts
+
+      - name: Attach standalone archives and checksum manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.stage.outputs.version }}
+        run: |
+          IS_DRAFT=$(gh release view "v${VERSION}" --repo "${REPOSITORY}" --json isDraft --jq .isDraft)
+          if [ "${IS_DRAFT}" != "true" ]; then
+            echo "::error::Refusing to replace assets on published release v${VERSION}."
+            exit 1
+          fi
+          gh release upload "v${VERSION}" standalone-artifacts/*.tar.gz standalone-artifacts/SHA256SUMS --repo "${REPOSITORY}" --clobber
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.stage.outputs.version }}
+        run: gh release edit "v${VERSION}" --repo "${REPOSITORY}" --draft=false
 
   publish-vscode-extension:
     name: "Publish VS Code Extension"
@@ -781,8 +862,15 @@ jobs:
 
   create-release-pr:
     name: "Create Release PR"
-    needs: [stage, npm-publish, create-release-tag, alias-versioned-docs]
-    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && !inputs.dry_run }}
+    needs:
+      [
+        stage,
+        npm-publish,
+        create-release-tag,
+        publish-standalone-assets,
+        alias-versioned-docs
+      ]
+    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && needs.publish-standalone-assets.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

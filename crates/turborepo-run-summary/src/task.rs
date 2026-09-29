@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheHitMetadata;
-use turborepo_env::{DetailedMap, EnvironmentVariableMap};
+use turborepo_env::EnvironmentVariableMap;
 use turborepo_task_id::TaskId;
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, OutputLogsMode, TaskDefinition,
@@ -248,35 +248,6 @@ impl From<turborepo_cache::CacheSource> for CacheSource {
 }
 
 impl TaskEnvVarSummary {
-    pub fn new(
-        task_definition: &TaskDefinition,
-        env_vars: DetailedMap,
-        env_at_execution_start: &EnvironmentVariableMap,
-    ) -> Result<Self, turborepo_env::Error> {
-        // TODO: this operation differs from the actual env that gets passed in during
-        // task execution it should be unified, but first we should copy Go's
-        // behavior as we try to match the implementations
-        let pass_through = task_definition
-            .pass_through_env
-            .as_deref()
-            .map(|pass_through_env| -> Result<_, turborepo_env::Error> {
-                Ok(env_at_execution_start
-                    .from_wildcards(pass_through_env)?
-                    .to_secret_hashable())
-            })
-            .transpose()?;
-
-        Ok(Self {
-            specified: TaskEnvConfiguration {
-                env: task_definition.env.clone(),
-                pass_through_env: task_definition.pass_through_env.clone(),
-            },
-            configured: env_vars.by_source.explicit.to_secret_hashable(),
-            inferred: env_vars.by_source.matching.to_secret_hashable(),
-            pass_through,
-        })
-    }
-
     /// Create a TaskEnvVarSummary from HashTrackerDetailedMap.
     ///
     /// This method is used when the env vars come from the HashTrackerInfo

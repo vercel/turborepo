@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_graphql::Object;
 use turborepo_repository::external_resolution::ExternalPackageIdentity;
 
-use crate::{package::Package, Array, Error, QueryRun};
+use crate::{Array, Error, QueryRun, package::Package};
 
 #[derive(Clone)]
 pub struct ExternalPackage {

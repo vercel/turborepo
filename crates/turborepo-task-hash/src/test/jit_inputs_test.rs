@@ -45,17 +45,21 @@ fn calculate_deferred_task_hash(
     let package = PackageName::from(task_id.package());
     hasher
         .calculate_task_hash_with_deferred_inputs(
-            task_id,
-            definition,
-            EnvMode::Strict,
-            &graph.package_task_context(&package).unwrap(),
-            &[],
-            PackageTaskEventBuilder::new(task_id.package(), task_id.task()),
-            &SCM::new(repo_root),
-            repo_root,
-            None,
-            None,
-            &HashSet::new(),
+            TaskHashRequest {
+                task_id,
+                task_definition: definition,
+                task_env_mode: EnvMode::Strict,
+                package_context: &graph.package_task_context(&package).unwrap(),
+                dependency_set: &[],
+                telemetry: PackageTaskEventBuilder::new(task_id.package(), task_id.task()),
+            },
+            DeferredHashInputs {
+                scm: &SCM::new(repo_root),
+                repo_root,
+                repo_index: None,
+                dependency_output_hashes: None,
+                dependency_output_producers: &HashSet::new(),
+            },
         )
         .unwrap()
 }
