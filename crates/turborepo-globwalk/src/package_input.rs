@@ -243,7 +243,10 @@ mod tests {
     #[test]
     fn matches_legacy_hasher_join() {
         // The hashers previously built `{package}/{input}` and validated it.
-        // Resolution must produce byte-identical globs so hashes are stable.
+        // Resolution must produce the same globs so hashes are stable. On
+        // Windows the legacy root package globs kept a leading slash, which
+        // the walker trims when joining onto its base path, so compare
+        // without it.
         for (package, raw) in [
             ("packages/a", "src/**/*.ts"),
             ("packages/a", "../../tsconfig.json"),
@@ -256,7 +259,11 @@ mod tests {
                 ValidatedGlob::from_str(&format!("{package}/{}", raw.trim_start_matches('/')))
                     .unwrap();
             let input = PackageInput::resolve(package, raw).unwrap();
-            assert_eq!(input.as_str(), legacy.as_str(), "{package} + {raw}");
+            assert_eq!(
+                input.as_str(),
+                legacy.as_str().trim_start_matches('/'),
+                "{package} + {raw}"
+            );
         }
     }
 
