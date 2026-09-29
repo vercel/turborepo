@@ -1,8 +1,8 @@
-//! Task-level filter resolution for `--filter` with the `filterUsingTasks`
-//! future flag.
+//! Task-level filter resolution for tag selectors and `filterUsingTasks`.
 //!
-//! When active, `--filter` patterns are resolved against the task graph
-//! rather than the package graph:
+//! Tags match package metadata or individual task definitions without a future
+//! flag. With `filterUsingTasks`, other `--filter` patterns also resolve
+//! against the task graph rather than the package graph:
 //!
 //! - Git-range selectors (`[main]`) match changed files against each task's
 //!   `inputs` globs, catching out-of-package inputs like `$TURBO_ROOT$`.
@@ -53,8 +53,12 @@ pub fn resolve_affected_tasks(
         pkg_dep_graph,
         scm,
         repo_root,
-        global_deps,
         None,
+        &TaskSelectorContext {
+            global_deps,
+            package_has_tag: &|_, _| false,
+            package_selections: &HashMap::new(),
+        },
     )
 }
 
@@ -100,6 +104,16 @@ pub fn filter_engine_to_tasks(
     )
 }
 
+/// Additional selector knowledge supplied by the run builder. Package tags
+/// are accessed generically, without depending on boundaries configuration.
+/// Pre-resolved package selections preserve legacy selectors' package-graph
+/// and change-detection semantics when tags are used without filterUsingTasks.
+pub struct TaskSelectorContext<'a> {
+    pub global_deps: &'a [String],
+    pub package_has_tag: &'a dyn Fn(&PackageName, &str) -> bool,
+    pub package_selections: &'a HashMap<String, HashSet<PackageName>>,
+}
+
 pub fn filter_engine_to_tasks_with_inclusions(
     engine: Engine,
     selectors: &[TargetSelector],
@@ -108,6 +122,30 @@ pub fn filter_engine_to_tasks_with_inclusions(
     scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
+) -> Result<Engine, crate::Error> {
+    filter_engine_to_tasks_with_context(
+        engine,
+        selectors,
+        constraints,
+        pkg_dep_graph,
+        scm,
+        repo_root,
+        &TaskSelectorContext {
+            global_deps,
+            package_has_tag: &|_, _| false,
+            package_selections: &HashMap::new(),
+        },
+    )
+}
+
+pub fn filter_engine_to_tasks_with_context(
+    engine: Engine,
+    selectors: &[TargetSelector],
+    constraints: TaskFilterConstraints<'_>,
+    pkg_dep_graph: &PackageGraph,
+    scm: &impl ChangedFilesDetector,
+    repo_root: &AbsoluteSystemPath,
+    context: &TaskSelectorContext<'_>,
 ) -> Result<Engine, crate::Error> {
     let (include, exclude): (Vec<_>, Vec<_>) = selectors.iter().partition(|s| !s.exclude);
 
@@ -120,8 +158,8 @@ pub fn filter_engine_to_tasks_with_inclusions(
             pkg_dep_graph,
             scm,
             repo_root,
-            global_deps,
             constraints.entrypoints,
+            context,
         )?;
         included_tasks.extend(matched);
     }
@@ -144,8 +182,8 @@ pub fn filter_engine_to_tasks_with_inclusions(
             pkg_dep_graph,
             scm,
             repo_root,
-            global_deps,
             constraints.entrypoints,
+            context,
         )?;
         included_tasks.retain(|t| !to_exclude.contains(t));
     }
@@ -167,11 +205,10 @@ pub fn filter_engine_to_tasks_with_inclusions(
         return Ok(engine.retain_filtered_tasks(&included_tasks));
     }
 
-    // `with` relationships (used by microfrontends to co-schedule proxy
-    // tasks alongside dev tasks) create no graph edges, so
-    // retain_filtered_tasks' forward DFS would miss them. Expand the
-    // included set to cover `with` siblings before pruning.
-    let included_tasks = expand_with_siblings(&engine, included_tasks);
+    // `with` relationships have no graph edges. Close both relationships
+    // before pruning: dependencies may have siblings, and those siblings may
+    // introduce further dependencies with their own siblings.
+    let included_tasks = expand_dependencies_and_with(&engine, included_tasks);
 
     // retain_filtered_tasks includes transitive dependencies for
     // execution and prunes the rest. Dependent expansion was already
@@ -190,9 +227,17 @@ fn resolve_selector_to_tasks(
     pkg_dep_graph: &PackageGraph,
     scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
-    global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
+    context: &TaskSelectorContext<'_>,
 ) -> Result<HashSet<TaskId<'static>>, crate::Error> {
+    if let Some(packages) = context.package_selections.get(&selector.raw) {
+        let mut tasks = engine.task_ids_for_packages(packages);
+        if let Some(entrypoints) = entrypoints {
+            tasks.retain(|task| entrypoints.contains(task));
+        }
+        return Ok(tasks);
+    }
+
     if selector.match_dependencies {
         return resolve_match_dependencies(
             engine,
@@ -200,8 +245,8 @@ fn resolve_selector_to_tasks(
             pkg_dep_graph,
             scm,
             repo_root,
-            global_deps,
             entrypoints,
+            context,
         );
     }
 
@@ -211,8 +256,8 @@ fn resolve_selector_to_tasks(
         pkg_dep_graph,
         scm,
         repo_root,
-        global_deps,
         entrypoints,
+        context,
     )?;
 
     let mut result = HashSet::new();
@@ -255,12 +300,18 @@ fn resolve_base_tasks(
     pkg_dep_graph: &PackageGraph,
     scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
-    global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
+    context: &TaskSelectorContext<'_>,
 ) -> Result<HashSet<TaskId<'static>>, crate::Error> {
-    let tasks_from_packages = resolve_name_and_dir(engine, selector, pkg_dep_graph);
-    let tasks_from_git_range =
-        resolve_git_range(engine, selector, pkg_dep_graph, scm, repo_root, global_deps)?;
+    let tasks_from_packages = resolve_name_and_dir(engine, selector, pkg_dep_graph, context);
+    let tasks_from_git_range = resolve_git_range(
+        engine,
+        selector,
+        pkg_dep_graph,
+        scm,
+        repo_root,
+        context.global_deps,
+    )?;
 
     let mut tasks = match (tasks_from_packages, tasks_from_git_range) {
         (Some(pkg_tasks), Some(git_tasks)) => {
@@ -282,16 +333,26 @@ fn resolve_name_and_dir(
     engine: &Engine,
     selector: &TargetSelector,
     pkg_dep_graph: &PackageGraph,
+    context: &TaskSelectorContext<'_>,
 ) -> Option<HashSet<TaskId<'static>>> {
     let has_name = !selector.name_pattern.is_empty();
     let has_dir = selector.parent_dir.is_some();
 
-    if !has_name && !has_dir {
+    if !has_name && !has_dir && selector.tag.is_none() {
         return None;
     }
 
     let matching_packages = find_matching_packages(selector, pkg_dep_graph);
-    Some(engine.task_ids_for_packages(&matching_packages))
+    let mut tasks = engine.task_ids_for_packages(&matching_packages);
+    if let Some(tag) = &selector.tag {
+        tasks.retain(|task| {
+            (context.package_has_tag)(&PackageName::from(task.package()), tag)
+                || engine
+                    .task_definition(task)
+                    .is_some_and(|def| def.tags.contains(tag))
+        });
+    }
+    Some(tasks)
 }
 
 /// Finds packages matching a selector's name pattern and/or directory.
@@ -386,8 +447,8 @@ fn resolve_match_dependencies(
     pkg_dep_graph: &PackageGraph,
     scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
-    global_deps: &[String],
     entrypoints: Option<&HashSet<TaskId<'static>>>,
+    context: &TaskSelectorContext<'_>,
 ) -> Result<HashSet<TaskId<'static>>, crate::Error> {
     let git_range = match &selector.git_range {
         Some(range) => range,
@@ -395,8 +456,8 @@ fn resolve_match_dependencies(
     };
 
     // Find all tasks in the named packages
-    let matching_packages = find_matching_packages(selector, pkg_dep_graph);
-    let mut package_tasks = engine.task_ids_for_packages(&matching_packages);
+    let mut package_tasks =
+        resolve_name_and_dir(engine, selector, pkg_dep_graph, context).unwrap_or_default();
     if let Some(entrypoints) = entrypoints {
         package_tasks.retain(|task| entrypoints.contains(task));
     }
@@ -416,7 +477,7 @@ fn resolve_match_dependencies(
                 engine,
                 pkg_dep_graph,
                 &files,
-                global_deps,
+                context.global_deps,
             );
             // Intersection: task must be in the candidate set AND affected
             Ok(candidate_tasks.intersection(&affected).cloned().collect())
@@ -493,6 +554,23 @@ pub fn expand_with_siblings(
     result
 }
 
+/// Compute the execution closure, alternating graph dependencies and edge-less
+/// `with` relationships until neither can introduce more tasks.
+fn expand_dependencies_and_with(
+    engine: &Engine,
+    mut tasks: HashSet<TaskId<'static>>,
+) -> HashSet<TaskId<'static>> {
+    loop {
+        let previous_len = tasks.len();
+        let dependencies = engine.collect_task_dependencies(&tasks);
+        tasks.extend(dependencies);
+        tasks = expand_with_siblings(engine, tasks);
+        if tasks.len() == previous_len {
+            return tasks;
+        }
+    }
+}
+
 pub fn retain_strict_task_graph(
     engine: Engine,
     pkg_dep_graph: &PackageGraph,
@@ -544,9 +622,7 @@ pub fn retain_strict_task_graph(
         }
     }
 
-    let expanded = expand_with_siblings(&engine, retained);
-    let mut retained = expanded.clone();
-    retained.extend(engine.collect_task_dependencies(&expanded));
+    let retained = expand_dependencies_and_with(&engine, retained);
     engine.retain_task_subset(&retained)
 }
 
@@ -781,6 +857,147 @@ mod tests {
             &[],
         )
         .unwrap()
+    }
+
+    #[tokio::test]
+    async fn tag_selectors_match_package_and_task_tags_and_expand_graph() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["web", "api", "lib"]).await;
+        let web = TaskId::new("web", "build");
+        let web_test = TaskId::new("web", "test");
+        let api = TaskId::new("api", "build");
+        let api_test = TaskId::new("api", "test");
+        let lib = TaskId::new("lib", "build");
+        let tagged = TaskDefinition {
+            tags: vec!["ci".to_string()],
+            ..Default::default()
+        };
+        let tasks = [
+            (web.clone(), TaskDefinition::default()),
+            (web_test.clone(), TaskDefinition::default()),
+            (api.clone(), tagged),
+            (api_test.clone(), TaskDefinition::default()),
+            (lib.clone(), TaskDefinition::default()),
+        ];
+        let edges = [(web.clone(), lib.clone()), (api_test.clone(), api.clone())];
+        let detector = fixed_changed_files(&[]);
+        let context = super::TaskSelectorContext {
+            global_deps: &[],
+            package_has_tag: &|package, label| {
+                package == &PackageName::from("web") && label == "ci"
+            },
+            package_selections: &HashMap::new(),
+        };
+        for (patterns, expected) in [
+            (
+                vec!["tag:ci"],
+                vec![web.clone(), web_test.clone(), api.clone(), lib.clone()],
+            ),
+            (
+                vec!["...tag:ci"],
+                vec![
+                    web.clone(),
+                    web_test.clone(),
+                    api.clone(),
+                    api_test.clone(),
+                    lib.clone(),
+                ],
+            ),
+            (vec!["tag:ci^..."], vec![lib.clone()]),
+            (vec!["...^tag:ci"], vec![api_test.clone(), api.clone()]),
+            (vec!["tag:ci", "!tag:ci"], vec![]),
+            // Exclusions remove entrypoints, not a selected task's execution dependencies.
+            (
+                vec!["!tag:ci"],
+                vec![api_test.clone(), api.clone(), lib.clone()],
+            ),
+            (vec!["tag:c*"], vec![]),
+            (vec!["tag:missing"], vec![]),
+            (vec!["tag:ci{packages/api}"], vec![api.clone()]),
+        ] {
+            let selectors: Vec<_> = patterns
+                .iter()
+                .map(|pattern| pattern.parse().unwrap())
+                .collect();
+            let filtered = super::filter_engine_to_tasks_with_context(
+                make_engine(&tasks, &edges),
+                &selectors,
+                super::TaskFilterConstraints {
+                    affected: None,
+                    always_include: &HashSet::new(),
+                    entrypoints: None,
+                    excluded_entrypoints: &HashSet::new(),
+                    orchestration_entrypoints: None,
+                },
+                &pkg_graph,
+                &detector,
+                root,
+                &context,
+            )
+            .unwrap();
+            assert_eq!(
+                filtered.task_ids().cloned().collect::<HashSet<_>>(),
+                expected.into_iter().collect(),
+                "{patterns:?}"
+            );
+        }
+        assert!(detector.calls.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn tag_git_selectors_intersect_inputs_and_affected_constraints() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["web", "api", "lib"]).await;
+        let web = TaskId::new("web", "build");
+        let api = TaskId::new("api", "build");
+        let lib = TaskId::new("lib", "build");
+        let mut tagged = def_with_inputs(&["src/**"], false);
+        tagged.tags = vec!["ci".to_string()];
+        let tasks = [
+            (web.clone(), tagged.clone()),
+            (api.clone(), tagged),
+            (lib.clone(), def_with_inputs(&["src/**"], false)),
+        ];
+        let edges = [(web.clone(), lib.clone())];
+        let detector = fixed_changed_files(&["packages/lib/src/index.ts"]);
+        let context = super::TaskSelectorContext {
+            global_deps: &[],
+            package_has_tag: &|_, _| false,
+            package_selections: &HashMap::new(),
+        };
+        for (pattern, affected, expected) in [
+            ("tag:ci[main]", None, HashSet::new()),
+            ("tag:ci...[main]", None, HashSet::from([lib.clone()])),
+            (
+                "tag:ci...[main]",
+                Some(HashSet::from([api.clone()])),
+                HashSet::new(),
+            ),
+        ] {
+            let filtered = super::filter_engine_to_tasks_with_context(
+                make_engine(&tasks, &edges),
+                &[pattern.parse().unwrap()],
+                super::TaskFilterConstraints {
+                    affected: affected.as_ref(),
+                    always_include: &HashSet::new(),
+                    entrypoints: None,
+                    excluded_entrypoints: &HashSet::new(),
+                    orchestration_entrypoints: None,
+                },
+                &pkg_graph,
+                &detector,
+                root,
+                &context,
+            )
+            .unwrap();
+            assert_eq!(
+                filtered.task_ids().cloned().collect::<HashSet<_>>(),
+                expected,
+                "{pattern}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -1169,9 +1386,20 @@ mod tests {
             ..Default::default()
         };
 
-        let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
-                .unwrap();
+        let tasks = super::resolve_selector_to_tasks(
+            &engine,
+            &selector,
+            &pkg_graph,
+            &scm,
+            root,
+            None,
+            &super::TaskSelectorContext {
+                global_deps: &[],
+                package_has_tag: &|_, _| false,
+                package_selections: &HashMap::new(),
+            },
+        )
+        .unwrap();
 
         assert!(tasks.contains(&web_build));
         assert!(!tasks.contains(&api_build));
@@ -1205,9 +1433,20 @@ mod tests {
             ..Default::default()
         };
 
-        let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
-                .unwrap();
+        let tasks = super::resolve_selector_to_tasks(
+            &engine,
+            &selector,
+            &pkg_graph,
+            &scm,
+            root,
+            None,
+            &super::TaskSelectorContext {
+                global_deps: &[],
+                package_has_tag: &|_, _| false,
+                package_selections: &HashMap::new(),
+            },
+        )
+        .unwrap();
 
         assert!(
             tasks.contains(&web_build),
@@ -1335,9 +1574,20 @@ mod tests {
             ..Default::default()
         };
 
-        let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
-                .unwrap();
+        let tasks = super::resolve_selector_to_tasks(
+            &engine,
+            &selector,
+            &pkg_graph,
+            &scm,
+            root,
+            None,
+            &super::TaskSelectorContext {
+                global_deps: &[],
+                package_has_tag: &|_, _| false,
+                package_selections: &HashMap::new(),
+            },
+        )
+        .unwrap();
 
         assert!(
             tasks.contains(&schema_gen),
@@ -1701,9 +1951,20 @@ mod tests {
             ..Default::default()
         };
 
-        let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
-                .unwrap();
+        let tasks = super::resolve_selector_to_tasks(
+            &engine,
+            &selector,
+            &pkg_graph,
+            &scm,
+            root,
+            None,
+            &super::TaskSelectorContext {
+                global_deps: &[],
+                package_has_tag: &|_, _| false,
+                package_selections: &HashMap::new(),
+            },
+        )
+        .unwrap();
 
         assert!(
             !tasks.contains(&web_build),
@@ -1741,9 +2002,20 @@ mod tests {
             ..Default::default()
         };
 
-        let tasks =
-            super::resolve_selector_to_tasks(&engine, &selector, &pkg_graph, &scm, root, &[], None)
-                .unwrap();
+        let tasks = super::resolve_selector_to_tasks(
+            &engine,
+            &selector,
+            &pkg_graph,
+            &scm,
+            root,
+            None,
+            &super::TaskSelectorContext {
+                global_deps: &[],
+                package_has_tag: &|_, _| false,
+                package_selections: &HashMap::new(),
+            },
+        )
+        .unwrap();
 
         assert!(
             tasks.contains(&a_build),
@@ -2015,6 +2287,40 @@ mod tests {
             ),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn execution_closure_alternates_dependencies_and_with_until_stable() {
+        let test = TaskId::new("app", "test");
+        let build = TaskId::new("app", "build");
+        let sidecar = TaskId::new("app", "sidecar");
+        let prepare = TaskId::new("lib", "prepare");
+        let watcher = TaskId::new("lib", "watcher");
+        let unrelated = TaskId::new("lib", "unrelated");
+        let engine = make_engine(
+            &[
+                (test.clone(), TaskDefinition::default()),
+                (build.clone(), def_with_siblings(&["sidecar"])),
+                (sidecar.clone(), TaskDefinition::default()),
+                (prepare.clone(), def_with_siblings(&["watcher"])),
+                // A mixed dependency/with cycle must terminate without dropping tasks.
+                (watcher.clone(), def_with_siblings(&["app#build"])),
+                (unrelated.clone(), TaskDefinition::default()),
+            ],
+            &[
+                (test.clone(), build.clone()),
+                (sidecar.clone(), prepare.clone()),
+            ],
+        );
+        let expected = HashSet::from([test.clone(), build, sidecar, prepare, watcher]);
+        let closure = super::expand_dependencies_and_with(&engine, HashSet::from([test]));
+        assert_eq!(closure, expected);
+        assert!(!closure.contains(&unrelated));
+        assert_eq!(
+            super::expand_dependencies_and_with(&engine, closure.clone()),
+            closure
+        );
+        assert!(super::expand_dependencies_and_with(&engine, HashSet::new()).is_empty());
     }
 
     /// expand_with_siblings should include cross-package `with` siblings.

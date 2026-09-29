@@ -104,7 +104,7 @@ impl PackageInference {
         mut selector: TargetSelector,
     ) -> Result<Vec<TargetSelector>, ResolutionError> {
         // Explicit name patterns bypass inference.
-        if !selector.name_pattern.is_empty() {
+        if !selector.name_pattern.is_empty() || selector.tag.is_some() {
             return Ok(vec![selector]);
         }
 

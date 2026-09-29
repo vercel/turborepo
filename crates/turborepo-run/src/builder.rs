@@ -1192,9 +1192,20 @@ impl RunBuilder {
 
         // When filterUsingTasks is active, --affected is handled by the
         // same task-level filter rather than a separate codepath.
-        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
-            && (!self.opts.scope_opts.filter_patterns.is_empty()
-                || self.opts.scope_opts.affected_range.is_some());
+        let has_tag_filter = self
+            .opts
+            .scope_opts
+            .filter_patterns
+            .iter()
+            .map(|pattern| pattern.parse::<turborepo_scope::TargetSelector>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(ResolutionError::from)?
+            .iter()
+            .any(|selector| selector.tag.is_some());
+        let use_task_level_filter = has_tag_filter
+            || (self.opts.future_flags.filter_using_tasks
+                && (!self.opts.scope_opts.filter_patterns.is_empty()
+                    || self.opts.scope_opts.affected_range.is_some()));
 
         let use_task_level_affected = !use_task_level_filter
             && self.opts.scope_opts.affected_range.is_some()
@@ -1207,9 +1218,16 @@ impl RunBuilder {
         // Task-level affectedness replaces package-level affectedness. Resolve
         // package constraints independently so SCM is queried only by the task
         // detector and the final package list can come from selected tasks.
-        let package_scope_opts = use_task_level_affected.then(|| {
+        let package_scope_opts = (use_task_level_affected || has_tag_filter).then(|| {
             let mut opts = self.opts.clone();
             opts.scope_opts.affected_range = None;
+            if has_tag_filter {
+                // Task tags cannot be resolved until definitions are loaded.
+                // Enumerate all namespaces (including lazy native owners), then
+                // apply the original selectors to the settled task graph.
+                opts.scope_opts.filter_patterns = vec!["*".to_string()];
+                opts.scope_opts.pkg_inference_root = None;
+            }
             opts
         });
         let package_resolution_opts = package_scope_opts.as_ref().unwrap_or(&self.opts);
@@ -1263,6 +1281,7 @@ impl RunBuilder {
                 needs_all_packages,
             },
             &root_turbo_json,
+            &turbo_json_loader,
             scm,
         )?;
         self.finalize_engine(&settled, &root_turbo_json, scm, untracked_scan_scope_tx)?;
@@ -1703,13 +1722,14 @@ impl RunBuilder {
         settled: SettledEngine,
         modes: SelectionModes,
         root_turbo_json: &TurboJson,
+        turbo_json_loader: &UnifiedTurboJsonLoader,
         scm: &SCM,
     ) -> Result<SettledEngine, Error> {
         let SettledEngine {
             pkg_dep_graph,
             mut engine,
             mut filtered_pkgs,
-            filter_mode,
+            mut filter_mode,
             unqualified_entrypoint_packages,
             all_pkgs,
             task_level_affected_package_scope,
@@ -1743,19 +1763,86 @@ impl RunBuilder {
                 .collect::<Result<_, _>>()
                 .map_err(ResolutionError::from)?;
 
-            let affected_constraint =
-                if let Some(affected_range) = &self.opts.scope_opts.affected_range {
-                    Some(turborepo_task_filter::resolve_affected_tasks(
-                        &engine,
-                        affected_range,
+            let has_tag_filter = selectors.iter().any(|selector| selector.tag.is_some());
+            let mut package_selections = HashMap::new();
+            if has_tag_filter && !self.opts.future_flags.filter_using_tasks {
+                // Keep ordinary filters on their existing package resolver,
+                // including package graph traversal and cwd inference.
+                for selector in selectors.iter().filter(|selector| selector.tag.is_none()) {
+                    let mut opts = self.opts.clone();
+                    opts.scope_opts.affected_range = None;
+                    opts.scope_opts.filter_patterns = vec![
+                        selector
+                            .raw
+                            .strip_prefix('!')
+                            .unwrap_or(&selector.raw)
+                            .to_string(),
+                    ];
+                    let detector = scope::change_detector(
+                        &opts.scope_opts,
+                        &self.repo_root,
                         &pkg_dep_graph,
                         scm,
+                        root_turbo_json,
+                    )?;
+                    let (packages, _) = scope::resolve_packages_with_change_detector(
+                        &opts.scope_opts,
                         &self.repo_root,
-                        &root_turbo_json.global_deps,
-                    )?)
+                        &pkg_dep_graph,
+                        detector,
+                    )?;
+                    package_selections.insert(selector.raw.clone(), packages.into_keys().collect());
+                }
+            }
+
+            let affected_constraint =
+                if let Some(affected_range) = &self.opts.scope_opts.affected_range {
+                    if self.opts.future_flags.filter_using_tasks
+                        || self.opts.future_flags.affected_using_task_inputs
+                    {
+                        Some(turborepo_task_filter::resolve_affected_tasks(
+                            &engine,
+                            affected_range,
+                            &pkg_dep_graph,
+                            scm,
+                            &self.repo_root,
+                            &root_turbo_json.global_deps,
+                        )?)
+                    } else {
+                        // Adding a tag must not opt --affected into task-input semantics.
+                        let mut opts = self.opts.clone();
+                        opts.scope_opts.filter_patterns.clear();
+                        let (packages, _, _) = Self::calculate_filtered_packages(
+                            &self.repo_root,
+                            &opts,
+                            &pkg_dep_graph,
+                            scm,
+                            root_turbo_json,
+                        )?;
+                        Some(engine.task_ids_for_packages(&packages.into_keys().collect()))
+                    }
                 } else {
                     None
                 };
+
+            let package_has_tag = |package: &PackageName, label: &str| {
+                turbo_json_loader
+                    .load(package)
+                    .ok()
+                    .and_then(|json| json.tags.as_ref())
+                    .is_some_and(|tags| {
+                        tags.iter().any(|tag| {
+                            // Package tags are still plain biome strings, whose
+                            // JSON escapes are preserved by the config parser.
+                            // Decode at this generic access boundary so they
+                            // match the literal labels used by task selectors.
+                            turborepo_unescape::UnescapedString::from_escaped(
+                                tag.as_inner().clone(),
+                            )
+                            .is_ok_and(|tag| tag.as_ref() == label)
+                        })
+                    })
+            };
 
             let package_tasks: HashSet<_> = self
                 .opts
@@ -1768,7 +1855,7 @@ impl RunBuilder {
                         .map(TaskId::into_owned)
                 })
                 .collect();
-            engine = turborepo_task_filter::filter_engine_to_tasks_with_inclusions(
+            engine = turborepo_task_filter::filter_engine_to_tasks_with_context(
                 engine,
                 &selectors,
                 turborepo_task_filter::TaskFilterConstraints {
@@ -1787,8 +1874,30 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 scm,
                 &self.repo_root,
-                &root_turbo_json.global_deps,
+                &turborepo_task_filter::TaskSelectorContext {
+                    global_deps: &root_turbo_json.global_deps,
+                    package_has_tag: &package_has_tag,
+                    package_selections: &package_selections,
+                },
             )?;
+            if has_tag_filter {
+                let selected_packages: HashSet<_> = engine
+                    .task_ids()
+                    .map(|task| PackageName::from(task.package()))
+                    .collect();
+                filtered_pkgs.retain(|package, _| selected_packages.contains(package));
+                // The broad discovery filter must not turn an exclude-only
+                // invocation into explicit selection (native entrypoint
+                // preferences depend on this distinction).
+                if selectors.iter().all(|selector| selector.exclude)
+                    && self.opts.scope_opts.affected_range.is_none()
+                    && self.opts.scope_opts.pkg_inference_root.is_none()
+                {
+                    filter_mode = FilterMode::ExcludeOnly {
+                        root_excluded: !selected_packages.contains(&PackageName::Root),
+                    };
+                }
+            }
         }
 
         // Task-level --affected detection (separate from --filter).
@@ -2532,14 +2641,16 @@ impl RunBuilder {
 /// git history: dependency (`pkg...`) or dependents (`...pkg`) expansion,
 /// match-dependencies (`pkg...[range]` — a reverse traversal, despite the
 /// name), or git ranges. Such queries cannot be narrowed against an
-/// inventory graph, whose edges are only the always-loaded JavaScript ones;
-/// the run conservatively loads every native owner for them instead.
+/// inventory graph, whose edges are only the always-loaded JavaScript ones.
+/// Tags also require every owner's task catalogue before building the loader.
+/// The run conservatively loads every native owner for these selectors.
 fn selectors_require_complete_graph(selectors: &[TargetSelector]) -> bool {
     selectors.iter().any(|selector| {
         selector.include_dependencies
             || selector.include_dependents
             || selector.match_dependencies
             || selector.git_range.is_some()
+            || selector.tag.is_some()
     })
 }
 
@@ -3684,6 +3795,8 @@ mod lazy_selector_tests {
             vec!["web^..."],
             vec!["web...[main]"],
             vec!["web", "...docs"],
+            vec!["tag:ci"],
+            vec!["!tag:ci"],
         ] {
             assert!(
                 selectors_require_complete_graph(&selectors(&patterns)),
