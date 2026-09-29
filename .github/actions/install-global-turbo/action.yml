@@ -15,6 +15,7 @@ runs:
       shell: bash
       env:
         TURBO_VERSION_INPUT: ${{ inputs.turbo-version }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         VERSION=""
@@ -25,6 +26,19 @@ runs:
           fi
           # The standalone installer accepts release versions, not npm dist-tags.
           VERSION=$(npm view "turbo@$TURBO_VERSION_INPUT" version)
+        else
+          # Resolve the latest release with the workflow token. The installer's
+          # unauthenticated lookup is rate limited per IP, which shared runner IPs exhaust.
+          VERSION=$(curl -fsSL \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/vercel/turborepo/releases/latest \
+            | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p' | head -n 1)
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Could not resolve the latest turbo release from GitHub."
+            exit 1
+          fi
         fi
         curl -fsSL https://turborepo.dev/install | TURBO_VERSION="$VERSION" sh
 
@@ -33,6 +47,7 @@ runs:
       shell: pwsh
       env:
         TURBO_VERSION_INPUT: ${{ inputs.turbo-version }}
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         $ErrorActionPreference = 'Stop'
         if ($env:TURBO_VERSION_INPUT) {
@@ -43,6 +58,16 @@ runs:
           $env:TURBO_VERSION = npm view "turbo@$env:TURBO_VERSION_INPUT" version
           if ($LASTEXITCODE -ne 0) { throw 'Could not resolve the turbo version.' }
         } else {
-          Remove-Item Env:TURBO_VERSION -ErrorAction SilentlyContinue
+          # Resolve the latest release with the workflow token. The installer's
+          # unauthenticated lookup is rate limited per IP, which shared runner IPs exhaust.
+          $release = Invoke-RestMethod `
+            -Uri 'https://api.github.com/repos/vercel/turborepo/releases/latest' `
+            -Headers @{
+              Authorization = "Bearer $env:GITHUB_TOKEN"
+              Accept = 'application/vnd.github+json'
+              'X-GitHub-Api-Version' = '2022-11-28'
+            }
+          if (-not $release.tag_name) { throw 'Could not resolve the latest turbo release from GitHub.' }
+          $env:TURBO_VERSION = $release.tag_name -replace '^v', ''
         }
         irm https://turborepo.dev/install.ps1 | iex
