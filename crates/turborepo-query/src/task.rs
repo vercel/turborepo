@@ -31,6 +31,14 @@ impl RepositoryTask {
         })
     }
 
+    pub fn get_tags(&self) -> Vec<String> {
+        self.package
+            .run()
+            .task_definition(&self.task_id())
+            .map(|definition| definition.tags.clone())
+            .unwrap_or_default()
+    }
+
     fn task_id(&self) -> QueryTaskId {
         QueryTaskId::new(self.package.get_name().to_string(), self.name.clone())
     }
@@ -116,6 +124,12 @@ impl RepositoryTask {
 
     async fn full_name(&self) -> String {
         format!("{}#{}", self.package.get_name(), self.name)
+    }
+
+    /// This task's resolved labels, excluding package labels. Package labels
+    /// are available separately through `package.tags`.
+    async fn tags(&self) -> Vec<String> {
+        self.get_tags()
     }
 
     async fn script(&self) -> Option<String> {

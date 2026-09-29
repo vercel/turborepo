@@ -1605,6 +1605,25 @@ impl turborepo_query_api::QueryRun for Run {
         &self.repo
     }
 
+    fn package_tags(&self, package: &PackageName) -> Vec<String> {
+        self.turbo_json_loader()
+            .load(package)
+            .ok()
+            .and_then(|config| config.tags.as_ref())
+            .map(|tags| {
+                tags.iter()
+                    // Package tags retain JSON escapes from the config parser.
+                    // Decode once at the query access boundary.
+                    .filter_map(|tag| {
+                        turborepo_unescape::UnescapedString::from_escaped(tag.as_inner().clone())
+                            .ok()
+                            .map(String::from)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     fn task_ids(&self) -> Vec<turborepo_query_api::QueryTaskId> {
         self.execution
             .engine

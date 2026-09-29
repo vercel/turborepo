@@ -50,6 +50,10 @@ impl Package {
         &self.name
     }
 
+    pub fn get_tags(&self) -> Vec<String> {
+        self.run.package_tags(&self.name)
+    }
+
     fn package_from_node(&self, node: &PackageNode) -> Option<Self> {
         let name = match node {
             PackageNode::Root => PackageName::Root,
@@ -185,6 +189,11 @@ impl Package {
     /// The name of the package
     async fn name(&self) -> String {
         self.name.to_string()
+    }
+
+    /// Package labels from the loaded turbo.json, excluding task labels.
+    async fn tags(&self) -> Vec<String> {
+        self.get_tags()
     }
 
     /// The path to the package, relative to the repository root

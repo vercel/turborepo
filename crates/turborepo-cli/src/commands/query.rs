@@ -237,6 +237,13 @@ mod tests {
             unreachable!("the recording query server does not inspect repository data")
         }
 
+        fn package_tags(
+            &self,
+            _package: &turborepo_repository::package_graph::PackageName,
+        ) -> Vec<String> {
+            Vec::new()
+        }
+
         fn task_ids(&self) -> Vec<turborepo_query_api::QueryTaskId> {
             self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Vec::new()

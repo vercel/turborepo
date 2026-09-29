@@ -1,0 +1,8 @@
+{
+  "tags": ["root-only"],
+  "tasks": {
+    "build": { "tags": ["compile", "compile"], "dependsOn": ["^build"] },
+    "test": { "tags": ["check"] },
+    "untagged": {}
+  }
+}
