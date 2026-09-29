@@ -3,10 +3,12 @@
 //! Shared between `turbo run --affected` (via `turborepo-run`) and
 //! `turbo query { affectedTasks }` (via `turborepo-query`).
 //!
-//! This is intentionally separate from the task hashing glob infrastructure
-//! in `turborepo-task-hash`. That system walks the filesystem for cache
-//! hashing; here we check a pre-computed set of changed file paths from SCM,
-//! which only needs to know whether *any* changed file matches.
+//! Matching is separate from the task hashing glob infrastructure in
+//! `turborepo-scm`. That system walks the filesystem for cache hashing; here
+//! we check a pre-computed set of changed file paths from SCM, which only
+//! needs to know whether *any* changed file matches. Both resolve inputs
+//! against the package directory with [`globwalk::PackageInput`], so they
+//! agree on which files an input refers to.
 //!
 //! # Glob precedence
 //!
@@ -14,6 +16,7 @@
 //! pattern matches a file, the file is rejected from that mode regardless of
 //! inclusion patterns. Startup and JIT inputs are then combined as a union.
 
+use globwalk::PackageInput;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use wax::Program;
 
@@ -21,9 +24,12 @@ use crate::TaskInputs;
 
 /// Pre-compiled glob patterns for efficient matching against many files.
 ///
-/// Created via [`compile_globs`]. Exclusions take priority over inclusions
-/// within each input mode (see [`check_compiled_globs`] for precedence rules).
-/// When a mode's default is true, all in-package files match unless excluded.
+/// Created via [`compile_globs`] for a specific package. Globs are resolved
+/// against the package directory into repo-root-relative patterns, so they are
+/// only valid for matching files on behalf of that package. Exclusions take
+/// priority over inclusions within each input mode (see
+/// [`check_compiled_globs`] for precedence rules). When a mode's default is
+/// true, all in-package files match unless excluded.
 pub struct CompiledGlobs {
     inclusions: Vec<wax::Glob<'static>>,
     exclusions: Vec<wax::Glob<'static>>,
@@ -34,8 +40,8 @@ pub struct CompiledGlobs {
     default: bool,
     jit_default: bool,
     eager: bool,
-    /// True when any glob starts with `../`, indicating cross-package
-    /// file references (from `$TURBO_ROOT$` expansion).
+    /// True when any resolved glob can reach outside the package directory
+    /// (e.g. from `$TURBO_ROOT$` expansion or `../` references).
     has_traversal_globs: bool,
     jit_has_traversal_globs: bool,
 }
@@ -43,7 +49,7 @@ pub struct CompiledGlobs {
 #[derive(Debug)]
 pub struct InvalidTaskInputGlob {
     pub glob: String,
-    pub error: Box<wax::BuildError>,
+    pub error: Box<dyn std::error::Error + Send + Sync + 'static>,
 }
 
 impl std::fmt::Display for InvalidTaskInputGlob {
@@ -60,13 +66,24 @@ impl std::error::Error for InvalidTaskInputGlob {
 
 /// Pre-compiles a task's input globs for efficient matching against many files.
 ///
+/// `package_unix_path` is the repo-root-relative, Unix-style path of the
+/// task's package (empty for the root package). Every glob is resolved
+/// against it into a repo-root-relative pattern with
+/// [`globwalk::PackageInput`], the same resolution the task hashers use. This
+/// keeps package-relative globs like `**/*.ts` scoped to the package even when
+/// the task also references files outside it via `$TURBO_ROOT$`.
+///
 /// When `inputs` has no globs and `default` is false (representing either
 /// `inputs: []` or a missing `inputs` key), the compiled result will match
 /// all files — see [`check_compiled_globs`] for details.
-pub fn compile_globs(inputs: &TaskInputs) -> Result<CompiledGlobs, InvalidTaskInputGlob> {
-    let (inclusions, exclusions, has_traversal_globs) = compile_patterns(&inputs.globs)?;
+pub fn compile_globs(
+    inputs: &TaskInputs,
+    package_unix_path: &str,
+) -> Result<CompiledGlobs, InvalidTaskInputGlob> {
+    let (inclusions, exclusions, has_traversal_globs) =
+        compile_patterns(&inputs.globs, package_unix_path)?;
     let (jit_inclusions, jit_exclusions, jit_has_traversal_globs) =
-        compile_patterns(&inputs.jit_globs)?;
+        compile_patterns(&inputs.jit_globs, package_unix_path)?;
 
     Ok(CompiledGlobs {
         inclusions,
@@ -83,34 +100,33 @@ pub fn compile_globs(inputs: &TaskInputs) -> Result<CompiledGlobs, InvalidTaskIn
 
 fn compile_patterns(
     globs: &[String],
+    package_unix_path: &str,
 ) -> Result<(Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool), InvalidTaskInputGlob> {
     let mut inclusions = Vec::new();
     let mut exclusions = Vec::new();
     let mut has_traversal_globs = false;
 
     for glob_str in globs {
-        let (is_exclusion, pattern) = glob_str
-            .strip_prefix('!')
-            .map_or((false, glob_str.as_str()), |pattern| (true, pattern));
-        // Changed files are matched as package-relative paths without a leading
-        // `./`. Normalize task inputs to the same representation used by the
-        // task hasher, including `$TURBO_ROOT$` inputs for root tasks.
-        let pattern = pattern.strip_prefix("./").unwrap_or(pattern);
-
-        if pattern.starts_with("../") {
-            has_traversal_globs = true;
-        }
-
-        let glob = wax::Glob::new(pattern)
-            .map_err(|error| InvalidTaskInputGlob {
-                glob: glob_str.clone(),
-                error: Box::new(error),
-            })?
+        let invalid = |error: Box<dyn std::error::Error + Send + Sync>| InvalidTaskInputGlob {
+            glob: glob_str.clone(),
+            error,
+        };
+        let input = PackageInput::resolve(package_unix_path, glob_str)
+            .map_err(|error| invalid(Box::new(error)))?;
+        let glob = wax::Glob::new(input.as_str())
+            .map_err(|error| invalid(Box::new(error)))?
             .into_owned();
 
-        if is_exclusion {
+        // Changed files are always repo-root-relative, so globs that escape
+        // the repository root can never match.
+        if input.escapes_repo_root() {
+            continue;
+        }
+
+        if input.is_exclusion() {
             exclusions.push(glob);
         } else {
+            has_traversal_globs |= input.reaches_outside_package();
             inclusions.push(glob);
         }
     }
@@ -140,10 +156,11 @@ pub fn file_matches_compiled_inputs_path(
 
 /// Checks whether a changed file matches pre-compiled task input globs.
 ///
-/// The file path (repo-root-relative, Unix-style string) is first
-/// relativized to the task's package directory. Files outside the package
-/// match only if the task has traversal globs (from `$TURBO_ROOT$`
-/// expansion). For the root package (empty prefix), all files are
+/// The file path must be repo-root-relative and Unix-style; `compiled` must
+/// have been created for the same package. Files outside the package match
+/// only through globs that reach outside the package directory (e.g. from
+/// `$TURBO_ROOT$` expansion), and never through `$TURBO_DEFAULT$` or the
+/// empty-inputs fallback. For the root package (empty prefix), all files are
 /// considered in-package.
 ///
 /// `pkg_prefix_slash` should be `"{pkg_str}/"` (or empty for the root
@@ -154,31 +171,14 @@ pub fn file_matches_compiled_inputs(
     pkg_prefix_slash: &str,
     compiled: &CompiledGlobs,
 ) -> bool {
-    let file_relative_to_pkg = if pkg_str.is_empty() {
-        Some(file_unix)
-    } else {
-        file_unix.strip_prefix(pkg_prefix_slash)
-    };
+    let in_package = pkg_str.is_empty() || file_unix.starts_with(pkg_prefix_slash);
 
-    // Files outside the package dir only match if there are traversal globs
-    // (e.g. `../../jest.config.js` from a $TURBO_ROOT$ reference).
-    let Some(relative_path) = file_relative_to_pkg else {
-        if !compiled.has_traversal_globs && !compiled.jit_has_traversal_globs {
-            return false;
-        }
-
-        let depth = pkg_str.matches('/').count() + 1;
-        let mut relative = String::with_capacity(depth * 3 + file_unix.len());
-        for _ in 0..depth {
-            relative.push_str("../");
-        }
-        relative.push_str(file_unix);
-
+    if !in_package {
         // Defaults only cover files inside the package. Keep startup and JIT
         // matching separate so exclusions in one mode do not affect the other.
         return (compiled.has_traversal_globs
             && check_compiled_globs(
-                &relative,
+                file_unix,
                 &compiled.inclusions,
                 &compiled.exclusions,
                 false,
@@ -186,22 +186,22 @@ pub fn file_matches_compiled_inputs(
             ))
             || (compiled.jit_has_traversal_globs
                 && check_compiled_globs(
-                    &relative,
+                    file_unix,
                     &compiled.jit_inclusions,
                     &compiled.jit_exclusions,
                     false,
                     false,
                 ));
-    };
+    }
 
     check_compiled_globs(
-        relative_path,
+        file_unix,
         &compiled.inclusions,
         &compiled.exclusions,
         compiled.default,
         compiled.eager,
     ) || check_compiled_globs(
-        relative_path,
+        file_unix,
         &compiled.jit_inclusions,
         &compiled.jit_exclusions,
         compiled.jit_default,
@@ -259,7 +259,7 @@ mod tests {
     use crate::{DependencyOutputsInput, TaskInputs};
 
     fn assert_match(file: &str, pkg: &str, inputs: &TaskInputs, expected: bool) {
-        let compiled = compile_globs(inputs).unwrap();
+        let compiled = compile_globs(inputs, pkg).unwrap();
         let f = AnchoredSystemPathBuf::from_raw(file).unwrap();
         let p = RelativeUnixPathBuf::new(pkg.to_string()).unwrap();
         assert_eq!(
@@ -567,7 +567,7 @@ mod tests {
             default: false,
             ..Default::default()
         };
-        let error = match compile_globs(&inputs) {
+        let error = match compile_globs(&inputs, "packages/lib-a") {
             Ok(_) => panic!("invalid glob compiled successfully"),
             Err(error) => error,
         };
@@ -650,6 +650,103 @@ mod tests {
             "packages/lib-a",
             &inputs,
             true,
+        );
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/14340
+    ///
+    /// A package-relative `**/` glob must stay scoped to its package even
+    /// when a `$TURBO_ROOT$` input makes the task consider files outside it.
+    #[test]
+    fn doublestar_glob_with_turbo_root_does_not_match_other_packages() {
+        let inputs = TaskInputs {
+            globs: vec!["**/*.ts".to_string(), "../../tsconfig.json".to_string()],
+            default: false,
+            ..Default::default()
+        };
+        assert_match("packages/b/src/index.ts", "packages/a", &inputs, false);
+        assert_match("packages/a/src/index.ts", "packages/a", &inputs, true);
+        assert_match("tsconfig.json", "packages/a", &inputs, true);
+        assert_match("other.json", "packages/a", &inputs, false);
+    }
+
+    #[test]
+    fn doublestar_jit_glob_with_turbo_root_does_not_match_other_packages() {
+        let inputs = TaskInputs {
+            jit_globs: vec!["**/*.ts".to_string(), "../../tsconfig.json".to_string()],
+            ..Default::default()
+        };
+        assert_match("packages/b/src/index.ts", "packages/a", &inputs, false);
+        assert_match("tsconfig.json", "packages/a", &inputs, true);
+    }
+
+    #[test]
+    fn sibling_package_traversal_glob_is_normalized() {
+        let inputs = TaskInputs {
+            globs: vec![
+                "../lib-b/src/**".to_string(),
+                "!../../packages/lib-b/src/generated/**".to_string(),
+            ],
+            default: true,
+            ..Default::default()
+        };
+        assert_match(
+            "packages/lib-b/src/index.ts",
+            "packages/lib-a",
+            &inputs,
+            true,
+        );
+        assert_match(
+            "packages/lib-b/src/generated/client.ts",
+            "packages/lib-a",
+            &inputs,
+            false,
+        );
+        assert_match(
+            "packages/lib-c/src/index.ts",
+            "packages/lib-a",
+            &inputs,
+            false,
+        );
+    }
+
+    #[test]
+    fn traversal_into_own_package_is_normalized() {
+        assert_match(
+            "packages/lib-a/src/index.ts",
+            "packages/lib-a",
+            &TaskInputs {
+                globs: vec!["../lib-a/./src/*.ts".to_string()],
+                default: false,
+                ..Default::default()
+            },
+            true,
+        );
+    }
+
+    #[test]
+    fn prefix_sharing_sibling_package_is_outside_package() {
+        // `packages/lib-ab` shares a string prefix with `packages/lib-a` but
+        // is a different package.
+        let inputs = TaskInputs {
+            globs: vec!["**".to_string(), "../../tsconfig.json".to_string()],
+            default: true,
+            ..Default::default()
+        };
+        assert_match("packages/lib-ab/index.ts", "packages/lib-a", &inputs, false);
+    }
+
+    #[test]
+    fn glob_escaping_repo_root_matches_nothing() {
+        assert_match(
+            "tsconfig.json",
+            "packages/lib-a",
+            &TaskInputs {
+                globs: vec!["../../../tsconfig.json".to_string()],
+                default: false,
+                ..Default::default()
+            },
+            false,
         );
     }
 }

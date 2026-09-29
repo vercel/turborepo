@@ -25,6 +25,10 @@ use wax::{
     walk::{FileIterator, FilterAny, LinkBehavior, WalkBehavior},
 };
 
+mod package_input;
+
+pub use package_input::{PackageInput, resolve_package_path};
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
     Files,
