@@ -137,6 +137,9 @@ impl Resolution {
                 // Yarn4 encodes the default npm protocol in yarn.lock, but not in resolutions field of package.json
                 // We check if the ranges match when we add `npm:` to range coming from resolutions.
                 && !Self::eq_with_protocol(&dependency.range, resolution_range, "npm:")
+                // Resolutions may also encode `npm:` while the manifest range omits it,
+                // e.g. `"debug@npm:^4.0.0"` targeting `"debug": "^4.0.0"`.
+                && !Self::eq_with_protocol(resolution_range, &dependency.range, "npm:")
         {
             return None;
         }
@@ -329,6 +332,22 @@ mod test {
         assert_eq!(
             dependency,
             Some(Descriptor::try_from("lodash@npm:4.17.21").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_patch_resolution_with_npm_protocol_selector() {
+        // Resolution selectors may include `npm:` while the manifest range doesn't.
+        // See https://github.com/vercel/turborepo/issues/14336
+        let resolution = parse_resolution("debug@npm:^4.0.0").unwrap();
+        let dependency = resolution.reduce_dependency(
+            "patch:debug@npm%3A4.4.3#~/.yarn/patches/debug-npm-4.4.3.patch",
+            &Descriptor::try_from("debug@^4.0.0").unwrap(),
+            &Locator::try_from("app@workspace:packages/app").unwrap(),
+        );
+        assert_eq!(
+            dependency,
+            Some(Descriptor::try_from("debug@npm:4.4.3").unwrap())
         );
     }
 
