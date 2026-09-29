@@ -52,8 +52,8 @@ export interface WorkspaceSchema extends BaseSchema {
    */
   extends: Array<string>;
   /**
-   * Used to tag a package for boundaries rules. Boundaries rules can restrict
-   * which packages a tag group can import or be imported by.
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
    */
   tags?: Array<string>;
   /**
@@ -63,6 +63,12 @@ export interface WorkspaceSchema extends BaseSchema {
 }
 
 export interface RootSchema extends BaseSchema {
+  /**
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
+   */
+  tags?: Array<string>;
+
   /**
    * Controls whether turbo maintains a root AGENTS.md block for AI agents.
    * Set to false to opt out of future automatic updates.
@@ -536,6 +542,15 @@ export interface Pipeline {
    * task execution or caching behavior.
    */
   description?: string;
+
+  /**
+   * Arbitrary string labels for this task. Package configurations replace
+   * inherited tags by default; an empty array clears them. Include
+   * `$TURBO_EXTENDS$` to append labels to inherited tags.
+   *
+   * @defaultValue `[]`
+   */
+  tags?: Array<string>;
 
   /**
    * The list of tasks that this task depends on.

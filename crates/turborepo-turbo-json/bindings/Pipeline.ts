@@ -17,6 +17,12 @@ export type Pipeline = {
  */
 description?: string, 
 /**
+ * Arbitrary string labels for this task. Package configurations replace
+ * inherited tags by default; an empty array clears them. Include
+ * `$TURBO_EXTENDS$` to append labels to inherited tags.
+ */
+tags?: Array<string>,
+/**
  * Whether or not to cache the outputs of the task.
  *
  * Setting cache to false is useful for long-running "watch" or

@@ -129,10 +129,8 @@ cacheMaxSize?: string,
  */
 noUpdateNotifier?: boolean, 
 /**
- * Used to tag a package for boundaries rules.
- *
- * Boundaries rules can restrict which packages a tag group can import
- * or be imported by.
+ * Arbitrary string labels for this package. In the root configuration,
+ * these labels apply to the root package.
  */
 tags?: Array<string>, 
 /**

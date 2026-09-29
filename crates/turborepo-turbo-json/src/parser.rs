@@ -267,6 +267,7 @@ impl WithMetadata for Pipeline {
 
 impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {
+        self.tags.add_text(text.clone());
         self.depends_on.add_text(text.clone());
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_text(text.clone());
@@ -283,6 +284,7 @@ impl WithMetadata for RawTaskDefinition {
     }
 
     fn add_path(&mut self, path: Arc<str>) {
+        self.tags.add_path(path.clone());
         self.depends_on.add_path(path.clone());
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_path(path.clone());
@@ -627,6 +629,82 @@ mod tests {
     use test_case::test_case;
 
     use super::*;
+
+    #[test]
+    fn test_task_tags_parse_with_metadata() {
+        let json = r#"{"tasks":{"build":{"tags":["","CI label","$TURBO_EXTENDS$","CI label","日本語","line\nlabel"]},"clear":{"tags":[]},"inherit":{}}}"#;
+        let root = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        let package_json = format!(r#"{{"extends":["//"],{}}}"#, &json[1..json.len() - 1]);
+        let package = RawPackageTurboJson::parse(&package_json, "packages/web/turbo.json").unwrap();
+        for (tasks, text, path) in [
+            (root.tasks.unwrap(), json, "turbo.json"),
+            (
+                package.tasks.unwrap(),
+                package_json.as_str(),
+                "packages/web/turbo.json",
+            ),
+        ] {
+            let tags = tasks
+                .get(&TaskName::from("build"))
+                .unwrap()
+                .tags
+                .as_ref()
+                .unwrap();
+            assert_eq!(
+                tags.iter().map(|tag| tag.as_str()).collect::<Vec<_>>(),
+                [
+                    "",
+                    "CI label",
+                    "$TURBO_EXTENDS$",
+                    "CI label",
+                    "日本語",
+                    "line\nlabel"
+                ]
+            );
+            for tag in tags {
+                assert_eq!(tag.text.as_deref(), Some(text));
+                assert_eq!(tag.path.as_deref(), Some(path));
+                assert!(tag.range.is_some());
+            }
+            assert_eq!(
+                tasks.get(&TaskName::from("clear")).unwrap().tags,
+                Some(vec![])
+            );
+            assert!(
+                tasks
+                    .get(&TaskName::from("inherit"))
+                    .unwrap()
+                    .tags
+                    .is_none()
+            );
+            let serialized =
+                serde_json::to_value(tasks.get(&TaskName::from("build")).unwrap().as_inner())
+                    .unwrap();
+            assert_eq!(
+                serialized["tags"],
+                serde_json::json!([
+                    "",
+                    "CI label",
+                    "$TURBO_EXTENDS$",
+                    "CI label",
+                    "日本語",
+                    "line\nlabel"
+                ])
+            );
+        }
+    }
+
+    #[test_case(r#""label""#; "scalar")]
+    #[test_case("[1]"; "number element")]
+    #[test_case("[true]"; "boolean element")]
+    #[test_case("[{}]"; "object element")]
+    #[test_case("[null]"; "null element")]
+    fn test_task_tags_reject_invalid_shapes(tags: &str) {
+        let json = format!(r#"{{"tasks":{{"build":{{"tags":{tags}}}}}}}"#);
+        assert!(RawRootTurboJson::parse(&json, "turbo.json").is_err());
+        let package_json = format!(r#"{{"extends":["//"],{}}}"#, &json[1..json.len() - 1]);
+        assert!(RawPackageTurboJson::parse(&package_json, "packages/web/turbo.json").is_err());
+    }
 
     #[test]
     fn test_biome_parse_error_new() {

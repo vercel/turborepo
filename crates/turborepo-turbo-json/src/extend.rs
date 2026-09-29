@@ -2,7 +2,7 @@
 
 use super::processed::{
     ProcessedDependsOn, ProcessedEnv, ProcessedInputs, ProcessedOutputs, ProcessedPassThroughEnv,
-    ProcessedTaskDefinition, ProcessedWith,
+    ProcessedTags, ProcessedTaskDefinition, ProcessedWith,
 };
 
 /// Trait for types that can be merged with extends behavior
@@ -39,6 +39,13 @@ impl Extendable for ProcessedEnv {
             self.vars.sort();
             self.vars.dedup();
         }
+        self.extends = other.extends;
+    }
+}
+
+impl Extendable for ProcessedTags {
+    fn extend(&mut self, other: Self) {
+        merge_field_vec!(self, other, labels);
         self.extends = other.extends;
     }
 }
@@ -145,6 +152,7 @@ impl ProcessedTaskDefinition {
         merge_field!(self, other, env);
         merge_field!(self, other, pass_through_env);
         merge_field!(self, other, with);
+        merge_field!(self, other, tags);
 
         // Non-array fields that are simply replaced
         let other_has_range = other.cache.as_ref().is_some_and(|c| c.range.is_some());
@@ -185,6 +193,7 @@ mod test {
     // Shared test fixtures
     fn create_base_task() -> ProcessedTaskDefinition {
         ProcessedTaskDefinition {
+            tags: None,
             extends: None,
             description: None,
             cache: Some(Spanned::new(true)),
@@ -224,6 +233,7 @@ mod test {
 
     fn create_override_task() -> ProcessedTaskDefinition {
         ProcessedTaskDefinition {
+            tags: None,
             extends: None,
             description: None,
             cache: Some(Spanned::new(false)),
@@ -263,6 +273,7 @@ mod test {
 
     fn create_partial_task() -> ProcessedTaskDefinition {
         ProcessedTaskDefinition {
+            tags: None,
             extends: None,
             description: None,
             persistent: Some(Spanned::new(true)),

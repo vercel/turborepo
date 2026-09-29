@@ -104,6 +104,7 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         let with = processed.with.map(|with_tasks| with_tasks.tasks);
 
         Ok(TaskDefinition {
+            tags: processed.tags.map(|tags| tags.labels).unwrap_or_default(),
             outputs,
             cache,
             topological_dependencies,
@@ -186,6 +187,99 @@ mod tests {
     use turborepo_types::TaskInputs;
 
     use super::*;
+
+    #[test]
+    fn test_task_tags_resolution() {
+        use turborepo_turbo_json::{FutureFlags, RawPackageTurboJson, RawRootTurboJson};
+
+        let root = RawRootTurboJson::parse(
+            r#"{"tasks":{"build":{"tags":["root","root"]}}}"#,
+            "turbo.json",
+        )
+        .unwrap();
+        let root_task = root
+            .tasks
+            .unwrap()
+            .get(&TaskName::from("build"))
+            .unwrap()
+            .value
+            .clone();
+        for (config, expected) in [
+            (r#"{}"#, vec!["root", "root"]),
+            (
+                r#"{"tags":["package","","$TURBO_EXTENDS$","package"]}"#,
+                vec!["root", "root", "package", "", "package"],
+            ),
+            (r#"{"tags":[]}"#, vec![]),
+            (r#"{"tags":["$TURBO_EXTENDS$"]}"#, vec!["root", "root"]),
+            (r#"{"extends":false,"tags":["package"]}"#, vec!["package"]),
+            (
+                r#"{"extends":false,"tags":["$TURBO_EXTENDS$","package"]}"#,
+                vec!["package"],
+            ),
+            (r#"{"extends":false,"tags":["$TURBO_EXTENDS$"]}"#, vec![]),
+            (r#"{"extends":false,"tags":[]}"#, vec![]),
+        ] {
+            let package = RawPackageTurboJson::parse(
+                &format!(r#"{{"extends":["//"],"tasks":{{"build":{config}}}}}"#),
+                "packages/web/turbo.json",
+            )
+            .unwrap();
+            let raw = package
+                .tasks
+                .unwrap()
+                .get(&TaskName::from("build"))
+                .unwrap()
+                .value
+                .clone();
+            let processed =
+                ProcessedTaskDefinition::from_raw(raw.clone(), &FutureFlags::default()).unwrap();
+            let mut merged = if raw.extends.as_ref().is_some_and(|extends| !extends.value) {
+                assert!(
+                    turborepo_turbo_json::HasConfigBeyondExtends::has_config_beyond_extends(&raw)
+                );
+                assert!(processed.has_config_beyond_extends());
+                ProcessedTaskDefinition::default()
+            } else {
+                ProcessedTaskDefinition::from_raw(root_task.clone(), &FutureFlags::default())
+                    .unwrap()
+            };
+            merged.merge(processed);
+            let task =
+                TaskDefinition::from_processed(merged, RelativeUnixPath::new("../..").unwrap())
+                    .unwrap();
+            assert_eq!(task.tags, expected, "{config}");
+        }
+        for (tags, expected) in [
+            (r#"["$TURBO_EXTENDS$","root","root"]"#, vec!["root", "root"]),
+            (r#"["$TURBO_EXTENDS$"]"#, vec![]),
+        ] {
+            let root = RawRootTurboJson::parse(
+                &format!(r#"{{"tasks":{{"build":{{"tags":{tags}}}}}}}"#),
+                "turbo.json",
+            )
+            .unwrap();
+            let raw = root
+                .tasks
+                .unwrap()
+                .get(&TaskName::from("build"))
+                .unwrap()
+                .value
+                .clone();
+            let task = TaskDefinition::from_raw(raw, RelativeUnixPath::new(".").unwrap()).unwrap();
+            assert_eq!(
+                task.tags, expected,
+                "marker must be stripped without a parent"
+            );
+        }
+        assert!(TaskDefinition::default().tags.is_empty());
+        assert!(
+            TaskDefinition::from_raw(Default::default(), RelativeUnixPath::new(".").unwrap())
+                .unwrap()
+                .tags
+                .is_empty()
+        );
+    }
 
     #[test]
     fn test_prepend_global_inputs_basic() {

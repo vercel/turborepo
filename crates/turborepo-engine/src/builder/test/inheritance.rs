@@ -1,6 +1,111 @@
 use super::*;
 
 #[test]
+fn test_task_tags_inheritance() {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let package_graph = mock_package_graph(
+        &repo_root,
+        package_jsons! { repo_root, "app" => [], "shared-config" => [] },
+    );
+    for (shared, local, expected, fresh) in [
+        (json!({}), json!({}), vec!["root", "root"], false),
+        (
+            json!({"tags": ["$TURBO_EXTENDS$", "shared", "shared"]}),
+            json!({"tags": ["$TURBO_EXTENDS$", "local", "shared"]}),
+            vec!["root", "root", "shared", "shared", "local", "shared"],
+            false,
+        ),
+        (
+            json!({"tags": ["$TURBO_EXTENDS$"]}),
+            json!({"tags": ["$TURBO_EXTENDS$"]}),
+            vec!["root", "root"],
+            false,
+        ),
+        (
+            json!({"tags": []}),
+            json!({"tags": ["$TURBO_EXTENDS$"]}),
+            vec![],
+            false,
+        ),
+        (
+            json!({"tags": ["$TURBO_EXTENDS$", "shared"]}),
+            json!({"tags": ["local", "local"]}),
+            vec!["local", "local"],
+            false,
+        ),
+        (
+            json!({"tags": ["shared"]}),
+            json!({}),
+            vec!["shared"],
+            false,
+        ),
+        (
+            json!({"tags": ["shared"]}),
+            json!({"tags": ["local", "$TURBO_EXTENDS$", "local"]}),
+            vec!["shared", "local", "local"],
+            false,
+        ),
+        (
+            json!({"tags": ["shared"]}),
+            json!({"tags": []}),
+            vec![],
+            false,
+        ),
+        (
+            json!({}),
+            json!({"extends": false, "tags": ["$TURBO_EXTENDS$", "fresh"]}),
+            vec!["fresh"],
+            true,
+        ),
+        (
+            json!({}),
+            json!({"extends": false, "tags": []}),
+            vec![],
+            true,
+        ),
+        (
+            json!({}),
+            json!({"extends": false, "tags": ["$TURBO_EXTENDS$"]}),
+            vec![],
+            true,
+        ),
+    ] {
+        let loader = TestTurboJsonLoader::new(HashMap::from([
+            (
+                PackageName::Root,
+                turbo_json(json!({"tasks": {"build": {"tags": ["root", "root"], "cache": false}}})),
+            ),
+            (
+                PackageName::from("shared-config"),
+                turbo_json(json!({"extends": ["//"], "tasks": {"build": shared}})),
+            ),
+            (
+                PackageName::from("app"),
+                turbo_json(json!({"extends": ["//", "shared-config"], "tasks": {"build": local}})),
+            ),
+        ]));
+        let tasks = TaskInheritanceResolver::new(&loader)
+            .resolve(&PackageName::from("app"))
+            .unwrap();
+        assert!(tasks.contains(&TaskName::from("build")));
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("app")])
+            .build()
+            .unwrap();
+        let task = engine
+            .task_definition(&TaskId::new("app", "build"))
+            .unwrap();
+        assert_eq!(task.tags, expected);
+        assert_eq!(
+            task.cache, fresh,
+            "tags-only extends:false must reset inherited configuration"
+        );
+    }
+}
+
+#[test]
 fn test_task_extends_false_excludes_task() {
     // shared-config defines build and lint tasks
     // app extends shared-config but opts out of lint with extends: false
