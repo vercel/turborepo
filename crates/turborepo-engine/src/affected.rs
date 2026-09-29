@@ -93,12 +93,13 @@ pub fn match_tasks_against_changed_files(
 
         let cache_key = (pkg_str.clone(), inputs.clone());
         if !compiled_cache.contains_key(&cache_key) {
-            let compiled =
-                compile_globs(inputs).map_err(|error| AffectednessError::InvalidGlob {
+            let compiled = compile_globs(inputs, &pkg_str).map_err(|error| {
+                AffectednessError::InvalidGlob {
                     task: task_id.clone(),
                     glob: error.glob,
                     error: error.error.to_string(),
-                })?;
+                }
+            })?;
             compiled_cache.insert(cache_key.clone(), compiled);
         }
         let compiled = &compiled_cache[&cache_key];
