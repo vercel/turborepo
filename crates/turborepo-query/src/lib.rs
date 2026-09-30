@@ -234,6 +234,8 @@ impl<T: OutputType> FromIterator<T> for Array<T> {
 enum PackageFields {
     Name,
     TaskName,
+    /// A package label (does not include labels on its tasks).
+    Tag,
     DirectDependencyCount,
     DirectDependentCount,
     IndirectDependentCount,
@@ -374,6 +376,7 @@ impl PackagePredicate {
         match (field, &value.0) {
             (PackageFields::Name, Value::String(name)) => pkg.get_name().as_str() == name,
             (PackageFields::TaskName, Value::String(name)) => pkg.get_task_names().contains(name),
+            (PackageFields::Tag, Value::String(tag)) => pkg.get_tags().contains(tag),
             _ => false,
         }
     }
@@ -670,8 +673,12 @@ struct ChangedTasks {
 impl ChangedTasks {
     /// The collection and all its transitive dependencies, with each task once.
     /// Includes non-executable task nodes and sorts by package name, then task
-    /// name.
-    async fn with_dependencies(&self) -> Result<Array<task::RepositoryTask>, Error> {
+    /// name. The optional filter applies after expansion and does not prune
+    /// traversal through non-matching tasks.
+    async fn with_dependencies(
+        &self,
+        filter: Option<task::TaskPredicate>,
+    ) -> Result<Array<task::RepositoryTask>, Error> {
         let Some(first) = self.items.first() else {
             return Ok(Vec::new().into());
         };
@@ -690,6 +697,13 @@ impl ChangedTasks {
         let mut tasks = task_ids
             .into_iter()
             .map(|task_id| task::RepositoryTask::new(&task_id, run))
+            .filter(|task| {
+                task.as_ref().map_or(true, |task| {
+                    filter
+                        .as_ref()
+                        .is_none_or(|predicate| predicate.check(task))
+                })
+            })
             .collect::<Result<Array<_>, _>>()?;
         tasks.sort_by(|a, b| {
             a.package
@@ -804,8 +818,10 @@ impl RepositoryQuery {
     ///
     /// Use the `tasks` parameter to filter to specific task names (e.g.
     /// `["test", "typecheck"]`). Use `filter` to filter by package (same
-    /// predicates as `affectedPackages`). When both are provided, a task
-    /// must match both filters to be included (intersection).
+    /// predicates as `affectedPackages`). `taskFilter` applies task predicates,
+    /// with TAG matching either task or package labels. All provided filters
+    /// intersect when selecting affected tasks, before adding prerequisites;
+    /// required prerequisites need not match the filters.
     async fn affected_tasks(
         &self,
         base: Option<String>,
@@ -813,6 +829,11 @@ impl RepositoryQuery {
         #[graphql(desc = "Filter to specific task names (e.g. [\"test\", \"typecheck\"])")]
         tasks: Option<Vec<String>>,
         filter: Option<PackagePredicate>,
+        #[graphql(
+            desc = "Task predicates applied before prerequisite expansion. TAG matches task or \
+                    package labels."
+        )]
+        task_filter: Option<task::TaskPredicate>,
     ) -> Result<ChangedTasks, Error> {
         let task_level_results =
             affected_tasks::calculate_affected_tasks(&self.run, base.clone(), head.clone())?;
@@ -861,10 +882,13 @@ impl RepositoryQuery {
             })
             .filter_map(|task_id| {
                 let task = task::RepositoryTask::new(task_id, &self.run).ok()?;
-                filter
+                (filter
                     .as_ref()
                     .is_none_or(|predicate| predicate.check(&task.package))
-                    .then(|| task_id.clone())
+                    && task_filter
+                        .as_ref()
+                        .is_none_or(|predicate| predicate.check(&task)))
+                .then(|| task_id.clone())
             })
             .collect();
 

@@ -224,7 +224,18 @@ expression: query_output
             {
               "name": "tasks",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -442,7 +453,18 @@ expression: query_output
             {
               "name": "directDependents",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -458,7 +480,18 @@ expression: query_output
             {
               "name": "directDependencies",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -474,7 +507,18 @@ expression: query_output
             {
               "name": "indirectDependents",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -490,7 +534,18 @@ expression: query_output
             {
               "name": "indirectDependencies",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -506,7 +561,18 @@ expression: query_output
             {
               "name": "allDependents",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -522,7 +588,18 @@ expression: query_output
             {
               "name": "allDependencies",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -588,8 +665,19 @@ expression: query_output
             },
             {
               "name": "withDependencies",
-              "description": "The collection and all its transitive dependencies, with each task once.\nIncludes non-executable task nodes and sorts by package name, then task\nname.",
-              "args": [],
+              "description": "The collection and all its transitive dependencies, with each task once.\nIncludes non-executable task nodes and sorts by package name, then task\nname. The optional filter applies after expansion and does not prune\ntraversal through non-matching tasks.",
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -1919,7 +2007,18 @@ expression: query_output
             {
               "name": "tasks",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -2051,6 +2150,12 @@ expression: query_output
             {
               "name": "TASK_NAME",
               "description": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "TAG",
+              "description": "A package label (does not include labels on its tasks).",
               "isDeprecated": false,
               "deprecationReason": null
             },
@@ -2348,7 +2453,7 @@ expression: query_output
             },
             {
               "name": "affectedTasks",
-              "description": "Gets a list of tasks that are affected by changes between two git refs.\n\nUnlike `affectedPackages` which operates at the package level,\n`affectedTasks` checks each task's specific `inputs` configuration\nagainst the changed files and walks the task dependency graph.\nA task is only reported as affected if its inputs actually changed,\nor if an upstream task dependency is affected.\n\nUse the `tasks` parameter to filter to specific task names (e.g.\n`[\"test\", \"typecheck\"]`). Use `filter` to filter by package (same\npredicates as `affectedPackages`). When both are provided, a task\nmust match both filters to be included (intersection).",
+              "description": "Gets a list of tasks that are affected by changes between two git refs.\n\nUnlike `affectedPackages` which operates at the package level,\n`affectedTasks` checks each task's specific `inputs` configuration\nagainst the changed files and walks the task dependency graph.\nA task is only reported as affected if its inputs actually changed,\nor if an upstream task dependency is affected.\n\nUse the `tasks` parameter to filter to specific task names (e.g.\n`[\"test\", \"typecheck\"]`). Use `filter` to filter by package (same\npredicates as `affectedPackages`). `taskFilter` applies task predicates,\nwith TAG matching either task or package labels. All provided filters\nintersect when selecting affected tasks, before adding prerequisites;\nrequired prerequisites need not match the filters.",
               "args": [
                 {
                   "name": "base",
@@ -2394,6 +2499,16 @@ expression: query_output
                   "type": {
                     "kind": "INPUT_OBJECT",
                     "name": "PackagePredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "taskFilter",
+                  "description": "Task predicates applied before prerequisite expansion. TAG matches task or package labels.",
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
                     "ofType": null
                   },
                   "defaultValue": null
@@ -2739,7 +2854,18 @@ expression: query_output
             {
               "name": "directDependents",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -2755,7 +2881,18 @@ expression: query_output
             {
               "name": "directDependencies",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -2771,7 +2908,18 @@ expression: query_output
             {
               "name": "indirectDependents",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -2787,7 +2935,18 @@ expression: query_output
             {
               "name": "indirectDependencies",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -2803,7 +2962,18 @@ expression: query_output
             {
               "name": "allDependents",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -2819,7 +2989,18 @@ expression: query_output
             {
               "name": "allDependencies",
               "description": null,
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -3092,6 +3273,74 @@ expression: query_output
           "possibleTypes": null
         },
         {
+          "kind": "INPUT_OBJECT",
+          "name": "TaskFieldValuePair",
+          "description": null,
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "field",
+              "description": null,
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "ENUM",
+                  "name": "TaskFields",
+                  "ofType": null
+                }
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "value",
+              "description": null,
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "_Any",
+                  "ofType": null
+                }
+              },
+              "defaultValue": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "ENUM",
+          "name": "TaskFields",
+          "description": null,
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
+          "enumValues": [
+            {
+              "name": "NAME",
+              "description": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "FULL_NAME",
+              "description": null,
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "TAG",
+              "description": "Matches a label on either the resolved task or its package.",
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "possibleTypes": null
+        },
+        {
           "kind": "OBJECT",
           "name": "TaskFileChanged",
           "description": null,
@@ -3196,6 +3445,93 @@ expression: query_output
           ],
           "inputFields": null,
           "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "TaskPredicate",
+          "description": "Predicates on tasks. Multiple predicates are combined using AND; use `or`\nfor alternatives. `has: {field: TAG, value: \"label\"}` matches an exact,\ncase-sensitive label in the union of task and package labels, like the CLI\n`tag:<label>` filter. Name equality only accepts string values.",
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "and",
+              "description": null,
+              "type": {
+                "kind": "LIST",
+                "name": null,
+                "ofType": {
+                  "kind": "NON_NULL",
+                  "name": null,
+                  "ofType": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  }
+                }
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "or",
+              "description": null,
+              "type": {
+                "kind": "LIST",
+                "name": null,
+                "ofType": {
+                  "kind": "NON_NULL",
+                  "name": null,
+                  "ofType": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "TaskPredicate",
+                    "ofType": null
+                  }
+                }
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "equal",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "TaskFieldValuePair",
+                "ofType": null
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "notEqual",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "TaskFieldValuePair",
+                "ofType": null
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "not",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "TaskPredicate",
+                "ofType": null
+              },
+              "defaultValue": null
+            },
+            {
+              "name": "has",
+              "description": null,
+              "type": {
+                "kind": "INPUT_OBJECT",
+                "name": "TaskFieldValuePair",
+                "ofType": null
+              },
+              "defaultValue": null
+            }
+          ],
+          "interfaces": null,
           "enumValues": null,
           "possibleTypes": null
         },

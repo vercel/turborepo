@@ -1,6 +1,6 @@
 use std::{collections::HashSet, sync::Arc};
 
-use async_graphql::{Json, Object, SimpleObject};
+use async_graphql::{Any, Enum, InputObject, Json, Object, SimpleObject, Value};
 use turborepo_errors::Spanned;
 use turborepo_types::TaskCommandOverride;
 
@@ -11,6 +11,79 @@ use crate::{Array, Error, QueryRun, QueryTaskId, package::Package};
 pub struct Environment {
     pub env: Vec<String>,
     pub pass_through_env: Vec<String>,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub(crate) enum TaskFields {
+    Name,
+    FullName,
+    /// Matches a label on either the resolved task or its package.
+    Tag,
+}
+
+#[derive(InputObject)]
+pub(crate) struct TaskFieldValuePair {
+    field: TaskFields,
+    value: Any,
+}
+
+/// Predicates on tasks. Multiple predicates are combined using AND; use `or`
+/// for alternatives. `has: {field: TAG, value: "label"}` matches an exact,
+/// case-sensitive label in the union of task and package labels, like the CLI
+/// `tag:<label>` filter. Name equality only accepts string values.
+#[derive(InputObject)]
+pub(crate) struct TaskPredicate {
+    and: Option<Vec<TaskPredicate>>,
+    or: Option<Vec<TaskPredicate>>,
+    equal: Option<TaskFieldValuePair>,
+    not_equal: Option<TaskFieldValuePair>,
+    not: Option<Box<TaskPredicate>>,
+    has: Option<TaskFieldValuePair>,
+}
+
+impl TaskPredicate {
+    fn check_equals(task: &RepositoryTask, pair: &TaskFieldValuePair) -> bool {
+        match (&pair.field, &pair.value.0) {
+            (TaskFields::Name, Value::String(name)) => &task.name == name,
+            (TaskFields::FullName, Value::String(name)) => task.task_id().full_name() == *name,
+            _ => false,
+        }
+    }
+
+    fn check_has(task: &RepositoryTask, pair: &TaskFieldValuePair) -> bool {
+        match (&pair.field, &pair.value.0) {
+            (TaskFields::Tag, Value::String(tag)) => {
+                task.get_tags().contains(tag) || task.package.get_tags().contains(tag)
+            }
+            _ => Self::check_equals(task, pair),
+        }
+    }
+
+    pub(crate) fn check(&self, task: &RepositoryTask) -> bool {
+        self.and
+            .as_ref()
+            .is_none_or(|predicates| predicates.iter().all(|p| p.check(task)))
+            && self
+                .or
+                .as_ref()
+                .is_none_or(|predicates| predicates.iter().any(|p| p.check(task)))
+            && self
+                .equal
+                .as_ref()
+                .is_none_or(|pair| Self::check_equals(task, pair))
+            && self
+                .not_equal
+                .as_ref()
+                .is_none_or(|pair| !Self::check_equals(task, pair))
+            && self
+                .not
+                .as_ref()
+                .is_none_or(|predicate| !predicate.check(task))
+            && self
+                .has
+                .as_ref()
+                .is_none_or(|pair| Self::check_has(task, pair))
+    }
 }
 
 pub struct RepositoryTask {
@@ -96,11 +169,19 @@ impl RepositoryTask {
         &self,
         task_id: &QueryTaskId,
         tasks: impl IntoIterator<Item = QueryTaskId>,
+        filter: Option<TaskPredicate>,
     ) -> Result<Array<RepositoryTask>, Error> {
         let mut tasks = tasks
             .into_iter()
             .filter(|task| task != task_id)
             .map(|task| RepositoryTask::new(&task, self.package.run()))
+            .filter(|task| {
+                task.as_ref().map_or(true, |task| {
+                    filter
+                        .as_ref()
+                        .is_none_or(|predicate| predicate.check(task))
+                })
+            })
             .collect::<Result<Array<_>, _>>()?;
         tasks.sort_by(|a, b| {
             a.package
@@ -168,17 +249,34 @@ impl RepositoryTask {
             .transpose()
     }
 
-    async fn direct_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
+    async fn direct_dependents(
+        &self,
+        filter: Option<TaskPredicate>,
+    ) -> Result<Array<RepositoryTask>, Error> {
         let task_id = self.task_id();
-        self.collect_and_sort(&task_id, self.package.run().task_dependents(&task_id))
+        self.collect_and_sort(
+            &task_id,
+            self.package.run().task_dependents(&task_id),
+            filter,
+        )
     }
 
-    async fn direct_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
+    async fn direct_dependencies(
+        &self,
+        filter: Option<TaskPredicate>,
+    ) -> Result<Array<RepositoryTask>, Error> {
         let task_id = self.task_id();
-        self.collect_and_sort(&task_id, self.package.run().task_dependencies(&task_id))
+        self.collect_and_sort(
+            &task_id,
+            self.package.run().task_dependencies(&task_id),
+            filter,
+        )
     }
 
-    async fn indirect_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
+    async fn indirect_dependents(
+        &self,
+        filter: Option<TaskPredicate>,
+    ) -> Result<Array<RepositoryTask>, Error> {
         let task_id = self.task_id();
         // Preserve the existing query semantics: this exclusion set is the
         // task's direct dependencies rather than its direct dependents.
@@ -196,10 +294,14 @@ impl RepositoryTask {
                 .transitive_task_dependents(&task_id)
                 .into_iter()
                 .filter(|task| !direct_dependents.contains(task)),
+            filter,
         )
     }
 
-    async fn indirect_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
+    async fn indirect_dependencies(
+        &self,
+        filter: Option<TaskPredicate>,
+    ) -> Result<Array<RepositoryTask>, Error> {
         let task_id = self.task_id();
         let direct_dependencies: HashSet<_> = self
             .package
@@ -215,22 +317,31 @@ impl RepositoryTask {
                 .transitive_task_dependencies(&task_id)
                 .into_iter()
                 .filter(|task| !direct_dependencies.contains(task)),
+            filter,
         )
     }
 
-    async fn all_dependents(&self) -> Result<Array<RepositoryTask>, Error> {
+    async fn all_dependents(
+        &self,
+        filter: Option<TaskPredicate>,
+    ) -> Result<Array<RepositoryTask>, Error> {
         let task_id = self.task_id();
         self.collect_and_sort(
             &task_id,
             self.package.run().transitive_task_dependents(&task_id),
+            filter,
         )
     }
 
-    async fn all_dependencies(&self) -> Result<Array<RepositoryTask>, Error> {
+    async fn all_dependencies(
+        &self,
+        filter: Option<TaskPredicate>,
+    ) -> Result<Array<RepositoryTask>, Error> {
         let task_id = self.task_id();
         self.collect_and_sort(
             &task_id,
             self.package.run().transitive_task_dependencies(&task_id),
+            filter,
         )
     }
 }
