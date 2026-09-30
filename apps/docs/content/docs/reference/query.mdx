@@ -114,6 +114,26 @@ expanded names, framework-inferred variables, or a complete process environment.
 The query does not execute tasks or report cache hits. Unlike dry-run summaries,
 this selection does not include file-hash inventories.
 
+## Tags
+
+Packages and tasks expose a `tags` array, returning `[]` when no labels are configured. Package tags come from the package's loaded `turbo.json` and do not include task labels or inherit root package labels.
+
+A task's `tags` contains its resolved task labels only, after configuration inheritance and `$TURBO_EXTENDS$` composition. Order and duplicate labels are preserved, and the inheritance marker is not exposed. Select `package { tags }` to read its package labels separately.
+
+```graphql title="tags.gql"
+query {
+  packages {
+    items {
+      name
+      tags
+      tasks {
+        items { fullName tags package { tags } }
+      }
+    }
+  }
+}
+```
+
 ## Shorthands
 
 Shorthands generate GraphQL queries for common operations so you don't need to write them by hand. The JSON output is identical to what you'd get from a raw query.

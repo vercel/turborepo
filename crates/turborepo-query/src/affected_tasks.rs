@@ -352,6 +352,16 @@ mod tests {
             &self.repo_context
         }
 
+        fn package_tags(&self, package: &PackageName) -> Vec<String> {
+            self.repo_context
+                .turbo_json_loader
+                .load(package)
+                .ok()
+                .and_then(|config| config.tags.as_ref())
+                .map(|tags| tags.iter().map(|tag| tag.as_inner().clone()).collect())
+                .unwrap_or_default()
+        }
+
         fn task_ids(&self) -> Vec<QueryTaskId> {
             self.engine.task_ids().map(query_task_id).collect()
         }
@@ -846,6 +856,117 @@ mod tests {
         let result: serde_json::Value = serde_json::from_str(&result.result_json).unwrap();
         assert!(result.get("errors").is_none(), "{result}");
         result["data"].clone()
+    }
+
+    async fn tagged_query_run(root: &AbsoluteSystemPath) -> Arc<MockQueryRun> {
+        let packages = ["app-a", "lib-a", "lib-b"]
+            .into_iter()
+            .map(|name| {
+                (
+                    root.join_components(&["packages", name, "package.json"]),
+                    PackageJson {
+                        name: Some(turborepo_errors::Spanned::new(name.to_string())),
+                        scripts: std::collections::BTreeMap::from([(
+                            "build".to_string(),
+                            turborepo_errors::Spanned::new("echo build".to_string()),
+                        )]),
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect();
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(packages))
+            .build()
+            .await
+            .unwrap();
+        let mut run = MockQueryRun {
+            engine: make_engine(&[]),
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: Default::default(),
+            changed_files: Default::default(),
+            recorded_calls: Default::default(),
+        };
+        let definition = |tags: &[&str]| TaskDefinition {
+            tags: tags.iter().map(|tag| tag.to_string()).collect(),
+            ..Default::default()
+        };
+        run.engine = make_engine_with_edges(
+            &[
+                (
+                    TaskId::new("app-a", "build"),
+                    definition(&["deploy", "shared"]),
+                ),
+                (
+                    TaskId::new("lib-a", "build"),
+                    definition(&["compile", "shared"]),
+                ),
+                (TaskId::new("lib-b", "build"), definition(&[])),
+            ],
+            &[
+                (TaskId::new("app-a", "build"), TaskId::new("lib-a", "build")),
+                (TaskId::new("app-a", "build"), TaskId::new("lib-b", "build")),
+            ],
+        );
+        let config = |tags: &[&str]| {
+            let mut config = TurboJson::default();
+            config.tags = Some(turborepo_errors::Spanned::new(
+                tags.iter()
+                    .map(|tag| turborepo_errors::Spanned::new(tag.to_string()))
+                    .collect(),
+            ));
+            config
+        };
+        run.repo_context.turbo_json_loader = UnifiedTurboJsonLoader::noop(HashMap::from([
+            (PackageName::Root, run.repo_context.root_turbo_json.clone()),
+            (
+                PackageName::from("app-a"),
+                config(&["application", "shared"]),
+            ),
+            (PackageName::from("lib-a"), config(&["library", "shared"])),
+        ]));
+        Arc::new(run)
+    }
+
+    #[tokio::test]
+    async fn query_tags_metadata_keeps_task_and_package_labels_separate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let run = tagged_query_run(root).await;
+        let data = query_data(
+            run,
+            r#"{
+            package(name: "app-a") {
+                tags
+                tasks { items { fullName tags package { tags }
+                    directDependencies { items { fullName tags package { tags } } }
+                } }
+            }
+            untagged: package(name: "lib-b") { tags tasks { items { tags } } }
+        }"#,
+        )
+        .await;
+        assert_eq!(
+            data["package"]["tags"],
+            serde_json::json!(["application", "shared"])
+        );
+        assert_eq!(
+            data["package"]["tasks"]["items"],
+            serde_json::json!([{
+                "fullName": "app-a#build", "tags": ["deploy", "shared"],
+                "package": {"tags": ["application", "shared"]},
+                "directDependencies": {"items": [
+                    {"fullName": "lib-a#build", "tags": ["compile", "shared"],
+                        "package": {"tags": ["library", "shared"]}},
+                    {"fullName": "lib-b#build", "tags": [], "package": {"tags": []}}
+                ]}
+            }])
+        );
+        assert_eq!(
+            data["untagged"],
+            serde_json::json!({"tags": [], "tasks": {"items": [{"tags": []}]}})
+        );
     }
 
     #[tokio::test]

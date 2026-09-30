@@ -86,6 +86,30 @@ expression: query_output
               "deprecationReason": null
             },
             {
+              "name": "tags",
+              "description": "Package labels from the loaded turbo.json, excluding task labels.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  }
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "path",
               "description": "The path to the package, relative to the repository root",
               "args": [],
@@ -334,6 +358,30 @@ expression: query_output
                   "kind": "SCALAR",
                   "name": "String",
                   "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "tags",
+              "description": "This task's resolved labels, excluding package labels. Package labels\nare available separately through `package.tags`.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  }
                 }
               },
               "isDeprecated": false,
@@ -1733,6 +1781,30 @@ expression: query_output
               "deprecationReason": null
             },
             {
+              "name": "tags",
+              "description": "Package labels from the loaded turbo.json, excluding task labels.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  }
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "path",
               "description": "The path to the package, relative to the repository root",
               "args": [],
@@ -2583,6 +2655,30 @@ expression: query_output
                   "kind": "SCALAR",
                   "name": "String",
                   "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "tags",
+              "description": "This task's resolved labels, excluding package labels. Package labels\nare available separately through `package.tags`.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "String",
+                      "ofType": null
+                    }
+                  }
                 }
               },
               "isDeprecated": false,

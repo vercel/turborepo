@@ -77,6 +77,10 @@ pub type BoundariesFuture<'a> =
 pub trait QueryRun: Send + Sync + 'static {
     fn repo_context(&self) -> &RepoContext;
 
+    /// Package labels from the package's loaded turbo.json, not task labels.
+    /// Returns an empty list when no configuration or tags can be loaded.
+    fn package_tags(&self, package: &PackageName) -> Vec<String>;
+
     fn task_ids(&self) -> Vec<QueryTaskId>;
     fn task_ids_for_package(&self, package: &str) -> Vec<QueryTaskId>;
     fn task_definition(&self, task_id: &QueryTaskId) -> Option<&TaskDefinition>;
