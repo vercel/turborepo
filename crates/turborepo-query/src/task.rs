@@ -19,12 +19,21 @@ pub(crate) enum TaskFields {
     FullName,
     /// Matches a label on either the resolved task or its package.
     Tag,
+    /// Compares resolved experimentalCI JSON: a boolean, an object, or null
+    /// when unset.
+    ExperimentalCi,
 }
 
 #[derive(InputObject)]
 pub(crate) struct TaskFieldValuePair {
     field: TaskFields,
-    value: Any,
+    value: Option<Any>,
+}
+
+impl TaskFieldValuePair {
+    fn value(&self) -> &Value {
+        self.value.as_ref().map_or(&Value::Null, |value| &value.0)
+    }
 }
 
 /// Predicates on tasks. Multiple predicates are combined using AND; use `or`
@@ -43,15 +52,23 @@ pub(crate) struct TaskPredicate {
 
 impl TaskPredicate {
     fn check_equals(task: &RepositoryTask, pair: &TaskFieldValuePair) -> bool {
-        match (&pair.field, &pair.value.0) {
+        match (&pair.field, pair.value()) {
             (TaskFields::Name, Value::String(name)) => &task.name == name,
             (TaskFields::FullName, Value::String(name)) => task.task_id().full_name() == *name,
+            (TaskFields::ExperimentalCi, value) => {
+                let Ok(value) = value.clone().into_json() else {
+                    return false;
+                };
+                task.get_experimental_ci().is_ok_and(|config| {
+                    config.map_or(serde_json::Value::Null, |config| config.0) == value
+                })
+            }
             _ => false,
         }
     }
 
     fn check_has(task: &RepositoryTask, pair: &TaskFieldValuePair) -> bool {
-        match (&pair.field, &pair.value.0) {
+        match (&pair.field, pair.value()) {
             (TaskFields::Tag, Value::String(tag)) => {
                 task.get_tags().contains(tag) || task.package.get_tags().contains(tag)
             }
@@ -110,6 +127,15 @@ impl RepositoryTask {
             .task_definition(&self.task_id())
             .map(|definition| definition.tags.clone())
             .unwrap_or_default()
+    }
+
+    fn get_experimental_ci(&self) -> Result<Option<Json<serde_json::Value>>, Error> {
+        self.package
+            .run()
+            .task_definition(&self.task_id())
+            .and_then(|definition| definition.experimental_ci.as_ref())
+            .map(|config| serde_json::to_value(config).map(Json).map_err(Error::from))
+            .transpose()
     }
 
     fn task_id(&self) -> QueryTaskId {
@@ -241,12 +267,7 @@ impl RepositoryTask {
     /// boolean or an object with arbitrary keys. Null if the key is not set.
     #[graphql(name = "experimentalCI")]
     async fn experimental_ci(&self) -> Result<Option<Json<serde_json::Value>>, Error> {
-        self.package
-            .run()
-            .task_definition(&self.task_id())
-            .and_then(|definition| definition.experimental_ci.as_ref())
-            .map(|config| serde_json::to_value(config).map(Json).map_err(Error::from))
-            .transpose()
+        self.get_experimental_ci()
     }
 
     async fn direct_dependents(

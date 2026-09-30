@@ -1086,6 +1086,109 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn query_experimental_ci_predicates_compare_resolved_json_before_dependencies() {
+        use turborepo_types::ExperimentalCIConfig;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let graph = make_pkg_graph(root, &["app"]).await;
+        let definition = |experimental_ci| TaskDefinition {
+            experimental_ci,
+            command: Some(TaskCommandOverride::Argv(vec!["echo".to_string()])),
+            ..Default::default()
+        };
+        let options = serde_json::json!({"nested": {"enabled": false}, "jobs": [1, "test"]});
+        let engine = make_engine_with_edges(
+            &[
+                (
+                    TaskId::new("app", "true"),
+                    definition(Some(ExperimentalCIConfig::Enabled(true))),
+                ),
+                (
+                    TaskId::new("app", "false"),
+                    definition(Some(ExperimentalCIConfig::Enabled(false))),
+                ),
+                (
+                    TaskId::new("app", "object"),
+                    definition(Some(ExperimentalCIConfig::Options(
+                        options.as_object().unwrap().clone(),
+                    ))),
+                ),
+                (TaskId::new("app", "unset"), definition(None)),
+            ],
+            &[
+                (TaskId::new("app", "true"), TaskId::new("app", "false")),
+                (TaskId::new("app", "true"), TaskId::new("app", "unset")),
+            ],
+        );
+        let run = Arc::new(MockQueryRun {
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::from([(
+                PackageName::from("app"),
+                PackageInclusionReason::FileChanged {
+                    file: AnchoredSystemPathBuf::from_raw("packages/app/changed.ts").unwrap(),
+                },
+            )]),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        });
+        let data = query_data(run, r#"{
+            package(name: "app") {
+                yes: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: true}}) { items { name experimentalCI } }
+                no: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: false}}) { items { name experimentalCI } }
+                unset: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: null}}) { items { name experimentalCI } }
+                object: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: {jobs: [1, "test"], nested: {enabled: false}}}}) { items { name experimentalCI } }
+                partial: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: {nested: {enabled: false}}}}) { length }
+                invalid: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: "true"}}) { length }
+                notNull: tasks(filter: {notEqual: {field: EXPERIMENTAL_CI, value: null}}) { items { name } }
+                notFalse: tasks(filter: {notEqual: {field: EXPERIMENTAL_CI, value: false}}) { items { name } }
+            }
+            affectedTasks(taskFilter: {and: [
+                {notEqual: {field: EXPERIMENTAL_CI, value: null}},
+                {notEqual: {field: EXPERIMENTAL_CI, value: false}}
+            ]}) { withDependencies { items { fullName experimentalCI } } }
+        }"#).await;
+        for (alias, name, value) in [
+            ("yes", "true", serde_json::json!(true)),
+            ("no", "false", serde_json::json!(false)),
+            ("unset", "unset", serde_json::Value::Null),
+            ("object", "object", options.clone()),
+        ] {
+            assert_eq!(
+                data["package"][alias]["items"],
+                serde_json::json!([
+                    {"name": name, "experimentalCI": value}
+                ])
+            );
+        }
+        for alias in ["partial", "invalid"] {
+            assert_eq!(data["package"][alias]["length"], 0);
+        }
+        assert_eq!(
+            data["package"]["notNull"]["items"],
+            serde_json::json!([
+                {"name":"false"}, {"name":"object"}, {"name":"true"}
+            ])
+        );
+        assert_eq!(
+            data["package"]["notFalse"]["items"],
+            serde_json::json!([
+                {"name":"object"}, {"name":"true"}, {"name":"unset"}
+            ])
+        );
+        assert_eq!(
+            data["affectedTasks"]["withDependencies"]["items"],
+            serde_json::json!([
+                {"fullName":"app#false", "experimentalCI":false},
+                {"fullName":"app#object", "experimentalCI":options},
+                {"fullName":"app#true", "experimentalCI":true},
+                {"fullName":"app#unset", "experimentalCI":null}
+            ])
+        );
+    }
+
+    #[tokio::test]
     async fn query_tags_task_predicates_select_before_prerequisite_expansion() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
