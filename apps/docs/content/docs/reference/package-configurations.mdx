@@ -55,7 +55,6 @@ For example, if your root `turbo.json` sets `"outputLogs": "hash-only"` for a ta
 
 Array fields like `outputs`, `env`, `inputs`, `dependsOn`, `passThroughEnv`, and task `tags` **completely replace** the root configuration's values by default.
 
-For task `tags`, omission inherits the labels, an explicit array replaces them, and `[]` clears them. Use `"tags": ["$TURBO_EXTENDS$", "frontend"]` to append to inherited labels instead. Top-level package tags remain separate: they label the current package rather than being inherited as task configuration.
 
 ```jsonc title="./turbo.json"
 {
