@@ -368,6 +368,15 @@ export interface Pipeline {
   description?: string;
 
   /**
+   * Arbitrary string labels for this task. Package configurations replace
+   * inherited tags by default; an empty array clears them. Include
+   * `$TURBO_EXTENDS$` to append labels to inherited tags.
+   *
+   * @defaultValue `[]`
+   */
+  tags?: Array<string>;
+
+  /**
    * The list of tasks that this task depends on.
    *
    * Prefixing an item in dependsOn with a ^ prefix tells turbo that this task depends
@@ -569,8 +578,8 @@ export interface WorkspaceSchema extends BaseSchema {
    */
   extends: Array<string>;
   /**
-   * Used to tag a package for boundaries rules. Boundaries rules can restrict
-   * which packages a tag group can import or be imported by.
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
    */
   tags?: Array<string>;
   /**
@@ -586,6 +595,12 @@ export interface WorkspaceSchema extends BaseSchema {
 /// Generate the RootSchema interface
 fn generate_root_schema_interface() -> String {
     r#"export interface RootSchema extends BaseSchema {
+  /**
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
+   */
+  tags?: Array<string>;
+
   /**
    * Controls whether turbo maintains a root AGENTS.md block for AI agents.
    * Set to false to opt out of future automatic updates.
@@ -1143,6 +1158,46 @@ mod cli_tests {
     use std::{ffi::OsStr, path::PathBuf};
 
     use super::{Cli, Commands};
+
+    #[test]
+    fn task_tags_are_optional_string_arrays() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let pipeline = &schema["definitions"]["Pipeline"];
+        let tags = &pipeline["properties"]["tags"];
+        assert_eq!(tags["type"], serde_json::json!(["array", "null"]));
+        assert_eq!(tags["items"]["$ref"], "#/definitions/String");
+        assert!(
+            pipeline["required"]
+                .as_array()
+                .is_none_or(|fields| { !fields.contains(&serde_json::json!("tags")) })
+        );
+        assert!(super::generate_pipeline_interface().contains("tags?: Array<string>;"));
+        assert!(super::generate_pipeline_interface().contains("`$TURBO_EXTENDS$`"));
+        assert!(
+            tags["description"]
+                .as_str()
+                .unwrap()
+                .contains("`$TURBO_EXTENDS$`")
+        );
+    }
+
+    #[test]
+    fn package_tags_are_supported_in_root_and_workspace_types() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let tags = &schema["properties"]["tags"];
+        assert_eq!(tags["anyOf"][0]["$ref"], "#/definitions/Array_of_String");
+        let description = tags["description"].as_str().unwrap();
+        assert!(description.contains("Arbitrary string labels"));
+        assert!(description.contains("root package"));
+        for interface in [
+            super::generate_root_schema_interface(),
+            super::generate_workspace_schema_interface(),
+        ] {
+            assert!(interface.contains("tags?: Array<string>;"));
+            assert!(interface.contains("Arbitrary string labels"));
+            assert!(interface.contains("root package"));
+        }
+    }
 
     #[test]
     fn schema_defaults_and_explicit_values() {

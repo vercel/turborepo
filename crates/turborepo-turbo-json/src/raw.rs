@@ -601,10 +601,8 @@ pub struct RawTurboJson {
     #[ts(optional)]
     pub no_update_notifier: Option<Spanned<bool>>,
 
-    /// Used to tag a package for boundaries rules.
-    ///
-    /// Boundaries rules can restrict which packages a tag group can import
-    /// or be imported by.
+    /// Arbitrary string labels for this package. In the root configuration,
+    /// these labels apply to the root package.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
@@ -756,6 +754,13 @@ pub struct RawTaskDefinition {
     #[ts(optional)]
     pub description: Option<Spanned<UnescapedString>>,
 
+    /// Arbitrary string labels for this task. Package configurations replace
+    /// inherited tags by default; an empty array clears them. Include
+    /// `$TURBO_EXTENDS$` to append labels to inherited tags.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub tags: Option<Vec<Spanned<UnescapedString>>>,
+
     /// Whether or not to cache the outputs of the task.
     ///
     /// Setting cache to false is useful for long-running "watch" or
@@ -899,7 +904,8 @@ pub struct RawTaskDefinition {
 
 impl HasConfigBeyondExtends for RawTaskDefinition {
     fn has_config_beyond_extends(&self) -> bool {
-        self.cache.is_some()
+        self.tags.is_some()
+            || self.cache.is_some()
             || self.depends_on.is_some()
             || self.env.is_some()
             || self.inputs.is_some()

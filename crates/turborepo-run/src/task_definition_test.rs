@@ -43,6 +43,7 @@ fn raw_input(value: &str) -> RawTaskInput {
           "interruptible": true
         }"#,
         RawTaskDefinition {
+            tags: None,
             extends: None,
             description: None,
             depends_on: Some(Spanned::new(vec![Spanned::<turborepo_unescape::UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
@@ -61,6 +62,7 @@ fn raw_input(value: &str) -> RawTaskInput {
             command: None,
         },
         TaskDefinition {
+          tags: vec![],
           env: vec!["OS".to_string()],
           outputs: TaskOutputs {
               inclusions: vec!["package/a/dist".to_string()],
@@ -95,6 +97,7 @@ fn raw_input(value: &str) -> RawTaskInput {
               "interruptible": true
             }"#,
         RawTaskDefinition {
+            tags: None,
             extends: None,
             description: None,
             depends_on: Some(Spanned::new(vec![Spanned::<turborepo_unescape::UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
@@ -113,6 +116,7 @@ fn raw_input(value: &str) -> RawTaskInput {
             command: None,
         },
         TaskDefinition {
+            tags: vec![],
             env: vec!["OS".to_string()],
             outputs: TaskOutputs {
                 inclusions: vec!["package\\a\\dist".to_string()],

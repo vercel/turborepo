@@ -351,6 +351,7 @@ impl From<SharedTaskSummary<TaskId<'static>>> for SharedTaskSummary<String> {
 impl From<TaskDefinition> for TaskSummaryTaskDefinition {
     fn from(value: TaskDefinition) -> Self {
         let TaskDefinition {
+            tags: _,
             outputs:
                 TaskOutputs {
                     inclusions,

@@ -42,8 +42,8 @@ pub use loader::{
 pub use parser::{BiomeParseError, parse_turbo_json};
 pub use processed::{
     ProcessedCommand, ProcessedDependsOn, ProcessedEnv, ProcessedGlob, ProcessedInputs,
-    ProcessedOutputs, ProcessedPassThroughEnv, ProcessedTaskDefinition, ProcessedWith,
-    duplicate_startup_error,
+    ProcessedOutputs, ProcessedPassThroughEnv, ProcessedTags, ProcessedTaskDefinition,
+    ProcessedWith, duplicate_startup_error,
 };
 pub use raw::{
     HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawObservabilityOtel,

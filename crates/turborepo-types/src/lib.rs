@@ -974,6 +974,8 @@ impl biome_deserialize::DeserializationVisitor for ExperimentalCIConfigVisitor {
 /// configuration for a task.
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub struct TaskDefinition {
+    /// Arbitrary task labels, preserving configured order and duplicates.
+    pub tags: Vec<String>,
     pub outputs: TaskOutputs,
     pub cache: bool,
 
@@ -1050,6 +1052,7 @@ pub enum TaskCommandOverride {
 impl Default for TaskDefinition {
     fn default() -> Self {
         Self {
+            tags: Default::default(),
             cache: true,
             outputs: Default::default(),
             env: Default::default(),

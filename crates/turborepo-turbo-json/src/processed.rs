@@ -53,6 +53,26 @@ fn extract_turbo_extends_inputs(
     }
 }
 
+/// Processed task tags with inheritance marker detection.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct ProcessedTags {
+    pub labels: Vec<String>,
+    pub extends: bool,
+}
+
+impl ProcessedTags {
+    pub fn new(raw_tags: Vec<Spanned<UnescapedString>>, future_flags: &FutureFlags) -> Self {
+        let (tags, extends) = extract_turbo_extends(raw_tags, future_flags);
+        Self {
+            labels: tags
+                .into_iter()
+                .map(|tag| String::from(tag.into_inner()))
+                .collect(),
+            extends,
+        }
+    }
+}
+
 /// A processed glob with separated components
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessedGlob {
@@ -724,6 +744,7 @@ fn is_identifier(value: &str) -> bool {
 pub struct ProcessedTaskDefinition {
     pub extends: Option<Spanned<bool>>,
     pub description: Option<Spanned<UnescapedString>>,
+    pub tags: Option<ProcessedTags>,
     pub cache: Option<Spanned<bool>>,
     pub depends_on: Option<ProcessedDependsOn>,
     pub env: Option<ProcessedEnv>,
@@ -749,6 +770,9 @@ impl ProcessedTaskDefinition {
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
             description: raw_task.description,
+            tags: raw_task
+                .tags
+                .map(|tags| ProcessedTags::new(tags, future_flags)),
             cache: raw_task.cache,
             depends_on: raw_task
                 .depends_on
@@ -790,7 +814,8 @@ impl ProcessedTaskDefinition {
     /// Check if a task definition has any configuration beyond just the
     /// `extends` field.
     pub fn has_config_beyond_extends(&self) -> bool {
-        self.cache.is_some()
+        self.tags.is_some()
+            || self.cache.is_some()
             || self.depends_on.is_some()
             || self.env.is_some()
             || self.inputs.is_some()
@@ -815,6 +840,21 @@ mod tests {
     use turborepo_unescape::UnescapedString;
 
     use super::*;
+
+    #[test_case(&[], &[], false; "empty array clears")]
+    #[test_case(&["local", "local"], &["local", "local"], false; "labels preserve duplicates")]
+    #[test_case(&["$TURBO_EXTENDS$"], &[], true; "marker only")]
+    #[test_case(&["local", "$TURBO_EXTENDS$", "", "local"], &["local", "", "local"], true; "shared marker semantics")]
+    fn test_task_tags_processing(raw: &[&str], expected: &[&str], extends: bool) {
+        let tags = ProcessedTags::new(
+            raw.iter()
+                .map(|label| Spanned::new(UnescapedString::from(label.to_string())))
+                .collect(),
+            &FutureFlags::default(),
+        );
+        assert_eq!(tags.labels, expected);
+        assert_eq!(tags.extends, extends);
+    }
 
     fn command_flags() -> FutureFlags {
         FutureFlags {
