@@ -1,5 +1,6 @@
 ---
 source: crates/turborepo/tests/query.rs
+assertion_line: 5
 expression: query_output
 ---
 {
@@ -2583,6 +2584,22 @@ expression: query_output
                 "ofType": {
                   "kind": "SCALAR",
                   "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "taskCatalogueVersion",
+              "description": "Semantic version of the package task catalogue. Version 1 includes\nnative scripts and all resolved Task Graph entries, including\nscriptless and command-only tasks, after configuration inheritance\nand task exclusions.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "Int",
                   "ofType": null
                 }
               },
