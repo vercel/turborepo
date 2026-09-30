@@ -33,6 +33,53 @@ expression: query_output
             }
           },
           {
+            "fullName": "lib-b#build1",
+            "directDependents": {
+              "items": [
+                {
+                  "fullName": "app-b#build1"
+                },
+                {
+                  "fullName": "lib-a#build1"
+                }
+              ]
+            }
+          },
+          {
+            "fullName": "lib-b#build2",
+            "directDependents": {
+              "items": []
+            }
+          },
+          {
+            "fullName": "lib-b#custom",
+            "directDependents": {
+              "items": []
+            }
+          },
+          {
+            "fullName": "lib-b#prepare",
+            "directDependents": {
+              "items": [
+                {
+                  "fullName": "lib-b#build0"
+                },
+                {
+                  "fullName": "lib-b#side-quest"
+                },
+                {
+                  "fullName": "lib-b#test"
+                }
+              ]
+            }
+          },
+          {
+            "fullName": "lib-b#side-quest",
+            "directDependents": {
+              "items": []
+            }
+          },
+          {
             "fullName": "lib-b#test",
             "directDependents": {
               "items": []

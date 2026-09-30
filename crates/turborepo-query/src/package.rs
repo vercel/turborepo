@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap},
     fmt,
     sync::Arc,
 };
@@ -105,27 +105,15 @@ impl Package {
     }
 
     pub fn get_task_names(&self) -> BTreeSet<String> {
-        let registered_tasks: HashSet<_> = self
-            .run
-            .repo_context()
-            .pkg_dep_graph()
-            .package_task_context(&self.name)
-            .map(|context| {
-                context
-                    .native_tasks()
-                    .registered_names()
-                    .into_iter()
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Resolved graph entries include scriptless configured tasks. Keep
+        // native scripts too, even when they are not configured in the graph.
         self.get_tasks()
             .into_keys()
             .chain(
                 self.run
                     .task_ids_for_package(self.name.as_str())
                     .into_iter()
-                    .map(|task| task.task)
-                    .filter(|task| registered_tasks.contains(task)),
+                    .map(|task| task.task),
             )
             .collect()
     }

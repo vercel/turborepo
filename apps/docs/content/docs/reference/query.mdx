@@ -114,6 +114,16 @@ expanded names, framework-inferred variables, or a complete process environment.
 The query does not execute tasks or report cache hits. Unlike dry-run summaries,
 this selection does not include file-hash inventories.
 
+## Package task catalogue
+
+`package.tasks` lists the package's native scripts and resolved Task Graph entries,
+including configured tasks without a script and tasks with an explicit command.
+Scriptless tasks can be entrypoints that depend on runnable tasks. Their `script`
+is `null`, and their `command` is `null` unless a command is configured. Inherited
+and shared configurations are resolved before listing tasks; scriptless tasks
+excluded by `extends: false` are not included. Task names are deduplicated and sorted.
+Task filters apply to this full catalogue, not only tasks with native scripts.
+
 ## Tags
 
 Packages and tasks expose a `tags` array, returning `[]` when no labels are configured. Package tags come from the package's loaded `turbo.json` and do not include task labels or inherit root package labels.
@@ -137,7 +147,7 @@ query {
 '
 ```
 
-Task predicates support `and`, `or`, and `not`, as well as `equal` and `notEqual` on `NAME` and `FULL_NAME`. The optional task `filter` is available on package task lists, task dependency/dependent lists, and `withDependencies`.
+Task predicates support `and`, `or`, and `not`, as well as `equal` and `notEqual` on `NAME`, `FULL_NAME`, and `EXPERIMENTAL_CI`. `EXPERIMENTAL_CI` compares the resolved `experimentalCI` metadata as JSON: a boolean, an object, or `null` when unset. Objects use structural equality, not partial matching. An omitted predicate `value` is equivalent to explicit `null`. `NAME` and `FULL_NAME` equality still only matches strings, and `TAG` membership still only matches string labels. To select configured values other than `false`, combine `notEqual: {field: EXPERIMENTAL_CI, value: null}` and `notEqual: {field: EXPERIMENTAL_CI, value: false}` with `and`. This comparison does not interpret metadata contents or assign meaning to tags. The optional task `filter` is available on package task lists, task dependency/dependent lists, and `withDependencies`.
 
 For affected tasks, pass `taskFilter` alongside the existing package `filter` or task-name `tasks` arguments:
 

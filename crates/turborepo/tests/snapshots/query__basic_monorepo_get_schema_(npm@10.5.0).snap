@@ -3296,13 +3296,9 @@ expression: query_output
               "name": "value",
               "description": null,
               "type": {
-                "kind": "NON_NULL",
-                "name": null,
-                "ofType": {
-                  "kind": "SCALAR",
-                  "name": "_Any",
-                  "ofType": null
-                }
+                "kind": "SCALAR",
+                "name": "_Any",
+                "ofType": null
               },
               "defaultValue": null
             }
@@ -3334,6 +3330,12 @@ expression: query_output
             {
               "name": "TAG",
               "description": "Matches a label on either the resolved task or its package.",
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "EXPERIMENTAL_CI",
+              "description": "Compares resolved experimentalCI JSON: a boolean, an object, or null\nwhen unset.",
               "isDeprecated": false,
               "deprecationReason": null
             }

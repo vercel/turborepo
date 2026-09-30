@@ -236,7 +236,7 @@ mod tests {
     use turborepo_ui::ColorConfig;
 
     use super::*;
-    use crate::QueryRun;
+    use crate::{Package, QueryRun};
 
     struct MockDiscovery;
 
@@ -649,7 +649,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn injected_go_graph_queries_packages_tasks_and_aggregate_exclusion() {
+    async fn injected_go_graph_queries_packages_tasks_and_scriptless_aggregate_entries() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
         let graph = PackageGraph::builder_optional(root, None)
@@ -708,9 +708,15 @@ mod tests {
                 .len(),
             2
         );
-        // Even with an engine build node, the Go aggregate's contract task
-        // does not register module-only build/test commands on this scope.
-        assert_eq!(workspace["tasks"]["items"], serde_json::json!([]));
+        // The injected engine entry is visible, but does not invent a native
+        // module-only build command or a test task for this aggregate scope.
+        assert_eq!(
+            workspace["tasks"]["items"],
+            serde_json::json!([{
+                "name": "build", "fullName": "go-workspace#build", "script": null,
+                "command": null, "directDependencies": {"items": []}
+            }])
+        );
         assert_eq!(api["path"], "apps/api");
         assert_eq!(lib["path"], "packages/lib");
         assert_eq!(api["directDependencies"]["items"][0]["name"], "lib");
@@ -749,7 +755,12 @@ mod tests {
                 .any(|edge| edge["source"] == "api" && edge["target"] == "lib")
         );
         assert_eq!(data["package"]["name"], "go-workspace");
-        assert_eq!(data["package"]["tasks"]["items"], serde_json::json!([]));
+        assert_eq!(
+            data["package"]["tasks"]["items"],
+            serde_json::json!([{
+                "name": "build", "command": null, "directDependencies": {"items": []}
+            }])
+        );
     }
 
     #[derive(Debug)]
@@ -1071,6 +1082,109 @@ mod tests {
                 "length": 1, "items": [{"fullName": "lib-a#build", "tags": ["compile", "shared"],
                     "package": {"tags": ["library", "shared"]}}]
             })
+        );
+    }
+
+    #[tokio::test]
+    async fn query_experimental_ci_predicates_compare_resolved_json_before_dependencies() {
+        use turborepo_types::ExperimentalCIConfig;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let graph = make_pkg_graph(root, &["app"]).await;
+        let definition = |experimental_ci| TaskDefinition {
+            experimental_ci,
+            command: Some(TaskCommandOverride::Argv(vec!["echo".to_string()])),
+            ..Default::default()
+        };
+        let options = serde_json::json!({"nested": {"enabled": false}, "jobs": [1, "test"]});
+        let engine = make_engine_with_edges(
+            &[
+                (
+                    TaskId::new("app", "true"),
+                    definition(Some(ExperimentalCIConfig::Enabled(true))),
+                ),
+                (
+                    TaskId::new("app", "false"),
+                    definition(Some(ExperimentalCIConfig::Enabled(false))),
+                ),
+                (
+                    TaskId::new("app", "object"),
+                    definition(Some(ExperimentalCIConfig::Options(
+                        options.as_object().unwrap().clone(),
+                    ))),
+                ),
+                (TaskId::new("app", "unset"), definition(None)),
+            ],
+            &[
+                (TaskId::new("app", "true"), TaskId::new("app", "false")),
+                (TaskId::new("app", "true"), TaskId::new("app", "unset")),
+            ],
+        );
+        let run = Arc::new(MockQueryRun {
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::from([(
+                PackageName::from("app"),
+                PackageInclusionReason::FileChanged {
+                    file: AnchoredSystemPathBuf::from_raw("packages/app/changed.ts").unwrap(),
+                },
+            )]),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        });
+        let data = query_data(run, r#"{
+            package(name: "app") {
+                yes: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: true}}) { items { name experimentalCI } }
+                no: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: false}}) { items { name experimentalCI } }
+                unset: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: null}}) { items { name experimentalCI } }
+                object: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: {jobs: [1, "test"], nested: {enabled: false}}}}) { items { name experimentalCI } }
+                partial: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: {nested: {enabled: false}}}}) { length }
+                invalid: tasks(filter: {equal: {field: EXPERIMENTAL_CI, value: "true"}}) { length }
+                notNull: tasks(filter: {notEqual: {field: EXPERIMENTAL_CI, value: null}}) { items { name } }
+                notFalse: tasks(filter: {notEqual: {field: EXPERIMENTAL_CI, value: false}}) { items { name } }
+            }
+            affectedTasks(taskFilter: {and: [
+                {notEqual: {field: EXPERIMENTAL_CI, value: null}},
+                {notEqual: {field: EXPERIMENTAL_CI, value: false}}
+            ]}) { withDependencies { items { fullName experimentalCI } } }
+        }"#).await;
+        for (alias, name, value) in [
+            ("yes", "true", serde_json::json!(true)),
+            ("no", "false", serde_json::json!(false)),
+            ("unset", "unset", serde_json::Value::Null),
+            ("object", "object", options.clone()),
+        ] {
+            assert_eq!(
+                data["package"][alias]["items"],
+                serde_json::json!([
+                    {"name": name, "experimentalCI": value}
+                ])
+            );
+        }
+        for alias in ["partial", "invalid"] {
+            assert_eq!(data["package"][alias]["length"], 0);
+        }
+        assert_eq!(
+            data["package"]["notNull"]["items"],
+            serde_json::json!([
+                {"name":"false"}, {"name":"object"}, {"name":"true"}
+            ])
+        );
+        assert_eq!(
+            data["package"]["notFalse"]["items"],
+            serde_json::json!([
+                {"name":"object"}, {"name":"true"}, {"name":"unset"}
+            ])
+        );
+        assert_eq!(
+            data["affectedTasks"]["withDependencies"]["items"],
+            serde_json::json!([
+                {"fullName":"app#false", "experimentalCI":false},
+                {"fullName":"app#object", "experimentalCI":options},
+                {"fullName":"app#true", "experimentalCI":true},
+                {"fullName":"app#unset", "experimentalCI":null}
+            ])
         );
     }
 
@@ -1421,6 +1535,41 @@ mod tests {
                 .unwrap()
                 .iter()
                 .any(|call| call == "task_ids_for_package:app")
+        );
+    }
+
+    #[tokio::test]
+    async fn package_task_names_include_scriptless_engine_tasks_in_sorted_package_scope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let graph = make_pkg_graph(root, &["app", "lib"]).await;
+        let engine = make_engine(&[
+            (TaskId::new("app", "check"), TaskDefinition::default()),
+            (TaskId::new("app", "build"), TaskDefinition::default()),
+            (
+                TaskId::new("app", "local-command"),
+                TaskDefinition {
+                    command: Some(TaskCommandOverride::Argv(vec![
+                        "echo".to_string(),
+                        "local".to_string(),
+                    ])),
+                    ..Default::default()
+                },
+            ),
+            (TaskId::new("lib", "other"), TaskDefinition::default()),
+        ]);
+        let run = Arc::new(MockQueryRun {
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        });
+        let package = Package::new(run, PackageName::from("app")).unwrap();
+        assert!(package.get_tasks().is_empty());
+        assert_eq!(
+            package.get_task_names().into_iter().collect::<Vec<_>>(),
+            ["build", "check", "local-command"]
         );
     }
 

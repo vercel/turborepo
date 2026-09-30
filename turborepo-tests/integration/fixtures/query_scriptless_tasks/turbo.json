@@ -1,0 +1,17 @@
+{
+  "agentGuidance": false,
+  "futureFlags": {
+    "experimentalTaskCommand": true
+  },
+  "tasks": {
+    "build": {},
+    "check": {
+      "tags": [
+        "ci"
+      ],
+      "dependsOn": [
+        "build"
+      ]
+    }
+  }
+}
