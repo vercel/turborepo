@@ -236,7 +236,7 @@ mod tests {
     use turborepo_ui::ColorConfig;
 
     use super::*;
-    use crate::QueryRun;
+    use crate::{Package, QueryRun};
 
     struct MockDiscovery;
 
@@ -649,7 +649,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn injected_go_graph_queries_packages_tasks_and_aggregate_exclusion() {
+    async fn injected_go_graph_queries_packages_tasks_and_scriptless_aggregate_entries() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
         let graph = PackageGraph::builder_optional(root, None)
@@ -708,9 +708,15 @@ mod tests {
                 .len(),
             2
         );
-        // Even with an engine build node, the Go aggregate's contract task
-        // does not register module-only build/test commands on this scope.
-        assert_eq!(workspace["tasks"]["items"], serde_json::json!([]));
+        // The injected engine entry is visible, but does not invent a native
+        // module-only build command or a test task for this aggregate scope.
+        assert_eq!(
+            workspace["tasks"]["items"],
+            serde_json::json!([{
+                "name": "build", "fullName": "go-workspace#build", "script": null,
+                "command": null, "directDependencies": {"items": []}
+            }])
+        );
         assert_eq!(api["path"], "apps/api");
         assert_eq!(lib["path"], "packages/lib");
         assert_eq!(api["directDependencies"]["items"][0]["name"], "lib");
@@ -749,7 +755,12 @@ mod tests {
                 .any(|edge| edge["source"] == "api" && edge["target"] == "lib")
         );
         assert_eq!(data["package"]["name"], "go-workspace");
-        assert_eq!(data["package"]["tasks"]["items"], serde_json::json!([]));
+        assert_eq!(
+            data["package"]["tasks"]["items"],
+            serde_json::json!([{
+                "name": "build", "command": null, "directDependencies": {"items": []}
+            }])
+        );
     }
 
     #[derive(Debug)]
@@ -1421,6 +1432,41 @@ mod tests {
                 .unwrap()
                 .iter()
                 .any(|call| call == "task_ids_for_package:app")
+        );
+    }
+
+    #[tokio::test]
+    async fn package_task_names_include_scriptless_engine_tasks_in_sorted_package_scope() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let graph = make_pkg_graph(root, &["app", "lib"]).await;
+        let engine = make_engine(&[
+            (TaskId::new("app", "check"), TaskDefinition::default()),
+            (TaskId::new("app", "build"), TaskDefinition::default()),
+            (
+                TaskId::new("app", "local-command"),
+                TaskDefinition {
+                    command: Some(TaskCommandOverride::Argv(vec![
+                        "echo".to_string(),
+                        "local".to_string(),
+                    ])),
+                    ..Default::default()
+                },
+            ),
+            (TaskId::new("lib", "other"), TaskDefinition::default()),
+        ]);
+        let run = Arc::new(MockQueryRun {
+            engine,
+            repo_context: make_repo_context(root, graph, TurboJson::default()),
+            affected_packages: HashMap::new(),
+            changed_files: HashSet::new(),
+            recorded_calls: Default::default(),
+        });
+        let package = Package::new(run, PackageName::from("app")).unwrap();
+        assert!(package.get_tasks().is_empty());
+        assert_eq!(
+            package.get_task_names().into_iter().collect::<Vec<_>>(),
+            ["build", "check", "local-command"]
         );
     }
 

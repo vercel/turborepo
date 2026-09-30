@@ -114,6 +114,16 @@ expanded names, framework-inferred variables, or a complete process environment.
 The query does not execute tasks or report cache hits. Unlike dry-run summaries,
 this selection does not include file-hash inventories.
 
+## Package task catalogue
+
+`package.tasks` lists the package's native scripts and resolved Task Graph entries,
+including configured tasks without a script and tasks with an explicit command.
+Scriptless tasks can be entrypoints that depend on runnable tasks. Their `script`
+is `null`, and their `command` is `null` unless a command is configured. Inherited
+and shared configurations are resolved before listing tasks; scriptless tasks
+excluded by `extends: false` are not included. Task names are deduplicated and sorted.
+Task filters apply to this full catalogue, not only tasks with native scripts.
+
 ## Tags
 
 Packages and tasks expose a `tags` array, returning `[]` when no labels are configured. Package tags come from the package's loaded `turbo.json` and do not include task labels or inherit root package labels.
