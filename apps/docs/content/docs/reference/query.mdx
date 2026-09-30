@@ -124,19 +124,6 @@ and shared configurations are resolved before listing tasks; scriptless tasks
 excluded by `extends: false` are not included. Task names are deduplicated and sorted.
 Task filters apply to this full catalogue, not only tasks with native scripts.
 
-Probe `taskCatalogueVersion` before relying on these semantics:
-
-```bash title="Terminal"
-turbo query 'query { taskCatalogueVersion }'
-```
-
-This root field returns the GraphQL `Int` value `1`, guaranteeing the resolved
-package task catalogue includes scriptless and command-only tasks as described
-above. Clients requiring this catalogue must require a value of at least `1` and
-fail clearly if the probe errors or the field is missing, rather than infer support
-from the Turborepo release version or the presence of task tags. Older versions
-reject this field; existing queries that do not select it remain unchanged.
-
 ## Tags
 
 Packages and tasks expose a `tags` array, returning `[]` when no labels are configured. Package tags come from the package's loaded `turbo.json` and do not include task labels or inherit root package labels.

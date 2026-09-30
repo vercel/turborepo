@@ -950,14 +950,6 @@ impl RepositoryQuery {
         self.run.repo_context().version()
     }
 
-    /// Semantic version of the package task catalogue. Version 1 includes
-    /// native scripts and all resolved Task Graph entries, including
-    /// scriptless and command-only tasks, after configuration inheritance
-    /// and task exclusions.
-    async fn task_catalogue_version(&self) -> i32 {
-        1
-    }
-
     /// Check boundaries for all packages.
     async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
         match self.run.check_boundaries(false).await {

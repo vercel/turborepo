@@ -95,7 +95,6 @@ fn query_resolved_metadata_selection_excludes_false_and_tags_can_reselect_it() {
     let data = query_data(
         tempdir.path(),
         r#"{
-        taskCatalogueVersion
         packages { items { name
             legacy: tasks(filter: {and: [
                 {notEqual: {field: EXPERIMENTAL_CI, value: null}},
@@ -114,7 +113,6 @@ fn query_resolved_metadata_selection_excludes_false_and_tags_can_reselect_it() {
         } }
     }"#,
     );
-    assert_eq!(data["taskCatalogueVersion"], 1);
     let packages = data["packages"]["items"].as_array().unwrap();
     for (name, legacy_enabled, selected) in [
         ("blocked", true, false),

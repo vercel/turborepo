@@ -18,29 +18,17 @@ fn query_data(root: &std::path::Path, query: &str) -> Value {
 }
 
 #[test]
-fn query_task_catalogue_version_probe_returns_one() {
-    let tempdir = tempfile::tempdir().unwrap();
-    setup::copy_fixture("query_scriptless_tasks", tempdir.path()).unwrap();
-    assert_eq!(
-        query_data(tempdir.path(), "query { taskCatalogueVersion }"),
-        json!({"taskCatalogueVersion": 1})
-    );
-}
-
-#[test]
 fn query_catalogue_includes_resolved_scriptless_tasks_and_native_scripts() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::copy_fixture("query_scriptless_tasks", tempdir.path()).unwrap();
     let data = query_data(
         tempdir.path(),
         r#"{
-            taskCatalogueVersion
             packages { items { name tasks { items { name script command tags
                 directDependencies { items { fullName } }
             } } } }
         }"#,
     );
-    assert_eq!(data["taskCatalogueVersion"], 1);
     let packages = data["packages"]["items"].as_array().unwrap();
     for (name, expected) in [
         ("//", vec![]),
