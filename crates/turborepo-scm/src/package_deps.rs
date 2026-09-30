@@ -1,6 +1,4 @@
-use std::str::FromStr;
-
-use globwalk::ValidatedGlob;
+use globwalk::{PackageInput, ValidatedGlob};
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
@@ -325,24 +323,17 @@ impl GitRepo {
 
         let mut inclusions = Vec::with_capacity(total_inputs);
         let mut exclusions = Vec::with_capacity(total_inputs);
-        let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
 
         let all_inputs = inputs
             .iter()
             .map(|s| s.as_ref())
             .chain(extra_inputs.iter().copied());
         for raw_glob in all_inputs {
-            glob_buf.clear();
-            if let Some(exclusion) = raw_glob.strip_prefix('!') {
-                glob_buf.push_str(package_unix_path);
-                glob_buf.push('/');
-                glob_buf.push_str(exclusion.trim_start_matches('/'));
-                exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+            let input = PackageInput::resolve(package_unix_path, raw_glob)?;
+            if input.is_exclusion() {
+                exclusions.push(input.into_glob());
             } else {
-                glob_buf.push_str(package_unix_path);
-                glob_buf.push('/');
-                glob_buf.push_str(raw_glob.trim_start_matches('/'));
-                inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                inclusions.push(input.into_glob());
             }
         }
         let files = globwalk::globwalk(
@@ -378,12 +369,15 @@ impl GitRepo {
         let mut hashes =
             self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index)?;
 
+        let pkg_prefix = package_path.to_unix();
+        let package_unix_path = pkg_prefix.as_str();
+
         let mut includes = Vec::new();
         let mut excludes = Vec::new();
         for input in inputs {
             let input_str = input.as_ref();
-            if let Some(exclude) = input_str.strip_prefix('!') {
-                excludes.push(exclude);
+            if input_str.starts_with('!') {
+                excludes.push(PackageInput::resolve(package_unix_path, input_str)?);
             } else {
                 includes.push(input_str);
             }
@@ -397,36 +391,22 @@ impl GitRepo {
         // Literal paths (e.g. "$TURBO_ROOT$/tsconfig.json") are resolved with a
         // single stat syscall instead of compiling a glob regex and walking a
         // directory tree.
-        let pkg_prefix = package_path.to_unix();
-
         if !includes.is_empty() {
             let full_pkg_path = turbo_root.resolve(package_path);
-            let package_unix_path = pkg_prefix.as_str();
 
             static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
 
             let mut glob_inclusions = Vec::new();
-            let mut glob_exclusions = Vec::new();
             let mut literal_to_hash = Vec::new();
-            let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
 
-            // Exclusions must apply to the filesystem walk itself, not just
-            // the in-memory filter below: the walk can discover files the
-            // in-memory filter misses (its raw patterns don't collapse `..`
-            // segments, so cross-package exclusions like
-            // `!../../crates/dep/.turbo/**` only match here, where
-            // `ValidatedGlob` normalizes the joined path).
-            for exclude in &excludes {
-                glob_buf.clear();
-                glob_buf.push_str(package_unix_path);
-                glob_buf.push('/');
-                glob_buf.push_str(exclude.trim_start_matches('/'));
-                glob_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
-            }
+            // Exclusions apply to the filesystem walk as well as to the
+            // in-memory filter below, so walked files outside the index are
+            // excluded too.
+            let glob_exclusions: Vec<ValidatedGlob> =
+                excludes.iter().map(|input| input.glob().clone()).collect();
 
             let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
             for raw_glob in all {
-                glob_buf.clear();
                 if !globwalk::is_glob_pattern(raw_glob) {
                     // Literal file path — resolve directly via stat instead of
                     // compiling a glob and walking directories.
@@ -437,10 +417,9 @@ impl GitRepo {
                             // Directory literal — fall through to the glob
                             // walker which will expand it via
                             // add_doublestar_to_dir (e.g. "src" -> "src/**").
-                            glob_buf.push_str(package_unix_path);
-                            glob_buf.push('/');
-                            glob_buf.push_str(raw_glob.trim_start_matches('/'));
-                            glob_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                            glob_inclusions.push(
+                                PackageInput::resolve(package_unix_path, raw_glob)?.into_glob(),
+                            );
                         }
                         Ok(_) => {
                             let git_relative = self.root.anchor(&resolved)?.to_unix();
@@ -460,10 +439,8 @@ impl GitRepo {
                         Err(_) => {}
                     }
                 } else {
-                    glob_buf.push_str(package_unix_path);
-                    glob_buf.push('/');
-                    glob_buf.push_str(raw_glob.trim_start_matches('/'));
-                    glob_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                    glob_inclusions
+                        .push(PackageInput::resolve(package_unix_path, raw_glob)?.into_glob());
                 }
             }
 
@@ -516,20 +493,29 @@ impl GitRepo {
 
         // Apply excludes via in-memory matching — no filesystem walk needed since
         // we already know all the paths from the combined index + includes.
-        if !excludes.is_empty() {
-            let exclude_globs: Vec<wax::Glob<'static>> = excludes
-                .iter()
-                .filter_map(|pattern| wax::Glob::new(pattern).ok().map(|g| g.into_owned()))
-                .collect();
+        // Hash keys are package-relative, so resolve them into the same
+        // repo-root-relative space as the exclusion globs before matching.
+        let exclude_globs: Vec<wax::Glob<'static>> = excludes
+            .iter()
+            .filter(|input| !input.escapes_repo_root())
+            .filter_map(|input| {
+                wax::Glob::new(input.as_str())
+                    .ok()
+                    .map(|glob| glob.into_owned())
+            })
+            .collect();
 
-            if !exclude_globs.is_empty() {
-                hashes.retain(|key, _| {
-                    let path_str = key.as_str();
-                    !exclude_globs
-                        .iter()
-                        .any(|glob| wax::Program::is_match(glob, path_str))
-                });
-            }
+        if !exclude_globs.is_empty() {
+            hashes.retain(|key, _| {
+                let Some(repo_path) =
+                    globwalk::resolve_package_path(package_unix_path, key.as_str())
+                else {
+                    return true;
+                };
+                !exclude_globs
+                    .iter()
+                    .any(|glob| wax::Program::is_match(glob, repo_path.as_ref()))
+            });
         }
 
         Ok(hashes)
@@ -1229,6 +1215,58 @@ mod tests {
                 .any(|key| key.as_str().contains("turbo-build.log")),
             "excluded .turbo logs must not be hashed, got {hashes:?}"
         );
+        Ok(())
+    }
+
+    /// Exclusions are resolved against the package directory the same way
+    /// inclusions are, so equivalent spellings (`./x`, `dir/../x`,
+    /// `../<package>/x`) exclude the same files from default inputs in both
+    /// the git and manual hashers.
+    #[test]
+    fn test_default_input_exclusions_are_normalized() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let app_dir = repo_root.join_components(&["packages", "app"]);
+        app_dir.create_dir_all()?;
+        for file in ["kept.ts", "dot-slash.ts", "dot-dot.ts", "sibling.ts"] {
+            app_dir
+                .join_component(file)
+                .create_with_contents("committed bytes")?;
+        }
+        app_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+
+        let package_path = AnchoredSystemPathBuf::from_raw(
+            ["packages", "app"].join(std::path::MAIN_SEPARATOR_STR),
+        )?;
+        let inputs = [
+            "!./dot-slash.ts",
+            "!src/../dot-dot.ts",
+            "!../app/sibling.ts",
+        ];
+
+        let SCM::Git(git) = SCM::new(&repo_root) else {
+            panic!("expected git SCM");
+        };
+        let git_hashes =
+            git.get_package_file_hashes(&repo_root, &package_path, &inputs, true, None)?;
+        let manual_hashes = get_package_file_hashes_without_git(
+            &repo_root,
+            &package_path,
+            &inputs,
+            true,
+            None,
+            None,
+        )?;
+
+        for (hasher, hashes) in [("git", &git_hashes), ("manual", &manual_hashes)] {
+            let mut keys: Vec<_> = hashes.keys().map(|key| key.as_str()).collect();
+            keys.sort_unstable();
+            assert_eq!(keys, ["kept.ts", "package.json"], "{hasher} hasher");
+        }
         Ok(())
     }
 
