@@ -74,14 +74,16 @@ fn hash_of(hashes: &[(String, String)], task_id: &str) -> String {
         .clone()
 }
 
-/// Run turbo with `--verbosity=2` and return the debug log it wrote, so
-/// tests can assert on the chosen untracked-file scan scope.
+/// Dry-run turbo with `--verbosity=2` and return the debug log it wrote, so
+/// tests can assert on the chosen untracked-file scan scope without launching
+/// package-manager processes. Hashing and scan selection happen during dry
+/// runs.
 fn run_with_debug_log(dir: &Path, args: &[&str]) -> String {
     let debug_dir = dir.join(".turbo").join("debug-logs");
     fs::remove_dir_all(&debug_dir).ok();
     let mut full_args = vec!["run"];
     full_args.extend_from_slice(args);
-    full_args.push("--verbosity=2");
+    full_args.extend_from_slice(&["--dry=json", "--verbosity=2"]);
     let output = run_turbo(dir, &full_args);
     assert!(
         output.status.success(),
@@ -96,6 +98,30 @@ fn run_with_debug_log(dir: &Path, args: &[&str]) -> String {
     assert!(!logs.is_empty(), "expected a debug log to be written");
     logs.sort();
     fs::read_to_string(logs.pop().unwrap()).unwrap()
+}
+
+#[test]
+fn scan_scope_logging_does_not_execute_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_repo(tempdir.path(), PLAIN_TURBO_JSON);
+
+    // A real run would fail. Scan-scope assertions must only hash the inputs,
+    // without depending on npm or spawning task processes.
+    let package_json = tempdir.path().join("packages/util/package.json");
+    let mut package: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&package_json).unwrap()).unwrap();
+    package["scripts"]["build"] = serde_json::json!("exit 1");
+    fs::write(
+        &package_json,
+        serde_json::to_string_pretty(&package).unwrap(),
+    )
+    .unwrap();
+
+    let log = run_with_debug_log(tempdir.path(), &["build", "--filter=util", "--only"]);
+    assert!(
+        log.contains("untracked-file scan scope: package directory prefixes"),
+        "expected a scoped scan without executing the failing task, log:\n{log}"
+    );
 }
 
 #[test]

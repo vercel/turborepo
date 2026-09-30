@@ -116,7 +116,9 @@ this selection does not include file-hash inventories.
 
 ## Tags
 
-Packages and tasks expose a `tags` array, returning `[]` when no labels are configured. A task's `tags` contains its resolved task labels only; `package { tags }` exposes its package labels separately.
+Packages and tasks expose a `tags` array, returning `[]` when no labels are configured. Package tags come from the package's loaded `turbo.json` and do not include task labels or inherit root package labels.
+
+A task's `tags` contains its resolved task labels only, after configuration inheritance and `$TURBO_EXTENDS$` composition. Order and duplicate labels are preserved, and the inheritance marker is not exposed. Select `package { tags }` to read its package labels separately.
 
 Use `has: { field: TAG, value: "label" }` to filter by exact, case-sensitive membership. Package predicates match package labels only. Task predicates match either resolved task labels or package labels.
 
