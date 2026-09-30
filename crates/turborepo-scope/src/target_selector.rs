@@ -33,6 +33,7 @@ pub struct TargetSelector {
     pub follow_prod_deps_only: bool,
     pub parent_dir: Option<AnchoredSystemPathBuf>,
     pub name_pattern: String,
+    pub tag: Option<String>,
     pub git_range: Option<GitRange>,
     pub raw: String,
 }
@@ -46,6 +47,43 @@ impl FromStr for TargetSelector {
             Some(selector) => (true, selector),
             None => (false, raw_selector),
         };
+
+        // Decode a quoted label before interpreting any selector syntax. JSON
+        // escapes and syntax-like characters inside the string are literal.
+        // Parse the remaining grammar with a safe placeholder, then restore the
+        // decoded label and original raw selector.
+        let tag_selector = selector
+            .strip_prefix("...")
+            .map_or(selector, |rest| rest.strip_prefix('^').unwrap_or(rest));
+        if let Some(literal) = tag_selector
+            .strip_prefix("tag:")
+            .filter(|s| s.starts_with('"'))
+        {
+            let mut strings = serde_json::Deserializer::from_str(literal).into_iter::<String>();
+            let tag = strings
+                .next()
+                .ok_or_else(|| InvalidSelectorError::InvalidQuotedTag(raw_selector.to_string()))?
+                .map_err(|_| InvalidSelectorError::InvalidQuotedTag(raw_selector.to_string()))?;
+            let suffix = &literal[strings.byte_offset()..];
+            let prefix = &selector[..selector.len() - tag_selector.len()];
+            let normalized = format!(
+                "{}{}tag:__quoted_tag__{}",
+                if exclude { "!" } else { "" },
+                prefix,
+                suffix
+            );
+            let mut parsed = Self::from_str(&normalized)?;
+            // Reject junk after the closing quote, including the legacy
+            // package-name fallback for malformed directory/range syntax.
+            if parsed.tag.as_deref() != Some("__quoted_tag__") {
+                return Err(InvalidSelectorError::InvalidQuotedTag(
+                    raw_selector.to_string(),
+                ));
+            }
+            parsed.tag = Some(tag);
+            parsed.raw = raw_selector.to_string();
+            return Ok(parsed);
+        }
 
         let mut exclude_self = false;
         let include_dependencies = selector.strip_suffix("...");
@@ -91,7 +129,7 @@ impl FromStr for TargetSelector {
         // - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
         //   brackets, optionally prefixed with `...` for match_dependencies
         let captures = regex!(
-            r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
+            r"^(?P<name>tag:[^{}\[\]]*?|[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
         )
         .captures(selector);
 
@@ -108,12 +146,23 @@ impl FromStr for TargetSelector {
                         ..Default::default()
                     })
                 } else {
+                    // A tag ending in a single dot is not a package name just
+                    // because it does not fit the legacy package-name regex.
+                    let tag = selector.strip_prefix("tag:");
+                    if tag == Some("") {
+                        return Err(InvalidSelectorError::EmptyTag);
+                    }
                     Ok(TargetSelector {
                         exclude,
                         exclude_self,
                         include_dependencies,
                         include_dependents,
-                        name_pattern: selector.to_string(),
+                        name_pattern: if tag.is_some() {
+                            String::new()
+                        } else {
+                            selector.to_string()
+                        },
+                        tag: tag.map(str::to_string),
                         raw: raw_selector.to_string(),
                         ..Default::default()
                     })
@@ -209,7 +258,17 @@ impl FromStr for TargetSelector {
             None
         };
 
+        let (name_pattern, tag) = if let Some(tag) = name_pattern.strip_prefix("tag:") {
+            if tag.is_empty() {
+                return Err(InvalidSelectorError::EmptyTag);
+            }
+            (String::new(), Some(tag.to_string()))
+        } else {
+            (name_pattern, None)
+        };
+
         Ok(TargetSelector {
+            tag,
             git_range,
             exclude,
             exclude_self,
@@ -227,6 +286,10 @@ impl FromStr for TargetSelector {
 /// Errors when parsing target selectors.
 #[derive(Debug, Error, PartialEq)]
 pub enum InvalidSelectorError {
+    #[error("invalid quoted tag selector: {0}")]
+    InvalidQuotedTag(String),
+    #[error("empty tag label")]
+    EmptyTag,
     #[error("cannot use match dependencies without specifying either a directory or package")]
     CantMatchDependencies,
     #[error("invalid anchored path: {0}")]
@@ -275,6 +338,61 @@ mod test {
 
     use super::{GitRange, TargetSelector};
 
+    #[test]
+    fn quoted_tag_labels_round_trip_without_interpreting_contents() {
+        for label in [
+            "",
+            "ci.",
+            "ci...",
+            "[]{}",
+            "...^!{dir}[main]...",
+            "\"quoted\"\\path",
+            "line\n\t\r\0",
+            "é🚀",
+        ] {
+            let literal = serde_json::to_string(label).unwrap();
+            let raw = format!("tag:{literal}");
+            let parsed: TargetSelector = raw.parse().unwrap();
+            assert_eq!(
+                parsed,
+                TargetSelector {
+                    tag: Some(label.to_string()),
+                    raw: raw.clone(),
+                    ..Default::default()
+                }
+            );
+            let raw = format!("!...^tag:{literal}{{packages/*}}...[main]^...");
+            let parsed: TargetSelector = raw.parse().unwrap();
+            assert_eq!(
+                parsed,
+                TargetSelector {
+                    tag: Some(label.to_string()),
+                    raw,
+                    exclude: true,
+                    exclude_self: true,
+                    include_dependents: true,
+                    include_dependencies: true,
+                    match_dependencies: true,
+                    parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
+                    git_range: Some(GitRange {
+                        from_ref: Some("main".to_string()),
+                        include_uncommitted: true,
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }
+            );
+        }
+        let parsed: TargetSelector = r#"tag:"\uD83D\uDE80""#.parse().unwrap();
+        assert_eq!(parsed.tag.as_deref(), Some("🚀"));
+    }
+
+    #[test_case("tag:ci.", TargetSelector { tag: Some("ci.".to_string()), raw: "tag:ci.".to_string(), ..Default::default() }; "tag trailing dot")]
+    #[test_case("tag:ci.{packages/*}[main]", TargetSelector { tag: Some("ci.".to_string()), raw: "tag:ci.{packages/*}[main]".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()), git_range: Some(GitRange { from_ref: Some("main".to_string()), include_uncommitted: true, ..Default::default() }), ..Default::default() }; "tag trailing dot with dir git")]
+    #[test_case("tag:ci...[main]", TargetSelector { tag: Some("ci".to_string()), raw: "tag:ci...[main]".to_string(), match_dependencies: true, git_range: Some(GitRange { from_ref: Some("main".to_string()), include_uncommitted: true, ..Default::default() }), ..Default::default() }; "tag match dependencies")]
+    #[test_case("tag:ci", TargetSelector { tag: Some("ci".to_string()), raw: "tag:ci".to_string(), ..Default::default() }; "tag")]
+    #[test_case("!...^tag:ci...", TargetSelector { tag: Some("ci".to_string()), raw: "!...^tag:ci...".to_string(), exclude: true, include_dependents: true, include_dependencies: true, exclude_self: true, ..Default::default() }; "tag modifiers")]
+    #[test_case("tag:ci{packages/*}[main]", TargetSelector { tag: Some("ci".to_string()), raw: "tag:ci{packages/*}[main]".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()), git_range: Some(GitRange { from_ref: Some("main".to_string()), include_uncommitted: true, ..Default::default() }), ..Default::default() }; "tag dir git")]
     #[test_case("foo", TargetSelector { name_pattern: "foo".to_string(), raw: "foo".to_string(), ..Default::default() }; "foo")]
     #[test_case("foo...", TargetSelector { name_pattern: "foo".to_string(), raw: "foo...".to_string(), include_dependencies: true, ..Default::default() }; "foo dot dot dot")]
     #[test_case("...foo", TargetSelector { name_pattern: "foo".to_string(), raw: "...foo".to_string(), include_dependents: true, ..Default::default() }; "dot dot dot foo")]
@@ -318,6 +436,16 @@ mod test {
         }
     }
 
+    #[test_case(r#"tag:"unterminated"# ; "unterminated quoted tag")]
+    #[test_case(r#"tag:"bad\q""# ; "invalid quoted escape")]
+    #[test_case(r#"tag:"\uD800""# ; "unpaired surrogate")]
+    #[test_case("tag:\"raw\nnewline\"" ; "unescaped control character")]
+    #[test_case(r#"tag:"ci"junk"# ; "junk after quoted tag")]
+    #[test_case(r#"tag:"ci""other""# ; "two quoted tags")]
+    #[test_case(r#"tag:"ci"[main]junk"# ; "junk after quoted range")]
+    #[test_case(r#"tag:"ci"...junk"# ; "junk after quoted modifier")]
+    #[test_case("tag:" ; "empty tag")]
+    #[test_case("!tag:..." ; "empty tag with modifiers")]
     #[test_case("{}" ; "curly brackets")]
     #[test_case("......[master]" ; "......[master]")]
     #[test_case("[]" ; "empty git range")]

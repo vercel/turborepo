@@ -11,6 +11,7 @@ workspace = true
 miette = { workspace = true, features = ["fancy"] }
 path-clean = { workspace = true }
 regex = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 wax = { workspace = true }
@@ -22,7 +23,6 @@ turborepo-types = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
-serde_json = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
