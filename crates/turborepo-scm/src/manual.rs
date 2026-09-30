@@ -1,6 +1,6 @@
-use std::{borrow::Cow, collections::HashSet, io::ErrorKind, str::FromStr};
+use std::{borrow::Cow, collections::HashSet, io::ErrorKind};
 
-use globwalk::{ValidatedGlob, fix_glob_pattern, is_glob_pattern};
+use globwalk::{PackageInput, fix_glob_pattern, is_glob_pattern};
 use ignore::WalkBuilder;
 use tracing::info;
 use turbopath::{
@@ -160,34 +160,26 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let mut default_file_hashes = GitHashes::new();
     let mut excluded_file_paths = HashSet::new();
 
-    // Inputs that reference parent directories (contain "..") can't be found by
-    // the WalkBuilder since it only walks within the package directory. Handle
+    // Inputs that resolve outside the package directory can't be found by the
+    // WalkBuilder since it only walks within the package directory. Handle
     // these separately using globwalk rooted at turbo_root, matching the git
-    // path's behavior.
-    let mut local_inputs: Vec<&str> = Vec::new();
+    // path's behavior. Inputs inside the package are matched against walked
+    // paths using their normalized package-relative form.
+    let mut local_inclusions: Vec<String> = Vec::new();
+    let mut local_exclusions: Vec<String> = Vec::new();
     let mut external_inclusions = Vec::new();
     let mut external_exclusions = Vec::new();
     for pattern in inputs {
-        let pattern = pattern.as_ref();
-        let is_exclusion = pattern.starts_with('!');
-        let raw = if is_exclusion { &pattern[1..] } else { pattern };
-
-        if raw.starts_with("..") {
-            let mut glob_buf =
-                String::with_capacity(package_unix_path.as_str().len() + 1 + raw.len());
-            glob_buf.push_str(package_unix_path.as_str());
-            glob_buf.push('/');
-            glob_buf.push_str(raw);
-            if is_exclusion {
-                external_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
-            } else {
-                external_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
-            }
-        } else {
-            local_inputs.push(pattern);
+        let input = PackageInput::resolve(package_unix_path.as_str(), pattern.as_ref())?;
+        match (input.package_relative(), input.is_exclusion()) {
+            (Some(relative), true) => local_exclusions.push(relative.to_owned()),
+            (Some(relative), false) => local_inclusions.push(relative.to_owned()),
+            (None, true) => external_exclusions.push(input.into_glob()),
+            (None, false) => external_inclusions.push(input.into_glob()),
         }
     }
-    let has_local_inclusions = local_inputs.iter().any(|pattern| !pattern.starts_with('!'));
+    let has_local_inputs = !local_inclusions.is_empty() || !local_exclusions.is_empty();
+    let has_local_inclusions = !local_inclusions.is_empty();
 
     if !external_inclusions.is_empty() {
         let files = globwalk::globwalk(
@@ -213,19 +205,16 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
     let mut excludes = Vec::new();
-    for pattern in &local_inputs {
-        if let Some(exclusion) = pattern.strip_prefix('!') {
-            let g = to_glob(exclusion)?;
-            excludes.push(g);
-        } else {
-            // If the pattern has no glob metacharacters and resolves to a
-            // directory, treat it as "dir/**" to match all files inside.
-            // This mirrors what globwalk::add_doublestar_to_dir does in the
-            // git code path.
-            let effective_pattern = expand_dir_pattern(&full_package_path, pattern);
-            let g = to_glob(effective_pattern.as_ref())?;
-            includes.push(g);
-        }
+    for exclusion in &local_exclusions {
+        excludes.push(to_glob(exclusion)?);
+    }
+    for inclusion in &local_inclusions {
+        // If the pattern has no glob metacharacters and resolves to a
+        // directory, treat it as "dir/**" to match all files inside.
+        // This mirrors what globwalk::add_doublestar_to_dir does in the
+        // git code path.
+        let effective_pattern = expand_dir_pattern(&full_package_path, inclusion);
+        includes.push(to_glob(effective_pattern.as_ref())?);
     }
     let include_pattern = if includes.is_empty() && external_inclusions.is_empty() {
         None
@@ -262,7 +251,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         .follow_links(false)
         // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
         // regular behavior
-        .git_ignore(local_inputs.is_empty() && external_inclusions.is_empty())
+        .git_ignore(!has_local_inputs && external_inclusions.is_empty())
         .require_git(false)
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
         .build();
