@@ -165,6 +165,42 @@ fn selectors_preserve_root_single_package_for_other_commands() {
     );
 }
 
+#[test_case::test_case(&["turbo", "query", "affected"] ; "affected")]
+#[test_case::test_case(&["turbo", "query", r#"{ package(name: "//") { tasks { length } } }"#] ; "graphql")]
+#[test_case::test_case(&["turbo", "query", "ls"] ; "ls")]
+#[test_case::test_case(&["turbo", "query"] ; "server")]
+fn query_selectors_preserve_inferred_and_explicit_repository_mode(argv: &[&str]) {
+    use turborepo_repository::{
+        inference::{RepoMode, RepoState},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
+
+    let tmp = tempfile::tempdir().unwrap();
+    let root = turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+    for (mode, explicit, expected) in [
+        (Some(RepoMode::SinglePackage), false, true),
+        (Some(RepoMode::MultiPackage), false, false),
+        (None, false, false),
+        (Some(RepoMode::MultiPackage), true, true),
+        (None, true, true),
+    ] {
+        let repo_state = mode.map(|mode| RepoState {
+            root: root.clone(),
+            mode,
+            root_package_json: PackageJson::default(),
+            package_manager: Ok(PackageManager::Npm),
+        });
+        let mut args = parse_args(argv).unwrap();
+        args.single_package = explicit;
+        let mut command = args.command.take().unwrap();
+        super::set_run_flags(&mut command, &repo_state, &mut args).unwrap();
+        args.command = Some(command);
+
+        assert_eq!(args.selectors().1.single_package, expected);
+    }
+}
+
 #[test_case::test_case("", None ; "root")]
 #[test_case::test_case("apps/web", Some("apps/web") ; "workspace")]
 #[test_case::test_case("crates", Some("crates") ; "plain directory")]
