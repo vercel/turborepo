@@ -139,7 +139,7 @@ fn initialize_deferred_telemetry_client(
 fn set_run_flags<'a>(
     command: &'a mut Command,
     repo_state: &'a Option<RepoState>,
-    cli_args: &'a Args,
+    cli_args: &'a mut Args,
 ) -> Result<&'a mut Command, Error> {
     match command {
         Command::Run {
@@ -175,6 +175,12 @@ fn set_run_flags<'a>(
                     debug!("{} not set", INVOCATION_DIR_ENV_VAR);
                 }
             }
+        }
+        Command::Query { .. } => {
+            // Query uses the root execution selector rather than ExecutionArgs.
+            cli_args.single_package |= repo_state
+                .as_ref()
+                .is_some_and(|state| matches!(state.mode, RepoMode::SinglePackage));
         }
         _ => {}
     }
@@ -407,8 +413,8 @@ async fn run_main(
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
 
-    // Set some run flags if we have the data and are executing a Run
-    set_run_flags(&mut command, &repo_state, &cli_args)?;
+    // Apply repository mode and package inference to command execution flags.
+    set_run_flags(&mut command, &repo_state, &mut cli_args)?;
 
     let cwd = repo_state
         .as_ref()

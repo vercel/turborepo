@@ -1000,7 +1000,7 @@ impl Args {
                 ExecutionSelector {
                     filter: ls_args.filter.clone(),
                     affected: ls_args.affected,
-                    ..Default::default()
+                    ..default_execution_selector
                 },
             ),
             _ => (RunSelector::default(), default_execution_selector),

@@ -4,7 +4,107 @@ mod common;
 
 use std::fs;
 
-use common::{run_turbo, setup};
+use common::{git, run_turbo, setup};
+
+#[test]
+fn test_query_single_package_affected_tasks_without_flag() {
+    assert_single_package_affected_tasks(false);
+}
+
+#[test]
+fn test_query_single_package_affected_tasks_with_task_inputs_without_flag() {
+    assert_single_package_affected_tasks(true);
+}
+
+fn assert_single_package_affected_tasks(affected_using_task_inputs: bool) {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    fs::create_dir(dir.join("src")).unwrap();
+    fs::write(
+        dir.join("package.json"),
+        r#"{"name":"single-package","version":"1.0.0","packageManager":"npm@10.5.0","scripts":{"build":"echo build"}}"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("package-lock.json"),
+        r#"{"name":"single-package","version":"1.0.0","lockfileVersion":3,"packages":{"":{"name":"single-package","version":"1.0.0"}}}"#,
+    )
+    .unwrap();
+    let mut config = serde_json::json!({
+        "agentGuidance": false,
+        "tasks": { "build": { "inputs": ["src/**"] } }
+    });
+    if affected_using_task_inputs {
+        config["futureFlags"] = serde_json::json!({ "affectedUsingTaskInputs": true });
+    }
+    fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+    fs::write(dir.join("src/index.js"), "console.log(1);\n").unwrap();
+    fs::write(dir.join("README.md"), "Initial documentation\n").unwrap();
+    git(dir, &["init", "--quiet", "--initial-branch=main"]);
+    git(dir, &["config", "user.email", "turbo-test@example.com"]);
+    git(dir, &["config", "user.name", "Turborepo Test"]);
+    git(dir, &["add", "."]);
+    git(
+        dir,
+        &["-c", "commit.gpgsign=false", "commit", "-qm", "Initial"],
+    );
+
+    // Single-package tasks must be discovered even with no changes.
+    let output = run_turbo(
+        dir,
+        &[
+            "query",
+            r#"{ package(name: "//") { tasks { items { fullName } length } } }"#,
+        ],
+    );
+    assert!(
+        output.status.success(),
+        "query failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks = &json["data"]["package"]["tasks"];
+    assert_eq!(tasks["length"], 1);
+    assert_eq!(tasks["items"][0]["fullName"], "//#build");
+
+    for changed_file in [None, Some("README.md"), Some("src/index.js")] {
+        if let Some(file) = changed_file {
+            fs::write(dir.join(file), "Changed\n").unwrap();
+        }
+        let expected_count = usize::from(
+            changed_file.is_some()
+                && (!affected_using_task_inputs || changed_file == Some("src/index.js")),
+        );
+        for explicit_flag in [false, true] {
+            let mut args = vec!["query", "affected", "--base=HEAD", "--exit-code"];
+            if explicit_flag {
+                args.push("--single-package");
+            }
+            let output = run_turbo(dir, &args);
+            assert_eq!(
+                output.status.code(),
+                Some(expected_count as i32),
+                "affected query failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            let affected = &json["data"]["affectedTasks"];
+            assert_eq!(affected["length"], expected_count);
+            assert_eq!(affected["items"].as_array().unwrap().len(), expected_count);
+            if expected_count == 1 {
+                assert_eq!(affected["items"][0]["fullName"], "//#build");
+                assert_eq!(
+                    affected["items"][0]["reason"]["__typename"],
+                    if changed_file == Some("src/index.js") {
+                        "TaskFileChanged"
+                    } else {
+                        "TaskAllChanged"
+                    }
+                );
+            }
+        }
+    }
+}
 
 #[test]
 fn test_query_from_file() {
