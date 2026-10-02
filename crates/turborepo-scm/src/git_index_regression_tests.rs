@@ -1176,6 +1176,279 @@ fn test_subprocess_index_comprehensive_mixed_state() {
     }
 }
 
+// OIDC normalization must agree across package and global-style hashing paths.
+// All fixtures live below the repository root to also exercise path rebasing.
+fn oidc_hashes_across_scm_paths(
+    repo: &TestRepo,
+    package_path: &str,
+    inputs: &[&str],
+    include_default_files: bool,
+) -> GitHashes {
+    let git = repo.scm();
+    let manual = SCM::Manual;
+    let package = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
+    let index = repo.build_repo_index();
+    let indexed = git
+        .get_package_file_hashes(
+            &repo.root,
+            &package,
+            inputs,
+            include_default_files,
+            None,
+            Some(&index),
+        )
+        .unwrap();
+
+    for (label, scm, repo_index) in [
+        ("Git without repo index", &git, None),
+        ("Manual SCM", &manual, None),
+    ] {
+        let hashes = scm
+            .get_package_file_hashes(
+                &repo.root,
+                &package,
+                inputs,
+                include_default_files,
+                None,
+                repo_index,
+            )
+            .unwrap();
+        assert_eq!(indexed, hashes, "{label}: package hashes must agree");
+    }
+
+    // Package hashes use package-relative keys; global inputs use root-relative
+    // keys. Compare whole maps after rebasing, rather than only the token hash.
+    let global_expected: GitHashes = indexed
+        .iter()
+        .map(|(relative, hash)| (path(&format!("{package_path}/{relative}")), *hash))
+        .collect();
+    let files: Vec<_> = global_expected
+        .keys()
+        .map(|relative| AnchoredSystemPathBuf::from_raw(relative.as_str()).unwrap())
+        .collect();
+    for (label, scm) in [("Git", &git), ("Manual", &manual)] {
+        let strict = scm.hash_files(&repo.root, files.iter()).unwrap();
+        let discovered = scm.hash_discovered_files(&repo.root, files.iter()).unwrap();
+        assert_eq!(global_expected, strict, "{label}: hash_files must agree");
+        assert_eq!(
+            global_expected, discovered,
+            "{label}: hash_discovered_files must agree"
+        );
+    }
+    indexed
+}
+
+fn oidc_env_content(token: &str, other: &str) -> String {
+    format!("# preserve this comment\nexport VERCEL_OIDC_TOKEN=\"{token}\"\nOTHER={other}\n")
+}
+
+fn oidc_env_hashes(repo: &TestRepo) -> GitHashes {
+    let defaults = oidc_hashes_across_scm_paths(repo, "apps/web", &[], false);
+    assert_eq!(defaults.len(), 1);
+    assert!(defaults.contains_key(&path(".env.local")));
+    for include_default_files in [false, true] {
+        let explicit =
+            oidc_hashes_across_scm_paths(repo, "apps/web", &[".env.local"], include_default_files);
+        assert_eq!(defaults, explicit, "explicit and default inputs must agree");
+    }
+    defaults
+}
+
+#[test]
+fn test_oidc_env_local_clean_tracked_and_dirty_rotation() {
+    let repo = TestRepo::new();
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+    repo.create_file("apps/web/.env.local", &oidc_env_content("initial", "keep"));
+    let before_commit = oidc_env_hashes(&repo);
+    repo.commit_all();
+
+    // Prove this is actually the clean Git fast path and that its raw blob OID
+    // differs from the normalized cache hash. Otherwise route equivalence alone
+    // could accidentally pass while every path hashes the unmodified token.
+    let index = repo.build_repo_index();
+    let (raw_hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
+    assert!(to_hash.is_empty(), "fixture must be clean after committing");
+    assert_eq!(raw_hashes.len(), 1);
+    assert_ne!(
+        raw_hashes[&path(".env.local")],
+        before_commit[&path(".env.local")]
+    );
+    assert_eq!(before_commit, oidc_env_hashes(&repo));
+
+    // Different lengths avoid relying on timestamp granularity for dirty state.
+    repo.create_file(
+        "apps/web/.env.local",
+        &oidc_env_content("a-much-longer-rotated-token", "keep"),
+    );
+    let dirty_index = repo.build_repo_index();
+    let (_, to_hash) = dirty_index.get_package_hashes(&path("apps/web")).unwrap();
+    assert!(to_hash.contains(&path("apps/web/.env.local")));
+    assert_eq!(before_commit, oidc_env_hashes(&repo));
+
+    repo.commit_all();
+    let clean_index = repo.build_repo_index();
+    let (rotated_raw_hashes, to_hash) = clean_index.get_package_hashes(&path("apps/web")).unwrap();
+    assert!(to_hash.is_empty());
+    assert_ne!(
+        raw_hashes, rotated_raw_hashes,
+        "Git's raw token OID changes"
+    );
+    assert_eq!(before_commit, oidc_env_hashes(&repo));
+
+    repo.create_file(
+        "apps/web/.env.local",
+        &oidc_env_content("a-much-longer-rotated-token", "changed-other-value"),
+    );
+    let other_changed = oidc_env_hashes(&repo);
+    assert_ne!(
+        before_commit, other_changed,
+        "OTHER must invalidate the hash"
+    );
+    repo.commit_all();
+    assert_eq!(other_changed, oidc_env_hashes(&repo));
+}
+
+#[test]
+fn test_oidc_env_local_untracked_rotation() {
+    let repo = TestRepo::new();
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+    repo.create_file("apps/web/.env.local", &oidc_env_content("initial", "keep"));
+
+    let index = repo.build_repo_index();
+    let (raw_hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
+    assert!(raw_hashes.is_empty(), "token fixture must not be tracked");
+    assert!(to_hash.contains(&path("apps/web/.env.local")));
+    let original = oidc_env_hashes(&repo);
+
+    repo.create_file(
+        "apps/web/.env.local",
+        &oidc_env_content("rotated-untracked-token", "keep"),
+    );
+    assert_eq!(original, oidc_env_hashes(&repo));
+    repo.create_file(
+        "apps/web/.env.local",
+        &oidc_env_content("rotated-untracked-token", "changed-other-value"),
+    );
+    assert_ne!(original, oidc_env_hashes(&repo));
+}
+
+#[test]
+fn test_oidc_env_local_ignored_explicit_inputs() {
+    let repo = TestRepo::new();
+    repo.create_gitignore(".gitignore", ".env.local\n");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+    repo.create_file("apps/web/.env.local", &oidc_env_content("initial", "keep"));
+    repo.git_cmd(&["check-ignore", "apps/web/.env.local"]);
+
+    let index = repo.build_repo_index();
+    let (raw_hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
+    assert!(raw_hashes.is_empty());
+    assert!(
+        to_hash.is_empty(),
+        "ignored token must not enter default inputs"
+    );
+    assert!(oidc_hashes_across_scm_paths(&repo, "apps/web", &[], false).is_empty());
+
+    let mut original = None;
+    // Cover literal and glob inputs, with and without merging default files.
+    for input in [".env.local", ".env.*"] {
+        for include_default_files in [false, true] {
+            let hashes =
+                oidc_hashes_across_scm_paths(&repo, "apps/web", &[input], include_default_files);
+            assert_eq!(hashes.len(), 1, "explicit input must include ignored token");
+            assert!(hashes.contains_key(&path(".env.local")));
+            if let Some(ref expected) = original {
+                assert_eq!(expected, &hashes);
+            } else {
+                original = Some(hashes);
+            }
+        }
+    }
+    let original = original.unwrap();
+    repo.create_file(
+        "apps/web/.env.local",
+        &oidc_env_content("rotated-ignored-token", "keep"),
+    );
+    for include_default_files in [false, true] {
+        assert_eq!(
+            original,
+            oidc_hashes_across_scm_paths(&repo, "apps/web", &[".env.local"], include_default_files,),
+        );
+    }
+    repo.create_file(
+        "apps/web/.env.local",
+        &oidc_env_content("rotated-ignored-token", "changed-other-value"),
+    );
+    let changed = oidc_hashes_across_scm_paths(&repo, "apps/web", &[".env.local"], false);
+    assert_ne!(original, changed);
+    assert_eq!(
+        changed,
+        oidc_hashes_across_scm_paths(&repo, "apps/web", &[".env.local"], true),
+    );
+}
+
+#[test]
+fn test_oidc_token_rotation_invalidates_ordinary_env_filenames() {
+    let repo = TestRepo::new();
+    let filenames = [
+        ".env.local",
+        ".env",
+        ".env.production",
+        ".env.development.local",
+        "prefixed.env.local",
+        ".env.local.bak",
+    ];
+    for filename in filenames {
+        repo.create_file(
+            &format!("apps/web/{filename}"),
+            &oidc_env_content("initial", "keep"),
+        );
+    }
+    repo.commit_all();
+    let original = oidc_hashes_across_scm_paths(&repo, "apps/web", &[], false);
+    assert_eq!(original.len(), filenames.len());
+    assert_eq!(
+        original,
+        oidc_hashes_across_scm_paths(&repo, "apps/web", &filenames, false),
+    );
+
+    for filename in filenames {
+        repo.create_file(
+            &format!("apps/web/{filename}"),
+            &oidc_env_content("a-longer-rotated-token", "keep"),
+        );
+    }
+    let rotated = oidc_hashes_across_scm_paths(&repo, "apps/web", &[], false);
+    assert_eq!(rotated.len(), filenames.len());
+    for filename in filenames {
+        if filename == ".env.local" {
+            assert_eq!(original[&path(filename)], rotated[&path(filename)]);
+        } else {
+            assert_ne!(
+                original[&path(filename)],
+                rotated[&path(filename)],
+                "token rotation must invalidate ordinary filename {filename}",
+            );
+        }
+    }
+    assert_eq!(
+        rotated,
+        oidc_hashes_across_scm_paths(&repo, "apps/web", &filenames, false),
+    );
+    repo.commit_all();
+    assert_eq!(
+        rotated,
+        oidc_hashes_across_scm_paths(&repo, "apps/web", &[], false)
+    );
+    assert_eq!(
+        rotated,
+        oidc_hashes_across_scm_paths(&repo, "apps/web", &filenames, false),
+    );
+}
+
 // Category 7: Race arm equivalence tests
 //
 // The race spawns both `walk_candidate_files` and `git ls-files --others`
