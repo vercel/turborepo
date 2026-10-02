@@ -23,6 +23,7 @@ use turbopath::{
 };
 
 pub(crate) mod crlf;
+mod env_local;
 pub mod git;
 mod hash_object;
 mod ls_tree;

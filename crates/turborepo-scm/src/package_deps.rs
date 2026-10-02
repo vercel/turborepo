@@ -174,13 +174,31 @@ impl GitRepo {
         let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
         let pkg_prefix = git_to_pkg_path.to_unix();
 
-        let (mut hashes, to_hash) = if let Some(index) = repo_index {
+        let (mut hashes, mut to_hash) = if let Some(index) = repo_index {
             index.get_package_hashes(&pkg_prefix)?
         } else {
             let mut hashes = self.git_ls_tree(&full_pkg_path)?;
             let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
             (hashes, to_hash)
         };
+
+        // Git blob IDs cannot represent the cache-only OIDC normalization.
+        // Re-read matching tracked files, even when Git considers them clean.
+        let env_files = hashes
+            .keys()
+            .filter(|path| crate::crlf::is_env_local(path.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        for path in env_files {
+            hashes.remove(&path);
+            let repo_relative = self
+                .root
+                .anchor(full_pkg_path.join_unix_path(&path))?
+                .to_unix();
+            if !to_hash.contains(&repo_relative) {
+                to_hash.push(repo_relative);
+            }
+        }
 
         // Note: to_hash is *git repo relative*
         hash_discovered_objects(
@@ -274,7 +292,7 @@ impl GitRepo {
             return Ok(());
         }
 
-        let (known_hashes, to_hash) = if let Some(index) = repo_index {
+        let (known_hashes, mut to_hash) = if let Some(index) = repo_index {
             index.partition_existing_paths_for_hashing(candidate_paths)
         } else {
             (Vec::new(), candidate_paths)
@@ -282,6 +300,10 @@ impl GitRepo {
 
         hashes.reserve(known_hashes.len() + to_hash.len());
         for (git_relative, oid) in known_hashes {
+            if crate::crlf::is_env_local(git_relative.as_str()) {
+                to_hash.push(git_relative);
+                continue;
+            }
             let package_relative =
                 self.git_relative_to_package_relative(full_pkg_path, pkg_prefix, &git_relative);
             hashes.insert(package_relative, oid);

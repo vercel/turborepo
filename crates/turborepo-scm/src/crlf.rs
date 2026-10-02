@@ -421,6 +421,52 @@ fn hash_file_normalized(
     Ok((hasher.finalize()?, outcome))
 }
 
+pub(crate) fn is_env_local(path: &str) -> bool {
+    path.rsplit('/').next() == Some(".env.local")
+}
+
+// Keep cache-specific normalization separate from Git verification:
+// verification must compare the actual working-tree content with Git's blob
+// IDs.
+fn hash_file_for_cache(
+    path: &AbsoluteSystemPath,
+    file: &mut std::fs::File,
+    file_len: u64,
+    attr: TextAttr,
+) -> Result<OidHash, std::io::Error> {
+    // Bound allocation for unusually large files. Unsupported files retain their
+    // ordinary hash, preferring a cache miss over ambiguous normalization.
+    if path.as_std_path().file_name() == Some(std::ffi::OsStr::new(".env.local"))
+        && file_len <= 1024 * 1024
+    {
+        let mut bytes = Vec::new();
+        file.take(1024 * 1024 + 1).read_to_end(&mut bytes)?;
+        if bytes.len() <= 1024 * 1024
+            && let Some(normalized) = crate::env_local::normalize_oidc_token(&bytes)
+        {
+            let mut reader = std::io::Cursor::new(&normalized);
+            let scan = scan_file_and_feed(&mut reader, true, |_| {})?;
+            let normalize_crlf = should_normalize(attr, &scan);
+            // Domain separation prevents transformed hashes from reusing an
+            // older cache entry that happened to contain the placeholder.
+            const DOMAIN: &[u8] = b"turborepo:env-local-oidc:v1\0";
+            let len = normalized.len() as u64 - if normalize_crlf { scan.crlf_count } else { 0 };
+            let mut hasher = BlobHasher::new();
+            hasher.write_blob_header(DOMAIN.len() as u64 + len);
+            hasher.update(DOMAIN);
+            if normalize_crlf {
+                reader.set_position(0);
+                stream_normalized(&mut reader, |data| hasher.update(data))?;
+            } else {
+                hasher.update(&normalized);
+            }
+            return hasher.finalize();
+        }
+        file.seek(SeekFrom::Start(0))?;
+    }
+    Ok(hash_file_normalized(file, file_len, attr)?.0)
+}
+
 /// Hash a working-tree file as a git blob (used when `.git/` is present).
 ///
 /// Uses the `sha1` crate rather than gix's collision-detected SHA-1
@@ -447,9 +493,12 @@ pub(crate) fn hash_file_as_git_blob(
     if !metadata.is_file() {
         return Ok(None);
     }
-    Ok(Some(
-        hash_file_normalized(&mut file, metadata.len(), attr)?.0,
-    ))
+    Ok(Some(hash_file_for_cache(
+        path,
+        &mut file,
+        metadata.len(),
+        attr,
+    )?))
 }
 
 /// Hash a working-tree file and report how the hash was produced. Used by the
@@ -472,7 +521,7 @@ pub(crate) fn manual_hash_file_maybe_normalized(
     let mut file = path.open()?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
-    Ok(hash_file_normalized(&mut file, metadata.len(), attr)?.0)
+    Ok(hash_file_for_cache(path, &mut file, metadata.len(), attr)?)
 }
 
 #[cfg(test)]
@@ -488,6 +537,96 @@ mod tests {
             .to_realpath()
             .unwrap();
         (tmp, dir)
+    }
+
+    #[test]
+    fn test_oidc_cache_normalization_preserves_git_verification_and_file() {
+        let (_tmp, root) = tmp_dir();
+        let path = root.join_component(".env.local");
+        for attr in [
+            TextAttr::Unspecified,
+            TextAttr::Set,
+            TextAttr::Auto,
+            TextAttr::Unset,
+        ] {
+            let initial = b"VERCEL_OIDC_TOKEN=first\r\nOTHER=keep\r\n";
+            std::fs::write(&path, initial).unwrap();
+            let cache_hash = hash_file_as_git_blob(&path, attr).unwrap().unwrap();
+            assert_eq!(
+                cache_hash,
+                manual_hash_file_maybe_normalized(&path, attr).unwrap()
+            );
+            let raw_hash = hash_file_for_verification(&path, attr).unwrap().0;
+            assert_ne!(cache_hash, raw_hash);
+            assert_eq!(std::fs::read(&path).unwrap(), initial);
+
+            std::fs::write(&path, b"VERCEL_OIDC_TOKEN=a-longer-token\r\nOTHER=keep\r\n").unwrap();
+            assert_eq!(
+                cache_hash,
+                hash_file_as_git_blob(&path, attr).unwrap().unwrap()
+            );
+            assert_ne!(raw_hash, hash_file_for_verification(&path, attr).unwrap().0);
+            std::fs::write(&path, b"OTHER=keep\r\n").unwrap();
+            assert_ne!(
+                cache_hash,
+                hash_file_as_git_blob(&path, attr).unwrap().unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn test_oidc_cache_normalization_obeys_crlf_attributes() {
+        let (_tmp, root) = tmp_dir();
+        let path = root.join_component(".env.local");
+        for attr in [
+            TextAttr::Unspecified,
+            TextAttr::Set,
+            TextAttr::Auto,
+            TextAttr::Unset,
+        ] {
+            std::fs::write(&path, b"VERCEL_OIDC_TOKEN=first\r\nOTHER=keep\r\n").unwrap();
+            let crlf = hash_file_as_git_blob(&path, attr).unwrap().unwrap();
+            std::fs::write(&path, b"VERCEL_OIDC_TOKEN=second\nOTHER=keep\n").unwrap();
+            let lf = hash_file_as_git_blob(&path, attr).unwrap().unwrap();
+            assert_eq!(crlf == lf, matches!(attr, TextAttr::Set | TextAttr::Auto));
+        }
+    }
+
+    #[test]
+    fn test_oidc_cache_normalization_fallback_and_domain_separation() {
+        let (_tmp, root) = tmp_dir();
+        let path = root.join_component(".env.local");
+        for bytes in [
+            b"OTHER=keep\n".as_slice(),
+            b"VERCEL_OIDC_TOKEN=one\nVERCEL_OIDC_TOKEN=two\n",
+            b"OTHER=\"unterminated\nVERCEL_OIDC_TOKEN=one\n",
+        ] {
+            std::fs::write(&path, bytes).unwrap();
+            assert_eq!(
+                hash_file_as_git_blob(&path, TextAttr::Unspecified)
+                    .unwrap()
+                    .unwrap(),
+                hash_bytes_as_blob(bytes).unwrap()
+            );
+        }
+        let bytes = b"VERCEL_OIDC_TOKEN=__TURBOREPO_VERCEL_OIDC_TOKEN__\n";
+        std::fs::write(&path, bytes).unwrap();
+        assert_ne!(
+            hash_file_as_git_blob(&path, TextAttr::Unspecified)
+                .unwrap()
+                .unwrap(),
+            hash_bytes_as_blob(bytes).unwrap()
+        );
+
+        let mut oversized = b"VERCEL_OIDC_TOKEN=one\n#".to_vec();
+        oversized.resize(1024 * 1024 + 1, b'x');
+        std::fs::write(&path, &oversized).unwrap();
+        assert_eq!(
+            hash_file_as_git_blob(&path, TextAttr::Unspecified)
+                .unwrap()
+                .unwrap(),
+            hash_bytes_as_blob(&oversized).unwrap()
+        );
     }
 
     // -- scan_file tests --
