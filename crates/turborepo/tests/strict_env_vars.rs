@@ -37,6 +37,11 @@ fn all_task_hashes(dir: &Path, extra_args: &[&str]) -> String {
 fn setup_strict_env() -> tempfile::TempDir {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "strict_env_vars", "npm@10.5.0", false).unwrap();
+    // This fixture uses Node, not POSIX shell syntax. Use npm's native shell:
+    // an unqualified `bash` on Windows can resolve to the WSL launcher instead
+    // of Git Bash. Changing the task script alone would still leave npm
+    // launching Bash through the shared setup's script-shell override.
+    fs::write(tempdir.path().join(".npmrc"), "update-notifier=false\n").unwrap();
     tempdir
 }
 
@@ -137,7 +142,11 @@ fn test_usage_strict() {
     assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
-        out.contains("globalpt: ''") && out.contains("localpt: ''") && out.contains("other: ''"),
+        out.contains("globalpt: ''")
+            && out.contains("localpt: ''")
+            && out.contains("globaldep: ''")
+            && out.contains("localdep: ''")
+            && out.contains("other: ''"),
         "strict default: no vars should be available, got: {out}"
     );
 
@@ -151,7 +160,10 @@ fn test_usage_strict() {
     assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
-        out.contains("globalpt: 'higlobalpt'") && out.contains("localpt: 'hilocalpt'"),
+        out.contains("globalpt: 'higlobalpt'")
+            && out.contains("localpt: 'hilocalpt'")
+            && out.contains("globaldep: 'higlobaldep'")
+            && out.contains("localdep: 'hilocaldep'"),
         "strict all.json: declared vars should be available, got: {out}"
     );
     assert!(
@@ -206,6 +218,36 @@ fn test_usage_loose() {
         out.contains("globalpt: 'higlobalpt'") && out.contains("other: 'hiother'"),
         "loose all.json: all vars should still be available, got: {out}"
     );
+}
+
+// Fail fast if either npm's script shell or the task starts relying on Bash
+// again. Shadow every real Bash (including Windows' WSL launcher) with this
+// test executable, which rejects Bash's arguments instead of hanging.
+#[test]
+fn test_usage_does_not_require_bash() {
+    let tempdir = setup_strict_env();
+    let shell_dir = tempfile::tempdir().unwrap();
+    let bash = if cfg!(windows) { "bash.exe" } else { "bash" };
+    fs::copy(
+        std::env::current_exe().unwrap(),
+        shell_dir.path().join(bash),
+    )
+    .unwrap();
+    let path = setup::prepend_to_path(shell_dir.path());
+    let out_path = tempdir.path().join("apps/my-app/out.txt");
+
+    for mode in ["strict", "loose"] {
+        let output = run_turbo_with_env(
+            tempdir.path(),
+            &["build", "--force", &format!("--env-mode={mode}")],
+            &[("PATH", &path), ("OTHER_VAR", "hiother")],
+        );
+        assert!(output.status.success(), "{}", combined_output(&output));
+        let out = fs::read_to_string(&out_path).unwrap();
+        let expected = if mode == "strict" { "" } else { "hiother" };
+        assert!(out.contains(&format!("other: '{expected}'")), "{out}");
+        fs::remove_file(&out_path).unwrap();
+    }
 }
 
 // --- dry-json.t ---
