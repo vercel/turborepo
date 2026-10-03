@@ -105,13 +105,17 @@ pub enum Error {
     #[error("Failed to resolve local `turbo` path: {0}")]
     LocalTurboPath(String),
 
-    /// Failed to find npx
-    #[error("Failed to find `npx`: {0}")]
-    Which(#[from] which::Error),
+    /// Failed to find the package manager's runner
+    #[error("Failed to find `{command}`: {source}")]
+    PackageManagerNotFound {
+        command: &'static str,
+        #[source]
+        source: which::Error,
+    },
 
-    /// Failed to execute turbo via npx
-    #[error("Failed to execute `turbo` via `npx`.")]
-    NpxTurboProcess(#[source] std::io::Error),
+    /// Failed to execute turbo via the package manager
+    #[error("Failed to execute `turbo` via the repository's package manager.")]
+    DownloadedTurboProcess(#[source] std::io::Error),
 
     /// Failed to resolve repository root
     #[error("Failed to resolve repository root: {0}")]
@@ -322,7 +326,7 @@ where
             "Found configuration for turbo version {}",
             local_config.turbo_version()
         );
-        spawn_npx_turbo(
+        spawn_downloaded_turbo(
             runtime,
             &repo_state,
             local_config.turbo_version(),
@@ -429,7 +433,7 @@ where
     spawn_child_turbo(runtime, command, Error::LocalTurboProcess)
 }
 
-fn spawn_npx_turbo<R, C, S, V>(
+fn spawn_downloaded_turbo<R, C, S, V>(
     runtime: &ShimRuntime<R, C, S, V>,
     repo_state: &RepoState,
     turbo_version: &str,
@@ -441,32 +445,77 @@ where
     S: ChildSpawner,
     V: VersionProvider,
 {
-    debug!("Running turbo@{turbo_version} via npx");
-    let npx_path = match which("npx") {
+    let package_manager = package_manager_for_download(repo_state);
+    let (executable, runner_args) = turbo_download_command(&package_manager, turbo_version);
+    debug!("Running turbo@{turbo_version} via {executable}");
+    let command_path = match which(executable) {
         Ok(path) => path,
-        Err(e) => return ShimResult::ShimError(e.into()),
+        Err(source) => {
+            return ShimResult::ShimError(Error::PackageManagerNotFound {
+                command: executable,
+                source,
+            });
+        }
     };
-    let cwd = match fs_canonicalize(&repo_state.root) {
-        Ok(path) => path,
-        Err(_) => return ShimResult::ShimError(Error::RepoRootPath(repo_state.root.clone())),
-    };
+    let mut command = process::Command::new(command_path);
+    command.args(runner_args);
+    if let Err(err) =
+        configure_downloaded_turbo(&mut command, repo_state, turbo_version, &mut shim_args)
+    {
+        return ShimResult::ShimError(err);
+    }
 
-    let raw_args = modify_args_for_local(&mut shim_args, repo_state, turbo_version);
+    spawn_child_turbo(runtime, command, Error::DownloadedTurboProcess)
+}
 
-    let mut command = process::Command::new(npx_path);
-    command.arg("-y");
-    command.arg(format!("turbo@{turbo_version}"));
+fn package_manager_for_download(repo_state: &RepoState) -> PackageManager {
+    repo_state
+        .package_manager
+        .as_ref()
+        .ok()
+        .cloned()
+        // Also support repositories identifying their manager only by a lockfile.
+        .or_else(|| PackageManager::detect_package_manager(&repo_state.root).ok())
+        .unwrap_or(PackageManager::Npm)
+}
 
-    // rather than passing an argument that local turbo might not understand, set
-    // an environment variable that can be optionally used
+fn turbo_download_command(
+    package_manager: &PackageManager,
+    turbo_version: &str,
+) -> (&'static str, Vec<String>) {
+    let package = format!("turbo@{turbo_version}");
+    match package_manager {
+        // Yarn Classic has no dlx command, so retain the npx fallback.
+        PackageManager::Npm | PackageManager::Yarn => ("npx", vec!["-y".into(), package]),
+        PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
+            ("pnpm", vec!["dlx".into(), package])
+        }
+        PackageManager::Berry => ("yarn", vec!["dlx".into(), package]),
+        PackageManager::Bun => ("bun", vec!["x".into(), package]),
+        PackageManager::Nub { .. } => ("nubx", vec![package]),
+        PackageManager::Aube { .. } => ("aubx", vec![package]),
+    }
+}
+
+fn configure_downloaded_turbo(
+    command: &mut process::Command,
+    repo_state: &RepoState,
+    turbo_version: &str,
+    shim_args: &mut ShimArgs,
+) -> Result<(), Error> {
+    let cwd = fs_canonicalize(&repo_state.root)
+        .map_err(|_| Error::RepoRootPath(repo_state.root.clone()))?;
+    let raw_args = modify_args_for_local(shim_args, repo_state, turbo_version);
+
+    // Use an environment variable rather than an argument old Turbo may not
+    // understand.
     command
         .args(&raw_args)
         .env(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path())
         .current_dir(cwd)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
-
-    spawn_child_turbo(runtime, command, Error::NpxTurboProcess)
+    Ok(())
 }
 
 fn modify_args_for_local(
@@ -658,6 +707,124 @@ mod tests {
         fn get_version(&self) -> &'static str {
             "2.0.0"
         }
+    }
+
+    #[test]
+    fn test_download_runners() {
+        for (manager, executable, prefix) in [
+            (PackageManager::Npm, "npx", vec!["-y"]),
+            (PackageManager::Yarn, "npx", vec!["-y"]),
+            (PackageManager::Berry, "yarn", vec!["dlx"]),
+            (PackageManager::Pnpm, "pnpm", vec!["dlx"]),
+            (PackageManager::Pnpm6, "pnpm", vec!["dlx"]),
+            (PackageManager::Pnpm9, "pnpm", vec!["dlx"]),
+            (PackageManager::Bun, "bun", vec!["x"]),
+            (
+                PackageManager::Nub {
+                    lockfile: Box::new(PackageManager::Npm),
+                },
+                "nubx",
+                vec![],
+            ),
+            (
+                PackageManager::Aube {
+                    lockfile: Box::new(PackageManager::Npm),
+                },
+                "aubx",
+                vec![],
+            ),
+        ] {
+            let (actual_executable, args) = turbo_download_command(&manager, "2.0.3");
+            assert_eq!(actual_executable, executable);
+            let expected: Vec<_> = prefix.into_iter().chain(["turbo@2.0.3"]).collect();
+            assert_eq!(args, expected);
+        }
+    }
+
+    #[test]
+    fn test_bun_download_with_and_without_package_manager() -> Result<(), Box<dyn std::error::Error>>
+    {
+        for package_json in [
+            br#"{"packageManager":"bun@1.3.0"}"#.as_slice(),
+            br#"{"devEngines":{"packageManager":{"name":"bun","version":"1.4.2"}}}"#.as_slice(),
+            br#"{}"#.as_slice(),
+        ] {
+            let tmpdir = tempfile::tempdir()?;
+            let root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+            root.join_component("package.json")
+                .create_with_contents(package_json)?;
+            root.join_component("bun.lock")
+                .create_with_contents(b"{}")?;
+            let repo = RepoState::infer(&root)?;
+            assert_eq!(package_manager_for_download(&repo), PackageManager::Bun);
+            assert_eq!(
+                turbo_download_command(&package_manager_for_download(&repo), "2.0.3"),
+                ("bun", vec!["x".into(), "turbo@2.0.3".into()])
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_download_configuration() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = tempfile::tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+        let invocation_dir = root.join_component("app");
+        let repo = RepoState {
+            root: root.clone(),
+            mode: RepoMode::SinglePackage,
+            root_package_json: Default::default(),
+            package_manager: Ok(PackageManager::Bun),
+        };
+        for (version, expected) in [
+            (
+                "2.0.3",
+                vec![
+                    "x",
+                    "turbo@2.0.3",
+                    "--skip-infer",
+                    "run",
+                    "build",
+                    "--single-package",
+                    "--",
+                    "--task-flag",
+                ],
+            ),
+            (
+                "1.6.0",
+                vec!["x", "turbo@1.6.0", "run", "build", "--", "--task-flag"],
+            ),
+        ] {
+            let mut args = ShimArgs {
+                cwd: root.clone(),
+                invocation_dir: invocation_dir.clone(),
+                skip_infer: false,
+                verbosity: 0,
+                force_update_check: false,
+                remaining_turbo_args: vec!["run".into(), "build".into()],
+                forwarded_args: vec!["--task-flag".into()],
+                color: false,
+                no_color: false,
+                root_turbo_json: None,
+                profile: None,
+                anon_profile: None,
+                heap: None,
+            };
+            let (executable, runner_args) = turbo_download_command(&PackageManager::Bun, version);
+            let mut command = process::Command::new(executable);
+            command.args(runner_args);
+            configure_downloaded_turbo(&mut command, &repo, version, &mut args)?;
+            assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
+            assert_eq!(
+                command.get_current_dir(),
+                Some(fs_canonicalize(&root)?.as_path())
+            );
+            assert!(command.get_envs().any(|(key, value)| {
+                key == INVOCATION_DIR_ENV_VAR
+                    && value == Some(invocation_dir.as_std_path().as_os_str())
+            }));
+        }
+        Ok(())
     }
 
     #[test]
