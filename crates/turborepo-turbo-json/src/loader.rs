@@ -851,6 +851,48 @@ mod tests {
         assert!(matches!(result.unwrap_err(), Error::NoTurboJSON));
     }
 
+    #[test_case(true; "enabled")]
+    #[test_case(false; "disabled")]
+    fn test_experimental_setup_is_inherited_from_root(enabled: bool) {
+        let tmp_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+        let root_path = repo_root.join_component(CONFIG_FILE);
+        fs::write(
+            &root_path,
+            format!(r#"{{"futureFlags":{{"experimentalSetup":{enabled}}},"tasks":{{}}}}"#),
+        )
+        .unwrap();
+        let root = crate::RawTurboJson::read(repo_root, &root_path, true)
+            .unwrap()
+            .unwrap();
+        let flags = TurboJson::try_from(root).unwrap().future_flags;
+        assert_eq!(flags.experimental_setup, enabled);
+        let reader = TurboJsonReader::new(repo_root.to_owned()).with_future_flags(flags);
+        let package_dir = repo_root.join_components(&["packages", "web"]);
+        package_dir.create_dir_all().unwrap();
+        let package_path = package_dir.join_component(CONFIG_FILE);
+        fs::write(&package_path, r#"{"extends":["//"],"tasks":{"build":{}}}"#).unwrap();
+
+        let config = reader.read(&package_path, false).unwrap().unwrap();
+        assert_eq!(config.future_flags.experimental_setup, enabled);
+        assert!(config.tasks.contains_key(&TaskName::from("build")));
+
+        // A package cannot override the root flag, even to the same value.
+        for override_value in [true, false] {
+            fs::write(
+                &package_path,
+                format!(
+                    r#"{{"extends":["//"],"futureFlags":{{"experimentalSetup":{override_value}}}}}"#
+                ),
+            )
+            .unwrap();
+            assert!(matches!(
+                reader.read(&package_path, false),
+                Err(Error::Parse(_))
+            ));
+        }
+    }
+
     #[test]
     fn test_loader_error_is_no_turbo_json() {
         let err = LoaderError::TurboJson(Error::NoTurboJSON);

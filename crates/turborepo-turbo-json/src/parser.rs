@@ -706,6 +706,40 @@ mod tests {
         assert!(RawPackageTurboJson::parse(&package_json, "packages/web/turbo.json").is_err());
     }
 
+    #[test_case(r#""true""#; "string")]
+    #[test_case("1"; "number")]
+    #[test_case("null"; "null")]
+    #[test_case("[]"; "array")]
+    #[test_case("{}"; "object")]
+    fn test_experimental_setup_rejects_non_boolean(value: &str) {
+        let json = format!(r#"{{"futureFlags":{{"experimentalSetup":{value}}}}}"#);
+        let error = RawRootTurboJson::parse(&json, "turbo.json").unwrap_err();
+        assert!(!error.diagnostics.is_empty());
+    }
+
+    #[test_case(""; "setup flag omitted")]
+    #[test_case(r#""experimentalSetup":true,"#; "setup flag enabled")]
+    #[test_case(r#""experimentalSetup":false,"#; "setup flag disabled")]
+    fn test_future_flags_reject_unknown_flags(setup_flag: &str) {
+        let json = format!(r#"{{"futureFlags":{{{setup_flag}"unknownSetupFlag":true}}}}"#);
+        let error = RawRootTurboJson::parse(&json, "turbo.json").unwrap_err();
+        assert!(!error.diagnostics.is_empty());
+    }
+
+    #[test_case(true; "enabled")]
+    #[test_case(false; "disabled")]
+    fn test_experimental_setup_not_allowed_in_package(enabled: bool) {
+        let json =
+            format!(r#"{{"extends":["//"],"futureFlags":{{"experimentalSetup":{enabled}}}}}"#);
+        assert!(RawPackageTurboJson::parse(&json, "packages/web/turbo.json").is_err());
+    }
+
+    #[test]
+    fn test_experimental_setup_does_not_add_setup_configuration() {
+        let json = r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#;
+        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
+    }
+
     #[test]
     fn test_biome_parse_error_new() {
         let err = BiomeParseError::new(vec![]);

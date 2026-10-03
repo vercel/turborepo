@@ -186,6 +186,58 @@ fn baseline_monorepo_hashes() {
 }
 
 #[test]
+fn turbo_lock_does_not_enable_setup_or_change_run_hashes() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
+    let config_path = dir.join("turbo.json");
+    let mut config = serde_json::json!({ "tasks": { "build": { "outputs": [] } } });
+    let lock_path = dir.join("turbo.lock");
+    let lock_contents = "not a valid setup lockfile\n";
+
+    // All flag and lock states must retain the same omitted-flag baseline.
+    fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+    let baseline = dry_json(dir, &["run", "build", "--dry=json"]);
+    let baseline_task_hashes = task_hash_contract(&baseline);
+    let baseline_global_inputs = global_cache_inputs_contract(&baseline);
+
+    for enabled in [None, Some(false), Some(true)] {
+        if let Some(enabled) = enabled {
+            config["futureFlags"] = serde_json::json!({ "experimentalSetup": enabled });
+        }
+        fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+        let without_lock = dry_json(dir, &["run", "build", "--dry=json"]);
+        fs::write(&lock_path, lock_contents).unwrap();
+        let with_lock = dry_json(dir, &["run", "build", "--dry=json"]);
+        for (state, actual) in [
+            ("without lock", &without_lock),
+            ("with malformed lock", &with_lock),
+        ] {
+            assert_eq!(
+                baseline_task_hashes,
+                task_hash_contract(actual),
+                "task hashes changed {state} with experimentalSetup={enabled:?}"
+            );
+            assert_eq!(
+                baseline_global_inputs,
+                global_cache_inputs_contract(actual),
+                "global inputs changed {state} with experimentalSetup={enabled:?}"
+            );
+        }
+        assert_eq!(without_lock["tasks"], with_lock["tasks"]);
+        let output = common::run_turbo(dir, &["run", "build", "--force"]);
+        assert!(
+            output.status.success(),
+            "run failed with experimentalSetup={enabled:?}:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(fs::read_to_string(&lock_path).unwrap(), lock_contents);
+        fs::remove_file(&lock_path).unwrap();
+    }
+}
+
+#[test]
 fn single_package_hashes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();

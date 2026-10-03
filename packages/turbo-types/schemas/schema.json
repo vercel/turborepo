@@ -331,6 +331,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalSetup": {
+          "description": "Opt into experimental setup features that are still in progress.\n\nAll future setup surfaces must require this flag. The `turbo.lock` format is unstable. This parser-only foundation ships no setup commands and does not interpret `turbo.lock` or change run or hash behavior.",
+          "default": false,
+          "type": "boolean"
+        },
         "filterUsingTasks": {
           "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
           "default": false,
