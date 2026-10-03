@@ -924,6 +924,17 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalGoWorkspaces?: boolean;
+
+  /**
+   * Opt into experimental setup features that are still in progress.
+   *
+   * All future setup surfaces must require this flag. The `turbo.lock`
+   * format is unstable. This parser-only foundation ships no setup commands
+   * and does not interpret `turbo.lock` or change run or hash behavior.
+   *
+   * @defaultValue `false`
+   */
+  experimentalSetup?: boolean;
 }
 
 "#
@@ -1158,6 +1169,23 @@ mod cli_tests {
     use std::{ffi::OsStr, path::PathBuf};
 
     use super::{Cli, Commands};
+
+    #[test]
+    fn experimental_setup_is_an_optional_boolean_future_flag() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let flags = &schema["definitions"]["FutureFlags"];
+        let setup = &flags["properties"]["experimentalSetup"];
+        assert_eq!(setup["type"], "boolean");
+        assert_eq!(setup["default"], false);
+        assert!(
+            flags["required"]
+                .as_array()
+                .is_none_or(|fields| !fields.contains(&serde_json::json!("experimentalSetup")))
+        );
+        assert!(schema["properties"].get("setup").is_none());
+        assert!(super::generate_root_schema_interface().contains("experimentalSetup?: boolean;"));
+        assert!(!super::generate_workspace_schema_interface().contains("futureFlags"));
+    }
 
     #[test]
     fn task_tags_are_optional_string_arrays() {

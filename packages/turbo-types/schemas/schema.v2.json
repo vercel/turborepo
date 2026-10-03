@@ -307,6 +307,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalSetup": {
+          "description": "Opt into experimental setup features that are still in progress.\n\nAll future setup surfaces must require this flag. The `turbo.lock` format is unstable. This parser-only foundation ships no setup commands and does not interpret `turbo.lock` or change run or hash behavior.",
+          "default": false,
+          "type": "boolean"
+        },
         "experimentalObservability": {
           "description": "Enable experimental OpenTelemetry exporter support.\n\nWhen enabled, Turborepo will honor the `experimentalObservability` configuration block (if present) to send run summaries to an observability backend.",
           "default": false,

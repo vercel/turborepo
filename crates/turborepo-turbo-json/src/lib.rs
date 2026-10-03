@@ -655,7 +655,7 @@ mod tests {
                 "build": {}
             },
             "futureFlags": {
-                "newFeature": true
+                "experimentalSetup": true
             }
         }"#;
 
@@ -704,6 +704,25 @@ mod tests {
         // TurboJson
         let turbo_json = TurboJson::try_from(raw_turbo_json);
         assert!(turbo_json.is_ok());
+    }
+
+    #[test_case(r#"{}"#, false; "omitted future flags")]
+    #[test_case(r#"{"futureFlags":{}}"#, false; "omitted setup flag")]
+    #[test_case(r#"{"futureFlags":{"experimentalSetup":true}}"#, true; "enabled")]
+    #[test_case(r#"{"futureFlags":{"experimentalSetup":false}}"#, false; "disabled")]
+    fn test_deserialize_future_flags_experimental_setup(json: &str, expected: bool) {
+        assert!(!FutureFlags::default().experimental_setup);
+        let raw = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert_eq!(
+            raw.future_flags
+                .as_ref()
+                .map(|flags| flags.as_inner().experimental_setup)
+                .unwrap_or_default(),
+            expected
+        );
+        let raw: RawTurboJson = raw.try_into().unwrap();
+        let config = TurboJson::try_from(raw).unwrap();
+        assert_eq!(config.future_flags.experimental_setup, expected);
     }
 
     #[test]

@@ -304,9 +304,33 @@ Enable experimental features that will become the default behavior in future ver
 </Callout>
 
 <Callout type="warn">
-  Changing any future flag will affect the [global
-  hash](/docs/crafting-your-repository/caching#global-hash-inputs), causing all
-  tasks to miss cache on the next run.
+  Future flags that change behavior can invalidate the [task
+  cache](/docs/crafting-your-repository/caching). The parser-only
+  [`experimentalSetup`](#experimentalsetup) flag is not currently a hash
+  input.
+</Callout>
+
+#### `experimentalSetup`
+
+<ExperimentalBadge />
+
+Default: `false`
+
+Opt into experimental setup features that are still in progress. This flag can only be set in the root `turbo.json`, and every future setup surface must require it to be `true`.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalSetup": true,
+  },
+}
+```
+
+<Callout type="warn">
+  The `turbo.lock` format is unstable and may change without notice. This
+  parser-only foundation ships no setup commands or `setup` configuration
+  key. Enabling the flag does not interpret `turbo.lock` or change existing
+  `turbo run` or hashing behavior when the file exists.
 </Callout>
 
 #### `errorsOnlyShowHash`

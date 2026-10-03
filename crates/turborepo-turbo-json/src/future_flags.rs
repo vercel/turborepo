@@ -145,6 +145,13 @@ pub struct FutureFlags {
     #[serde(default)]
     #[schemars(skip)]
     pub experimental_task_command: bool,
+    /// Opt into experimental setup features that are still in progress.
+    ///
+    /// All future setup surfaces must require this flag. The `turbo.lock`
+    /// format is unstable. This parser-only foundation ships no setup commands
+    /// and does not interpret `turbo.lock` or change run or hash behavior.
+    #[serde(default)]
+    pub experimental_setup: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Deserializable
@@ -164,7 +171,8 @@ impl TS for FutureFlags {
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
-         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
+         experimentalSetup?: boolean }"
             .to_string()
     }
 
@@ -174,7 +182,8 @@ impl TS for FutureFlags {
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
-         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
+         experimentalSetup?: boolean }"
             .to_string()
     }
 
@@ -185,7 +194,7 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean };"
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
             .to_string()
     }
 
@@ -196,7 +205,7 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean };"
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
             .to_string()
     }
 
@@ -206,3 +215,20 @@ impl TS for FutureFlags {
 }
 
 impl FutureFlags {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn experimental_setup_is_optional_in_all_typescript_forms() {
+        for typescript in [
+            FutureFlags::inline(),
+            FutureFlags::inline_flattened(),
+            FutureFlags::decl(),
+            FutureFlags::decl_concrete(),
+        ] {
+            assert!(typescript.contains("experimentalSetup?: boolean"));
+        }
+    }
+}
