@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { Client, defaultMessageReducer } from "eve/client";
 
 import {
   isWorkspaceRunning,
+  workspaceChatContent,
+  workspaceImageSelectionError,
+  workspaceImageUrl,
+  readWorkspaceChatImages,
+  hasConfirmedWorkspaceMessage,
+  MAX_WORKSPACE_IMAGE_BYTES,
   latestWorkspaceFailure,
   removeConfirmedQueuedMessages,
   workspaceStatusLabel
@@ -125,17 +132,239 @@ test("queue cleanup removes only confirmed messages and then stabilizes", () => 
   );
 });
 
-test("queue confirmation combines text parts and ignores non-text parts", () => {
+test("queue confirmation combines text parts and ignores non-attachment parts", () => {
   const queue = [{ text: "Fix\ncache", afterMessageCount: 0 }];
   const messages = [
     {
       role: "user",
       parts: [
         { type: "text", text: "Fix" },
-        { type: "file" },
+        { type: "reasoning", text: "ignored" },
         { type: "text", text: "cache" }
       ]
     }
   ];
   assert.deepEqual(removeConfirmedQueuedMessages(queue, messages), []);
+});
+
+const image = {
+  id: "image_1",
+  name: "screenshot.png",
+  mediaType: "image/png",
+  size: 68,
+  url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a8S8AAAAASUVORK5CYII="
+};
+
+test("chat serializes real image data for text-plus-image and image-only turns", () => {
+  assert.equal(workspaceChatContent({ text: "Hello" }), "Hello");
+  const file = {
+    type: "file",
+    data: image.url,
+    mediaType: image.mediaType,
+    filename: image.name
+  };
+  assert.deepEqual(
+    workspaceChatContent({ text: "Inspect this", images: [image] }),
+    [{ type: "text", text: "Inspect this" }, file]
+  );
+  assert.deepEqual(workspaceChatContent({ text: "", images: [image] }), [file]);
+});
+
+test("image selection enforces safe formats, count, and total request size", () => {
+  const file = { type: image.mediaType, size: image.size };
+  for (const type of ["image/png", "image/jpeg", "image/webp", "image/gif"])
+    assert.equal(
+      workspaceImageSelectionError([{ ...file, type }], []),
+      undefined
+    );
+  for (const type of ["image/svg+xml", "text/html", "application/pdf", ""])
+    assert.match(workspaceImageSelectionError([{ ...file, type }], []), /PNG/);
+  assert.match(
+    workspaceImageSelectionError([{ ...file, size: 0 }], []),
+    /empty/
+  );
+  assert.match(
+    workspaceImageSelectionError([file, file, file, file, file], []),
+    /at most 4/
+  );
+  assert.match(
+    workspaceImageSelectionError([file], [image, image, image, image]),
+    /at most 4/
+  );
+  assert.equal(
+    workspaceImageSelectionError(
+      [{ ...file, size: MAX_WORKSPACE_IMAGE_BYTES }],
+      []
+    ),
+    undefined
+  );
+  assert.match(
+    workspaceImageSelectionError(
+      [{ ...file, size: MAX_WORKSPACE_IMAGE_BYTES }],
+      [image]
+    ),
+    /2 MiB/
+  );
+});
+
+test("image previews reject executable or mismatched image URLs", () => {
+  assert.equal(workspaceImageUrl("image/png", image.url), image.url);
+  assert.equal(
+    workspaceImageUrl("image/png", "https://example.com/image.png"),
+    "https://example.com/image.png"
+  );
+  for (const url of [
+    "javascript:alert(1)",
+    "data:text/html;base64,AAAA",
+    "data:image/svg+xml;base64,AAAA",
+    "http://example.com/image.png",
+    "/image.png"
+  ])
+    assert.equal(workspaceImageUrl("image/png", url), undefined);
+  assert.equal(
+    workspaceImageUrl("image/svg+xml", "https://example.com/image.svg"),
+    undefined
+  );
+  assert.equal(workspaceImageUrl("image/png"), undefined);
+});
+
+test("resumed Eve transcripts retain image URLs and confirm the matching image turn", () => {
+  const reducer = defaultMessageReducer();
+  const event = {
+    type: "message.received",
+    data: {
+      turnId: "turn_image",
+      message: "Inspect this",
+      parts: [
+        { type: "text", text: "Inspect this" },
+        {
+          type: "file",
+          filename: image.name,
+          mediaType: image.mediaType,
+          url: image.url,
+          size: image.size
+        }
+      ]
+    }
+  };
+  const messages = reducer.reduce(
+    reducer.initial(),
+    JSON.parse(JSON.stringify(event))
+  ).messages;
+  const projectedImage = messages[0].parts[1];
+  assert.equal(
+    workspaceImageUrl(projectedImage.mediaType, projectedImage.url),
+    image.url
+  );
+  const queue = [
+    { text: "Inspect this", images: [image], afterMessageCount: 0 },
+    {
+      text: "Inspect this",
+      images: [{ ...image, url: "data:image/png;base64,different" }],
+      afterMessageCount: 0
+    }
+  ];
+  assert.deepEqual(removeConfirmedQueuedMessages(queue, messages), [queue[1]]);
+  assert.equal(hasConfirmedWorkspaceMessage(messages, queue[0]), true);
+  assert.equal(hasConfirmedWorkspaceMessage(messages, queue[1]), false);
+  assert.equal(
+    hasConfirmedWorkspaceMessage(messages, {
+      text: "Inspect this",
+      afterMessageCount: 0
+    }),
+    false
+  );
+  const imageOnly = [{ role: "user", parts: [projectedImage] }];
+  assert.equal(
+    hasConfirmedWorkspaceMessage(imageOnly, {
+      text: "",
+      images: [image],
+      afterMessageCount: 0
+    }),
+    true
+  );
+  assert.equal(
+    hasConfirmedWorkspaceMessage(imageOnly, {
+      text: "",
+      images: [image],
+      afterMessageCount: 1
+    }),
+    false
+  );
+});
+
+test("browser image reading creates persistent data URLs and reports read failures", async (t) => {
+  class Reader {
+    readAsDataURL(file) {
+      queueMicrotask(() => {
+        if (file.name === "broken.png") this.onerror();
+        else {
+          this.result = image.url;
+          this.onload();
+        }
+      });
+    }
+  }
+  const original = globalThis.FileReader;
+  globalThis.FileReader = Reader;
+  t.after(() => {
+    if (original === undefined) delete globalThis.FileReader;
+    else globalThis.FileReader = original;
+  });
+  const files = [{ name: image.name, type: image.mediaType, size: image.size }];
+  const images = await readWorkspaceChatImages(files, []);
+  assert.equal(images[0].url, image.url);
+  assert.equal(images[0].name, image.name);
+  assert.ok(images[0].id);
+  await assert.rejects(
+    readWorkspaceChatImages([{ ...files[0], name: "broken.png" }], []),
+    /Could not read/
+  );
+  await assert.rejects(
+    readWorkspaceChatImages([{ ...files[0], type: "image/svg+xml" }], []),
+    /PNG/
+  );
+});
+
+test("Eve transport posts image bytes on normal and queued turns", async (t) => {
+  const bodies = [];
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    assert.match(String(url), /session_image/);
+    assert.equal(init.method, "POST");
+    bodies.push(JSON.parse(init.body));
+    return Response.json({ sessionId: "session_image" });
+  });
+  const session = new Client({
+    host: "https://factory.example"
+  }).sessions.attach("session_image");
+  await session.send(
+    workspaceChatContent({ text: "Inspect this", images: [image] })
+  );
+  await session.send(workspaceChatContent({ text: "", images: [image] }), {
+    turnPolicy: "queue",
+    streamReconnectPolicy: { reconnect: false }
+  });
+  assert.equal(bodies[0].message[1].data, image.url);
+  assert.equal(bodies[0].message[1].mediaType, image.mediaType);
+  assert.equal(bodies[1].message[0].data, image.url);
+  assert.equal(bodies[1].turnPolicy, "queue");
+});
+
+test("repeated queued image messages consume distinct confirmations across cleanups", () => {
+  const queue = [
+    { id: "first", text: "", images: [image], afterMessageCount: 0 },
+    { id: "second", text: "", images: [image], afterMessageCount: 0 }
+  ];
+  const confirmation = {
+    role: "user",
+    parts: [{ type: "file", mediaType: image.mediaType, url: image.url }]
+  };
+  const pending = removeConfirmedQueuedMessages(queue, [confirmation]);
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].id, "second");
+  assert.equal(removeConfirmedQueuedMessages(pending, [confirmation]), pending);
+  assert.deepEqual(
+    removeConfirmedQueuedMessages(pending, [confirmation, confirmation]),
+    []
+  );
 });

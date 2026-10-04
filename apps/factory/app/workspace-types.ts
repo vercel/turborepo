@@ -125,28 +125,193 @@ function nonEmptyString(value: unknown): string | undefined {
   return normalized || undefined;
 }
 
+export const WORKSPACE_IMAGE_MEDIA_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif"
+] as const;
+export const MAX_WORKSPACE_IMAGES = 4;
+// Base64 plus the JSON envelope stays below Vercel's 4.5 MB request limit.
+export const MAX_WORKSPACE_IMAGE_BYTES = 2 * 1024 * 1024;
+
+export interface WorkspaceChatImage {
+  readonly id: string;
+  readonly name: string;
+  readonly mediaType: string;
+  readonly size: number;
+  readonly url: string;
+}
+
+export interface WorkspaceChatDraft {
+  readonly text: string;
+  readonly images?: readonly WorkspaceChatImage[];
+}
+
 type ProjectedChatMessage = {
   readonly role: string;
-  readonly parts: readonly { readonly type: string; readonly text?: string }[];
+  readonly parts: readonly {
+    readonly type: string;
+    readonly text?: string;
+    readonly url?: string;
+    readonly filename?: string;
+    readonly mediaType?: string;
+    readonly size?: number;
+  }[];
 };
+
+export function workspaceImageSelectionError(
+  files: readonly Pick<File, "type" | "size">[],
+  existing: readonly WorkspaceChatImage[]
+): string | undefined {
+  if (files.length + existing.length > MAX_WORKSPACE_IMAGES)
+    return `Attach at most ${MAX_WORKSPACE_IMAGES} images per message.`;
+  if (
+    files.some(
+      (file) => !WORKSPACE_IMAGE_MEDIA_TYPES.some((type) => type === file.type)
+    )
+  )
+    return "Use PNG, JPEG, WebP, or GIF images.";
+  if (files.some((file) => file.size === 0))
+    return "Cannot attach an empty image.";
+  if (
+    files.reduce((size, file) => size + file.size, 0) +
+      existing.reduce((size, image) => size + image.size, 0) >
+    MAX_WORKSPACE_IMAGE_BYTES
+  )
+    return "Images must total 2 MiB or less per message.";
+  return undefined;
+}
+
+export async function readWorkspaceChatImages(
+  files: readonly File[],
+  existing: readonly WorkspaceChatImage[]
+): Promise<WorkspaceChatImage[]> {
+  const error = workspaceImageSelectionError(files, existing);
+  if (error) throw new Error(error);
+  return Promise.all(
+    files.map(
+      (file) =>
+        new Promise<WorkspaceChatImage>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () =>
+            reject(new Error(`Could not read ${file.name}.`));
+          reader.onabort = () =>
+            reject(new Error(`Reading ${file.name} was cancelled.`));
+          reader.onload = () => {
+            if (
+              typeof reader.result !== "string" ||
+              !workspaceImageUrl(file.type, reader.result)
+            ) {
+              reject(new Error(`Could not read ${file.name} as an image.`));
+              return;
+            }
+            resolve({
+              id: crypto.randomUUID(),
+              name: file.name,
+              mediaType: file.type,
+              size: file.size,
+              url: reader.result
+            });
+          };
+          reader.readAsDataURL(file);
+        })
+    )
+  );
+}
+
+/** Eve accepts file data URLs and persists their browser-resolvable URLs in the transcript. */
+export function workspaceChatContent(draft: WorkspaceChatDraft) {
+  if (!draft.images?.length) return draft.text;
+  return [
+    ...(draft.text ? [{ type: "text" as const, text: draft.text }] : []),
+    ...draft.images.map((image) => ({
+      type: "file" as const,
+      data: image.url,
+      mediaType: image.mediaType,
+      filename: image.name
+    }))
+  ];
+}
+
+export function workspaceImageUrl(
+  mediaType: string,
+  url?: string
+): string | undefined {
+  if (!url || !WORKSPACE_IMAGE_MEDIA_TYPES.some((type) => type === mediaType))
+    return undefined;
+  if (url.startsWith(`data:${mediaType};base64,`)) return url;
+  try {
+    return new URL(url).protocol === "https:" ? url : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function matchesChatDraft(
+  message: ProjectedChatMessage,
+  draft: WorkspaceChatDraft
+): boolean {
+  if (message.role !== "user") return false;
+  const text = message.parts
+    .filter((part) => part.type === "text")
+    .map((part) => part.text)
+    .join("\n")
+    .trim();
+  const files = message.parts.filter((part) => part.type === "file");
+  const images = draft.images ?? [];
+  return (
+    text === draft.text.trim() &&
+    files.length === images.length &&
+    images.every((image, index) => {
+      const file = files[index];
+      return (
+        file?.mediaType === image.mediaType &&
+        (file.url
+          ? file.url === image.url
+          : file.filename === image.name && file.size === image.size)
+      );
+    })
+  );
+}
+
+export function hasConfirmedWorkspaceMessage(
+  messages: readonly ProjectedChatMessage[],
+  draft: WorkspaceChatDraft & { readonly afterMessageCount: number }
+): boolean {
+  return messages
+    .slice(draft.afterMessageCount)
+    .some((message) => matchesChatDraft(message, draft));
+}
 
 /** Keep React state referentially unchanged unless a queued message is confirmed. */
 export function removeConfirmedQueuedMessages<
-  T extends { readonly afterMessageCount: number; readonly text: string }
+  T extends WorkspaceChatDraft & { readonly afterMessageCount: number }
 >(current: T[], messages: readonly ProjectedChatMessage[]): T[] {
-  const pending = current.filter(
-    (queued) =>
-      !messages.slice(queued.afterMessageCount).some(
-        (message) =>
-          message.role === "user" &&
-          message.parts
-            .filter((part) => part.type === "text")
-            .map((part) => part.text)
-            .join("\n")
-            .trim() === queued.text.trim()
-      )
-  );
-  // filter creates a fresh array even for an empty or entirely pending queue.
-  // Returning it from a message-projection effect would schedule another render.
-  return pending.length === current.length ? current : pending;
+  const confirmed = new Set<number>();
+  let changed = false;
+  const pending: T[] = [];
+  for (const queued of current) {
+    // Don't reuse a previous acknowledgement for a repeated queued draft,
+    // including on the next cleanup after the first entry has been removed.
+    let afterMessageCount = queued.afterMessageCount;
+    for (const index of confirmed) {
+      if (matchesChatDraft(messages[index], queued))
+        afterMessageCount = Math.max(afterMessageCount, index + 1);
+    }
+    const index = messages.findIndex(
+      (message, index) =>
+        index >= afterMessageCount &&
+        !confirmed.has(index) &&
+        matchesChatDraft(message, queued)
+    );
+    if (index >= 0) {
+      confirmed.add(index);
+      changed = true;
+    } else if (afterMessageCount !== queued.afterMessageCount) {
+      pending.push({ ...queued, afterMessageCount });
+      changed = true;
+    } else pending.push(queued);
+  }
+  return changed ? pending : current;
 }
