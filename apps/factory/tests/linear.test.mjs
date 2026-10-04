@@ -11,10 +11,12 @@ function withEnvironment(name, value, run) {
   const previous = process.env[name];
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
-  return Promise.resolve().then(run).finally(() => {
-    if (previous === undefined) delete process.env[name];
-    else process.env[name] = previous;
-  });
+  return Promise.resolve()
+    .then(run)
+    .finally(() => {
+      if (previous === undefined) delete process.env[name];
+      else process.env[name] = previous;
+    });
 }
 
 const request = new Request("https://factory.example/eve/v1/linear");
@@ -36,14 +38,19 @@ test("Linear credentials accept a resolved token", async () => {
 
 test("Linear credential failures do not expose provider errors", async () => {
   for (const resolve of [
-    () => { throw new Error("sensitive provider detail"); },
+    () => {
+      throw new Error("sensitive provider detail");
+    },
     () => ({}),
-    () => ({ accessToken: async () => { throw new Error("sensitive token detail"); } })
+    () => ({
+      accessToken: async () => {
+        throw new Error("sensitive token detail");
+      }
+    })
   ]) {
-    await assert.rejects(
-      createLinearCredentials(resolve).accessToken(),
-      { message: "Linear credentials are unavailable." }
-    );
+    await assert.rejects(createLinearCredentials(resolve).accessToken(), {
+      message: "Linear credentials are unavailable."
+    });
   }
 });
 
@@ -68,8 +75,14 @@ test("Linear webhook verification fails closed", async (t) => {
   for (const resolve of [
     () => ({}),
     () => ({ webhookVerifier: () => null }),
-    () => { throw new Error("sensitive configuration detail"); },
-    () => ({ webhookVerifier: async () => { throw new Error("sensitive verifier detail"); } })
+    () => {
+      throw new Error("sensitive configuration detail");
+    },
+    () => ({
+      webhookVerifier: async () => {
+        throw new Error("sensitive verifier detail");
+      }
+    })
   ]) {
     assert.equal(
       await createLinearCredentials(resolve).webhookVerifier(request, "body"),
@@ -89,7 +102,10 @@ test("missing Linear configuration only fails when credentials are used", async 
     await assert.rejects(linearCredentials.accessToken(), {
       message: "Linear credentials are unavailable."
     });
-    assert.equal(await linearCredentials.webhookVerifier(request, "body"), null);
+    assert.equal(
+      await linearCredentials.webhookVerifier(request, "body"),
+      null
+    );
   });
 });
 
@@ -102,9 +118,13 @@ test("Linear MCP requires its own connector configuration", async () => {
 });
 
 test("Linear MCP auth is app scoped for internal and scheduled sessions", async () => {
-  await withEnvironment("LINEAR_MCP_CONNECT_UID", " mcp.linear.app/factory ", () => {
-    const auth = linearMcpAuth();
-    assert.equal(auth.principalType, "app");
-    assert.equal(typeof auth.getToken, "function");
-  });
+  await withEnvironment(
+    "LINEAR_MCP_CONNECT_UID",
+    " mcp.linear.app/factory ",
+    () => {
+      const auth = linearMcpAuth();
+      assert.equal(auth.principalType, "app");
+      assert.equal(typeof auth.getToken, "function");
+    }
+  );
 });
