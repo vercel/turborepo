@@ -1,34 +1,23 @@
-const { resolve } = require("node:path");
+const eslint = require("@eslint/js");
+const prettierModule = require("eslint-config-prettier/flat");
+const turboModule = require("eslint-config-turbo/flat");
 
-const project = resolve(process.cwd(), "tsconfig.json");
+const prettier = prettierModule.default ?? prettierModule;
+const turbo = turboModule.default ?? turboModule;
 
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ["eslint:recommended", "prettier", "turbo"],
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
-  },
-  env: {
-    node: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
+module.exports = [
+  eslint.configs.recommended,
+  {
+    languageOptions: {
+      globals: {
+        module: "readonly",
+        require: "readonly",
       },
     },
   },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-    "dist/",
-  ],
-  overrides: [
-    {
-      files: ["*.js?(x)", "*.ts?(x)"],
-    },
-  ],
-};
+  ...(Array.isArray(turbo) ? turbo : [turbo]),
+  ...(Array.isArray(prettier) ? prettier : [prettier]),
+  {
+    ignores: ["**/*.ts", "**/*.tsx", "dist/**", "node_modules/**"],
+  },
+];
