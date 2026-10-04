@@ -15,7 +15,6 @@ import type {
   EveMessageInputRequest,
   EveMessagePart
 } from "eve/react";
-import { useEveAgent } from "eve/react";
 import {
   ArrowDownIcon,
   ArrowLeftIcon,
@@ -59,14 +58,15 @@ import { Button } from "../components/ui/button";
 import { WorkspaceDiff } from "./workspace-diff";
 import {
   latestWorkspaceFailure,
-  hasConfirmedWorkspaceMessage,
+  activeWorkspaceTurnId,
+  WORKSPACE_CHAT_TURN_POLICY,
   readWorkspaceChatImages,
   workspaceChatContent,
   workspaceImageUrl,
   workspaceImageSelectionError,
   WORKSPACE_IMAGE_MEDIA_TYPES,
   type WorkspaceChatImage,
-  removeConfirmedQueuedMessages,
+  removeConfirmedOptimisticMessages,
   type PublicWorkspace,
   type WorkspaceFailure
 } from "./workspace-types";
@@ -101,7 +101,7 @@ interface LoadedWorkspace {
   readonly workspace: PublicWorkspace;
 }
 
-type QueuedMessage = {
+type SentMessage = {
   readonly images: readonly WorkspaceChatImage[];
   readonly afterMessageCount: number;
   readonly id: string;
@@ -205,24 +205,19 @@ function WorkspaceChat({
   const readingImagesRef = useRef(false);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
-  const sendingToAgentRef = useRef(false);
-  const sendSequence = useRef(0);
   const restoredMessages = useRef(new Set<string>());
-  const restoreMessage = useCallback(
-    (message: QueuedMessage, error: string) => {
-      if (restoredMessages.current.has(message.id)) return;
-      restoredMessages.current.add(message.id);
-      // Preserve anything typed/attached while the preceding response streamed.
-      setDraft((current) =>
-        current
-          ? [message.text, current].filter(Boolean).join("\n")
-          : message.text
-      );
-      setDraftImages((current) => [...message.images, ...current]);
-      setImageError(error);
-    },
-    []
-  );
+  const restoreMessage = useCallback((message: SentMessage, error: string) => {
+    if (restoredMessages.current.has(message.id)) return;
+    restoredMessages.current.add(message.id);
+    // Preserve anything typed/attached while the preceding response streamed.
+    setDraft((current) =>
+      current
+        ? [message.text, current].filter(Boolean).join("\n")
+        : message.text
+    );
+    setDraftImages((current) => [...message.images, ...current]);
+    setImageError(error);
+  }, []);
 
   const addImages = useCallback(
     async (files: readonly File[]) => {
@@ -249,24 +244,15 @@ function WorkspaceChat({
     workspace.thinkingEffort ?? DEFAULT_WORKSPACE_THINKING_EFFORT
   );
   const thinkingEffortRef = useRef(thinkingEffort);
-  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
   const [externalEvents, setExternalEvents] = useState(initialEvents);
   const reconnectStream = useRef<() => void>(() => {});
   const streamIndex = useRef(initialEvents.length);
-  const [optimisticMessage, setOptimisticMessage] =
-    useState<QueuedMessage | null>(null);
+  const [optimisticMessages, setOptimisticMessages] = useState<SentMessage[]>(
+    []
+  );
   const [stopping, setStopping] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [view, setView] = useState<"chat" | "diff">("chat");
-  const agent = useEveAgent({
-    headers: () => consoleHeaders(thinkingEffortRef.current),
-    initialEvents,
-    initialSession: {
-      sessionId: workspace.sessionId!,
-      streamIndex: initialEvents.length
-    }
-  });
-
   useEffect(() => {
     let controller: AbortController | undefined;
     let disposed = false;
@@ -323,10 +309,7 @@ function WorkspaceChat({
     };
   }, [workspace.sessionId]);
 
-  const events = useMemo(
-    () => mergeEvents(externalEvents, agent.events),
-    [agent.events, externalEvents]
-  );
+  const events = externalEvents;
   const data = useMemo(
     () =>
       events.reduce(
@@ -337,65 +320,17 @@ function WorkspaceChat({
   );
   const messages = useMemo(
     () =>
-      appendOptimisticMessage(data.messages, optimisticMessage, workspace.id),
-    [data.messages, optimisticMessage, workspace.id]
+      appendOptimisticMessages(data.messages, optimisticMessages, workspace.id),
+    [data.messages, optimisticMessages, workspace.id]
   );
-  const serverBusy = isServerBusy(events);
-  const busy =
-    serverBusy || agent.status === "submitted" || agent.status === "streaming";
+  const activeTurnId = activeWorkspaceTurnId(events);
+  const busy = activeTurnId !== undefined || sending;
   const hasAssistantProgress = hasRenderableAssistantProgress(messages.at(-1));
-  const streamedFailure = useMemo(
-    () => latestWorkspaceFailure(events),
-    [events]
-  );
-  const failure =
-    streamedFailure ?? fallbackWorkspaceFailure(agent.error?.message);
+  const failure = useMemo(() => latestWorkspaceFailure(events), [events]);
 
   useEffect(() => {
-    // agent.send resolves after streaming, but the composer must allow queueing
-    // as soon as Eve has entered the submitted/streaming state.
-    if (
-      sendingToAgentRef.current &&
-      (agent.status === "submitted" || agent.status === "streaming")
-    ) {
-      sendingRef.current = false;
-      setSending(false);
-    }
-  }, [agent.status]);
-
-  useEffect(() => {
-    if (
-      optimisticMessage &&
-      hasConfirmedWorkspaceMessage(data.messages, optimisticMessage)
-    ) {
-      setOptimisticMessage(null);
-    }
-  }, [data.messages, optimisticMessage]);
-
-  useEffect(() => {
-    // Eve reports transport failures in hook state as well as promise failures.
-    if (
-      agent.status === "error" &&
-      optimisticMessage &&
-      !hasConfirmedWorkspaceMessage(data.messages, optimisticMessage)
-    ) {
-      restoreMessage(
-        optimisticMessage,
-        agent.error?.message ?? "Could not send message."
-      );
-      setOptimisticMessage(null);
-    }
-  }, [
-    agent.error,
-    agent.status,
-    data.messages,
-    optimisticMessage,
-    restoreMessage
-  ]);
-
-  useEffect(() => {
-    setQueuedMessages((current) =>
-      removeConfirmedQueuedMessages(current, data.messages)
+    setOptimisticMessages((current) =>
+      removeConfirmedOptimisticMessages(current, data.messages)
     );
   }, [data.messages]);
 
@@ -412,56 +347,44 @@ function WorkspaceChat({
       setImageError(validationError);
       return;
     }
-    const message: QueuedMessage = {
+    const message: SentMessage = {
       afterMessageCount: data.messages.length,
       id: crypto.randomUUID(),
       text,
       images: draftImages
     };
-    const sequence = ++sendSequence.current;
-    sendingToAgentRef.current = !busy;
     sendingRef.current = true;
     setSending(true);
     setDraft("");
     setDraftImages([]);
     setImageError(null);
-    if (busy) setQueuedMessages((current) => [...current, message]);
-    else setOptimisticMessage(message);
+    setOptimisticMessages((current) => [...current, message]);
     try {
-      const content = workspaceChatContent(message);
-      if (busy) {
-        await new Client({
-          headers: consoleHeaders(thinkingEffortRef.current),
-          host: ""
-        }).sessions
-          .attach(workspace.sessionId!)
-          .send(content, {
-            streamReconnectPolicy: { reconnect: false },
-            turnPolicy: "queue"
-          });
-      } else {
-        await agent.send(content, { turnPolicy: "queue" });
-      }
+      // The hook refuses sends while streaming. The fixed-session API accepts
+      // steering messages immediately and the durable stream follows all turns.
+      await new Client({
+        headers: consoleHeaders(thinkingEffortRef.current),
+        host: ""
+      }).sessions
+        .attach(workspace.sessionId!)
+        .send(workspaceChatContent(message), {
+          streamReconnectPolicy: { reconnect: false },
+          turnPolicy: WORKSPACE_CHAT_TURN_POLICY
+        });
+      reconnectStream.current();
     } catch (cause) {
-      if (busy)
-        setQueuedMessages((current) =>
-          current.filter((candidate) => candidate.id !== message.id)
-        );
-      else setOptimisticMessage(null);
+      setOptimisticMessages((current) =>
+        current.filter((candidate) => candidate.id !== message.id)
+      );
       restoreMessage(
         message,
         cause instanceof Error ? cause.message : "Could not send message."
       );
     } finally {
-      if (sendSequence.current === sequence) {
-        sendingToAgentRef.current = false;
-        sendingRef.current = false;
-        setSending(false);
-      }
+      sendingRef.current = false;
+      setSending(false);
     }
   }, [
-    agent,
-    busy,
     data.messages.length,
     draft,
     draftImages,
@@ -472,23 +395,40 @@ function WorkspaceChat({
   const answer = useCallback(
     async (response: InputResponse) => {
       try {
-        await agent.respond([response]);
-      } catch {
-        // The agent exposes the actionable failure below the conversation.
+        await new Client({
+          headers: consoleHeaders(thinkingEffortRef.current),
+          host: ""
+        }).sessions
+          .attach(workspace.sessionId!)
+          .respond([response], {
+            streamReconnectPolicy: { reconnect: false }
+          });
+        reconnectStream.current();
+      } catch (cause) {
+        setImageError(
+          cause instanceof Error ? cause.message : "Could not send response."
+        );
       }
     },
-    [agent]
+    [workspace.sessionId]
   );
 
   const stop = useCallback(async () => {
     if (stopping) return;
     setStopping(true);
     try {
-      await agent.cancel();
+      await new Client({ headers: CONSOLE_HEADERS, host: "" }).sessions
+        .attach(workspace.sessionId!)
+        .cancel({ turnId: activeTurnId });
+      reconnectStream.current();
+    } catch (cause) {
+      setImageError(
+        cause instanceof Error ? cause.message : "Could not stop response."
+      );
     } finally {
       setStopping(false);
     }
-  }, [agent, stopping]);
+  }, [activeTurnId, stopping, workspace.sessionId]);
 
   return (
     <main
@@ -597,7 +537,7 @@ function WorkspaceChat({
             >
               {messages.map((message, index) => (
                 <WorkspaceMessage
-                  canRespond={agent.status !== "error"}
+                  canRespond={!failure}
                   isStreaming={busy && index === messages.length - 1}
                   key={message.id}
                   message={message}
@@ -611,9 +551,6 @@ function WorkspaceChat({
 
           <div className="shrink-0 bg-background px-6 pt-2 pb-5 max-[520px]:px-4">
             {failure ? <WorkspaceFailureAlert failure={failure} /> : null}
-            {queuedMessages.length > 0 ? (
-              <QueuedMessages messages={queuedMessages} />
-            ) : null}
             <ChatComposer
               busy={busy}
               images={draftImages}
@@ -704,33 +641,6 @@ function ScrollToBottomButton() {
     >
       <ArrowDownIcon className="size-4" />
     </button>
-  );
-}
-
-function QueuedMessages({
-  messages
-}: {
-  readonly messages: readonly QueuedMessage[];
-}) {
-  return (
-    <div
-      aria-label="Queued messages"
-      className="mx-auto mb-2 max-w-3xl rounded-md border border-border/70 bg-muted/30 px-3 py-2"
-    >
-      <p className="text-[11px] font-medium text-muted-foreground">
-        Queued ({messages.length})
-      </p>
-      <ol className="mt-1 space-y-1 text-xs">
-        {messages.map((message) => (
-          <li className="truncate" key={message.id}>
-            {message.text || "Image message"}
-            {message.images.length
-              ? ` · ${message.images.length} image(s)`
-              : ""}
-          </li>
-        ))}
-      </ol>
-    </div>
   );
 }
 
@@ -906,8 +816,7 @@ function ChatComposer({
             ))}
           </select>
           <span className="text-[11px] text-muted-foreground/70">
-            {busy ? "Enter to queue" : "Enter to send"} · Shift+Enter for a new
-            line
+            Enter to send · Shift+Enter for a new line
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -927,7 +836,7 @@ function ChatComposer({
             </button>
           ) : null}
           <button
-            aria-label={busy ? "Queue message" : "Send message"}
+            aria-label="Send message"
             className="grid size-7 place-items-center rounded-md bg-foreground text-background transition-colors hover:bg-foreground/90 disabled:opacity-30"
             disabled={
               sending || readingImages || (!value.trim() && images.length === 0)
@@ -1243,37 +1152,16 @@ function appendUniqueEvent(
     : [...events, event];
 }
 
-function mergeEvents(
-  initial: readonly MessageStreamEvent[],
-  streamed: readonly MessageStreamEvent[]
-): MessageStreamEvent[] {
-  return streamed.reduce(appendUniqueEvent, [...initial]);
-}
-
-function isServerBusy(events: readonly MessageStreamEvent[]): boolean {
-  let busy = false;
-  for (const event of events) {
-    if (event.type === "turn.started") busy = true;
-    if (
-      event.type === "turn.completed" ||
-      event.type === "turn.cancelled" ||
-      event.type === "turn.failed" ||
-      event.type === "session.failed"
-    )
-      busy = false;
-  }
-  return busy;
-}
-
-function appendOptimisticMessage(
+function appendOptimisticMessages(
   messages: readonly EveMessage[],
-  draft: QueuedMessage | null,
+  pending: readonly SentMessage[],
   workspaceId: string
 ): readonly EveMessage[] {
-  if (!draft || hasConfirmedWorkspaceMessage(messages, draft)) return messages;
+  const unconfirmed = removeConfirmedOptimisticMessages([...pending], messages);
+  if (!unconfirmed.length) return messages;
   return [
     ...messages,
-    {
+    ...unconfirmed.map((draft): EveMessage => ({
       id: `${workspaceId}:${draft.id}:optimistic-user-message`,
       metadata: { optimistic: true, status: "submitted" },
       parts: [
@@ -1295,7 +1183,7 @@ function appendOptimisticMessage(
         }))
       ],
       role: "user"
-    }
+    }))
   ];
 }
 
@@ -1340,13 +1228,6 @@ function partKey(part: EveMessagePart, index: number) {
   return part.type === "dynamic-tool"
     ? part.toolCallId
     : `${part.type}:${index}`;
-}
-
-function fallbackWorkspaceFailure(
-  message: string | undefined
-): WorkspaceFailure | undefined {
-  const normalized = message?.trim();
-  return normalized ? { message: normalized } : undefined;
 }
 
 function failureHeadline(failure: WorkspaceFailure): string {

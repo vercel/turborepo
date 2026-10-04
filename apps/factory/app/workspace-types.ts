@@ -284,34 +284,60 @@ export function hasConfirmedWorkspaceMessage(
     .some((message) => matchesChatDraft(message, draft));
 }
 
-/** Keep React state referentially unchanged unless a queued message is confirmed. */
-export function removeConfirmedQueuedMessages<
+/** Keep React state referentially unchanged unless a sent message is confirmed. */
+export function removeConfirmedOptimisticMessages<
   T extends WorkspaceChatDraft & { readonly afterMessageCount: number }
 >(current: T[], messages: readonly ProjectedChatMessage[]): T[] {
   const confirmed = new Set<number>();
   let changed = false;
   const pending: T[] = [];
-  for (const queued of current) {
-    // Don't reuse a previous acknowledgement for a repeated queued draft,
+  for (const sent of current) {
+    // Don't reuse a previous acknowledgement for a repeated sent draft,
     // including on the next cleanup after the first entry has been removed.
-    let afterMessageCount = queued.afterMessageCount;
+    let afterMessageCount = sent.afterMessageCount;
     for (const index of confirmed) {
-      if (matchesChatDraft(messages[index], queued))
+      if (matchesChatDraft(messages[index], sent))
         afterMessageCount = Math.max(afterMessageCount, index + 1);
     }
     const index = messages.findIndex(
       (message, index) =>
         index >= afterMessageCount &&
         !confirmed.has(index) &&
-        matchesChatDraft(message, queued)
+        matchesChatDraft(message, sent)
     );
     if (index >= 0) {
       confirmed.add(index);
       changed = true;
-    } else if (afterMessageCount !== queued.afterMessageCount) {
-      pending.push({ ...queued, afterMessageCount });
+    } else if (afterMessageCount !== sent.afterMessageCount) {
+      pending.push({ ...sent, afterMessageCount });
       changed = true;
-    } else pending.push(queued);
+    } else pending.push(sent);
   }
   return changed ? pending : current;
+}
+
+// Steering replaces an active response rather than waiting for it to finish.
+export const WORKSPACE_CHAT_TURN_POLICY = "steer" as const;
+
+export function activeWorkspaceTurnId(
+  events: readonly WorkspaceEvent[]
+): string | undefined {
+  let turnId: string | undefined;
+  for (const event of events) {
+    if (event.type === "session.failed" || event.type === "session.completed") {
+      turnId = undefined;
+      continue;
+    }
+    if (!isRecord(event.data)) continue;
+    if (event.type === "turn.started" && typeof event.data.turnId === "string")
+      turnId = event.data.turnId;
+    else if (
+      ["turn.completed", "turn.cancelled", "turn.failed"].includes(
+        event.type
+      ) &&
+      event.data.turnId === turnId
+    )
+      turnId = undefined;
+  }
+  return turnId;
 }

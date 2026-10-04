@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { Client, defaultMessageReducer } from "eve/client";
 
 import {
   isWorkspaceRunning,
+  activeWorkspaceTurnId,
+  WORKSPACE_CHAT_TURN_POLICY,
   workspaceChatContent,
   workspaceImageSelectionError,
   workspaceImageUrl,
@@ -11,7 +14,7 @@ import {
   hasConfirmedWorkspaceMessage,
   MAX_WORKSPACE_IMAGE_BYTES,
   latestWorkspaceFailure,
-  removeConfirmedQueuedMessages,
+  removeConfirmedOptimisticMessages,
   workspaceStatusLabel
 } from "../app/workspace-types.ts";
 
@@ -84,56 +87,61 @@ function userMessage(text) {
   return { role: "user", parts: [{ type: "text", text }] };
 }
 
-test("queue cleanup preserves state identity when there is nothing to confirm", () => {
+test("optimistic confirmation preserves state identity when there is nothing to confirm", () => {
   const empty = [];
-  assert.equal(removeConfirmedQueuedMessages(empty, []), empty);
-  const queue = [{ id: "queued_1", text: "Fix cache", afterMessageCount: 1 }];
-  // A repeated older prompt and an assistant response do not acknowledge a queue entry.
+  assert.equal(removeConfirmedOptimisticMessages(empty, []), empty);
+  const optimistic = [
+    { id: "sent_1", text: "Fix cache", afterMessageCount: 1 }
+  ];
+  // A repeated older prompt and an assistant response do not acknowledge a optimistic entry.
   const messages = [
     userMessage("Fix cache"),
     { role: "assistant", parts: [{ type: "text", text: "Fix cache" }] }
   ];
-  assert.equal(removeConfirmedQueuedMessages(queue, messages), queue);
+  assert.equal(
+    removeConfirmedOptimisticMessages(optimistic, messages),
+    optimistic
+  );
   // Even freshly rebuilt projections must not trigger another state update.
   for (let render = 0; render < 100; render++) {
     assert.equal(
-      removeConfirmedQueuedMessages(queue, structuredClone(messages)),
-      queue
+      removeConfirmedOptimisticMessages(optimistic, structuredClone(messages)),
+      optimistic
     );
   }
 });
 
-test("queue cleanup removes only confirmed messages and then stabilizes", () => {
-  const queue = [
-    { id: "queued_1", text: "Fix cache", afterMessageCount: 1 },
-    { id: "queued_2", text: "Run tests", afterMessageCount: 1 }
+test("optimistic confirmation removes only confirmed messages and then stabilizes", () => {
+  const optimistic = [
+    { id: "sent_1", text: "Fix cache", afterMessageCount: 1 },
+    { id: "sent_2", text: "Run tests", afterMessageCount: 1 }
   ];
   const messages = [
     userMessage("Original request"),
     userMessage("  Fix cache  ")
   ];
-  const pending = removeConfirmedQueuedMessages(queue, messages);
-  assert.deepEqual(pending, [queue[1]]);
-  assert.notEqual(pending, queue);
-  assert.equal(pending[0], queue[1]);
-  assert.equal(queue.length, 2);
+  const pending = removeConfirmedOptimisticMessages(optimistic, messages);
+  assert.deepEqual(pending, [optimistic[1]]);
+  assert.notEqual(pending, optimistic);
+  assert.equal(pending[0], optimistic[1]);
+  assert.equal(optimistic.length, 2);
   assert.equal(
-    removeConfirmedQueuedMessages(pending, structuredClone(messages)),
+    removeConfirmedOptimisticMessages(pending, structuredClone(messages)),
     pending
   );
-  const empty = removeConfirmedQueuedMessages(pending, [
+  const empty = removeConfirmedOptimisticMessages(pending, [
     ...messages,
     userMessage("Run tests")
   ]);
   assert.deepEqual(empty, []);
   assert.equal(
-    removeConfirmedQueuedMessages(empty, structuredClone(messages)),
+    removeConfirmedOptimisticMessages(empty, structuredClone(messages)),
     empty
   );
 });
 
-test("queue confirmation combines text parts and ignores non-attachment parts", () => {
-  const queue = [{ text: "Fix\ncache", afterMessageCount: 0 }];
+test("optimistic confirmation combines text parts and ignores non-attachment parts", () => {
+  const optimistic = [{ text: "Fix\ncache", afterMessageCount: 0 }];
   const messages = [
     {
       role: "user",
@@ -144,7 +152,7 @@ test("queue confirmation combines text parts and ignores non-attachment parts", 
       ]
     }
   ];
-  assert.deepEqual(removeConfirmedQueuedMessages(queue, messages), []);
+  assert.deepEqual(removeConfirmedOptimisticMessages(optimistic, messages), []);
 });
 
 const image = {
@@ -256,7 +264,7 @@ test("resumed Eve transcripts retain image URLs and confirm the matching image t
     workspaceImageUrl(projectedImage.mediaType, projectedImage.url),
     image.url
   );
-  const queue = [
+  const optimistic = [
     { text: "Inspect this", images: [image], afterMessageCount: 0 },
     {
       text: "Inspect this",
@@ -264,9 +272,11 @@ test("resumed Eve transcripts retain image URLs and confirm the matching image t
       afterMessageCount: 0
     }
   ];
-  assert.deepEqual(removeConfirmedQueuedMessages(queue, messages), [queue[1]]);
-  assert.equal(hasConfirmedWorkspaceMessage(messages, queue[0]), true);
-  assert.equal(hasConfirmedWorkspaceMessage(messages, queue[1]), false);
+  assert.deepEqual(removeConfirmedOptimisticMessages(optimistic, messages), [
+    optimistic[1]
+  ]);
+  assert.equal(hasConfirmedWorkspaceMessage(messages, optimistic[0]), true);
+  assert.equal(hasConfirmedWorkspaceMessage(messages, optimistic[1]), false);
   assert.equal(
     hasConfirmedWorkspaceMessage(messages, {
       text: "Inspect this",
@@ -326,7 +336,7 @@ test("browser image reading creates persistent data URLs and reports read failur
   );
 });
 
-test("Eve transport posts image bytes on normal and queued turns", async (t) => {
+test("Eve transport posts image bytes on normal and steering turns", async (t) => {
   const bodies = [];
   t.mock.method(globalThis, "fetch", async (url, init) => {
     assert.match(String(url), /session_image/);
@@ -338,20 +348,22 @@ test("Eve transport posts image bytes on normal and queued turns", async (t) => 
     host: "https://factory.example"
   }).sessions.attach("session_image");
   await session.send(
-    workspaceChatContent({ text: "Inspect this", images: [image] })
+    workspaceChatContent({ text: "Inspect this", images: [image] }),
+    { turnPolicy: WORKSPACE_CHAT_TURN_POLICY }
   );
   await session.send(workspaceChatContent({ text: "", images: [image] }), {
-    turnPolicy: "queue",
+    turnPolicy: WORKSPACE_CHAT_TURN_POLICY,
     streamReconnectPolicy: { reconnect: false }
   });
+  assert.equal(bodies[0].turnPolicy, "steer");
   assert.equal(bodies[0].message[1].data, image.url);
   assert.equal(bodies[0].message[1].mediaType, image.mediaType);
   assert.equal(bodies[1].message[0].data, image.url);
-  assert.equal(bodies[1].turnPolicy, "queue");
+  assert.equal(bodies[1].turnPolicy, "steer");
 });
 
-test("repeated queued image messages consume distinct confirmations across cleanups", () => {
-  const queue = [
+test("repeated sent image messages consume distinct confirmations across cleanups", () => {
+  const optimistic = [
     { id: "first", text: "", images: [image], afterMessageCount: 0 },
     { id: "second", text: "", images: [image], afterMessageCount: 0 }
   ];
@@ -359,12 +371,56 @@ test("repeated queued image messages consume distinct confirmations across clean
     role: "user",
     parts: [{ type: "file", mediaType: image.mediaType, url: image.url }]
   };
-  const pending = removeConfirmedQueuedMessages(queue, [confirmation]);
+  const pending = removeConfirmedOptimisticMessages(optimistic, [confirmation]);
   assert.equal(pending.length, 1);
   assert.equal(pending[0].id, "second");
-  assert.equal(removeConfirmedQueuedMessages(pending, [confirmation]), pending);
+  assert.equal(
+    removeConfirmedOptimisticMessages(pending, [confirmation]),
+    pending
+  );
   assert.deepEqual(
-    removeConfirmedQueuedMessages(pending, [confirmation, confirmation]),
+    removeConfirmedOptimisticMessages(pending, [confirmation, confirmation]),
     []
+  );
+});
+
+test("chat sends every message directly with steering and has no queue UI", () => {
+  const source = readFileSync(
+    new URL("../app/workspace-client.tsx", import.meta.url),
+    "utf8"
+  );
+  assert.equal(WORKSPACE_CHAT_TURN_POLICY, "steer");
+  assert.match(source, /turnPolicy: WORKSPACE_CHAT_TURN_POLICY/);
+  assert.doesNotMatch(
+    source,
+    /useEveAgent|QueuedMessages|queuedMessages|Enter to queue|Queue message|turnPolicy: "queue"/
+  );
+  assert.match(source, /\.send\(workspaceChatContent\(message\)/);
+});
+
+test("steered turns ignore stale completion and cancellation events", () => {
+  const events = [
+    { type: "turn.started", data: { turnId: "old" } },
+    { type: "turn.started", data: { turnId: "replacement" } },
+    { type: "turn.cancelled", data: { turnId: "old" } }
+  ];
+  assert.equal(activeWorkspaceTurnId(events), "replacement");
+  assert.equal(
+    activeWorkspaceTurnId([
+      ...events,
+      { type: "turn.completed", data: { turnId: "old" } }
+    ]),
+    "replacement"
+  );
+  assert.equal(
+    activeWorkspaceTurnId([
+      ...events,
+      { type: "turn.completed", data: { turnId: "replacement" } }
+    ]),
+    undefined
+  );
+  assert.equal(
+    activeWorkspaceTurnId([...events, { type: "session.failed" }]),
+    undefined
   );
 });
