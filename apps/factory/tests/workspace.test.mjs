@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -187,4 +188,45 @@ test("mutation requests reject malformed origins", () => {
   });
 
   assert.equal(isWorkspaceMutationRequest(request, "create-workspace"), false);
+});
+
+test("new workspaces default to Sol 6.1 and preserve explicit Fast selections", () => {
+  assert.equal(DEFAULT_WORKSPACE_MODEL, "openai/gpt-6.1-sol");
+  assert.equal(
+    parseCreateWorkspaceInput({ prompt: "Fix cache" }).model,
+    "openai/gpt-6.1-sol"
+  );
+  assert.equal(
+    parseCreateWorkspaceInput({
+      prompt: "Fix cache",
+      model: "openai/gpt-6.1-sol-fast"
+    }).model,
+    "openai/gpt-6.1-sol-fast"
+  );
+});
+
+test("Start work puts the workspace composer before scheduled jobs", () => {
+  const page = readFileSync(
+    new URL("../app/work/page.tsx", import.meta.url),
+    "utf8"
+  );
+  const composer = page.indexOf("<WorkspaceComposer ");
+  const schedules = page.indexOf('aria-labelledby="manual-schedules-title"');
+  assert.ok(composer >= 0 && schedules > composer);
+});
+
+test("mobile form text prevents focus zoom without restricting browser zoom", () => {
+  const css = readFileSync(
+    new URL("../app/globals.css", import.meta.url),
+    "utf8"
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 720px\), \(pointer: coarse\)\s*\{\s*input,\s*select,\s*textarea\s*\{\s*font-size: max\(16px, 1rem\);/
+  );
+  const layout = readFileSync(
+    new URL("../app/layout.tsx", import.meta.url),
+    "utf8"
+  );
+  assert.doesNotMatch(layout, /userScalable|maximumScale/);
 });

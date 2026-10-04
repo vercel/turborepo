@@ -17,21 +17,19 @@ const AGENT_RUNS_URL =
 export default async function WorkPage() {
   const examples = listExamples();
   const fetchedModels = await fetchGatewayModels().catch(() => []);
-  const models =
-    fetchedModels.length > 0
-      ? fetchedModels
-      : [
-          {
-            id: DEFAULT_WORKSPACE_MODEL,
-            name: "GPT-5.6 Sol",
-            ownedBy: "openai"
-          }
-        ];
-  const defaultModel = models.some(
+  const models = fetchedModels.some(
     (model) => model.id === DEFAULT_WORKSPACE_MODEL
   )
-    ? DEFAULT_WORKSPACE_MODEL
-    : models[0].id;
+    ? fetchedModels
+    : [
+        ...fetchedModels,
+        {
+          id: DEFAULT_WORKSPACE_MODEL,
+          name: "GPT-6.1 Sol",
+          ownedBy: "openai"
+        }
+      ];
+  const defaultModel = DEFAULT_WORKSPACE_MODEL;
   return (
     <main
       id="main-content"
@@ -40,47 +38,8 @@ export default async function WorkPage() {
       <h1 className="mt-8 text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]">
         Start work
       </h1>
-      <section className="py-6 pb-16" aria-labelledby="manual-schedules-title">
-        <header>
-          <h2
-            className="text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]"
-            id="manual-schedules-title"
-          >
-            Run scheduled jobs
-          </h2>
-          <p className="mt-2 mb-6 text-sm text-muted-foreground text-pretty">
-            Start either daily job now without waiting for its next cron run.
-          </p>
-        </header>
-        <div className="grid grid-cols-2 gap-6 max-[720px]:grid-cols-1">
-          <section
-            className="rounded-md bg-secondary p-5"
-            aria-labelledby="maintenance-title"
-          >
-            <h3
-              className="text-pretty text-base font-semibold tracking-[-0.02em]"
-              id="maintenance-title"
-            >
-              Daily example maintenance
-            </h3>
-            <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
-          </section>
-          <section
-            className="rounded-md bg-secondary p-5"
-            aria-labelledby="performance-title"
-          >
-            <h3
-              className="text-pretty text-base font-semibold tracking-[-0.02em]"
-              id="performance-title"
-            >
-              Daily performance improvement
-            </h3>
-            <RunPerformance agentRunsUrl={AGENT_RUNS_URL} />
-          </section>
-        </div>
-      </section>
       <section
-        className="grid grid-cols-[minmax(220px,4fr)_minmax(0,8fr)] gap-x-16 border-b border-border py-[clamp(64px,10vw,120px)] max-[720px]:block max-[720px]:py-16"
+        className="grid grid-cols-[minmax(220px,4fr)_minmax(0,8fr)] gap-x-16 border-b border-border py-8 max-[720px]:block max-[720px]:py-8"
         aria-labelledby="chat-title"
       >
         <div className="contents max-[720px]:flex max-[720px]:items-start max-[720px]:justify-between max-[720px]:gap-4 max-[520px]:flex-col-reverse">
@@ -120,6 +79,45 @@ export default async function WorkPage() {
         </dl>
         <div className="col-start-2 border-t border-border pt-8">
           <WorkspaceComposer defaultModel={defaultModel} models={models} />
+        </div>
+      </section>
+      <section className="py-6 pb-16" aria-labelledby="manual-schedules-title">
+        <header>
+          <h2
+            className="text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]"
+            id="manual-schedules-title"
+          >
+            Run scheduled jobs
+          </h2>
+          <p className="mt-2 mb-6 text-sm text-muted-foreground text-pretty">
+            Start either daily job now without waiting for its next cron run.
+          </p>
+        </header>
+        <div className="grid grid-cols-2 gap-6 max-[720px]:grid-cols-1">
+          <section
+            className="rounded-md bg-secondary p-5"
+            aria-labelledby="maintenance-title"
+          >
+            <h3
+              className="text-pretty text-base font-semibold tracking-[-0.02em]"
+              id="maintenance-title"
+            >
+              Daily example maintenance
+            </h3>
+            <RunMaintenance agentRunsUrl={AGENT_RUNS_URL} examples={examples} />
+          </section>
+          <section
+            className="rounded-md bg-secondary p-5"
+            aria-labelledby="performance-title"
+          >
+            <h3
+              className="text-pretty text-base font-semibold tracking-[-0.02em]"
+              id="performance-title"
+            >
+              Daily performance improvement
+            </h3>
+            <RunPerformance agentRunsUrl={AGENT_RUNS_URL} />
+          </section>
         </div>
       </section>
     </main>
