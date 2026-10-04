@@ -58,6 +58,7 @@ import { Button } from "../components/ui/button";
 import { WorkspaceDiff } from "./workspace-diff";
 import {
   latestWorkspaceFailure,
+  removeConfirmedQueuedMessages,
   type PublicWorkspace,
   type WorkspaceFailure
 } from "./workspace-types";
@@ -307,14 +308,7 @@ function WorkspaceChat({
 
   useEffect(() => {
     setQueuedMessages((current) =>
-      current.filter(
-        (message) =>
-          !hasUserMessageAfter(
-            data.messages,
-            message.text,
-            message.afterMessageCount
-          )
-      )
+      removeConfirmedQueuedMessages(current, data.messages)
     );
   }, [data.messages]);
 
@@ -1052,19 +1046,6 @@ function appendOptimisticMessage(
       role: "user"
     }
   ];
-}
-
-function hasUserMessageAfter(
-  messages: readonly EveMessage[],
-  text: string,
-  afterMessageCount: number
-) {
-  return messages
-    .slice(afterMessageCount)
-    .some(
-      (message) =>
-        message.role === "user" && messageText(message).trim() === text.trim()
-    );
 }
 
 function messageText(message: EveMessage) {

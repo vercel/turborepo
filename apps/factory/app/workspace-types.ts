@@ -124,3 +124,29 @@ function nonEmptyString(value: unknown): string | undefined {
   const normalized = value.trim();
   return normalized || undefined;
 }
+
+type ProjectedChatMessage = {
+  readonly role: string;
+  readonly parts: readonly { readonly type: string; readonly text?: string }[];
+};
+
+/** Keep React state referentially unchanged unless a queued message is confirmed. */
+export function removeConfirmedQueuedMessages<
+  T extends { readonly afterMessageCount: number; readonly text: string }
+>(current: T[], messages: readonly ProjectedChatMessage[]): T[] {
+  const pending = current.filter(
+    (queued) =>
+      !messages.slice(queued.afterMessageCount).some(
+        (message) =>
+          message.role === "user" &&
+          message.parts
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join("\n")
+            .trim() === queued.text.trim()
+      )
+  );
+  // filter creates a fresh array even for an empty or entirely pending queue.
+  // Returning it from a message-projection effect would schedule another render.
+  return pending.length === current.length ? current : pending;
+}
