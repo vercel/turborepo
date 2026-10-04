@@ -1,8 +1,6 @@
 use const_format::formatcp;
 use turborepo_platform::{Architecture, OperatingSystem, Platform};
 
-// Turborepo package spellings remain local policy, not shared platform
-// identity.
 const fn package_os(os: OperatingSystem) -> &'static str {
     match os {
         OperatingSystem::Windows => "windows",
