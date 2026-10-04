@@ -13,6 +13,7 @@ import {
   type WorkspaceThinkingEffort
 } from "../agent/lib/workspace";
 import { Button } from "../components/ui/button";
+import { ModelPicker } from "./model-picker";
 import type { PublicWorkspace } from "./workspace-types";
 
 interface WorkspaceComposerProps {
@@ -121,19 +122,16 @@ export function WorkspaceComposer({
         <label className="text-sm font-medium" htmlFor="workspace-model">
           Model
         </label>
-        <select
-          className="min-h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+        <ModelPicker
           disabled={submitting}
           id="workspace-model"
-          onChange={(event) => setModel(event.target.value)}
+          models={models.map((option) => ({
+            id: option.id,
+            label: `${option.name} (${option.ownedBy})`
+          }))}
+          onValueChange={setModel}
           value={model}
-        >
-          {models.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name} ({option.ownedBy})
-            </option>
-          ))}
-        </select>
+        />
       </div>
       <div className="grid gap-2">
         <label

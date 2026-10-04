@@ -8,7 +8,7 @@ export const DEFAULT_WORKSPACE_THINKING_EFFORT = "high" as const;
 
 export type WorkspaceStatus = "idle" | "running" | "error";
 
-export const DEFAULT_WORKSPACE_MODEL = "openai/gpt-5.6-sol";
+export const DEFAULT_WORKSPACE_MODEL = "openai/gpt-6.1-sol";
 export const DEFAULT_WORKSPACE_HARNESS = "fx" as const;
 export const WORKSPACE_HARNESSES = [
   { id: "fx", name: "fx" },
