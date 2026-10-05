@@ -412,6 +412,130 @@ fn test_prune_docker_preserves_task_env_mode() {
     assert_eq!(pruned_turbo_json["tasks"]["build"]["envMode"], "loose");
 }
 
+/// Regression for #14372: pnpm cleans workspace catalogs before checking a
+/// frozen lockfile, so snapshots from removed importers must not survive prune.
+#[test]
+fn test_prune_pnpm_catalog_snapshots() {
+    for catalog_prune in [None, Some(false), Some(true)] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            fs::write(
+                dir.join("package.json"),
+                r#"{"name":"repo","private":true,"packageManager":"pnpm@12.9.1",
+                    "devDependencies":{"is-odd":"catalog:tools"}}"#,
+            )
+            .unwrap();
+            for (app, dependency) in [("app-a", "is-number"), ("app-b", "is-odd")] {
+                let path = dir.join("apps").join(app);
+                fs::create_dir_all(&path).unwrap();
+                fs::write(
+                    path.join("package.json"),
+                    serde_json::json!({"name": app, "dependencies": {dependency: "catalog:"}})
+                        .to_string(),
+                )
+                .unwrap();
+            }
+            let mut workspace = String::from(
+                "packages:\n  - apps/*\ncatalog:\n  is-number: 7.0.0\n  is-odd: \
+                 3.0.1\ncatalogs:\n  tools:\n    is-odd: 3.0.1\n",
+            );
+            if let Some(enabled) = catalog_prune {
+                workspace.push_str(&format!("catalogPrune: {enabled}\n"));
+            }
+            fs::write(dir.join("pnpm-workspace.yaml"), &workspace).unwrap();
+            let lockfile = r#"lockfileVersion: '9.0'
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+catalogs:
+  default:
+    is-number: {specifier: 7.0.0, version: 7.0.0}
+    is-odd: {specifier: 3.0.1, version: 3.0.1}
+  tools:
+    is-odd: {specifier: 3.0.1, version: 3.0.1}
+importers:
+  .:
+    devDependencies:
+      is-odd: {specifier: 'catalog:tools', version: 3.0.1}
+  apps/app-a:
+    dependencies:
+      is-number: {specifier: 'catalog:', version: 7.0.0}
+  apps/app-b:
+    dependencies:
+      is-odd: {specifier: 'catalog:', version: 3.0.1}
+packages:
+  is-number@6.0.0:
+    resolution: {integrity: sha512-test}
+  is-number@7.0.0:
+    resolution: {integrity: sha512-test}
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-test}
+snapshots:
+  is-number@6.0.0: {}
+  is-number@7.0.0: {}
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+            fs::write(dir.join("pnpm-lock.yaml"), lockfile).unwrap();
+            let mut args = vec!["prune", "app-a"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let contents = fs::read_to_string(dir.join("out/pnpm-lock.yaml")).unwrap();
+            let catalogs = contents
+                .split("catalogs:\n")
+                .nth(1)
+                .unwrap()
+                .split("\nimporters:")
+                .next()
+                .unwrap();
+            assert_eq!(
+                catalogs.trim(),
+                r#"default:
+    is-number:
+      specifier: 7.0.0
+      version: 7.0.0
+  tools:
+    is-odd:
+      specifier: 3.0.1
+      version: 3.0.1"#
+            );
+            assert!(!contents.contains("apps/app-b:"));
+            // is-odd remains a root dependency, but not a default-catalog reference.
+            assert!(contents.contains("is-odd@3.0.1:"));
+            let expected_workspace = workspace.replace("  - apps/*", "- apps/*");
+            let workspace_paths = if docker {
+                vec![
+                    "out/pnpm-workspace.yaml",
+                    "out/full/pnpm-workspace.yaml",
+                    "out/json/pnpm-workspace.yaml",
+                ]
+            } else {
+                vec!["out/pnpm-workspace.yaml"]
+            };
+            for path in workspace_paths {
+                let actual = fs::read_to_string(dir.join(path)).unwrap();
+                assert_eq!(actual, expected_workspace, "workspace config in {path}");
+            }
+            if docker {
+                assert_eq!(
+                    fs::read_to_string(dir.join("out/json/pnpm-lock.yaml")).unwrap(),
+                    contents
+                );
+            }
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-lock.yaml")).unwrap(),
+                lockfile
+            );
+        }
+    }
+}
+
 #[test]
 fn test_prune_docker_filters_pnpm_workspace_patched_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
