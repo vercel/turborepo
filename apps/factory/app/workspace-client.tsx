@@ -15,7 +15,6 @@ import type {
   EveMessageInputRequest,
   EveMessagePart
 } from "eve/react";
-import { useEveAgent } from "eve/react";
 import {
   ArrowDownIcon,
   ArrowLeftIcon,
@@ -25,6 +24,7 @@ import {
   CircleAlertIcon,
   Loader2Icon,
   MessageSquareIcon,
+  PaperclipIcon,
   SquareIcon,
   XIcon
 } from "lucide-react";
@@ -58,6 +58,15 @@ import { Button } from "../components/ui/button";
 import { WorkspaceDiff } from "./workspace-diff";
 import {
   latestWorkspaceFailure,
+  activeWorkspaceTurnId,
+  WORKSPACE_CHAT_TURN_POLICY,
+  readWorkspaceChatImages,
+  workspaceChatContent,
+  workspaceImageUrl,
+  workspaceImageSelectionError,
+  WORKSPACE_IMAGE_MEDIA_TYPES,
+  type WorkspaceChatImage,
+  removeConfirmedOptimisticMessages,
   type PublicWorkspace,
   type WorkspaceFailure
 } from "./workspace-types";
@@ -92,7 +101,8 @@ interface LoadedWorkspace {
   readonly workspace: PublicWorkspace;
 }
 
-type QueuedMessage = {
+type SentMessage = {
+  readonly images: readonly WorkspaceChatImage[];
   readonly afterMessageCount: number;
   readonly id: string;
   readonly text: string;
@@ -189,29 +199,60 @@ function WorkspaceChat({
   readonly workspace: PublicWorkspace;
 }) {
   const [draft, setDraft] = useState("");
+  const [draftImages, setDraftImages] = useState<WorkspaceChatImage[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [readingImages, setReadingImages] = useState(false);
+  const readingImagesRef = useRef(false);
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+  const restoredMessages = useRef(new Set<string>());
+  const restoreMessage = useCallback((message: SentMessage, error: string) => {
+    if (restoredMessages.current.has(message.id)) return;
+    restoredMessages.current.add(message.id);
+    // Preserve anything typed/attached while the preceding response streamed.
+    setDraft((current) =>
+      current
+        ? [message.text, current].filter(Boolean).join("\n")
+        : message.text
+    );
+    setDraftImages((current) => [...message.images, ...current]);
+    setImageError(error);
+  }, []);
+
+  const addImages = useCallback(
+    async (files: readonly File[]) => {
+      if (!files.length || readingImagesRef.current || sendingRef.current)
+        return;
+      readingImagesRef.current = true;
+      setReadingImages(true);
+      setImageError(null);
+      try {
+        const images = await readWorkspaceChatImages(files, draftImages);
+        setDraftImages((current) => [...current, ...images]);
+      } catch (cause) {
+        setImageError(
+          cause instanceof Error ? cause.message : "Could not attach images."
+        );
+      } finally {
+        readingImagesRef.current = false;
+        setReadingImages(false);
+      }
+    },
+    [draftImages]
+  );
   const [thinkingEffort, setThinkingEffort] = useState<WorkspaceThinkingEffort>(
     workspace.thinkingEffort ?? DEFAULT_WORKSPACE_THINKING_EFFORT
   );
   const thinkingEffortRef = useRef(thinkingEffort);
-  const [queuedMessages, setQueuedMessages] = useState<QueuedMessage[]>([]);
   const [externalEvents, setExternalEvents] = useState(initialEvents);
   const reconnectStream = useRef<() => void>(() => {});
   const streamIndex = useRef(initialEvents.length);
-  const [optimisticMessage, setOptimisticMessage] = useState<string | null>(
-    null
+  const [optimisticMessages, setOptimisticMessages] = useState<SentMessage[]>(
+    []
   );
   const [stopping, setStopping] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [view, setView] = useState<"chat" | "diff">("chat");
-  const agent = useEveAgent({
-    headers: () => consoleHeaders(thinkingEffortRef.current),
-    initialEvents,
-    initialSession: {
-      sessionId: workspace.sessionId!,
-      streamIndex: initialEvents.length
-    }
-  });
-
   useEffect(() => {
     let controller: AbortController | undefined;
     let disposed = false;
@@ -268,10 +309,7 @@ function WorkspaceChat({
     };
   }, [workspace.sessionId]);
 
-  const events = useMemo(
-    () => mergeEvents(externalEvents, agent.events),
-    [agent.events, externalEvents]
-  );
+  const events = externalEvents;
   const data = useMemo(
     () =>
       events.reduce(
@@ -282,106 +320,119 @@ function WorkspaceChat({
   );
   const messages = useMemo(
     () =>
-      appendOptimisticMessage(data.messages, optimisticMessage, workspace.id),
-    [data.messages, optimisticMessage, workspace.id]
+      appendOptimisticMessages(data.messages, optimisticMessages, workspace.id),
+    [data.messages, optimisticMessages, workspace.id]
   );
-  const serverBusy = isServerBusy(events);
-  const busy =
-    serverBusy || agent.status === "submitted" || agent.status === "streaming";
+  const activeTurnId = activeWorkspaceTurnId(events);
+  const busy = activeTurnId !== undefined || sending;
   const hasAssistantProgress = hasRenderableAssistantProgress(messages.at(-1));
-  const streamedFailure = useMemo(
-    () => latestWorkspaceFailure(events),
-    [events]
-  );
-  const failure =
-    streamedFailure ?? fallbackWorkspaceFailure(agent.error?.message);
+  const failure = useMemo(() => latestWorkspaceFailure(events), [events]);
 
   useEffect(() => {
-    if (
-      optimisticMessage &&
-      hasLatestUserMessage(data.messages, optimisticMessage)
-    ) {
-      setOptimisticMessage(null);
-    }
-  }, [data.messages, optimisticMessage]);
-
-  useEffect(() => {
-    setQueuedMessages((current) =>
-      current.filter(
-        (message) =>
-          !hasUserMessageAfter(
-            data.messages,
-            message.text,
-            message.afterMessageCount
-          )
-      )
+    setOptimisticMessages((current) =>
+      removeConfirmedOptimisticMessages(current, data.messages)
     );
   }, [data.messages]);
 
   const submit = useCallback(async () => {
-    const message = draft.trim();
-    if (!message) return;
+    const text = draft.trim();
+    if (
+      (!text && !draftImages.length) ||
+      readingImagesRef.current ||
+      sendingRef.current
+    )
+      return;
+    const validationError = workspaceImageSelectionError([], draftImages);
+    if (validationError) {
+      setImageError(validationError);
+      return;
+    }
+    const message: SentMessage = {
+      afterMessageCount: data.messages.length,
+      id: crypto.randomUUID(),
+      text,
+      images: draftImages
+    };
+    sendingRef.current = true;
+    setSending(true);
     setDraft("");
+    setDraftImages([]);
+    setImageError(null);
+    setOptimisticMessages((current) => [...current, message]);
+    try {
+      // The hook refuses sends while streaming. The fixed-session API accepts
+      // steering messages immediately and the durable stream follows all turns.
+      await new Client({
+        headers: consoleHeaders(thinkingEffortRef.current),
+        host: ""
+      }).sessions
+        .attach(workspace.sessionId!)
+        .send(workspaceChatContent(message), {
+          streamReconnectPolicy: { reconnect: false },
+          turnPolicy: WORKSPACE_CHAT_TURN_POLICY
+        });
+      reconnectStream.current();
+    } catch (cause) {
+      setOptimisticMessages((current) =>
+        current.filter((candidate) => candidate.id !== message.id)
+      );
+      restoreMessage(
+        message,
+        cause instanceof Error ? cause.message : "Could not send message."
+      );
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }, [
+    data.messages.length,
+    draft,
+    draftImages,
+    restoreMessage,
+    workspace.sessionId
+  ]);
 
-    if (busy) {
-      const queued: QueuedMessage = {
-        afterMessageCount: data.messages.length,
-        id: crypto.randomUUID(),
-        text: message
-      };
-      setQueuedMessages((current) => [...current, queued]);
+  const answer = useCallback(
+    async (response: InputResponse) => {
       try {
         await new Client({
           headers: consoleHeaders(thinkingEffortRef.current),
           host: ""
         }).sessions
           .attach(workspace.sessionId!)
-          .send(message, {
-            streamReconnectPolicy: { reconnect: false },
-            turnPolicy: "queue"
+          .respond([response], {
+            streamReconnectPolicy: { reconnect: false }
           });
-      } catch {
-        setQueuedMessages((current) =>
-          current.filter((candidate) => candidate.id !== queued.id)
+        reconnectStream.current();
+      } catch (cause) {
+        setImageError(
+          cause instanceof Error ? cause.message : "Could not send response."
         );
-        setDraft(message);
-      }
-      return;
-    }
-
-    setOptimisticMessage(message);
-    try {
-      await agent.send(message, { turnPolicy: "queue" });
-    } catch {
-      setOptimisticMessage(null);
-      setDraft(message);
-    }
-  }, [agent, busy, data.messages.length, draft, workspace.sessionId]);
-
-  const answer = useCallback(
-    async (response: InputResponse) => {
-      try {
-        await agent.respond([response]);
-      } catch {
-        // The agent exposes the actionable failure below the conversation.
       }
     },
-    [agent]
+    [workspace.sessionId]
   );
 
   const stop = useCallback(async () => {
     if (stopping) return;
     setStopping(true);
     try {
-      await agent.cancel();
+      await new Client({ headers: CONSOLE_HEADERS, host: "" }).sessions
+        .attach(workspace.sessionId!)
+        .cancel({ turnId: activeTurnId });
+      reconnectStream.current();
+    } catch (cause) {
+      setImageError(
+        cause instanceof Error ? cause.message : "Could not stop response."
+      );
     } finally {
       setStopping(false);
     }
-  }, [agent, stopping]);
+  }, [activeTurnId, stopping, workspace.sessionId]);
 
   return (
     <main
-      className="mx-auto flex h-screen min-h-[640px] w-full max-w-5xl flex-col overflow-hidden max-[720px]:h-[calc(100dvh-113px)] max-[720px]:min-h-[520px]"
+      className="mx-auto flex h-dvh min-h-0 w-full max-w-5xl flex-col overflow-x-hidden overflow-y-auto max-[720px]:h-[calc(100dvh-113px)]"
       id="main-content"
       onFocus={(event) => {
         if (!event.relatedTarget) reconnectStream.current();
@@ -401,7 +452,6 @@ function WorkspaceChat({
               {workspace.title}
             </h1>
             <p className="mt-0.5 truncate font-mono text-[11px] text-muted-foreground">
-              {workspace.harness ? `${workspace.harness} · ` : ""}
               {workspace.sessionId}
             </p>
           </div>
@@ -486,7 +536,7 @@ function WorkspaceChat({
             >
               {messages.map((message, index) => (
                 <WorkspaceMessage
-                  canRespond={agent.status !== "error"}
+                  canRespond={!failure}
                   isStreaming={busy && index === messages.length - 1}
                   key={message.id}
                   message={message}
@@ -500,11 +550,19 @@ function WorkspaceChat({
 
           <div className="shrink-0 bg-background px-6 pt-2 pb-5 max-[520px]:px-4">
             {failure ? <WorkspaceFailureAlert failure={failure} /> : null}
-            {queuedMessages.length > 0 ? (
-              <QueuedMessages messages={queuedMessages} />
-            ) : null}
             <ChatComposer
               busy={busy}
+              images={draftImages}
+              imageError={imageError}
+              readingImages={readingImages}
+              sending={sending}
+              onAddImages={addImages}
+              onRemoveImage={(id) => {
+                setDraftImages((current) =>
+                  current.filter((image) => image.id !== id)
+                );
+                setImageError(null);
+              }}
               onChange={setDraft}
               onStop={stop}
               onSubmit={submit}
@@ -585,32 +643,14 @@ function ScrollToBottomButton() {
   );
 }
 
-function QueuedMessages({
-  messages
-}: {
-  readonly messages: readonly QueuedMessage[];
-}) {
-  return (
-    <div
-      aria-label="Queued messages"
-      className="mx-auto mb-2 max-w-3xl rounded-md border border-border/70 bg-muted/30 px-3 py-2"
-    >
-      <p className="text-[11px] font-medium text-muted-foreground">
-        Queued ({messages.length})
-      </p>
-      <ol className="mt-1 space-y-1 text-xs">
-        {messages.map((message) => (
-          <li className="truncate" key={message.id}>
-            {message.text}
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
 function ChatComposer({
   busy,
+  images,
+  imageError,
+  readingImages,
+  sending,
+  onAddImages,
+  onRemoveImage,
   onChange,
   onStop,
   onSubmit,
@@ -620,6 +660,12 @@ function ChatComposer({
   value
 }: {
   readonly busy: boolean;
+  readonly images: readonly WorkspaceChatImage[];
+  readonly imageError: string | null;
+  readonly readingImages: boolean;
+  readonly sending: boolean;
+  readonly onAddImages: (files: readonly File[]) => void;
+  readonly onRemoveImage: (id: string) => void;
   readonly onChange: (value: string) => void;
   readonly onStop: () => void;
   readonly onSubmit: () => void;
@@ -629,6 +675,7 @@ function ChatComposer({
   readonly value: string;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     textareaRef.current?.focus({ preventScroll: true });
@@ -656,12 +703,71 @@ function ChatComposer({
       className="mx-auto max-w-3xl rounded-[14px] border border-border bg-card shadow-sm transition-[border-color,box-shadow] focus-within:border-foreground/20 focus-within:ring-2 focus-within:ring-foreground/5"
       onSubmit={submit}
     >
+      {images.length > 0 ? (
+        <ul
+          className="flex list-none flex-wrap gap-2 px-4 pt-3"
+          aria-label="Attached images"
+        >
+          {images.map((image) => (
+            <li key={image.id} className="relative">
+              <img
+                alt={image.name}
+                src={image.url}
+                className="size-20 rounded-md border border-border object-cover"
+              />
+              <button
+                aria-label={`Remove ${image.name}`}
+                disabled={readingImages || sending}
+                onClick={() => onRemoveImage(image.id)}
+                type="button"
+                className="absolute -top-1 -right-1 rounded-full bg-background p-1 shadow-sm"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {imageError ? (
+        <p className="px-4 pt-2 text-sm text-destructive" role="alert">
+          {imageError}
+        </p>
+      ) : null}
+      <input
+        accept={WORKSPACE_IMAGE_MEDIA_TYPES.join(",")}
+        aria-label="Attach images"
+        className="hidden"
+        disabled={readingImages || sending}
+        multiple
+        onChange={(event) => {
+          onAddImages(Array.from(event.currentTarget.files ?? []));
+          event.currentTarget.value = "";
+        }}
+        ref={fileInputRef}
+        type="file"
+      />
       <label className="sr-only" htmlFor="workspace-message">
         Continue the work
       </label>
       <textarea
         className="max-h-40 min-h-14 w-full resize-none bg-transparent px-4 pt-3 text-[15px] leading-6 outline-none placeholder:text-muted-foreground/60 disabled:opacity-60"
         id="workspace-message"
+        disabled={sending}
+        onPaste={(event) => {
+          const files = Array.from(event.clipboardData.files).filter((file) =>
+            file.type.startsWith("image/")
+          );
+          if (!files.length) return;
+          event.preventDefault();
+          const text = event.clipboardData.getData("text/plain");
+          if (text) {
+            const { selectionStart, selectionEnd } = event.currentTarget;
+            onChange(
+              value.slice(0, selectionStart) + text + value.slice(selectionEnd)
+            );
+          }
+          onAddImages(files);
+        }}
         onChange={(event) => {
           onChange(event.target.value);
           event.target.style.height = "auto";
@@ -675,6 +781,20 @@ function ChatComposer({
       />
       <div className="flex min-h-10 items-center justify-between px-3 pb-2">
         <div className="flex items-center gap-2">
+          <button
+            aria-label="Attach images"
+            title="Attach PNG, JPEG, WebP, or GIF images (up to 4, 2 MiB total)"
+            className="rounded-md p-1 text-muted-foreground hover:text-foreground disabled:opacity-50"
+            disabled={readingImages || sending}
+            onClick={() => fileInputRef.current?.click()}
+            type="button"
+          >
+            {readingImages ? (
+              <Loader2Icon className="size-4 animate-spin" />
+            ) : (
+              <PaperclipIcon className="size-4" />
+            )}
+          </button>
           <label className="sr-only" htmlFor="workspace-thinking-effort">
             Thinking effort
           </label>
@@ -695,8 +815,7 @@ function ChatComposer({
             ))}
           </select>
           <span className="text-[11px] text-muted-foreground/70">
-            {busy ? "Enter to queue" : "Enter to send"} · Shift+Enter for a new
-            line
+            Enter to send · Shift+Enter for a new line
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -716,9 +835,11 @@ function ChatComposer({
             </button>
           ) : null}
           <button
-            aria-label={busy ? "Queue message" : "Send message"}
+            aria-label="Send message"
             className="grid size-7 place-items-center rounded-md bg-foreground text-background transition-colors hover:bg-foreground/90 disabled:opacity-30"
-            disabled={!value.trim()}
+            disabled={
+              sending || readingImages || (!value.trim() && images.length === 0)
+            }
             type="submit"
           >
             <ArrowUpIcon className="size-4" />
@@ -780,7 +901,6 @@ function WorkspacePart({
   if (part.type === "text")
     return (
       <Streamdown
-        caret={isStreaming ? "block" : undefined}
         className="min-w-0 text-[15px] leading-6 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
         isAnimating={isStreaming}
         plugins={streamdownPlugins}
@@ -788,6 +908,21 @@ function WorkspacePart({
         {part.text}
       </Streamdown>
     );
+  if (part.type === "file") {
+    const url = workspaceImageUrl(part.mediaType, part.url);
+    return url ? (
+      <img
+        alt={part.filename ?? "Attached image"}
+        src={url}
+        loading="lazy"
+        className="my-2 max-h-96 max-w-full rounded-md border border-border object-contain"
+      />
+    ) : (
+      <p className="my-2 text-sm text-muted-foreground">
+        {part.filename ?? "Attachment"} (preview unavailable)
+      </p>
+    );
+  }
   if (part.type === "reasoning")
     return (
       <details
@@ -1015,72 +1150,39 @@ function appendUniqueEvent(
     : [...events, event];
 }
 
-function mergeEvents(
-  initial: readonly MessageStreamEvent[],
-  streamed: readonly MessageStreamEvent[]
-): MessageStreamEvent[] {
-  return streamed.reduce(appendUniqueEvent, [...initial]);
-}
-
-function isServerBusy(events: readonly MessageStreamEvent[]): boolean {
-  let busy = false;
-  for (const event of events) {
-    if (event.type === "turn.started") busy = true;
-    if (
-      event.type === "turn.completed" ||
-      event.type === "turn.cancelled" ||
-      event.type === "turn.failed" ||
-      event.type === "session.failed"
-    )
-      busy = false;
-  }
-  return busy;
-}
-
-function appendOptimisticMessage(
+function appendOptimisticMessages(
   messages: readonly EveMessage[],
-  text: string | null,
+  pending: readonly SentMessage[],
   workspaceId: string
 ): readonly EveMessage[] {
-  if (!text || hasLatestUserMessage(messages, text)) return messages;
+  const unconfirmed = removeConfirmedOptimisticMessages([...pending], messages);
+  if (!unconfirmed.length) return messages;
   return [
     ...messages,
-    {
-      id: `${workspaceId}:optimistic-user-message`,
+    ...unconfirmed.map((draft): EveMessage => ({
+      id: `${workspaceId}:${draft.id}:optimistic-user-message`,
       metadata: { optimistic: true, status: "submitted" },
-      parts: [{ state: "done", text, type: "text" }],
+      parts: [
+        ...(draft.text
+          ? [
+              {
+                state: "done" as const,
+                text: draft.text,
+                type: "text" as const
+              }
+            ]
+          : []),
+        ...draft.images.map((image) => ({
+          type: "file" as const,
+          filename: image.name,
+          mediaType: image.mediaType,
+          size: image.size,
+          url: image.url
+        }))
+      ],
       role: "user"
-    }
+    }))
   ];
-}
-
-function hasUserMessageAfter(
-  messages: readonly EveMessage[],
-  text: string,
-  afterMessageCount: number
-) {
-  return messages
-    .slice(afterMessageCount)
-    .some(
-      (message) =>
-        message.role === "user" && messageText(message).trim() === text.trim()
-    );
-}
-
-function messageText(message: EveMessage) {
-  return message.parts
-    .filter((part) => part.type === "text")
-    .map((part) => part.text)
-    .join("\n");
-}
-
-function hasLatestUserMessage(messages: readonly EveMessage[], text: string) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.role !== "user") continue;
-    return messageText(message).trim() === text.trim();
-  }
-  return false;
 }
 
 function hasRenderableAssistantProgress(message: EveMessage | undefined) {
@@ -1124,13 +1226,6 @@ function partKey(part: EveMessagePart, index: number) {
   return part.type === "dynamic-tool"
     ? part.toolCallId
     : `${part.type}:${index}`;
-}
-
-function fallbackWorkspaceFailure(
-  message: string | undefined
-): WorkspaceFailure | undefined {
-  const normalized = message?.trim();
-  return normalized ? { message: normalized } : undefined;
 }
 
 function failureHeadline(failure: WorkspaceFailure): string {

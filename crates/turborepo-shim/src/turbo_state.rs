@@ -1,4 +1,22 @@
 use const_format::formatcp;
+use turborepo_platform::{Architecture, OperatingSystem, Platform};
+
+const fn package_os(os: OperatingSystem) -> &'static str {
+    match os {
+        OperatingSystem::Windows => "windows",
+        OperatingSystem::Macos => "darwin",
+        OperatingSystem::Linux => "linux",
+        OperatingSystem::Unknown => "unknown",
+    }
+}
+
+const fn package_arch(arch: Architecture) -> &'static str {
+    match arch {
+        Architecture::X64 => "64",
+        Architecture::Arm64 => "arm64",
+        Architecture::Unknown => "unknown",
+    }
+}
 
 /// Struct containing helper methods for querying information about the
 /// currently running turbo binary.
@@ -7,39 +25,9 @@ pub struct TurboState;
 
 impl TurboState {
     pub const fn platform_name() -> &'static str {
-        const ARCH: &str = {
-            #[cfg(target_arch = "x86_64")]
-            {
-                "64"
-            }
-            #[cfg(target_arch = "aarch64")]
-            {
-                "arm64"
-            }
-            #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-            {
-                "unknown"
-            }
-        };
-
-        const OS: &str = {
-            #[cfg(target_os = "macos")]
-            {
-                "darwin"
-            }
-            #[cfg(target_os = "windows")]
-            {
-                "windows"
-            }
-            #[cfg(target_os = "linux")]
-            {
-                "linux"
-            }
-            #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-            {
-                "unknown"
-            }
-        };
+        const TARGET: Platform = Platform::current();
+        const ARCH: &str = package_arch(TARGET.arch());
+        const OS: &str = package_os(TARGET.os());
 
         formatcp!("{}-{}", OS, ARCH)
     }
@@ -83,6 +71,58 @@ impl TurboState {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_package_spellings_for_explicit_targets() {
+        for (os, os_name) in [
+            (OperatingSystem::Windows, "windows"),
+            (OperatingSystem::Macos, "darwin"),
+            (OperatingSystem::Linux, "linux"),
+            (OperatingSystem::Unknown, "unknown"),
+        ] {
+            for (arch, arch_name) in [
+                (Architecture::X64, "64"),
+                (Architecture::Arm64, "arm64"),
+                (Architecture::Unknown, "unknown"),
+            ] {
+                let platform = Platform::new(os, arch);
+                assert_eq!(
+                    format!(
+                        "{}-{}",
+                        package_os(platform.os()),
+                        package_arch(platform.arch())
+                    ),
+                    format!("{os_name}-{arch_name}")
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_current_package_names_preserve_legacy_spellings() {
+        const PLATFORM: &str = TurboState::platform_name();
+        const PACKAGE: &str = TurboState::platform_package_name();
+        let os = match std::env::consts::OS {
+            "macos" => "darwin",
+            "windows" => "windows",
+            "linux" => "linux",
+            _ => "unknown",
+        };
+        let arch = match std::env::consts::ARCH {
+            "x86_64" => "64",
+            "aarch64" => "arm64",
+            _ => "unknown",
+        };
+        let expected = format!("{os}-{arch}");
+        assert_eq!(PLATFORM, expected);
+        assert_eq!(PACKAGE, format!("turbo-{expected}"));
+        assert_eq!(TurboState::scoped_platform_package_scope(), "@turbo");
+        assert_eq!(TurboState::scoped_platform_package_dir(), expected);
+        assert_eq!(
+            TurboState::binary_name(),
+            if cfg!(windows) { "turbo.exe" } else { "turbo" }
+        );
+    }
 
     #[test]
     fn test_scoped_package_path_segments_have_no_separators() {

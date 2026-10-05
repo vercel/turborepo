@@ -7,7 +7,6 @@ import {
   writeFactoryImageHandoff
 } from "./lib/factory-image-handoff";
 import { readFactoryImagePointer } from "./lib/factory-image-registry";
-import { FACTORY_HARNESS_PORT } from "./lib/harness-agent-config";
 import {
   isWorkspaceDriveEnabled,
   WORKSPACE_DRIVE_MOUNT_PATH,
@@ -53,13 +52,11 @@ export default defineSandbox({
     return vercel(
       handoff === null
         ? {
-            ports: [FACTORY_HARNESS_PORT],
             resources: { vcpus: SESSION_VCPUS },
             sessionCreateOptions,
             timeout: SESSION_TIMEOUT_MS
           }
         : {
-            ports: [FACTORY_HARNESS_PORT],
             resources: { vcpus: SESSION_VCPUS },
             sessionCreateOptions,
             source: { snapshotId: handoff.snapshotId, type: "snapshot" },
