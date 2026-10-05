@@ -498,6 +498,18 @@ impl RunBuilder {
         self
     }
 
+    /// Whether scope selection needs tasks rather than only package inventory.
+    /// Inventory commands must populate the graph even without requested tasks.
+    pub fn needs_task_graph_for_scope(&self) -> bool {
+        let scope = &self.opts.scope_opts;
+        let flags = &self.opts.future_flags;
+        (flags.filter_using_tasks
+            && (!scope.filter_patterns.is_empty() || scope.affected_range.is_some()))
+            || (flags.affected_using_task_inputs && scope.affected_range.is_some())
+            || Self::parse_filter_selectors(&scope.filter_patterns)
+                .is_none_or(|selectors| selectors.iter().any(|selector| selector.tag.is_some()))
+    }
+
     pub fn do_not_validate_engine(mut self) -> Self {
         self.should_validate_engine = false;
         self
