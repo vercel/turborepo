@@ -3,13 +3,11 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
-  isWorkspaceHarness,
   isWorkspaceMutationRequest,
   isWorkspaceModel,
   isWorkspaceRecord,
   isWorkspaceThinkingEffort,
   parseCreateWorkspaceInput,
-  DEFAULT_WORKSPACE_HARNESS,
   DEFAULT_WORKSPACE_THINKING_EFFORT,
   DEFAULT_WORKSPACE_MODEL,
   toWorkspaceSummary,
@@ -39,12 +37,11 @@ function workspace(changes = {}) {
   };
 }
 
-test("validates Eve workspace records", () => {
+test("validates Eve workspace records, including legacy coding-agent metadata", () => {
   assert.equal(isWorkspaceRecord(workspace()), true);
   assert.equal(isWorkspaceRecord(workspace({ sessionId: undefined })), true);
   assert.equal(isWorkspaceRecord(workspace({ agent: "fx" })), false);
   assert.equal(isWorkspaceRecord(workspace({ harness: "codex" })), true);
-  assert.equal(isWorkspaceRecord(workspace({ harness: "unknown" })), false);
   assert.equal(
     isWorkspaceRecord(workspace({ thinkingEffort: "medium" })),
     true
@@ -55,7 +52,7 @@ test("validates Eve workspace records", () => {
 
 test("workspace views whitelist fields and omit opaque state", () => {
   const view = toWorkspaceView({
-    ...workspace(),
+    ...workspace({ harness: "codex" }),
     activeTurnId: "turn_abc",
     unexpected: "private"
   });
@@ -64,7 +61,7 @@ test("workspace views whitelist fields and omit opaque state", () => {
   assert.equal(view.sessionId, "wrun_abc");
   assert.equal(view.sandbox.id, "eve-sandbox-abc");
   assert.equal(view.model, DEFAULT_WORKSPACE_MODEL);
-  assert.equal(view.harness, undefined);
+  assert.equal("harness" in view, false);
   assert.equal(view.thinkingEffort, DEFAULT_WORKSPACE_THINKING_EFFORT);
 });
 
@@ -91,13 +88,11 @@ test("workspaces use a resumable conversation session", () => {
 
 test("validates create bodies", () => {
   assert.deepEqual(parseCreateWorkspaceInput({ title: "  Work  " }), {
-    harness: DEFAULT_WORKSPACE_HARNESS,
     model: DEFAULT_WORKSPACE_MODEL,
     thinkingEffort: DEFAULT_WORKSPACE_THINKING_EFFORT,
     title: "Work"
   });
   assert.deepEqual(parseCreateWorkspaceInput({ prompt: "  Fix cache  " }), {
-    harness: DEFAULT_WORKSPACE_HARNESS,
     model: DEFAULT_WORKSPACE_MODEL,
     prompt: "Fix cache",
     thinkingEffort: DEFAULT_WORKSPACE_THINKING_EFFORT,
@@ -105,22 +100,16 @@ test("validates create bodies", () => {
   });
   assert.deepEqual(
     parseCreateWorkspaceInput({
-      harness: "claude-code",
       model: "anthropic/claude-sonnet-5",
       prompt: "Fix cache",
       thinkingEffort: "medium"
     }),
     {
-      harness: "claude-code",
       model: "anthropic/claude-sonnet-5",
       prompt: "Fix cache",
       thinkingEffort: "medium",
       title: "Fix cache"
     }
-  );
-  assert.equal(
-    parseCreateWorkspaceInput({ harness: "unknown", prompt: "Fix cache" }),
-    null
   );
   assert.equal(
     parseCreateWorkspaceInput({ model: "not a model", prompt: "Fix cache" }),
@@ -131,20 +120,6 @@ test("validates create bodies", () => {
     null
   );
   assert.equal(parseCreateWorkspaceInput({ title: " ", prompt: " " }), null);
-});
-
-test("validates workspace harness identifiers", () => {
-  for (const harness of [
-    "fx",
-    "claude-code",
-    "codex",
-    "cursor",
-    "opencode",
-    "pi"
-  ]) {
-    assert.equal(isWorkspaceHarness(harness), true);
-  }
-  assert.equal(isWorkspaceHarness("unknown"), false);
 });
 
 test("validates workspace thinking effort", () => {
@@ -229,4 +204,41 @@ test("mobile form text prevents focus zoom without restricting browser zoom", ()
     "utf8"
   );
   assert.doesNotMatch(layout, /userScalable|maximumScale/);
+});
+
+test("legacy coding-agent selections are ignored for new workspaces", () => {
+  const input = parseCreateWorkspaceInput({
+    prompt: "Fix cache",
+    harness: "codex"
+  });
+  assert.equal("harness" in input, false);
+  assert.equal(input.model, DEFAULT_WORKSPACE_MODEL);
+});
+
+test("workspace coding uses Eve's direct tools without a runtime picker", () => {
+  const instructions = readFileSync(
+    new URL("../agent/instructions.md", import.meta.url),
+    "utf8"
+  );
+  assert.match(
+    instructions,
+    /run validation directly with `bash`, `read_file`, and `write_file`/
+  );
+  assert.doesNotMatch(instructions, /harness_agent/);
+  const composer = readFileSync(
+    new URL("../app/workspace-composer.tsx", import.meta.url),
+    "utf8"
+  );
+  assert.doesNotMatch(composer, /workspace-harness|Coding agent/);
+  const manifest = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8")
+  );
+  assert.equal(
+    Object.keys(manifest.dependencies).some(
+      (name) =>
+        name.startsWith("@ai-sdk/harness") || name === "@ai-sdk/sandbox-vercel"
+    ),
+    false
+  );
+  assert.equal(manifest.scripts.build, "eve build && next build");
 });
