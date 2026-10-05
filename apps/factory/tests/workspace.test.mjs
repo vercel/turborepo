@@ -190,6 +190,20 @@ test("Start work puts the workspace composer before scheduled jobs", () => {
   assert.ok(composer >= 0 && schedules > composer);
 });
 
+test("Start work shows the form without introductory copy or metadata", () => {
+  const page = readFileSync(
+    new URL("../app/work/page.tsx", import.meta.url),
+    "utf8"
+  );
+  const main = page.indexOf("<main");
+  const composer = page.indexOf("<WorkspaceComposer ");
+  assert.ok(main >= 0 && composer > main);
+  const beforeForm = page.slice(main, composer);
+  assert.match(beforeForm, /<h1\b[^>]*>\s*Start work\s*<\/h1>/);
+  assert.doesNotMatch(beforeForm, /<(?:h2|p|dl|span)\b/);
+  assert.doesNotMatch(beforeForm, /New workspace|ON DEMAND|chat-title/);
+});
+
 test("mobile form text prevents focus zoom without restricting browser zoom", () => {
   const css = readFileSync(
     new URL("../app/globals.css", import.meta.url),
