@@ -8,10 +8,16 @@
 //! Platform selection belongs to consumers (using `turborepo-platform`), not
 //! this transport library.
 //!
-//! The default client enables reqwest's bundled TLS roots. Product
-//! proxy/custom-CA integration is separate work (TURBO-6279); this crate does
-//! not implement the runtime API client's CA environment handling or claim
-//! configuration parity.
+//! The default client uses reqwest's system proxy discovery (`HTTPS_PROXY`,
+//! `HTTP_PROXY`, `NO_PROXY`, including reqwest's lowercase variants) and rustls
+//! with native + bundled webpki roots, like Remote Cache. The native-root
+//! loader honors `SSL_CERT_FILE` (PEM bundle) and `SSL_CERT_DIR` (certificate
+//! directories). If default construction fails with native roots, it retries
+//! with verified webpki roots only. Environment trust never disables
+//! verification. Set environment configuration before constructing the client;
+//! reuse it for subsequent downloads. Trusted callers can inject a builder to
+//! add roots or override proxy discovery without changing the download safety
+//! limits.
 //!
 //! ```no_run
 //! use std::time::Duration;
@@ -30,14 +36,15 @@
 //! }
 //! ```
 
-use std::time::Duration;
+use std::{error::Error as StdError, time::Duration};
 
 use reqwest::{Client, ClientBuilder, header::ACCEPT_ENCODING, redirect::Policy};
 use sha2::{Digest, Sha256};
 use url::{Host, Origin, Url};
 
-/// Errors deliberately contain no URLs, response bodies, or underlying HTTP
-/// errors, including in `Debug` and the error source chain.
+/// Returned errors deliberately contain no URLs, response bodies, or underlying
+/// HTTP errors, including in `Debug` and the error source chain. This contract
+/// does not cover dependency logging (reqwest debug logs can include URLs).
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum Error {
     #[error("invalid absolute HTTP(S) URL")]
@@ -54,8 +61,14 @@ pub enum Error {
     MissingDigest,
     #[error("SHA-256 digest must contain exactly 64 hexadecimal characters")]
     InvalidDigest,
-    #[error("could not build download HTTP client")]
+    #[error("could not build download HTTP client; check TLS and proxy configuration")]
     ClientBuild,
+    #[error("download certificate verification failed; check custom CA trust")]
+    CertificateFailed,
+    #[error("download proxy authentication required")]
+    ProxyAuthenticationRequired,
+    #[error("download connection failed; check network, proxy, and certificate configuration")]
+    ConnectionFailed,
     #[error("download HTTP request failed")]
     RequestFailed,
     #[error("download time limit exceeded")]
@@ -175,14 +188,35 @@ pub struct DownloadClient {
 
 impl DownloadClient {
     pub fn new(origins: impl IntoIterator<Item = ApprovedOrigin>) -> Result<Self, Error> {
-        Self::with_http_builder(Client::builder(), origins)
+        // Match Remote Cache's native -> bundled trust fallback, without an
+        // API-client dependency or overriding reqwest's proxy discovery.
+        let origins: Vec<_> = origins.into_iter().collect();
+        let build = |native| {
+            Self::with_http_builder(
+                Client::builder()
+                    .use_rustls_tls()
+                    .tls_built_in_native_certs(native)
+                    .tls_built_in_webpki_certs(true),
+                origins.iter().cloned(),
+            )
+        };
+        match build(true) {
+            // reqwest can reject PEM-valid but DER-invalid native roots even
+            // with webpki enabled. Retry only default construction: keep verified
+            // bundled trust, origin approvals, and all download safety policies.
+            Err(Error::ClientBuild) => build(false),
+            result => result,
+        }
     }
 
     /// Inject trusted HTTP configuration, rather than an already-built client
     /// whose redirect policy cannot be checked. Redirects, retries, and
     /// automatic decoding are overridden here. Callers are responsible for
-    /// the security of injected TLS/proxy configuration. An empty approval
-    /// list denies all requests.
+    /// the security of injected TLS/proxy configuration. For example,
+    /// `Client::builder().add_root_certificate(cert)` adds custom trust and
+    /// `.no_proxy()` disables environment proxies. An empty approval list
+    /// denies all requests. Build failures are returned without substituting a
+    /// default client, so explicit injected trust is never silently discarded.
     pub fn with_http_builder(
         builder: ClientBuilder,
         origins: impl IntoIterator<Item = ApprovedOrigin>,
@@ -251,6 +285,9 @@ impl DownloadClient {
             if status.is_redirection() {
                 return Err(Error::RedirectRejected);
             }
+            if status == reqwest::StatusCode::PROXY_AUTHENTICATION_REQUIRED {
+                return Err(Error::ProxyAuthenticationRequired);
+            }
             if !status.is_success() {
                 return Err(Error::HttpStatus(status.as_u16()));
             }
@@ -313,7 +350,29 @@ fn parse_url(input: &str) -> Result<Url, Error> {
 
 fn http_error(error: reqwest::Error) -> Error {
     if error.is_timeout() {
-        Error::TimedOut
+        return Error::TimedOut;
+    }
+    // Classify typed errors only: no formatting/string matching of sources
+    // containing URLs, proxy credentials, certificate names, or filesystem paths.
+    let mut source: Option<&(dyn StdError + 'static)> = Some(&error);
+    while let Some(cause) = source {
+        if matches!(
+            cause.downcast_ref::<rustls::Error>(),
+            Some(rustls::Error::InvalidCertificate(_) | rustls::Error::NoCertificatesPresented)
+        ) {
+            return Error::CertificateFailed;
+        }
+        // io::Error::source may skip its immediate inner error.
+        source = if let Some(io) = cause.downcast_ref::<std::io::Error>() {
+            io.get_ref().map(|inner| inner as &dyn StdError)
+        } else {
+            cause.source()
+        };
+    }
+    if error.is_connect() {
+        // reqwest cannot reliably distinguish a proxy CONNECT failure from an
+        // origin connection failure. Give a neutral hint, not false attribution.
+        Error::ConnectionFailed
     } else {
         Error::RequestFailed
     }

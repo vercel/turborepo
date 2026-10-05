@@ -11,11 +11,17 @@ workspace = true
 
 [dependencies]
 hex = { workspace = true }
-reqwest = { workspace = true, features = ["rustls-tls"] }
+reqwest = { workspace = true, features = [
+  "rustls-tls-native-roots",
+  "rustls-tls-webpki-roots",
+] }
+rustls = { version = "0.23.36", default-features = false, features = ["ring", "std"] }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 url = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["macros", "rt", "net", "io-util"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "net", "io-util", "process"] }
+tokio-rustls = { version = "0.26.0", default-features = false, features = ["ring", "tls12"] }

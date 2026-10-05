@@ -14,6 +14,8 @@ use tokio::{
 
 use super::*;
 
+mod transport;
+
 type TestResult = Result<(), Box<dyn StdError>>;
 const ABC_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 const OK: &str = "HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc";
@@ -67,7 +69,7 @@ impl Fixture {
 
     fn client(&self) -> Result<DownloadClient, Error> {
         DownloadClient::with_http_builder(
-            Client::builder().no_proxy(),
+            http_fixture_builder(),
             [ApprovedOrigin::loopback_http_for_tests(&self.origin)?],
         )
     }
@@ -85,6 +87,15 @@ impl Drop for Fixture {
     fn drop(&mut self) {
         self.task.abort();
     }
+}
+
+// HTTP-only fixtures must not load ambient/system CAs; no_proxy only affects
+// proxy discovery, not native certificate loading.
+fn http_fixture_builder() -> ClientBuilder {
+    Client::builder()
+        .use_rustls_tls()
+        .no_proxy()
+        .tls_built_in_native_certs(false)
 }
 
 fn limits(bytes: usize) -> Result<Limits, Error> {
@@ -261,7 +272,7 @@ async fn redirect_policy_is_forced_off_even_for_approved_targets() -> TestResult
         );
         let source = Fixture::new(&response, "", Duration::ZERO).await?;
         let client = DownloadClient::with_http_builder(
-            Client::builder().no_proxy().redirect(Policy::limited(10)),
+            http_fixture_builder().redirect(Policy::limited(10)),
             [
                 ApprovedOrigin::loopback_http_for_tests(&source.origin)?,
                 ApprovedOrigin::loopback_http_for_tests(&target.origin)?,
