@@ -1,4 +1,8 @@
-use std::{any::Any, borrow::Cow, collections::BTreeMap};
+use std::{
+    any::Any,
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use rustc_hash::FxHashMap;
 use semver::Version;
@@ -624,6 +628,57 @@ impl PnpmLockfile {
         }
     }
 
+    /// Catalog snapshots describe resolved importer references, not the full
+    /// workspace catalog configuration. Retaining snapshots for removed
+    /// importers makes frozen installs fail when pnpm prunes that
+    /// configuration.
+    fn prune_catalogs(
+        &self,
+        importers: &BTreeMap<String, ProjectSnapshot>,
+    ) -> Option<Map<String, Map<String, Dependency>>> {
+        let catalogs = self.catalogs.as_ref()?;
+        let mut referenced = BTreeSet::new();
+        for importer in importers.values() {
+            let DependencyInfo::V6 {
+                dependencies,
+                optional_dependencies,
+                dev_dependencies,
+            } = &importer.dependencies
+            else {
+                continue;
+            };
+            for (name, dependency) in dependencies
+                .iter()
+                .flatten()
+                .chain(optional_dependencies.iter().flatten())
+                .chain(dev_dependencies.iter().flatten())
+            {
+                if let Some(catalog) = dependency.specifier.strip_prefix("catalog:") {
+                    let catalog = catalog.trim();
+                    let catalog = if catalog.is_empty() {
+                        "default"
+                    } else {
+                        catalog
+                    };
+                    referenced.insert((catalog, name.as_str()));
+                }
+            }
+        }
+
+        let pruned: Map<_, _> = catalogs
+            .iter()
+            .filter_map(|(catalog, entries)| {
+                let entries: Map<_, _> = entries
+                    .iter()
+                    .filter(|(name, _)| referenced.contains(&(catalog.as_str(), name.as_str())))
+                    .map(|(name, entry)| (name.clone(), entry.clone()))
+                    .collect();
+                (!entries.is_empty()).then(|| (catalog.clone(), entries))
+            })
+            .collect();
+        (!pruned.is_empty()).then_some(pruned)
+    }
+
     fn prune_patches(
         &self,
         patches: &Map<String, PatchFile>,
@@ -973,6 +1028,7 @@ impl crate::Lockfile for PnpmLockfile {
             .map(|patches| self.prune_patches(patches, &pruned_packages))
             .transpose()?;
 
+        let catalogs = self.prune_catalogs(&importers);
         let mut pruned = Self {
             leading_documents: self.leading_documents.clone(),
             importers,
@@ -998,7 +1054,7 @@ impl crate::Lockfile for PnpmLockfile {
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
-            catalogs: self.catalogs.clone(),
+            catalogs,
         };
         // The pruned lockfile must be queryable like a parsed one
         // (has_package/all_dependencies consult the index).
@@ -1279,6 +1335,73 @@ mod tests {
 
     use super::*;
     use crate::Lockfile;
+
+    #[test]
+    fn test_subgraph_prunes_catalog_snapshots_by_importer_reference() {
+        let yaml = r#"lockfileVersion: '9.0'
+catalogs:
+  default:
+    root-dep: {specifier: 'workspace:*', version: 'workspace:*'}
+    shared: {specifier: 'workspace:*', version: 'workspace:*'}
+    removed: {specifier: 'workspace:*', version: 'workspace:*'}
+  tools:
+    shared: {specifier: 'workspace:*', version: 'workspace:*'}
+    optional: {specifier: 'workspace:*', version: 'workspace:*'}
+    removed: {specifier: 'workspace:*', version: 'workspace:*'}
+  unused:
+    shared: {specifier: 'workspace:*', version: 'workspace:*'}
+importers:
+  .:
+    devDependencies:
+      root-dep: {specifier: 'catalog:default', version: 'link:packages/root-dep'}
+  apps/keep:
+    dependencies:
+      shared: {specifier: 'catalog:', version: 'link:../../packages/shared'}
+    devDependencies:
+      shared: {specifier: 'catalog:tools', version: 'link:../../packages/shared'}
+    optionalDependencies:
+      optional: {specifier: 'catalog:tools', version: 'link:../../packages/optional'}
+      removed: {specifier: 'workspace:*', version: 'link:../../packages/removed'}
+  apps/remove:
+    dependencies:
+      removed: {specifier: 'catalog:', version: 'link:../../packages/removed'}
+    devDependencies:
+      removed: {specifier: 'catalog:tools', version: 'link:../../packages/removed'}
+      shared: {specifier: 'catalog:unused', version: 'link:../../packages/shared'}
+"#;
+        // Catalogs can resolve to workspace links with no package snapshots.
+        // The same package can also use different catalogs in different groups.
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        let pruned = lockfile.subgraph(&["apps/keep".into()], &[]).unwrap();
+        let pruned = PnpmLockfile::from_bytes(&pruned.encode().unwrap()).unwrap();
+        let mut expected = lockfile.catalogs.clone().unwrap();
+        expected.get_mut("default").unwrap().remove("removed");
+        expected.get_mut("tools").unwrap().remove("removed");
+        expected.remove("unused");
+        assert_eq!(pruned.catalogs, Some(expected));
+        assert!(!pruned.importers.contains_key("apps/remove"));
+    }
+
+    #[test]
+    fn test_subgraph_omits_unused_catalogs() {
+        let yaml = r#"lockfileVersion: '9.0'
+catalogs:
+  default:
+    removed: {specifier: 'workspace:*', version: 'workspace:*'}
+importers:
+  .: {}
+  apps/keep: {}
+  apps/remove:
+    dependencies:
+      removed: {specifier: 'catalog:', version: 'link:../../packages/removed'}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        let pruned = lockfile.subgraph(&["apps/keep".into()], &[]).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let pruned = PnpmLockfile::from_bytes(&encoded).unwrap();
+        assert_eq!(pruned.catalogs, None);
+        assert!(!std::str::from_utf8(&encoded).unwrap().contains("catalogs:"));
+    }
 
     #[test]
     fn test_parses_pnpm_v6_single_project_lockfile() {
