@@ -16,6 +16,9 @@ use crate::commands::{CommandBase, bin, docs, generate, get_mfe_port, link, logi
 pub enum Error {
     #[error("No command specified.")]
     NoCommand,
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Setup(#[from] crate::commands::setup::Error),
     #[error("Query server not available. The turbo query command requires the full turbo binary.")]
     QueryNotAvailable,
     #[error("{0}")]

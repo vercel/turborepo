@@ -57,6 +57,13 @@ pub trait TurboRunner: Send + Sync {
     /// The error type returned by the runner.
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Whether this invocation belongs to the global CLI without repository
+    /// inference, update checks, or local binary selection. The CLI owns its
+    /// command grammar; existing runners retain the normal shim behavior.
+    fn is_global_command(&self) -> bool {
+        false
+    }
+
     /// Run the turbo CLI with the given repository state and UI configuration.
     ///
     /// # Arguments

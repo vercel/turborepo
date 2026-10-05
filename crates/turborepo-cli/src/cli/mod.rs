@@ -21,7 +21,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, telemetry, unlink,
+        login, logout, ls, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
@@ -39,7 +39,7 @@ pub use args::{
     AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
     EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
     GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
-    QuerySubcommand, RunArgs, TelemetryCommand, Verbosity,
+    QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -335,6 +335,12 @@ pub fn run(
         Args::new(env::args_os().collect())
     };
 
+    // Setup must not bootstrap task configuration, telemetry, agent guidance,
+    // HTTP clients, or worker runtimes. Help already exited during parsing.
+    if let Some(Command::Setup { setup_args }) = cli_args.command.as_ref() {
+        return setup::run(&cli_args, setup_args).map_err(Into::into);
+    }
+
     // Initialize rayon's global pool before the tokio runtime so we
     // control thread count and avoid lazy initialization during a hot path.
     init_rayon_pool();
@@ -460,6 +466,7 @@ async fn run_main(
     };
 
     let cli_result = match command {
+        Command::Setup { .. } => unreachable!("setup is dispatched before runtime startup"),
         Command::Bin => {
             CommandEventBuilder::new("bin")
                 .with_parent(&root_telemetry)

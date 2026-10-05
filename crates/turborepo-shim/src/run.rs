@@ -231,7 +231,7 @@ where
     // If skip_infer is passed, we're probably running local turbo with
     // global turbo having handled the inference. We can run without any
     // concerns.
-    if args.skip_infer {
+    if runtime.runner.is_global_command() || args.skip_infer {
         return run_cli(runtime, None, color_config);
     }
 
@@ -682,11 +682,11 @@ mod tests {
     struct MockRunner;
     impl TurboRunner for MockRunner {
         type Error = std::io::Error;
-        fn run(
-            &self,
-            _repo_state: Option<RepoState>,
-            _ui: ColorConfig,
-        ) -> Result<i32, Self::Error> {
+        fn is_global_command(&self) -> bool {
+            true
+        }
+        fn run(&self, repo_state: Option<RepoState>, _ui: ColorConfig) -> Result<i32, Self::Error> {
+            assert!(repo_state.is_none(), "global command must bypass inference");
             Ok(0)
         }
     }
@@ -828,7 +828,7 @@ mod tests {
     }
 
     #[test]
-    fn test_shim_runtime_creation() {
+    fn test_global_command_runtime_creation_and_routing() {
         let runtime = ShimRuntime::new(
             MockRunner,
             MockConfigProvider,
@@ -836,6 +836,12 @@ mod tests {
             MockVersionProvider,
         );
         assert_eq!(runtime.version_provider.get_version(), "2.0.0");
+        let mut args = ShimArgs::parse().unwrap();
+        args.skip_infer = false;
+        args.force_update_check = false;
+        args.remaining_turbo_args = vec!["--help".into()];
+        assert!(RepoState::infer(&args.cwd).is_ok());
+        assert!(matches!(run_with_args(&runtime, args), ShimResult::Ok(0)));
     }
 
     #[test]
