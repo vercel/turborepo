@@ -9,6 +9,7 @@
 
 use std::{
     collections::HashMap,
+    future::Future,
     io::Write,
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
@@ -40,6 +41,39 @@ fn serial_group_lock(group: &str) -> Arc<tokio::sync::Mutex<()>> {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     groups.entry(group.to_string()).or_default().clone()
+}
+
+// Allow normal output draining to finish quietly before emitting one
+// diagnostic. This delay never stops draining or changes when a task is allowed
+// to finish.
+const OUTPUT_WAIT_STATUS_DELAY: Duration = Duration::from_secs(5);
+
+async fn wait_for_output<T>(
+    process_exit: impl Future<Output = Option<ChildExit>>,
+    output: impl Future<Output = T>,
+    report_wait: impl FnOnce(),
+) -> T {
+    tokio::pin!(process_exit, output);
+    tokio::select! {
+        biased;
+        result = &mut output => return result,
+        _ = &mut process_exit => {}
+    }
+
+    tokio::select! {
+        biased;
+        result = &mut output => return result,
+        _ = tokio::time::sleep(OUTPUT_WAIT_STATUS_DELAY) => report_wait(),
+    }
+    output.await
+}
+
+fn emit_output_wait_status(log: &turborepo_log::LogHandle, task_id: &str) {
+    log.info(format!(
+        "Waiting for output from {task_id} after its process exited. A descendant process may be \
+         keeping stdout or stderr open."
+    ))
+    .emit();
 }
 
 /// Windows NT status codes that indicate out-of-memory conditions.
@@ -472,7 +506,18 @@ where
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
             })?;
 
-            let status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
+            let mut exit_observer = process.clone();
+            // Report through the run logger, not the task's grouped/cached output:
+            // otherwise a held-open task could hide its own waiting diagnostic.
+            let log =
+                turborepo_log::log(turborepo_log::Source::turbo(turborepo_log::Subsystem::Run));
+            let result = wait_for_output(
+                exit_observer.wait(),
+                process.wait_with_piped_outputs(&mut stdout_writer),
+                || emit_output_wait_status(&log, &self.task_id_for_display),
+            )
+            .await;
+            let status = match result {
                 Ok(Some(exit_status)) => exit_status,
                 Err(e) => {
                     telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
@@ -637,6 +682,77 @@ impl<H: HashTrackerProvider> DryRunExecutor<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    async fn assert_pending<F: Future>(mut future: std::pin::Pin<&mut F>) {
+        std::future::poll_fn(|cx| {
+            assert!(future.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn held_open_output_reports_once_without_ending_the_wait() {
+        let (collector, logger) = turborepo_log::sinks::collector::CollectorSink::with_logger();
+        let log = logger.handle(turborepo_log::Source::turbo(turborepo_log::Subsystem::Run));
+        let (exit_tx, exit_rx) = oneshot::channel();
+        let (output_tx, output_rx) = oneshot::channel();
+        let wait = wait_for_output(
+            async { exit_rx.await.unwrap() },
+            async { output_rx.await.unwrap() },
+            || emit_output_wait_status(&log, "docs#typecheck"),
+        );
+        tokio::pin!(wait);
+        assert_pending(wait.as_mut()).await;
+        // A running task must not produce post-exit waiting diagnostics.
+        tokio::time::advance(Duration::from_secs(10)).await;
+        assert_pending(wait.as_mut()).await;
+        assert!(collector.events().is_empty());
+
+        let expected = Some(ChildExit::Finished(Some(42)));
+        exit_tx.send(expected).unwrap();
+        assert_pending(wait.as_mut()).await;
+        assert!(collector.events().is_empty());
+        tokio::time::advance(Duration::from_millis(4999)).await;
+        assert_pending(wait.as_mut()).await;
+        assert!(collector.events().is_empty());
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert_pending(wait.as_mut()).await;
+        let events = collector.events();
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        assert_eq!(event.level(), turborepo_log::Level::Info);
+        assert_eq!(
+            event.source(),
+            &turborepo_log::Source::turbo(turborepo_log::Subsystem::Run)
+        );
+        assert!(event.message().contains("docs#typecheck"));
+        assert!(event.message().contains("stdout or stderr open"));
+        // Keeping output open longer must neither repeat the message nor end
+        // the wait. Completion still comes only from the output future.
+        for _ in 0..3 {
+            tokio::time::advance(Duration::from_secs(10)).await;
+            assert_pending(wait.as_mut()).await;
+            assert_eq!(collector.events().len(), 1);
+        }
+        output_tx.send(expected).unwrap();
+        assert_eq!(wait.await, expected);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn output_completion_wins_over_a_ready_status_delay() {
+        let (output_tx, output_rx) = oneshot::channel();
+        let wait = wait_for_output(
+            std::future::ready(Some(ChildExit::Finished(Some(0)))),
+            output_rx,
+            || panic!("completed output should not produce a waiting diagnostic"),
+        );
+        tokio::pin!(wait);
+        assert_pending(wait.as_mut()).await;
+        output_tx.send(()).unwrap();
+        tokio::time::advance(OUTPUT_WAIT_STATUS_DELAY).await;
+        assert_eq!(wait.await, Ok(()));
+    }
 
     #[test]
     fn task_error_stop_signal_matches_continue_mode() {

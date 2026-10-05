@@ -6,6 +6,7 @@ license = "MIT"
 
 [dev-dependencies]
 test-case = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
 
 [dependencies]
