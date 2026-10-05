@@ -8346,6 +8346,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-package-manager"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "turborepo-package-watcher"
 version = "0.1.0"
 dependencies = [
@@ -8513,6 +8520,7 @@ dependencies = [
  "turborepo-graph-utils",
  "turborepo-lockfile-hash",
  "turborepo-lockfiles",
+ "turborepo-package-manager",
  "turborepo-rayon-compat",
  "wax",
  "which",
