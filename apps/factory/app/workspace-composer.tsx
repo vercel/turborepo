@@ -5,11 +5,8 @@ import { useState } from "react";
 
 import type { GatewayModel } from "../agent/lib/gateway-models";
 import {
-  DEFAULT_WORKSPACE_HARNESS,
   DEFAULT_WORKSPACE_THINKING_EFFORT,
-  WORKSPACE_HARNESSES,
   WORKSPACE_THINKING_EFFORTS,
-  type WorkspaceHarness,
   type WorkspaceThinkingEffort
 } from "../agent/lib/workspace";
 import { Button } from "../components/ui/button";
@@ -29,9 +26,6 @@ export function WorkspaceComposer({
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState(defaultModel);
-  const [harness, setHarness] = useState<WorkspaceHarness>(
-    DEFAULT_WORKSPACE_HARNESS
-  );
   const [thinkingEffort, setThinkingEffort] = useState<WorkspaceThinkingEffort>(
     DEFAULT_WORKSPACE_THINKING_EFFORT
   );
@@ -51,7 +45,6 @@ export function WorkspaceComposer({
           "x-operator-action": "create-workspace"
         },
         body: JSON.stringify({
-          harness,
           ...(title.trim() ? { title: title.trim() } : {}),
           model,
           prompt: message,
@@ -97,26 +90,6 @@ export function WorkspaceComposer({
           placeholder="Fix affected package detection"
           value={title}
         />
-      </div>
-      <div className="grid gap-2">
-        <label className="text-sm font-medium" htmlFor="workspace-harness">
-          Coding agent
-        </label>
-        <select
-          className="min-h-10 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-          disabled={submitting}
-          id="workspace-harness"
-          onChange={(event) =>
-            setHarness(event.target.value as WorkspaceHarness)
-          }
-          value={harness}
-        >
-          {WORKSPACE_HARNESSES.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
       </div>
       <div className="grid gap-2">
         <label className="text-sm font-medium" htmlFor="workspace-model">

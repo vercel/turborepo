@@ -16,7 +16,6 @@ export interface WorkspacePullRequest {
 }
 
 export interface PublicWorkspace {
-  readonly harness?: string;
   readonly id: string;
   readonly title: string;
   readonly status: string;
@@ -33,7 +32,6 @@ export interface PublicWorkspace {
 }
 
 export interface WorkspaceSummary {
-  readonly harness?: string;
   readonly id: string;
   readonly title: string;
   readonly status: string;
@@ -80,8 +78,8 @@ const FAILURE_RESET_EVENTS = new Set([
 
 /**
  * Projects the current run failure from an agent event stream. Keeping this
- * boundary independent of Eve's event types lets another harness map its
- * failures into the workspace UI without changing the presentation.
+ * boundary independent of Eve's event types keeps failure handling separate
+ * from the workspace presentation.
  */
 export function latestWorkspaceFailure(
   events: readonly WorkspaceEvent[]
