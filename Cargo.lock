@@ -7693,6 +7693,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-archive"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "hex",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "turborepo-download",
+]
+
+[[package]]
 name = "turborepo-auth"
 version = "0.1.0"
 dependencies = [
