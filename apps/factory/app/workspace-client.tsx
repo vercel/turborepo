@@ -432,7 +432,7 @@ function WorkspaceChat({
 
   return (
     <main
-      className="mx-auto flex h-screen min-h-[640px] w-full max-w-5xl flex-col overflow-hidden max-[720px]:h-[calc(100dvh-113px)] max-[720px]:min-h-[520px]"
+      className="mx-auto flex h-dvh min-h-0 w-full max-w-5xl flex-col overflow-x-hidden overflow-y-auto max-[720px]:h-[calc(100dvh-113px)]"
       id="main-content"
       onFocus={(event) => {
         if (!event.relatedTarget) reconnectStream.current();
@@ -861,15 +861,6 @@ function WorkspaceMessage({
   readonly message: EveMessage;
   readonly onRespond: (response: InputResponse) => void;
 }) {
-  if (
-    message.parts.every(
-      (part) =>
-        part.type === "step-start" ||
-        (part.type === "text" && !part.text.trim())
-    )
-  )
-    return null;
-
   const isUser = message.role === "user";
   return (
     <article
@@ -907,8 +898,7 @@ function WorkspacePart({
   readonly onRespond: (response: InputResponse) => void;
   readonly part: EveMessagePart;
 }) {
-  if (part.type === "text") {
-    if (!part.text.trim()) return null;
+  if (part.type === "text")
     return (
       <Streamdown
         className="min-w-0 text-[15px] leading-6 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
@@ -918,7 +908,6 @@ function WorkspacePart({
         {part.text}
       </Streamdown>
     );
-  }
   if (part.type === "file") {
     const url = workspaceImageUrl(part.mediaType, part.url);
     return url ? (
@@ -1201,7 +1190,7 @@ function hasRenderableAssistantProgress(message: EveMessage | undefined) {
     message?.role === "assistant" &&
     message.parts.some((part) => {
       if (part.type === "text" || part.type === "reasoning")
-        return part.text.trim().length > 0;
+        return part.text.length > 0;
       return part.type !== "step-start";
     })
   );
