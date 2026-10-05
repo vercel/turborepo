@@ -861,6 +861,15 @@ function WorkspaceMessage({
   readonly message: EveMessage;
   readonly onRespond: (response: InputResponse) => void;
 }) {
+  if (
+    message.parts.every(
+      (part) =>
+        part.type === "step-start" ||
+        (part.type === "text" && !part.text.trim())
+    )
+  )
+    return null;
+
   const isUser = message.role === "user";
   return (
     <article
@@ -898,10 +907,10 @@ function WorkspacePart({
   readonly onRespond: (response: InputResponse) => void;
   readonly part: EveMessagePart;
 }) {
-  if (part.type === "text")
+  if (part.type === "text") {
+    if (!part.text.trim()) return null;
     return (
       <Streamdown
-        caret={isStreaming ? "block" : undefined}
         className="min-w-0 text-[15px] leading-6 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
         isAnimating={isStreaming}
         plugins={streamdownPlugins}
@@ -909,6 +918,7 @@ function WorkspacePart({
         {part.text}
       </Streamdown>
     );
+  }
   if (part.type === "file") {
     const url = workspaceImageUrl(part.mediaType, part.url);
     return url ? (
@@ -1191,7 +1201,7 @@ function hasRenderableAssistantProgress(message: EveMessage | undefined) {
     message?.role === "assistant" &&
     message.parts.some((part) => {
       if (part.type === "text" || part.type === "reasoning")
-        return part.text.length > 0;
+        return part.text.trim().length > 0;
       return part.type !== "step-start";
     })
   );
