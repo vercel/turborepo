@@ -8351,6 +8351,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-platform"
+version = "0.1.0"
+
+[[package]]
 name = "turborepo-process"
 version = "0.1.0"
 dependencies = [
@@ -8725,6 +8729,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-setup"
+version = "0.1.0"
+dependencies = [
+ "semver 1.0.23",
+ "thiserror 2.0.18",
+ "turborepo-platform",
+]
+
+[[package]]
 name = "turborepo-shim"
 version = "0.1.0"
 dependencies = [
@@ -8746,6 +8759,7 @@ dependencies = [
  "tracing",
  "turbo-updater",
  "turbopath",
+ "turborepo-platform",
  "turborepo-repository",
  "turborepo-ui",
  "which",
