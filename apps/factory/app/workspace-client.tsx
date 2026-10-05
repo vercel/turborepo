@@ -432,7 +432,7 @@ function WorkspaceChat({
 
   return (
     <main
-      className="mx-auto flex h-screen min-h-[640px] w-full max-w-5xl flex-col overflow-hidden max-[720px]:h-[calc(100dvh-113px)] max-[720px]:min-h-[520px]"
+      className="mx-auto flex h-dvh min-h-0 w-full max-w-5xl flex-col overflow-x-hidden overflow-y-auto max-[720px]:h-[calc(100dvh-113px)]"
       id="main-content"
       onFocus={(event) => {
         if (!event.relatedTarget) reconnectStream.current();
@@ -901,7 +901,6 @@ function WorkspacePart({
   if (part.type === "text")
     return (
       <Streamdown
-        caret={isStreaming ? "block" : undefined}
         className="min-w-0 text-[15px] leading-6 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
         isAnimating={isStreaming}
         plugins={streamdownPlugins}
