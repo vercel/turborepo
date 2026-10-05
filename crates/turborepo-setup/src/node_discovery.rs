@@ -1,14 +1,11 @@
-//! Root-only Node discovery; no upstream access, binary probes, or lock schema.
-//!
-//! Precedence: runtime > .nvmrc > .node-version > engines.node. Sources AND;
-//! runtime Node alternatives OR. First matching alternative gives provenance.
-//! Name-only Node is unconstrained; other named runtimes are ignored, malformed
-//! entries fail. Only node (stable), lts/* (stable LTS), lts/name (stable LTS
-//! codename, case-insensitive) aliases; current/latest/comments/shell are
-//! rejected. Exact selections require canonical identity including build;
-//! ranges/engines use unchanged VersionRequest semantics. Highest semver wins,
-//! including build tie ordering, regardless of metadata order. No source means
-//! no default.
+//! Root-only; injected metadata, no binaries/network/lock schema.
+//! Precedence: runtime > .nvmrc > .node-version > engines.node; sources AND,
+//! runtime nodes OR. First matching alternative gives provenance.
+//! Only .nvmrc aliases: node (stable), lts/*, lts/name (stable LTS, ASCII
+//! names). Runtime/engines.node/.node-version: strict npm exact/range, no
+//! aliases. Exact identity includes build; ranges/engines use VersionRequest
+//! semantics. Highest semver/build wins, order independent; no
+//! default/comments/shell.
 
 use std::{
     collections::BTreeMap,
@@ -107,15 +104,16 @@ struct Declaration {
 
 impl Declaration {
     fn matches(&self, release: &NodeRelease) -> bool {
+        let version = &release.version;
         match &self.request {
             Request::Unconstrained => true,
-            Request::Version(request) => {
-                request.matches_with_exact(&release.version, |a, b| !self.exact_identity || a == b)
+            Request::Version(r) => {
+                r.matches_with_exact(version, |a, b| !self.exact_identity || a == b)
             }
-            Request::Node => release.version.pre.is_empty(),
-            Request::Lts(None) => release.version.pre.is_empty() && release.lts.is_some(),
+            Request::Node => version.pre.is_empty(),
+            Request::Lts(None) => version.pre.is_empty() && release.lts.is_some(),
             Request::Lts(Some(name)) => {
-                release.version.pre.is_empty() && release.lts.as_ref() == Some(name)
+                version.pre.is_empty() && release.lts.as_ref() == Some(name)
             }
         }
     }
@@ -299,9 +297,9 @@ impl NodeRequirements {
             }
             let input = input.trim();
             source.request = Some(input.into());
-            if exact_identity && input == "node" {
+            if file == ".nvmrc" && input == "node" {
                 Request::Node
-            } else if exact_identity && input.starts_with("lts/") {
+            } else if file == ".nvmrc" && input.starts_with("lts/") {
                 let name = &input[4..];
                 let name = if name == "*" {
                     None

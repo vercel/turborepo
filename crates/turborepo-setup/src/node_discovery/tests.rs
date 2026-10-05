@@ -66,26 +66,16 @@ fn all_sources_intersect_with_ordered_normalized_provenance() -> TestResult {
     let selected = requests.resolve(&metadata)?;
     assert_eq!(selected.version.to_string(), "24.10.0");
     assert_eq!(selected.selection_source, selected.sources[0]);
-    let sources: Vec<_> = selected
-        .sources
-        .iter()
-        .map(|s| {
-            format!(
-                "{}={}",
-                s.location(),
-                s.request.as_deref().unwrap_or("<unconstrained>")
-            )
-        })
-        .collect();
-    assert_eq!(
-        sources,
-        [
-            "package.json#devEngines.runtime.version=>=22 <26",
-            ".nvmrc=24.x",
-            ".node-version=24.10.0",
-            "package.json#engines.node=<24.11",
-        ]
-    );
+    assert_eq!(selected.sources.len(), 4);
+    for (source, (location, request)) in selected.sources.iter().zip([
+        ("package.json#devEngines.runtime.version", ">=22 <26"),
+        (".nvmrc", "24.x"),
+        (".node-version", "24.10.0"),
+        ("package.json#engines.node", "<24.11"),
+    ]) {
+        assert_eq!(source.location(), location);
+        assert_eq!(source.request.as_deref(), Some(request));
+    }
     metadata.reverse();
     assert_eq!(requests.resolve(&metadata)?.version, selected.version);
     Ok(())
@@ -136,11 +126,24 @@ fn aliases_resolve_only_from_injected_lts_metadata() -> TestResult {
         let root = root(&[(".nvmrc", alias)])?;
         assert!(root.error()?.contains(".nvmrc"));
     }
-    let root = root(&[(".node-version", "lts/unknown")])?;
-    root.conflict()?;
-    root.put(".nvmrc", "node")?;
-    root.put("package.json", r#"{"engines":{"node":"lts/*"}}"#)?;
-    assert!(root.error()?.contains("engines.node"));
+    root(&[(".nvmrc", "lts/unknown")])?.conflict()?;
+    for (file, field) in [
+        (".node-version", ""),
+        ("package.json", "engines.node"),
+        ("package.json", "devEngines.runtime.version"),
+    ] {
+        for alias in ["node", "lts/*", "lts/jod"] {
+            let contents = match field {
+                "" => alias.into(),
+                "engines.node" => format!(r#"{{"engines":{{"node":"{alias}"}}}}"#),
+                _ => format!(
+                    r#"{{"devEngines":{{"runtime":{{"name":"node","version":"{alias}"}}}}}}"#
+                ),
+            };
+            let message = root(&[(file, &contents)])?.error()?;
+            assert!(message.contains(file) && message.contains(field));
+        }
+    }
     Ok(())
 }
 
