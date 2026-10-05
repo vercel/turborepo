@@ -102,6 +102,60 @@ fn limits(bytes: usize) -> Result<Limits, Error> {
     Limits::new(bytes, Duration::from_secs(2))
 }
 
+#[test]
+fn verify_bytes_accepts_known_abc_digest() -> TestResult {
+    let artifact =
+        VerifiedArtifact::verify_bytes(b"abc".to_vec(), ExpectedSha256::from_hex(ABC_SHA256)?)?;
+    assert_eq!(artifact.as_bytes(), b"abc");
+    assert_eq!(artifact.into_bytes(), b"abc");
+    Ok(())
+}
+
+#[test]
+fn verify_bytes_rejects_altered_bytes() -> TestResult {
+    let result =
+        VerifiedArtifact::verify_bytes(b"abd".to_vec(), ExpectedSha256::from_hex(ABC_SHA256)?);
+    assert!(matches!(result, Err(Error::DigestMismatch)));
+    Ok(())
+}
+
+#[test]
+fn verify_bytes_rejects_wrong_digest() -> TestResult {
+    let result =
+        VerifiedArtifact::verify_bytes(b"abc".to_vec(), ExpectedSha256::from_hex(&"0".repeat(64))?);
+    assert!(matches!(result, Err(Error::DigestMismatch)));
+    Ok(())
+}
+
+#[test]
+fn verify_bytes_accepts_known_empty_digest() -> TestResult {
+    let digest = ExpectedSha256::from_hex(
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    )?;
+    let artifact = VerifiedArtifact::verify_bytes(Vec::new(), digest)?;
+    assert!(artifact.as_bytes().is_empty());
+    assert!(artifact.into_bytes().is_empty());
+    Ok(())
+}
+
+#[test]
+fn verify_bytes_digest_mismatch_is_redacted() -> TestResult {
+    let error = VerifiedArtifact::verify_bytes(
+        b"private-artifact-bytes".to_vec(),
+        ExpectedSha256::from_hex(ABC_SHA256)?,
+    )
+    .err()
+    .ok_or("expected a digest mismatch")?;
+    assert_eq!(error, Error::DigestMismatch);
+    assert_eq!(
+        error.to_string(),
+        "artifact SHA-256 does not match the trusted digest"
+    );
+    assert_eq!(format!("{error:?}"), "DigestMismatch");
+    assert!(StdError::source(&error).is_none());
+    Ok(())
+}
+
 #[tokio::test]
 async fn reads_metadata_and_verifies_pinned_artifact() -> TestResult {
     let fixture = Fixture::new(OK, "", Duration::ZERO).await?;

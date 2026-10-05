@@ -170,6 +170,23 @@ impl ExpectedSha256 {
 pub struct VerifiedArtifact(Vec<u8>);
 
 impl VerifiedArtifact {
+    /// Synchronously verifies local bytes against a mandatory, caller-supplied
+    /// SHA-256 digest from a pinned or otherwise trusted source.
+    ///
+    /// The caller must bound input size before calling; this helper applies no
+    /// byte or time limits. It performs no HTTP, filesystem, or cache I/O and
+    /// has no CLI or installer behavior. A matching digest pins the bytes, not
+    /// publisher trust or authenticity.
+    ///
+    /// Returns [`Error::DigestMismatch`] without bytes or digests on mismatch.
+    pub fn verify_bytes(bytes: Vec<u8>, digest: ExpectedSha256) -> Result<Self, Error> {
+        let actual: [u8; 32] = Sha256::digest(&bytes).into();
+        if actual != digest.0 {
+            return Err(Error::DigestMismatch);
+        }
+        Ok(Self(bytes))
+    }
+
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
