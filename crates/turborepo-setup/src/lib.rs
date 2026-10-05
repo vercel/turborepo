@@ -2,7 +2,11 @@
 //! `turborepo-platform`; vendor artifact policy lives in each adapter.
 
 pub mod node;
+pub mod node_discovery;
 pub mod version_request;
 
 pub use node::{NodeArtifact, NodeArtifactError};
+pub use node_discovery::{
+    NodeDiscoveryError, NodeRelease, NodeRequirements, NodeSource, ResolvedNode,
+};
 pub use version_request::{VersionRequest, VersionRequestError};
