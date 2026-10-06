@@ -11,6 +11,9 @@ use crate::{
     writer_storage::WriterStorage,
 };
 
+mod snapshot;
+pub use snapshot::Snapshot;
+
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
 const NATIVE: [&str; 3] = ["node", "npm", "pnpm"];
@@ -23,6 +26,8 @@ pub enum StorageError {
     Io(#[from] io::Error),
     #[error("invalid native setup declarations")]
     Declarations,
+    #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
+    Conflict,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -138,19 +143,21 @@ fn read_optional(root: &Path, name: &str, limit: usize) -> io::Result<Option<Vec
 /// Capture package.json once so both adapters see the same manifest snapshot.
 pub fn probe_native(root: &Path) -> Result<DeclarationMap, StorageError> {
     let root = root.canonicalize()?;
-    let manifest = read_optional(
-        &root,
-        "package.json",
-        crate::node_discovery::MAX_MANIFEST_BYTES,
-    )?
-    .map(String::from_utf8)
-    .transpose()
-    .map_err(|_| StorageError::Declarations)?;
+    probe_native_with(|file, limit| read_optional(&root, file, limit))
+}
+
+fn probe_native_with(
+    mut read: impl FnMut(&'static str, usize) -> io::Result<Option<Vec<u8>>>,
+) -> Result<DeclarationMap, StorageError> {
+    let manifest = read("package.json", crate::node_discovery::MAX_MANIFEST_BYTES)?
+        .map(String::from_utf8)
+        .transpose()
+        .map_err(|_| StorageError::Declarations)?;
     let node = NodeRequirements::read_with(|file, limit| {
         if file == "package.json" {
             return Ok(manifest.clone());
         }
-        read_optional(&root, file, limit)
+        read(file, limit)
             .and_then(|bytes| {
                 bytes
                     .map(String::from_utf8)

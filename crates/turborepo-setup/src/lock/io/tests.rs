@@ -8,7 +8,7 @@ use crate::lock::{Document, SCHEMA_VERSION, Tool};
 #[path = "edge_tests.rs"]
 mod edge_tests;
 
-fn selection(declarations: DeclarationMap, version: &str) -> Lock {
+pub(super) fn selection(declarations: DeclarationMap, version: &str) -> Lock {
     Lock::new(Document {
         schema_version: SCHEMA_VERSION,
         tools: declarations
@@ -46,7 +46,7 @@ fn fixture(version: &str) -> Lock {
     )
 }
 
-fn writer_root() -> tempfile::TempDir {
+pub(super) fn writer_root() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
     assert!(
         std::process::Command::new("git")

@@ -245,6 +245,17 @@ impl WriterStorage {
         bytes: &[u8],
         before_promote: impl FnOnce() -> io::Result<()>,
     ) -> io::Result<()> {
+        self.replace_checked(bytes, |_| before_promote())
+    }
+
+    /// Run a final precondition after staging/flush, under this stable guard.
+    /// Any error aborts promotion and cleans the owned stage without changing
+    /// the previous lock. No callback runs after atomic promotion.
+    pub fn replace_checked(
+        &mut self,
+        bytes: &[u8],
+        before_promote: impl FnOnce(&Self) -> io::Result<()>,
+    ) -> io::Result<()> {
         if bytes.len() > MAX_BYTES {
             return Err(io::Error::other("setup lock exceeds byte limit"));
         }
@@ -253,7 +264,7 @@ impl WriterStorage {
         let result = (|| {
             file.write_all(bytes)?;
             file.sync_all()?;
-            before_promote()?;
+            before_promote(self)?;
             self.read_lock()?;
             drop(file);
             self.storage.promote(&self.root)
