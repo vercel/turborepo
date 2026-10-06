@@ -70,6 +70,82 @@ impl VersionRequest {
         self.exact.is_some()
     }
 
+    /// Whether a supported release can satisfy both requests. Checks bounded
+    /// witnesses without materializing intersections or resolving a catalog.
+    /// Prereleases must be admitted by both selected OR branches; witnesses
+    /// obey the same safe-component and 256-byte limits as `matches`.
+    /// Build identity and integrity remain the discovery adapter's policy.
+    pub fn intersects(&self, other: &Self) -> bool {
+        self.branches.iter().any(|a| {
+            other.branches.iter().any(|b| {
+                let terms = || a.iter().chain(b);
+                let lower = terms()
+                    .filter(|c| matches!(c.op, Op::Eq | Op::Ge | Op::Gt))
+                    .max_by(|a, b| {
+                        a.version
+                            .cmp_precedence(&b.version)
+                            .then_with(|| (a.op == Op::Gt).cmp(&(b.op == Op::Gt)))
+                    });
+                // Stable witnesses need no prerelease gate; prerelease
+                // witnesses are gated against this branch pair below. Avoid
+                // rescanning unrelated OR branches for every candidate.
+                let allows = |v: &Version| is_valid_release(v) && terms().all(|c| c.matches(v));
+                let mut stable = lower.map_or_else(|| Version::new(0, 0, 0), |c| c.version.clone());
+                stable.build = semver::BuildMetadata::EMPTY;
+                stable.pre = Prerelease::EMPTY;
+                let mut stable_exists = true;
+                if lower.is_some_and(|c| c.op == Op::Gt && c.version.pre.is_empty()) {
+                    let mut core = [stable.major, stable.minor, stable.patch];
+                    stable_exists = false;
+                    for i in (0..3).rev() {
+                        if core[i] < MAX_COMPONENT {
+                            core[i] += 1;
+                            stable_exists = true;
+                            break;
+                        }
+                        core[i] = 0;
+                    }
+                    stable = Version::new(core[0], core[1], core[2]);
+                }
+                if stable_exists && allows(&stable) {
+                    return true;
+                }
+                // Prereleases must have an explicitly admitted core tuple in
+                // BOTH branches. Try the least version above their lower bound.
+                let core = |v: &Version| (v.major, v.minor, v.patch);
+                let gate = |branch: &[Comparator], v: &Version| {
+                    branch
+                        .iter()
+                        .any(|c| !c.version.pre.is_empty() && core(&c.version) == core(v))
+                };
+                terms().filter(|c| !c.version.pre.is_empty()).any(|c| {
+                    let mut v = c.version.clone();
+                    if !gate(a, &v) || !gate(b, &v) {
+                        return false;
+                    }
+                    let pre = if let Some(bound) =
+                        lower.filter(|bound| core(&bound.version) == core(&v))
+                    {
+                        if bound.version.pre.is_empty() {
+                            return false;
+                        }
+                        if bound.op == Op::Gt {
+                            next_prerelease(&bound.version)
+                        } else {
+                            Some(bound.version.pre.clone())
+                        }
+                    } else {
+                        Prerelease::new("0").ok()
+                    };
+                    let Some(pre) = pre else { return false };
+                    v.pre = pre;
+                    v.build = semver::BuildMetadata::EMPTY;
+                    allows(&v)
+                })
+            })
+        })
+    }
+
     /// Canonical exact request, including authored build metadata, if any.
     pub fn exact_version(&self) -> Option<&Version> {
         self.exact.as_ref()
@@ -92,21 +168,7 @@ impl VersionRequest {
         release: &Version,
         exact_matches: impl FnOnce(&Version, &Version) -> bool,
     ) -> bool {
-        let core = [release.major, release.minor, release.patch];
-        let suffix = release.pre.len().saturating_add(release.build.len());
-        if core.iter().any(|&n| n > MAX_COMPONENT) || suffix > MAX_VERSION_BYTES {
-            return false;
-        }
-        // Count the canonical encoding without allocating an unbounded string.
-        let bytes = core
-            .iter()
-            .map(|n| n.checked_ilog10().unwrap_or(0) as usize + 1)
-            .sum::<usize>()
-            + 2
-            + suffix
-            + usize::from(!release.pre.is_empty())
-            + usize::from(!release.build.is_empty());
-        if bytes > MAX_VERSION_BYTES {
+        if !is_valid_release(release) {
             return false;
         }
         if let Some(exact) = &self.exact {
@@ -121,6 +183,78 @@ impl VersionRequest {
                                 == (release.major, release.minor, release.patch)
                     }))
         })
+    }
+}
+
+/// Candidate bounds only: applies no version constraints or prerelease gating.
+pub(crate) fn is_valid_release(release: &Version) -> bool {
+    let core = [release.major, release.minor, release.patch];
+    let suffix = release.pre.len().saturating_add(release.build.len());
+    if core.iter().any(|&n| n > MAX_COMPONENT) || suffix > MAX_VERSION_BYTES {
+        return false;
+    }
+    // Count the canonical encoding without allocating an unbounded string.
+    let bytes = core
+        .iter()
+        .map(|n| n.checked_ilog10().unwrap_or(0) as usize + 1)
+        .sum::<usize>()
+        + 2
+        + suffix
+        + usize::from(!release.pre.is_empty())
+        + usize::from(!release.build.is_empty());
+    bytes <= MAX_VERSION_BYTES
+}
+
+/// Least bounded prerelease above the lower bound. If `.0` does not fit,
+/// increment the last identifier, carrying left only if it has no successor.
+fn next_prerelease(version: &Version) -> Option<Prerelease> {
+    let mut v = version.clone();
+    v.build = semver::BuildMetadata::EMPTY;
+    let pre = v.pre.as_str();
+    let budget = MAX_VERSION_BYTES.checked_sub(v.to_string().len() - pre.len())?;
+    if pre.len() + 2 <= budget {
+        return Prerelease::new(&format!("{pre}.0")).ok();
+    }
+    let mut end = pre.len();
+    loop {
+        let start = pre[..end].rfind('.').map_or(0, |i| i + 1);
+        let token = &pre[start..end];
+        if token.bytes().all(|b| b.is_ascii_digit()) {
+            let mut digits = token.as_bytes().to_vec();
+            if let Some(i) = digits.iter().rposition(|&b| b != b'9') {
+                digits[i] += 1;
+                digits[i + 1..].fill(b'0');
+            } else {
+                digits.fill(b'0');
+                digits.insert(0, b'1');
+            }
+            let next = String::from_utf8(digits).ok()?;
+            let next = if start + next.len() <= budget {
+                &next
+            } else {
+                "-"
+            };
+            return Prerelease::new(&format!("{}{next}", &pre[..start])).ok();
+        }
+        if end < budget {
+            return Prerelease::new(&format!("{}-", &pre[..end])).ok();
+        }
+        for i in (start..end).rev() {
+            for &b in b"-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" {
+                if b <= pre.as_bytes()[i] {
+                    continue;
+                }
+                let mut next = format!("{}{}", &pre[..i], char::from(b));
+                if next[start..].bytes().all(|b| b.is_ascii_digit()) {
+                    if next.len() == budget {
+                        continue;
+                    }
+                    next.push('-');
+                }
+                return Prerelease::new(&next).ok();
+            }
+        }
+        end = start.checked_sub(1)?;
     }
 }
 

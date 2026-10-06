@@ -30,6 +30,13 @@ fn npm_reference_matrix() -> TestResult {
                 result == b'1',
                 "{input:?}: {release}"
             );
+            if let Ok(exact) = VersionRequest::parse(&release.to_string()) {
+                assert_eq!(
+                    request.intersects(&exact),
+                    result == b'1',
+                    "{input:?}: {release}"
+                );
+            }
         }
     }
     Ok(())
@@ -281,5 +288,323 @@ fn parser_limits_are_inclusive_and_overflow_never_wraps() -> TestResult {
         VersionRequest::parse(&full).err(),
         Some(VersionRequestError::TooComplex)
     );
+    Ok(())
+}
+
+#[test]
+fn candidate_validation_is_independent_of_version_constraints() -> TestResult {
+    assert!(is_valid_release(&Version::new(
+        MAX_COMPONENT,
+        MAX_COMPONENT,
+        MAX_COMPONENT
+    )));
+    for core in [
+        [MAX_COMPONENT + 1, 0, 0],
+        [0, MAX_COMPONENT + 1, 0],
+        [0, 0, MAX_COMPONENT + 1],
+    ] {
+        assert!(!is_valid_release(&Version::new(core[0], core[1], core[2])));
+    }
+    let prerelease = Version::parse("9.0.0-rc.1+build.42")?;
+    assert!(is_valid_release(&prerelease));
+    assert!(!VersionRequest::parse("*")?.matches(&prerelease));
+    for (bytes, valid) in [(256, true), (257, false)] {
+        for prefix in ["1.2.3-", "1.2.3+", "1.2.3-alpha+"] {
+            let release = Version::parse(&format!("{prefix}{}", "a".repeat(bytes - prefix.len())))?;
+            assert_eq!(release.to_string().len(), bytes);
+            assert_eq!(is_valid_release(&release), valid);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn bounded_intersection_witnesses_are_actual_candidates() -> TestResult {
+    for (pre, expected) in [
+        ("z".repeat(250), false),
+        ("a".repeat(250), true),
+        ("9".repeat(250), true),
+        ("a".repeat(249), true),
+        (format!("z.{}", "z".repeat(248)), true),
+    ] {
+        let version = Version::parse(&format!("1.0.0-{pre}"))?;
+        let request = VersionRequest::parse(&format!(">{version} <1.0.0"))?;
+        assert_eq!(request.intersects(&request), expected);
+        if let Some(pre) = next_prerelease(&version) {
+            let mut candidate = version;
+            candidate.pre = pre;
+            assert!(candidate.to_string().len() <= MAX_VERSION_BYTES);
+            assert!(request.matches(&candidate));
+        } else {
+            assert!(!expected);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn intersections_preserve_and_or_and_branch_local_prerelease_gates() -> TestResult {
+    for (a, b, expected) in [
+        ("*", "*", true),
+        (">*", "*", false),
+        ("<*", "*", false),
+        (">2 <1", "*", false),
+        ("1.x 2.x", "*", false),
+        ("1.2.3 2.3.4", "*", false),
+        ("1.0.0 - 2.0.0", "2.0.0 - 3.0.0", true),
+        ("^1", "^2", false),
+        (">=1.2.3 <2", "^1.5", true),
+        (">1.2.3 <1.2.4", ">1.2.3 <1.2.4", false),
+        (">=1.2.3 >1.2.3 <=1.2.3", "*", false),
+        (">1.2.3 >=1.2.3 <=1.2.3", "*", false),
+        ("1.2.3 >1.2.3", "*", false),
+        (">1.2.3 1.2.3", "*", false),
+        ("1.2.3+one", "1.2.3+two", true),
+        (">1.2.3-alpha", "<1.2.3-alpha.0", false),
+        (">1.2.3-alpha", "<=1.2.3-alpha.0", true),
+        (">=1.2.3-alpha <1.2.3", "<1.2.3", false),
+        (">=1.2.3-alpha <1.2.3", "*", false),
+        (">=1.2.3-alpha <1.2.3", "1.2.3", false),
+        ("<1.2.3-beta", ">=1.2.3-alpha <1.2.3", true),
+        (">=1.2.3-alpha <1 || >=1 <2", "1.2.3-beta", false),
+        ("* || >1.2.3-alpha <1.2.3-beta", "1.2.3-alpha.1", true),
+        ("* || >=1.2.3-alpha <1.2.3", ">=1.2.3-beta <1.2.3", true),
+        ("1.2.3-9007199254740992", "1.2.3-9007199254740993", false),
+        (
+            "1.2.3-18446744073709551616",
+            "1.2.3-18446744073709551617",
+            false,
+        ),
+        (
+            ">1.2.3-18446744073709551616",
+            "<=1.2.3-18446744073709551616.0",
+            true,
+        ),
+        (
+            ">1.2.3-18446744073709551616",
+            "<1.2.3-18446744073709551616.0",
+            false,
+        ),
+    ] {
+        let left = VersionRequest::parse(a)?;
+        let right = VersionRequest::parse(b)?;
+        assert_eq!(left.intersects(&right), expected, "{a:?} and {b:?}");
+        assert_eq!(right.intersects(&left), expected, "{b:?} and {a:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn bounded_prerelease_successor_is_the_least_supported_release() -> TestResult {
+    for core in [
+        Version::new(1, 0, 0),
+        Version::new(MAX_COMPONENT, MAX_COMPONENT, MAX_COMPONENT),
+    ] {
+        let budget = MAX_VERSION_BYTES - core.to_string().len() - 1;
+        for (pre, expected) in [
+            (
+                "a".repeat(budget - 2),
+                Some(format!("{}.0", "a".repeat(budget - 2))),
+            ),
+            (
+                "a".repeat(budget - 1),
+                Some(format!("{}-", "a".repeat(budget - 1))),
+            ),
+            (
+                "a".repeat(budget),
+                Some(format!("{}b", "a".repeat(budget - 1))),
+            ),
+            ("9".repeat(budget), Some("-".to_owned())),
+            (
+                format!("1{}", "9".repeat(budget - 1)),
+                Some(format!("2{}", "0".repeat(budget - 1))),
+            ),
+            (
+                format!("z.{}", "z".repeat(budget - 2)),
+                Some("z-".to_owned()),
+            ),
+            (
+                format!("9.{}", "z".repeat(budget - 2)),
+                Some("10".to_owned()),
+            ),
+            (
+                format!("a.{}", "9".repeat(budget - 2)),
+                Some("a.-".to_owned()),
+            ),
+            (
+                format!("{}-", "0".repeat(budget - 1)),
+                Some(format!("{}A", "0".repeat(budget - 1))),
+            ),
+            ("z".repeat(budget), None),
+        ] {
+            let lower = Version::parse(&format!("{core}-{pre}"))?;
+            let next = next_prerelease(&lower);
+            assert_eq!(
+                next.as_ref().map(Prerelease::as_str),
+                expected.as_deref(),
+                "{lower}"
+            );
+            let Some(next) = next else {
+                let remaining = VersionRequest::parse(&format!(">{lower} <{core}"))?;
+                assert!(!remaining.intersects(&remaining));
+                continue;
+            };
+            let mut candidate = lower.clone();
+            candidate.pre = next;
+            assert!(is_valid_release(&candidate));
+            assert!(lower.cmp_precedence(&candidate).is_lt());
+            // A bounded successor cannot skip any supported witness: the
+            // strict gap is empty, while its inclusive endpoint is reachable.
+            let gap = VersionRequest::parse(&format!(">{lower} <{candidate}"))?;
+            assert!(!gap.intersects(&gap), "{lower} to {candidate}");
+            let endpoint = VersionRequest::parse(&format!(">{lower} <={candidate}"))?;
+            assert!(endpoint.intersects(&endpoint), "{lower} to {candidate}");
+            assert!(endpoint.matches(&candidate));
+        }
+        // Build identity does not affect precedence. Removing it can reopen
+        // space for the otherwise oversized `.0` successor.
+        let pre = "a".repeat(budget - 2);
+        let lower = Version::parse(&format!("{core}-{pre}+b"))?;
+        assert_eq!(lower.to_string().len(), MAX_VERSION_BYTES);
+        let next = next_prerelease(&lower).ok_or("expected a bounded successor")?;
+        assert_eq!(next.as_str(), format!("{pre}.0"));
+        let mut candidate = lower.clone();
+        candidate.pre = next;
+        candidate.build = semver::BuildMetadata::EMPTY;
+        assert!(is_valid_release(&candidate));
+        let endpoint = VersionRequest::parse(&format!(">{lower} <={candidate}"))?;
+        assert!(endpoint.intersects(&endpoint));
+        assert!(endpoint.matches(&candidate));
+    }
+    Ok(())
+}
+
+#[test]
+fn overlap_witnesses_carry_safe_components_and_never_overflow() -> TestResult {
+    for (a, b, expected) in [
+        (format!(">0.0.{MAX_COMPONENT}"), "0.1.0".to_owned(), true),
+        (
+            format!(">0.{MAX_COMPONENT}.{MAX_COMPONENT}"),
+            "1.0.0".to_owned(),
+            true,
+        ),
+        (
+            format!(">{MAX_COMPONENT}.{MAX_COMPONENT}.{MAX_COMPONENT}"),
+            "*".to_owned(),
+            false,
+        ),
+        (
+            format!(">={MAX_COMPONENT}.{MAX_COMPONENT}.{MAX_COMPONENT}"),
+            "*".to_owned(),
+            true,
+        ),
+        (
+            format!(">0.0.{MAX_COMPONENT} <0.1.0-a"),
+            "<0.1.0-a".to_owned(),
+            true,
+        ),
+        (
+            format!(">0.0.{MAX_COMPONENT} <0.1.0"),
+            "*".to_owned(),
+            false,
+        ),
+    ] {
+        let left = VersionRequest::parse(&a)?;
+        let right = VersionRequest::parse(&b)?;
+        assert_eq!(left.intersects(&right), expected, "{a:?} and {b:?}");
+        assert_eq!(right.intersects(&left), expected, "{b:?} and {a:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn range_overlap_agrees_with_a_finite_release_oracle() -> TestResult {
+    // These requests use only the enumerated core tuples and prerelease
+    // boundaries; the catalog contains their possible least witnesses.
+    let inputs = [
+        "*",
+        ">*",
+        "<*",
+        "^1",
+        "^2",
+        "~1.2.3",
+        ">=1 <2",
+        "<=1.2.3",
+        ">1.2.3 <1.2.4",
+        ">1.2.3-alpha <1.2.3-beta",
+        ">1.2.3-alpha <1.2.3-alpha.0",
+        ">=1.2.3-alpha <1.2.3",
+        ">=1.2.3-alpha <1 || >=1 <2",
+        "* || >=1.2.3-alpha <1.2.3",
+        "^1.2.3-alpha",
+        "1.x 2.x",
+        "1.2.3+one",
+        "1.2.3-alpha.0",
+        ">0.0.0-a <0.0.0",
+        ">=0.0.0 <=0.0.0-alpha",
+        "2 - 1",
+        "1 - 2",
+        "3",
+        ">2 <3",
+        ">1.2.3-1 <1.2.3-2",
+        ">1.2.3-1 <1.2.3-1.0",
+    ];
+    let requests = inputs
+        .iter()
+        .map(|input| VersionRequest::parse(input))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut releases = Vec::new();
+    for major in 0..=4 {
+        for minor in 0..=3 {
+            for patch in 0..=4 {
+                for pre in [
+                    "",
+                    "0",
+                    "0.0",
+                    "1",
+                    "1.0",
+                    "1.0.0",
+                    "2",
+                    "a",
+                    "a.0",
+                    "alpha",
+                    "alpha.0",
+                    "alpha.0.0",
+                    "alpha.1",
+                    "beta",
+                    "beta.0",
+                    "beta.0.0",
+                    "z",
+                ] {
+                    let mut release = Version::new(major, minor, patch);
+                    release.pre = Prerelease::new(pre)?;
+                    releases.push(release);
+                }
+            }
+        }
+    }
+    for (a, left) in inputs.iter().zip(&requests) {
+        for (b, right) in inputs.iter().zip(&requests) {
+            let expected = releases
+                .iter()
+                .any(|release| left.matches(release) && right.matches(release));
+            assert_eq!(left.intersects(right), expected, "{a:?} and {b:?}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn overlap_preserves_parser_branch_and_term_bounds() -> TestResult {
+    let mut left = vec![">1.0.0 <1.0.0"; MAX_REQUEST_BRANCHES - 1];
+    let mut right = vec![">2.0.0 <2.0.0"; MAX_REQUEST_BRANCHES - 1];
+    left.push("1.2.3");
+    right.push("1.2.3");
+    let left = VersionRequest::parse(&left.join(" || "))?;
+    let right = VersionRequest::parse(&right.join(" || "))?;
+    assert!(left.intersects(&right));
+    let bounded = VersionRequest::parse(&vec!["^1"; MAX_BRANCH_TERMS].join(" "))?;
+    assert!(bounded.intersects(&VersionRequest::parse("1.5.0")?));
+    assert!(!bounded.intersects(&VersionRequest::parse("2.0.0")?));
     Ok(())
 }
