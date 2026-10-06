@@ -62,6 +62,12 @@ struct Inventory {
     tools: Vec<Installed>,
 }
 
+impl Inventory {
+    fn contains(&self, tool: &Tool) -> bool {
+        self.tools.iter().any(|installed| &installed.tool == tool)
+    }
+}
+
 pub struct Store {
     root: PathBuf,
     // Never unlink a lock file: all processes must lock the same inode.
@@ -121,7 +127,13 @@ impl Store {
             Ok(_) => {}
         }
         let inventory: Inventory = serde_json::from_reader(File::open(path)?.take(1024 * 1024))?;
-        if inventory.schema != 1 || !inventory.generation.starts_with("generation-") {
+        if inventory.schema != 1
+            || !inventory.generation.starts_with("generation-")
+            || inventory
+                .tools
+                .iter()
+                .any(|installed| !is_sha256(&installed.tree_sha256))
+        {
             return Err(Error::InvalidInventory);
         }
         component(&inventory.generation.to_ascii_lowercase())?;
@@ -132,8 +144,11 @@ impl Store {
                 .map(|t| t.tool.clone())
                 .collect::<Vec<_>>(),
         )?;
-        real_directory(&self.root.join(&inventory.generation))?;
-        Ok(Some(inventory))
+        match real_directory(&self.root.join(&inventory.generation)) {
+            Ok(()) => Ok(Some(inventory)),
+            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn current(&self) -> Result<Option<Current>, Error> {
@@ -154,9 +169,33 @@ impl Store {
         validate_tools(desired)?;
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
-        Ok(self.inventory()?.is_some_and(|old| {
-            self.check(&old).is_ok() && old.tools.iter().map(|t| &t.tool).eq(desired.iter())
-        }))
+        Ok(self
+            .healthy_inventory()?
+            .is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())))
+    }
+
+    /// Whether reconciliation can copy this exact tool without preparation.
+    /// A damaged sibling tree or shim invalidates reuse of the entire
+    /// generation.
+    pub fn can_reuse(&self, tool: &Tool) -> Result<bool, Error> {
+        validate_tools(std::slice::from_ref(tool))?;
+        Ok(self
+            .healthy_inventory()?
+            .is_some_and(|old| old.contains(tool)))
+    }
+
+    fn healthy_inventory(&self) -> Result<Option<Inventory>, Error> {
+        let Some(old) = self.inventory()? else {
+            return Ok(None);
+        };
+        match self.check(&old) {
+            Ok(()) => Ok(Some(old)),
+            // Metadata/path validation above remains fail-closed. Damaged install
+            // contents can be rebuilt, but must never be copied into staging.
+            Err(Error::InvalidInventory | Error::UnsafePath) => Ok(None),
+            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     fn check(&self, inventory: &Inventory) -> Result<(), Error> {
@@ -174,7 +213,10 @@ impl Store {
             check_executables(&tree, &installed.tool)?;
             for (name, executable) in &installed.tool.executables {
                 names.insert(name.clone());
-                if fs::read_link(bin.join(name))? != shim_target(&installed.tool.id, executable) {
+                let shim = bin.join(name);
+                if !fs::symlink_metadata(&shim)?.file_type().is_symlink()
+                    || fs::read_link(shim)? != shim_target(&installed.tool.id, executable)
+                {
                     return Err(Error::UnsafePath);
                 }
             }
@@ -201,8 +243,8 @@ impl Store {
         mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
-        let old = self.inventory()?;
-        let valid_old = old.as_ref().filter(|old| self.check(old).is_ok());
+        let old = self.healthy_inventory()?;
+        let valid_old = old.as_ref();
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
         if valid_old.is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())) {
@@ -219,7 +261,7 @@ impl Store {
         for tool in desired {
             let tree = tools.join(&tool.id);
             directory(&tree)?;
-            if let Some(old) = valid_old.filter(|old| old.tools.iter().any(|t| t.tool == tool)) {
+            if let Some(old) = valid_old.filter(|old| old.contains(&tool)) {
                 copy_tree(
                     &self.root.join(&old.generation).join("tools").join(&tool.id),
                     &tree,
@@ -288,14 +330,52 @@ fn component(value: &str) -> Result<(), Error> {
     Ok(())
 }
 
+fn artifact_component(value: &str) -> Result<(), Error> {
+    // Preserve artifact spelling (scopes, case and dotfiles), not bookkeeping
+    // identity rules. Keep the archive boundary's conservative portable subset.
+    if value.is_empty()
+        || value.len() > 255
+        || matches!(value, "." | "..")
+        || value.ends_with(['.', ' '])
+        || value
+            .bytes()
+            .any(|b| !(32..127).contains(&b) || b"\\/:<>\"|?*~".contains(&b))
+    {
+        return Err(Error::UnsafePath);
+    }
+    let stem = value
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_ascii_lowercase();
+    if matches!(
+        stem.as_str(),
+        "con" | "prn" | "aux" | "nul" | "clock$" | "conin$" | "conout$"
+    ) || ["com", "lpt"].iter().any(|p| {
+        stem.strip_prefix(p)
+            .is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+    }) {
+        return Err(Error::UnsafePath);
+    }
+    Ok(())
+}
+
 fn relative(value: &str) -> Result<(), Error> {
     if value.len() > 4096 {
         return Err(Error::UnsafePath);
     }
     for part in value.split('/') {
-        component(part)?;
+        artifact_component(part)?;
     }
     Ok(())
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
 fn validate_tools(tools: &[Tool]) -> Result<(), Error> {
@@ -306,11 +386,7 @@ fn validate_tools(tools: &[Tool]) -> Result<(), Error> {
         if !ids.insert(&tool.id)
             || tool.version.is_empty()
             || tool.platform.is_empty()
-            || tool.artifact_sha256.len() != 64
-            || !tool
-                .artifact_sha256
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || !is_sha256(&tool.artifact_sha256)
             || tool.executables.is_empty()
         {
             return Err(Error::InvalidInventory);
@@ -383,7 +459,9 @@ fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if fs::metadata(resolved)?.permissions().mode() & 0o111 == 0 {
+            // Installer-owned files need owner execute; group/other execute
+            // alone does not make the exported binary runnable by its owner.
+            if fs::metadata(resolved)?.permissions().mode() & 0o100 == 0 {
                 return Err(Error::InvalidInventory);
             }
         }
@@ -454,9 +532,7 @@ fn walk(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<(), Error>) -> Resul
             .file_name()
             .and_then(|n| n.to_str())
             .ok_or(Error::UnsafePath)?;
-        // Artifact trees may contain uppercase names; forbid aliases only for
-        // bookkeeping paths. Reject separators and special portable spellings.
-        component(&name.trim_start_matches('.').to_ascii_lowercase())?;
+        artifact_component(name)?;
         visit(&path)?;
         if fs::symlink_metadata(&path)?.is_dir() {
             walk(&path, visit)?;
