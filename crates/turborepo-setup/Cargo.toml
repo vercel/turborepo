@@ -14,9 +14,19 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
+turborepo-archive = { workspace = true }
+turborepo-download = { workspace = true }
 turborepo-package-manager = { workspace = true }
 turborepo-platform = { workspace = true }
+turborepo-tool-install = { workspace = true }
 url = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+flate2 = "1.1.9"
+sha2 = { workspace = true }
+tar = { version = "0.4.45", default-features = false }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "net", "io-util"] }
