@@ -147,6 +147,18 @@ impl Store {
         }))
     }
 
+    /// Readiness for a complete desired tool set, without downloading or
+    /// staging. Damaged trees return false so provisioning can repair them
+    /// atomically.
+    pub fn is_current(&self, desired: &[Tool]) -> Result<bool, Error> {
+        validate_tools(desired)?;
+        let mut desired = desired.to_vec();
+        desired.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(self.inventory()?.is_some_and(|old| {
+            self.check(&old).is_ok() && old.tools.iter().map(|t| &t.tool).eq(desired.iter())
+        }))
+    }
+
     fn check(&self, inventory: &Inventory) -> Result<(), Error> {
         let generation = self.root.join(&inventory.generation);
         let tools = generation.join("tools");
@@ -276,12 +288,43 @@ fn component(value: &str) -> Result<(), Error> {
     Ok(())
 }
 
+fn artifact_component(value: &str) -> Result<(), Error> {
+    // Preserve artifact spelling (scopes, case and dotfiles), not bookkeeping
+    // identity rules. Keep the archive boundary's conservative portable subset.
+    if value.is_empty()
+        || value.len() > 255
+        || matches!(value, "." | "..")
+        || value.ends_with(['.', ' '])
+        || value
+            .bytes()
+            .any(|b| !(32..127).contains(&b) || b"\\/:<>\"|?*~".contains(&b))
+    {
+        return Err(Error::UnsafePath);
+    }
+    let stem = value
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end()
+        .to_ascii_lowercase();
+    if matches!(
+        stem.as_str(),
+        "con" | "prn" | "aux" | "nul" | "clock$" | "conin$" | "conout$"
+    ) || ["com", "lpt"].iter().any(|p| {
+        stem.strip_prefix(p)
+            .is_some_and(|n| matches!(n, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+    }) {
+        return Err(Error::UnsafePath);
+    }
+    Ok(())
+}
+
 fn relative(value: &str) -> Result<(), Error> {
     if value.len() > 4096 {
         return Err(Error::UnsafePath);
     }
     for part in value.split('/') {
-        component(part)?;
+        artifact_component(part)?;
     }
     Ok(())
 }
@@ -371,7 +414,9 @@ fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            if fs::metadata(resolved)?.permissions().mode() & 0o111 == 0 {
+            // Installer-owned files need owner execute; group/other execute
+            // alone does not make the exported binary runnable by its owner.
+            if fs::metadata(resolved)?.permissions().mode() & 0o100 == 0 {
                 return Err(Error::InvalidInventory);
             }
         }
@@ -442,9 +487,7 @@ fn walk(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<(), Error>) -> Resul
             .file_name()
             .and_then(|n| n.to_str())
             .ok_or(Error::UnsafePath)?;
-        // Artifact trees may contain uppercase names; forbid aliases only for
-        // bookkeeping paths. Reject separators and special portable spellings.
-        component(&name.trim_start_matches('.').to_ascii_lowercase())?;
+        artifact_component(name)?;
         visit(&path)?;
         if fs::symlink_metadata(&path)?.is_dir() {
             walk(&path, visit)?;
