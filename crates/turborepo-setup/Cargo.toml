@@ -12,10 +12,11 @@ workspace = true
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 turborepo-package-manager = { workspace = true }
 turborepo-platform = { workspace = true }
 url = { workspace = true }
 
-[dev-dependencies]
-tempfile = { workspace = true }
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

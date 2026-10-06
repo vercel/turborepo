@@ -11,6 +11,9 @@ use url::Url;
 
 use crate::node_discovery::UniqueJson;
 
+mod io;
+pub use io::{DeclarationMap, StorageError, WriteOutcome, probe_native, write};
+
 pub const SCHEMA_VERSION: u32 = 0;
 pub const MAX_LOCK_BYTES: usize = 1024 * 1024;
 const MAX_TOOLS: usize = 64;
