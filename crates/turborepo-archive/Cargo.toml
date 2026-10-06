@@ -16,6 +16,9 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 turborepo-download = { workspace = true }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+nix = { workspace = true, features = ["fs"] }
+
 [dev-dependencies]
 hex = { workspace = true }
 sha2 = { workspace = true }
