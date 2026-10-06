@@ -7,6 +7,8 @@ use std::{
 
 use super::*;
 
+mod paths_permissions;
+
 fn tool(id: &str) -> Tool {
     Tool {
         id: id.into(),
