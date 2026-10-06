@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
+import { validateReviewCI } from "./validate-review-ci.mjs";
+
 export const JOBS = [
   "release-pr",
   "quality",
   "js_tests",
-  "review_gate",
   "turbo_types_check",
   "rust_test",
   "check-examples",
@@ -20,20 +21,24 @@ const RELEASE_TEST_JOBS = new Set([
   "check-lockfiles",
   "js_native_packages"
 ]);
-const PR_ONLY_JOBS = new Set(["quality", "js_tests", "review_gate"]);
+const PR_ONLY_JOBS = new Set(["quality", "js_tests"]);
 
-export function validateSummary(needs, eventName) {
-  if (!["pull_request", "pull_request_review", "push"].includes(eventName)) {
-    throw new Error(`Unexpected CI event: ${eventName}`);
-  }
+function validateDependencies(needs, jobs) {
   if (!needs || typeof needs !== "object" || Array.isArray(needs)) {
     throw new Error("Missing CI dependency results");
   }
   for (const job of Object.keys(needs)) {
-    if (!JOBS.includes(job)) {
+    if (!jobs.includes(job)) {
       throw new Error(`Unexpected CI dependency: ${job}`);
     }
   }
+}
+
+export function validateSummary(needs, eventName) {
+  if (!["pull_request", "push"].includes(eventName)) {
+    throw new Error(`Unexpected CI event: ${eventName}`);
+  }
+  validateDependencies(needs, JOBS);
 
   const release = needs["release-pr"]?.outputs?.["is-release-pr"];
   if (
@@ -59,12 +64,38 @@ export function validateSummary(needs, eventName) {
   }
 }
 
+export function validateFinalSummary(needs, eventName) {
+  if (!["pull_request", "pull_request_review", "push"].includes(eventName)) {
+    throw new Error(`Unexpected CI event: ${eventName}`);
+  }
+  validateDependencies(needs, ["code_checks"]);
+  const expected = eventName === "pull_request_review" ? "skipped" : "success";
+  const result = needs.code_checks?.result;
+  if (result !== expected) {
+    throw new Error(`CI did not pass:\ncode_checks: ${result ?? "missing"}`);
+  }
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   try {
-    validateSummary(
-      JSON.parse(process.env.CI_NEEDS ?? "null"),
-      process.env.CI_EVENT_NAME
-    );
+    const needs = JSON.parse(process.env.CI_NEEDS ?? "null");
+    const eventName = process.env.CI_EVENT_NAME;
+    if (process.env.CI_CODE_ONLY === "true") {
+      validateSummary(needs, eventName);
+    } else {
+      validateFinalSummary(needs, eventName);
+      if (eventName === "pull_request_review") {
+        const runId = await validateReviewCI({
+          repository: process.env.GITHUB_REPOSITORY,
+          token: process.env.GH_TOKEN,
+          runId: Number(process.env.GITHUB_RUN_ID),
+          pullNumber: Number(process.env.PR_NUMBER),
+          headSha: process.env.PR_HEAD_SHA,
+          reviewSha: process.env.GITHUB_SHA
+        });
+        console.log(`Reused code checks from run ${runId}.`);
+      }
+    }
     console.log("All required CI jobs passed or were intentionally skipped.");
   } catch (error) {
     console.error(`::error::${error.message}`);
