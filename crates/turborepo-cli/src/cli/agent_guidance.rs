@@ -99,7 +99,17 @@ fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
             // A dangling link must still be created through, not replaced.
             match fs::read_link(&agents_path) {
-                Ok(target) => normalize_lexically(&repo_root.join(target)),
+                Ok(target) => {
+                    let lexical = normalize_lexically(&repo_root.join(target));
+                    // The parent directory may itself be a symlink leaving the
+                    // repository, so resolve it before the containment check.
+                    match (lexical.parent(), lexical.file_name()) {
+                        (Some(parent), Some(name)) => fs::canonicalize(parent)
+                            .map(|parent| parent.join(name))
+                            .unwrap_or(lexical),
+                        _ => lexical,
+                    }
+                }
                 Err(_) => agents_path,
             }
         }
@@ -591,6 +601,22 @@ mod tests {
                 .unwrap()
                 .contains(MANAGED_BLOCK)
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_create_through_a_dangling_symlink_via_a_directory_link_outside() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("repo");
+        let outside = temp.path().join("outside");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("docs")).unwrap();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("docs/CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(&root).unwrap(), MaintenanceStatus::OutsideRepository);
+        assert!(!outside.join("CLAUDE.md").exists());
     }
 
     #[test]
