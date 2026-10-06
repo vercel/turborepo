@@ -3,6 +3,7 @@
 
 pub mod node;
 pub mod node_discovery;
+pub mod node_metadata;
 pub mod package_manager;
 pub mod version_request;
 
