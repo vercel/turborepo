@@ -303,7 +303,7 @@ export function removeConfirmedOptimisticMessages<
         !confirmed.has(index) &&
         matchesChatDraft(message, sent)
     );
-    if (index >= 0) {
+    if (index !== -1) {
       confirmed.add(index);
       changed = true;
     } else if (afterMessageCount !== sent.afterMessageCount) {

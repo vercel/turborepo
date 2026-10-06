@@ -115,17 +115,21 @@ export function operatorModelSelection(
     }
   > = {};
   switch (model.split("/", 1)[0]) {
-    case "openai":
+    case "openai": {
       providerOptions.openai = { reasoningEffort: effort };
       break;
-    case "anthropic":
+    }
+    case "anthropic": {
       providerOptions.anthropic = { effort };
       break;
-    case "google":
+    }
+    case "google": {
       providerOptions.google = { thinkingConfig: { thinkingLevel: effort } };
       break;
-    default:
+    }
+    default: {
       return { model };
+    }
   }
   return { model, modelOptions: { providerOptions } };
 }
