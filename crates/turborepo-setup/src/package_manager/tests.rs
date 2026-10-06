@@ -417,6 +417,79 @@ fn alternative_and_request_limits_are_inclusive() -> TestResult {
 }
 
 #[test]
+fn shared_families_do_not_expand_setup_capabilities() -> TestResult {
+    for family in Manager::ALL {
+        let supported = matches!(family, Manager::Npm | Manager::Pnpm);
+        let top = json!({"packageManager": format!("{}@9.0.0", family.name())});
+        if supported {
+            let shared: turborepo_package_manager::Family = discover(top)?.manager;
+            assert_eq!(shared, family);
+            continue;
+        }
+        invalid_at(top, TOP, "unsupported manager; setup supports npm and pnpm");
+        // Unsupported capabilities win over malformed versions and policies,
+        // even with an authoritative pin or an ignored alternative.
+        for version in [json!(null), json!(42), json!("latest")] {
+            for policy in [json!("ignore"), json!(null)] {
+                let entry = json!({"name": family.name(), "version": version, "onFail": policy});
+                for (entries, pointer) in [
+                    (entry.clone(), format!("{DEV}/name")),
+                    (json!([entry]), format!("{DEV}/0/name")),
+                ] {
+                    let mut root = json!({"devEngines": {"packageManager": entries}});
+                    invalid_at(root.clone(), &pointer, "unsupported manager");
+                    root["packageManager"] = json!("pnpm@9.0.0");
+                    invalid_at(root, &pointer, "unsupported manager");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn shared_entry_adapter_preserves_validation_order() -> TestResult {
+    for (version, pointer, message) in [
+        (json!(null), format!("{DEV}/version"), "required string"),
+        (
+            json!("latest"),
+            format!("{DEV}/onFail"),
+            "expected error, warn, or ignore",
+        ),
+        (
+            json!("x".repeat(MAX_VERSION_FIELD_BYTES + 1)),
+            format!("{DEV}/onFail"),
+            "expected error, warn, or ignore",
+        ),
+    ] {
+        let root = json!({"devEngines": {"packageManager": {
+            "name": "pnpm", "version": version, "onFail": null
+        }}});
+        let error = discover_package_manager(&root)
+            .err()
+            .ok_or("expected error")?;
+        assert_eq!(error.sources, [pointer]);
+        assert_eq!(error.message, message);
+        let mut root = root;
+        root["packageManager"] = json!("pnpm");
+        invalid_at(root, TOP, "expected name@version string");
+    }
+    invalid_at(
+        json!({"devEngines": {"packageManager": [
+            {"name": "pnpm", "version": "latest"}, {"name": null}
+        ]}}),
+        &format!("{DEV}/0/version"),
+        "",
+    );
+    invalid_at(
+        json!({"devEngines": {"packageManager": vec![json!(null); MAX_ALTERNATIVES + 1]}}),
+        DEV,
+        "expected 1..=32 package-manager alternatives",
+    );
+    Ok(())
+}
+
+#[test]
 fn diagnostics_are_opaque_and_raw_fields_are_bounded() -> TestResult {
     let private = "private-input";
     for value in [

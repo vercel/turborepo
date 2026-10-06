@@ -5,6 +5,8 @@
 use semver::Version;
 use serde_json::Value;
 use thiserror::Error;
+pub use turborepo_package_manager::Family as Manager;
+use turborepo_package_manager::{EntryError, SpecError, parse_entry, parse_spec};
 
 use crate::version_request::{MAX_REQUEST_BYTES, VersionRequest, is_valid_release};
 
@@ -12,21 +14,6 @@ const TOP: &str = "package.json#/packageManager";
 const DEV: &str = "package.json#/devEngines/packageManager";
 const MAX_ALTERNATIVES: usize = 32;
 const MAX_VERSION_FIELD_BYTES: usize = MAX_REQUEST_BYTES + "+sha512.".len() + 128;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Manager {
-    Npm,
-    Pnpm,
-}
-
-impl Manager {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Npm => "npm",
-            Self::Pnpm => "pnpm",
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Precedence {
@@ -125,11 +112,10 @@ fn invalid(source: &str, message: impl Into<String>) -> Error {
     }
 }
 
-fn manager(name: &str, source: &str) -> Result<Manager, Error> {
-    match name {
-        "npm" => Ok(Manager::Npm),
-        "pnpm" => Ok(Manager::Pnpm),
-        _ => Err(invalid(
+fn manager(family: Manager, source: &str) -> Result<Manager, Error> {
+    match family {
+        Manager::Npm | Manager::Pnpm => Ok(family),
+        Manager::Aube | Manager::Bun | Manager::Nub | Manager::Yarn => Err(invalid(
             source,
             "unsupported manager; setup supports npm and pnpm",
         )),
@@ -229,17 +215,26 @@ fn request(
 }
 
 fn dev_request(value: &Value, source: &str) -> Result<Request, Error> {
-    let obj = value
-        .as_object()
-        .ok_or_else(|| invalid(source, "expected a package-manager object"))?;
-    let string = |key: &str| {
-        obj.get(key)
-            .and_then(Value::as_str)
-            .ok_or_else(|| invalid(&format!("{source}/{key}"), "required string"))
+    let structural_error = |error: EntryError| {
+        let pointer = error
+            .field()
+            .map_or_else(|| source.to_owned(), |field| format!("{source}/{field}"));
+        let message = match error {
+            EntryError::ExpectedObject => "expected a package-manager object",
+            EntryError::MissingName | EntryError::NameNotString | EntryError::VersionNotString => {
+                "required string"
+            }
+            EntryError::EmptyName | EntryError::NameWhitespace | EntryError::UnknownName => {
+                "unsupported manager; setup supports npm and pnpm"
+            }
+        };
+        invalid(&pointer, message)
     };
-    let manager = manager(string("name")?, &format!("{source}/name"))?;
-    let version = obj.get("version").map(|_| string("version")).transpose()?;
-    let on_fail = match obj.get("onFail").map(Value::as_str) {
+    let entry = parse_entry(value).map_err(structural_error)?;
+    // Capabilities precede version types, which precede onFail and version grammar.
+    let manager = manager(entry.family, &format!("{source}/name"))?;
+    let version = entry.version().map_err(structural_error)?;
+    let on_fail = match entry.on_fail.map(Value::as_str) {
         None | Some(Some("error")) => OnFail::Error,
         Some(Some("warn")) => OnFail::Warn,
         Some(Some("ignore")) => OnFail::Ignore,
@@ -271,10 +266,23 @@ pub fn discover_package_manager(root: &Value) -> Result<Option<Declaration>, Err
                     "package-manager declaration exceeds setup's byte limit",
                 ));
             }
-            let (name, version) = text
-                .split_once('@')
-                .ok_or_else(|| invalid(TOP, "expected name@version string"))?;
-            request(manager(name, TOP)?, Some(version), TOP, OnFail::Error)
+            let spec = parse_spec(text).map_err(|error| {
+                invalid(
+                    TOP,
+                    match error {
+                        SpecError::ExpectedNameAtVersion => "expected name@version string",
+                        SpecError::UnknownName => {
+                            "unsupported manager; setup supports npm and pnpm"
+                        }
+                    },
+                )
+            })?;
+            request(
+                manager(spec.family, TOP)?,
+                Some(spec.version),
+                TOP,
+                OnFail::Error,
+            )
         })
         .transpose()?;
     let mut dev = Vec::new();
