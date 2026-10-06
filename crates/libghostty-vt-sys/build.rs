@@ -6,7 +6,7 @@ use std::{
 
 /// Pinned ghostty commit. Update this to pull a newer version.
 const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
-const GHOSTTY_COMMIT: &str = "a887df42c56f6de86c0fe6da9c4eeca37931e083";
+const GHOSTTY_COMMIT: &str = "f2a7652abab5d03f846f3150f9cc1b2dc23bb3dd";
 
 #[derive(Clone, Copy)]
 enum LinkMode {
