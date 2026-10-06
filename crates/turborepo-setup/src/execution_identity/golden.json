@@ -1,0 +1,77 @@
+{
+  "domain": "turborepo.setup.execution.v1",
+  "execution": {
+    "os": "linux",
+    "arch": "x64",
+    "libc": {
+      "family": "gnu",
+      "abi": "glibc-2.31"
+    },
+    "target": "x86_64-unknown-linux-gnu",
+    "cpuVariants": [
+      "x86-64-v2"
+    ]
+  },
+  "tools": {
+    "javascript": {
+      "adapter": "node",
+      "version": "24.0.0",
+      "options": {
+        "conditions": [
+          "production"
+        ]
+      },
+      "installation": {
+        "kind": "managed",
+        "parts": {
+          "headers": {
+            "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "format": "tar-gz",
+            "rootPrefix": "node-headers",
+            "destination": "include",
+            "executables": {}
+          },
+          "runtime": {
+            "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "format": "tar-gz",
+            "rootPrefix": "node-v24",
+            "destination": null,
+            "executables": {
+              "node": "bin/node"
+            }
+          }
+        }
+      }
+    },
+    "npm": {
+      "adapter": "npm",
+      "version": "11.0.0",
+      "options": {},
+      "installation": {
+        "kind": "managed",
+        "parts": {
+          "distribution": {
+            "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "format": "tar-gz",
+            "rootPrefix": "package",
+            "destination": "npm",
+            "executables": {
+              "npm": "bin/npm-cli.js"
+            }
+          }
+        }
+      }
+    },
+    "pnpm": {
+      "adapter": "pnpm",
+      "version": "10.9.0",
+      "options": {},
+      "installation": {
+        "kind": "verify-system",
+        "executables": [
+          "pnpm"
+        ]
+      }
+    }
+  }
+}
