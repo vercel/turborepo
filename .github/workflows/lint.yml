@@ -1,10 +1,6 @@
 name: Lint
 on:
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  workflow_call:
 
 env:
   RUSTFLAGS: "-D warnings"
@@ -71,13 +67,3 @@ jobs:
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
           TURBO_API= pnpm dlx turbo run quality --env-mode=strict
-
-  cleanup:
-    name: Cleanup
-    needs:
-      - quality
-    if: always()
-    permissions:
-      actions: write
-    uses: ./.github/workflows/pr-clean-caches.yml
-    secrets: inherit
