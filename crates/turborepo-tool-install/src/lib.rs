@@ -147,6 +147,18 @@ impl Store {
         }))
     }
 
+    /// Readiness for a complete desired tool set, without downloading or
+    /// staging. Damaged trees return false so provisioning can repair them
+    /// atomically.
+    pub fn is_current(&self, desired: &[Tool]) -> Result<bool, Error> {
+        validate_tools(desired)?;
+        let mut desired = desired.to_vec();
+        desired.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(self.inventory()?.is_some_and(|old| {
+            self.check(&old).is_ok() && old.tools.iter().map(|t| &t.tool).eq(desired.iter())
+        }))
+    }
+
     fn check(&self, inventory: &Inventory) -> Result<(), Error> {
         let generation = self.root.join(&inventory.generation);
         let tools = generation.join("tools");
