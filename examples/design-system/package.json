@@ -1,21 +1,25 @@
 {
+  "name": "design-system",
   "private": true,
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
     "clean": "turbo run clean && rm -rf node_modules",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "format": "prettier --write \"**/*.{js,mjs,ts,tsx,json,md,yaml,yml}\"",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "turbo run build --filter=docs^... && changeset publish",
     "preview-storybook": "turbo run preview-storybook"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.1",
-    "prettier": "^3.2.5",
-    "turbo": "^2.9.6"
+    "@changesets/cli": "3.0.3",
+    "prettier": "3.9.9",
+    "turbo": "2.11.7"
   },
-  "packageManager": "pnpm@8.15.6",
-  "name": "design-system"
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": ">=26.10.0"
+  }
 }

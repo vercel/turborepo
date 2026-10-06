@@ -2,16 +2,22 @@
   "name": "@repo/eslint-config",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "files": [
     "library.js",
     "react.js",
     "storybook.js"
   ],
+  "dependencies": {
+    "@babel/core": "8.0.6",
+    "@babel/eslint-parser": "8.0.6",
+    "@eslint/js": "10.0.1",
+    "eslint-config-turbo": "2.11.7",
+    "eslint-plugin-storybook": "10.6.1",
+    "globals": "17.13.0"
+  },
   "devDependencies": {
-    "@vercel/style-guide": "^5.2.0",
-    "eslint-config-turbo": "^2.0.0",
-    "eslint-plugin-mdx": "^3.1.5",
-    "eslint-plugin-only-warn": "^1.1.0",
-    "eslint-plugin-storybook": "^0.8.0"
+    "eslint": "10.12.0",
+    "storybook": "10.6.1"
   }
 }

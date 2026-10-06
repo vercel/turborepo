@@ -7,27 +7,29 @@
     "dev": "storybook dev -p 6006",
     "build": "storybook build --docs",
     "preview-storybook": "serve storybook-static",
-    "clean": "rm -rf .turbo node_modules",
-    "lint": "eslint ./stories/*.stories.tsx --max-warnings 0"
+    "clean": "rm -rf .turbo node_modules storybook-static",
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@acme/ui": "workspace:*",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
-    "@storybook/addon-actions": "^8.2.6",
-    "@storybook/addon-essentials": "^8.2.6",
-    "@storybook/addon-links": "^8.2.6",
-    "@storybook/react": "^8.2.6",
-    "@storybook/react-vite": "^8.2.6",
-    "@vitejs/plugin-react": "^4.2.1",
-    "eslint": "^8.57.0",
-    "serve": "^14.2.1",
-    "storybook": "^8.2.6",
     "@repo/typescript-config": "workspace:*",
-    "typescript": "5.5.4",
-    "vite": "^5.1.4"
+    "@storybook/addon-docs": "10.6.1",
+    "@storybook/addon-links": "10.6.1",
+    "@storybook/react-vite": "10.6.1",
+    "@types/node": "26.6.4",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "eslint": "10.12.0",
+    "serve": "14.2.6",
+    "storybook": "10.6.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.3"
   }
 }

@@ -6,21 +6,14 @@
       "outputs": ["dist/**", "storybook-static/**"],
       "dependsOn": ["^build"]
     },
-    "lint": {
-      "dependsOn": ["^lint"]
-    },
-    "dev": {
+    "lint": { "dependsOn": ["^lint"] },
+    "check-types": { "dependsOn": ["^build", "^check-types"] },
+    "dev": { "dependsOn": ["^build"], "cache": false, "persistent": true },
+    "clean": { "cache": false },
+    "preview-storybook": {
+      "dependsOn": ["build"],
       "cache": false,
       "persistent": true
-    },
-    "clean": {
-      "cache": false
-    },
-    "preview-storybook": {
-      "dependsOn": [
-        "^build"
-      ],
-      "cache": false
     }
   }
 }

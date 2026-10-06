@@ -2,207 +2,133 @@
 
 This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
-This guide explains how to use a React design system starter powered by:
-
-- 🏎 [Turborepo](https://turborepo.dev) — High-performance build system for Monorepos
-- 🚀 [React](https://reactjs.org/) — JavaScript library for user interfaces
-- 🛠 [Tsup](https://github.com/egoist/tsup) — TypeScript bundler powered by esbuild
-- 📖 [Storybook](https://storybook.js.org/) — UI component environment powered by Vite
-
-As well as a few others tools preconfigured:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-- [Changesets](https://github.com/changesets/changesets) for managing versioning and changelogs
-- [GitHub Actions](https://github.com/changesets/action) for fully automated package publishing
+A React design system powered by [Turborepo](https://turborepo.dev), [React](https://react.dev), [tsdown](https://tsdown.dev), and [Storybook](https://storybook.js.org/) with Vite. TypeScript, ESLint flat configuration, Prettier, and Changesets are included.
 
 ## Using this example
 
-Run the following command:
+Use Node.js 26.10.0 or newer and pnpm 12.9.1 (pinned in `package.json`):
 
 ```sh
 npx create-turbo@latest -e design-system
+cd design-system
+npm install --global pnpm@12.9.1
+pnpm install
 ```
 
-### Useful Commands
+### Useful commands
 
-- `pnpm build` - Build all packages, including the Storybook site
-- `pnpm dev` - Run all packages locally and preview with Storybook
-- `pnpm lint` - Lint all packages
-- `pnpm changeset` - Generate a changeset
-- `pnpm clean` - Clean up all `node_modules` and `dist` folders (runs each package's clean script)
+- `pnpm build`: Build the component library and static Storybook documentation.
+- `pnpm dev`: Watch the component library and run Storybook at `http://localhost:6006`.
+- `pnpm lint`: Lint source files and configuration with ESLint.
+- `pnpm check-types`: Check TypeScript, including unused declarations.
+- `pnpm preview-storybook`: Build and serve the static Storybook site.
+- `pnpm format`: Format source, configuration, and documentation.
+- `pnpm changeset`: Generate a changeset.
+- `pnpm clean`: Remove generated builds, task caches, and dependencies.
+
+## Apps and packages
+
+- `apps/docs`: Storybook component documentation.
+- `packages/ui`: Publishable React components (`@acme/ui`).
+- `packages/typescript-config`: Shared TypeScript configuration.
+- `packages/eslint-config`: Shared ESLint flat configurations.
+
+pnpm links internal dependencies using `workspace:*`. Each package declares its own dependencies; use `pnpm add <package> --filter <workspace>` to add one, or `pnpm add -Dw <package>` for root development tooling.
 
 ## Turborepo
 
-[Turborepo](https://turborepo.dev) is the build system for coding agents. It was designed after the workflows used by massive software engineering organizations to ship code at scale. Turborepo abstracts the complex configuration needed for monorepos and provides fast, incremental builds with zero-configuration remote caching.
+[Turborepo](https://turborepo.dev) is the build system for coding agents. It runs independent tasks in parallel and caches their outputs. The `build` task builds dependencies first, so Storybook consumes the compiled library. The `check-types` task also builds dependencies before resolving their generated declarations. Development starts with a dependency build before the library watcher and Storybook run together.
 
-Using Turborepo simplifies managing your design system monorepo, as you can have a single lint, build, test, and release process for all packages. [Learn more](https://vercel.com/blog/monorepos-are-changing-how-teams-build-software) about how monorepos improve your development workflow.
+`dist/**` and `storybook-static/**` are cached build outputs. Development and preview servers are persistent, uncached tasks. Generated files and dependencies are excluded by `.gitignore`.
 
-## Apps & Packages
+## Compilation and components
 
-This Turborepo includes the following packages and applications:
+`packages/ui/tsdown.config.ts` bundles each component into ES modules and CommonJS with declarations. React and its JSX runtime stay external: React is a peer dependency of the library, not bundled into it.
 
-- `apps/docs`: Component documentation site with Storybook
-- `packages/ui`: Core React components
-- `packages/typescript-config`: Shared `tsconfig.json`s used throughout the Turborepo
-- `packages/eslint-config`: ESLint preset
-
-Each package and app is 100% [TypeScript](https://www.typescriptlang.org/). Workspaces enables us to "hoist" dependencies that are shared between packages to the root `package.json`. This means smaller `node_modules` folders and a better local dev experience. To install a dependency for the entire monorepo, use the `-w` workspaces flag with `pnpm add`.
-
-This example sets up your `.gitignore` to exclude all generated files, other folders like `node_modules` used to store your dependencies.
-
-### Compilation
-
-To make the ui library code work across all browsers, we need to compile the raw TypeScript and React code to plain JavaScript. We can accomplish this with `tsup`, which uses `esbuild` to greatly improve performance.
-
-Running `pnpm build` from the root of the Turborepo will run the `build` command defined in each package's `package.json` file. Turborepo runs each `build` in parallel and caches & hashes the output to speed up future builds.
-
-For `@acme/ui`, the `build` command is equivalent to the following:
-
-```bash
-tsup src/*.tsx --format esm,cjs --dts --external react
+```sh
+pnpm build --filter=@acme/ui
 ```
 
-`tsup` compiles all of the components in the design system individually, into both ES Modules and CommonJS formats as well as their TypeScript types. The `package.json` for `@acme/ui` then instructs the consumer to select the correct format:
+The button's compiled files are:
 
-```json:ui/package.json
+```text
+packages/ui/dist/
+  button.mjs     # ES module
+  button.d.mts   # ES module declarations
+  button.js      # CommonJS
+  button.d.ts    # CommonJS declarations
+```
+
+The package exports the appropriate declarations for each module format:
+
+```json
 {
-  "name": "@acme/ui",
-  "version": "0.0.0",
-  "sideEffects": false,
-  "exports":{
+  "exports": {
     "./button": {
-      "types": "./src/button.tsx",
-      "import": "./dist/button.mjs",
-      "require": "./dist/button.js"
+      "import": {
+        "types": "./dist/button.d.mts",
+        "default": "./dist/button.mjs"
+      },
+      "require": {
+        "types": "./dist/button.d.ts",
+        "default": "./dist/button.js"
+      }
     }
   }
 }
 ```
 
-Run `pnpm build` to confirm compilation is working correctly. You should see a folder `ui/dist` which contains the compiled output.
-
-```bash
-ui
-└── dist
-    ├── button.d.ts  <-- Types
-    ├── button.js    <-- CommonJS version
-    ├── button.mjs   <-- ES Modules version
-    └── button.d.mts   <-- ES Modules version with Types
-```
-
-## Components
-
-Each file inside of `ui/src` is a component inside our design system. For example:
-
-```tsx:ui/src/Button.tsx
-import * as React from 'react';
-
-export interface ButtonProps {
-  children: React.ReactNode;
-}
-
-export function Button(props: ButtonProps) {
-  return <button>{props.children}</button>;
-}
-
-Button.displayName = 'Button';
-```
-
-When adding a new file, ensure that its specifier is defined in `package.json` file:
-
-```json:ui/package.json
-{
-  "name": "@acme/ui",
-  "version": "0.0.0",
-  "sideEffects": false,
-  "exports":{
-    "./button": {
-      "types": "./src/button.tsx",
-      "import": "./dist/button.mjs",
-      "require": "./dist/button.js"
-    }
-    // Add new component exports here
-  }
-}
-```
+Only `dist` is published. Consumers import components with `import { Button } from "@acme/ui/button"`. To add a component, add its source file to `packages/ui/src`, its entry to `tsdown.config.ts`, and its subpath export to `package.json`.
 
 ## Storybook
 
-Storybook provides us with an interactive UI playground for our components. This allows us to preview our components in the browser and instantly see changes when developing locally. This example preconfigures Storybook to:
+Storybook uses the React Vite framework, the links addon, and the docs addon. Essential controls and actions are built into current Storybook. The button story uses `tags: ["autodocs"]` to generate documentation and `fn` from `storybook/test` to capture clicks in the actions panel.
 
-- Use Vite to bundle stories instantly (in milliseconds)
-- Automatically find any stories inside the `stories/` folder
-- Support using module path aliases like `@acme/ui` for imports
-- Write MDX for component documentation pages
+Stories use typed Component Story Format:
 
-For example, here's the included Story for our `Button` component:
+```tsx
+import type { Meta, StoryObj } from "@storybook/react-vite";
+import { Button } from "@acme/ui/button";
 
-```js:apps/docs/stories/button.stories.mdx
-import { Button } from '@acme/ui/button';
-import { Meta, Story, Preview, Props } from '@storybook/addon-docs/blocks';
+const meta = {
+  component: Button,
+  tags: ["autodocs"],
+} satisfies Meta<typeof Button>;
 
-<Meta title="Components/Button" component={Button} />
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  args: { children: "Hello" },
+};
+```
+
+Optional MDX files in `apps/docs/stories` can reference these stories using current doc blocks:
+
+```mdx
+import { Meta, Canvas, Controls } from "@storybook/addon-docs/blocks";
+import * as ButtonStories from "./button.stories";
+
+<Meta of={ButtonStories} />
 
 # Button
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec euismod, nisl eget consectetur tempor, nisl nunc egestas nisi, euismod aliquam nisl nunc euismod.
-
-## Props
-
-<Props of={Box} />
-
-## Examples
-
-<Preview>
-  <Story name="Default">
-    <Button>Hello</Button>
-  </Story>
-</Preview>
+<Canvas of={ButtonStories.Primary} />
+<Controls />
 ```
 
-This example includes a few helpful Storybook scripts:
+## Versioning and publishing
 
-- `pnpm dev`: Starts Storybook in dev mode with hot reloading at `localhost:6006`
-- `pnpm build`: Builds the Storybook UI and generates the static HTML files
-- `pnpm preview-storybook`: Starts a local server to view the generated Storybook UI
+[Changesets](https://github.com/changesets/changesets) manages package versions and changelogs. Run `pnpm changeset`, select the publishable packages, choose the version bump, and describe the change. Commit the generated file under `.changeset` with your code.
 
-## Versioning & Publishing Packages
+The included release workflow uses pnpm and the pinned Node version. Enable Actions to create pull requests in the repository's Actions settings, and configure an `NPM_TOKEN` repository secret with permission to publish your packages. GitHub supplies the workflow's `GITHUB_TOKEN`. Installing the [Changesets bot](https://github.com/apps/changeset-bot) is optional.
 
-This example uses [Changesets](https://github.com/changesets/changesets) to manage versions, create changelogs, and publish to npm. It's preconfigured so you can start publishing packages immediately.
+On pushes to `main`, the workflow opens a versioning pull request using `pnpm version-packages`, or publishes the versioned packages with `pnpm release`:
 
-You'll need to create an `NPM_TOKEN` and `GITHUB_TOKEN` and add it to your GitHub repository settings to enable access to npm. It's also worth installing the [Changesets bot](https://github.com/apps/changeset-bot) on your repository.
-
-### Generating the Changelog
-
-To generate your changelog, run `pnpm changeset` locally:
-
-1. **Which packages would you like to include?** – This shows which packages and changed and which have remained the same. By default, no packages are included. Press `space` to select the packages you want to include in the `changeset`.
-1. **Which packages should have a major bump?** – Press `space` to select the packages you want to bump versions for.
-1. If doing the first major version, confirm you want to release.
-1. Write a summary for the changes.
-1. Confirm the changeset looks as expected.
-1. A new Markdown file will be created in the `changeset` folder with the summary and a list of the packages included.
-
-### Releasing
-
-When you push your code to GitHub, the [GitHub Action](https://github.com/changesets/action) will run the `release` script defined in the root `package.json`:
-
-```bash
+```sh
 turbo run build --filter=docs^... && changeset publish
 ```
 
-Turborepo runs the `build` script for all publishable packages (excluding docs) and publishes the packages to npm. By default, this example includes `acme` as the npm organization. To change this, do the following:
+This builds the documentation application's dependencies without building Storybook. The documentation and shared configuration packages are private; only `@acme/ui` is publishable.
 
-- Rename folders in `packages/*` to replace `acme` with your desired scope
-- Search and replace `acme` with your desired scope
-- Re-run `pnpm install`
-
-To publish packages to a private npm organization scope, **remove** the following from each of the `package.json`'s
-
-```diff
-- "publishConfig": {
--  "access": "public"
-- },
-```
+Before publishing, replace the `@acme` package scope and all its import references with your npm organization, then run `pnpm install`. To publish privately, change the library's `publishConfig.access` and the Changesets `access` setting to `restricted`.

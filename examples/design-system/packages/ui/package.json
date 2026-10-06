@@ -3,30 +3,39 @@
   "version": "0.0.0",
   "sideEffects": false,
   "license": "MIT",
+  "files": [
+    "dist"
+  ],
   "exports": {
     "./button": {
-      "types": "./src/button.tsx",
-      "import": "./dist/button.mjs",
-      "require": "./dist/button.js"
+      "import": {
+        "types": "./dist/button.d.mts",
+        "default": "./dist/button.mjs"
+      },
+      "require": {
+        "types": "./dist/button.d.ts",
+        "default": "./dist/button.js"
+      }
     }
   },
   "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
     "lint": "eslint . --max-warnings 0",
+    "check-types": "tsc --noEmit",
     "clean": "rm -rf .turbo node_modules dist"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
-    "@types/react": "^18.2.61",
-    "@types/react-dom": "^18.2.19",
-    "eslint": "^8.57.0",
     "@repo/typescript-config": "workspace:*",
-    "tsup": "^8.0.2",
-    "typescript": "5.5.4"
+    "@types/react": "19.3.0",
+    "eslint": "10.12.0",
+    "react": "19.3.0",
+    "tsdown": "0.23.0",
+    "typescript": "7.0.2"
   },
-  "dependencies": {
-    "react": "^18.2.0"
+  "peerDependencies": {
+    "react": "19.3.0"
   },
   "publishConfig": {
     "access": "public"
