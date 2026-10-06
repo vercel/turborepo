@@ -126,6 +126,7 @@ fn build_vendored(link_mode: LinkMode) {
                 let deployment_target = env::var("MACOSX_DEPLOYMENT_TARGET")
                     .expect("MACOSX_DEPLOYMENT_TARGET must be set for macOS builds");
                 set_ghostty_macos_deployment_target(&dir, &deployment_target);
+                localize_libsystem_symbols_in_every_archive_member(&dir);
             }
             dir
         }
@@ -195,6 +196,10 @@ fn build_vendored(link_mode: LinkMode) {
     }
 
     run(build, "zig build");
+
+    if target.contains("apple-darwin") && matches!(link_mode, LinkMode::Static) {
+        assert_libsystem_symbols_not_overridden(&install_prefix.join("lib/libghostty-vt.a"));
+    }
 
     let lib_dir = install_prefix.join("lib");
     let include_dir = install_prefix.join("include");
@@ -423,6 +428,92 @@ fn set_ghostty_macos_deployment_target(ghostty_dir: &Path, deployment_target: &s
 
     std::fs::write(&config_path, source.replacen(old, &new, 1))
         .unwrap_or_else(|error| panic!("failed to write {}: {error}", config_path.display()));
+}
+
+/// Libc symbols that the static library must leave to libSystem. If the
+/// archive defines them globally, the linker binds every caller in the final
+/// executable to them, replacing libSystem's `memset` and friends for the whole
+/// process. Ghostty's own `libsystem_override.sh` removes these definitions.
+const LIBSYSTEM_SYMBOLS: [&str; 6] = [
+    "_bcmp", "_memcmp", "_memcpy", "_memmove", "_memset", "_strlen",
+];
+
+/// Marker line in `libsystem_override.sh` at which the archive rewrite starts.
+const LIBSYSTEM_OVERRIDE_REWRITE_START: &str = "xcrun ar x \"$out\" compiler_rt.o";
+
+/// The archive rewrite, applied to every member instead of only
+/// `compiler_rt.o`.
+const LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS: &str = r#"xcrun ar x "$out"
+sort -u localize.txt >loc.txt
+for member in *.o; do
+  chmod 644 "$member"
+  xcrun nm -g "$member" | awk '$2 ~ /^[A-TV-Z]$/ {print $3}' | sort -u >all.txt
+  if comm -12 all.txt loc.txt | grep -q .; then
+    comm -23 all.txt loc.txt >keep.txt
+    xcrun nmedit -s keep.txt "$member"
+  fi
+done
+xcrun ar r "$out" *.o
+xcrun ranlib "$out" 2>/dev/null || true
+"#;
+
+/// Ghostty's `libsystem_override.sh` localises the libc symbols that Zig
+/// defines only in the `compiler_rt.o` archive member. Zig 0.16 also defines
+/// `memset` in the library's main object, where the script leaves it global, so
+/// the executable ends up using Zig's `memset` instead of libSystem's. Rewrite
+/// the script to localise them in every member.
+fn localize_libsystem_symbols_in_every_archive_member(ghostty_dir: &Path) {
+    let script_path = ghostty_dir.join("src/build/libsystem_override.sh");
+    let source = std::fs::read_to_string(&script_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", script_path.display()));
+
+    if source.contains(LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS) {
+        return;
+    }
+    let start = source
+        .find(LIBSYSTEM_OVERRIDE_REWRITE_START)
+        .unwrap_or_else(|| {
+            panic!(
+                "expected the compiler_rt.o archive rewrite in {}",
+                script_path.display()
+            )
+        });
+
+    let rewritten = format!(
+        "{}{LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS}",
+        &source[..start]
+    );
+    std::fs::write(&script_path, rewritten)
+        .unwrap_or_else(|error| panic!("failed to write {}: {error}", script_path.display()));
+}
+
+/// Fails the build if the static library still defines libSystem's symbols
+/// globally.
+fn assert_libsystem_symbols_not_overridden(archive: &Path) {
+    let output = Command::new("nm")
+        .arg("-gU")
+        .arg(archive)
+        .output()
+        .unwrap_or_else(|error| panic!("failed to execute nm on {}: {error}", archive.display()));
+    assert!(
+        output.status.success(),
+        "nm failed on {}: {}",
+        archive.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let listing = String::from_utf8_lossy(&output.stdout);
+    let overridden = listing
+        .lines()
+        .filter_map(|line| line.split_whitespace().last())
+        .filter(|symbol| LIBSYSTEM_SYMBOLS.contains(symbol))
+        .collect::<Vec<_>>();
+    assert!(
+        overridden.is_empty(),
+        "{} exports {overridden:?}, which would replace libSystem's implementations in the final \
+         executable",
+        archive.display()
+    );
 }
 
 fn run(mut command: Command, context: &str) {
