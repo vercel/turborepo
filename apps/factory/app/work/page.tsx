@@ -17,21 +17,19 @@ const AGENT_RUNS_URL =
 export default async function WorkPage() {
   const examples = listExamples();
   const fetchedModels = await fetchGatewayModels().catch(() => []);
-  const models =
-    fetchedModels.length > 0
-      ? fetchedModels
-      : [
-          {
-            id: DEFAULT_WORKSPACE_MODEL,
-            name: "GPT-5.6 Sol",
-            ownedBy: "openai"
-          }
-        ];
-  const defaultModel = models.some(
+  const models = fetchedModels.some(
     (model) => model.id === DEFAULT_WORKSPACE_MODEL
   )
-    ? DEFAULT_WORKSPACE_MODEL
-    : models[0].id;
+    ? fetchedModels
+    : [
+        ...fetchedModels,
+        {
+          id: DEFAULT_WORKSPACE_MODEL,
+          name: "GPT-6.1 Sol",
+          ownedBy: "openai"
+        }
+      ];
+  const defaultModel = DEFAULT_WORKSPACE_MODEL;
   return (
     <main
       id="main-content"
@@ -40,6 +38,9 @@ export default async function WorkPage() {
       <h1 className="mt-8 text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]">
         Start work
       </h1>
+      <div className="border-b border-border py-8">
+        <WorkspaceComposer defaultModel={defaultModel} models={models} />
+      </div>
       <section className="py-6 pb-16" aria-labelledby="manual-schedules-title">
         <header>
           <h2
@@ -77,49 +78,6 @@ export default async function WorkPage() {
             </h3>
             <RunPerformance agentRunsUrl={AGENT_RUNS_URL} />
           </section>
-        </div>
-      </section>
-      <section
-        className="grid grid-cols-[minmax(220px,4fr)_minmax(0,8fr)] gap-x-16 border-b border-border py-[clamp(64px,10vw,120px)] max-[720px]:block max-[720px]:py-16"
-        aria-labelledby="chat-title"
-      >
-        <div className="contents max-[720px]:flex max-[720px]:items-start max-[720px]:justify-between max-[720px]:gap-4 max-[520px]:flex-col-reverse">
-          <div className="col-start-1 row-span-4 max-[720px]:block">
-            <h2
-              className="text-[clamp(1.5rem,3vw,2rem)] leading-tight font-semibold tracking-[-0.04em]"
-              id="chat-title"
-            >
-              New workspace
-            </h2>
-          </div>
-          <span className="col-start-2 self-start justify-self-start font-mono text-xs tracking-[0.02em] text-muted-foreground">
-            ON DEMAND
-          </span>
-        </div>
-        <p className="col-start-2 mt-6 max-w-[68ch] text-muted-foreground text-pretty max-[720px]:mt-6">
-          Creates a durable Factory workspace on the factory image, with the
-          same sandbox checkout of <code>main</code> the scheduled operations
-          use. Return later to review the transcript and continue the work in
-          the same durable Eve session.
-        </p>
-        <dl className="col-start-2 my-10 grid grid-cols-3 gap-6 max-[520px]:grid-cols-1 max-[520px]:gap-4">
-          <div className="min-w-0 border-t border-border pt-3">
-            <dt className="text-xs text-muted-foreground">Scope</dt>
-            <dd className="mt-1.5 text-sm">
-              <code>durable sandbox</code>
-            </dd>
-          </div>
-          <div className="min-w-0 border-t border-border pt-3">
-            <dt className="text-xs text-muted-foreground">Execution</dt>
-            <dd className="mt-1.5 text-sm">Multi-turn</dd>
-          </div>
-          <div className="min-w-0 border-t border-border pt-3">
-            <dt className="text-xs text-muted-foreground">Output</dt>
-            <dd className="mt-1.5 text-sm">Durable transcript</dd>
-          </div>
-        </dl>
-        <div className="col-start-2 border-t border-border pt-8">
-          <WorkspaceComposer defaultModel={defaultModel} models={models} />
         </div>
       </section>
     </main>

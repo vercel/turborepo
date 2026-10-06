@@ -31,7 +31,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html className="min-w-80 bg-background" lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background font-sans text-foreground antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-dvh bg-background font-sans text-foreground antialiased`}
       >
         <a
           className="fixed top-3 left-3 z-10 -translate-y-[200%] rounded-md bg-primary px-3 py-2 text-primary-foreground focus:translate-y-0"
@@ -39,7 +39,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         >
           Skip to content
         </a>
-        <div className="grid min-h-screen grid-cols-[240px_minmax(0,1fr)] max-[720px]:block">
+        <div className="grid min-h-dvh grid-cols-[240px_minmax(0,1fr)] max-[720px]:block">
           <Navigation />
           {children}
         </div>

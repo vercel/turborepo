@@ -4,10 +4,11 @@ The operator page and its API routes rely on Vercel Deployment Protection for ac
 
 ## Workspaces
 
-"Start work" creates a durable Factory workspace backed by AI SDK
-`HarnessAgent`. Operators choose fx, Claude Code, Codex, Cursor, OpenCode, or Pi
-when creating the workspace. Each workspace has one server-side record, named
-Vercel Sandbox, resumable harness session, transcript, and shareable
+"Start work" creates a durable Factory workspace backed by Eve. Factory inspects
+the repository, edits files, and runs validation directly with its sandbox shell
+and file tools, using the operator's selected model. Each workspace has one
+server-side record, named Vercel Sandbox, resumable Eve session, transcript, and
+shareable
 `/workspaces/<id>` URL. Eve advances the workspace one turn at a time, so
 another browser or operator can reopen the URL and continue the same
 conversation and checkout.
@@ -27,12 +28,15 @@ with a threaded rationale and get an investigation report only. Only
 high-confidence issues proceed to a focused fix, validation, and a draft
 `agents/issue-*` pull request.
 
-The channel also follows Factory-created pull requests whose head is an
-`agents/*` branch. Timeline and inline review comments from collaborators with
-write access start a turn without requiring an `@mention`. The turn checks out
-the current PR head, replies in the same GitHub thread, and can publish validated
+Factory can create and update pull requests using any Git branch name; no
+prefix is required. Automated runs still derive their daily branch names.
+
+The channel also follows pull requests in `vercel/turborepo` regardless of their
+branch names. Timeline and inline review comments from collaborators with write
+access start a turn without requiring an `@mention`. The turn checks out the
+current PR head, replies in the same GitHub thread, and can publish validated
 feedback changes back to that exact branch. Bot, external-user, non-PR, and
-non-Factory-branch comments fail closed and are ignored.
+other-repository comments do not automatically start feedback turns.
 
 Workspace records live as private `factory-workspaces/v1/<id>.json` Blob
 objects. Mutation routes require an exact same-origin request and action header;
@@ -130,10 +134,8 @@ and recent builds, and can start a build for the current `main` head with
 Eve freezes `revalidationKey` at build time, so the template rotates when
 the toolchain fingerprint changes or a newer image is published, and
 boots from the published snapshot when one matches. Each session then
-fast-forwards its checkout to the current `main`. New HarnessAgent workspaces do the same,
-and provision the shared image phases before their first turn when no matching
-image exists. Resumed workspaces preserve their checkout, selected harness session, and
-uncommitted changes.
+fast-forwards its checkout to the current `main`. Resumed workspaces preserve
+their checkout, Eve session, and uncommitted changes.
 
 A toolchain change provisions the template from scratch during the next
 Vercel build, because Eve prewarms sandbox templates there. Measured
@@ -148,7 +150,7 @@ Configure `GITHUB_TOKEN_EXCHANGE_URL`. The exchange endpoint receives Vercel OID
 ## Agent Runs
 
 The operator page links to Vercel Agent Runs, the audit record for Eve schedules.
-HarnessAgent workspace turns are audited through Workflow observability.
+Eve workspace turns are audited through Workflow observability.
 Workspace Blob records hold the resumable UI transcript and control-plane
 state, not the complete execution audit.
 

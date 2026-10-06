@@ -1,0 +1,39 @@
+[package]
+name = "turborepo-download"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+publish = false
+description = "Bounded metadata reads and checksum-verifying artifact downloads"
+
+[lints]
+workspace = true
+
+[dependencies]
+hex = { workspace = true }
+reqwest = { workspace = true, features = [
+  "rustls-tls-native-roots",
+  "rustls-tls-webpki-roots",
+] }
+rustls = { version = "0.23.36", default-features = false, features = [
+  "ring",
+  "std",
+] }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+url = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt",
+  "net",
+  "io-util",
+  "process",
+] }
+tokio-rustls = { version = "0.26.0", default-features = false, features = [
+  "ring",
+  "tls12",
+] }

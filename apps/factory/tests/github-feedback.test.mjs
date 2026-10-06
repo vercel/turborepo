@@ -10,7 +10,7 @@ import {
 } from "../agent/lib/github-feedback.ts";
 
 const trusted = {
-  branch: "agents/examples-basic-2026-08-25",
+  branch: "feature/fix-cache",
   conversationKind: "review_thread",
   permission: "write",
   pullRequestNumber: 123,
@@ -21,14 +21,31 @@ const trusted = {
 test("accepts trusted feedback on Factory pull request review threads", () => {
   assert.equal(isTrustedFactoryPullRequestFeedback(trusted), true);
   assert.equal(
-    isTrustedFactoryPullRequestFeedback({ ...trusted, permission: "admin" }),
+    isTrustedFactoryPullRequestFeedback({ ...trusted, permission: "maintain" }),
     true
   );
 });
 
+test("accepts trusted feedback regardless of branch naming", () => {
+  for (const branch of [
+    "agents/examples-basic-2026-08-25",
+    "fix-cache",
+    "feature/fix-cache",
+    "maintainer/cache#123",
+    "修复/缓存"
+  ]) {
+    assert.equal(
+      isTrustedFactoryPullRequestFeedback({ ...trusted, branch }),
+      true
+    );
+  }
+});
+
 test("rejects comments that cannot safely drive Factory changes", () => {
   for (const candidate of [
-    { ...trusted, branch: "feature/not-factory" },
+    { ...trusted, branch: "" },
+    { ...trusted, branch: undefined },
+    { ...trusted, branch: 123 },
     { ...trusted, conversationKind: "issue" },
     { ...trusted, conversationKind: "pull_request" },
     { ...trusted, permission: "read" },
@@ -53,7 +70,7 @@ test("authorizes updates only for the branch authenticated by the webhook", () =
     true
   );
   assert.equal(
-    isAuthorizedFactoryPullRequestUpdate(auth, "agents/another-pr"),
+    isAuthorizedFactoryPullRequestUpdate(auth, "feature/another-pr"),
     false
   );
   assert.equal(

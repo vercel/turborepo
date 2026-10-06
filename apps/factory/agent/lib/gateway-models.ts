@@ -53,3 +53,14 @@ export async function fetchGatewayModels(): Promise<readonly GatewayModel[]> {
   }
   return parseGatewayModels(await response.json());
 }
+
+/** Use only catalogued Fast variants, never invent a model ID. */
+export function fastModelOption<T extends { readonly id: string }>(
+  models: readonly T[],
+  value: string
+): T | undefined {
+  const alternate = value.endsWith("-fast")
+    ? value.slice(0, -"-fast".length)
+    : `${value}-fast`;
+  return models.find((model) => model.id === alternate);
+}

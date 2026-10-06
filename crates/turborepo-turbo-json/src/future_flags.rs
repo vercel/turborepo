@@ -147,9 +147,11 @@ pub struct FutureFlags {
     pub experimental_task_command: bool,
     /// Opt into experimental setup features that are still in progress.
     ///
-    /// All future setup surfaces must require this flag. The `turbo.lock`
-    /// format is unstable. This parser-only foundation ships no setup commands
-    /// and does not interpret `turbo.lock` or change run or hash behavior.
+    /// Setup invocation requires this flag; help is available without it.
+    /// The `turbo.lock` format is unstable. Only parsing and help are
+    /// implemented; provisioning, planning, and checking return a
+    /// diagnostic. Setup does not interpret `turbo.lock` or change run or
+    /// hash behavior.
     #[serde(default)]
     pub experimental_setup: bool,
 }

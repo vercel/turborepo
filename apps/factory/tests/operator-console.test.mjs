@@ -5,10 +5,10 @@ import {
   isOperatorSessionRequest,
   operatorSessionRequestPrincipal,
   operatorSessionPrincipal,
+  operatorModelSelection,
   OPERATOR_SESSION_ACTION,
   OPERATOR_SESSION_PRINCIPAL,
   OPERATOR_THINKING_EFFORT_HEADER,
-  selectedOperatorHarness,
   selectedOperatorModel,
   selectedOperatorThinkingEffort
 } from "../agent/lib/operator-console.ts";
@@ -107,13 +107,8 @@ test("workspace sessions run as a user, never as the app principal", () => {
 });
 
 test("workspace principals carry their selected model", () => {
-  const principal = operatorSessionPrincipal(
-    "openai/gpt-5.6-sol",
-    "codex",
-    "high"
-  );
+  const principal = operatorSessionPrincipal("openai/gpt-5.6-sol", "high");
   assert.equal(selectedOperatorModel(principal), "openai/gpt-5.6-sol");
-  assert.equal(selectedOperatorHarness(principal), "codex");
   assert.equal(selectedOperatorThinkingEffort(principal), "high");
   assert.equal(isAppPrincipal(principal), false);
 });
@@ -122,7 +117,6 @@ test("workspace principals ignore malformed model identifiers", () => {
   const principal = operatorSessionPrincipal("not a model");
   assert.equal(principal, OPERATOR_SESSION_PRINCIPAL);
   assert.equal(selectedOperatorModel(principal), undefined);
-  assert.equal(selectedOperatorHarness(principal), undefined);
   assert.equal(selectedOperatorThinkingEffort(principal), undefined);
 });
 
@@ -138,5 +132,61 @@ test("workspace session requests carry valid thinking effort", () => {
       )
     ),
     undefined
+  );
+});
+
+test("direct model calls preserve model and thinking effort across follow-up turns", () => {
+  const initiator = operatorSessionPrincipal("openai/gpt-6.1-sol", "high");
+  assert.deepEqual(operatorModelSelection(initiator), {
+    model: "openai/gpt-6.1-sol",
+    modelOptions: { providerOptions: { openai: { reasoningEffort: "high" } } }
+  });
+  assert.deepEqual(
+    operatorModelSelection(
+      operatorSessionPrincipal(undefined, "low"),
+      initiator
+    ),
+    {
+      model: "openai/gpt-6.1-sol",
+      modelOptions: { providerOptions: { openai: { reasoningEffort: "low" } } }
+    }
+  );
+  assert.deepEqual(
+    operatorModelSelection(OPERATOR_SESSION_PRINCIPAL, initiator),
+    operatorModelSelection(initiator)
+  );
+  assert.equal(operatorModelSelection(OPERATOR_SESSION_PRINCIPAL), undefined);
+});
+
+test("direct model calls apply provider-specific thinking controls", () => {
+  assert.deepEqual(
+    operatorModelSelection(
+      operatorSessionPrincipal("anthropic/claude-opus-5.5", "medium")
+    ),
+    {
+      model: "anthropic/claude-opus-5.5",
+      modelOptions: { providerOptions: { anthropic: { effort: "medium" } } }
+    }
+  );
+  assert.deepEqual(
+    operatorModelSelection(
+      operatorSessionPrincipal("google/gemini-3.5-flash", "high")
+    ),
+    {
+      model: "google/gemini-3.5-flash",
+      modelOptions: {
+        providerOptions: {
+          google: { thinkingConfig: { thinkingLevel: "high" } }
+        }
+      }
+    }
+  );
+  assert.deepEqual(
+    operatorModelSelection(operatorSessionPrincipal("other/model", "high")),
+    { model: "other/model" }
+  );
+  assert.deepEqual(
+    operatorModelSelection(operatorSessionPrincipal("openai/gpt-6.1-sol")),
+    { model: "openai/gpt-6.1-sol" }
   );
 });

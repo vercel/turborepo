@@ -9,21 +9,12 @@
  * past a preflight either.
  */
 
-import type { WorkspaceHarness, WorkspaceThinkingEffort } from "./workspace";
+import type { WorkspaceThinkingEffort } from "./workspace";
 
 const WORKSPACE_THINKING_EFFORT_IDS = new Set<WorkspaceThinkingEffort>([
   "low",
   "medium",
   "high"
-]);
-
-const WORKSPACE_HARNESS_IDS = new Set<WorkspaceHarness>([
-  "fx",
-  "claude-code",
-  "codex",
-  "cursor",
-  "opencode",
-  "pi"
 ]);
 
 function isWorkspaceThinkingEffort(
@@ -32,13 +23,6 @@ function isWorkspaceThinkingEffort(
   return (
     typeof value === "string" &&
     WORKSPACE_THINKING_EFFORT_IDS.has(value as WorkspaceThinkingEffort)
-  );
-}
-
-function isWorkspaceHarness(value: unknown): value is WorkspaceHarness {
-  return (
-    typeof value === "string" &&
-    WORKSPACE_HARNESS_IDS.has(value as WorkspaceHarness)
   );
 }
 
@@ -72,7 +56,6 @@ export const OPERATOR_SESSION_PRINCIPAL = {
 
 export function operatorSessionPrincipal(
   model?: string,
-  harness?: WorkspaceHarness,
   thinkingEffort?: WorkspaceThinkingEffort
 ) {
   const attributes: Record<string, string> = {};
@@ -81,9 +64,6 @@ export function operatorSessionPrincipal(
     /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._:-]*$/i.test(model)
   ) {
     attributes.selectedModel = model;
-  }
-  if (harness !== undefined && isWorkspaceHarness(harness)) {
-    attributes.selectedHarness = harness;
   }
   if (
     thinkingEffort !== undefined &&
@@ -114,11 +94,44 @@ export function selectedOperatorThinkingEffort(
   return isWorkspaceThinkingEffort(effort) ? effort : undefined;
 }
 
-export function selectedOperatorHarness(
-  auth: OperatorAuth | null | undefined
-): WorkspaceHarness | undefined {
-  const harness = auth?.attributes.selectedHarness;
-  return isWorkspaceHarness(harness) ? harness : undefined;
+/** Preserve workspace reasoning controls on Eve's direct model calls. */
+export function operatorModelSelection(
+  current: OperatorAuth | null | undefined,
+  initiator?: OperatorAuth | null
+) {
+  const model =
+    selectedOperatorModel(current) ?? selectedOperatorModel(initiator);
+  if (!model) return undefined;
+  const effort =
+    selectedOperatorThinkingEffort(current) ??
+    selectedOperatorThinkingEffort(initiator);
+  if (!effort) return { model };
+  const providerOptions: Record<
+    string,
+    {
+      reasoningEffort?: string;
+      effort?: string;
+      thinkingConfig?: { thinkingLevel: string };
+    }
+  > = {};
+  switch (model.split("/", 1)[0]) {
+    case "openai": {
+      providerOptions.openai = { reasoningEffort: effort };
+      break;
+    }
+    case "anthropic": {
+      providerOptions.anthropic = { effort };
+      break;
+    }
+    case "google": {
+      providerOptions.google = { thinkingConfig: { thinkingLevel: effort } };
+      break;
+    }
+    default: {
+      return { model };
+    }
+  }
+  return { model, modelOptions: { providerOptions } };
 }
 
 export function operatorSessionRequestPrincipal(
@@ -126,7 +139,6 @@ export function operatorSessionRequestPrincipal(
 ) {
   const effort = request.headers.get(OPERATOR_THINKING_EFFORT_HEADER);
   return operatorSessionPrincipal(
-    undefined,
     undefined,
     isWorkspaceThinkingEffort(effort) ? effort : undefined
   );

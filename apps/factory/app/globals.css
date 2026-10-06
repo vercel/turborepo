@@ -108,3 +108,13 @@
     animation: none;
   }
 }
+
+/* iOS zooms focused form controls with text smaller than 16px. Keep browser
+   zoom available and preserve the compact desktop typography. */
+@media (max-width: 720px), (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
+}

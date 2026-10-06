@@ -332,6 +332,126 @@ fn config_accepts_run_configuration_flags_before_command() {
 }
 
 #[test]
+fn setup_parser_keeps_controls_separate_from_tasks() {
+    use crate::cli::SetupArgs;
+
+    for flag in [
+        "--plan",
+        "--check",
+        "--force",
+        "--frozen",
+        "--no-frozen",
+        "--offline",
+        "--tools-only",
+        "--no-lock",
+        "--update-lock",
+    ] {
+        let args = parse_args(["turbo", "--verbosity=2", "setup", flag, "--cwd", "repo"]).unwrap();
+        assert!(matches!(args.command, Some(Command::Setup { .. })));
+        assert!(args.run_args().is_none() && args.execution_args().is_none());
+        assert_eq!(
+            args.selectors(),
+            (RunSelector::default(), ExecutionSelector::default())
+        );
+        assert_eq!(
+            super::configuration::cli_overrides_from_args(&args)
+                .unwrap()
+                .force,
+            None
+        );
+        assert_eq!(args.verbosity.verbosity, Some(2));
+        assert_eq!(args.cwd, Some("repo".into()));
+    }
+    assert_eq!(
+        parse_args(["turbo", "setup"]).unwrap().command,
+        Some(Command::Setup {
+            setup_args: SetupArgs::default()
+        })
+    );
+    for flags in [
+        ["--plan", "--force"],
+        ["--plan", "--update-lock"],
+        ["--no-lock", "--no-frozen"],
+    ] {
+        assert!(parse_args(["turbo", "setup", flags[0], flags[1]]).is_ok());
+    }
+}
+
+#[test]
+fn setup_explicit_conflicts_are_order_independent() {
+    for (a, b) in [
+        ("--frozen", "--no-frozen"),
+        ("--frozen", "--no-lock"),
+        ("--frozen", "--update-lock"),
+        ("--no-lock", "--update-lock"),
+        ("--plan", "--check"),
+        ("--check", "--force"),
+        ("--check", "--update-lock"),
+        ("--check", "--no-lock"),
+    ] {
+        for flags in [[a, b], [b, a]] {
+            let error = parse_args(["turbo", "setup", flags[0], flags[1]]).unwrap_err();
+            assert!(error.contains("cannot be used"), "{flags:?}: {error}");
+        }
+    }
+}
+
+#[test]
+fn setup_rejects_tasks_selectors_subcommands_and_exec_syntax() {
+    for tail in [
+        vec!["build"],
+        vec!["update-lock"],
+        vec!["lock"],
+        vec!["--force", "config"],
+        vec!["--", "echo", "hello"],
+        vec!["--filter", "web"],
+        vec!["--affected"],
+        vec!["--dry"],
+        vec!["--node"],
+        vec!["--force=false"],
+        vec!["--plan=true"],
+        vec!["--frozen=false"],
+        vec!["--no-frozen=true"],
+        vec!["--plan", "--plan"],
+    ] {
+        assert!(
+            parse_args(["turbo", "setup"].into_iter().chain(tail.iter().copied())).is_err(),
+            "{tail:?}"
+        );
+    }
+    assert!(parse_args(["turbo", "run", "build", "--update-lock"]).is_err());
+}
+
+#[test]
+fn setup_global_classification_uses_the_command_grammar() {
+    for (words, expected) in [
+        (vec!["setup"], true),
+        (vec!["setup", "--help"], true),
+        (vec!["setup", "--unknown"], true),
+        (vec!["--cwd", "repo", "setup", "--offline"], true),
+        (vec!["--token", "setup", "setup"], true),
+        (vec!["--root-turbo-json=setup", "setup"], true),
+        (vec!["run", "setup"], false),
+        (vec!["build", "--", "setup"], false),
+        (vec!["--token", "setup", "run", "build"], false),
+        (vec!["--cwd", "setup", "bin"], false),
+        (vec!["--root-turbo-json", "setup", "bin"], false),
+    ] {
+        let words: Vec<_> = ["turbo"]
+            .into_iter()
+            .chain(words)
+            .map(OsString::from)
+            .collect();
+        assert_eq!(Args::is_setup_command(&words), expected, "{words:?}");
+    }
+}
+
+#[test]
+fn setup_short_help() {
+    assert_snapshot!(Args::render_help(get_subcommand("setup"), false).unwrap());
+}
+
+#[test]
 fn turbo_short_help() {
     assert_snapshot!(Args::render_help(Args::command(), false).unwrap());
 }

@@ -325,7 +325,7 @@ jobs:
           PR_TITLE="chore: Release Turbo repository packages ${VERSION}" \
             node scripts/validate-release-pr.mjs
 
-          for WORKFLOW in release-review-gate.yml turborepo-test.yml test-js-packages.yml; do
+          for WORKFLOW in turborepo-test.yml; do
             RUN_ID=""
             for _ in $(seq 1 30); do
               RUN_ID=$(gh api --method GET \

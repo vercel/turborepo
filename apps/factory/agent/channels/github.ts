@@ -32,15 +32,12 @@ export default githubChannel({
     if (merged === null) return null;
 
     try {
-      const updated = await markPullRequestSlackNotificationMerged(
+      // The stored Slack notification identifies Factory-created PRs, not
+      // their branch names. Untracked merges need no notification update.
+      await markPullRequestSlackNotificationMerged(
         pullRequest.pullRequestNumber,
         formatMergedPullRequestSlackNotification(merged.title, merged.url)
       );
-      if (!updated) {
-        console.warn("Could not find the Factory pull request Slack message.", {
-          pullRequestNumber: pullRequest.pullRequestNumber
-        });
-      }
     } catch (error) {
       console.warn("Could not update the Factory pull request Slack message.", {
         error,

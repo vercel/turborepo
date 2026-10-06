@@ -1,38 +1,32 @@
-import { defineAgent, defineDynamic } from "eve";
+import { defineAgent, defineDynamic, type DynamicResolveContext } from "eve";
 
 import {
   GPT_SOL_MODEL,
   selectPerformanceModels
 } from "./lib/performance-models.js";
-import { selectedOperatorModel } from "./lib/operator-console.js";
+import { operatorModelSelection } from "./lib/operator-console.js";
 import { sessionDate } from "./lib/repo.js";
 
+function resolveModel(_event: unknown, ctx: DynamicResolveContext) {
+  const operatorSelection = operatorModelSelection(
+    ctx.session.auth.current,
+    ctx.session.auth.initiator
+  );
+  if (operatorSelection) return operatorSelection;
+  // Dynamic models have no compiled default; always return a concrete model.
+  try {
+    return selectPerformanceModels(sessionDate(ctx.session.id)).authorModel;
+  } catch {
+    return GPT_SOL_MODEL;
+  }
+}
+
 export default defineAgent({
-  build: {
-    // Harness adapters load sandbox bootstrap assets relative to import.meta.url.
-    // Preserve their package layout in Eve's hosted output.
-    externalDependencies: [
-      "@ai-sdk/harness-acp",
-      "@ai-sdk/harness-claude-code",
-      "@ai-sdk/harness-codex",
-      "@ai-sdk/harness-opencode"
-    ]
-  },
   model: defineDynamic({
     events: {
-      // A dynamic model has no compiled default and a resolver that throws
-      // fails the turn, so keep supplying the model the removed `fallback`
-      // option used to cover when a session id cannot be parsed.
-      "session.started": (_event, ctx) => {
-        const operatorModel = selectedOperatorModel(ctx.session.auth.current);
-        if (operatorModel) return operatorModel;
-        try {
-          return selectPerformanceModels(sessionDate(ctx.session.id))
-            .authorModel;
-        } catch {
-          return GPT_SOL_MODEL;
-        }
-      }
+      "session.started": resolveModel,
+      // Follow-up turns may change effort but omit the original model selection.
+      "turn.started": resolveModel
     }
   })
 });

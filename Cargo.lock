@@ -7693,6 +7693,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-archive"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "hex",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "turborepo-download",
+]
+
+[[package]]
 name = "turborepo-auth"
 version = "0.1.0"
 dependencies = [
@@ -7986,6 +7999,21 @@ dependencies = [
  "dirs-next",
  "thiserror 2.0.18",
  "turbopath",
+]
+
+[[package]]
+name = "turborepo-download"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "reqwest",
+ "rustls",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-rustls",
+ "url",
 ]
 
 [[package]]
@@ -8331,6 +8359,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-package-manager"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "turborepo-package-watcher"
 version = "0.1.0"
 dependencies = [
@@ -8349,6 +8384,10 @@ dependencies = [
  "turborepo-scm",
  "turborepo-turbo-json",
 ]
+
+[[package]]
+name = "turborepo-platform"
+version = "0.1.0"
 
 [[package]]
 name = "turborepo-process"
@@ -8494,6 +8533,7 @@ dependencies = [
  "turborepo-graph-utils",
  "turborepo-lockfile-hash",
  "turborepo-lockfiles",
+ "turborepo-package-manager",
  "turborepo-rayon-compat",
  "wax",
  "which",
@@ -8725,6 +8765,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-setup"
+version = "0.1.0"
+dependencies = [
+ "semver 1.0.23",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "turborepo-package-manager",
+ "turborepo-platform",
+]
+
+[[package]]
 name = "turborepo-shim"
 version = "0.1.0"
 dependencies = [
@@ -8746,6 +8799,7 @@ dependencies = [
  "tracing",
  "turbo-updater",
  "turbopath",
+ "turborepo-platform",
  "turborepo-repository",
  "turborepo-ui",
  "which",
