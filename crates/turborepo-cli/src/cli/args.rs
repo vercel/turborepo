@@ -1428,6 +1428,9 @@ pub enum QuerySubcommand {
 pub enum CacheCommand {
     /// Upload task artifacts from the local cache to the Remote Cache
     Push(CachePushArgs),
+    /// List the 10 most recent entries in the local cache
+    #[usage(alias = "ls")]
+    List,
 }
 
 #[derive(UsageArgs, Clone, Debug, PartialEq)]

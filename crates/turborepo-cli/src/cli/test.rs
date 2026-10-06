@@ -8,9 +8,9 @@ use turborepo_run_opts::{ExecutionSelector, RunSelector};
 use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsMode};
 
 use crate::cli::{
-    CachePushArgs, ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
-    GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
-    RunArgs, should_maintain_agent_guidance,
+    CacheCommand, CachePushArgs, ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs,
+    GenerateCommand, GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath,
+    OutputLogsModeArg, RunArgs, should_maintain_agent_guidance,
 };
 
 fn parse_args<I, S>(args: I) -> Result<Args, String>
@@ -510,6 +510,22 @@ fn cache_push_short_help() {
         .subcommands
         .iter()
         .find(|command| command.name == "push")
+        .unwrap();
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn cache_short_help() {
+    let cmd = get_subcommand("cache");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn cache_list_short_help() {
+    let cmd = get_subcommand("cache")
+        .subcommands
+        .iter()
+        .find(|command| command.name == "list")
         .unwrap();
     assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
@@ -1960,6 +1976,19 @@ fn test_parse_cache_push() {
             upload_timeout: Some(0),
         })
     );
+}
+
+#[test]
+fn test_parse_cache_list() {
+    let list = parse_args(["turbo", "cache", "list"]).unwrap();
+    assert_eq!(
+        list.command,
+        Some(Command::Cache {
+            command: CacheCommand::List,
+        })
+    );
+    assert_eq!(parse_args(["turbo", "cache", "ls"]).unwrap(), list);
+    assert!(parse_args(["turbo", "cache", "list", "0123abcd"]).is_err());
 }
 
 #[test]

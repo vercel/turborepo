@@ -3,7 +3,7 @@ title: cache
 description: API reference for the `turbo cache` command
 product: turborepo
 type: reference
-summary: Reference for the `turbo cache` command that manages cached task artifacts, including uploading local artifacts to Remote Cache.
+summary: Reference for the `turbo cache` command that manages cached task artifacts, including listing recent local cache entries and uploading local artifacts to Remote Cache.
 related:
   - /docs/core-concepts/remote-caching
   - /docs/reference/link
@@ -17,6 +17,25 @@ turbo cache <subcommand>
 Manage cached task artifacts.
 
 ## Subcommands
+
+### `list`
+
+```bash title="Terminal"
+turbo cache list
+```
+
+Alias: `turbo cache ls`
+
+Show the 10 most recently cached task artifacts in the local filesystem cache, newest first. The local cache directory is set by [`cacheDir`](/docs/reference/configuration#cachedir) or [`TURBO_CACHE_DIR`](/docs/reference/system-environment-variables#turbo_cache_dir).
+
+```txt title="Terminal"
+HASH              CACHED AT
+2f1e0d9c8b7a6543  2026-10-06 14:03:12
+```
+
+`CACHED AT` is the time, in your local time zone, when the artifact was written to this machine's local cache. That is either when the task ran, or when the artifact was downloaded from [Remote Cache](/docs/core-concepts/remote-caching). Restoring a cache hit does not update it.
+
+Use a hash from this list with [`turbo cache push`](#push) to upload that artifact to Remote Cache.
 
 ### `push`
 

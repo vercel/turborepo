@@ -1,15 +1,16 @@
+use chrono::{DateTime, Local};
 use miette::Diagnostic;
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::CacheClient;
 use turborepo_cache::{
     CacheError, LazyScmState,
-    fs::{FSCache, LocalArtifact},
+    fs::{self, FSCache, LocalArtifact},
     http::HTTPCache,
 };
 use turborepo_log::{Source, Subsystem};
 use turborepo_run_opts::RemoteCacheDisabledReason;
-use turborepo_ui::LogSinks;
+use turborepo_ui::{BOLD, LogSinks, cprintln};
 use turborepo_vercel_api::CachingStatus;
 
 use super::CommandBase;
@@ -171,4 +172,36 @@ fn upload_timeout_suffix(base: &CommandBase) -> String {
         (0, timeout) => format!(" after {timeout}s"),
         (upload_timeout, _) => format!(" after {upload_timeout}s"),
     }
+}
+
+/// How many entries `turbo cache list` shows.
+const LIST_LIMIT: usize = 10;
+
+/// Prints the most recently cached artifacts in the local cache, newest
+/// first.
+pub fn list(base: &CommandBase) -> Result<i32, Error> {
+    let cache_dir =
+        AbsoluteSystemPathBuf::from_unknown(&base.repo_root, &base.opts.cache_opts.cache_dir);
+    let artifacts = fs::recent_artifacts(&cache_dir, LIST_LIMIT)?;
+    if artifacts.is_empty() {
+        println!("No artifacts in the local cache at {cache_dir}");
+        return Ok(0);
+    }
+
+    const HASH_HEADER: &str = "HASH";
+    let width = artifacts
+        .iter()
+        .map(|artifact| artifact.hash.len())
+        .fold(HASH_HEADER.len(), usize::max);
+    cprintln!(base.color_config, BOLD, "{HASH_HEADER:<width$}  CACHED AT");
+    for artifact in &artifacts {
+        let cached_at = DateTime::<Local>::from(artifact.cached_at);
+        println!(
+            "{:<width$}  {}",
+            artifact.hash,
+            cached_at.format("%Y-%m-%d %H:%M:%S")
+        );
+    }
+
+    Ok(0)
 }

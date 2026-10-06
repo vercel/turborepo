@@ -1,4 +1,7 @@
-use std::{backtrace::Backtrace, time::Duration};
+use std::{
+    backtrace::Backtrace,
+    time::{Duration, SystemTime},
+};
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
@@ -53,10 +56,24 @@ pub struct LocalArtifact {
     pub dirty_hash: Option<String>,
 }
 
+/// An archive in the local filesystem cache, identified by its task hash.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CachedArtifact {
+    pub hash: String,
+    /// Modification time of the `<hash>.tar.zst` archive: when it was
+    /// written to this cache, either after running the task or after
+    /// downloading it from the Remote Cache.
+    pub cached_at: SystemTime,
+}
+
 /// Task hashes are hex digests; anything else could escape the cache
 /// directory when joined into a path.
+fn is_valid_hash(hash: &str) -> bool {
+    !hash.is_empty() && hash.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 fn validate_hash(hash: &str) -> Result<(), CacheError> {
-    if hash.is_empty() || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !is_valid_hash(hash) {
         return Err(CacheError::InvalidHash(hash.to_string()));
     }
     Ok(())
@@ -408,6 +425,48 @@ impl FSCache {
     pub fn evict(&self, max_age: Option<Duration>, max_size: Option<u64>) -> (u64, u64) {
         evict_cache_dir(&self.cache_directory, max_age, max_size)
     }
+}
+
+/// Returns up to `limit` archives in `cache_directory`, most recently cached
+/// first. Only `<hash>.tar.zst` files with a valid hash are considered, so
+/// in-progress temporary files and sidecars are skipped. Archives are not
+/// opened. A missing cache directory yields an empty list.
+pub fn recent_artifacts(
+    cache_directory: &AbsoluteSystemPath,
+    limit: usize,
+) -> Result<Vec<CachedArtifact>, CacheError> {
+    let entries = match std::fs::read_dir(cache_directory.as_std_path()) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+
+    let mut artifacts: Vec<CachedArtifact> = entries
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let name = entry.file_name().into_string().ok()?;
+            let hash = name.strip_suffix(".tar.zst")?;
+            if !is_valid_hash(hash) {
+                return None;
+            }
+            let metadata = entry.metadata().ok()?;
+            if !metadata.is_file() {
+                return None;
+            }
+            Some(CachedArtifact {
+                hash: hash.to_owned(),
+                cached_at: metadata.modified().ok()?,
+            })
+        })
+        .collect();
+
+    artifacts.sort_unstable_by(|a, b| {
+        b.cached_at
+            .cmp(&a.cached_at)
+            .then_with(|| a.hash.cmp(&b.hash))
+    });
+    artifacts.truncate(limit);
+    Ok(artifacts)
 }
 
 /// Evicts cache entries from the given directory based on age and/or
@@ -1387,6 +1446,61 @@ mod test {
                 dirty_hash: None,
             })
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_recent_artifacts_newest_first_and_limited() -> Result<()> {
+        let dir = tempdir()?;
+        let cache_dir = AbsoluteSystemPathBuf::try_from(dir.path())?;
+        let base = SystemTime::UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        let set_mtime = |path: &AbsoluteSystemPath, secs: u64| {
+            filetime::set_file_mtime(
+                path.as_std_path(),
+                filetime::FileTime::from_system_time(base + Duration::from_secs(secs)),
+            )
+        };
+
+        // 12 archives, created in an order unrelated to their mtimes.
+        let hashes: Vec<String> = (0..12u64).map(|i| format!("{:016x}", i * 7 % 12)).collect();
+        for hash in &hashes {
+            let archive = cache_dir.join_component(&format!("{hash}.tar.zst"));
+            archive.create_with_contents("archive")?;
+            set_mtime(&archive, u64::from_str_radix(hash, 16)?)?;
+        }
+        // Newer than every archive, but none of these is a cached artifact.
+        let distractors = [
+            format!(".{}.tar.zst.1.0.tmp", hashes[0]),
+            "not-a-hash.tar.zst".to_string(),
+            "0123.tar.zst.tmp".to_string(),
+            format!("{}-meta.json", hashes[0]),
+            format!("{}-manifest.json", hashes[0]),
+        ];
+        for name in &distractors {
+            let path = cache_dir.join_component(name);
+            path.create_with_contents("x")?;
+            set_mtime(&path, 100)?;
+        }
+        let dir_entry = cache_dir.join_component("abcdef.tar.zst");
+        dir_entry.create_dir_all()?;
+        set_mtime(&dir_entry, 100)?;
+
+        let recent = recent_artifacts(&cache_dir, 10)?;
+        let expected: Vec<CachedArtifact> = (2..12u64)
+            .rev()
+            .map(|i| CachedArtifact {
+                hash: format!("{i:016x}"),
+                cached_at: base + Duration::from_secs(i),
+            })
+            .collect();
+        assert_eq!(recent, expected);
+
+        // A cache directory that was never created is an empty cache, and
+        // listing does not create it.
+        let missing = cache_dir.join_component("missing");
+        assert_eq!(recent_artifacts(&missing, 10)?, Vec::new());
+        assert!(!missing.exists());
 
         Ok(())
     }

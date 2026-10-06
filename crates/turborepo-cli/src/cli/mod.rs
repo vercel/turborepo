@@ -505,6 +505,15 @@ async fn run_main(
 
             Ok(cache::push(&base, &hashes).await?)
         }
+        Command::Cache {
+            command: CacheCommand::List,
+        } => {
+            let event = CommandEventBuilder::new("cache-list").with_parent(&root_telemetry);
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
+            Ok(cache::list(&base)?)
+        }
         #[allow(unused_variables)]
         Command::Daemon {
             command,
