@@ -4,6 +4,7 @@
 pub mod lock;
 pub mod node;
 pub mod node_discovery;
+pub mod node_provision;
 pub mod package_manager;
 pub mod version_request;
 
