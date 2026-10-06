@@ -139,12 +139,18 @@ impl NodeRequirements {
     /// duplicate JSON keys, and read errors are fatal even with another source.
     /// Reads stop at limit + 1 bytes; request limits apply BEFORE trimming.
     pub fn read(root: &Path) -> Result<Self, NodeDiscoveryError> {
+        Self::read_with(|file, limit| read_optional(root, file, limit))
+    }
+
+    pub(crate) fn read_with(
+        mut read: impl FnMut(&'static str, usize) -> Result<Option<String>, NodeDiscoveryError>,
+    ) -> Result<Self, NodeDiscoveryError> {
         let mut result = Self {
             declarations: Vec::new(),
             policy_sources: Vec::new(),
             runtime_end: 0,
         };
-        let manifest = read_optional(root, "package.json", MAX_MANIFEST_BYTES)?
+        let manifest = read("package.json", MAX_MANIFEST_BYTES)?
             .map(|text| {
                 serde_json::from_str::<UniqueJson>(&text)
                     .map(|v| v.0)
@@ -179,7 +185,7 @@ impl NodeRequirements {
         }
         result.runtime_end = result.declarations.len();
         for file in [".nvmrc", ".node-version"] {
-            if let Some(request) = read_optional(root, file, MAX_REQUEST_BYTES)? {
+            if let Some(request) = read(file, MAX_REQUEST_BYTES)? {
                 result.push(file, None, Some(&request), true)?;
             }
         }
