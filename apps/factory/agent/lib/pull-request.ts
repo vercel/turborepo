@@ -67,7 +67,7 @@ export function mergedFactoryPullRequest(
   const branch = (head as Readonly<Record<string, unknown>>).ref;
   return value.merged === true &&
     typeof branch === "string" &&
-    branch.startsWith("agents/") &&
+    branch.length > 0 &&
     typeof value.title === "string" &&
     typeof value.html_url === "string"
     ? { title: value.title, url: value.html_url }

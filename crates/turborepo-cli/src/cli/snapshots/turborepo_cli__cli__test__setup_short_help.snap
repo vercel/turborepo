@@ -1,37 +1,32 @@
 ---
 source: crates/turborepo-cli/src/cli/test.rs
-expression: "Args::render_help(Args::command(), true).unwrap()"
+expression: "Args::render_help(get_subcommand(\"setup\"), false).unwrap()"
 ---
-The build system that makes ship happen
+EXPERIMENTAL: Provision repository tools and dependencies (not yet implemented)
 
-Usage: turbo [FLAGS] <SUBCOMMAND>
-
-Commands:
-  bin           Get the path to the Turbo binary
-  completion    Generate the autocompletion script for the specified shell
-  daemon        Runs the Turborepo background daemon
-  devtools      Visualize your monorepo's package graph in the browser
-  docs          Search the Turborepo documentation
-  generate      Generate a new app / package [aliases: g, gen]
-  get-mfe-port  Get the port assigned to the current microfrontend
-  info          Print debugging information
-  link          Link your local directory to a Vercel organization and enable
-                remote caching.
-  login         Login to your Vercel account
-  logout        Logout to your Vercel account
-  ls            List packages in your monorepo.
-  prune         Prepare a subset of your monorepo.
-  query         Query your monorepo using GraphQL. If no query is provided,
-                spins up a GraphQL server with GraphiQL.
-  run           Run tasks across projects in your monorepo
-  setup         EXPERIMENTAL: Provision repository tools and dependencies (not
-                yet implemented)
-  telemetry     Enable or disable anonymous telemetry
-  unlink        Unlink the current directory from your Vercel organization and
-                disable Remote Caching
-  watch
+Usage: turbo setup [FLAGS]
 
 Flags:
+      --plan                      Report the proposed setup without writing or
+                                  installing
+      --check                     Check installed state without writing,
+                                  resolving, or downloading
+      --force                     Reinstall selected versions without refreshing
+                                  resolution
+      --frozen                    Require an existing, current turbo.lock (the
+                                  default in CI)
+      --no-frozen                 Allow lock creation or updates, including in
+                                  CI
+      --offline                   Use cached artifacts only; never make HTTP
+                                  requests
+      --tools-only                Skip dependency installation
+      --no-lock                   Provision without writing turbo.lock;
+                                  overrides CI-inferred frozen mode
+      --update-lock               Refresh floating requests and provision
+                                  repository-policy-selected tools
+  -h, --help                      Print help
+
+Global flags:
       --version
       --skip-infer                Skip any attempts to infer which version of
                                   Turbo the project is configured to use
@@ -75,10 +70,6 @@ Flags:
       --dangerously-disable-package-manager-check
                                   Allow for missing `packageManager` in
                                   `package.json`.
-
-                                  `turbo` will use hints from codebase to guess
-                                  which package manager should be used.
       --root-turbo-json <ROOT_TURBO_JSON>  Use the `turbo.json` located at the
                                   provided path instead of one at the
                                   root of the repository.
-  -h, --help                      Print help
