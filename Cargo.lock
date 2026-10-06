@@ -7581,6 +7581,7 @@ dependencies = [
  "turborepo-query",
  "turborepo-query-api",
  "turborepo-repository",
+ "turborepo-shim",
  "turborepo-signals",
  "which",
  "windows-sys 0.59.0",
@@ -8771,14 +8772,22 @@ name = "turborepo-setup"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
+ "flate2",
  "hex",
  "semver 1.0.23",
  "serde",
  "serde_json",
+ "sha2",
+ "tar",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
+ "turborepo-archive",
+ "turborepo-download",
  "turborepo-package-manager",
  "turborepo-platform",
+ "turborepo-tool-install",
+ "url",
 ]
 
 [[package]]
@@ -8795,6 +8804,7 @@ dependencies = [
  "pretty_assertions",
  "semver 1.0.23",
  "serde",
+ "serde_json",
  "serde_yaml_ng",
  "shared_child",
  "tempfile",

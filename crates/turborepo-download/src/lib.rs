@@ -39,7 +39,7 @@
 use std::{error::Error as StdError, time::Duration};
 
 use reqwest::{Client, ClientBuilder, header::ACCEPT_ENCODING, redirect::Policy};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 use url::{Host, Origin, Url};
 
 /// Returned errors deliberately contain no URLs, response bodies, or underlying
@@ -81,6 +81,12 @@ pub enum Error {
     HttpStatus(u16),
     #[error("artifact SHA-256 does not match the trusted digest")]
     DigestMismatch,
+    #[error("SHA-512 digest is required")]
+    MissingSha512Digest,
+    #[error("SHA-512 digest must contain exactly 128 hexadecimal characters")]
+    InvalidSha512Digest,
+    #[error("artifact SHA-512 does not match the trusted digest")]
+    Sha512DigestMismatch,
 }
 
 /// Exact scheme/host/effective-port approval, never a URL prefix or wildcard.
@@ -166,6 +172,64 @@ impl ExpectedSha256 {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct ExpectedSha512([u8; 64]);
+
+impl ExpectedSha512 {
+    // Format validation is not publisher trust; callers supply a trusted pin.
+    pub fn from_hex(digest: &str) -> Result<Self, Error> {
+        if digest.is_empty() {
+            return Err(Error::MissingSha512Digest);
+        }
+        if digest.len() != 128 {
+            return Err(Error::InvalidSha512Digest);
+        }
+        let mut bytes = [0; 64];
+        hex::decode_to_slice(digest, &mut bytes).map_err(|_| Error::InvalidSha512Digest)?;
+        Ok(Self(bytes))
+    }
+}
+
+// One streaming verification state inside the existing transport path.
+enum Verification {
+    Sha256(ExpectedSha256, Sha256),
+    Sha512(ExpectedSha512, Sha512, Option<ExpectedSha256>),
+}
+
+impl Verification {
+    fn update(&mut self, bytes: &[u8]) {
+        match self {
+            Self::Sha256(_, hash) => hash.update(bytes),
+            Self::Sha512(_, hash, _) => hash.update(bytes),
+        }
+    }
+
+    fn finish(self, bytes: &[u8]) -> Result<(), Error> {
+        match self {
+            Self::Sha256(expected, hash) => {
+                let actual: [u8; 32] = hash.finalize().into();
+                if actual != expected.0 {
+                    return Err(Error::DigestMismatch);
+                }
+            }
+            Self::Sha512(expected, hash, sha256) => {
+                let actual: [u8; 64] = hash.finalize().into();
+                if actual != expected.0 {
+                    return Err(Error::Sha512DigestMismatch);
+                }
+                // Never derive/compare SHA-256 before mandatory SHA-512 matches.
+                if let Some(expected) = sha256 {
+                    let actual: [u8; 32] = Sha256::digest(bytes).into();
+                    if actual != expected.0 {
+                        return Err(Error::DigestMismatch);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Constructed only after successful verification; has no filesystem effects.
 pub struct VerifiedArtifact(Vec<u8>);
 
@@ -185,6 +249,23 @@ impl VerifiedArtifact {
             return Err(Error::DigestMismatch);
         }
         Ok(Self(bytes))
+    }
+
+    // As with verify_bytes, the caller must bound local input before calling.
+    pub fn verify_bytes_sha512(
+        bytes: Vec<u8>,
+        digest: ExpectedSha512,
+        sha256: Option<ExpectedSha256>,
+    ) -> Result<Self, Error> {
+        let mut verification = Verification::Sha512(digest, Sha512::new(), sha256);
+        verification.update(&bytes);
+        verification.finish(&bytes)?;
+        Ok(Self(bytes))
+    }
+
+    // Only verified bytes can produce this lock-ready artifact identity.
+    pub fn sha256_hex(&self) -> String {
+        hex::encode(Sha256::digest(&self.0))
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -271,16 +352,36 @@ impl DownloadClient {
         digest: ExpectedSha256,
         limits: Limits,
     ) -> Result<VerifiedArtifact, Error> {
-        self.fetch(url, limits, Some(digest))
-            .await
-            .map(VerifiedArtifact)
+        self.fetch(
+            url,
+            limits,
+            Some(Verification::Sha256(digest, Sha256::new())),
+        )
+        .await
+        .map(VerifiedArtifact)
+    }
+
+    pub async fn download_verified_sha512(
+        &self,
+        url: &str,
+        digest: ExpectedSha512,
+        sha256: Option<ExpectedSha256>,
+        limits: Limits,
+    ) -> Result<VerifiedArtifact, Error> {
+        self.fetch(
+            url,
+            limits,
+            Some(Verification::Sha512(digest, Sha512::new(), sha256)),
+        )
+        .await
+        .map(VerifiedArtifact)
     }
 
     async fn fetch(
         &self,
         input: &str,
         limits: Limits,
-        expected: Option<ExpectedSha256>,
+        mut verification: Option<Verification>,
     ) -> Result<Vec<u8>, Error> {
         let url = parse_url(input)?;
         if !self.origins.iter().any(|origin| origin.0 == url.origin()) {
@@ -315,21 +416,17 @@ impl DownloadClient {
                 return Err(Error::TooLarge);
             }
             let mut bytes = Vec::new();
-            let mut hasher = expected.map(|_| Sha256::new());
             while let Some(chunk) = response.chunk().await.map_err(http_error)? {
                 if chunk.len() > limits.max_bytes - bytes.len() {
                     return Err(Error::TooLarge);
                 }
-                if let Some(hasher) = &mut hasher {
-                    hasher.update(&chunk);
+                if let Some(verification) = &mut verification {
+                    verification.update(&chunk);
                 }
                 bytes.extend_from_slice(&chunk);
             }
-            if let (Some(expected), Some(hasher)) = (expected, hasher) {
-                let actual: [u8; 32] = hasher.finalize().into();
-                if actual != expected.0 {
-                    return Err(Error::DigestMismatch);
-                }
+            if let Some(verification) = verification {
+                verification.finish(&bytes)?;
             }
             // Async timeouts cannot preempt synchronous hashing/copying. Never
             // return bytes successfully if that work consumed the time budget.
