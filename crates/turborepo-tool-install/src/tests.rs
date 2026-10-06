@@ -7,6 +7,8 @@ use std::{
 
 use super::*;
 
+mod recovery;
+
 fn tool(id: &str) -> Tool {
     Tool {
         id: id.into(),

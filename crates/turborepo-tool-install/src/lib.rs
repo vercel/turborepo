@@ -62,6 +62,12 @@ struct Inventory {
     tools: Vec<Installed>,
 }
 
+impl Inventory {
+    fn contains(&self, tool: &Tool) -> bool {
+        self.tools.iter().any(|installed| &installed.tool == tool)
+    }
+}
+
 pub struct Store {
     root: PathBuf,
     // Never unlink a lock file: all processes must lock the same inode.
@@ -121,7 +127,13 @@ impl Store {
             Ok(_) => {}
         }
         let inventory: Inventory = serde_json::from_reader(File::open(path)?.take(1024 * 1024))?;
-        if inventory.schema != 1 || !inventory.generation.starts_with("generation-") {
+        if inventory.schema != 1
+            || !inventory.generation.starts_with("generation-")
+            || inventory
+                .tools
+                .iter()
+                .any(|installed| !is_sha256(&installed.tree_sha256))
+        {
             return Err(Error::InvalidInventory);
         }
         component(&inventory.generation.to_ascii_lowercase())?;
@@ -132,8 +144,11 @@ impl Store {
                 .map(|t| t.tool.clone())
                 .collect::<Vec<_>>(),
         )?;
-        real_directory(&self.root.join(&inventory.generation))?;
-        Ok(Some(inventory))
+        match real_directory(&self.root.join(&inventory.generation)) {
+            Ok(()) => Ok(Some(inventory)),
+            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     pub fn current(&self) -> Result<Option<Current>, Error> {
@@ -145,6 +160,42 @@ impl Store {
             bin: self.root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
         }))
+    }
+
+    /// Readiness for a complete desired tool set, without downloading or
+    /// staging. Damaged trees return false so provisioning can repair them
+    /// atomically.
+    pub fn is_current(&self, desired: &[Tool]) -> Result<bool, Error> {
+        validate_tools(desired)?;
+        let mut desired = desired.to_vec();
+        desired.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(self
+            .healthy_inventory()?
+            .is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())))
+    }
+
+    /// Whether reconciliation can copy this exact tool without preparation.
+    /// A damaged sibling tree or shim invalidates reuse of the entire
+    /// generation.
+    pub fn can_reuse(&self, tool: &Tool) -> Result<bool, Error> {
+        validate_tools(std::slice::from_ref(tool))?;
+        Ok(self
+            .healthy_inventory()?
+            .is_some_and(|old| old.contains(tool)))
+    }
+
+    fn healthy_inventory(&self) -> Result<Option<Inventory>, Error> {
+        let Some(old) = self.inventory()? else {
+            return Ok(None);
+        };
+        match self.check(&old) {
+            Ok(()) => Ok(Some(old)),
+            // Metadata/path validation above remains fail-closed. Damaged install
+            // contents can be rebuilt, but must never be copied into staging.
+            Err(Error::InvalidInventory | Error::UnsafePath) => Ok(None),
+            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     fn check(&self, inventory: &Inventory) -> Result<(), Error> {
@@ -162,7 +213,10 @@ impl Store {
             check_executables(&tree, &installed.tool)?;
             for (name, executable) in &installed.tool.executables {
                 names.insert(name.clone());
-                if fs::read_link(bin.join(name))? != shim_target(&installed.tool.id, executable) {
+                let shim = bin.join(name);
+                if !fs::symlink_metadata(&shim)?.file_type().is_symlink()
+                    || fs::read_link(shim)? != shim_target(&installed.tool.id, executable)
+                {
                     return Err(Error::UnsafePath);
                 }
             }
@@ -189,8 +243,8 @@ impl Store {
         mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
-        let old = self.inventory()?;
-        let valid_old = old.as_ref().filter(|old| self.check(old).is_ok());
+        let old = self.healthy_inventory()?;
+        let valid_old = old.as_ref();
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
         if valid_old.is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())) {
@@ -207,7 +261,7 @@ impl Store {
         for tool in desired {
             let tree = tools.join(&tool.id);
             directory(&tree)?;
-            if let Some(old) = valid_old.filter(|old| old.tools.iter().any(|t| t.tool == tool)) {
+            if let Some(old) = valid_old.filter(|old| old.contains(&tool)) {
                 copy_tree(
                     &self.root.join(&old.generation).join("tools").join(&tool.id),
                     &tree,
@@ -286,6 +340,13 @@ fn relative(value: &str) -> Result<(), Error> {
     Ok(())
 }
 
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
 fn validate_tools(tools: &[Tool]) -> Result<(), Error> {
     let mut ids = BTreeSet::new();
     let mut names = BTreeSet::new();
@@ -294,11 +355,7 @@ fn validate_tools(tools: &[Tool]) -> Result<(), Error> {
         if !ids.insert(&tool.id)
             || tool.version.is_empty()
             || tool.platform.is_empty()
-            || tool.artifact_sha256.len() != 64
-            || !tool
-                .artifact_sha256
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || !is_sha256(&tool.artifact_sha256)
             || tool.executables.is_empty()
         {
             return Err(Error::InvalidInventory);
