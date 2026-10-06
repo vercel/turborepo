@@ -328,14 +328,18 @@ Opt into experimental setup features that are still in progress. This flag can o
 
 <Callout type="warn">
   The `turbo.lock` format is unstable and may change without notice.
-  `turbo setup` currently provides parsing and help only: provisioning,
+  `turbo setup` currently provides parsing, help, and root discovery: provisioning,
   planning, and checking are not implemented and exit with a diagnostic,
   never a prepared-success report. The root `setup` configuration key is not
   implemented. Enabling the flag does not interpret `turbo.lock` or change
   existing `turbo run` or hashing behavior when the file exists.
 </Callout>
 
-`turbo setup --help` works without the flag, Node.js, a package manager, or a local `turbo` installation. Actual invocation requires this root flag. For now, run from the repository root or select it with `--cwd`; automatic setup root discovery and compatible local CLI handoff are separate follow-ups. Setup never runs Turborepo tasks.
+`turbo setup --help` works without the flag, Node.js, a package manager, or a local `turbo` installation. Actual invocation requires this root flag. Setup discovers the root `turbo.json` or `turbo.jsonc` from the current directory or the directory selected with `--cwd`, including pure non-JavaScript repositories. Package Configurations that declare `extends` do not define setup roots. Discovery stops at Git clone or worktree boundaries and never runs a package manager or language tool.
+
+Nested JavaScript packages must belong to the root's `package.json` or `pnpm-workspace.yaml` workspace. Secondary Cargo, uv, and Go workspace markers are diagnosed only when the corresponding `experimentalCargoWorkspaces`, `experimentalPythonWorkspaces`, or `experimentalGoWorkspaces` flag is enabled at the root. With those flags off, setup ignores the corresponding native markers and tool declarations; future provisioning must follow the same rule.
+
+If multiple root configurations or a nested workspace make the root ambiguous, setup names the conflicting paths instead of borrowing another repository's `.turbo/tools`. Select the intended root explicitly with `turbo setup --cwd=<root>`. `--cwd` pointing to a subdirectory still requires unambiguous discovery. An explicit `--root-turbo-json` path is relative to the invocation directory and anchors setup at that configuration's parent; the selected directory must be inside that root. Compatible local CLI handoff remains a separate follow-up. Setup never runs Turborepo tasks.
 
 The experimental command accepts existing global options and these controls. Their provisioning behavior is reserved for follow-up implementations:
 

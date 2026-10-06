@@ -53,7 +53,7 @@ fn invoke(root: &Path, words: &[&str], ci: bool) -> (i32, String) {
         .env("ALL_PROXY", &url)
         .env("NO_PROXY", "");
     if ci {
-        // Even this normal shim override must not trigger repository inference.
+        // Even this normal shim override must not trigger JS inference or handoff.
         command
             .env("CI", "1")
             .env("TURBO_BINARY_PATH", root.join("unbuilt-local-turbo"));
@@ -196,6 +196,270 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
         failure(root, &words, true, PENDING);
     }
+}
+
+fn assert_diagnostic_path(text: &str, path: &Path) {
+    // Miette wraps long paths and adds `|` gutters on continuation lines.
+    let rendered = text.replace([' ', '|'], "");
+    let expected = path
+        .canonicalize()
+        .unwrap()
+        .display()
+        .to_string()
+        .replace(' ', "");
+    assert!(rendered.contains(&expected), "{text}");
+}
+
+fn inferred(root: &Path, words: &[&str], expected: &Path) {
+    let words: Vec<_> = words.iter().copied().chain(["--verbosity=2"]).collect();
+    let text = failure(root, &words, true, PENDING);
+    let expected = expected.canonicalize().unwrap();
+    assert!(
+        text.contains(&format!("setup root: {}", expected.display())),
+        "{text}"
+    );
+}
+
+#[test]
+fn nested_js_workspaces_need_no_manager_declaration_lock_or_executable() {
+    for (package, pnpm) in [
+        (r#"{"workspaces":["packages/*"]}"#, false),
+        (r#"{"workspaces":{"packages":["packages/*"]}}"#, false),
+        ("{}", true),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        write(root, "turbo.json", ENABLED);
+        write(root, "package.json", package);
+        if pnpm {
+            write(root, "pnpm-workspace.yaml", "packages:\n  - 'packages/*'\n");
+        }
+        fs::create_dir_all(root.join("packages/app/src")).unwrap();
+        write(root, "packages/app/package.json", r#"{"name":"app"}"#);
+        write(root, "packages/app/turbo.json", r#"{"extends":["//"]}"#);
+        inferred(root, &["setup", "--cwd=packages/app/src"], root);
+        inferred(&root.join("packages/app/src"), &["setup"], root);
+        inferred(
+            root,
+            &[
+                "setup",
+                "--cwd=packages/app/src",
+                "--root-turbo-json=turbo.json",
+            ],
+            root,
+        );
+    }
+}
+
+#[test]
+fn nested_non_js_roots_need_no_package_json_or_language_tools() {
+    for (flag, manifest, contents, member, member_contents) in [
+        (
+            "experimentalCargoWorkspaces",
+            "Cargo.toml",
+            "[workspace]\nmembers = ['packages/app']\n",
+            "Cargo.toml",
+            "[package]\nname = 'app'\nversion = '0.1.0'\n",
+        ),
+        (
+            "experimentalPythonWorkspaces",
+            "pyproject.toml",
+            "[tool.uv.workspace]\nmembers = ['packages/*']\n",
+            "pyproject.toml",
+            "[project]\nname = 'app'\nversion = '0.1.0'\n",
+        ),
+        (
+            "experimentalGoWorkspaces",
+            "go.work",
+            "go 1.22\nuse ./packages/app\n",
+            "go.mod",
+            "module example.com/app\ngo 1.22\n",
+        ),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        write(
+            root,
+            "turbo.jsonc",
+            &format!(r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":true}}}}"#),
+        );
+        write(root, manifest, contents);
+        fs::create_dir_all(root.join("packages/app/src")).unwrap();
+        write(root, &format!("packages/app/{member}"), member_contents);
+        inferred(root, &["--cwd", "packages/app/src", "setup"], root);
+        inferred(&root.join("packages/app/src"), &["setup"], root);
+    }
+}
+
+#[test]
+fn ambiguous_configs_require_an_exact_explicit_root() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    fs::create_dir_all(root.join("inner/src")).unwrap();
+    write(root, "inner/turbo.jsonc", ENABLED);
+    write(
+        root,
+        "inner/.turbo-tools-placeholder",
+        "must not borrow these",
+    );
+    let text = failure(
+        root,
+        &["setup", "--cwd=inner/src"],
+        false,
+        "ambiguous setup roots",
+    );
+    assert!(
+        text.contains("--cwd=<root>") && text.contains(".turbo/tools"),
+        "{text}"
+    );
+    assert!(text.contains("inner"), "{text}");
+    let text = failure(
+        root,
+        &["setup", "--cwd=inner/src", "--root-turbo-json=turbo.json"],
+        false,
+        "nested setup root marker",
+    );
+    assert_diagnostic_path(&text, &root.join("inner/turbo.jsonc"));
+    inferred(root, &["setup", "--cwd=inner"], &root.join("inner"));
+    inferred(root, &["setup", "--cwd=."], root);
+}
+
+#[test]
+fn nested_native_workspace_markers_follow_root_flags() {
+    for (flag, marker, contents) in [
+        (
+            "experimentalCargoWorkspaces",
+            "Cargo.toml",
+            "[workspace]\nmembers = []\n",
+        ),
+        (
+            "experimentalPythonWorkspaces",
+            "pyproject.toml",
+            "[tool.uv.workspace]\nmembers = []\n",
+        ),
+        ("experimentalGoWorkspaces", "go.work", "go 1.22\nuse .\n"),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::create_dir_all(root.join("inner/src")).unwrap();
+        write(root, &format!("inner/{marker}"), contents);
+        for enabled in [false, true] {
+            write(
+                root,
+                "turbo.json",
+                &format!(r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":{enabled}}}}}"#),
+            );
+            if enabled {
+                let text = failure(
+                    root,
+                    &["setup", "--cwd=inner/src"],
+                    false,
+                    "nested setup root marker",
+                );
+                assert!(
+                    text.contains(marker) && text.contains("--cwd=<root>"),
+                    "{text}"
+                );
+            } else {
+                inferred(root, &["setup", "--cwd=inner/src"], root);
+                // Disabled ecosystems aren't even parsed, including tool declarations.
+                write(root, &format!("inner/{marker}"), "not a valid declaration");
+                write(root, "inner/rust-toolchain.toml", "also invalid");
+                inferred(root, &["setup", "--cwd=inner/src"], root);
+                write(root, &format!("inner/{marker}"), contents);
+            }
+        }
+    }
+}
+
+#[test]
+fn excluded_js_packages_and_secondary_workspaces_are_not_neighbors() {
+    for marker in ["package.json", "pnpm-workspace.yaml"] {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        write(root, "turbo.json", ENABLED);
+        write(
+            root,
+            "package.json",
+            r#"{"workspaces":["packages/*","!packages/inner"]}"#,
+        );
+        fs::create_dir_all(root.join("packages/inner/src")).unwrap();
+        write(
+            root,
+            &format!("packages/inner/{marker}"),
+            if marker == "package.json" {
+                "{}"
+            } else {
+                "packages: ['*']"
+            },
+        );
+        let text = failure(
+            root,
+            &["setup", "--cwd=packages/inner/src"],
+            false,
+            "nested setup root marker",
+        );
+        assert!(text.contains(marker), "{text}");
+        inferred(root, &["setup", "--cwd=."], root);
+    }
+}
+
+#[test]
+fn git_boundaries_and_explicit_configs_do_not_borrow_outer_tools() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    fs::create_dir_all(root.join("inner/src")).unwrap();
+    // Worktree .git files are boundaries just like clone .git directories.
+    write(root, "inner/.git", "gitdir: unrelated");
+    failure(root, &["setup", "--cwd=inner/src"], false, DISABLED);
+    failure(
+        root,
+        &["setup", "--cwd=inner/src", "--root-turbo-json=turbo.json"],
+        false,
+        "nested setup root marker",
+    );
+    write(root, "inner/custom.json", ENABLED);
+    inferred(
+        root,
+        &[
+            "setup",
+            "--cwd=inner/src",
+            "--root-turbo-json=inner/custom.json",
+        ],
+        &root.join("inner"),
+    );
+    failure(
+        root,
+        &["setup", "--root-turbo-json=inner/custom.json"],
+        false,
+        "outside the selected root configuration",
+    );
+}
+
+#[test]
+fn malformed_or_duplicate_root_configs_are_not_silently_skipped() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    fs::create_dir_all(root.join("src")).unwrap();
+    write(root, "turbo.json", "not json");
+    let (code, text) = invoke(root, &["setup", "--cwd=src"], false);
+    assert_eq!(code, 1);
+    assert!(
+        !text.contains(DISABLED) && !text.contains(PENDING),
+        "{text}"
+    );
+    assert_diagnostic_path(&text, &root.join("turbo.json"));
+    write(root, "turbo.json", ENABLED);
+    write(root, "turbo.jsonc", ENABLED);
+    let (code, text) = invoke(root, &["setup", "--cwd=src"], false);
+    assert_eq!(code, 1);
+    assert!(
+        text.contains("turbo.json") && text.contains("turbo.jsonc"),
+        "{text}"
+    );
+    assert!(!text.contains(PENDING), "{text}");
 }
 
 #[test]
