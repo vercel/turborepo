@@ -471,60 +471,24 @@ aube add turbo --save-dev
 
 </PackageManagerTabs>
 
-You can also optionally install `turbo` globally for added convenience when working with Turborepo.
+To run `turbo` directly from your terminal, install the global binary:
 
-<PackageManagerTabs>
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
 
-<Tab value="pnpm">
-
-```bash title="Terminal"
-pnpm add turbo --global
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh
 ```
 
-</Tab>
+  </Tab>
+  <Tab value="Windows x64">
 
-<Tab value="yarn">
-
-```bash title="Terminal"
-yarn global add turbo
+```powershell title="PowerShell"
+irm https://turborepo.dev/install.ps1 | iex
 ```
 
-</Tab>
-
-<Tab value="npm">
-
-```bash title="Terminal"
-npm install turbo --global
-```
-
-</Tab>
-
-<Tab value="bun">
-
-```bash title="Terminal"
-bun install turbo --global
-```
-
-</Tab>
-
-
-<Tab value="nub">
-
-```bash title="Terminal"
-nub add turbo --global
-```
-
-</Tab>
-
-<Tab value="aube">
-
-```bash title="Terminal"
-aube add turbo --global
-```
-
-</Tab>
-
-</PackageManagerTabs>
+  </Tab>
+</Tabs>
 
 ### Step 8: Add a `turbo.json`
 

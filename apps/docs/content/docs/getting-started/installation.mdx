@@ -3,7 +3,7 @@ title: Installation
 description: Learn how to get started with Turborepo.
 product: turborepo
 type: guide
-summary: Install Turborepo globally and in your repository using your preferred package manager.
+summary: Install Turborepo globally and in your repository.
 prerequisites:
   - /docs/getting-started
 related:
@@ -69,60 +69,38 @@ For more details on the starter, [visit the README for the basic starter on GitH
 
 ## Installing `turbo`
 
-`turbo` can be installed both globally **and** in your repository. We highly recommend installing both ways so you can take advantage of fast, convenient workflows _and_ a stable version of `turbo` for all developers working in your repository.
+You can install `turbo` globally and pin a version in your repository. When a local binary is installed, the global binary defers to it.
 
 ### Global installation
 
 A global install of `turbo` brings flexibility and speed to your local workflows.
 
-<PackageManagerTabs>
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
 
-  <Tab value="pnpm">
-  ```bash title="Terminal"
-  pnpm add turbo --global
-  ```
-
-  </Tab>
-
-  <Tab value="yarn">
-  ```bash title="Terminal"
-  yarn global add turbo
-  ```
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh
+```
 
   </Tab>
+  <Tab value="Windows x64">
 
-  <Tab value="npm">
-  ```bash title="Terminal"
-  npm install turbo --global
-  ```
-
-  </Tab>
-
-  <Tab value="bun">
-  ```bash title="Terminal"
-  bun install turbo --global
-  ```
+```powershell title="PowerShell"
+irm https://turborepo.dev/install.ps1 | iex
+```
 
   </Tab>
+</Tabs>
 
+<Callout type="info">
+  See the [support policy](/docs/support-policy#platforms) for supported platforms.
+</Callout>
 
-<Tab value="nub">
-  ```bash title="Terminal"
-  nub add turbo --global
-  ```
+<Callout type="info">
+  The binaries are also available directly in the [GitHub release assets](https://github.com/vercel/turborepo/releases), starting with 2.11.5. To install an older version, use your package manager.
+</Callout>
 
-  </Tab>
-
-<Tab value="aube">
-  ```bash title="Terminal"
-  aube add turbo --global
-  ```
-
-  </Tab>
-
-</PackageManagerTabs>
-
-Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running one-off commands to use within your repository. For example:
+After installing `turbo`, you can run commands from your terminal. For example:
 
 - `turbo build`: Run `build` scripts following your repository's dependency graph
 - `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package (without running it)
@@ -134,20 +112,13 @@ Once installed globally, you can run your scripts through `turbo` from your term
   `turbo build` and `turbo run build` will both run your `build` task.
 </Callout>
 
-<Callout type="error" title="Avoid multiple global installations">
-  If you've installed global `turbo` before, make sure you use the same package
-  manager as your existing installation to avoid unexpected behaviors. You can
-  quickly check which package manager you previously used with [`turbo
-  bin`](/docs/reference/bin).
-</Callout>
-
 #### Using global `turbo` in CI
 
-You can also take advantage of global `turbo` when creating your CI pipelines. Visit the [Constructing CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci) guide for more information.
+To use the global binary in CI, see [Constructing CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci).
 
 ### Repository installation
 
-When collaborating with other developers in a repository, it's a good idea to pin versions of dependencies. You can do this with `turbo` by adding it as a `devDependency` in the root of your repository:
+To pin the `turbo` version used in a repository, add it as a `devDependency` at the root:
 
 <PackageManagerTabs>
 
@@ -196,6 +167,4 @@ When collaborating with other developers in a repository, it's a good idea to pi
 
 </PackageManagerTabs>
 
-You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repository if it exists.
-
-This lets you to get the best of both installations: easily run commands in your terminal while maintaining a pinned version for consistent usage for all developers in the repository.
+When you invoke the global binary from this repository, it uses the installed local version instead.
