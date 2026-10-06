@@ -219,7 +219,7 @@ pub(super) fn extract_zip(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         if crc32fast::hash(data) != entry.u32(16) {
             return Err(Error::InvalidArchive);
         }
-        tree.entry(name, directory, mode, size as u64, data)?;
+        tree.entry(name, directory, mode, size as u64, None, data)?;
     }
     if index != central.len() || position != local.len() {
         return Err(Error::InvalidArchive);

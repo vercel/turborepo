@@ -194,6 +194,29 @@ fn portable_paths_links_types_collisions_and_layout() {
 }
 
 #[test]
+fn zip_links_stay_rejected_with_tar_link_support() {
+    let mut entries = [
+        ("pkg/bin/tool", 0o100755, b"tool".as_slice()),
+        ("pkg/bin/npm", 0o120777, b"../lib/npm-cli.js".as_slice()),
+        ("pkg/lib/npm-cli.js", 0o100755, b"npm".as_slice()),
+    ];
+    for _ in 0..2 {
+        for deflate in [false, true] {
+            rejected(zip(&entries, deflate, true), Zip, limits(), UnsupportedLink);
+        }
+        entries.reverse();
+    }
+    let bytes = valid(false, false);
+    let artifact = unpack(bytes, Zip, limits()).unwrap();
+    assert!(
+        !fs::symlink_metadata(artifact.root_path().join("bin/tool"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+}
+
+#[test]
 fn byte_entry_node_path_and_decompression_budgets() {
     for small in [
         Limits::new(100, 32, 80, 8),

@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
+mod links;
+
 use std::{io::Write, mem::discriminant};
 
 use sha2::{Digest, Sha256};
@@ -45,8 +47,17 @@ pub(super) fn rejected(bytes: Vec<u8>, format: Format, limits: Limits, expected:
     }
 }
 fn tar(entries: &[(&str, Kind, &[u8])]) -> Vec<u8> {
+    tar_with_links(
+        &entries
+            .iter()
+            .map(|&(name, kind, data)| (name, kind, data, "tool"))
+            .collect::<Vec<_>>(),
+    )
+}
+type TarEntry<'a> = (&'a str, Kind, &'a [u8], &'a str);
+fn tar_with_links(entries: &[TarEntry<'_>]) -> Vec<u8> {
     let mut builder = tar::Builder::new(Vec::new());
-    for (name, kind, data) in entries {
+    for (name, kind, data, target) in entries {
         let mut header = tar::Header::new_gnu();
         header.set_entry_type(*kind);
         header.set_mode(0o6755);
@@ -55,7 +66,8 @@ fn tar(entries: &[(&str, Kind, &[u8])]) -> Vec<u8> {
         header.as_mut_bytes()[..100].fill(0);
         header.as_mut_bytes()[..name.len()].copy_from_slice(name.as_bytes());
         if kind.is_symlink() || kind.is_hard_link() {
-            header.set_link_name("tool").unwrap();
+            let field = &mut header.as_old_mut().linkname;
+            field[..target.len()].copy_from_slice(target.as_bytes());
         }
         header.set_cksum();
         builder.append(&header, *data).unwrap();
@@ -116,13 +128,12 @@ fn unsafe_portable_names_on_all_hosts() {
 }
 #[test]
 fn links_and_special_metadata_are_explicitly_unsupported() {
-    for kind in [Kind::Symlink, Kind::Link, Kind::GNULongLink] {
-        // A valid relative link to an existing sibling still needs the follow-up.
+    for kind in [Kind::Link, Kind::GNULongLink] {
         let bytes = tar(&[("pkg/bin/tool", Regular, b"x"), ("pkg/bin/npm", kind, b"")]);
         rejected(bytes, Tar, limits(), UnsupportedLink);
     }
     let diagnostic = UnsupportedLink.to_string();
-    assert!(diagnostic.contains("safe Node symlink support"));
+    assert!(diagnostic.contains("hard links"));
     for kind in [
         Kind::Fifo,
         Kind::Char,
