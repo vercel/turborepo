@@ -465,7 +465,10 @@ export async function createPullRequest(
       method: "GET",
       owner,
       repo,
-      path: `/git/ref/heads/${encodeURIComponent(branchName)}`
+      path: `/git/ref/heads/${branchName
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`
     });
     newCommitSha = requireSha(branchRef.object?.sha, "branch ref SHA");
     const existingCommit = await github<CommitResponse>({
