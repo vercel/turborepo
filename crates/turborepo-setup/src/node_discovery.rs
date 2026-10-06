@@ -370,7 +370,7 @@ fn read_optional(
 // serde_json::Value silently overwrites duplicate keys. Reject them recursively
 // so duplicate runtime/version/engines fields cannot erase authored
 // constraints. serde_json's default recursion limit remains enabled.
-struct UniqueJson(Value);
+pub(crate) struct UniqueJson(pub(crate) Value);
 impl<'de> Deserialize<'de> for UniqueJson {
     fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct JsonVisitor;

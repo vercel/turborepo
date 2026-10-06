@@ -8770,13 +8770,21 @@ dependencies = [
 name = "turborepo-setup"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "semver 1.0.23",
  "serde",
  "serde_json",
+ "sha2",
+ "tar",
  "tempfile",
  "thiserror 2.0.18",
+ "tokio",
+ "turborepo-archive",
+ "turborepo-download",
  "turborepo-package-manager",
  "turborepo-platform",
+ "turborepo-tool-install",
+ "url",
 ]
 
 [[package]]
