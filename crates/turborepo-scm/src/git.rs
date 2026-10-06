@@ -826,7 +826,16 @@ mod tests {
         let blob = run_git(&repo, &["rev-parse", "HEAD:nested[repo]/turbo.lock"]);
         fs::remove_file(&lock).unwrap();
         fs::remove_file(repo.join(".git/objects").join(&blob[..2]).join(&blob[2..])).unwrap();
-        assert!(scm.previous_content(Some("HEAD"), &lock).is_err());
+        let blob_check = Command::new("git")
+            .args(["cat-file", "-e", &blob])
+            .current_dir(&repo)
+            .output()
+            .unwrap();
+        assert!(
+            !blob_check.status.success(),
+            "deleted blob should be unavailable: {}",
+            String::from_utf8_lossy(&blob_check.stderr)
+        );
         assert!(scm.is_path_committed(&lock).unwrap());
     }
 
