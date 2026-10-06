@@ -81,8 +81,14 @@ fn invoke(root: &Path, words: &[&str], ci: bool) -> (i32, String) {
 fn failure(root: &Path, words: &[&str], ci: bool, expected: &str) -> String {
     let (code, text) = invoke(root, words, ci);
     assert_eq!(code, 1, "{words:?}: {text}");
-    assert!(text.contains(expected), "{text}");
+    assert!(diagnostic_contains(&text, expected), "{text}");
     text
+}
+
+fn diagnostic_contains(text: &str, expected: &str) -> bool {
+    // Miette may wrap sentences and filenames across lines with `|` gutters.
+    text.replace([' ', '|'], "")
+        .contains(&expected.replace(' ', ""))
 }
 
 #[test]
@@ -198,26 +204,41 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     }
 }
 
+fn canonical_path(path: &Path) -> turbopath::AbsoluteSystemPathBuf {
+    turbopath::AbsoluteSystemPathBuf::try_from(path)
+        .expect("absolute fixture path")
+        .to_realpath()
+        .expect("canonical fixture path")
+}
+
 fn assert_diagnostic_path(text: &str, path: &Path) {
     // Miette wraps long paths and adds `|` gutters on continuation lines.
     let rendered = text.replace([' ', '|'], "");
-    let expected = path
-        .canonicalize()
-        .unwrap()
-        .display()
-        .to_string()
-        .replace(' ', "");
+    let expected = canonical_path(path).as_str().replace(' ', "");
     assert!(rendered.contains(&expected), "{text}");
+}
+
+#[test]
+fn diagnostic_assertions_preserve_wrapped_sentences_and_filenames() {
+    assert!(diagnostic_contains(
+        "outside the selected root | configuration /tmp/repo/custom.json",
+        "outside the selected root configuration",
+    ));
+    assert!(diagnostic_contains(
+        "/tmp/repo/pnpm- | workspace.yaml",
+        "pnpm-workspace.yaml"
+    ));
+    assert!(!diagnostic_contains(
+        "/tmp/repo/package.json",
+        "pnpm-workspace.yaml"
+    ));
 }
 
 fn inferred(root: &Path, words: &[&str], expected: &Path) {
     let words: Vec<_> = words.iter().copied().chain(["--verbosity=2"]).collect();
     let text = failure(root, &words, true, PENDING);
-    let expected = expected.canonicalize().unwrap();
-    assert!(
-        text.contains(&format!("setup root: {}", expected.display())),
-        "{text}"
-    );
+    let expected = canonical_path(expected);
+    assert!(text.contains(&format!("setup root: {expected}")), "{text}");
 }
 
 #[test]
@@ -400,7 +421,7 @@ fn excluded_js_packages_and_secondary_workspaces_are_not_neighbors() {
             false,
             "nested setup root marker",
         );
-        assert!(text.contains(marker), "{text}");
+        assert_diagnostic_path(&text, &root.join(format!("packages/inner/{marker}")));
         inferred(root, &["setup", "--cwd=."], root);
     }
 }

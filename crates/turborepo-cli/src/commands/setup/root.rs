@@ -90,7 +90,12 @@ pub(super) fn infer(
 
     let (path, raw) = if let Some(config) = config {
         let config = config.to_realpath()?;
-        let root = config.parent().expect("absolute config has a parent");
+        let root = config.parent().ok_or_else(|| {
+            marker_error(
+                &config,
+                "expected a root configuration file, not a filesystem root",
+            )
+        })?;
         if !cwd.starts_with(root) {
             return Err(Error::Outside { cwd, config });
         }
@@ -280,6 +285,20 @@ mod tests {
             !inferred.flags.experimental_python_workspaces
                 && !inferred.flags.experimental_go_workspaces
         );
+    }
+
+    #[test]
+    fn filesystem_root_is_not_a_configuration_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let cwd = AbsoluteSystemPathBuf::try_from(temp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let filesystem_root = cwd.ancestors().last().unwrap();
+        assert!(matches!(
+            infer(&cwd, false, Some(filesystem_root)),
+            Err(Error::Marker { .. })
+        ));
     }
 
     #[cfg(unix)]
