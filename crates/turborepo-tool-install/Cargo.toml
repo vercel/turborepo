@@ -1,0 +1,17 @@
+[package]
+name = "turborepo-tool-install"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+hex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }

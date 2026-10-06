@@ -125,6 +125,11 @@ impl<'a> ScopeChangeDetector<'a> {
         })
     }
 
+    pub fn with_managed_setup(mut self, managed_setup: bool) -> Self {
+        self.change_mapper = self.change_mapper.with_managed_setup(managed_setup);
+        self
+    }
+
     /// Gets the lockfile content from SCM if it has changed.
     /// Does *not* error if cannot get content.
     ///

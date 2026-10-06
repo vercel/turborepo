@@ -1,5 +1,4 @@
-//! TURBO-6300: verified TAR/TAR.GZ extraction; no transport, installation or
-//! CLI.
+//! Verified TAR/TAR.GZ and ZIP extraction; no transport, installation or CLI.
 //!
 //! The extractor creates and owns a fresh staging directory, never accepts an
 //! existing extraction tree, and deletes staging on failure/drop. The OS temp
@@ -7,20 +6,28 @@
 //! mutation). Unix staging is created with mode 0700; Windows relies on the
 //! user's temp-directory ACL. Paths use a conservative ASCII portable subset.
 //!
-//! Links (including valid Node TAR symlinks), special files, and sparse/PAX TAR
-//! are explicitly unsupported. Safe Node link support is separate work; this
-//! is not a full Node installer. GNU long names are supported with bounded
+//! Relative Node TAR symlinks are validated against the complete installation
+//! tree and created only after all extraction writes. Targets must exist inside
+//! the expected root; intermediate target components must be real directories.
+//! Cycles (including directory cycles) are rejected. Symlink creation is Unix
+//! only; hard links, GNU long links, special files and sparse/PAX TAR remain
+//! unsupported. This is not a Node installer. GNU long names use bounded
 //! raw-header processing. Byte limits include compressed input and the whole
 //! decoded TAR (headers/padding/trailers), not just advertised entry sizes.
 //! Unix file rwx bits are preserved with owner read/write enabled and special
 //! bits stripped; directories stay private/writable for cleanup. Windows has
-//! no Unix executable-mode equivalent. ZIP belongs to parent TURBO-6204.
-//! Native platform qualification is required before claiming support.
+//! no Unix executable-mode equivalent. ZIP supports single-disk ZIP32 stored
+//! and DEFLATE entries, with optional data descriptors. Encryption, ZIP64,
+//! self-extracting prefixes, reordered/overlapping local records, and unknown
+//! extra fields/host attributes are rejected rather than interpreted loosely.
+//! ZIP input, total decoded payload, entry count and path work are bounded;
+//! metadata is borrowed from the bounded input, never allocated from ZIP
+//! counts. Native platform qualification is required before claiming support.
 
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     fs::{self, OpenOptions},
     io::{self, Cursor, Read},
     path::{Path, PathBuf},
@@ -39,9 +46,15 @@ pub enum Error {
     UnsafePath,
     #[error("archive paths collide, repeat, or conflict with a parent file")]
     PathConflict,
-    #[error("archive links are unsupported; safe Node symlink support is separate work")]
+    #[error("ZIP links, hard links, and GNU long links are unsupported")]
     UnsupportedLink,
-    #[error("unsupported archive entry or metadata (special files, sparse or PAX TAR)")]
+    #[error("archive symlinks require a qualified Unix host; unsupported on this platform")]
+    UnsupportedSymlinkPlatform,
+    #[error("archive symlink target is unsafe, missing, aliased or traverses another link")]
+    UnsafeLink,
+    #[error("archive symlinks form a cycle")]
+    LinkCycle,
+    #[error("unsupported archive entry, encryption, or metadata")]
     UnsupportedEntry,
     #[error("archive does not match the required root and regular-file layout")]
     LayoutMismatch,
@@ -55,9 +68,10 @@ pub enum Error {
 pub enum Format {
     Tar,
     TarGz,
+    Zip,
 }
 
-/// Bounds input bytes, decoded TAR bytes, raw entries and
+/// Bounds input bytes, decoded TAR bytes (ZIP payload bytes), raw entries and
 /// created nodes (including implicit directories), and each path's bytes/depth.
 /// Allocator/parser overhead is not part of the byte limit. No CPU time budget.
 #[derive(Clone, Copy)]
@@ -147,6 +161,7 @@ pub fn extract(
     };
     match format {
         Format::Tar => extract_tar(artifact, &mut tree)?,
+        Format::Zip => zip::extract_zip(artifact, &mut tree)?,
         Format::TarGz => {
             let mut decoded = Vec::new();
             flate2::read::MultiGzDecoder::new(artifact)
@@ -164,11 +179,12 @@ pub fn extract(
         if !tree
             .nodes
             .get(&path.to_ascii_lowercase())
-            .is_some_and(|n| n.path == path && !n.directory)
+            .is_some_and(|n| n.path == path && !n.directory && n.link.is_none())
         {
             return Err(Error::LayoutMismatch);
         }
     }
+    tree.finish_links()?;
     Ok(ExtractedArtifact {
         staging: tree.staging,
         root: tree.root,
@@ -227,6 +243,7 @@ struct Node {
     path: String,
     directory: bool,
     explicit: bool,
+    link: Option<String>,
 }
 struct Tree {
     staging: TempDir,
@@ -242,6 +259,7 @@ impl Tree {
         directory: bool,
         mode: u32,
         size: u64,
+        link: Option<&[u8]>,
         reader: impl Read,
     ) -> Result<(), Error> {
         let path = portable_path(raw, directory, self.limits)?;
@@ -251,6 +269,16 @@ impl Tree {
         if (path == self.root && !directory) || (directory && size != 0) {
             return Err(Error::LayoutMismatch);
         }
+        let link = link
+            .map(|raw| {
+                if size != 0 || directory {
+                    return Err(Error::InvalidArchive);
+                }
+                let target = std::str::from_utf8(raw).map_err(|_| Error::UnsafePath)?;
+                link_target(&path, target, self.limits, None)?;
+                Ok(target.to_owned())
+            })
+            .transpose()?;
         if size > (self.limits.bytes - self.bytes) as u64 {
             return Err(Error::LimitExceeded);
         }
@@ -287,11 +315,12 @@ impl Tree {
                     path: prefix.clone(),
                     directory: is_dir,
                     explicit,
+                    link: if explicit { link.clone() } else { None },
                 };
                 self.nodes.insert(key, node);
             }
         }
-        if !directory {
+        if !directory && link.is_none() {
             let mut options = OpenOptions::new();
             options.write(true).create_new(true);
             #[cfg(unix)]
@@ -313,6 +342,122 @@ impl Tree {
         }
         Ok(())
     }
+
+    fn finish_links(&self) -> Result<(), Error> {
+        if self.nodes.values().all(|node| node.link.is_none()) {
+            return Ok(());
+        }
+        // Directory containment plus link-target edges form the filesystem graph.
+        // Kahn's algorithm rejects file chains and directory traversal cycles
+        // without recursion or creating even one symlink on a validation failure.
+        let indices: BTreeMap<_, _> = self
+            .nodes
+            .values()
+            .enumerate()
+            .map(|(i, node)| (node.path.as_str(), i))
+            .collect();
+        let mut edges = vec![Vec::new(); indices.len()];
+        let mut incoming = vec![0usize; indices.len()];
+        for node in self.nodes.values() {
+            let index = indices[node.path.as_str()];
+            if let Some((parent, _)) = node.path.rsplit_once('/') {
+                edges[indices[parent]].push(index);
+                incoming[index] += 1;
+            }
+            if let Some(target) = &node.link {
+                let target = link_target(&node.path, target, self.limits, Some(&self.nodes))?;
+                let destination = indices[target.as_str()];
+                edges[index].push(destination);
+                incoming[destination] += 1;
+            }
+        }
+        let mut ready: VecDeque<_> = incoming
+            .iter()
+            .enumerate()
+            .filter_map(|(i, count)| (*count == 0).then_some(i))
+            .collect();
+        let mut visited = 0;
+        while let Some(index) = ready.pop_front() {
+            visited += 1;
+            for &destination in &edges[index] {
+                incoming[destination] -= 1;
+                if incoming[destination] == 0 {
+                    ready.push_back(destination);
+                }
+            }
+        }
+        if visited != indices.len() {
+            return Err(Error::LinkCycle);
+        }
+        #[cfg(unix)]
+        for node in self.nodes.values() {
+            if let Some(target) = &node.link {
+                let destination = self.staging.path().join(&node.path);
+                std::os::unix::fs::symlink(target, &destination)?;
+                // macOS applies umask to symlinks and checks their permissions
+                // for read_link. Never chmod through a link into its target.
+                #[cfg(target_os = "macos")]
+                nix::sys::stat::fchmodat(
+                    None,
+                    &destination,
+                    nix::sys::stat::Mode::from_bits_truncate(0o777),
+                    nix::sys::stat::FchmodatFlags::NoFollowSymlink,
+                )
+                .map_err(io::Error::from)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn link_target(
+    path: &str,
+    target: &str,
+    limits: Limits,
+    nodes: Option<&BTreeMap<String, Node>>,
+) -> Result<String, Error> {
+    if target.len() > limits.path_bytes || target.split('/').count() > limits.depth {
+        return Err(Error::LimitExceeded);
+    }
+    let mut parts: Vec<_> = path.split('/').collect();
+    parts.pop();
+    for component in target.split('/') {
+        // Check the original traversal, not just its normalized result: a/../b
+        // cannot hide a symlink or regular-file intermediate component.
+        if let Some(nodes) = nodes {
+            let prefix = parts.join("/");
+            if !nodes
+                .get(&prefix.to_ascii_lowercase())
+                .is_some_and(|n| n.path == prefix && n.directory)
+            {
+                return Err(Error::UnsafeLink);
+            }
+        }
+        match component {
+            "" => return Err(Error::UnsafeLink),
+            "." => {}
+            ".." => {
+                if parts.len() <= 1 {
+                    return Err(Error::UnsafeLink);
+                }
+                parts.pop();
+            }
+            _ => {
+                portable_path(component.as_bytes(), false, limits)?;
+                parts.push(component);
+            }
+        }
+        portable_path(parts.join("/").as_bytes(), false, limits)?;
+    }
+    let resolved = parts.join("/");
+    if let Some(nodes) = nodes
+        && !nodes
+            .get(&resolved.to_ascii_lowercase())
+            .is_some_and(|n| n.path == resolved)
+    {
+        return Err(Error::UnsafeLink);
+    }
+    Ok(resolved)
 }
 
 fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
@@ -336,8 +481,12 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
             return Err(Error::InvalidArchive);
         }
         let kind = entry.header().entry_type();
-        if kind.is_symlink() || kind.is_hard_link() || kind.is_gnu_longlink() {
+        if kind.is_hard_link() || kind.is_gnu_longlink() {
             return Err(Error::UnsupportedLink);
+        }
+        #[cfg(not(unix))]
+        if kind.is_symlink() {
+            return Err(Error::UnsupportedSymlinkPlatform);
         }
         if kind.is_gnu_longname() {
             if pending.is_some() {
@@ -356,7 +505,7 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
             pending = Some(name);
             continue;
         }
-        if !kind.is_file() && !kind.is_dir() {
+        if !kind.is_file() && !kind.is_dir() && !kind.is_symlink() {
             return Err(Error::UnsupportedEntry);
         }
         // Check raw fields before tar erases NUL suffixes or USTAR backslashes.
@@ -368,7 +517,25 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
             .take()
             .unwrap_or_else(|| entry.path_bytes().into_owned());
         let mode = entry.header().mode().map_err(|_| Error::InvalidArchive)?;
-        tree.entry(&name, kind.is_dir(), mode, size, &mut entry)?;
+        let link = if kind.is_symlink() {
+            check_tar_field(&entry.header().as_old().linkname)?;
+            Some(
+                entry
+                    .link_name_bytes()
+                    .ok_or(Error::UnsafeLink)?
+                    .into_owned(),
+            )
+        } else {
+            None
+        };
+        tree.entry(
+            &name,
+            kind.is_dir(),
+            mode,
+            size,
+            link.as_deref(),
+            &mut entry,
+        )?;
     }
     let position = archive.into_inner().position() as usize;
     if pending.is_some()
@@ -410,6 +577,8 @@ fn check_tar_field(field: &[u8]) -> Result<(), Error> {
     }
     Ok(())
 }
+
+mod zip;
 
 #[cfg(test)]
 mod tests;
