@@ -31,7 +31,6 @@ fn assert_single_package_affected_tasks(affected_using_task_inputs: bool) {
     )
     .unwrap();
     let mut config = serde_json::json!({
-        "agentGuidance": false,
         "tasks": { "build": { "inputs": ["src/**"] } }
     });
     if affected_using_task_inputs {
