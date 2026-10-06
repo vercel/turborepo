@@ -4,6 +4,7 @@
 pub mod node;
 pub mod node_discovery;
 pub mod package_manager;
+pub mod registry_metadata;
 pub mod version_request;
 
 pub use node::{NodeArtifact, NodeArtifactError};
