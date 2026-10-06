@@ -7,7 +7,7 @@ use tokio::{
     io::{AsyncBufRead, AsyncReadExt, BufReader},
     sync::mpsc,
 };
-use tracing::{debug, trace};
+use tracing::trace;
 
 use super::{Child, ChildExit};
 
@@ -266,15 +266,10 @@ impl Child {
                         continue;
                     }
 
-                    if self.is_closing() {
-                        // During Turbo-initiated shutdown, give the pipe readers a
-                        // short grace window to pull the child's final log lines.
-                        draining_after_exit = true;
-                        drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
-                    } else {
-                        debug!("child process failed, skipping reading stdout/stderr");
-                        return Ok(status);
-                    }
+                    // Give the pipe readers a grace window to drain any remaining
+                    // output lines before returning, preserving final error logs.
+                    draining_after_exit = true;
+                    drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
                 }
                 _ = tokio::time::sleep_until(drain_deadline), if draining_after_exit => {
                     trace!("post-exit output drain timed out");
