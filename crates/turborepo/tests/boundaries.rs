@@ -1,5 +1,6 @@
 mod common;
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_boundaries() -> Result<(), anyhow::Error> {
     check_json_output!(
@@ -12,6 +13,7 @@ fn test_boundaries() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_boundaries_tags() -> Result<(), anyhow::Error> {
     check_json_output!(
@@ -24,6 +26,7 @@ fn test_boundaries_tags() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_boundaries_on_basic_monorepo() -> Result<(), anyhow::Error> {
     check_json_output!(
@@ -36,6 +39,7 @@ fn test_boundaries_on_basic_monorepo() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_boundaries_circular() -> Result<(), anyhow::Error> {
     check_json_output!(

@@ -1,5 +1,6 @@
 mod common;
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_query() -> Result<(), anyhow::Error> {
     check_json_output!(
@@ -24,6 +25,7 @@ fn test_query() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[cfg(not(windows))]
 #[test]
 fn test_double_symlink() -> Result<(), anyhow::Error> {
@@ -44,6 +46,7 @@ fn test_double_symlink() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_ast() -> Result<(), anyhow::Error> {
     // Separate because the `\\` -> `/` filter isn't compatible with ast
@@ -58,6 +61,7 @@ fn test_ast() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_trace() -> Result<(), anyhow::Error> {
     insta::with_settings!({ filters => vec![(r"\\\\", "/")]}, {
@@ -85,6 +89,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
     })
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_trace_on_monorepo() -> Result<(), anyhow::Error> {
     insta::with_settings!({ filters => vec![(r"\\\\", "/")]}, {
@@ -101,6 +106,7 @@ fn test_trace_on_monorepo() -> Result<(), anyhow::Error> {
     })
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_reverse_trace() -> Result<(), anyhow::Error> {
     check_json_output!(
@@ -116,6 +122,7 @@ fn test_reverse_trace() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_task_queries() -> Result<(), anyhow::Error> {
     check_json_output!(

@@ -1,5 +1,6 @@
 mod common;
 
+#[allow(semicolon_in_expressions_from_non_local_macros)]
 #[test]
 fn test_query() -> Result<(), anyhow::Error> {
     check_json_output!(
