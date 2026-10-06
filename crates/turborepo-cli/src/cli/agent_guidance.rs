@@ -88,7 +88,14 @@ fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
         }
     }
 
+    // Resolve a symlinked AGENTS.md so the temp file replaces its target
+    // instead of the link itself.
     let agents_path = repo_root.join("AGENTS.md");
+    let agents_path = match fs::canonicalize(&agents_path) {
+        Ok(resolved) => resolved,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => agents_path,
+        Err(error) => return Err(error),
+    };
     let original = match fs::read_to_string(&agents_path) {
         Ok(contents) => Some(contents),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
@@ -419,6 +426,28 @@ mod tests {
 
         assert!(!replace_if_unchanged(&agents, &temp_file, Some("initial content")).unwrap());
         assert_eq!(fs::read_to_string(agents).unwrap(), "user edit");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preserves_symlinked_agents_file() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        let claude = root.join("CLAUDE.md");
+        let agents = root.join("AGENTS.md");
+        fs::write(&claude, "# Project rules\n").unwrap();
+        std::os::unix::fs::symlink("CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(root).unwrap(), MaintenanceStatus::Updated);
+        assert!(
+            fs::symlink_metadata(&agents)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        let updated = fs::read_to_string(&claude).unwrap();
+        assert!(updated.starts_with("# Project rules\n"));
+        assert!(updated.contains(MANAGED_BLOCK));
     }
 
     #[test]
