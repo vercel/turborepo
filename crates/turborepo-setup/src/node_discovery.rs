@@ -122,6 +122,8 @@ impl Declaration {
 #[derive(Debug, Clone)]
 pub struct NodeRequirements {
     declarations: Vec<Declaration>,
+    // Provenance only: policies must never become unconstrained OR branches.
+    policy_sources: Vec<NodeSource>,
     runtime_end: usize, // Leading runtime alternatives are OR; the remainder AND.
 }
 
@@ -139,6 +141,7 @@ impl NodeRequirements {
     pub fn read(root: &Path) -> Result<Self, NodeDiscoveryError> {
         let mut result = Self {
             declarations: Vec::new(),
+            policy_sources: Vec::new(),
             runtime_end: 0,
         };
         let manifest = read_optional(root, "package.json", MAX_MANIFEST_BYTES)?
@@ -200,7 +203,10 @@ impl NodeRequirements {
     }
 
     pub fn sources(&self) -> impl Iterator<Item = &NodeSource> {
-        self.declarations.iter().map(|d| &d.source)
+        self.declarations
+            .iter()
+            .map(|d| &d.source)
+            .chain(&self.policy_sources)
     }
 
     /// Injected metadata only. Validate all identities, even ineligible
@@ -262,6 +268,23 @@ impl NodeRequirements {
             .and_then(normalize_name)
             .ok_or_else(|| invalid(&location, "expected runtime name"))?;
         if name == "node" {
+            if let Some(policy) = object.get("onFail") {
+                let location = format!("{location}.onFail");
+                match policy.as_str() {
+                    Some("error") => self.policy_sources.push(NodeSource {
+                        file: "package.json",
+                        field: Some(format!("{field}.onFail")),
+                        request: Some("error".into()),
+                    }),
+                    Some("warn" | "ignore") => {
+                        return Err(invalid(
+                            &location,
+                            "advisory Node runtime onFail policies are unsupported by setup",
+                        ));
+                    }
+                    _ => return Err(invalid(&location, "expected error, warn, or ignore")),
+                }
+            }
             let request = object
                 .get("version")
                 .map(|v| {
