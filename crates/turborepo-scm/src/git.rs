@@ -119,6 +119,29 @@ impl SCM {
         }
     }
 
+    /// Checks HEAD tree membership without reading a blob or consulting the
+    /// index. This also works when committed content is absent in a blobless
+    /// checkout, and does not mistake a staged addition for a committed path.
+    pub fn is_path_committed(&self, path: &AbsoluteSystemPath) -> Result<bool, Error> {
+        match self {
+            Self::Git(git) => {
+                let relative = git.root.anchor(path)?.to_unix();
+                let output = git.execute_git_command(
+                    &[
+                        "--literal-pathspecs",
+                        "ls-tree",
+                        "-z",
+                        "--name-only",
+                        "HEAD",
+                    ],
+                    relative.as_str(),
+                )?;
+                Ok(!output.is_empty())
+            }
+            Self::Manual => Ok(false),
+        }
+    }
+
     pub fn previous_content(
         &self,
         from_commit: Option<&str>,
@@ -769,6 +792,42 @@ mod tests {
 
         let path = repo_root.path().to_path_buf();
         Ok((repo_root, path))
+    }
+
+    #[test]
+    fn committed_path_detection_does_not_require_blob_contents() {
+        let (_temp, repo) = setup_repository(Some("main")).unwrap();
+        run_git(
+            &repo,
+            &[
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "Initial",
+            ],
+        );
+        let root = AbsoluteSystemPath::from_std_path(&repo).unwrap();
+        let scm = SCM::new(root);
+        let lock = root.join_components(&["nested[repo]", "turbo.lock"]);
+        fs::create_dir_all(repo.join("nested[repo]")).unwrap();
+        fs::write(&lock, "toolchain resolution\n").unwrap();
+        assert!(!scm.is_path_committed(&lock).unwrap());
+        run_git(&repo, &["add", "nested[repo]/turbo.lock"]);
+        assert!(!scm.is_path_committed(&lock).unwrap());
+        run_git(
+            &repo,
+            &["-c", "commit.gpgsign=false", "commit", "-m", "Lock"],
+        );
+        assert!(scm.is_path_committed(&lock).unwrap());
+        assert!(!SCM::Manual.is_path_committed(&lock).unwrap());
+
+        let blob = run_git(&repo, &["rev-parse", "HEAD:nested[repo]/turbo.lock"]);
+        fs::remove_file(&lock).unwrap();
+        fs::remove_file(repo.join(".git/objects").join(&blob[..2]).join(&blob[2..])).unwrap();
+        assert!(scm.previous_content(Some("HEAD"), &lock).is_err());
+        assert!(scm.is_path_committed(&lock).unwrap());
     }
 
     fn changed_files(
