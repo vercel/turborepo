@@ -93,7 +93,15 @@ fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
     let agents_path = repo_root.join("AGENTS.md");
     let agents_path = match fs::canonicalize(&agents_path) {
         Ok(resolved) => resolved,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => agents_path,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            // A dangling link must still be created through, not replaced.
+            match fs::read_link(&agents_path) {
+                Ok(target) => agents_path
+                    .parent()
+                    .map_or(target.clone(), |dir| dir.join(target)),
+                Err(_) => agents_path,
+            }
+        }
         Err(error) => return Err(error),
     };
     let original = match fs::read_to_string(&agents_path) {
@@ -108,10 +116,7 @@ fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
         Err(()) => return Ok(MaintenanceStatus::MalformedMarkers),
     };
 
-    let Some(parent) = agents_path.parent() else {
-        return Err(io::Error::other("AGENTS.md has no parent directory"));
-    };
-    let temp_path = write_temp_file(parent, &updated, original.as_deref())?;
+    let temp_path = write_temp_file(&agents_path, &updated, original.as_deref())?;
 
     // Do not replace the file if another editor changed it after we read it.
     // All turbo invocations additionally share the pid lock above.
@@ -177,9 +182,16 @@ fn upsert_managed_block(existing: Option<&str>) -> Result<Option<String>, ()> {
     Ok(Some(format!("{existing}{separator}{MANAGED_BLOCK}\n")))
 }
 
-fn write_temp_file(parent: &Path, contents: &str, original: Option<&str>) -> io::Result<PathBuf> {
+fn write_temp_file(
+    agents_path: &Path,
+    contents: &str,
+    original: Option<&str>,
+) -> io::Result<PathBuf> {
+    let Some(parent) = agents_path.parent() else {
+        return Err(io::Error::other("AGENTS.md has no parent directory"));
+    };
     let permissions = original
-        .and_then(|_| fs::metadata(parent.join("AGENTS.md")).ok())
+        .and_then(|_| fs::metadata(agents_path).ok())
         .map(|metadata| metadata.permissions());
 
     loop {
@@ -448,6 +460,66 @@ mod tests {
         let updated = fs::read_to_string(&claude).unwrap();
         assert!(updated.starts_with("# Project rules\n"));
         assert!(updated.contains(MANAGED_BLOCK));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preserves_mode_and_directory_of_cross_directory_symlink() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        let docs = root.join("docs");
+        fs::create_dir(&docs).unwrap();
+        let target = docs.join("CLAUDE.md");
+        fs::write(&target, "# Project rules\n").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("docs/CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(root).unwrap(), MaintenanceStatus::Updated);
+        assert!(
+            fs::symlink_metadata(&agents)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(fs::read_to_string(&target).unwrap().contains(MANAGED_BLOCK));
+        for dir in [root, docs.as_path()] {
+            assert!(!fs::read_dir(dir).unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".tmp")
+            }));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_through_dangling_symlink() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(root).unwrap(), MaintenanceStatus::Updated);
+        assert!(
+            fs::symlink_metadata(&agents)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            fs::read_to_string(root.join("CLAUDE.md"))
+                .unwrap()
+                .contains(MANAGED_BLOCK)
+        );
     }
 
     #[test]
