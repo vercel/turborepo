@@ -1,16 +1,18 @@
 use std::{
     collections::BTreeMap,
     fs::{File, OpenOptions},
-    io::{self, Read, Write},
+    io::{self, Read},
     path::Path,
 };
 
 use super::{Declaration, Error, Installation, Lock, MAX_LOCK_BYTES, declarations};
-use crate::{NodeDiscoveryError, NodeRequirements, node_discovery::UniqueJson, package_manager};
+use crate::{
+    NodeDiscoveryError, NodeRequirements, node_discovery::UniqueJson, package_manager,
+    writer_storage::WriterStorage,
+};
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const WRITER_LOCK: &str = ".turbo-lock.writer";
 const NATIVE: [&str; 3] = ["node", "npm", "pnpm"];
 
 #[derive(Debug, thiserror::Error)]
@@ -90,9 +92,9 @@ impl Lock {
 // No following final-component links, including dangling links; nonblocking
 // opens avoid hanging on FIFOs. The explicit root is canonicalized once. This
 // protects paths in a stable repository, not an attacker replacing root dirs.
-fn open_regular(path: &Path, create: bool) -> io::Result<File> {
+fn open_regular(path: &Path) -> io::Result<File> {
     let mut options = OpenOptions::new();
-    options.read(true).write(create).create(create);
+    options.read(true);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -119,7 +121,7 @@ fn open_regular(path: &Path, create: bool) -> io::Result<File> {
 }
 
 fn read_optional(root: &Path, name: &str, limit: usize) -> io::Result<Option<Vec<u8>>> {
-    let file = match open_regular(&root.join(name), false) {
+    let file = match open_regular(&root.join(name)) {
         Ok(file) => file,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
@@ -220,39 +222,25 @@ pub fn probe_native(root: &Path) -> Result<DeclarationMap, StorageError> {
     Ok(result)
 }
 
-/// Only complete validated selections enter this API. A persistent sidecar is
-/// locked across the read/compare/stage/replace sequence, never turbo.lock's
-/// replaceable inode. Never unlink the sidecar: waiters must share its inode.
-/// Read-only consumers need no lock: replacement exposes one complete file.
+/// Explicit unconditional publication of a complete validated selection.
+/// Bookkeeping and recovery belong to ignored WriterStorage; readers never
+/// acquire it. Resolver callers must use lock/source snapshot CAS instead.
 pub fn write(root: &Path, lock: &Lock) -> Result<WriteOutcome, StorageError> {
-    write_with(root, lock, |_| Ok(()))
+    write_with(root, lock, || Ok(()))
 }
 
 fn write_with(
     root: &Path,
     lock: &Lock,
-    before_replace: impl FnOnce(&Path) -> io::Result<()>,
+    before_replace: impl FnOnce() -> io::Result<()>,
 ) -> Result<WriteOutcome, StorageError> {
     let bytes = lock.canonical_bytes()?;
-    let root = root.canonicalize()?;
-    let guard = open_regular(&root.join(WRITER_LOCK), true)?;
-    guard.lock()?;
-    if read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?.as_deref() == Some(&bytes) {
+    let mut guard = WriterStorage::acquire(root)?;
+    if guard.read_lock()?.as_deref() == Some(&bytes) {
         return Ok(WriteOutcome::Unchanged);
     }
-    let mut staged = tempfile::Builder::new()
-        .prefix(".turbo-lock-")
-        .tempfile_in(&root)?;
-    staged.write_all(&bytes)?;
-    staged.as_file().sync_all()?;
-    before_replace(staged.path())?;
-    // Recheck target type after staging; never follow a lockfile symlink.
-    read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?;
-    staged
-        .persist(root.join(LOCK_NAME))
-        .map_err(|error| error.error)?;
-    // No fallible operation after promotion: an error always leaves the old
-    // lock intact. sync_all above flushes staged content, not the directory.
+    before_replace()?;
+    guard.replace(&bytes)?;
     Ok(WriteOutcome::Written)
 }
 
