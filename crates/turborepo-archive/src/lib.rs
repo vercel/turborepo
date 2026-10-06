@@ -1,5 +1,4 @@
-//! TURBO-6300: verified TAR/TAR.GZ extraction; no transport, installation or
-//! CLI.
+//! Verified TAR/TAR.GZ and ZIP extraction; no transport, installation or CLI.
 //!
 //! The extractor creates and owns a fresh staging directory, never accepts an
 //! existing extraction tree, and deletes staging on failure/drop. The OS temp
@@ -17,8 +16,13 @@
 //! decoded TAR (headers/padding/trailers), not just advertised entry sizes.
 //! Unix file rwx bits are preserved with owner read/write enabled and special
 //! bits stripped; directories stay private/writable for cleanup. Windows has
-//! no Unix executable-mode equivalent. ZIP belongs to parent TURBO-6204.
-//! Native platform qualification is required before claiming support.
+//! no Unix executable-mode equivalent. ZIP supports single-disk ZIP32 stored
+//! and DEFLATE entries, with optional data descriptors. Encryption, ZIP64,
+//! self-extracting prefixes, reordered/overlapping local records, and unknown
+//! extra fields/host attributes are rejected rather than interpreted loosely.
+//! ZIP input, total decoded payload, entry count and path work are bounded;
+//! metadata is borrowed from the bounded input, never allocated from ZIP
+//! counts. Native platform qualification is required before claiming support.
 
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -42,7 +46,7 @@ pub enum Error {
     UnsafePath,
     #[error("archive paths collide, repeat, or conflict with a parent file")]
     PathConflict,
-    #[error("hard links and GNU long links are unsupported")]
+    #[error("ZIP links, hard links, and GNU long links are unsupported")]
     UnsupportedLink,
     #[error("archive symlinks require a qualified Unix host; unsupported on this platform")]
     UnsupportedSymlinkPlatform,
@@ -50,7 +54,7 @@ pub enum Error {
     UnsafeLink,
     #[error("archive symlinks form a cycle")]
     LinkCycle,
-    #[error("unsupported archive entry or metadata (special files, sparse or PAX TAR)")]
+    #[error("unsupported archive entry, encryption, or metadata")]
     UnsupportedEntry,
     #[error("archive does not match the required root and regular-file layout")]
     LayoutMismatch,
@@ -64,9 +68,10 @@ pub enum Error {
 pub enum Format {
     Tar,
     TarGz,
+    Zip,
 }
 
-/// Bounds input bytes, decoded TAR bytes, raw entries and
+/// Bounds input bytes, decoded TAR bytes (ZIP payload bytes), raw entries and
 /// created nodes (including implicit directories), and each path's bytes/depth.
 /// Allocator/parser overhead is not part of the byte limit. No CPU time budget.
 #[derive(Clone, Copy)]
@@ -156,6 +161,7 @@ pub fn extract(
     };
     match format {
         Format::Tar => extract_tar(artifact, &mut tree)?,
+        Format::Zip => zip::extract_zip(artifact, &mut tree)?,
         Format::TarGz => {
             let mut decoded = Vec::new();
             flate2::read::MultiGzDecoder::new(artifact)
@@ -571,6 +577,8 @@ fn check_tar_field(field: &[u8]) -> Result<(), Error> {
     }
     Ok(())
 }
+
+mod zip;
 
 #[cfg(test)]
 mod tests;

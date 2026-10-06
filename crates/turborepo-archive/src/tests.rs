@@ -13,11 +13,18 @@ use turborepo_download::ExpectedSha256;
 
 use super::{Error::*, Format::*, *};
 
+pub(super) fn fixture_permissions(path: &std::path::Path, mode: u32) {
+    #[cfg(unix)]
+    fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+    #[cfg(not(unix))]
+    let _ = (path, mode);
+}
+
 fn verified(bytes: Vec<u8>) -> VerifiedArtifact {
     let digest = ExpectedSha256::from_hex(&hex::encode(Sha256::digest(&bytes))).unwrap();
     VerifiedArtifact::verify_bytes(bytes, digest).unwrap()
 }
-fn limits() -> Limits {
+pub(super) fn limits() -> Limits {
     Limits::new(32 * 1024, 32, 240, 8).unwrap()
 }
 fn layout<'a>(files: &'a [&'a str]) -> Layout<'a> {
@@ -26,10 +33,14 @@ fn layout<'a>(files: &'a [&'a str]) -> Layout<'a> {
         required_files: files,
     }
 }
-fn unpack(bytes: Vec<u8>, format: Format, limits: Limits) -> Result<ExtractedArtifact, Error> {
+pub(super) fn unpack(
+    bytes: Vec<u8>,
+    format: Format,
+    limits: Limits,
+) -> Result<ExtractedArtifact, Error> {
     extract(&verified(bytes), format, limits, layout(&["bin/tool"]))
 }
-fn rejected(bytes: Vec<u8>, format: Format, limits: Limits, expected: Error) {
+pub(super) fn rejected(bytes: Vec<u8>, format: Format, limits: Limits, expected: Error) {
     match unpack(bytes, format, limits) {
         Ok(_) => panic!("expected {expected}"),
         Err(actual) => assert_eq!(discriminant(&actual), discriminant(&expected), "{actual}"),
@@ -335,11 +346,14 @@ fn destination_copy_errors_keep_their_io_kind() {
 #[test]
 fn failure_cleanup_and_no_surrounding_writes() {
     let surrounding = tempfile::tempdir().unwrap();
+    fixture_permissions(surrounding.path(), 0o700);
     let sentinel = surrounding.path().join("sentinel");
     fs::write(&sentinel, b"unchanged").unwrap();
+    fixture_permissions(&sentinel, 0o600);
     let staging = tempfile::Builder::new()
         .tempdir_in(surrounding.path())
         .unwrap();
+    fixture_permissions(staging.path(), 0o700);
     let path = staging.path().to_owned();
     let mut tree = Tree {
         staging,

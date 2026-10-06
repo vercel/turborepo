@@ -10,6 +10,7 @@ description = "Bounded verified archive extraction into owned private staging"
 workspace = true
 
 [dependencies]
+crc32fast = "1.5.0"
 flate2 = "1.1.9"
 tar = { version = "0.4.45", default-features = false }
 tempfile = { workspace = true }
