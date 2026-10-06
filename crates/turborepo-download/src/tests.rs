@@ -14,6 +14,7 @@ use tokio::{
 
 use super::*;
 
+mod sha512;
 mod transport;
 
 type TestResult = Result<(), Box<dyn StdError>>;
