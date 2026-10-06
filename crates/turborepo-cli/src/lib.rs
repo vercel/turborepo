@@ -10,6 +10,7 @@
 // functions; keep error layouts stable until a separate API/performance review.
 #![allow(clippy::result_large_err)]
 
+mod capabilities;
 mod cli;
 mod commands;
 mod config;
@@ -53,6 +54,9 @@ pub fn get_version() -> &'static str {
 pub fn main(
     query_server: Option<std::sync::Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, shim::Error> {
+    if let Some(code) = capabilities::run_query(std::env::args_os()) {
+        return Ok(code);
+    }
     raise_open_file_limit();
     shim::run(query_server)
 }
