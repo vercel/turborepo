@@ -46,36 +46,16 @@ familiar with Turborepo.
 <Step>
 ### Install `turbo`
 
-Install `turbo` globally.
-
-<Tabs items={["macOS and Linux", "Windows x64"]}>
-  <Tab value="macOS and Linux">
-
-```sh title="Terminal"
-curl -fsSL https://turborepo.dev/install | sh
-```
-
-  </Tab>
-  <Tab value="Windows x64">
-
-```powershell title="PowerShell"
-irm https://turborepo.dev/install.ps1 | iex
-```
-
-  </Tab>
-</Tabs>
-
-<Callout type="info">
-  The binaries are also available in the [GitHub release assets](https://github.com/vercel/turborepo/releases).
-</Callout>
-
-Then pin `turbo` in your repository's root:
+We recommend you install `turbo` both globally and into your repository's root for the best developer experience.
 
 <PackageManagerTabs>
   <Tab value="pnpm">
       Ensure you have created a `pnpm-workspace.yaml` file before you begin the installation. Failure to have this file will result in an error that says: ` --workspace-root may only be used inside a workspace`.
 
     ```bash title="Terminal"
+    # Global install
+    pnpm add turbo --global
+    # Install in repository
     pnpm add turbo --save-dev --workspace-root
     ```
 
@@ -83,6 +63,9 @@ Then pin `turbo` in your repository's root:
   <Tab value="yarn">
 
     ```bash title="Terminal"
+    # Global install
+    yarn global add turbo
+    # Install in repository
     yarn add turbo --dev
     ```
 
@@ -90,6 +73,9 @@ Then pin `turbo` in your repository's root:
   <Tab value="npm">
 
     ```bash title="Terminal"
+    # Global install
+    npm install turbo --global
+    # Install in repository
     npm install turbo --save-dev
     ```
 
@@ -97,6 +83,9 @@ Then pin `turbo` in your repository's root:
   <Tab value="bun">
 
     ```bash title="Terminal"
+    # Global install
+    bun install turbo --global
+    # Install in repository
     bun install turbo --dev
     ```
 
@@ -105,6 +94,9 @@ Then pin `turbo` in your repository's root:
 <Tab value="nub">
 
     ```bash title="Terminal"
+    # Global install
+    nub add turbo --global
+    # Install in repository
     nub add turbo --save-dev
     ```
 
@@ -113,6 +105,9 @@ Then pin `turbo` in your repository's root:
 <Tab value="aube">
 
     ```bash title="Terminal"
+    # Global install
+    aube add turbo --global
+    # Install in repository
     aube add turbo --save-dev
     ```
 
@@ -120,7 +115,7 @@ Then pin `turbo` in your repository's root:
 
 </PackageManagerTabs>
 
-The installed local version takes precedence when you run the global binary in your repository. See [Installation](/docs/getting-started/installation#repository-installation) for details.
+To learn more about why we recommend both installations, visit the [Installation page](/docs/getting-started/installation).
 
 </Step>
 <Step>
