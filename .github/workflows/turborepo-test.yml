@@ -12,7 +12,8 @@ on:
     branches: [main]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  # Review events must not cancel in-progress code checks.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}-${{ github.event_name == 'pull_request_review' && 'review' || 'code' }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 permissions:
@@ -21,6 +22,7 @@ permissions:
 jobs:
   release-pr:
     name: Validate release PR
+    if: github.event_name != 'pull_request_review'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -44,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "pull_request_review" ]]; then
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
             echo "is-release-pr=false" >> "$GITHUB_OUTPUT"
             echo "Not a pull request event, skipping release PR check"
             exit 0
@@ -93,7 +95,7 @@ jobs:
           echo "Release PR content validation passed - only generated release files changed"
 
   quality:
-    if: github.event_name != 'push'
+    if: github.event_name == 'pull_request'
     permissions:
       contents: read
       id-token: write
@@ -102,24 +104,17 @@ jobs:
 
   js_tests:
     needs: release-pr
-    if: github.event_name != 'push' && needs.release-pr.outputs.is-release-pr != 'true'
+    if: github.event_name == 'pull_request' && needs.release-pr.outputs.is-release-pr != 'true'
     permissions:
       contents: read
       id-token: write
     uses: ./.github/workflows/test-js-packages.yml
     secrets: inherit
 
-  review_gate:
-    if: github.event_name != 'push'
-    permissions:
-      contents: read
-      pull-requests: read
-    uses: ./.github/workflows/release-review-gate.yml
-
   turbo_types_check:
     name: "@turbo/types codegen check"
     needs: release-pr
-    if: needs.release-pr.outputs.is-release-pr != 'true'
+    if: github.event_name != 'pull_request_review' && needs.release-pr.outputs.is-release-pr != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -186,7 +181,7 @@ jobs:
       # For the OIDC token exchanged for a Remote Cache access token.
       id-token: write
     needs: release-pr
-    if: needs.release-pr.outputs.is-release-pr != 'true'
+    if: github.event_name != 'pull_request_review' && needs.release-pr.outputs.is-release-pr != 'true'
     env:
       TURBO_CACHE: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && 'remote:rw' || 'local:rw' }}
     steps:
@@ -373,7 +368,7 @@ jobs:
     name: Integration - Lockfile parsers
     timeout-minutes: 15
     needs: release-pr
-    if: needs.release-pr.outputs.is-release-pr != 'true'
+    if: github.event_name != 'pull_request_review' && needs.release-pr.outputs.is-release-pr != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -436,7 +431,7 @@ jobs:
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     needs: release-pr
-    if: needs.release-pr.outputs.is-release-pr != 'true'
+    if: github.event_name != 'pull_request_review' && needs.release-pr.outputs.is-release-pr != 'true'
     timeout-minutes: 15
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -513,16 +508,15 @@ jobs:
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 
-  summary:
-    name: CI Summary
+  code_checks:
+    name: "Code checks (PR #${{ github.event.pull_request.number || 0 }}, ${{ github.event.pull_request.base.ref || github.ref_name }})"
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: always()
+    if: always() && github.event_name != 'pull_request_review'
     needs:
       - release-pr
       - quality
       - js_tests
-      - review_gate
       - turbo_types_check
       - rust_test
       - check-examples
@@ -534,18 +528,59 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Validate code CI results
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT_NAME: ${{ github.event_name }}
+          CI_CODE_ONLY: "true"
+        run: |
+          node --test scripts/validate-ci-summary.test.mjs scripts/validate-review-ci.test.mjs
+          node scripts/validate-ci-summary.mjs
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    if: always()
+    needs: code_checks
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
       - name: Validate all CI results
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
           CI_EVENT_NAME: ${{ github.event_name }}
-        run: |
-          node --test scripts/validate-ci-summary.test.mjs
-          node scripts/validate-ci-summary.mjs
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/validate-ci-summary.mjs
+
+      - name: Checkout trusted review policy
+        if: github.event_name != 'push'
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted-review-policy
+          persist-credentials: false
+
+      - name: Validate review requirement
+        if: github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: node trusted-review-policy/scripts/validate-review-gate.mjs
 
   cleanup:
     name: Cleanup
     needs: summary
-    if: always()
+    if: always() && github.event_name != 'pull_request_review'
     permissions:
       actions: write
     uses: ./.github/workflows/pr-clean-caches.yml
