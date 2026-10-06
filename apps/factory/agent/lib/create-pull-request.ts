@@ -260,7 +260,7 @@ export async function createPullRequest(
       ? `agents/examples-${selection.example}-${selection.date}`
       : input.branchName;
   if (!branchName) {
-    throw new Error("Interactive pull requests require an agents/* branch.");
+    throw new Error("Interactive pull requests require a branch name.");
   }
   if (
     auth?.attributes?.[FACTORY_PULL_REQUEST_FEEDBACK_ATTRIBUTE] === "true" &&
@@ -465,7 +465,7 @@ export async function createPullRequest(
       method: "GET",
       owner,
       repo,
-      path: `/git/ref/heads/${branchName}`
+      path: `/git/ref/heads/${encodeURIComponent(branchName)}`
     });
     newCommitSha = requireSha(branchRef.object?.sha, "branch ref SHA");
     const existingCommit = await github<CommitResponse>({
