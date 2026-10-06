@@ -11,7 +11,7 @@ export function ungradedAttempts(resultsRoot, variants, fixtures) {
     const runs = readdirSync(variantRoot)
       .filter((name) => statSync(join(variantRoot, name)).isDirectory())
       .sort()
-      .reverse();
+      .toReversed();
     for (const fixture of fixtures) {
       const latest = runs.find((run) =>
         existsSync(join(variantRoot, run, fixture, "summary.json"))
