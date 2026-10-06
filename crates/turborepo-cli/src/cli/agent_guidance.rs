@@ -3,8 +3,6 @@ use std::{
     io::{self, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
-    thread,
-    time::Duration,
 };
 
 const BEGIN_MARKER: &str = "<!-- BEGIN:turborepo-agent-rules -->";
@@ -67,30 +65,20 @@ fn find_bundled_docs_index(executable: &Path) -> Option<PathBuf> {
     None
 }
 
-fn acquire_lock(lock: &mut pidlock::Pidlock) -> Result<(), pidlock::PidlockError> {
-    let mut attempts = 0;
-    loop {
-        match lock.acquire() {
-            Err(pidlock::PidlockError::File(pidlock::PidFileError::Invalid { .. }))
-                if attempts < 10 =>
-            {
-                // Pidlock creates the lock file before writing its PID. A
-                // competing invocation can observe that short initialization
-                // window and see an empty or partial file.
-                attempts += 1;
-                thread::sleep(Duration::from_millis(1));
-            }
-            result => return result,
-        }
-    }
-}
-
 fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
     let lock_path = repo_root.join(".turborepo-agent-guidance.lock");
     let mut lock = pidlock::Pidlock::new(lock_path);
-    match acquire_lock(&mut lock) {
+    match lock.acquire() {
         Ok(()) => {}
-        Err(pidlock::PidlockError::AlreadyOwned | pidlock::PidlockError::LockExists(_)) => {
+        Err(
+            pidlock::PidlockError::AlreadyOwned
+            | pidlock::PidlockError::LockExists(_)
+            | pidlock::PidlockError::File(pidlock::PidFileError::Invalid { .. }),
+        ) => {
+            // Pidlock creates the lock file before writing its PID. An invalid
+            // PID can mean another invocation is still initializing the lock.
+            // This update is best-effort, so defer without assuming the writer
+            // will finish within a fixed retry deadline or removing its lock.
             return Ok(MaintenanceStatus::Locked);
         }
         Err(error) => {
@@ -218,7 +206,12 @@ fn write_temp_file(parent: &Path, contents: &str, original: Option<&str>) -> io:
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path, thread};
+    use std::{
+        fs,
+        path::Path,
+        sync::{Arc, Barrier},
+        thread,
+    };
 
     use tempfile::TempDir;
 
@@ -350,22 +343,63 @@ mod tests {
     }
 
     #[test]
+    fn skips_incomplete_or_invalid_locks_without_touching_files() {
+        for contents in ["", "not a PID"] {
+            let temp = TempDir::new().unwrap();
+            let agents = temp.path().join("AGENTS.md");
+            let lock_path = temp.path().join(".turborepo-agent-guidance.lock");
+            let user_content = "# Project rules\n";
+            fs::write(&agents, user_content).unwrap();
+            fs::write(&lock_path, contents).unwrap();
+
+            assert_eq!(upsert(temp.path()).unwrap(), MaintenanceStatus::Locked);
+            assert_eq!(fs::read_to_string(&agents).unwrap(), user_content);
+            assert_eq!(fs::read_to_string(&lock_path).unwrap(), contents);
+
+            fs::remove_file(&lock_path).unwrap();
+            assert_eq!(upsert(temp.path()).unwrap(), MaintenanceStatus::Updated);
+        }
+    }
+
+    #[test]
     fn concurrent_invocations_preserve_a_single_complete_block() {
         let temp = TempDir::new().unwrap();
         let root = temp.path().to_owned();
+        let barrier = Arc::new(Barrier::new(8));
         let handles = (0..8)
             .map(|_| {
                 let root = root.clone();
-                thread::spawn(move || upsert(&root).unwrap())
+                let barrier = Arc::clone(&barrier);
+                thread::spawn(move || {
+                    barrier.wait();
+                    upsert(&root).unwrap()
+                })
             })
             .collect::<Vec<_>>();
-        for handle in handles {
-            assert!(matches!(
-                handle.join().unwrap(),
-                MaintenanceStatus::Updated
-                    | MaintenanceStatus::Unchanged
-                    | MaintenanceStatus::Locked
-            ));
+        // Join every worker before asserting so a failure cannot drop the
+        // temporary directory while other workers are still using it.
+        let results = handles
+            .into_iter()
+            .map(|handle| handle.join())
+            .collect::<Vec<_>>();
+        let statuses = results.into_iter().map(Result::unwrap).collect::<Vec<_>>();
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|status| **status == MaintenanceStatus::Updated)
+                .count(),
+            1
+        );
+        for status in statuses {
+            assert!(
+                matches!(
+                    status,
+                    MaintenanceStatus::Updated
+                        | MaintenanceStatus::Unchanged
+                        | MaintenanceStatus::Locked
+                ),
+                "unexpected maintenance status: {status:?}"
+            );
         }
 
         let contents = fs::read_to_string(root.join("AGENTS.md")).unwrap();
