@@ -1060,6 +1060,16 @@ impl Args {
         }
     }
 
+    /// Fetch the `turbo cache push` args supplied to the command
+    pub fn cache_push_args(&self) -> Option<&CachePushArgs> {
+        match &self.command {
+            Some(Command::Cache {
+                command: CacheCommand::Push(push_args),
+            }) => Some(push_args),
+            _ => None,
+        }
+    }
+
     pub(super) fn remove_single_package(
         args: Vec<OsString>,
     ) -> (bool, impl Iterator<Item = OsString>) {
@@ -1143,6 +1153,11 @@ pub enum Command {
         ignore: Option<BoundariesIgnore>,
         #[usage(long, requires = "ignore")]
         reason: Option<String>,
+    },
+    /// Manage cached task artifacts
+    Cache {
+        #[usage(subcommand)]
+        command: CacheCommand,
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: CompletionShell },
@@ -1407,6 +1422,24 @@ pub enum QuerySubcommand {
     Affected(AffectedArgs),
     /// List packages in your monorepo (shorthand for a packages query)
     Ls(LsArgs),
+}
+
+#[derive(Subcommands, Clone, Debug, PartialEq)]
+pub enum CacheCommand {
+    /// Upload task artifacts from the local cache to the Remote Cache
+    Push(CachePushArgs),
+}
+
+#[derive(UsageArgs, Clone, Debug, PartialEq)]
+pub struct CachePushArgs {
+    /// Hashes of locally cached tasks to upload (see `turbo run --dry=json`)
+    #[usage(required = true, value_name = "HASH")]
+    pub hashes: Vec<String>,
+    /// Seconds allowed for each artifact upload; 0 disables the timeout.
+    /// Overrides TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT and
+    /// remoteCache.uploadTimeout
+    #[usage(long, value_name = "SECONDS")]
+    pub upload_timeout: Option<u64>,
 }
 
 #[derive(UsageArgs, Clone, Debug, PartialEq)]

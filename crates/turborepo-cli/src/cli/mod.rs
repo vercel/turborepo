@@ -20,8 +20,8 @@ use turborepo_watch::WatchClient;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, setup, telemetry, unlink,
+        CommandBase, bin, boundaries, cache, config, daemon, docs, generate, get_mfe_port, info,
+        link, login, logout, ls, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
@@ -36,10 +36,11 @@ mod test;
 
 #[allow(unused_imports)]
 pub use args::{
-    AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
-    EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
-    GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
-    QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
+    AffectedArgs, Args, BoundariesIgnore, CacheCommand, CachePushArgs, Command, ContinueModeArg,
+    DaemonCommand, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
+    GenerateWorkspaceArgs, GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, LsArgs,
+    NonEmptyPath, OutputFormat, OutputLogsModeArg, QuerySubcommand, RunArgs, SetupArgs,
+    TelemetryCommand, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -493,6 +494,16 @@ async fn run_main(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             Ok(boundaries::run(base, event, ignore, reason).await?)
+        }
+        Command::Cache {
+            command: CacheCommand::Push(push_args),
+        } => {
+            let event = CommandEventBuilder::new("cache-push").with_parent(&root_telemetry);
+            event.track_call();
+            let hashes = push_args.hashes.clone();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
+            Ok(cache::push(&base, &hashes).await?)
         }
         #[allow(unused_variables)]
         Command::Daemon {

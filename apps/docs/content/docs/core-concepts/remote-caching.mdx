@@ -205,6 +205,16 @@ To enable this feature, set the `remoteCache` options on your `turbo.json` confi
 }
 ```
 
+## Uploading local artifacts manually
+
+If a task ran without Remote Cache access, or its upload failed, you can upload the locally cached artifact afterward with [`turbo cache push`](/docs/reference/cache#push):
+
+```bash title="Terminal"
+turbo cache push <hash> --upload-timeout=300
+```
+
+The artifact is uploaded exactly as stored in your local cache, so other machines get a cache hit for that task hash.
+
 ## Remote Cache API
 
 A Remote Cache can be implemented by any HTTP server that meets Turborepo's Remote Caching API specification.

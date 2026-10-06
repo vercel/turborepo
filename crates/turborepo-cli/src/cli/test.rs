@@ -8,7 +8,7 @@ use turborepo_run_opts::{ExecutionSelector, RunSelector};
 use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsMode};
 
 use crate::cli::{
-    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
+    CachePushArgs, ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
     GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
     RunArgs, should_maintain_agent_guidance,
 };
@@ -501,6 +501,16 @@ fn logout_short_help() {
 #[test]
 fn devtools_short_help() {
     let cmd = get_subcommand("devtools");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
+fn cache_push_short_help() {
+    let cmd = get_subcommand("cache")
+        .subcommands
+        .iter()
+        .find(|command| command.name == "push")
+        .unwrap();
     assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
 
@@ -1927,6 +1937,29 @@ fn test_pass_through_args() {
 #[test]
 fn test_parse_prune_no_mixed_arg_and_flag() {
     assert!(parse_args(["turbo", "prune", "foo", "--scope", "bar"]).is_err(),);
+}
+
+#[test]
+fn test_parse_cache_push() {
+    assert!(parse_args(["turbo", "cache", "push"]).is_err());
+    assert!(parse_args(["turbo", "cache", "push", "--upload-timeout", "5"]).is_err());
+    let args = parse_args([
+        "turbo",
+        "cache",
+        "push",
+        "0123abcd",
+        "4567ef01",
+        "--upload-timeout",
+        "0",
+    ])
+    .unwrap();
+    assert_eq!(
+        args.cache_push_args(),
+        Some(&CachePushArgs {
+            hashes: vec!["0123abcd".to_string(), "4567ef01".to_string()],
+            upload_timeout: Some(0),
+        })
+    );
 }
 
 #[test]

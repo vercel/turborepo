@@ -1,0 +1,51 @@
+---
+title: cache
+description: API reference for the `turbo cache` command
+product: turborepo
+type: reference
+summary: Reference for the `turbo cache` command that manages cached task artifacts, including uploading local artifacts to Remote Cache.
+related:
+  - /docs/core-concepts/remote-caching
+  - /docs/reference/link
+  - /docs/reference/configuration#uploadtimeout
+---
+
+```bash title="Terminal"
+turbo cache <subcommand>
+```
+
+Manage cached task artifacts.
+
+## Subcommands
+
+### `push`
+
+```bash title="Terminal"
+turbo cache push <hash...> [--upload-timeout <seconds>]
+```
+
+Upload task artifacts from the local filesystem cache to [Remote Cache](/docs/core-concepts/remote-caching). Use this to share a build that ran without Remote Cache access, or whose upload failed during `turbo run`.
+
+Each argument is a task hash. You can find task hashes in the `cache miss, executing <hash>` log line, in [run summaries](/docs/reference/run#--summarize), or with a dry run:
+
+```bash title="Terminal"
+turbo run build --filter=web --dry=json | jq -r '.tasks[].hash'
+```
+
+`turbo cache push` uploads the archive exactly as it is stored in the local cache. It keeps the task duration and the git commit information recorded when the task ran. If [artifact signing](/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification) is enabled, each artifact is signed with `TURBO_REMOTE_CACHE_SIGNATURE_KEY` before upload.
+
+Before uploading anything, `turbo` checks that every hash exists in the local cache, that the repository is [linked](/docs/reference/link) to Remote Cache, and that Remote Cache writes are allowed. The command fails if remote caching is disabled with [`remoteCache.enabled`](/docs/reference/configuration#enabled), or if writes are disabled with [`TURBO_REMOTE_CACHE_READ_ONLY`](/docs/reference/system-environment-variables#turbo_remote_cache_read_only) or [`TURBO_CACHE`](/docs/reference/system-environment-variables#turbo_cache).
+
+Artifacts are uploaded one at a time. If an upload fails, `turbo` continues with the remaining hashes and exits with a non-zero code.
+
+#### `--upload-timeout <seconds>`
+
+Default: `60`
+
+The time in seconds allowed for each artifact upload. Use `0` to disable the timeout. Increase this value for large artifacts or slow connections.
+
+```bash title="Terminal"
+turbo cache push 2f1e0d9c8b7a6543 --upload-timeout=300
+```
+
+This flag takes precedence over [`TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT`](/docs/reference/system-environment-variables#turbo_remote_cache_upload_timeout) and [`remoteCache.uploadTimeout`](/docs/reference/configuration#uploadtimeout). The global `--remote-cache-timeout` flag still applies to connecting and to other Remote Cache requests.

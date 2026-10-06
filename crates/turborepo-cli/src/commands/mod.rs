@@ -15,6 +15,7 @@ use crate::{
 
 pub(crate) mod bin;
 pub(crate) mod boundaries;
+pub(crate) mod cache;
 pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod devtools;

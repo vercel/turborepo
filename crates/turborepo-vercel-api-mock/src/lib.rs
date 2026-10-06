@@ -87,6 +87,8 @@ pub async fn start_test_server(
     let head_metadata_ref = get_metadata_ref.clone();
     let put_metadata_ref = get_metadata_ref.clone();
     let query_metadata_ref = get_metadata_ref.clone();
+    let get_tags_ref: Arc<Mutex<HashMap<String, String>>> = Arc::new(Mutex::new(HashMap::new()));
+    let put_tags_ref = get_tags_ref.clone();
     let put_tempdir_ref = Arc::new(tempfile::tempdir()?);
     let get_tempdir_ref = put_tempdir_ref.clone();
 
@@ -235,6 +237,12 @@ pub async fn start_test_server(
                         .lock()
                         .await
                         .insert(hash.clone(), (sha, dirty_hash));
+                    if let Some(tag) = headers.get("x-artifact-tag").and_then(|v| v.to_str().ok()) {
+                        put_tags_ref
+                            .lock()
+                            .await
+                            .insert(hash.clone(), tag.to_string());
+                    }
 
                     let mut body_stream = body.into_data_stream();
                     while let Some(item) = body_stream.next().await {
@@ -300,6 +308,17 @@ pub async fn start_test_server(
                         };
                         headers.insert("x-artifact-dirty-hash", value);
                     }
+                }
+
+                if let Some(tag) = get_tags_ref.lock().await.get(&hash).cloned() {
+                    let Ok(value) = HeaderValue::from_str(&tag) else {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            HeaderMap::new(),
+                            Vec::new(),
+                        );
+                    };
+                    headers.insert("x-artifact-tag", value);
                 }
 
                 (StatusCode::FOUND, headers, buffer)

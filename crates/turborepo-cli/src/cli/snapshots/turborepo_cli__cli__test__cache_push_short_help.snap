@@ -1,38 +1,22 @@
 ---
 source: crates/turborepo-cli/src/cli/test.rs
-expression: "Args::render_help(Args::command(), true).unwrap()"
+expression: "Args::render_help(cmd, false).unwrap()"
 ---
-The build system that makes ship happen
+Upload task artifacts from the local cache to the Remote Cache
 
-Usage: turbo [FLAGS] <SUBCOMMAND>
+Usage: turbo cache push [--upload-timeout <SECONDS>] <HASH>…
 
-Commands:
-  bin           Get the path to the Turbo binary
-  cache         Manage cached task artifacts
-  completion    Generate the autocompletion script for the specified shell
-  daemon        Runs the Turborepo background daemon
-  devtools      Visualize your monorepo's package graph in the browser
-  docs          Search the Turborepo documentation
-  generate      Generate a new app / package [aliases: g, gen]
-  get-mfe-port  Get the port assigned to the current microfrontend
-  info          Print debugging information
-  link          Link your local directory to a Vercel organization and enable
-                remote caching.
-  login         Login to your Vercel account
-  logout        Logout to your Vercel account
-  ls            List packages in your monorepo.
-  prune         Prepare a subset of your monorepo.
-  query         Query your monorepo using GraphQL. If no query is provided,
-                spins up a GraphQL server with GraphiQL.
-  run           Run tasks across projects in your monorepo
-  setup         EXPERIMENTAL: Provision repository tools and dependencies (not
-                yet implemented)
-  telemetry     Enable or disable anonymous telemetry
-  unlink        Unlink the current directory from your Vercel organization and
-                disable Remote Caching
-  watch
+Arguments:
+  <HASH>…  Hashes of locally cached tasks to upload (see `turbo run --dry=json`)
 
 Flags:
+      --upload-timeout <SECONDS>  Seconds allowed for each artifact upload; 0
+                                  disables the timeout. Overrides
+                                  TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT and
+                                  remoteCache.uploadTimeout
+  -h, --help                      Print help
+
+Global flags:
       --version
       --skip-infer                Skip any attempts to infer which version of
                                   Turbo the project is configured to use
@@ -76,10 +60,6 @@ Flags:
       --dangerously-disable-package-manager-check
                                   Allow for missing `packageManager` in
                                   `package.json`.
-
-                                  `turbo` will use hints from codebase to guess
-                                  which package manager should be used.
       --root-turbo-json <ROOT_TURBO_JSON>  Use the `turbo.json` located at the
                                   provided path instead of one at the
                                   root of the repository.
-  -h, --help                      Print help

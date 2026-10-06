@@ -21,6 +21,7 @@ use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
     artifact_body::{ARTIFACT_MEMORY_THRESHOLD, ArtifactBody},
     cache_archive::CacheReader,
+    fs::LocalArtifact,
     signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
     upload_progress::{UploadProgress, UploadProgressQuery},
 };
@@ -310,6 +311,41 @@ impl HTTPCache {
         body: Arc<ArtifactBody>,
         duration: u64,
     ) -> Result<(), CacheError> {
+        let resolved_scm = self.scm_state.get_resolved().await;
+        let sha = resolved_scm.and_then(|s| s.sha.clone());
+        let dirty_hash = resolved_scm.and_then(|s| s.dirty_hash.clone());
+        self.put_body_with_scm(hash, body, duration, sha, dirty_hash)
+            .await
+    }
+
+    /// Uploads an artifact that was already written to the local filesystem
+    /// cache. The archive is streamed from disk as-is, and the provenance
+    /// recorded when the task ran is sent rather than the current git state.
+    #[tracing::instrument(skip_all)]
+    pub async fn put_local_artifact(
+        &self,
+        hash: &str,
+        artifact: &LocalArtifact,
+    ) -> Result<(), CacheError> {
+        let file = std::fs::File::open(artifact.archive_path.as_std_path())?;
+        self.put_body_with_scm(
+            hash,
+            Arc::new(ArtifactBody::OnDisk(file)),
+            artifact.duration,
+            artifact.sha.clone(),
+            artifact.dirty_hash.clone(),
+        )
+        .await
+    }
+
+    async fn put_body_with_scm(
+        &self,
+        hash: &str,
+        body: Arc<ArtifactBody>,
+        duration: u64,
+        sha: Option<String>,
+        dirty_hash: Option<String>,
+    ) -> Result<(), CacheError> {
         let body_len = body.len();
 
         let tag = self
@@ -317,10 +353,6 @@ impl HTTPCache {
             .as_ref()
             .map(|signer| body.generate_tag(signer, hash))
             .transpose()?;
-
-        let resolved_scm = self.scm_state.get_resolved().await;
-        let sha = resolved_scm.and_then(|s| s.sha.clone());
-        let dirty_hash = resolved_scm.and_then(|s| s.dirty_hash.clone());
 
         tracing::debug!("uploading {}", hash);
 
@@ -662,8 +694,10 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        CacheOpts, CacheSource, LazyScmState,
+        CacheError, CacheOpts, CacheSource, LazyScmState,
+        fs::{FSCache, LocalArtifact},
         http::{APIAuth, HTTPCache},
+        signature_authentication::ArtifactSignatureAuthenticator,
         test_cases::{TestCase, get_test_cases, validate_analytics},
     };
 
@@ -1897,5 +1931,163 @@ mod test {
         // The flag should not force an error when no key exists at all.
         // It only enforces minimum length on keys that ARE set.
         assert!(result.is_ok());
+    }
+
+    async fn start_mock_server() -> Result<(u16, tokio::task::JoinHandle<Result<()>>)> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start within timeout"))??;
+        Ok((port, handle))
+    }
+
+    fn remote_cache(
+        port: u16,
+        root: &AbsoluteSystemPathBuf,
+        scm_state: LazyScmState,
+        signing_key: Option<&[u8]>,
+    ) -> HTTPCache {
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+        let mut cache = HTTPCache::new(
+            APIClient::new(
+                format!("http://localhost:{port}"),
+                Some(Duration::from_secs(200)),
+                None,
+                "2.0.0",
+                false,
+            )
+            .unwrap(),
+            &opts,
+            root.to_owned(),
+            APIAuth {
+                team_id: Some("my-team".to_string()),
+                token: SecretString::new("my-token".to_string()),
+                team_slug: None,
+            },
+            None,
+            scm_state,
+        )
+        .unwrap();
+        // Set the key directly rather than through the process-wide env var,
+        // which other tests mutate concurrently.
+        cache.signer_verifier = signing_key.map(|key| {
+            ArtifactSignatureAuthenticator::new(b"my-team".to_vec(), Some(key.to_vec()))
+        });
+        cache
+    }
+
+    /// Builds a local cache entry under a fresh root, recording `build_sha`
+    /// as the build-time provenance.
+    fn local_entry(
+        hash: &str,
+        duration: u64,
+        build_sha: &str,
+    ) -> Result<(tempfile::TempDir, LocalArtifact)> {
+        let root = tempdir()?;
+        let root_path = AbsoluteSystemPathBuf::try_from(root.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("dist/out.txt")?;
+        root_path.resolve(&file).ensure_dir()?;
+        root_path
+            .resolve(&file)
+            .create_with_contents("built output")?;
+        let fs_cache = FSCache::new(
+            camino::Utf8Path::new(".turbo/cache"),
+            &root_path,
+            None,
+            LazyScmState::resolved(Some(crate::CacheScmState {
+                sha: Some(build_sha.to_string()),
+                dirty_hash: Some("build-dirty".to_string()),
+            })),
+        )?;
+        fs_cache.put(&root_path, hash, &[file], duration)?;
+        let artifact = fs_cache.local_artifact(hash)?.unwrap();
+        Ok((root, artifact))
+    }
+
+    #[tokio::test]
+    async fn test_put_local_artifact_round_trips_with_build_time_metadata() -> Result<()> {
+        let (port, handle) = start_mock_server().await?;
+        let hash = "0a1b2c3d4e5f6071";
+        let (push_root, artifact) = local_entry(hash, 1234, "build-sha")?;
+        let push_root_path = AbsoluteSystemPathBuf::try_from(push_root.path())?;
+
+        // The pushing process is at a different commit than the build was.
+        let push_cache = remote_cache(
+            port,
+            &push_root_path,
+            LazyScmState::resolved(Some(crate::CacheScmState {
+                sha: Some("push-sha".to_string()),
+                dirty_hash: None,
+            })),
+            None,
+        );
+        push_cache.put_local_artifact(hash, &artifact).await?;
+
+        let fetch_root = tempdir()?;
+        let fetch_root_path = AbsoluteSystemPathBuf::try_from(fetch_root.path())?;
+        let fetch_cache = remote_cache(port, &fetch_root_path, LazyScmState::resolved(None), None);
+        let (metadata, files) = fetch_cache.fetch(hash).await?.unwrap();
+
+        assert_eq!(metadata.time_saved, 1234);
+        assert_eq!(metadata.sha.as_deref(), Some("build-sha"));
+        assert_eq!(metadata.dirty_hash.as_deref(), Some("build-dirty"));
+        let restored = fetch_root_path.join_components(&["dist", "out.txt"]);
+        assert!(files.iter().any(|f| fetch_root_path.resolve(f) == restored));
+        assert_eq!(std::fs::read_to_string(restored)?, "built output");
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_put_local_artifact_signs_archive_bytes() -> Result<()> {
+        let (port, handle) = start_mock_server().await?;
+        let hash = "1a2b3c4d5e6f7081";
+        let key = b"this-key-is-at-least-32-bytes-!!";
+        let (push_root, artifact) = local_entry(hash, 10, "build-sha")?;
+        let push_root_path = AbsoluteSystemPathBuf::try_from(push_root.path())?;
+
+        remote_cache(
+            port,
+            &push_root_path,
+            LazyScmState::resolved(None),
+            Some(key),
+        )
+        .put_local_artifact(hash, &artifact)
+        .await?;
+
+        let fetch_root = tempdir()?;
+        let fetch_root_path = AbsoluteSystemPathBuf::try_from(fetch_root.path())?;
+        let verified = remote_cache(
+            port,
+            &fetch_root_path,
+            LazyScmState::resolved(None),
+            Some(key),
+        )
+        .fetch(hash)
+        .await?;
+        assert!(verified.is_some());
+
+        let wrong_key = remote_cache(
+            port,
+            &fetch_root_path,
+            LazyScmState::resolved(None),
+            Some(b"a-different-key-of-at-least-32-bytes"),
+        )
+        .fetch(hash)
+        .await;
+        assert!(matches!(wrong_key, Err(CacheError::InvalidTag(_))));
+
+        handle.abort();
+        Ok(())
     }
 }

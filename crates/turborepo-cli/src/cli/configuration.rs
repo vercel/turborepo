@@ -14,6 +14,9 @@ pub(crate) fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOption
         team_slug: args.team.clone(),
         token: args.token.clone(),
         timeout: args.remote_cache_timeout,
+        upload_timeout: args
+            .cache_push_args()
+            .and_then(|push_args| push_args.upload_timeout),
         preflight: args.preflight.then_some(true),
         ui: args.ui.map(Into::into),
         allow_no_package_manager: args
@@ -71,11 +74,14 @@ pub(crate) fn resolve_configuration_from_args(
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
+    use std::{collections::HashMap, ffi::OsString};
 
+    use tempfile::TempDir;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_config::ConfigurationFileInputs;
     use turborepo_types::LogOrder;
 
-    use super::{Args, cli_overrides_from_args};
+    use super::{Args, cli_overrides_from_args, resolve_configuration_with_overrides};
 
     fn parse_args(args: &[&str]) -> Args {
         Args::parse_args(args.iter().map(OsString::from).collect()).unwrap()
@@ -110,5 +116,38 @@ mod tests {
 
             assert_eq!(overrides.force, expected);
         }
+    }
+
+    #[test]
+    fn test_cache_push_upload_timeout_beats_env_and_turbo_json() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"remoteCache": {"uploadTimeout": 20}}"#)
+            .unwrap();
+        let file_inputs = || ConfigurationFileInputs {
+            global_config_path: repo_root.join_component("global-config.json"),
+            global_auth_path: repo_root.join_component("global-auth.json"),
+            legacy_auth_path: None,
+        };
+        let environment = || {
+            HashMap::from([(
+                OsString::from("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT"),
+                OsString::from("30"),
+            )])
+        };
+        let resolve = |argv: &[&str], environment: HashMap<OsString, OsString>| {
+            let overrides = cli_overrides_from_args(&parse_args(argv)).unwrap();
+            resolve_configuration_with_overrides(&repo_root, overrides, environment, file_inputs())
+                .unwrap()
+                .upload_timeout()
+        };
+
+        let push = ["turbo", "cache", "push", "abc123", "--upload-timeout", "5"];
+        assert_eq!(resolve(&push, environment()), 5);
+        let push_without_flag = ["turbo", "cache", "push", "abc123"];
+        assert_eq!(resolve(&push_without_flag, environment()), 30);
+        assert_eq!(resolve(&push_without_flag, HashMap::new()), 20);
     }
 }

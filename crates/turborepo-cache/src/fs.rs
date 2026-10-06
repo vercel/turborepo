@@ -39,6 +39,29 @@ impl CacheMetadata {
     }
 }
 
+/// A task artifact already present in the local filesystem cache, along with
+/// the provenance recorded when it was built.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalArtifact {
+    /// Path to the compressed `<hash>.tar.zst` archive.
+    pub archive_path: AbsoluteSystemPathBuf,
+    /// Task duration in milliseconds recorded at build time.
+    pub duration: u64,
+    /// HEAD commit SHA recorded at build time.
+    pub sha: Option<String>,
+    /// Working-tree dirty hash recorded at build time.
+    pub dirty_hash: Option<String>,
+}
+
+/// Task hashes are hex digests; anything else could escape the cache
+/// directory when joined into a path.
+fn validate_hash(hash: &str) -> Result<(), CacheError> {
+    if hash.is_empty() || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(CacheError::InvalidHash(hash.to_string()));
+    }
+    Ok(())
+}
+
 impl FSCache {
     fn resolve_cache_dir(
         repo_root: &AbsoluteSystemPath,
@@ -201,6 +224,38 @@ impl FSCache {
         Ok(Some(CacheHitMetadata {
             time_saved: duration,
             source: CacheSource::Local,
+            sha,
+            dirty_hash,
+        }))
+    }
+
+    /// Looks up the archive and build-time metadata for `hash` without
+    /// restoring it. Returns `None` if no archive exists for the hash. A
+    /// missing or unreadable `-meta.json` sidecar yields a zero duration and
+    /// no provenance, matching the existence check used during runs.
+    pub fn local_artifact(&self, hash: &str) -> Result<Option<LocalArtifact>, CacheError> {
+        validate_hash(hash)?;
+        let archive_path = self
+            .cache_directory
+            .join_component(&format!("{hash}.tar.zst"));
+        if !archive_path.as_path().is_file() {
+            return Ok(None);
+        }
+
+        let meta = CacheMetadata::read(
+            &self
+                .cache_directory
+                .join_component(&format!("{hash}-meta.json")),
+        )
+        .ok();
+        let (duration, sha, dirty_hash) = match meta {
+            Some(m) => (m.duration, m.sha, m.dirty_hash),
+            None => (0, None, None),
+        };
+
+        Ok(Some(LocalArtifact {
+            archive_path,
+            duration,
             sha,
             dirty_hash,
         }))
@@ -1290,6 +1345,48 @@ mod test {
 
         // changing.txt should be restored to its original cached content.
         assert_eq!(changing_file.read_to_string()?, "original");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_artifact_lookup() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let cache = FSCache::new(
+            Utf8Path::new(".turbo/cache"),
+            &repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+
+        // No archive for the hash.
+        assert_eq!(cache.local_artifact("0123456789abcdef")?, None);
+
+        // Hashes must not be able to name files outside the cache directory.
+        for invalid in ["", "../0123", "0123/4567", "not-a-hash"] {
+            assert!(matches!(
+                cache.local_artifact(invalid),
+                Err(CacheError::InvalidHash(_))
+            ));
+        }
+
+        // An archive without its metadata sidecar is still pushable, with no
+        // recorded duration or provenance.
+        let hash = "fedcba9876543210";
+        let archive_path = cache
+            .cache_directory()
+            .join_component(&format!("{hash}.tar.zst"));
+        archive_path.create_with_contents("archive")?;
+        assert_eq!(
+            cache.local_artifact(hash)?,
+            Some(LocalArtifact {
+                archive_path,
+                duration: 0,
+                sha: None,
+                dirty_hash: None,
+            })
+        );
 
         Ok(())
     }

@@ -114,6 +114,8 @@ pub enum CacheError {
     ForbiddenRemoteCacheWrite,
     #[error("Remote artifact cache is temporarily unavailable; retry after the outage cooldown")]
     RemoteCacheUnavailable,
+    #[error("invalid cache hash `{0}`: expected a hexadecimal task hash")]
+    InvalidHash(String),
 }
 
 impl From<turborepo_api_client::Error> for CacheError {

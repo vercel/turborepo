@@ -31,8 +31,9 @@ pub(crate) enum ArtifactBody {
     /// Small artifact held in memory; retries are a cheap `Bytes` refcount
     /// bump.
     InMemory(bytes::Bytes),
-    /// Large artifact spooled to an anonymous temporary file; consumers read
-    /// it back from the start through fresh handles in bounded chunks.
+    /// Large artifact on disk: either spooled to an anonymous temporary file
+    /// or an existing local cache archive. Consumers read it back from the
+    /// start through fresh handles in bounded chunks.
     OnDisk(std::fs::File),
 }
 
