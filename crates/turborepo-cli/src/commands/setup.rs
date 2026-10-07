@@ -99,7 +99,7 @@ pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
     // Discovery reads files only: no environment config pipeline, graph, tool
     // probes, package manager detection, or local CLI handoff.
     let discovery = root::Discovery::capture(args)?;
-    tracing::debug!(?discovery, "setup discovery captured");
+    tracing::debug!("setup root: {}", discovery.root_path());
     if !discovery.flags().experimental_setup {
         return Err(Error::Disabled);
     }
