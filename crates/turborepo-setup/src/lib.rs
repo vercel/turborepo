@@ -11,6 +11,7 @@ pub mod node_resolution;
 pub mod package_manager;
 pub mod pnpm_provision;
 pub mod registry_metadata;
+pub mod source_policy;
 pub mod version_request;
 pub mod writer_storage;
 

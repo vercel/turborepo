@@ -11,6 +11,8 @@ CA outside tests. The CA signing key is not retained.
 | `server.pem` | P-256 server leaf, serial 2 | 2020-01-01 through 2120-01-01 |
 | `expired.pem` | Same server key, serial 3 | 2000-01-01 through 2001-01-01 |
 | `server-key.pem` | PKCS#8 P-256 test key | Not applicable |
+| `p521-ca.pem` | Self-signed P-521 CA, serial 16 | 2020-01-01 through 2120-01-01 |
+| `p521-server.pem` | Existing P-256 server key, signed by P-521 issuer, serial 17 | 2020-01-01 through 2120-01-01 |
 | `invalid-der.pem` | Valid PEM containing a truncated DER SEQUENCE (`0x30`) | Not a certificate |
 
 The invalid-DER fixture exercises reqwest's native-root build failure, unlike

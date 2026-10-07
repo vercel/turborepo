@@ -47,7 +47,7 @@ pub struct NodeTransport {
     origin: String,
 }
 impl NodeTransport {
-    pub fn official() -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             origin: "https://nodejs.org".into(),
@@ -56,10 +56,16 @@ impl NodeTransport {
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only, no env
     /// override.
-    pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
+    #[cfg(test)]
+    pub(crate) fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         let approved = ApprovedOrigin::loopback_http_for_tests(origin)?;
         Ok(Self {
-            client: DownloadClient::new([approved])?,
+            client: DownloadClient::with_http_builder(
+                reqwest::Client::builder()
+                    .no_proxy()
+                    .tls_built_in_native_certs(false),
+                [approved],
+            )?,
             origin: origin.trim_end_matches('/').into(),
         })
     }
