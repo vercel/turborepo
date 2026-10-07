@@ -536,6 +536,80 @@ snapshots:
     }
 }
 
+/// npm 12 patch files and declarations follow the pruned lockfile in both
+/// layouts. Regression for https://github.com/vercel/turborepo/issues/14426.
+#[test]
+fn test_prune_npm_patches() {
+    const PATCH: &str = "patches/is-number@7.0.0.patch";
+    for app in ["web", "docs"] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            setup::copy_fixture("npm_patches", dir).unwrap();
+            let original_manifest = fs::read(dir.join("package.json")).unwrap();
+            let original_lockfile = fs::read(dir.join("package-lock.json")).unwrap();
+            let original_patch = fs::read(dir.join(PATCH)).unwrap();
+            let original_lockfile_json: serde_json::Value =
+                serde_json::from_slice(&original_lockfile).unwrap();
+            let mut args = vec!["prune", app];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let retains_patch = app == "web";
+            let roots = if docker {
+                vec!["out/json", "out/full"]
+            } else {
+                vec!["out"]
+            };
+            for root in roots {
+                let root = dir.join(root);
+                let manifest: serde_json::Value =
+                    serde_json::from_slice(&fs::read(root.join("package.json")).unwrap()).unwrap();
+                let expected = if retains_patch {
+                    serde_json::json!({"is-number@7.0.0": PATCH})
+                } else {
+                    serde_json::json!({})
+                };
+                assert_eq!(manifest["patchedDependencies"], expected);
+                assert_eq!(root.join(PATCH).exists(), retains_patch);
+                if retains_patch {
+                    assert_eq!(fs::read(root.join(PATCH)).unwrap(), original_patch);
+                }
+                assert_eq!(ls_dir(&root.join("apps")), [app]);
+            }
+            let pruned_lockfile = fs::read(dir.join("out/package-lock.json")).unwrap();
+            let lockfile: serde_json::Value = serde_json::from_slice(&pruned_lockfile).unwrap();
+            assert_eq!(lockfile["lockfileVersion"], 4);
+            if retains_patch {
+                assert_eq!(
+                    lockfile["packages"]["node_modules/is-number"]["patched"],
+                    original_lockfile_json["packages"]["node_modules/is-number"]["patched"]
+                );
+            } else {
+                assert!(lockfile["packages"].get("node_modules/is-number").is_none());
+            }
+            if docker {
+                assert_eq!(
+                    fs::read(dir.join("out/json/package-lock.json")).unwrap(),
+                    pruned_lockfile
+                );
+            }
+            assert_eq!(
+                fs::read(dir.join("package.json")).unwrap(),
+                original_manifest
+            );
+            assert_eq!(
+                fs::read(dir.join("package-lock.json")).unwrap(),
+                original_lockfile
+            );
+            assert_eq!(fs::read(dir.join(PATCH)).unwrap(), original_patch);
+        }
+    }
+}
+
 #[test]
 fn test_prune_docker_filters_pnpm_workspace_patched_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
