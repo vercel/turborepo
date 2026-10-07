@@ -7,51 +7,28 @@ use bindgen::{
 use heck::ToShoutySnakeCase;
 
 fn main() {
-    // The include directory is produced by build.rs. After a successful
-    // `cargo build -p libghostty-vt-sys`, the headers live in:
-    //   target/<profile>/build/libghostty-vt-sys-<hash>/out/ghostty-install/include
-    //
-    // For convenience, also allow GHOSTTY_SOURCE_DIR/include or
-    // an explicit GHOSTTY_INCLUDE_DIR override.
+    // The headers this crate's build script installed for this very build,
+    // so they always match the pin and the enabled features. GHOSTTY_SOURCE_DIR
+    // or an explicit GHOSTTY_INCLUDE_DIR override them.
     let include_dir = if let Ok(dir) = env::var("GHOSTTY_INCLUDE_DIR") {
         PathBuf::from(dir)
     } else if let Ok(src) = env::var("GHOSTTY_SOURCE_DIR") {
         PathBuf::from(src).join("include")
     } else {
-        // Walk target/debug/build/ to find the libghostty-vt-sys output.
-        let manifest_dir =
-            PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set"));
-        let workspace_root = manifest_dir
-            .parent()
-            .and_then(std::path::Path::parent)
-            .expect("workspace root must exist")
-            .to_path_buf();
-
-        let build_dir = workspace_root.join("target").join("debug").join("build");
-        let mut found = None;
-        if let Ok(entries) = std::fs::read_dir(&build_dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str.starts_with("libghostty-vt-sys-") {
-                    let candidate = entry
-                        .path()
-                        .join("out")
-                        .join("ghostty-install")
-                        .join("include");
-                    if candidate.join("ghostty").join("vt.h").exists() {
-                        found = Some(candidate);
-                        break;
-                    }
-                }
-            }
-        }
-        found.unwrap_or_else(|| {
-            panic!(
-                "could not find ghostty headers; run `cargo build -p libghostty-vt-sys` first, or \
-                 set GHOSTTY_INCLUDE_DIR or GHOSTTY_SOURCE_DIR"
-            )
-        })
+        let dir = PathBuf::from(option_env!("LIBGHOSTTY_VT_SYS_INCLUDE_DIR").unwrap_or_else(
+            || {
+                panic!(
+                    "the build script installed no ghostty headers (pkg-config build?); set \
+                     GHOSTTY_INCLUDE_DIR or GHOSTTY_SOURCE_DIR"
+                )
+            },
+        ));
+        assert!(
+            dir.join("ghostty").join("vt.h").exists(),
+            "no ghostty headers in {}; set GHOSTTY_INCLUDE_DIR or GHOSTTY_SOURCE_DIR",
+            dir.display()
+        );
+        dir
     };
 
     let header = include_dir.join("ghostty").join("vt.h");
@@ -62,14 +39,22 @@ fn main() {
     let mut builder = bindgen::Builder::default()
         .header(header.to_string_lossy())
         .clang_arg(format!("-I{}", include_dir.to_string_lossy()))
+        // Ghostty's ABI and the Rust wrapper use signed c_int enums. C++11
+        // selects GHOSTTY_ENUM_TYPED's explicit `: int` even with libclang
+        // versions that lack the c_fixed_enum extension in C mode.
+        .clang_args(["-x", "c++", "-std=c++11"])
         .allowlist_function("[Gg]hostty.*")
         .allowlist_type("[Gg]hostty.*")
         .allowlist_var("GHOSTTY_.*")
+        // Only used to force enums to `int` size. It is defined as `INT_MAX`,
+        // and whether bindgen can evaluate that depends on which `limits.h`
+        // clang resolves, which differs between environments. Exclude it so
+        // the output is the same everywhere.
+        .blocklist_item("GHOSTTY_ENUM_MAX_VALUE")
         .generate_cstr(true)
         .derive_default(true)
         .size_t_is_usize(true)
         .default_enum_style(EnumVariation::ModuleConsts)
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .parse_callbacks(Box::new(Callbacks));
 
     if cfg!(target_os = "linux") {
@@ -86,6 +71,12 @@ fn main() {
 }
 
 const PREFIXES: &[(&str, &str)] = &[
+    ("GhosttySearchOption", "GHOSTTY_SEARCH_OPT"),
+    ("GhosttySysOption", "GHOSTTY_SYS_OPT"),
+    (
+        "GhosttyTerminalUnknownSequenceTag",
+        "GHOSTTY_TERMINAL_UNKNOWN_SEQUENCE",
+    ),
     ("GhosttyOptimizeMode", "GHOSTTY_OPTIMIZE"),
     ("GhosttyKeyEncoderOption", "GHOSTTY_KEY_ENCODER_OPT"),
     ("GhosttyMouseTrackingMode", "GHOSTTY_MOUSE_TRACKING"),
@@ -93,6 +84,7 @@ const PREFIXES: &[(&str, &str)] = &[
     ("GhosttySgrAttributeTag", "GHOSTTY_SGR_ATTR"),
     ("GhosttyOscCommandData", "GHOSTTY_OSC_DATA"),
     ("GhosttyOscCommandType", "GHOSTTY_OSC_COMMAND"),
+    ("GhosttyOscOption", "GHOSTTY_OSC_OPT"),
     ("GhosttyTerminalOption", "GHOSTTY_TERMINAL_OPT"),
     (
         "GhosttyTerminalScrollViewportTag",
@@ -110,6 +102,10 @@ const PREFIXES: &[(&str, &str)] = &[
     (
         "GhosttySelectionGestureEventOption",
         "GHOSTTY_SELECTION_GESTURE_EVENT_OPT",
+    ),
+    (
+        "GhosttySnapshotDecoderOption",
+        "GHOSTTY_SNAPSHOT_DECODER_OPT",
     ),
 ];
 
@@ -143,7 +139,7 @@ impl ParseCallbacks for Callbacks {
 
         // Remove redundant C prefixes
         let prefix = PREFIXES
-            .into_iter()
+            .iter()
             .find(|(v, _)| *v == enum_name)
             .map(|(_, n)| n.to_string())
             .unwrap_or(enum_name.to_shouty_snake_case());

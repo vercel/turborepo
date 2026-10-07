@@ -27,7 +27,7 @@ turbopath = { workspace = true }
 which = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
-terminal-control = "=0.6.0"
+terminal-control = { path = "../terminal-control" }
 
 [lints]
 workspace = true

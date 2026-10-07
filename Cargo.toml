@@ -3,6 +3,7 @@ resolver = "3"
 
 members = [
   "crates/libghostty-vt-sys",
+  "crates/terminal-control",
   "crates/turbo-trace",
   "crates/turborepo*",
   "packages/turbo-repository/rust",
@@ -121,7 +122,7 @@ turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-watch = { path = "crates/turborepo-watch", default-features = false }
 turborepo-ghostty = { path = "crates/turborepo-ghostty" }
-libghostty-vt = "0.2.1"
+libghostty-vt = { git = "https://github.com/uzaaft/libghostty-rs", rev = "3c7766d4e5d6ce93870ad666a14c0b5a0e957360" }
 
 reqwest = { version = "0.12.28", default-features = false }
 hyper-rustls = { version = "0.27.7", default-features = false }
@@ -206,5 +207,8 @@ schemars = "0.8.16"
 ts-rs = { version = "11.1.0", features = ["serde-compat"] }
 
 [patch.crates-io]
-# Upstream 0.2.1 links ghostty-vt.lib (MSVC DLL import lib) instead of ghostty-vt-static.lib.
+# Keep the native Ghostty pin, bindings, and platform build patches together.
+libghostty-vt-sys = { path = "crates/libghostty-vt-sys" }
+
+[patch."https://github.com/uzaaft/libghostty-rs"]
 libghostty-vt-sys = { path = "crates/libghostty-vt-sys" }

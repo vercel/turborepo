@@ -6,7 +6,7 @@ use std::{
 
 /// Pinned ghostty commit. Update this to pull a newer version.
 const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
-const GHOSTTY_COMMIT: &str = "f2a7652abab5d03f846f3150f9cc1b2dc23bb3dd";
+const GHOSTTY_COMMIT: &str = "5147c0a503cdeed7615cce245cdd815ed7a6b692";
 
 #[derive(Clone, Copy)]
 enum LinkMode {
@@ -191,14 +191,20 @@ fn build_vendored(link_mode: LinkMode) {
         build.arg(format!(
             "-Dtarget={architecture}-macos.{deployment_target}-none"
         ));
-    } else if target != host {
+    } else if target.contains("windows") || target != host {
+        // Rust's HOST describes rustc, which may differ from the Zig compiler
+        // architecture when Windows runs a compiler under emulation.
         build.arg(format!("-Dtarget={}", zig_target(&target)));
     }
 
     run(build, "zig build");
 
     if target.contains("apple-darwin") && matches!(link_mode, LinkMode::Static) {
-        assert_libsystem_symbols_not_overridden(&install_prefix.join("lib/libghostty-vt.a"));
+        let archive = install_prefix.join("lib/libghostty-vt.a");
+        // Source overrides must remain untouched. Localize the build-owned
+        // output too, so an upstream checkout gets the same protection.
+        localize_libsystem_symbols_in_archive(&archive);
+        assert_libsystem_symbols_not_overridden(&archive);
     }
 
     let lib_dir = install_prefix.join("lib");
@@ -233,6 +239,10 @@ fn build_vendored(link_mode: LinkMode) {
         include_dir.join("ghostty").join("vt.h").display()
     );
 
+    println!(
+        "cargo:rustc-env=LIBGHOSTTY_VT_SYS_INCLUDE_DIR={}",
+        include_dir.display()
+    );
     for dir in &search_dirs {
         println!("cargo:rustc-link-search=native={}", dir.display());
     }
@@ -325,36 +335,32 @@ fn emit_include_metadata(include_paths: &[PathBuf]) {
     println!("cargo:include={}", joined.to_string_lossy());
 }
 
-/// Decide which Zig `OptimizeMode` to pass to `zig build`.
+/// Decide which Zig 0.17 optimization mode to pass to `zig build`.
 ///
-/// The `LIBGHOSTTY_VT_SYS_OPTIMIZE` environment variable overrides this
-/// unconditionally; accepted values are the four Zig `OptimizeMode` names
-/// (`Debug`, `ReleaseSafe`, `ReleaseFast`, `ReleaseSmall`).
-///
-/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as
-/// cargo sets for the `dev` profile), `Debug` mode is used. Otherwise, if
-/// `OPT_LEVEL` is `s` or `z`, `ReleaseSmall` is used.
+/// `LIBGHOSTTY_VT_SYS_OPTIMIZE` accepts `debug`, `safe`, `fast`, and `small`.
+/// The pre-0.17 names remain accepted for compatibility with existing builds.
+/// Defaults to `fast`, or `debug` when Cargo enables debug information.
 fn zig_optimize_mode() -> &'static str {
     if let Ok(override_mode) = env::var("LIBGHOSTTY_VT_SYS_OPTIMIZE") {
         return match override_mode.as_str() {
-            "Debug" => "Debug",
-            "ReleaseSafe" => "ReleaseSafe",
-            "ReleaseFast" => "ReleaseFast",
-            "ReleaseSmall" => "ReleaseSmall",
+            "Debug" | "debug" => "debug",
+            "ReleaseSafe" | "safe" => "safe",
+            "ReleaseFast" | "fast" => "fast",
+            "ReleaseSmall" | "small" => "small",
             other => panic!(
-                "LIBGHOSTTY_VT_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, \
-                 ReleaseSmall (got '{other}')"
+                "LIBGHOSTTY_VT_SYS_OPTIMIZE must be debug, safe, fast, or small (legacy \
+                 Debug/Release* names are also accepted; got '{other}')"
             ),
         };
     }
 
     if env::var("DEBUG").as_deref() == Ok("true") {
-        return "Debug";
+        return "debug";
     }
 
     match env::var("OPT_LEVEL").as_deref() {
-        Ok("s") | Ok("z") => "ReleaseSmall",
-        _ => "ReleaseFast",
+        Ok("s") | Ok("z") => "small",
+        _ => "fast",
     }
 }
 
@@ -485,6 +491,36 @@ fn localize_libsystem_symbols_in_every_archive_member(ghostty_dir: &Path) {
     );
     std::fs::write(&script_path, rewritten)
         .unwrap_or_else(|error| panic!("failed to write {}: {error}", script_path.display()));
+}
+
+/// Localize guarded libc symbols in the installed archive without modifying
+/// the source checkout, including when GHOSTTY_SOURCE_DIR is set.
+fn localize_libsystem_symbols_in_archive(archive: &Path) {
+    let parent = archive
+        .parent()
+        .unwrap_or_else(|| panic!("archive has no parent: {}", archive.display()));
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let work_dir = parent.join(format!("libsystem-localize-{}-{nonce}", std::process::id()));
+    std::fs::create_dir(&work_dir)
+        .unwrap_or_else(|error| panic!("failed to create {}: {error}", work_dir.display()));
+    std::fs::write(work_dir.join("localize.txt"), LIBSYSTEM_SYMBOLS.join("\n"))
+        .unwrap_or_else(|error| panic!("failed to write localization symbols: {error}"));
+
+    let mut localize = Command::new("/bin/sh");
+    localize
+        .arg("-c")
+        .arg(format!(
+            "set -eu\nout=\"$1\"\n{LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS}"
+        ))
+        .arg("libsystem-localize")
+        .arg(archive)
+        .current_dir(&work_dir);
+    run(localize, "localize libSystem symbols in installed archive");
+    std::fs::remove_dir_all(&work_dir)
+        .unwrap_or_else(|error| panic!("failed to remove {}: {error}", work_dir.display()));
 }
 
 /// Fails the build if the static library still defines libSystem's symbols

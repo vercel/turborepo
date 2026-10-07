@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/zig"
-          curl -fsSL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz \
+          curl -fsSL https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz \
             | tar -xJ --strip-components=1 -C "$RUNNER_TEMP/zig"
           echo "$RUNNER_TEMP/zig" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/zig/zig" version
