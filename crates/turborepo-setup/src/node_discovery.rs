@@ -122,6 +122,8 @@ impl Declaration {
 #[derive(Debug, Clone)]
 pub struct NodeRequirements {
     declarations: Vec<Declaration>,
+    // Provenance only: policies must never become unconstrained OR branches.
+    policy_sources: Vec<NodeSource>,
     runtime_end: usize, // Leading runtime alternatives are OR; the remainder AND.
 }
 
@@ -137,11 +139,18 @@ impl NodeRequirements {
     /// duplicate JSON keys, and read errors are fatal even with another source.
     /// Reads stop at limit + 1 bytes; request limits apply BEFORE trimming.
     pub fn read(root: &Path) -> Result<Self, NodeDiscoveryError> {
+        Self::read_with(|file, limit| read_optional(root, file, limit))
+    }
+
+    pub(crate) fn read_with(
+        mut read: impl FnMut(&'static str, usize) -> Result<Option<String>, NodeDiscoveryError>,
+    ) -> Result<Self, NodeDiscoveryError> {
         let mut result = Self {
             declarations: Vec::new(),
+            policy_sources: Vec::new(),
             runtime_end: 0,
         };
-        let manifest = read_optional(root, "package.json", MAX_MANIFEST_BYTES)?
+        let manifest = read("package.json", MAX_MANIFEST_BYTES)?
             .map(|text| {
                 serde_json::from_str::<UniqueJson>(&text)
                     .map(|v| v.0)
@@ -176,7 +185,7 @@ impl NodeRequirements {
         }
         result.runtime_end = result.declarations.len();
         for file in [".nvmrc", ".node-version"] {
-            if let Some(request) = read_optional(root, file, MAX_REQUEST_BYTES)? {
+            if let Some(request) = read(file, MAX_REQUEST_BYTES)? {
                 result.push(file, None, Some(&request), true)?;
             }
         }
@@ -200,7 +209,10 @@ impl NodeRequirements {
     }
 
     pub fn sources(&self) -> impl Iterator<Item = &NodeSource> {
-        self.declarations.iter().map(|d| &d.source)
+        self.declarations
+            .iter()
+            .map(|d| &d.source)
+            .chain(&self.policy_sources)
     }
 
     /// Injected metadata only. Validate all identities, even ineligible
@@ -262,6 +274,23 @@ impl NodeRequirements {
             .and_then(normalize_name)
             .ok_or_else(|| invalid(&location, "expected runtime name"))?;
         if name == "node" {
+            if let Some(policy) = object.get("onFail") {
+                let location = format!("{location}.onFail");
+                match policy.as_str() {
+                    Some("error") => self.policy_sources.push(NodeSource {
+                        file: "package.json",
+                        field: Some(format!("{field}.onFail")),
+                        request: Some("error".into()),
+                    }),
+                    Some("warn" | "ignore") => {
+                        return Err(invalid(
+                            &location,
+                            "advisory Node runtime onFail policies are unsupported by setup",
+                        ));
+                    }
+                    _ => return Err(invalid(&location, "expected error, warn, or ignore")),
+                }
+            }
             let request = object
                 .get("version")
                 .map(|v| {
@@ -370,7 +399,7 @@ fn read_optional(
 // serde_json::Value silently overwrites duplicate keys. Reject them recursively
 // so duplicate runtime/version/engines fields cannot erase authored
 // constraints. serde_json's default recursion limit remains enabled.
-struct UniqueJson(Value);
+pub(crate) struct UniqueJson(pub(crate) Value);
 impl<'de> Deserialize<'de> for UniqueJson {
     fn deserialize<D: de::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct JsonVisitor;

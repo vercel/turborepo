@@ -11,7 +11,7 @@ function Gradient({
   small?: boolean;
   conic?: boolean;
   className?: string;
-}): JSX.Element {
+}): React.JSX.Element {
   return (
     <span
       className={[
@@ -50,7 +50,7 @@ const LINKS = [
   },
 ];
 
-export default function Page(): JSX.Element {
+export default function Page(): React.JSX.Element {
   return (
     <main className={styles.main}>
       <div className={styles.description}>

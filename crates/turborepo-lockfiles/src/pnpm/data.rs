@@ -274,6 +274,13 @@ struct LockfileSettings {
     dedupe_peers: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     peers_suffix_max_length: Option<u32>,
+    // Catch-all for settings we don't model with dedicated fields. pnpm
+    // compares every key in this block against the active config, so with
+    // `lockfile.includeResolutionSettings` (autoDedupe, dedupePeerDependents,
+    // ...) dropping any of them makes `pnpm install --frozen-lockfile` on the
+    // pruned output fail with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+    #[serde(flatten)]
+    other: Map<String, serde_yaml_ng::Value>,
 }
 
 impl PnpmLockfile {
@@ -3258,6 +3265,86 @@ snapshots:
         );
         assert_eq!(pruned_settings.auto_install_peers, Some(false));
         assert_eq!(pruned_settings.exclude_links_from_lockfile, Some(false));
+    }
+
+    #[test]
+    fn test_lockfile_settings_preserve_resolution_settings() {
+        // pnpm's `lockfile.includeResolutionSettings` writes additional keys
+        // into the settings block. Every one of them must survive prune.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoDedupe: true
+  autoInstallPeers: true
+  dedupeInjectedDeps: true
+  dedupePeerDependents: true
+  excludeLinksFromLockfile: false
+  linkWorkspacePackages: false
+
+importers:
+
+  .:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+  apps/web:
+    dependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ghi}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  lodash@4.17.21: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        assert_eq!(
+            lockfile,
+            PnpmLockfile::from_bytes_via_serde(yaml.as_bytes()).unwrap()
+        );
+
+        let pruned = lockfile
+            .subgraph(&["apps/web".to_string()], &["lodash@4.17.21".to_string()])
+            .unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned.encode().unwrap()).unwrap();
+        let settings = pruned_lockfile
+            .settings
+            .as_ref()
+            .expect("pruned lockfile should have settings");
+
+        assert_eq!(settings.auto_install_peers, Some(true));
+        assert_eq!(settings.exclude_links_from_lockfile, Some(false));
+        for (key, expected) in [
+            ("autoDedupe", true),
+            ("dedupeInjectedDeps", true),
+            ("dedupePeerDependents", true),
+            ("linkWorkspacePackages", false),
+        ] {
+            assert_eq!(
+                settings.other.get(key),
+                Some(&serde_yaml_ng::Value::Bool(expected)),
+                "{key} must survive prune round-trip"
+            );
+        }
     }
 
     #[test]
