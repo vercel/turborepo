@@ -16,6 +16,11 @@ use turborepo_tool_install::Outcome;
 
 use super::*;
 
+#[cfg(unix)]
+mod recovery;
+#[cfg(unix)]
+const SCOPED_RESOURCE: &str = "lib/node_modules/npm/node_modules/@npmcli/config/package.json";
+
 struct Upstream {
     origin: String,
     requests: Arc<AtomicUsize>,
@@ -102,6 +107,7 @@ fn unix_archive(os: &str, arch: &str, bad_link: bool, missing: bool) -> Vec<u8> 
         ("lib/node_modules/npm/bin/npm-cli.js", cli),
         ("lib/node_modules/npm/bin/npx-cli.js", cli),
         ("lib/node_modules/npm/package.json", "{\"name\":\"npm\"}"),
+        (SCOPED_RESOURCE, "{\"name\":\"@npmcli/config\"}"),
         ("share/man/man1/node.1", "fixture resource"),
     ] {
         if missing && path == "lib/node_modules/npm/bin/npx-cli.js" {
@@ -149,6 +155,7 @@ fn zip_archive(arch: &str) -> Vec<u8> {
         "node_modules/npm/bin/npm-cli.js",
         "node_modules/npm/bin/npx-cli.js",
         "node_modules/npm/package.json",
+        "node_modules/npm/node_modules/@npmcli/config/package.json",
     ];
     for path in files {
         let name = format!("node-v24.0.0-win-{arch}/{path}");
@@ -259,6 +266,7 @@ async fn locked_unix_matrix_full_resources_shims_repair_and_network_free_repeat(
             "fixture resource"
         );
         assert!(root.join("lib/node_modules/npm/package.json").is_file());
+        recovery::assert_scoped_resource(&store);
         let manifest = repo.path().join(".turbo/tools/manifest.json");
         let old = fs::read(&manifest).unwrap();
         assert_eq!(
@@ -266,6 +274,7 @@ async fn locked_unix_matrix_full_resources_shims_repair_and_network_free_repeat(
             Outcome::Unchanged
         );
         assert_eq!(fs::read(&manifest).unwrap(), old);
+        recovery::assert_scoped_resource(&store);
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
         fs::write(root.join("bin/node"), "damaged").unwrap();
         assert!(!store.is_current(&[plan.inventory_tool().clone()]).unwrap());
@@ -274,6 +283,7 @@ async fn locked_unix_matrix_full_resources_shims_repair_and_network_free_repeat(
             Outcome::Replaced
         );
         assert!(store.current().unwrap().is_some());
+        recovery::assert_scoped_resource(&store);
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 2);
         assert_eq!(serde_json::to_vec(&value).unwrap(), before);
     }
@@ -358,6 +368,16 @@ async fn zip_matrix_prepares_full_windows_tree_without_claiming_promotion() {
                 .root_path()
                 .join("node_modules/npm/package.json")
                 .is_file()
+        );
+        assert_eq!(
+            fs::read(
+                prepared
+                    .tree
+                    .root_path()
+                    .join("node_modules/npm/node_modules/@npmcli/config/package.json")
+            )
+            .unwrap(),
+            b"fixture"
         );
         #[cfg(unix)]
         {

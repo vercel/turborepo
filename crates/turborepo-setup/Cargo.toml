@@ -31,7 +31,6 @@ rustix = { version = "1.1", features = ["fs"] }
 
 [dev-dependencies]
 flate2 = "1.1.9"
-sha2 = { workspace = true }
 tar = { version = "0.4.45", default-features = false }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "net", "io-util"] }

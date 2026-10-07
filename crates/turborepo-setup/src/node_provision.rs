@@ -7,11 +7,7 @@ use std::{fs, io, path::Path, time::Duration};
 use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256};
-use turborepo_platform::{
-    Architecture::{Arm64, X64},
-    OperatingSystem::{Linux, Macos, Windows},
-    Platform as Target,
-};
+use turborepo_platform::OperatingSystem::Windows;
 use turborepo_tool_install::{Store, Tool};
 
 use crate::{
@@ -79,18 +75,13 @@ impl NodePlan {
     /// lock. Executable ownership is exactly the lock's chosen mapping,
     /// never inferred.
     pub fn from_lock(lock: &Lock, platform: Platform) -> Result<Self, Error> {
-        let (os, arch, spelling) = match platform {
-            Platform::MacosX64 => (Macos, X64, "macos-x64"),
-            Platform::MacosArm64 => (Macos, Arm64, "macos-arm64"),
-            Platform::LinuxX64Gnu => (Linux, X64, "linux-x64-gnu"),
-            Platform::LinuxArm64Gnu => (Linux, Arm64, "linux-arm64-gnu"),
-            Platform::WindowsX64 => (Windows, X64, "windows-x64"),
-            Platform::WindowsArm64 => (Windows, Arm64, "windows-arm64"),
-            _ => return Err(Error::UnsupportedTarget),
-        };
+        let (target, spelling) =
+            crate::node::lock_target(platform).ok_or(Error::UnsupportedTarget)?;
         let node = lock.tools().get("node").ok_or(Error::InvalidLock)?;
         let version = Version::parse(&node.version).map_err(|_| Error::InvalidLock)?;
-        if node.adapter != "node" || !node.options.is_empty() || version.to_string() != node.version
+        if node.adapter != "node"
+            || version.to_string() != node.version
+            || !crate::node_resolution::valid_bundled_npm_option(&node.options)
         {
             return Err(Error::InvalidLock);
         }
@@ -102,9 +93,16 @@ impl NodePlan {
             return Err(Error::InvalidLock);
         }
         let artifact = parts.values().next().ok_or(Error::InvalidLock)?.clone();
-        let official = NodeArtifact::for_platform(&version, Target::new(os, arch))
-            .map_err(|_| Error::InvalidLock)?;
-        let windows = os == Windows;
+        let official =
+            NodeArtifact::for_platform(&version, target).map_err(|_| Error::InvalidLock)?;
+        let windows = target.os() == Windows;
+        if !node.options.is_empty()
+            && ["npm", "npx"]
+                .iter()
+                .any(|name| !artifact.executables.contains_key(*name))
+        {
+            return Err(Error::InvalidLock);
+        }
         let extension = if windows { ".zip" } else { ".tar.gz" };
         let root = official
             .filename()
@@ -147,11 +145,13 @@ impl NodePlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools, then reconciles that same set
-    /// with each prepared adapter. This avoids dropping other tools and
-    /// avoids network traffic on a healthy repeat. Windows trees may be
-    /// inspected via download, but promotion is explicitly unqualified by
-    /// the shared inventory contract.
+    /// The caller supplies ALL desired tools and reconciles that same set,
+    /// holding this Store lock throughout preparation and reconciliation.
+    /// Reuse requires a healthy entire selected
+    /// generation with an identical Node tool, not complete desired-set
+    /// equality. Unrelated tool changes need no Node download. Windows
+    /// trees may be inspected via download, but promotion remains
+    /// explicitly unqualified.
     pub async fn prepare_if_needed(
         &self,
         store: &Store,
@@ -164,7 +164,7 @@ impl NodePlan {
         if !desired.iter().any(|tool| tool == &self.tool) {
             return Err(Error::InventoryMismatch);
         }
-        if store.is_current(desired)? {
+        if store.can_reuse(&self.tool)? {
             return Ok(None);
         }
         self.download(transport).await.map(Some)
@@ -260,7 +260,7 @@ impl PreparedNode {
         Ok(())
     }
 }
-fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
+pub(crate) fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let path = entry.path();
