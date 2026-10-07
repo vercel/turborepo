@@ -12,10 +12,8 @@ use crate::{
     node_discovery::UniqueJson,
     node_provision::{NodePlan, copy_tree},
     package_manager::{CorepackIntegrity, Manager},
-    registry_metadata::{self, MAX_METADATA_BYTES},
+    registry_metadata::{self, MAX_METADATA_BYTES, PUBLIC_NPM_REGISTRY as REGISTRY},
 };
-
-const REGISTRY: &str = "https://registry.npmjs.org";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -44,6 +42,8 @@ pub struct PnpmTransport {
     origin: String,
 }
 impl PnpmTransport {
+    // TODO(TURBO-6219): Apply mirror/registry policy to requests and validation.
+    // Never fall back to public npm or forward credentials across origins.
     pub fn official() -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(REGISTRY)?])?,
@@ -156,9 +156,7 @@ impl PnpmPlan {
         desired: &[Tool],
         transport: &PnpmTransport,
     ) -> Result<Option<PreparedPnpm>, Error> {
-        if !desired.iter().any(|tool| tool == &self.tool)
-            || !desired.iter().any(|tool| tool == &self.node)
-        {
+        if !desired.contains(&self.tool) || !desired.contains(&self.node) {
             return Err(Error::NodeBinding);
         }
         if store.can_reuse(&self.tool)? {
