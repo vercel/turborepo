@@ -35,6 +35,10 @@ use std::{
 
 use camino::{Utf8Path, Utf8PathBuf};
 use env::EnvVars;
+pub use experimental_otel::{
+    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+    ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
+};
 pub use file::ConfigurationFileInputs;
 use file::{AuthFile, ConfigFile};
 use miette::Diagnostic;
@@ -51,15 +55,9 @@ use turborepo_repository::{
 };
 use turborepo_scm::WorktreeInfo;
 use turborepo_turbo_json::FutureFlags;
+/// Configuration file names, shared with the loader.
+pub use turborepo_types::{CONFIG_FILE, CONFIG_FILE_JSONC};
 use turborepo_types::{ConfigurationSource, EnvMode, LogOrder, UIMode};
-
-pub const CONFIG_FILE: &str = "turbo.json";
-pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
-
-pub use experimental_otel::{
-    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
-    ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
-};
 
 // The first Some value wins as config sources are merged highest-priority
 // first.
