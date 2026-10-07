@@ -76,6 +76,30 @@ describe("add-package-names", () => {
     }
   });
 
+  it("generated name collides with an existing name - aborts with error", async () => {
+    // packages/ui has no name, and packages/utils is already named "ui"
+    const { root, readJson } = useFixture({
+      fixture: "generated-name-collision"
+    });
+
+    const result = await transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain('"ui"');
+    expect(result.changes).toMatchInlineSnapshot(`{}`);
+
+    // verify nothing was written
+    expect(
+      readJson<{ name?: string }>("packages/ui/package.json")?.name
+    ).toBeUndefined();
+    expect(
+      readJson<{ name: string }>("packages/utils/package.json")?.name
+    ).toBe("ui");
+  });
+
   it("correct names", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
