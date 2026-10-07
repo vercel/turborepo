@@ -66,6 +66,12 @@ registry bookkeeping files. The retained library does not embed the schemas.
 8. `src/workspace.rs` gives the pending-action queue an initial capacity of eight
    entries to follow the parent's allocation lint policy without changing queue
    semantics.
+9. Unix PTY error codes, theme-query imports, and process-group cleanup remain
+   Unix-only when the workspace builds the library on Windows. Error-classifier
+   tests keep Windows access-denied errors distinct from Unix PTY `EIO`.
+10. The initial-output-grace test uses out-of-band producer readiness and an
+    explicit release barrier instead of assuming shell startup fits inside a
+    50 ms window. Production capture logic and timeouts remain unchanged.
 
 All other retained Rust sources are byte-for-byte copies of the publication.
 No production wrapper or existing TUI test is modified.

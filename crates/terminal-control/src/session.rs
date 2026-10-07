@@ -790,6 +790,7 @@ impl Session {
     }
 
     fn finish_exited_output(&mut self) -> Result<()> {
+        #[cfg(unix)]
         let kill_after = Instant::now() + Duration::from_millis(50);
         let deadline = Instant::now() + Duration::from_secs(1);
         while !self.output_closed && Instant::now() < deadline {
@@ -4088,11 +4089,28 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn short_settling_waits_for_initial_output_grace() {
+        struct ReadyFile(PathBuf);
+
+        impl Drop for ReadyFile {
+            fn drop(&mut self) {
+                let _ = fs::remove_file(&self.0);
+            }
+        }
+
+        let ready = ReadyFile(std::env::temp_dir().join(format!(
+            "termctrl-initial-output-grace-{}-{:?}.ready",
+            std::process::id(),
+            thread::current().id()
+        )));
+        fs::write(&ready.0, b"").unwrap();
         let mut session = Session::start(
             &[
                 "sh".to_owned(),
                 "-c".to_owned(),
-                "sleep 0.02; printf READY".to_owned(),
+                "stty -echo && printf ready > \"$1\" && read -r release && printf READY && read -r stop"
+                    .to_owned(),
+                "initial-output-grace".to_owned(),
+                ready.0.to_str().unwrap().to_owned(),
             ],
             None,
             None,
@@ -4100,6 +4118,30 @@ mod tests {
         )
         .unwrap();
 
+        // Signal readiness outside the PTY so capture still has no initial output.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while fs::read(&ready.0).unwrap() != b"ready" {
+            assert!(Instant::now() < deadline, "producer did not become ready");
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert!(session.last_output.is_none());
+
+        // Keep the producer blocked for the entire capture: no shell startup or
+        // scheduling delay has to fit inside the production grace period.
+        let started = Instant::now();
+        let capture = session
+            .capture(Duration::from_millis(10), Duration::from_secs(2))
+            .unwrap();
+        assert!(started.elapsed() >= INITIAL_OUTPUT_GRACE);
+        assert_eq!(capture.reason, CaptureReason::Idle);
+        assert!(capture.shot.ansi.is_empty());
+        assert!(capture.shot.frame.text().is_empty());
+        assert!(session.last_output.is_none());
+
+        session.send(b"\n").unwrap();
+        session
+            .wait_for_text("READY", Duration::from_secs(2))
+            .unwrap();
         let capture = session
             .capture(Duration::from_millis(10), Duration::from_secs(2))
             .unwrap();

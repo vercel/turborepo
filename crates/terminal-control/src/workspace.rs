@@ -4345,7 +4345,7 @@ fn attachment_closed(error: &anyhow::Error) -> bool {
         let Some(error) = cause.downcast_ref::<std::io::Error>() else {
             return false;
         };
-        matches!(
+        let closed = matches!(
             error.kind(),
             std::io::ErrorKind::BrokenPipe
                 | std::io::ErrorKind::ConnectionReset
@@ -4353,7 +4353,15 @@ fn attachment_closed(error: &anyhow::Error) -> bool {
                 | std::io::ErrorKind::TimedOut
                 | std::io::ErrorKind::WouldBlock
                 | std::io::ErrorKind::UnexpectedEof
-        ) || error.raw_os_error() == Some(libc::EIO)
+        );
+        #[cfg(unix)]
+        {
+            closed || error.raw_os_error() == Some(libc::EIO)
+        }
+        #[cfg(not(unix))]
+        {
+            closed
+        }
     })
 }
 
@@ -4792,7 +4800,36 @@ fn attributes(attributes: &Attributes) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
+    #[cfg(unix)]
+    use std::time::Instant;
+
+    #[test]
+    fn attachment_closed_preserves_portable_error_kinds() {
+        assert!(super::attachment_closed(&anyhow::Error::from(
+            std::io::Error::new(std::io::ErrorKind::BrokenPipe, "closed terminal")
+        )));
+        assert!(!super::attachment_closed(&anyhow::Error::from(
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "access denied")
+        )));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn attachment_closed_recognizes_unix_pty_eio() {
+        assert!(super::attachment_closed(&anyhow::Error::from(
+            std::io::Error::from_raw_os_error(libc::EIO)
+        )));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn attachment_closed_does_not_treat_windows_access_denied_as_unix_eio() {
+        // ERROR_ACCESS_DENIED is 5 on Windows, the numeric value of EIO on Unix.
+        assert!(!super::attachment_closed(&anyhow::Error::from(
+            std::io::Error::from_raw_os_error(5)
+        )));
+    }
 
     fn frame(cols: u16, rows: u16, text: &str, cursor: Option<(u16, u16)>) -> Frame {
         Frame {

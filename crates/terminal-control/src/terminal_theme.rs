@@ -1,5 +1,8 @@
+#[cfg(unix)]
 use std::io::Write;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+#[cfg(unix)]
+use std::time::Instant;
 
 use libghostty_vt::style::RgbColor;
 use serde::{Deserialize, Serialize};
