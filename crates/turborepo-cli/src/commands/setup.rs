@@ -2,7 +2,6 @@
 
 use miette::Diagnostic;
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
 
 use crate::cli::{Args, SetupArgs};
 
@@ -99,18 +98,9 @@ impl SetupRequest {
 pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
     // Discovery reads files only: no environment config pipeline, graph, tool
     // probes, package manager detection, or local CLI handoff.
-    let cwd = match args.cwd.as_deref() {
-        Some(cwd) => AbsoluteSystemPathBuf::from_cwd(cwd)?,
-        None => AbsoluteSystemPathBuf::cwd()?,
-    };
-    let config = args
-        .root_turbo_json
-        .as_deref()
-        .map(AbsoluteSystemPathBuf::from_cwd)
-        .transpose()?;
-    let root = root::infer(&cwd, args.cwd.is_some(), config.as_deref())?;
-    tracing::debug!("setup root: {}", root.path);
-    if !root.flags.experimental_setup {
+    let discovery = root::Discovery::capture(args)?;
+    tracing::debug!(?discovery, "setup discovery captured");
+    if !discovery.flags().experimental_setup {
         return Err(Error::Disabled);
     }
 
