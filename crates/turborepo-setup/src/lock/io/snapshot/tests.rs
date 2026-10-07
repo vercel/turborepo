@@ -1,6 +1,7 @@
 use std::{fs, sync::mpsc, thread, time::Duration};
 
 use serde_json::json;
+use turborepo_types::{CONFIG_FILE, CONFIG_FILE_JSONC, CONFIG_FILES};
 
 use super::{
     super::{
@@ -10,16 +11,25 @@ use super::{
     },
     *,
 };
+use crate::{node_discovery::MAX_MANIFEST_BYTES, version_request::MAX_REQUEST_BYTES};
+
+fn write_file(root: &Path, file: &str, bytes: impl AsRef<[u8]>) {
+    fs::write(root.join(file), bytes).unwrap();
+}
+fn reject_oversized(root: &Path, file: &str, limit: usize) {
+    write_file(root, file, vec![b'x'; limit + 1]);
+    assert!(Snapshot::capture(root).is_err());
+}
 
 fn root() -> tempfile::TempDir {
     let root = writer_root();
-    fs::write(root.path().join(".nvmrc"), ">=24 <30\n").unwrap();
-    fs::write(root.path().join("package.json"), "{}").unwrap();
-    fs::write(
-        root.path().join("turbo.json"),
+    write_file(root.path(), ".nvmrc", ">=24 <30\n");
+    write_file(root.path(), "package.json", "{}");
+    write_file(
+        root.path(),
+        CONFIG_FILE,
         r#"{"futureFlags":{"experimentalSetup":true}}"#,
-    )
-    .unwrap();
+    );
     root
 }
 fn candidate(snapshot: &Snapshot, version: &str) -> Lock {
@@ -27,6 +37,10 @@ fn candidate(snapshot: &Snapshot, version: &str) -> Lock {
 }
 fn assert_conflict(result: Result<WriteOutcome, StorageError>) {
     assert!(matches!(result, Err(StorageError::Conflict)), "{result:?}");
+}
+fn locked_version(root: &Path) -> String {
+    let lock = Lock::read(root).unwrap().unwrap();
+    lock.tools()["node"].version.clone()
 }
 fn no_stage(root: &Path) {
     assert!(!root.join(".turbo/setup-lock/staged").exists());
@@ -36,37 +50,24 @@ fn no_stage(root: &Path) {
 #[test]
 fn capture_and_resolver_inputs_are_read_only_immutable_and_redacted() {
     let root = root();
-    fs::write(root.path().join("package.json"), json!({"description":"credential-secret",
-        "packageManager":"npm@11.0.0","devEngines":{"runtime":{"name":"node","version":"24.x","onFail":"error"}}}).to_string()).unwrap();
+    write_file(root.path(), "package.json", json!({"description":"credential-secret",
+        "packageManager":"npm@11.0.0","devEngines":{"runtime":{"name":"node","version":"24.x","onFail":"error"}}}).to_string());
     let snapshot = Snapshot::capture(root.path()).unwrap();
     assert!(snapshot.previous_lock().is_none());
     assert_eq!(snapshot.declarations(), &probe_native(root.path()).unwrap());
     assert!(!format!("{snapshot:?}").contains("credential-secret"));
-    fs::write(
-        root.path().join("package.json"),
-        json!({"packageManager":"pnpm@10.0.0",
-        "devEngines":{"runtime":{"name":"node","version":"26.x"}}})
-        .to_string(),
-    )
-    .unwrap();
+    let changed_manifest = json!({"packageManager":"pnpm@10.0.0",
+        "devEngines":{"runtime":{"name":"node","version":"26.x"}}});
+    write_file(root.path(), "package.json", changed_manifest.to_string());
     let releases = [
         crate::NodeRelease::new("24.0.0", None).unwrap(),
         crate::NodeRelease::new("26.0.0", None).unwrap(),
     ];
-    assert_eq!(
-        snapshot
-            .node_requirements()
-            .unwrap()
-            .resolve(&releases)
-            .unwrap()
-            .version
-            .to_string(),
-        "24.0.0"
-    );
-    assert_eq!(
-        snapshot.package_manager().unwrap().unwrap().manager,
-        crate::package_manager::Manager::Npm
-    );
+    let requirements = snapshot.node_requirements().unwrap();
+    let resolved = requirements.resolve(&releases).unwrap();
+    assert_eq!(resolved.version.to_string(), "24.0.0");
+    let manager = snapshot.package_manager().unwrap().unwrap().manager;
+    assert_eq!(manager, crate::package_manager::Manager::Npm);
     assert!(
         snapshot.declarations()["node"]
             .iter()
@@ -110,12 +111,13 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
         "package-whitespace",
         "package-unrelated",
         "request-whitespace",
-        "turbo.json",
-        "turbo.jsonc",
         "delete-config",
         "inactive-runtime",
         "runtime-policy",
-    ] {
+    ]
+    .into_iter()
+    .chain(CONFIG_FILES)
+    {
         let root = root();
         let initial = Snapshot::capture(root.path()).unwrap();
         write(root.path(), &candidate(&initial, "24.0.0")).unwrap();
@@ -126,38 +128,28 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
                 bytes.push(b' '); // Same parsed lock, different exact expected bytes.
                 fs::write(root.path().join(LOCK_NAME), bytes).unwrap();
             }
-            "turbo.json" | "turbo.jsonc" => fs::write(root.path().join(change),
-                r#"{"futureFlags":{"experimentalSetup":false},"setup":{"javascript":"skip"}}"#).unwrap(),
-            "inactive-runtime" | "runtime-policy" => fs::write(root.path().join("package.json"),
-                json!({"devEngines":{"runtime":{"name":if change == "inactive-runtime" {"other"} else {"node"},"onFail":"error"}}}).to_string()).unwrap(),
-            "package-whitespace" => fs::write(root.path().join("package.json"), " { }\n").unwrap(),
-            "package-unrelated" => fs::write(
-                root.path().join("package.json"),
-                r#"{"description":"unrelated"}"#,
-            )
-            .unwrap(),
-            "request-whitespace" => {
-                fs::write(root.path().join(".nvmrc"), "  >=24 <30\r\n").unwrap()
-            }
-            "delete-config" => fs::remove_file(root.path().join("turbo.json")).unwrap(),
+            file if CONFIG_FILES.contains(&file) => write_file(root.path(), file,
+                r#"{"futureFlags":{"experimentalSetup":false},"setup":{"javascript":"skip"}}"#),
+            "inactive-runtime" | "runtime-policy" => write_file(root.path(), "package.json",
+                json!({"devEngines":{"runtime":{"name":if change == "inactive-runtime" {"other"} else {"node"},"onFail":"error"}}}).to_string()),
+            "package-whitespace" => write_file(root.path(), "package.json", " { }\n"),
+            "package-unrelated" => write_file(root.path(), "package.json", r#"{"description":"unrelated"}"#),
+            "request-whitespace" => write_file(root.path(), ".nvmrc", "  >=24 <30\r\n"),
+            "delete-config" => fs::remove_file(root.path().join(CONFIG_FILE)).unwrap(),
             "delete-nvmrc" => fs::remove_file(root.path().join(".nvmrc")).unwrap(),
-            "new-node-version" => fs::write(root.path().join(".node-version"), "24.0.0").unwrap(),
-            "package.json" => fs::write(
-                root.path().join(change),
-                json!({"devEngines":{"runtime":{"name":"node","onFail":"error"}}}).to_string(),
-            )
-            .unwrap(),
-            _ => fs::write(root.path().join(change), "26.x").unwrap(),
+            "new-node-version" => write_file(root.path(), ".node-version", "24.0.0"),
+            "package.json" => write_file(root.path(), change,
+                json!({"devEngines":{"runtime":{"name":"node","onFail":"error"}}}).to_string()),
+            _ => write_file(root.path(), change, "26.x"),
         }
         if [
             "package-whitespace",
             "package-unrelated",
             "request-whitespace",
             "inactive-runtime",
-            "turbo.json",
-            "turbo.jsonc",
         ]
         .contains(&change)
+            || CONFIG_FILES.contains(&change)
         {
             assert_eq!(&probe_native(root.path()).unwrap(), snapshot.declarations());
         }
@@ -190,11 +182,7 @@ fn mismatched_candidate_and_extra_adapters_fail_before_storage_init() {
     assert!(!root.path().join(".turbo").exists());
     // An existing extra adapter must not be silently dropped by a native-only
     // update.
-    fs::write(
-        root.path().join(LOCK_NAME),
-        extra.canonical_bytes().unwrap(),
-    )
-    .unwrap();
+    write_file(root.path(), LOCK_NAME, extra.canonical_bytes().unwrap());
     let snapshot = Snapshot::capture(root.path()).unwrap();
     assert!(snapshot.commit(&candidate(&snapshot, "24.0.0")).is_err());
     assert!(!root.path().join(".turbo").exists());
@@ -255,11 +243,11 @@ fn final_post_flush_check_aborts_source_and_lock_races_and_failures() {
                 "source" => fs::write(root.path().join(".nvmrc"), "26.x"),
                 "lock" | "lock-created" => fs::write(root.path().join(LOCK_NAME), &external),
                 "lock-deleted" => fs::remove_file(root.path().join(LOCK_NAME)),
-                "config-deleted" => fs::remove_file(root.path().join("turbo.json")),
+                "config-deleted" => fs::remove_file(root.path().join(CONFIG_FILE)),
                 "source-deleted" => fs::remove_file(root.path().join(".nvmrc")),
                 "source-created" => fs::write(root.path().join(".node-version"), "24.0.0"),
                 "flags-policy" => fs::write(
-                    root.path().join("turbo.jsonc"),
+                    root.path().join(CONFIG_FILE_JSONC),
                     r#"{"futureFlags":{"experimentalSetup":false},"setup":{}}"#,
                 ),
                 _ => Err(io::Error::other("injected pre-promotion failure")),
@@ -307,10 +295,7 @@ fn competing_resolver_candidates_cannot_publish_last_writer_wins() {
         })
     });
     staged_rx.recv().unwrap();
-    assert_eq!(
-        Lock::read(root.path()).unwrap().unwrap().tools()["node"].version,
-        "24.0.0"
-    );
+    assert_eq!(locked_version(root.path()), "24.0.0");
     #[cfg(unix)]
     {
         fs::rename(root.path().join(".turbo"), root.path().join("old-cache")).unwrap();
@@ -329,41 +314,23 @@ fn competing_resolver_candidates_cannot_publish_last_writer_wins() {
     release_tx.send(()).unwrap();
     assert_eq!(first.join().unwrap().unwrap(), WriteOutcome::Written);
     assert_conflict(second.join().unwrap());
-    assert_eq!(
-        Lock::read(root.path()).unwrap().unwrap().tools()["node"].version,
-        "25.0.0"
-    );
+    assert_eq!(locked_version(root.path()), "25.0.0");
     no_stage(root.path());
 }
 
 #[test]
 fn capture_rejects_oversized_invalid_inputs_without_writer_state() {
     let root = root();
-    fs::write(
-        root.path().join("turbo.jsonc"),
-        vec![b' '; crate::node_discovery::MAX_MANIFEST_BYTES + 1],
-    )
-    .unwrap();
+    for file in CONFIG_FILES.into_iter().chain(["package.json"]) {
+        reject_oversized(root.path(), file, MAX_MANIFEST_BYTES);
+        fs::remove_file(root.path().join(file)).unwrap();
+    }
+    write_file(root.path(), "package.json", "{}");
+    reject_oversized(root.path(), ".nvmrc", MAX_REQUEST_BYTES);
+    write_file(root.path(), ".nvmrc", "24.x");
+    write_file(root.path(), LOCK_NAME, "{invalid");
     assert!(Snapshot::capture(root.path()).is_err());
-    fs::remove_file(root.path().join("turbo.jsonc")).unwrap();
-    fs::write(
-        root.path().join("package.json"),
-        vec![b' '; crate::node_discovery::MAX_MANIFEST_BYTES + 1],
-    )
-    .unwrap();
-    assert!(Snapshot::capture(root.path()).is_err());
-    fs::write(root.path().join("package.json"), "{}").unwrap();
-    fs::write(
-        root.path().join(".nvmrc"),
-        vec![b'x'; crate::version_request::MAX_REQUEST_BYTES + 1],
-    )
-    .unwrap();
-    assert!(Snapshot::capture(root.path()).is_err());
-    fs::write(root.path().join(".nvmrc"), "24.x").unwrap();
-    fs::write(root.path().join(LOCK_NAME), "{invalid").unwrap();
-    assert!(Snapshot::capture(root.path()).is_err());
-    fs::write(root.path().join(LOCK_NAME), vec![b'x'; MAX_LOCK_BYTES + 1]).unwrap();
-    assert!(Snapshot::capture(root.path()).is_err());
+    reject_oversized(root.path(), LOCK_NAME, MAX_LOCK_BYTES);
     assert!(!root.path().join(".turbo").exists());
 }
 
