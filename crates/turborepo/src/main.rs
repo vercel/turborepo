@@ -101,7 +101,7 @@ fn main() -> Result<()> {
     });
 
     turborepo_cli::finish_heap_profile();
-    process::exit(exit_code)
+    turborepo_cli::process_exit::exit(exit_code)
 }
 
 #[cfg(windows)]
