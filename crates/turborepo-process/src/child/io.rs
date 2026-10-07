@@ -272,8 +272,15 @@ impl Child {
                         draining_after_exit = true;
                         drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
                     } else {
-                        debug!("child process failed, skipping reading stdout/stderr");
-                        return Ok(status);
+                        // When a child process exits non-zero, its final lines of
+                        // output are often the error context that matters most
+                        // (stack traces, assertion messages, etc.). Drain stdout
+                        // and stderr for a bounded window — same as the shutdown
+                        // path — so that a slow downstream reader does not cause
+                        // those final lines to be silently dropped.
+                        debug!("child process failed, draining remaining stdout/stderr");
+                        draining_after_exit = true;
+                        drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
                     }
                 }
                 _ = tokio::time::sleep_until(drain_deadline), if draining_after_exit => {
