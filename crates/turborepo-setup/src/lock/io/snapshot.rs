@@ -38,6 +38,12 @@ impl fmt::Debug for Snapshot {
 fn inputs(root: &Path) -> io::Result<Inputs> {
     SOURCES
         .into_iter()
+        // Preserve flags/policy and inactive declarations without interpreting
+        // config or enabling an adapter. Presence changes also invalidate CAS.
+        .chain(
+            ["turbo.json", "turbo.jsonc"]
+                .map(|file| (file, crate::node_discovery::MAX_MANIFEST_BYTES)),
+        )
         .map(|(file, limit)| read_optional(root, file, limit).map(|bytes| (file, bytes)))
         .collect()
 }

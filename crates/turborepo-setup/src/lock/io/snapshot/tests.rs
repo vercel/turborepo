@@ -15,6 +15,11 @@ fn root() -> tempfile::TempDir {
     let root = writer_root();
     fs::write(root.path().join(".nvmrc"), ">=24 <30\n").unwrap();
     fs::write(root.path().join("package.json"), "{}").unwrap();
+    fs::write(
+        root.path().join("turbo.json"),
+        r#"{"futureFlags":{"experimentalSetup":true}}"#,
+    )
+    .unwrap();
     root
 }
 fn candidate(snapshot: &Snapshot, version: &str) -> Lock {
@@ -105,6 +110,11 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
         "package-whitespace",
         "package-unrelated",
         "request-whitespace",
+        "turbo.json",
+        "turbo.jsonc",
+        "delete-config",
+        "inactive-runtime",
+        "runtime-policy",
     ] {
         let root = root();
         let initial = Snapshot::capture(root.path()).unwrap();
@@ -116,6 +126,10 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
                 bytes.push(b' '); // Same parsed lock, different exact expected bytes.
                 fs::write(root.path().join(LOCK_NAME), bytes).unwrap();
             }
+            "turbo.json" | "turbo.jsonc" => fs::write(root.path().join(change),
+                r#"{"futureFlags":{"experimentalSetup":false},"setup":{"javascript":"skip"}}"#).unwrap(),
+            "inactive-runtime" | "runtime-policy" => fs::write(root.path().join("package.json"),
+                json!({"devEngines":{"runtime":{"name":if change == "inactive-runtime" {"other"} else {"node"},"onFail":"error"}}}).to_string()).unwrap(),
             "package-whitespace" => fs::write(root.path().join("package.json"), " { }\n").unwrap(),
             "package-unrelated" => fs::write(
                 root.path().join("package.json"),
@@ -125,6 +139,7 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
             "request-whitespace" => {
                 fs::write(root.path().join(".nvmrc"), "  >=24 <30\r\n").unwrap()
             }
+            "delete-config" => fs::remove_file(root.path().join("turbo.json")).unwrap(),
             "delete-nvmrc" => fs::remove_file(root.path().join(".nvmrc")).unwrap(),
             "new-node-version" => fs::write(root.path().join(".node-version"), "24.0.0").unwrap(),
             "package.json" => fs::write(
@@ -138,6 +153,9 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
             "package-whitespace",
             "package-unrelated",
             "request-whitespace",
+            "inactive-runtime",
+            "turbo.json",
+            "turbo.jsonc",
         ]
         .contains(&change)
         {
@@ -217,6 +235,8 @@ fn final_post_flush_check_aborts_source_and_lock_races_and_failures() {
         "lock-deleted",
         "source-deleted",
         "source-created",
+        "flags-policy",
+        "config-deleted",
     ] {
         let root = root();
         let initial = Snapshot::capture(root.path()).unwrap();
@@ -235,8 +255,13 @@ fn final_post_flush_check_aborts_source_and_lock_races_and_failures() {
                 "source" => fs::write(root.path().join(".nvmrc"), "26.x"),
                 "lock" | "lock-created" => fs::write(root.path().join(LOCK_NAME), &external),
                 "lock-deleted" => fs::remove_file(root.path().join(LOCK_NAME)),
+                "config-deleted" => fs::remove_file(root.path().join("turbo.json")),
                 "source-deleted" => fs::remove_file(root.path().join(".nvmrc")),
                 "source-created" => fs::write(root.path().join(".node-version"), "24.0.0"),
+                "flags-policy" => fs::write(
+                    root.path().join("turbo.jsonc"),
+                    r#"{"futureFlags":{"experimentalSetup":false},"setup":{}}"#,
+                ),
                 _ => Err(io::Error::other("injected pre-promotion failure")),
             }
         });
@@ -314,6 +339,13 @@ fn competing_resolver_candidates_cannot_publish_last_writer_wins() {
 #[test]
 fn capture_rejects_oversized_invalid_inputs_without_writer_state() {
     let root = root();
+    fs::write(
+        root.path().join("turbo.jsonc"),
+        vec![b' '; crate::node_discovery::MAX_MANIFEST_BYTES + 1],
+    )
+    .unwrap();
+    assert!(Snapshot::capture(root.path()).is_err());
+    fs::remove_file(root.path().join("turbo.jsonc")).unwrap();
     fs::write(
         root.path().join("package.json"),
         vec![b' '; crate::node_discovery::MAX_MANIFEST_BYTES + 1],
