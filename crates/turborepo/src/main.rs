@@ -1,7 +1,7 @@
 // Bump all rust changes
 #![deny(clippy::all)]
 
-use std::{ffi::OsStr, future::Future, pin::Pin, process, sync::Arc};
+use std::{ffi::OsStr, future::Future, pin::Pin, sync::Arc};
 
 use anyhow::Result;
 use miette::Report;
@@ -79,7 +79,7 @@ fn main() -> Result<()> {
         let exit_code = match command {
             InternalWindowsConsoleCommand::CtrlC(pid) => send_windows_ctrl_c(pid),
         };
-        process::exit(exit_code);
+        std::process::exit(exit_code);
     }
 
     if let Some(command) = internal_lsp_command(std::env::args_os()) {
