@@ -1,7 +1,7 @@
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -29,6 +29,8 @@ pub(super) enum MaintenanceStatus {
     MalformedMarkers,
     ConcurrentEdit,
     Locked,
+    /// `AGENTS.md` is a symlink whose target is outside the repository root.
+    OutsideRepository,
 }
 
 /// Update the managed guidance only when an agent is detected and the root
@@ -88,7 +90,35 @@ fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
         }
     }
 
+    // Resolve a symlinked AGENTS.md so the temp file replaces its target
+    // instead of the link itself.
+    let repo_root = fs::canonicalize(repo_root)?;
     let agents_path = repo_root.join("AGENTS.md");
+    let agents_path = match fs::canonicalize(&agents_path) {
+        Ok(resolved) => resolved,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            // A dangling link must still be created through, not replaced.
+            match fs::read_link(&agents_path) {
+                Ok(target) => {
+                    let lexical = normalize_lexically(&repo_root.join(target));
+                    // The parent directory may itself be a symlink leaving the
+                    // repository, so resolve it before the containment check.
+                    match (lexical.parent(), lexical.file_name()) {
+                        (Some(parent), Some(name)) => fs::canonicalize(parent)
+                            .map(|parent| parent.join(name))
+                            .unwrap_or(lexical),
+                        _ => lexical,
+                    }
+                }
+                Err(_) => agents_path,
+            }
+        }
+        Err(error) => return Err(error),
+    };
+    // Never edit, or create, a file outside the repository on behalf of a link.
+    if !agents_path.starts_with(&repo_root) {
+        return Ok(MaintenanceStatus::OutsideRepository);
+    }
     let original = match fs::read_to_string(&agents_path) {
         Ok(contents) => Some(contents),
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
@@ -101,10 +131,7 @@ fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
         Err(()) => return Ok(MaintenanceStatus::MalformedMarkers),
     };
 
-    let Some(parent) = agents_path.parent() else {
-        return Err(io::Error::other("AGENTS.md has no parent directory"));
-    };
-    let temp_path = write_temp_file(parent, &updated, original.as_deref())?;
+    let temp_path = write_temp_file(&agents_path, &updated, original.as_deref())?;
 
     // Do not replace the file if another editor changed it after we read it.
     // All turbo invocations additionally share the pid lock above.
@@ -119,6 +146,22 @@ fn upsert(repo_root: &Path) -> io::Result<MaintenanceStatus> {
             Err(error)
         }
     }
+}
+
+/// Removes `.` and resolves `..` components without touching the filesystem,
+/// for a path whose final component may not exist yet.
+fn normalize_lexically(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other),
+        }
+    }
+    normalized
 }
 
 fn replace_if_unchanged(
@@ -170,9 +213,16 @@ fn upsert_managed_block(existing: Option<&str>) -> Result<Option<String>, ()> {
     Ok(Some(format!("{existing}{separator}{MANAGED_BLOCK}\n")))
 }
 
-fn write_temp_file(parent: &Path, contents: &str, original: Option<&str>) -> io::Result<PathBuf> {
+fn write_temp_file(
+    agents_path: &Path,
+    contents: &str,
+    original: Option<&str>,
+) -> io::Result<PathBuf> {
+    let Some(parent) = agents_path.parent() else {
+        return Err(io::Error::other("AGENTS.md has no parent directory"));
+    };
     let permissions = original
-        .and_then(|_| fs::metadata(parent.join("AGENTS.md")).ok())
+        .and_then(|_| fs::metadata(agents_path).ok())
         .map(|metadata| metadata.permissions());
 
     loop {
@@ -419,6 +469,154 @@ mod tests {
 
         assert!(!replace_if_unchanged(&agents, &temp_file, Some("initial content")).unwrap());
         assert_eq!(fs::read_to_string(agents).unwrap(), "user edit");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preserves_symlinked_agents_file() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        let claude = root.join("CLAUDE.md");
+        let agents = root.join("AGENTS.md");
+        fs::write(&claude, "# Project rules\n").unwrap();
+        std::os::unix::fs::symlink("CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(root).unwrap(), MaintenanceStatus::Updated);
+        assert!(
+            fs::symlink_metadata(&agents)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        let updated = fs::read_to_string(&claude).unwrap();
+        assert!(updated.starts_with("# Project rules\n"));
+        assert!(updated.contains(MANAGED_BLOCK));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn preserves_mode_and_directory_of_cross_directory_symlink() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        let docs = root.join("docs");
+        fs::create_dir(&docs).unwrap();
+        let target = docs.join("CLAUDE.md");
+        fs::write(&target, "# Project rules\n").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("docs/CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(root).unwrap(), MaintenanceStatus::Updated);
+        assert!(
+            fs::symlink_metadata(&agents)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(fs::read_to_string(&target).unwrap().contains(MANAGED_BLOCK));
+        for dir in [root, docs.as_path()] {
+            assert!(!fs::read_dir(dir).unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .ends_with(".tmp")
+            }));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_through_dangling_symlink() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(root).unwrap(), MaintenanceStatus::Updated);
+        assert!(
+            fs::symlink_metadata(&agents)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert!(
+            fs::read_to_string(root.join("CLAUDE.md"))
+                .unwrap()
+                .contains(MANAGED_BLOCK)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn leaves_a_symlink_to_a_file_outside_the_repository_alone() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("repo");
+        let outside = temp.path().join("outside");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&outside).unwrap();
+        let target = outside.join("shared.md");
+        fs::write(&target, "# Shared\n").unwrap();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink(&target, &agents).unwrap();
+
+        assert_eq!(upsert(&root).unwrap(), MaintenanceStatus::OutsideRepository);
+        assert!(fs::symlink_metadata(&agents).unwrap().is_symlink());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "# Shared\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_create_through_a_dangling_symlink_leaving_the_repository() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("repo");
+        fs::create_dir(&root).unwrap();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("../created-outside.md", &agents).unwrap();
+
+        assert_eq!(upsert(&root).unwrap(), MaintenanceStatus::OutsideRepository);
+        assert!(fs::symlink_metadata(&agents).unwrap().is_symlink());
+        assert!(!temp.path().join("created-outside.md").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn creates_through_a_dangling_symlink_whose_parent_components_stay_inside() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path();
+        fs::create_dir(root.join("docs")).unwrap();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("docs/../CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(root).unwrap(), MaintenanceStatus::Updated);
+        assert!(fs::symlink_metadata(&agents).unwrap().is_symlink());
+        assert!(
+            fs::read_to_string(root.join("CLAUDE.md"))
+                .unwrap()
+                .contains(MANAGED_BLOCK)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_create_through_a_dangling_symlink_via_a_directory_link_outside() {
+        let temp = TempDir::new().unwrap();
+        let root = temp.path().join("repo");
+        let outside = temp.path().join("outside");
+        fs::create_dir(&root).unwrap();
+        fs::create_dir(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("docs")).unwrap();
+        let agents = root.join("AGENTS.md");
+        std::os::unix::fs::symlink("docs/CLAUDE.md", &agents).unwrap();
+
+        assert_eq!(upsert(&root).unwrap(), MaintenanceStatus::OutsideRepository);
+        assert!(!outside.join("CLAUDE.md").exists());
     }
 
     #[test]
