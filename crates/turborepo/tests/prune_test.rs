@@ -723,6 +723,122 @@ fn test_prune_docker_keeps_version_range_patches() {
     );
 }
 
+/// A symlink followed by `..` must be resolved by the filesystem, not
+/// eliminated lexically before checking containment.
+#[cfg(unix)]
+#[test]
+fn test_prune_rejects_patch_symlink_parent_traversal() {
+    for fixture in ["npm_patches", "monorepo_with_root_dep"] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            setup::copy_fixture(fixture, dir).unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            fs::create_dir(outside.path().join("child")).unwrap();
+            let secret = outside.path().join("host.patch");
+            fs::write(&secret, "host contents must not be exported\n").unwrap();
+            std::os::unix::fs::symlink(outside.path().join("child"), dir.join("patches/link"))
+                .unwrap();
+            // The lexically normalized path points to this harmless decoy;
+            // filesystem resolution of link/.. instead reaches the host file.
+            fs::write(dir.join("patches/host.patch"), "repository decoy\n").unwrap();
+            let malicious_path = "patches/link/../host.patch";
+            let lockfile = if fixture == "npm_patches" {
+                "package-lock.json"
+            } else {
+                "pnpm-lock.yaml"
+            };
+            for name in ["package.json", lockfile] {
+                let path = dir.join(name);
+                let contents = fs::read_to_string(&path).unwrap();
+                fs::write(
+                    path,
+                    contents.replace("patches/is-number@7.0.0.patch", malicious_path),
+                )
+                .unwrap();
+            }
+            let mut args = vec!["prune", "web"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            let output_text = combined_output(&output);
+            assert!(
+                !output.status.success(),
+                "unexpected success: {output_text}"
+            );
+            assert!(
+                output_text.contains("Invalid patched dependency path"),
+                "unexpected output: {output_text}"
+            );
+            for root in ["out", "out/full", "out/json"] {
+                assert!(!dir.join(root).join("patches/host.patch").exists());
+            }
+            assert_eq!(
+                fs::read_to_string(secret).unwrap(),
+                "host contents must not be exported\n"
+            );
+        }
+    }
+}
+
+/// Safe source symlinks must resolve before `..`, while output paths must
+/// use their validated normalized components rather than a pre-existing link.
+#[cfg(unix)]
+#[test]
+fn test_prune_copies_patch_to_validated_destination() {
+    for docker in [false, true] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup::copy_fixture("npm_patches", dir).unwrap();
+        fs::create_dir_all(dir.join("internal/child")).unwrap();
+        fs::write(dir.join("internal/actual.patch"), "canonical source\n").unwrap();
+        fs::write(dir.join("patches/actual.patch"), "lexical decoy\n").unwrap();
+        std::os::unix::fs::symlink("../internal/child", dir.join("patches/link")).unwrap();
+        let patch_path = "patches/link/../actual.patch";
+        for name in ["package.json", "package-lock.json"] {
+            let path = dir.join(name);
+            let contents = fs::read_to_string(&path).unwrap();
+            fs::write(
+                path,
+                contents.replace("patches/is-number@7.0.0.patch", patch_path),
+            )
+            .unwrap();
+        }
+
+        let outside = tempfile::tempdir().unwrap();
+        fs::create_dir(outside.path().join("child")).unwrap();
+        let host_file = outside.path().join("actual.patch");
+        fs::write(&host_file, "host file must not be overwritten\n").unwrap();
+        let roots = if docker {
+            vec!["out/full", "out/json"]
+        } else {
+            vec!["out"]
+        };
+        for root in &roots {
+            let patches = dir.join(root).join("patches");
+            fs::create_dir_all(&patches).unwrap();
+            std::os::unix::fs::symlink(outside.path().join("child"), patches.join("link")).unwrap();
+        }
+        let mut args = vec!["prune", "web"];
+        if docker {
+            args.push("--docker");
+        }
+        let output = run_turbo(dir, &args);
+        assert!(output.status.success(), "{}", combined_output(&output));
+        for root in roots {
+            assert_eq!(
+                fs::read_to_string(dir.join(root).join("patches/actual.patch")).unwrap(),
+                "canonical source\n"
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(host_file).unwrap(),
+            "host file must not be overwritten\n"
+        );
+    }
+}
+
 #[test]
 fn test_prune_rejects_patch_paths_with_parent_dir() {
     let tempdir = tempfile::tempdir().unwrap();
