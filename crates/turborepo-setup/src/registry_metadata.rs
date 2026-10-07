@@ -11,6 +11,7 @@ use crate::{
     version_request::is_valid_release,
 };
 
+pub(crate) const PUBLIC_NPM_REGISTRY: &str = "https://registry.npmjs.org";
 pub const MAX_METADATA_BYTES: usize = 256 * 1024;
 const MAX_VERSION_BYTES: usize = 256;
 
@@ -110,7 +111,7 @@ pub fn parse_release(
         return Err(RegistryMetadataError::IdentityMismatch);
     }
     // Compare the literal decoded string, not a URL parser's normalized form.
-    let tarball = format!("https://registry.npmjs.org/{name}/-/{name}-{exact_version}.tgz");
+    let tarball = format!("{PUBLIC_NPM_REGISTRY}/{name}/-/{name}-{exact_version}.tgz");
     if document.dist.tarball != tarball {
         return Err(RegistryMetadataError::InvalidTarball);
     }

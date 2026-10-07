@@ -7,6 +7,7 @@ pub mod node_discovery;
 pub mod node_metadata;
 pub mod node_provision;
 pub mod package_manager;
+pub mod pnpm_provision;
 pub mod registry_metadata;
 pub mod version_request;
 pub mod writer_storage;
