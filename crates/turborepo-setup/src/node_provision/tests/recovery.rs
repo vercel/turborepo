@@ -108,6 +108,45 @@ async fn unrelated_inventory_changes_reuse_node_with_unavailable_transport() {
     assert_eq!(ready.store.current().unwrap().unwrap().tools.len(), 2);
     assert_scoped_resource(&ready.store);
 
+    let mut changed_sibling = sibling.clone();
+    changed_sibling.version = "2.0.0".into();
+    changed_sibling.artifact_sha256 = "c".repeat(64);
+    changed_sibling.executables = BTreeMap::from([("fixture-next".into(), "bin/fixture".into())]);
+    let changed_desired = [node.clone(), changed_sibling.clone()];
+    assert!(!ready.store.is_current(&changed_desired).unwrap());
+    assert!(ready.store.can_reuse(&node).unwrap());
+    assert!(
+        ready
+            .plan
+            .prepare_if_needed(&ready.store, &changed_desired, &offline)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let mut staged = Vec::new();
+    assert_eq!(
+        ready
+            .store
+            .reconcile(&changed_desired, |tool, path| {
+                assert_eq!(tool, &changed_sibling);
+                staged.push(tool.clone());
+                stage_sibling(tool, path)
+            })
+            .unwrap(),
+        Outcome::Replaced
+    );
+    assert_eq!(staged, [changed_sibling.clone()]);
+    assert!(ready.store.is_current(&changed_desired).unwrap());
+    let current = ready.store.current().unwrap().unwrap();
+    assert_eq!(current.tools, [changed_sibling, node.clone()]);
+    assert!(!current.bin.join("fixture").exists());
+    assert_eq!(
+        fs::read_link(current.bin.join("fixture-next")).unwrap(),
+        Path::new("../tools/fixture/bin/fixture")
+    );
+    assert_scoped_resource(&ready.store);
+    assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 1);
+
     let node_only = [node.clone()];
     assert!(!ready.store.is_current(&node_only).unwrap());
     assert!(
@@ -128,6 +167,7 @@ async fn unrelated_inventory_changes_reuse_node_with_unavailable_transport() {
     let current = ready.store.current().unwrap().unwrap();
     assert_eq!(current.tools, node_only);
     assert!(!current.bin.join("fixture").exists());
+    assert!(!current.bin.join("fixture-next").exists());
     assert_scoped_resource(&ready.store);
     assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 1);
     assert_eq!(

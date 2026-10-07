@@ -147,8 +147,9 @@ impl NodePlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools and holds this Store lock through
-    /// preparation and reconciliation. Reuse requires a healthy entire selected
+    /// The caller supplies ALL desired tools and reconciles that same set,
+    /// holding this Store lock throughout preparation and reconciliation.
+    /// Reuse requires a healthy entire selected
     /// generation with an identical Node tool, not complete desired-set
     /// equality. Unrelated tool changes need no Node download. Windows
     /// trees may be inspected via download, but promotion remains
