@@ -142,6 +142,27 @@ impl NodeRequirements {
         Self::read_with(|file, limit| read_optional(root, file, limit))
     }
 
+    /// Parse an injected root snapshot with the same limits and semantics as
+    /// native discovery, without reading files. Missing sources are optional.
+    pub fn from_sources(
+        package_json: Option<&str>,
+        nvmrc: Option<&str>,
+        node_version: Option<&str>,
+    ) -> Result<Self, NodeDiscoveryError> {
+        Self::read_with(|file, limit| {
+            let text = match file {
+                "package.json" => package_json,
+                ".nvmrc" => nvmrc,
+                ".node-version" => node_version,
+                _ => unreachable!("fixed native Node source"),
+            };
+            if text.is_some_and(|text| text.len() > limit) {
+                return Err(NodeDiscoveryError::TooLarge { file, limit });
+            }
+            Ok(text.map(str::to_owned))
+        })
+    }
+
     pub(crate) fn read_with(
         mut read: impl FnMut(&'static str, usize) -> Result<Option<String>, NodeDiscoveryError>,
     ) -> Result<Self, NodeDiscoveryError> {
