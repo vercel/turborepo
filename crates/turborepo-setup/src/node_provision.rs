@@ -260,7 +260,7 @@ impl PreparedNode {
         Ok(())
     }
 }
-fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
+pub(crate) fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let path = entry.path();
