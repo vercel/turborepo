@@ -7,6 +7,7 @@ use serde::{
     ser::SerializeMap,
 };
 use serde_json::Value;
+use turbopath::RelativeUnixPathBuf;
 
 use super::{Error, Lockfile, Package};
 
@@ -288,6 +289,16 @@ impl Lockfile for NpmLockfile {
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
         Ok(serde_json::to_vec_pretty(&self)?)
+    }
+
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        // npm 12 records patch paths on the package entries. Reading them from
+        // the subgraph naturally excludes patches for packages removed by prune.
+        self.packages
+            .values()
+            .filter_map(|package| package.other.get("patched")?.get("path")?.as_str())
+            .map(|path| RelativeUnixPathBuf::new(path).map_err(Error::from))
+            .collect()
     }
 
     fn global_change(&self, other: &dyn Lockfile) -> bool {
@@ -757,6 +768,77 @@ impl NpmPackage {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_patch_paths_follow_subgraph() {
+        let json = serde_json::json!({
+            "lockfileVersion": 4,
+            "packages": {
+                "": {},
+                "apps/web": {},
+                "node_modules/foo": {
+                    "version": "1.0.0",
+                    "patched": {"path": "patches/foo.patch", "integrity": "sha512-foo"}
+                },
+                "apps/web/node_modules/@scope/bar": {
+                    "version": "2.0.0",
+                    "patched": {"path": "patches/bar.patch", "integrity": "sha512-bar"}
+                },
+                "node_modules/unpatched": {"version": "1.0.0"}
+            }
+        });
+        let lockfile = NpmLockfile::load(&serde_json::to_vec(&json).unwrap()).unwrap();
+        let mut paths = lockfile.patches().unwrap();
+        paths.sort();
+        assert_eq!(
+            paths,
+            ["patches/bar.patch", "patches/foo.patch"]
+                .map(|path| RelativeUnixPathBuf::new(path).unwrap())
+        );
+
+        // Nested, scoped package entries carry the same patch metadata as
+        // hoisted ones, and the integrity must survive pruning unchanged.
+        let pruned = lockfile
+            .subgraph(
+                &["apps/web".into()],
+                &["apps/web/node_modules/@scope/bar".into()],
+            )
+            .unwrap();
+        assert_eq!(
+            pruned.patches().unwrap(),
+            [RelativeUnixPathBuf::new("patches/bar.patch").unwrap()]
+        );
+        let encoded = pruned.encode().unwrap();
+        let value: Value = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(value["lockfileVersion"], 4);
+        assert_eq!(
+            value["packages"]["apps/web/node_modules/@scope/bar"]["patched"],
+            json["packages"]["apps/web/node_modules/@scope/bar"]["patched"]
+        );
+        assert_eq!(
+            NpmLockfile::load(&encoded).unwrap().patches().unwrap(),
+            pruned.patches().unwrap()
+        );
+        assert!(
+            lockfile
+                .subgraph(&[], &[])
+                .unwrap()
+                .patches()
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_patch_paths_reject_absolute_paths() {
+        let lockfile = NpmLockfile::load(
+            br#"{"lockfileVersion":4,"packages":{"node_modules/foo":{
+                "version":"1.0.0","patched":{"path":"/outside.patch"}
+            }}}"#,
+        )
+        .unwrap();
+        assert!(matches!(lockfile.patches(), Err(Error::Path(_))));
+    }
 
     #[test]
     fn test_npm_parent() {

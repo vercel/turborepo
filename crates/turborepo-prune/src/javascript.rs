@@ -7,7 +7,7 @@
 
 use std::collections::{BTreeSet, HashSet};
 
-use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use super::Error;
@@ -111,23 +111,36 @@ pub(crate) fn validate_patch_source_paths(
     repo_root: &AbsoluteSystemPath,
     patches: &[RelativeUnixPathBuf],
 ) -> Result<(), Error> {
-    let repo_root_realpath = repo_root.to_realpath()?;
-
     for patch in patches {
-        let patch_path = repo_root.join_unix_path(patch);
-        if !patch_path.starts_with(repo_root.as_std_path()) {
-            return Err(Error::InvalidPatchPath(patch.clone()));
-        }
+        resolve_patch_source_path(repo_root, patch)?;
+    }
+    Ok(())
+}
 
-        if patch_path.try_exists()? {
-            let patch_realpath = patch_path.to_realpath()?;
-            if !patch_realpath.starts_with(repo_root_realpath.as_std_path()) {
-                return Err(Error::InvalidPatchPath(patch.clone()));
-            }
-        }
+/// Resolve the original path components before checking canonical containment.
+/// Cleaning `symlink/..` first can hide a traversal outside the repository.
+/// Copying must use the returned path, not resolve the untrusted path again.
+pub(crate) fn resolve_patch_source_path(
+    repo_root: &AbsoluteSystemPath,
+    patch: &RelativeUnixPathBuf,
+) -> Result<Option<AbsoluteSystemPathBuf>, Error> {
+    if !repo_root
+        .join_unix_path(patch)
+        .starts_with(repo_root.as_std_path())
+    {
+        return Err(Error::InvalidPatchPath(patch.clone()));
     }
 
-    Ok(())
+    let patch_path = repo_root.resolve(&patch.to_anchored_system_path_buf());
+    if !patch_path.try_exists()? {
+        return Ok(None);
+    }
+    let patch_realpath = patch_path.to_realpath()?;
+    let repo_root_realpath = repo_root.to_realpath()?;
+    if !patch_realpath.starts_with(repo_root_realpath.as_std_path()) {
+        return Err(Error::InvalidPatchPath(patch.clone()));
+    }
+    Ok(Some(patch_realpath))
 }
 
 pub(crate) fn package_json_patch_paths(
