@@ -21,7 +21,7 @@ const REGISTRY: &str = "https://registry.npmjs.org";
 pub enum Error {
     #[error("invalid locked pnpm artifact or executable mapping; regenerate turbo.lock")]
     InvalidLock,
-    #[error("pnpm requires the selected healthy managed Node in the complete desired inventory")]
+    #[error("pnpm requires the selected managed Node in the complete desired inventory")]
     NodeBinding,
     #[error("pnpm promotion is unqualified for Windows, musl or non-Unix hosts")]
     UnsupportedTarget,
@@ -51,8 +51,7 @@ impl PnpmTransport {
         })
     }
 
-    /// Literal-loopback fixtures only; provenance stays canonical. No repo/env
-    /// override.
+    /// Loopback fixtures only; canonical provenance, no env override.
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::loopback_http_for_tests(origin)?])?,
@@ -69,8 +68,7 @@ pub struct PnpmPlan {
     launch_directory: String,
 }
 impl PnpmPlan {
-    /// Bind selected Node and authored integrity in inventory, retaining locked
-    /// archive SHA-256.
+    /// Bind Node and authored integrity; retain locked archive SHA-256.
     pub fn from_lock(
         lock: &Lock,
         platform: Platform,
@@ -100,8 +98,8 @@ impl PnpmPlan {
             return Err(Error::InvalidLock);
         };
         let parts = artifacts
-            .get(&Platform::Any)
-            .or_else(|| artifacts.get(&platform))
+            .get(&platform)
+            .or_else(|| artifacts.get(&Platform::Any))
             .ok_or(Error::InvalidLock)?;
         if parts.len() != 1 {
             return Err(Error::InvalidLock);
@@ -150,8 +148,8 @@ impl PnpmPlan {
         &self.tool
     }
 
-    /// Install Node first, then prepare and reconcile the SAME complete desired
-    /// set. No publication here; reuse requires healthy selected Node.
+    /// Prepare without executing Node, then reconcile the SAME complete desired
+    /// set with all adapter callbacks. Only healthy generations allow reuse.
     pub async fn prepare_if_needed(
         &self,
         store: &Store,
@@ -160,7 +158,6 @@ impl PnpmPlan {
     ) -> Result<Option<PreparedPnpm>, Error> {
         if !desired.iter().any(|tool| tool == &self.tool)
             || !desired.iter().any(|tool| tool == &self.node)
-            || !store.can_reuse(&self.node)?
         {
             return Err(Error::NodeBinding);
         }
@@ -241,8 +238,7 @@ pub struct PreparedPnpm {
     launch_directory: String,
 }
 impl PreparedPnpm {
-    /// Copy all verified resources; export launchers invoking this generation's
-    /// managed Node.
+    /// Copy verified resources; launch this generation's managed Node.
     pub fn stage(
         &self,
         tool: &Tool,

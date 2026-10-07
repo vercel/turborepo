@@ -19,6 +19,8 @@ use turborepo_tool_install::Outcome;
 
 use super::*;
 
+const TARGET: Platform = Platform::MacosArm64;
+
 struct Registry {
     transport: PnpmTransport,
     requests: Arc<Mutex<Vec<String>>>,
@@ -128,8 +130,8 @@ fn fixture(bytes: &[u8]) -> Value {
 }
 fn plans(value: &Value) -> (NodePlan, PnpmPlan) {
     let lock = Lock::parse(&serde_json::to_vec(value).unwrap()).unwrap();
-    let node = NodePlan::from_lock(&lock, Platform::MacosArm64).unwrap();
-    let pnpm = PnpmPlan::from_lock(&lock, Platform::MacosArm64, &node, None).unwrap();
+    let node = NodePlan::from_lock(&lock, TARGET).unwrap();
+    let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, None).unwrap();
     (node, pnpm)
 }
 fn node_stage(_: &Tool, destination: &Path) -> Result<(), turborepo_tool_install::Error> {
@@ -166,7 +168,11 @@ async fn install(
         .prepare_if_needed(store, &desired, &registry.transport)
         .await?;
     Ok(store.reconcile(&desired, |tool, path| {
-        prepared.as_ref().unwrap().stage(tool, path)
+        if tool == node.inventory_tool() {
+            node_stage(tool, path)
+        } else {
+            prepared.as_ref().unwrap().stage(tool, path)
+        }
     })?)
 }
 
@@ -180,18 +186,29 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
         .prefix("pnpm repo ' spaces ")
         .tempdir()
         .unwrap();
-    let mut store = seeded(repo.path(), &node);
-    let before = manifest(repo.path());
+    let mut store = Store::open(repo.path()).unwrap();
     let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
     let prepared = pnpm
         .prepare_if_needed(&store, &desired, &registry.transport)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(manifest(repo.path()), before); // Preparation never publishes.
+    assert!(store.current().unwrap().is_none()); // Preparation never publishes.
     store
-        .reconcile(&desired, |tool, path| prepared.stage(tool, path))
+        .reconcile(&desired, |tool, path| {
+            if tool == node.inventory_tool() {
+                node_stage(tool, path)
+            } else {
+                prepared.stage(tool, path)
+            }
+        })
         .unwrap();
+    assert_eq!(
+        fs::read_dir(repo.path().join(".turbo/tools"))
+            .unwrap()
+            .count(),
+        3
+    );
     let current = store.current().unwrap().unwrap();
     let root = current.bin.parent().unwrap().join("tools/pnpm");
     assert_eq!(
@@ -257,15 +274,6 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
     let bin = store.current().unwrap().unwrap().bin;
     fs::remove_file(bin.join("pnpm")).unwrap();
     std::os::unix::fs::symlink("../tools/pnpm/bin/pnpm.cjs", bin.join("pnpm")).unwrap();
-    let snapshot = manifest(repo.path());
-    assert!(matches!(
-        install(&mut store, &node, &pnpm, &registry).await,
-        Err(Error::NodeBinding)
-    ));
-    assert_eq!(manifest(repo.path()), snapshot);
-    store
-        .reconcile(&[node.inventory_tool().clone()], node_stage)
-        .unwrap();
     install(&mut store, &node, &pnpm, &registry).await.unwrap();
     let bin = store.current().unwrap().unwrap().bin;
     assert_eq!(
@@ -321,94 +329,64 @@ async fn both_hashes_and_package_layout_are_mandatory() {
     version["version"] = json!("10.0.1");
     let mut bin = package();
     bin["bin"]["pnpm"] = json!("dist/pnpm.cjs");
-    let mut cases = vec![
-        (
-            good.clone(),
-            b"wrong sha256".to_vec(),
-            good.clone(),
-            "sha256",
-        ),
-        (
-            good.clone(),
-            good.clone(),
-            b"wrong sha512".to_vec(),
-            "sha512",
-        ),
-    ];
+    let mut cases = vec![(good.clone(), "sha256"), (good, "sha512")];
     for invalid in [wrong, version, bin] {
-        let bytes = archive(&invalid.to_string(), "bin/pnpm.cjs");
-        cases.push((bytes, Vec::new(), Vec::new(), "package"));
+        cases.push((archive(&invalid.to_string(), "bin/pnpm.cjs"), "package"));
     }
-    let missing = archive(&package().to_string(), "bin/wrong.cjs");
-    cases.push((missing, Vec::new(), Vec::new(), "layout"));
+    cases.push((archive(&package().to_string(), "bin/wrong.cjs"), "layout"));
     let duplicate = archive("{\"name\":\"pnpm\",\"name\":\"pnpm\"}", "bin/pnpm.cjs");
-    cases.push((duplicate, Vec::new(), Vec::new(), "package"));
-    for (bytes, lock_bytes, registry_bytes, expected) in cases {
-        let lock_bytes = if lock_bytes.is_empty() {
-            &bytes
-        } else {
-            &lock_bytes
-        };
-        let registry_bytes = if registry_bytes.is_empty() {
-            &bytes
-        } else {
-            &registry_bytes
-        };
-        let (node, pnpm) = plans(&fixture(lock_bytes));
-        let registry = serve(metadata(registry_bytes), bytes).await;
+    cases.push((duplicate, "package"));
+    for (bytes, expected) in cases {
+        let mut value = fixture(&bytes);
+        let mut meta = metadata(&bytes);
+        if expected == "sha256" {
+            value["tools"]["pnpm"]["installation"]["artifacts"]["any"]["package"]["sha256"] =
+                json!("00".repeat(32));
+        }
+        if expected == "sha512" {
+            meta["dist"]["integrity"] = metadata(b"wrong sha512")["dist"]["integrity"].clone();
+        }
+        let (node, pnpm) = plans(&value);
+        let registry = serve(meta, bytes).await;
         let repo = tempfile::tempdir().unwrap();
         let mut store = seeded(repo.path(), &node);
         let snapshot = manifest(repo.path());
         let error = install(&mut store, &node, &pnpm, &registry)
             .await
             .unwrap_err();
-        match expected {
-            "sha256" => assert!(matches!(
-                error,
-                Error::Download(DownloadError::DigestMismatch)
-            )),
-            "sha512" => assert!(matches!(
-                error,
-                Error::Download(DownloadError::Sha512DigestMismatch)
-            )),
-            "layout" => assert!(matches!(
-                error,
-                Error::Archive(turborepo_archive::Error::LayoutMismatch)
-            )),
-            _ => assert!(matches!(error, Error::InvalidPackage)),
-        }
+        let kind = match error {
+            Error::Download(DownloadError::DigestMismatch) => "sha256",
+            Error::Download(DownloadError::Sha512DigestMismatch) => "sha512",
+            Error::Archive(turborepo_archive::Error::LayoutMismatch) => "layout",
+            Error::InvalidPackage => "package",
+            _ => panic!("unexpected error: {error}"),
+        };
+        assert_eq!(kind, expected);
         assert_eq!(manifest(repo.path()), snapshot);
     }
 }
 
 #[tokio::test]
-async fn missing_damaged_or_wrong_node_prevents_network_and_reuse() {
+async fn desired_node_binding_and_damaged_generation_repair() {
     let bytes = archive(&package().to_string(), "bin/pnpm.cjs");
     let registry = serve(metadata(&bytes), bytes.clone()).await;
     let (node, pnpm) = plans(&fixture(&bytes));
     let repo = tempfile::tempdir().unwrap();
     let mut store = Store::open(repo.path()).unwrap();
-    assert!(matches!(
-        install(&mut store, &node, &pnpm, &registry).await,
-        Err(Error::NodeBinding)
-    ));
-    store
-        .reconcile(&[node.inventory_tool().clone()], node_stage)
-        .unwrap();
+    let mut wrong = node.inventory_tool().clone();
+    wrong.artifact_sha256 = "22".repeat(32);
+    for nodes in [vec![], vec![wrong]] {
+        let desired = [nodes, vec![pnpm.inventory_tool().clone()]].concat();
+        assert!(matches!(
+            pnpm.prepare_if_needed(&store, &desired, &registry.transport)
+                .await,
+            Err(Error::NodeBinding)
+        ));
+        assert!(registry.requests.lock().unwrap().is_empty());
+        assert!(store.current().unwrap().is_none());
+    }
     install(&mut store, &node, &pnpm, &registry).await.unwrap();
     let snapshot = manifest(repo.path());
-    let lock = Lock::parse(&serde_json::to_vec(&fixture(&bytes)).unwrap()).unwrap();
-    for (algorithm, digest) in [("sha512", "00".repeat(64)), ("sha256", "bad".into())] {
-        let pin = CorepackIntegrity { algorithm, digest };
-        let pinned = PnpmPlan::from_lock(&lock, Platform::MacosArm64, &node, Some(&pin)).unwrap();
-        assert_ne!(pnpm.inventory_tool(), pinned.inventory_tool());
-        assert!(
-            install(&mut store, &node, &pinned, &registry)
-                .await
-                .is_err()
-        );
-        assert_eq!(manifest(repo.path()), snapshot);
-    }
     registry.requests.lock().unwrap().clear();
     let old = store.current().unwrap().unwrap().bin;
     fs::write(
@@ -416,21 +394,36 @@ async fn missing_damaged_or_wrong_node_prevents_network_and_reuse() {
         "corrupted",
     )
     .unwrap();
-    assert!(matches!(
-        install(&mut store, &node, &pnpm, &registry).await,
-        Err(Error::NodeBinding)
-    ));
-    assert!(registry.requests.lock().unwrap().is_empty());
+    let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    assert!(
+        pnpm.prepare_if_needed(&store, &desired, &registry.transport)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert_eq!(registry.requests.lock().unwrap().len(), 2);
     assert_eq!(manifest(repo.path()), snapshot);
+    install(&mut store, &node, &pnpm, &registry).await.unwrap();
+    assert!(store.is_current(&desired).unwrap());
+    registry.requests.lock().unwrap().clear();
     let mut changed = fixture(&bytes);
     changed["tools"]["node"]["installation"]["artifacts"]["macos-arm64"]["distribution"]
         ["sha256"] = json!("22".repeat(32));
-    let (new_node, new_pnpm) = plans(&changed);
+    let (_, new_pnpm) = plans(&changed);
     assert_ne!(pnpm.inventory_tool(), new_pnpm.inventory_tool());
+    let desired = [
+        node.inventory_tool().clone(),
+        new_pnpm.inventory_tool().clone(),
+    ];
     assert!(matches!(
-        install(&mut store, &new_node, &new_pnpm, &registry).await,
+        new_pnpm
+            .prepare_if_needed(&store, &desired, &registry.transport)
+            .await,
         Err(Error::NodeBinding)
     ));
+    let lock = Lock::parse(&serde_json::to_vec(&changed).unwrap()).unwrap();
+    let result = PnpmPlan::from_lock(&lock, TARGET, &node, None);
+    assert!(matches!(result, Err(Error::NodeBinding)));
     assert!(registry.requests.lock().unwrap().is_empty());
 }
 
@@ -439,17 +432,30 @@ fn lock_transport_and_unqualified_targets_fail_closed() {
     let bytes = archive(&package().to_string(), "bin/pnpm.cjs");
     let value = fixture(&bytes);
     let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
-    let (node, _) = plans(&value);
+    let (node, any) = plans(&value);
+    let mut exact = value.clone();
+    let sets = &mut exact["tools"]["pnpm"]["installation"]["artifacts"];
+    sets["macos-arm64"] = sets["any"].clone();
+    sets["macos-arm64"]["package"]["sha256"] = json!("33".repeat(32));
+    assert!(Lock::parse(&serde_json::to_vec(&exact).unwrap()).is_err());
+    exact["tools"]["pnpm"]["installation"]["artifacts"]
+        .as_object_mut()
+        .unwrap()
+        .remove("any");
+    let (_, native) = plans(&exact);
+    assert_eq!(native.inventory_tool().artifact_sha256, "33".repeat(32));
+    assert_eq!(
+        any.inventory_tool().artifact_sha256,
+        format!("{:x}", Sha256::digest(&bytes))
+    );
     for platform in [
         Platform::WindowsX64,
         Platform::WindowsArm64,
         Platform::LinuxX64Musl,
         Platform::Any,
     ] {
-        assert!(matches!(
-            PnpmPlan::from_lock(&lock, platform, &node, None),
-            Err(Error::UnsupportedTarget)
-        ));
+        let result = PnpmPlan::from_lock(&lock, platform, &node, None);
+        assert!(matches!(result, Err(Error::UnsupportedTarget)));
     }
     for (field, bad) in [
         ("url", json!("https://evil.test/pnpm.tgz")),
@@ -460,10 +466,8 @@ fn lock_transport_and_unqualified_targets_fail_closed() {
         let mut changed = value.clone();
         changed["tools"]["pnpm"]["installation"]["artifacts"]["any"]["package"][field] = bad;
         let lock = Lock::parse(&serde_json::to_vec(&changed).unwrap()).unwrap();
-        assert!(matches!(
-            PnpmPlan::from_lock(&lock, Platform::MacosArm64, &node, None),
-            Err(Error::InvalidLock)
-        ));
+        let result = PnpmPlan::from_lock(&lock, TARGET, &node, None);
+        assert!(matches!(result, Err(Error::InvalidLock)));
     }
     for origin in [
         "http://localhost:1234",
@@ -481,31 +485,31 @@ async fn authored_pins_and_bounded_metadata_fail_before_artifacts() {
     let bytes = archive(&package().to_string(), "bin/pnpm.cjs");
     let value = fixture(&bytes);
     let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
-    let (node, _) = plans(&value);
+    let (node, unpinned) = plans(&value);
     let repo = tempfile::tempdir().unwrap();
     let mut store = seeded(repo.path(), &node);
+    let good = serve(metadata(&bytes), bytes.clone()).await;
+    install(&mut store, &node, &unpinned, &good).await.unwrap();
     let snapshot = manifest(repo.path());
     for (algorithm, digest) in [
         ("sha512", "00".repeat(64)),
         ("sha256", "00".repeat(32)),
         ("sha512", "bad".into()),
+        ("sha256", "bad".into()),
     ] {
-        let pnpm = PnpmPlan::from_lock(
-            &lock,
-            Platform::MacosArm64,
-            &node,
-            Some(&CorepackIntegrity { algorithm, digest }),
-        )
-        .unwrap();
+        let pin = CorepackIntegrity { algorithm, digest };
+        let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&pin)).unwrap();
+        assert_ne!(pnpm.inventory_tool(), unpinned.inventory_tool());
         let registry = serve(metadata(&bytes), bytes.clone()).await;
         assert!(install(&mut store, &node, &pnpm, &registry).await.is_err());
         assert_eq!(registry.requests.lock().unwrap().len(), 1);
         assert_eq!(manifest(repo.path()), snapshot);
     }
     let registry = serve_raw(vec![b' '; MAX_METADATA_BYTES + 1], bytes).await;
-    let (_, pnpm) = plans(&value);
+    let (_, pnpm) = plans(&fixture(b"force metadata recheck"));
+    let result = install(&mut store, &node, &pnpm, &registry).await;
     assert!(matches!(
-        install(&mut store, &node, &pnpm, &registry).await,
+        result,
         Err(Error::Download(DownloadError::TooLarge))
     ));
     assert_eq!(manifest(repo.path()), snapshot);
