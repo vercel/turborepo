@@ -145,11 +145,13 @@ impl NodePlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools, then reconciles that same set
-    /// with each prepared adapter. This avoids dropping other tools and
-    /// avoids network traffic on a healthy repeat. Windows trees may be
-    /// inspected via download, but promotion is explicitly unqualified by
-    /// the shared inventory contract.
+    /// The caller supplies ALL desired tools and reconciles that same set,
+    /// holding this Store lock throughout preparation and reconciliation.
+    /// Reuse requires a healthy entire selected
+    /// generation with an identical Node tool, not complete desired-set
+    /// equality. Unrelated tool changes need no Node download. Windows
+    /// trees may be inspected via download, but promotion remains
+    /// explicitly unqualified.
     pub async fn prepare_if_needed(
         &self,
         store: &Store,
@@ -162,7 +164,7 @@ impl NodePlan {
         if !desired.iter().any(|tool| tool == &self.tool) {
             return Err(Error::InventoryMismatch);
         }
-        if store.is_current(desired)? {
+        if store.can_reuse(&self.tool)? {
             return Ok(None);
         }
         self.download(transport).await.map(Some)
