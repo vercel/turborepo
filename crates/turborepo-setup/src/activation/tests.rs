@@ -78,6 +78,22 @@ fn stage(tool: &Tool, root: &Path) -> Result<(), turborepo_tool_install::Error> 
         fs::write(&path, "#!/bin/sh\ntouch activation-was-probed\nexit 99\n")?;
         fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
     }
+    if tool.id == "node" && tool.executables.contains_key("npm") {
+        let npm = root.join("lib/node_modules/npm");
+        fs::create_dir_all(npm.join("bin"))?;
+        fs::write(
+            npm.join("package.json"),
+            r#"{"name":"npm","version":"11.0.0","bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}"#,
+        )?;
+        for name in ["npm", "npx"] {
+            let cli = format!("bin/{name}-cli.js");
+            fs::rename(root.join(format!("bin/{name}")), npm.join(&cli))?;
+            symlink(
+                format!("../lib/node_modules/npm/{cli}"),
+                root.join(format!("bin/{name}")),
+            )?;
+        }
+    }
     fs::create_dir_all(root.join("resources"))?;
     fs::write(
         root.join("resources/template.json"),
@@ -439,6 +455,49 @@ fn unsupported_adapters_platforms_and_invalid_lock_metadata_are_distinct() {
 }
 
 #[test]
+fn locked_node_semantics_are_checked_before_inventory() {
+    for (file, contents, version) in [
+        (".nvmrc", "26.0.0", "24.0.0"),
+        (".node-version", "26.x", "24.0.0"),
+        ("package.json", r#"{"engines":{"node":">=26"}}"#, "24.0.0"),
+        (
+            "package.json",
+            r#"{"devEngines":{"runtime":{"name":"node","version":">=26"}}}"#,
+            "24.0.0",
+        ),
+        (".nvmrc", "lts/*", "24.0.0-rc.1"),
+    ] {
+        let repo = tempfile::tempdir().unwrap();
+        let mut value = fixture();
+        value["tools"].as_object_mut().unwrap().remove("pnpm");
+        write_sources(repo.path(), &value);
+        fs::remove_file(repo.path().join(".nvmrc")).unwrap();
+        fs::write(repo.path().join("package.json"), "{}").unwrap();
+        fs::write(repo.path().join(file), contents).unwrap();
+        let captured = Snapshot::capture(repo.path()).unwrap();
+        value["tools"]["node"]["declarations"] =
+            serde_json::to_value(&captured.declarations()["node"]).unwrap();
+        value["tools"]["node"]["version"] = json!(version);
+        let artifact =
+            &mut value["tools"]["node"]["installation"]["artifacts"]["macos-arm64"]["distribution"];
+        artifact["url"] = json!(format!(
+            "https://nodejs.org/dist/v{version}/node-v{version}-darwin-arm64.tar.gz"
+        ));
+        artifact["rootPrefix"] = json!(format!("node-v{version}-darwin-arm64"));
+        fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
+        let before = state(repo.path());
+        assert!(
+            matches!(
+                ActivationPlan::inspect(repo.path(), context()),
+                Err(Error::DeclarationDrift)
+            ),
+            "{file}: {contents}"
+        );
+        assert_eq!(state(repo.path()), before);
+    }
+}
+
+#[test]
 fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
     let repo = tempfile::tempdir().unwrap();
     let mut value = fixture();
@@ -449,4 +508,13 @@ fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
     let plan = ActivationPlan::inspect(repo.path(), context()).unwrap();
     assert_eq!(plan.snapshot().tools().len(), 1);
     assert_eq!(plan.tools().len(), 1);
+    value["tools"]["node"]["options"]["bundled-npm"] = json!(["12.0.0"]);
+    assert_eq!(plan.tools(), desired(&value, None));
+    fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
+    let before = state(repo.path());
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), context()),
+        Err(Error::StaleInventory)
+    ));
+    assert_eq!(state(repo.path()), before);
 }

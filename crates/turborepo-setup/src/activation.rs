@@ -113,6 +113,14 @@ impl ActivationPlan {
         }
         let platform = context.artifact_platform();
         let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+        let version = semver::Version::parse(&node.inventory_tool().version)
+            .map_err(|_| Error::InvalidLock)?;
+        if !sources
+            .node_requirements()?
+            .matches_locked_version(&version)
+        {
+            return Err(Error::DeclarationDrift);
+        }
         let mut tools = vec![node.inventory_tool().clone()];
         if lock.tools().contains_key("pnpm") {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
@@ -131,6 +139,11 @@ impl ActivationPlan {
         if current.tools != tools {
             return Err(Error::StaleInventory);
         }
+        let tree = current
+            .tool_tree(node.inventory_tool())
+            .ok_or(Error::StaleInventory)?;
+        node.verify_bundled_npm(&tree)
+            .map_err(|_| Error::StaleInventory)?;
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
