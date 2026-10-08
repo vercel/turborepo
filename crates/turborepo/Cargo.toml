@@ -27,7 +27,8 @@ turbopath = { workspace = true }
 which = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
-terminal-control = { path = "../terminal-control" }
+# Compatibility patch on upstream 0.6.0; use the same Ghostty API as production.
+terminal-control = { git = "https://github.com/anthonyshew/terminal-control", rev = "c701c8eda0612a8e0f0a2c2f086f1070cc42c7fd" }
 
 [lints]
 workspace = true
