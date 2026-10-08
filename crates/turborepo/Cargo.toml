@@ -25,7 +25,8 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 turbopath = { workspace = true }
 turborepo-shim = { workspace = true }
-turborepo-setup = { path = "../turborepo-setup" }
+turborepo-platform = { workspace = true }
+turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-tool-install = { path = "../turborepo-tool-install" }
 which = { workspace = true }
 

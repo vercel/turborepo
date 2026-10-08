@@ -199,9 +199,13 @@ fn check_rejects_a_locked_node_version_that_does_not_satisfy_native_declarations
     fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap();
     f.lock["tools"]["node"]["declarations"][0]["request"] = json!("26.0.0");
     f.save();
-    // Dependency regression: keep visible until the ActivationPlan follow-up
-    // validates the selected Node version, rather than only provenance equality.
-    assert!(f.check(CHECK).is_err());
+    // Matching provenance cannot authorize a version outside the native request.
+    assert!(matches!(
+        f.check(CHECK),
+        Err(Error::Activation(
+            turborepo_setup::activation::Error::DeclarationDrift
+        ))
+    ));
     assert_eq!(u.hits(), 3);
 }
 

@@ -588,9 +588,12 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
     use std::os::unix::fs::PermissionsExt;
 
     use turborepo_setup::{
-        lock::{Lock, Platform},
+        activation::ActivationPlan,
+        execution_identity::{ExecutionContext, Libc},
+        lock::{Lock, Platform, Snapshot},
         node_provision::NodePlan,
         pnpm_provision::PnpmPlan,
+        test_support::OwnedSetupFixture,
     };
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
@@ -681,12 +684,24 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
         assert!(!text.contains("tasks are ready") && !root.join("probe-ran").exists());
     }
     // Actual native prune, both output shapes, not a manually copied fixture.
-    let pruned = tempfile::tempdir().unwrap();
+    let pruned = OwnedSetupFixture::new().unwrap();
+    let context = ExecutionContext::new(
+        turborepo_platform::Platform::current(),
+        if cfg!(target_os = "linux") {
+            Libc::Gnu { abi: "gnu".into() }
+        } else {
+            Libc::None
+        },
+        "host-readiness".into(),
+        ["unprobed".into()].into(),
+    )
+    .unwrap();
+    assert_eq!(context.artifact_platform(), platform);
     let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
     monitor.set_nonblocking(true).unwrap();
     let proxy = format!("http://{}", monitor.local_addr().unwrap());
     for docker in [false, true] {
-        let output_root = pruned.path().join(if docker { "docker" } else { "plain" });
+        let output_root = pruned.root().join(if docker { "docker" } else { "plain" });
         let before = snapshot(root);
         let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
         command
@@ -749,6 +764,27 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
                 assert_eq!(code, 0, "{text}");
                 assert!(text.contains("Dependencies skipped"), "{text}");
             }
+            // Owned policy is a test-only typed seam, never a production opt-out.
+            // Inspect the actual prune output and all fixture state without locks.
+            let before = snapshot(pruned.root().parent().unwrap());
+            let sources = Snapshot::capture(&output_root).unwrap();
+            pruned.policy_at(&output_root).unwrap();
+            let plan = ActivationPlan::inspect(&output_root, context.clone()).unwrap();
+            assert_eq!(plan.tools(), tools);
+            pruned.policy_at(&output_root).unwrap();
+            sources.ensure_current().unwrap();
+            assert_eq!(snapshot(pruned.root().parent().unwrap()), before);
+            eprintln!(
+                "Real prune output {}: owned typed Node/pnpm readiness passed",
+                output_root.display()
+            );
+            fs::write(plan.path_prepend().join("../tools/pnpm/resource"), "damage").unwrap();
+            let damaged = snapshot(pruned.root().parent().unwrap());
+            assert!(matches!(
+                ActivationPlan::inspect(&output_root, context.clone()),
+                Err(turborepo_setup::activation::Error::DamagedInventory(_))
+            ));
+            assert_eq!(snapshot(pruned.root().parent().unwrap()), damaged);
         }
     }
     assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
