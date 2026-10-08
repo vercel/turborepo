@@ -319,6 +319,7 @@ impl DownloadClient {
         builder: ClientBuilder,
         origins: impl IntoIterator<Item = ApprovedOrigin>,
     ) -> Result<Self, Error> {
+        turborepo_tls::ensure_crypto_provider();
         let client = builder
             .redirect(Policy::none())
             .retry(reqwest::retry::never())

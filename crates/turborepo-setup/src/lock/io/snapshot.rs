@@ -125,14 +125,23 @@ impl Snapshot {
         Ok(guard.read_lock()? == self.bytes && inputs(&self.root)? == self.inputs)
     }
 
-    fn commit_with(
+    /// Read-only revalidation for frozen/no-lock transactions, without storage.
+    pub(crate) fn ensure_current(&self) -> Result<(), StorageError> {
+        if read_optional(&self.root, LOCK_NAME, MAX_LOCK_BYTES)? != self.bytes
+            || inputs(&self.root)? != self.inputs
+        {
+            return Err(StorageError::Conflict);
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_native_coverage(
         &self,
-        candidate: &Lock,
-        before_check: impl FnOnce() -> io::Result<()>,
-    ) -> Result<WriteOutcome, StorageError> {
+        candidate: Option<&Lock>,
+    ) -> Result<(), StorageError> {
         // Only canonical native IDs and these fixed input files are covered.
         // Refuse to publish or silently remove aliases/extra sources.
-        for lock in std::iter::once(candidate).chain(self.previous.as_ref()) {
+        for lock in candidate.into_iter().chain(self.previous.as_ref()) {
             if lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
@@ -147,6 +156,15 @@ impl Snapshot {
                 .into());
             }
         }
+        Ok(())
+    }
+
+    fn commit_with(
+        &self,
+        candidate: &Lock,
+        before_check: impl FnOnce() -> io::Result<()>,
+    ) -> Result<WriteOutcome, StorageError> {
+        self.check_native_coverage(Some(candidate))?;
         if !candidate.matches_native(&self.native)? {
             return Err(
                 Error::Invalid("candidate provenance does not match captured sources").into(),
