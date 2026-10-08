@@ -821,6 +821,8 @@ fn test_uv_prune() {
         ("conftest.py", "import pytest\n"),
         ("ruff.toml", "line-length = 100\n"),
         ("pytest.ini", "[pytest]\n"),
+        // Packaging configuration for a root project whose sources aren't kept.
+        ("setup.cfg", "[options]\npackage_dir = =src\n"),
     ] {
         fs::write(tempdir.path().join(name), contents).unwrap();
     }
@@ -838,6 +840,10 @@ fn test_uv_prune() {
     for name in ["conftest.py", "ruff.toml", "pytest.ini"] {
         assert!(out.join(name).exists(), "{name} must be carried into out/");
     }
+    assert!(
+        !out.join("setup.cfg").exists(),
+        "setup.cfg can configure an unpruned root package and must stay behind"
+    );
 
     let lock = fs::read_to_string(out.join("uv.lock")).unwrap();
     assert!(lock.contains("name = \"py-app\""));
