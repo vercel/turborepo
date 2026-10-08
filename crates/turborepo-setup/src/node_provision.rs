@@ -34,6 +34,8 @@ pub enum Error {
     #[error("bundled npm package identity or entrypoints do not match the selected resolution")]
     InvalidBundledNpm,
     #[error(transparent)]
+    Resolution(#[from] crate::node_resolution::Error),
+    #[error(transparent)]
     Download(#[from] turborepo_download::Error),
     #[error(transparent)]
     Archive(#[from] turborepo_archive::Error),
@@ -54,6 +56,50 @@ impl NodeTransport {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             origin: "https://nodejs.org".into(),
         })
+    }
+
+    /// Read only bounded official metadata for a native portable selection.
+    /// No caller URL, artifact download, installation or executable probing.
+    pub async fn resolve_native(
+        &self,
+        requirements: &crate::NodeRequirements,
+        include_bundled_npm: bool,
+    ) -> Result<crate::node_resolution::ToolResolution, Error> {
+        use crate::{node_metadata::ReleaseIndex, node_resolution};
+        let index = self
+            .client
+            .read_metadata(
+                &format!("{}/dist/index.json", self.origin),
+                turborepo_download::Limits::new(
+                    crate::node_metadata::MAX_INDEX_BYTES,
+                    Duration::from_secs(30),
+                )?,
+            )
+            .await?;
+        let releases = ReleaseIndex::parse(&index).map_err(node_resolution::Error::from)?;
+        let selected = requirements
+            .resolve(&releases.releases())
+            .map_err(node_resolution::Error::from)?;
+        let version = selected.version.to_string();
+        let checksums = self
+            .client
+            .read_metadata(
+                &format!("{}/dist/v{version}/SHASUMS256.txt", self.origin),
+                turborepo_download::Limits::new(
+                    crate::node_metadata::MAX_CHECKSUM_BYTES,
+                    Duration::from_secs(30),
+                )?,
+            )
+            .await?;
+        Ok(node_resolution::resolve(
+            requirements,
+            &index,
+            node_resolution::ChecksumManifest {
+                version: &version,
+                bytes: &checksums,
+            },
+            include_bundled_npm,
+        )?)
     }
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only, no env

@@ -3,6 +3,7 @@
 
 pub mod bundled_npm;
 pub mod execution_identity;
+pub mod js_resolution;
 pub mod lock;
 pub mod node;
 pub mod node_discovery;
