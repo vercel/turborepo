@@ -80,6 +80,14 @@ pub struct Current {
     pub bin: PathBuf,
 }
 
+impl Current {
+    /// Resources for an inspected member, not execution authorization.
+    pub fn tool_tree(&self, tool: &Tool) -> Option<PathBuf> {
+        self.tools.contains(tool).then_some(())?;
+        Some(self.bin.parent()?.join("tools").join(&tool.id))
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
     Unchanged,

@@ -73,6 +73,8 @@ fn inspect_does_not_initialize_or_lock_storage() {
     // Reader works even while the writer lock is held, without reacquiring it.
     let current = Store::inspect(repo.path()).unwrap().unwrap();
     assert_eq!(current.tools, store.current().unwrap().unwrap().tools);
+    assert!(current.tool_tree(&tool("node")).unwrap().is_dir());
+    assert!(current.tool_tree(&tool("other")).is_none());
     assert_eq!(manifest(&store), before);
     drop(store);
     fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
