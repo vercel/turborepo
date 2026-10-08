@@ -21,3 +21,5 @@ The workflow signs with `rcodesign` from `apple-codesign` 0.29.0 using the binar
 ## Versioned docs aliases
 
 The Release workflow's `alias-versioned-docs` job requests a GitHub Actions OIDC token with audience `https://github.com/vercel` and exchanges it for a short-lived Vercel access token. It does not use the `TURBO_TOKEN` secret.
+
+Configure `VERCEL_TEAM_ID`, `VERCEL_PROJECT_ID`, and `VERCEL_OIDC_POLICY_ID` as repository secrets.

@@ -771,9 +771,9 @@ jobs:
       contents: read
       id-token: write
     env:
-      VERCEL_TEAM_ID: team_nLlpyC6REAqxydlFKbrMDlud
-      VERCEL_PROJECT_ID: prj_yM4GdZnTY4prqeWVc4IDEtA5xEtl
-      VERCEL_OIDC_POLICY_ID: pol_e1dcc1e2-c117-4b83-9dd0-2b812c7aaab2
+      VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_OIDC_POLICY_ID: ${{ secrets.VERCEL_OIDC_POLICY_ID }}
     outputs:
       success: ${{ steps.alias.outcome == 'success' }}
       subdomain: ${{ steps.version.outputs.subdomain }}
@@ -800,6 +800,9 @@ jobs:
         id: vercel-token
         run: |
           set -euo pipefail
+          : "${VERCEL_TEAM_ID:?Missing VERCEL_TEAM_ID secret}"
+          : "${VERCEL_PROJECT_ID:?Missing VERCEL_PROJECT_ID secret}"
+          : "${VERCEL_OIDC_POLICY_ID:?Missing VERCEL_OIDC_POLICY_ID secret}"
           OIDC_TOKEN=$(curl --fail --silent --show-error --retry 3 \
             --get --data-urlencode "audience=https://github.com/vercel" \
             --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
