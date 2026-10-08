@@ -18,6 +18,7 @@ use turborepo_download::Error as DownloadError;
 use turborepo_tool_install::Outcome;
 
 use super::*;
+use crate::pnpm_provision::PnpmTransport;
 
 const TARGET: Platform = Platform::MacosArm64;
 
@@ -228,7 +229,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
     fs::set_permissions(bait.path().join("node"), fs::Permissions::from_mode(0o755)).unwrap();
     for path in [
         current.bin.join("pnpm"),
-        root.join(&pnpm.tool.executables["pnpm"]),
+        root.join(&pnpm.inventory_tool().executables["pnpm"]),
         current.bin.join("pnpx"),
     ] {
         let output = Command::new(path)
@@ -278,7 +279,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
     let bin = store.current().unwrap().unwrap().bin;
     assert_eq!(
         fs::read_link(bin.join("pnpm")).unwrap(),
-        Path::new("../tools/pnpm").join(&pnpm.tool.executables["pnpm"])
+        Path::new("../tools/pnpm").join(&pnpm.inventory_tool().executables["pnpm"])
     );
     assert!(!bin.join("extra").exists());
 }
