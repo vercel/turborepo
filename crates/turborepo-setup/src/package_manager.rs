@@ -340,5 +340,7 @@ pub fn discover_package_manager(root: &Value) -> Result<Option<Declaration>, Err
     }))
 }
 
+mod locked_integrity;
+
 #[cfg(test)]
 mod tests;

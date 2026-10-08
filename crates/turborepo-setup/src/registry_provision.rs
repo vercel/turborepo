@@ -27,6 +27,8 @@ pub enum Error {
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
     #[error(transparent)]
+    Authored(#[from] crate::package_manager::Error),
+    #[error(transparent)]
     Metadata(#[from] registry_metadata::RegistryMetadataError),
     #[error(transparent)]
     Download(#[from] turborepo_download::Error),
@@ -309,6 +311,25 @@ impl PreparedRegistry {
 /// Locked pnpm facade retaining the existing preparation/staging API.
 pub struct PnpmPlan(RegistryPlan);
 impl PnpmPlan {
+    /// Validate every applicable authored pin before storage or transport, and
+    /// bind the effective strong pin into the inventory's reuse identity.
+    pub fn from_declaration(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        declaration: &crate::package_manager::Declaration,
+    ) -> Result<Self, Error> {
+        if declaration.manager != Manager::Pnpm {
+            return Err(Error::InvalidLock);
+        }
+        let plan = Self::from_lock(lock, platform, node, None)?;
+        let version = semver::Version::parse(&plan.inventory_tool().version)
+            .map_err(|_| Error::InvalidLock)?;
+        let authored =
+            declaration.locked_integrity(&version, &plan.inventory_tool().artifact_sha256)?;
+        Self::from_lock(lock, platform, node, authored.as_ref())
+    }
+
     pub fn from_lock(
         lock: &Lock,
         platform: Platform,

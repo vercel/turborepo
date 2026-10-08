@@ -4,6 +4,35 @@
 
 use std::path::Component;
 
+mod loopback;
+pub use loopback::LoopbackServer;
+
+/// Observe the real writer's root lock, without arbitrary sleeps or changing
+/// the contributor's environment. Only used by owned concurrent CLI fixtures.
+#[cfg(unix)]
+pub fn wait_for_writer(root: &Path) -> io::Result<()> {
+    use std::{
+        fs::TryLockError,
+        time::{Duration, Instant},
+    };
+    let file = fs::File::open(root)?;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match file.try_lock() {
+            Err(TryLockError::WouldBlock) => return Ok(()),
+            Err(TryLockError::Error(error)) => return Err(error),
+            Ok(()) => file.unlock()?,
+        }
+        if Instant::now() >= deadline {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "writer fixture did not reach lock",
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
 use super::*;
 
 /// Keeps every preflight input alive inside one ephemeral, canonical directory.
@@ -40,6 +69,21 @@ impl OwnedSetupFixture {
             system,
             node,
         })
+    }
+
+    /// Initialize only the owned repository and explicit ignored setup storage.
+    pub fn init_git(&self) -> io::Result<()> {
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .current_dir(&self.root)
+            .status()?;
+        if !status.success() {
+            return Err(io::Error::other("fixture git init failed"));
+        }
+        fs::write(self.root.join(".gitignore"), "/.turbo/\n")
     }
 
     pub fn root(&self) -> &Path {
