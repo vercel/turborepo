@@ -25,4 +25,6 @@ pub use node::{NodeArtifact, NodeArtifactError};
 pub use node_discovery::{
     NodeDiscoveryError, NodeRelease, NodeRequirements, NodeSource, ResolvedNode,
 };
+#[cfg(feature = "test-support")]
+pub use source_policy::test_support;
 pub use version_request::{VersionRequest, VersionRequestError};

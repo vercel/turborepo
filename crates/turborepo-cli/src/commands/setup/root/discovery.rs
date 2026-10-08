@@ -214,5 +214,7 @@ impl Discovery {
     }
 }
 
+#[cfg(all(test, unix))]
+mod owned_fixtures;
 #[cfg(test)]
 mod tests;
