@@ -3,7 +3,7 @@
 
 use std::{fs, io, net::TcpListener, path::Path, process::Command};
 
-const PENDING: &str = "provisioning is not implemented yet";
+const PENDING: &str = "this setup mode is not implemented";
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
 const DISABLED: &str = "requires root futureFlags.experimentalSetup";
 
@@ -134,7 +134,7 @@ fn standalone_gate_reads_only_the_selected_root_config() {
         }
         let text = failure(root, &["setup"], false, DISABLED);
         assert!(text.contains("--cwd"), "{text}");
-        assert!(!text.contains("provisioning is not implemented"));
+        assert!(!diagnostic_contains(&text, PENDING), "{text}");
     }
     // jsonc and both existing global root selectors work without JS.
     fs::remove_file(root.join("turbo.json")).unwrap();

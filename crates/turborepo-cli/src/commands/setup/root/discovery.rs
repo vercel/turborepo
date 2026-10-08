@@ -39,24 +39,12 @@ impl SourceEligibility {
     pub fn node(self) -> bool {
         self.node
     }
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "pending guarded provisioner6320")
-    )]
     pub fn cargo(self) -> bool {
         self.cargo
     }
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "pending guarded provisioner6320")
-    )]
     pub fn python(self) -> bool {
         self.python
     }
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "pending guarded provisioner6320")
-    )]
     pub fn go(self) -> bool {
         self.go
     }
@@ -170,23 +158,11 @@ impl Discovery {
         self.root.flags
     }
 
-    // These are preparatory APIs, not a shipped installation path. Current run
-    // only gates/normalizes requests and still returns NotImplemented.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "pending guarded provisioner6320")
-    )]
     pub fn source_eligibility(&self) -> SourceEligibility {
         self.eligibility
     }
 
     /// Reject unsupported custom configuration BEFORE Snapshot/storage/network.
-    /// Current parse/gating-only run still accepts it, as before this
-    /// pre-factor.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "pending guarded provisioner6320")
-    )]
     pub fn snapshot_root(&self) -> Result<&AbsoluteSystemPath, Error> {
         match self.scope {
             ConfigScope::RootFiles(_) => Ok(self.root_path()),
@@ -199,10 +175,6 @@ impl Discovery {
     /// preserve the original root diagnostic rather than flattening it to a
     /// generic conflict. Never recaptures or updates this expected state on
     /// drift.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "pending guarded provisioner6320")
-    )]
     pub fn revalidate(&self) -> Result<bool, Error> {
         self.snapshot_root()?;
         let current = infer(&self.cwd, self.explicit_cwd, self.config.as_deref())?;
