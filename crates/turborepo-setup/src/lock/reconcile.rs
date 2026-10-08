@@ -84,6 +84,7 @@ fn without_npm_exports(tool: &Tool) -> Tool {
                 }
             }
         }
+        Installation::Bundled { .. } => {}
         Installation::VerifySystem { executables } => {
             executables.retain(|name| name != "npm" && name != "npx");
         }

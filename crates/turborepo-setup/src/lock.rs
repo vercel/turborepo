@@ -81,6 +81,9 @@ pub enum Installation {
     Managed {
         artifacts: BTreeMap<Platform, BTreeMap<String, Artifact>>,
     },
+    /// Native npm identity/provenance whose resources AND executable ownership
+    /// belong to the selected managed Node. No duplicate artifact or inventory.
+    Bundled { owner: String },
     /// Explicit external-tool requirement. No fabricated artifact digest.
     VerifySystem { executables: Vec<String> },
 }
@@ -248,10 +251,12 @@ impl Lock {
                 }
             }
         }
+        crate::bundled_npm::validate(&document)?;
         for platform in Platform::NATIVE {
             let mut names = BTreeSet::new();
             for tool in document.tools.values() {
                 let executable_names: Vec<_> = match &tool.installation {
+                    Installation::Bundled { .. } => Vec::new(),
                     Installation::VerifySystem { executables } => executables.iter().collect(),
                     Installation::Managed { artifacts } => artifacts
                         .get(&platform)
