@@ -60,6 +60,27 @@ fn checked_reconciliation_preserves_selection_on_staged_and_noop_conflicts() {
 }
 
 #[test]
+fn inspect_does_not_initialize_or_lock_storage() {
+    let repo = tempfile::tempdir().unwrap();
+    assert!(Store::inspect(repo.path()).unwrap().is_none());
+    assert!(!repo.path().join(".turbo").exists());
+    fs::create_dir(repo.path().join(".turbo")).unwrap();
+    assert!(Store::inspect(repo.path()).unwrap().is_none());
+    assert!(!repo.path().join(".turbo/tools").exists());
+    let mut store = Store::open(repo.path()).unwrap();
+    store.reconcile(&[tool("node")], populate).unwrap();
+    let before = manifest(&store);
+    // Reader works even while the writer lock is held, without reacquiring it.
+    let current = Store::inspect(repo.path()).unwrap().unwrap();
+    assert_eq!(current.tools, store.current().unwrap().unwrap().tools);
+    assert_eq!(manifest(&store), before);
+    drop(store);
+    fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
+    assert!(Store::inspect(repo.path()).unwrap().is_some());
+    assert!(!repo.path().join(".turbo/tools/transaction.lock").exists());
+}
+
+#[test]
 fn no_op_replacement_removal_and_full_layout() {
     let repo = tempfile::tempdir().unwrap();
     let mut store = Store::open(repo.path()).unwrap();
