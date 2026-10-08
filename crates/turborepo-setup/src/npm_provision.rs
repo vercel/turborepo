@@ -1,6 +1,6 @@
 //! Independently locked Unix npm override. Node must export only node when npm
-//! owns npm/npx. Matching Node-bundled selection belongs to TURBO-6326, not
-//! here.
+//! owns npm/npx. Matching native pins use `bundled_npm`: Node remains the sole
+//! resource/executable owner, with a separate npm resolution identity.
 
 use turborepo_tool_install::{Store, Tool};
 
