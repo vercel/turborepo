@@ -184,6 +184,19 @@ impl Store {
             .is_some_and(|old| old.contains(tool)))
     }
 
+    /// Healthy tree for adapter-specific resource verification while holding
+    /// this Store guard. Not activation authorization or resolution semantics.
+    pub fn reusable_tree(&self, tool: &Tool, desired: &[Tool]) -> Result<Option<PathBuf>, Error> {
+        validate_tools(desired)?;
+        if !desired.contains(tool) {
+            return Err(Error::InvalidInventory);
+        }
+        Ok(self
+            .healthy_inventory()?
+            .filter(|old| old.contains(tool))
+            .map(|old| self.root.join(old.generation).join("tools").join(&tool.id)))
+    }
+
     fn healthy_inventory(&self) -> Result<Option<Inventory>, Error> {
         let Some(old) = self.inventory()? else {
             return Ok(None);
