@@ -967,7 +967,9 @@ fn reject_unsupported_local_sources(
             // bypasses `[tool.uv.sources]` but is just as unhashable.
             if let Some((_, reference)) = requirement.split_once('@')
                 && let Some(url) = reference.split(';').next().map(str::trim)
-                && url.starts_with("file:")
+                && url
+                    .get(..5)
+                    .is_some_and(|scheme| scheme.eq_ignore_ascii_case("file:"))
             {
                 return Err(Error::UnsupportedLocalPathSource {
                     manifest: manifest_path.to_string(),
@@ -4451,6 +4453,7 @@ version = "0.1.0"
                 "helper[cli] @ file:///opt/vendor/helper ; python_version >= '3.11'",
                 true,
             ),
+            ("helper @ FILE:///opt/vendor/helper", true),
             ("helper @ git+https://example.com/helper@v1", false),
             ("helper>=1", false),
         ] {
