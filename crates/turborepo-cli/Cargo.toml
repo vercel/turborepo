@@ -110,3 +110,9 @@ turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 turborepo-watch = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+] }
