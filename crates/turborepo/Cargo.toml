@@ -25,6 +25,8 @@ tempfile = { workspace = true }
 tokio = { workspace = true }
 turbopath = { workspace = true }
 turborepo-shim = { workspace = true }
+turborepo-setup = { path = "../turborepo-setup" }
+turborepo-tool-install = { path = "../turborepo-tool-install" }
 which = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]

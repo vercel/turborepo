@@ -11,16 +11,43 @@ fn write(root: &Path, name: &str, contents: &str) {
     fs::write(root.join(name), contents).expect("write fixture");
 }
 
-fn snapshot(root: &Path) -> Vec<(std::path::PathBuf, Vec<u8>)> {
-    fn visit(dir: &Path, files: &mut Vec<(std::path::PathBuf, Vec<u8>)>) {
-        for entry in fs::read_dir(dir).expect("read fixture directory") {
-            let path = entry.expect("read fixture entry").path();
-            if path.is_dir() {
-                files.push((path.clone(), vec![]));
-                visit(&path, files);
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Entry(
+    std::path::PathBuf,
+    u32,
+    std::time::SystemTime,
+    Vec<u8>,
+    Option<std::path::PathBuf>,
+);
+
+fn snapshot(root: &Path) -> Vec<Entry> {
+    fn visit(path: &Path, files: &mut Vec<Entry>) {
+        let metadata = fs::symlink_metadata(path).expect("fixture metadata");
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::MetadataExt;
+            metadata.mode()
+        };
+        #[cfg(not(unix))]
+        let mode = u32::from(metadata.permissions().readonly());
+        files.push(Entry(
+            path.to_owned(),
+            mode,
+            metadata.modified().expect("fixture modification time"),
+            if metadata.is_file() {
+                fs::read(path).expect("fixture file bytes")
             } else {
-                let contents = fs::read(&path).expect("read fixture file");
-                files.push((path, contents));
+                vec![]
+            },
+            if metadata.file_type().is_symlink() {
+                Some(fs::read_link(path).expect("fixture link target"))
+            } else {
+                None
+            },
+        ));
+        if metadata.is_dir() {
+            for entry in fs::read_dir(path).expect("read fixture directory") {
+                visit(&entry.expect("read fixture entry").path(), files);
             }
         }
     }
@@ -83,6 +110,29 @@ fn failure(root: &Path, words: &[&str], ci: bool, expected: &str) -> String {
     assert_eq!(code, 1, "{words:?}: {text}");
     assert!(diagnostic_contains(&text, expected), "{text}");
     text
+}
+
+fn external_system_policy_blocked(code: i32, text: &str) -> bool {
+    let blocked = diagnostic_contains(text, "official-only setup rejects System configuration")
+        || diagnostic_contains(text, "cannot safely inspect System configuration");
+    if blocked {
+        assert_eq!(code, 1);
+        assert!(!text.contains(": ready"), "{text}");
+        eprintln!(
+            "Native readiness qualification blocked by external System npm configuration; policy \
+             was not bypassed."
+        );
+    }
+    blocked
+}
+
+fn check_failure(root: &Path, words: &[&str], ci: bool, expected: &str) {
+    let (code, text) = invoke(root, words, ci);
+    assert_eq!(code, 1, "{text}");
+    assert!(
+        diagnostic_contains(&text, expected) || external_system_policy_blocked(code, &text),
+        "{text}"
+    );
 }
 
 fn diagnostic_contains(text: &str, expected: &str) -> bool {
@@ -196,6 +246,12 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         assert!(text.contains("no tasks were run"), "{text}");
         assert!(!text.contains("test run successful"), "{text}");
     }
+    failure(
+        root,
+        &["setup", "--check", "--tools-only"],
+        false,
+        "non-JavaScript workspace setup",
+    );
     let text = failure(root, &["setup", "--update-lock"], true, "inferred in CI");
     assert!(text.contains("--no-frozen"), "{text}");
     for flags in [vec!["--update-lock", "--no-frozen"], vec!["--no-lock"]] {
@@ -481,6 +537,228 @@ fn malformed_or_duplicate_root_configs_are_not_silently_skipped() {
         "{text}"
     );
     assert!(!text.contains(PENDING), "{text}");
+}
+
+#[test]
+fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    let qualified = cfg!(all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    ));
+    for ci in [false, true] {
+        for extra in [
+            None,
+            Some("--offline"),
+            Some("--frozen"),
+            Some("--no-frozen"),
+        ] {
+            let mut words = vec!["setup", "--check", "--tools-only"];
+            words.extend(extra);
+            check_failure(
+                root,
+                &words,
+                ci,
+                if qualified {
+                    "managed activation requires turbo.lock"
+                } else {
+                    "managed promotion requires macOS or GNU Linux"
+                },
+            );
+        }
+        for conflict in ["--force", "--update-lock", "--no-lock", "--plan"] {
+            let (code, text) = invoke(root, &["setup", "--check", "--tools-only", conflict], ci);
+            assert_eq!(code, 1, "{text}");
+            assert!(!text.contains("ready"), "{text}");
+        }
+    }
+}
+
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+#[test]
+fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use turborepo_setup::{
+        lock::{Lock, Platform},
+        node_provision::NodePlan,
+        pnpm_provision::PnpmPlan,
+    };
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(root, ".nvmrc", "24.0.0");
+    write(root, ".gitignore", "/.turbo/\n");
+    write(
+        root,
+        "package.json",
+        r#"{"name":"fixture","packageManager":"pnpm@10.0.0","workspaces":["apps/*"]}"#,
+    );
+    write(root, "pnpm-workspace.yaml", "packages: ['apps/*']\n");
+    write(
+        root,
+        "pnpm-lock.yaml",
+        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
+    );
+    fs::create_dir_all(root.join("apps/web/src")).unwrap();
+    write(root, "apps/web/package.json", r#"{"name":"web"}"#);
+    let (platform, selector, spelling) = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => (Platform::MacosArm64, "macos-arm64", "darwin-arm64"),
+        ("macos", _) => (Platform::MacosX64, "macos-x64", "darwin-x64"),
+        ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64-gnu", "linux-arm64"),
+        _ => (Platform::LinuxX64Gnu, "linux-x64-gnu", "linux-x64"),
+    };
+    let prefix = format!("node-v24.0.0-{spelling}");
+    let lock = serde_json::json!({"schemaVersion":0,"tools":{
+        "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
+            "installation":{"kind":"managed","artifacts":{selector:{"distribution":{
+                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz"),"sha256":"0".repeat(64),
+                "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}}}}}},
+        "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
+            "installation":{"kind":"managed","artifacts":{"any":{"package":{
+                "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"1".repeat(64),
+                "format":"tar-gz","rootPrefix":"package","executables":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}}}}}
+    }}).to_string();
+    write(root, "turbo.lock", &lock);
+    let lock = Lock::parse(lock.as_bytes()).unwrap();
+    let node = NodePlan::from_lock(&lock, platform).unwrap();
+    let declaration = turborepo_setup::lock::Snapshot::capture(root)
+        .unwrap()
+        .package_manager()
+        .unwrap()
+        .unwrap();
+    let pnpm = PnpmPlan::from_declaration(&lock, platform, &node, &declaration).unwrap();
+    let tools = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    // Production has no loopback override. Seed through the real Store/adapter
+    // contract; the CLI library fixtures separately exercise actual downloads.
+    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
+        for relative in tool.executables.values() {
+            let file = destination.join(relative);
+            fs::create_dir_all(file.parent().unwrap())?;
+            fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
+            fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
+        }
+        fs::write(destination.join("resource"), "adjacent resource")?;
+        Ok::<_, turborepo_tool_install::Error>(())
+    };
+    let mut store = turborepo_tool_install::Store::open(root).unwrap();
+    store.reconcile(&tools, stage).unwrap();
+    let current = store.current().unwrap().unwrap();
+    drop(store);
+    for ci in [false, true] {
+        let (code, text) = invoke(
+            root,
+            &[
+                "setup",
+                "--check",
+                "--tools-only",
+                "--offline",
+                "--cwd=apps/web/src",
+            ],
+            ci,
+        );
+        if external_system_policy_blocked(code, &text) {
+            continue;
+        }
+        assert_eq!(code, 0, "{text}");
+        assert!(
+            text.contains("node 24.0.0: ready") && text.contains("pnpm 10.0.0: ready"),
+            "{text}"
+        );
+        assert!(
+            text.contains("Dependencies skipped")
+                && text.contains("dependency readiness was not checked"),
+            "{text}"
+        );
+        assert!(!text.contains("tasks are ready") && !root.join("probe-ran").exists());
+    }
+    // Actual native prune, both output shapes, not a manually copied fixture.
+    let pruned = tempfile::tempdir().unwrap();
+    let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
+    monitor.set_nonblocking(true).unwrap();
+    let proxy = format!("http://{}", monitor.local_addr().unwrap());
+    for docker in [false, true] {
+        let output_root = pruned.path().join(if docker { "docker" } else { "plain" });
+        let before = snapshot(root);
+        let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
+        command
+            .env_clear()
+            .current_dir(root)
+            .args(["prune", "web", "--out-dir"])
+            .arg(&output_root)
+            .env("PATH", "")
+            .env("HOME", root.join("home"))
+            .env("TURBO_TELEMETRY_DISABLED", "1")
+            .env("DO_NOT_TRACK", "1")
+            .env("HTTP_PROXY", &proxy)
+            .env("HTTPS_PROXY", &proxy)
+            .env("ALL_PROXY", &proxy)
+            .env("NO_PROXY", "");
+        if docker {
+            command.arg("--docker");
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(snapshot(root), before);
+        let roots = if docker {
+            vec![output_root.join("full"), output_root.join("json")]
+        } else {
+            vec![output_root]
+        };
+        for output_root in roots {
+            for file in ["turbo.lock", ".nvmrc"] {
+                assert_eq!(
+                    fs::read(output_root.join(file)).unwrap(),
+                    fs::read(root.join(file)).unwrap()
+                );
+            }
+            assert!(!output_root.join(".turbo").exists());
+            check_failure(
+                &output_root,
+                &["setup", "--check", "--tools-only"],
+                true,
+                "managed installation is missing; run turbo setup",
+            );
+            // A separate repo-local generation, not copied ignored state.
+            let mut store = turborepo_tool_install::Store::open(&output_root).unwrap();
+            store.reconcile(&tools, stage).unwrap();
+            drop(store);
+            let (code, text) = invoke(
+                &output_root,
+                &["setup", "--check", "--tools-only", "--offline"],
+                true,
+            );
+            if external_system_policy_blocked(code, &text) {
+                eprintln!(
+                    "TURBO-6277: real pruned fixture check success remains blocked by external \
+                     System npm configuration."
+                );
+            } else {
+                assert_eq!(code, 0, "{text}");
+                assert!(text.contains("Dependencies skipped"), "{text}");
+            }
+        }
+    }
+    assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
+    fs::write(current.bin.join("../tools/pnpm/resource"), "damage").unwrap();
+    check_failure(
+        root,
+        &["setup", "--check", "--tools-only"],
+        true,
+        "managed installation is damaged or unsafe; run turbo setup",
+    );
 }
 
 #[test]
