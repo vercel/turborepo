@@ -375,12 +375,11 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
         };
         setup::run(&args, setup_args)
     };
-    for flags in [
-        &["--frozen", "--tools-only"][..],
-        &["--plan"],
-        &["--check"],
-        &["--__test-run"],
-    ] {
+    assert!(matches!(
+        dispatch(&["--frozen", "--tools-only"]),
+        Err(setup::Error::Unsupported(_))
+    ));
+    for flags in [&["--plan"][..], &["--check"], &["--__test-run"]] {
         assert!(matches!(dispatch(flags), Err(setup::Error::NotImplemented)));
     }
     assert!(

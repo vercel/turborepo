@@ -1,6 +1,6 @@
-//! Real CLI consumers of the dev-dependency seam. The executor is still the
-//! explicit NotImplemented gate on main; these tests do not qualify
-//! provisioning or native/packaged-wrapper process parity.
+//! Real CLI consumers of the dev-dependency seam. Positive frozen provisioning
+//! is qualified separately in setup/tests.rs; these discovery tests do not
+//! qualify native/packaged-wrapper process parity.
 
 use std::{fs, time::Duration};
 
@@ -58,13 +58,10 @@ fn owned_policy_reaches_actual_parser_root_and_executor_without_success_or_write
     let request = setup::SetupRequest::new(setup_args, true)?;
     assert_eq!(request.lock, setup::LockMode::Frozen);
     assert!(request.tools_only);
-    assert!(matches!(
-        setup::execute(request),
-        Err(setup::Error::NotImplemented)
-    ));
+    setup::validate_request(&request)?;
     assert!(matches!(
         setup::run(&args, setup_args),
-        Err(setup::Error::NotImplemented)
+        Err(setup::Error::Unsupported(_))
     ));
     fs::write(f.home().join(".npmrc"), "")?;
     assert_eq!(
@@ -249,7 +246,7 @@ async fn unsupported_unix_artifact_targets_fail_before_loopback_traffic_or_stora
     };
     assert!(matches!(
         setup::run(&args, setup_args),
-        Err(setup::Error::NotImplemented)
+        Err(setup::Error::Unsupported(_))
     ));
     assert!(
         tokio::time::timeout(Duration::from_millis(50), listener.accept())

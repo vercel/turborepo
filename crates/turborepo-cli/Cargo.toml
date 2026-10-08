@@ -25,10 +25,13 @@ pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+flate2 = "1.1.9"
 insta = { workspace = true }
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 serial_test = "3.0"
+sha2 = { workspace = true }
+tar = { version = "0.4.45", default-features = false }
 test-case = { workspace = true }
 tracing.workspace = true
 turborepo-download = { workspace = true, features = ["test-support"] }
@@ -69,8 +72,8 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 toml = { workspace = true }
 
-tracing-appender = "0.2.2"
 tracing.workspace = true
+tracing-appender = "0.2.2"
 usage = { package = "usage-rs", version = "=6.5.0", features = ["completions"] }
 
 turbo-updater = { workspace = true }
@@ -100,10 +103,12 @@ turborepo-rayon-compat = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-run = { workspace = true, default-features = false }
 turborepo-run-opts = { workspace = true }
+turborepo-setup = { path = "../turborepo-setup" }
 turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
+turborepo-tool-install = { path = "../turborepo-tool-install" }
 turborepo-tracing = { workspace = true }
 turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { workspace = true }
