@@ -124,9 +124,65 @@ impl RepoState {
     }
 }
 
+/// Which experimental native workspace toolchains a root turbo config enables.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct NativeWorkspaceFlags {
+    pub cargo: bool,
+    pub python: bool,
+    pub go: bool,
+}
+
+/// A native workspace manifest that could not be read or parsed.
+#[derive(Debug, Error)]
+#[error("{reason}")]
+pub struct NativeWorkspaceManifestError {
+    pub path: AbsoluteSystemPathBuf,
+    pub reason: String,
+}
+
+/// The manifest in `dir` that roots a native workspace whose toolchain is
+/// enabled: a `Cargo.toml` with a `workspace` table, a `pyproject.toml` with
+/// `tool.uv.workspace`, or a `go.work`. Manifests are only read for enabled
+/// toolchains. Callers decide whether an unreadable manifest is an error.
+pub fn native_workspace_manifest(
+    dir: &AbsoluteSystemPath,
+    flags: NativeWorkspaceFlags,
+) -> Result<Option<&'static str>, NativeWorkspaceManifestError> {
+    let toml_manifest = |name| -> Result<Option<toml::Value>, NativeWorkspaceManifestError> {
+        let path = dir.join_component(name);
+        let error = |reason: String| NativeWorkspaceManifestError {
+            path: path.clone(),
+            reason,
+        };
+        path.read_existing_to_string()
+            .map_err(|e| error(e.to_string()))?
+            .map(|contents| toml::from_str(&contents).map_err(|e| error(e.to_string())))
+            .transpose()
+    };
+    if flags.cargo
+        && toml_manifest("Cargo.toml")?.is_some_and(|cargo| cargo.get("workspace").is_some())
+    {
+        return Ok(Some("Cargo.toml"));
+    }
+    if flags.python
+        && toml_manifest("pyproject.toml")?.is_some_and(|python| {
+            python
+                .get("tool")
+                .and_then(|tool| tool.get("uv"))
+                .and_then(|uv| uv.get("workspace"))
+                .is_some()
+        })
+    {
+        return Ok(Some("pyproject.toml"));
+    }
+    if flags.go && dir.join_component("go.work").exists() {
+        return Ok(Some("go.work"));
+    }
+    Ok(None)
+}
+
 /// Whether `dir` holds a native workspace manifest whose toolchain is enabled
-/// by the future flags of the turbo config in `dir`. Mirrors the gating `turbo
-/// setup` applies to the same markers.
+/// by the future flags of the turbo config in `dir`.
 ///
 /// A missing, unreadable, or malformed file counts as not enabled; the
 /// turbo.json loader reports config errors once the run starts.
@@ -140,21 +196,23 @@ fn has_enabled_native_workspace(dir: &AbsoluteSystemPath) -> bool {
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false)
     };
-    let toml_marker = |name| -> Option<toml::Value> {
-        let contents = dir.join_component(name).read_existing_to_string().ok()??;
-        toml::from_str(&contents).ok()
-    };
-    (enabled("experimentalCargoWorkspaces")
-        && toml_marker("Cargo.toml").is_some_and(|cargo| cargo.get("workspace").is_some()))
-        || (enabled("experimentalPythonWorkspaces")
-            && toml_marker("pyproject.toml").is_some_and(|python| {
-                python
-                    .get("tool")
-                    .and_then(|tool| tool.get("uv"))
-                    .and_then(|uv| uv.get("workspace"))
-                    .is_some()
-            }))
-        || (enabled("experimentalGoWorkspaces") && dir.join_component("go.work").exists())
+    // Ask per toolchain so one malformed manifest doesn't hide another.
+    [
+        NativeWorkspaceFlags {
+            cargo: enabled("experimentalCargoWorkspaces"),
+            ..Default::default()
+        },
+        NativeWorkspaceFlags {
+            python: enabled("experimentalPythonWorkspaces"),
+            ..Default::default()
+        },
+        NativeWorkspaceFlags {
+            go: enabled("experimentalGoWorkspaces"),
+            ..Default::default()
+        },
+    ]
+    .into_iter()
+    .any(|flags| matches!(native_workspace_manifest(dir, flags), Ok(Some(_))))
 }
 
 /// Reads only the `futureFlags` object of the turbo config in `dir`, without
@@ -185,7 +243,7 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::{RepoMode, RepoState};
+    use super::{NativeWorkspaceFlags, RepoMode, RepoState, native_workspace_manifest};
     use crate::{package_json::PackageJson, package_manager, package_manager::PackageManager};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
@@ -539,6 +597,64 @@ mod test {
     ], RepoMode::SinglePackage ; "ambiguous turbo config")]
     fn native_workspace_root_mode(files: &[(&str, &str)], expected: RepoMode) {
         assert_eq!(infer_native_root(files), expected);
+    }
+
+    #[test]
+    fn native_workspace_manifest_is_gated_by_flags_and_strict_about_enabled_manifests() {
+        let (_tmp, dir) = tmp_dir();
+        dir.join_component("Cargo.toml")
+            .create_with_contents(CARGO_WORKSPACE)
+            .unwrap();
+        dir.join_component("pyproject.toml")
+            .create_with_contents(UV_WORKSPACE)
+            .unwrap();
+        dir.join_component("go.work")
+            .create_with_contents("go 1.22\n")
+            .unwrap();
+        let only = |cargo, python, go| NativeWorkspaceFlags { cargo, python, go };
+
+        assert_eq!(
+            native_workspace_manifest(&dir, only(false, false, false)).unwrap(),
+            None
+        );
+        assert_eq!(
+            native_workspace_manifest(&dir, only(true, false, false)).unwrap(),
+            Some("Cargo.toml")
+        );
+        assert_eq!(
+            native_workspace_manifest(&dir, only(false, true, false)).unwrap(),
+            Some("pyproject.toml")
+        );
+        assert_eq!(
+            native_workspace_manifest(&dir, only(false, false, true)).unwrap(),
+            Some("go.work")
+        );
+
+        // A malformed manifest is only read, and only an error, when enabled.
+        dir.join_component("Cargo.toml")
+            .create_with_contents("[workspace")
+            .unwrap();
+        assert_eq!(
+            native_workspace_manifest(&dir, only(false, false, true)).unwrap(),
+            Some("go.work")
+        );
+        let error = native_workspace_manifest(&dir, only(true, false, true)).unwrap_err();
+        assert_eq!(error.path, dir.join_component("Cargo.toml"));
+    }
+
+    #[test]
+    fn malformed_manifest_does_not_hide_another_enabled_native_workspace() {
+        assert_eq!(
+            infer_native_root(&[
+                (
+                    "turbo.json",
+                    r#"{"futureFlags":{"experimentalCargoWorkspaces":true,"experimentalGoWorkspaces":true}}"#,
+                ),
+                ("Cargo.toml", "[workspace"),
+                ("go.work", "go 1.22\n"),
+            ]),
+            RepoMode::MultiPackage
+        );
     }
 
     #[test]

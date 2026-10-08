@@ -3,7 +3,11 @@
 use miette::Diagnostic;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
+use turborepo_repository::{
+    inference::{NativeWorkspaceFlags, native_workspace_manifest},
+    package_json::PackageJson,
+    package_manager::PackageManager,
+};
 use turborepo_turbo_json::{FutureFlags, RawTurboJson};
 
 #[derive(Debug, Error, Diagnostic)]
@@ -185,14 +189,6 @@ fn marker_error(path: &AbsoluteSystemPath, reason: impl std::fmt::Display) -> Er
     }
 }
 
-fn toml_marker(dir: &AbsoluteSystemPath, name: &str) -> Result<Option<toml::Value>, Error> {
-    let path = dir.join_component(name);
-    path.read_existing_to_string()
-        .map_err(|e| marker_error(&path, e))?
-        .map(|contents| toml::from_str(&contents).map_err(|e| marker_error(&path, e)))
-        .transpose()
-}
-
 fn check_nested_markers(
     dir: &AbsoluteSystemPath,
     root: &AbsoluteSystemPath,
@@ -235,24 +231,15 @@ fn check_nested_markers(
             return Err(nested("package.json"));
         }
     }
-    if flags.experimental_cargo_workspaces
-        && let Some(cargo) = toml_marker(dir, "Cargo.toml")?
-        && cargo.get("workspace").is_some()
+    let native = NativeWorkspaceFlags {
+        cargo: flags.experimental_cargo_workspaces,
+        python: flags.experimental_python_workspaces,
+        go: flags.experimental_go_workspaces,
+    };
+    if let Some(manifest) = native_workspace_manifest(dir, native)
+        .map_err(|error| marker_error(&error.path, error.reason))?
     {
-        return Err(nested("Cargo.toml"));
-    }
-    if flags.experimental_python_workspaces
-        && let Some(python) = toml_marker(dir, "pyproject.toml")?
-        && python
-            .get("tool")
-            .and_then(|tool| tool.get("uv"))
-            .and_then(|uv| uv.get("workspace"))
-            .is_some()
-    {
-        return Err(nested("pyproject.toml"));
-    }
-    if flags.experimental_go_workspaces && dir.join_component("go.work").exists() {
-        return Err(nested("go.work"));
+        return Err(nested(manifest));
     }
     Ok(())
 }
