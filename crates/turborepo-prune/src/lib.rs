@@ -39,6 +39,9 @@ pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ManagedSetup(#[from] managed_setup::Error),
     #[error("I/O error while pruning: {0}")]
     Io(#[from] std::io::Error),
     #[error("File system error while pruning. The error from the operating system is: {0}")]
@@ -129,6 +132,7 @@ static ADDITIONAL_DIRECTORIES: LazyLock<Vec<(&'static RelativeUnixPath, Option<C
     });
 
 mod javascript;
+mod managed_setup;
 mod tasks;
 
 use javascript::{
@@ -269,7 +273,9 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
     telemetry.track_arg_usage("production", input.production);
     telemetry.track_arg_usage("out-dir", input.output_dir != DEFAULT_OUTPUT_DIR);
 
+    let managed_setup = managed_setup::ManagedSetup::plan(&input)?;
     let prune = Prune::new(&input, telemetry).await?;
+    managed_setup.copy(&prune)?;
 
     println!(
         "Generating pruned monorepo for {} in {}",
@@ -442,7 +448,7 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
         prune.copy_directory(&path, *required_for_install)?;
     }
 
-    prune.copy_turbo_json(&workspace_names)?;
+    prune.copy_turbo_json(&workspace_names, managed_setup.enabled())?;
     prune.copy_global_dependencies()?;
 
     // Distinct JavaScript rendering + materialization: core already selected
@@ -1270,7 +1276,7 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
-    fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
+    fn copy_turbo_json(&self, workspaces: &[String], managed_setup: bool) -> Result<(), Error> {
         let Some((turbo_json, turbo_json_name)) = self
             .get_turbo_json(turbo_json())
             .transpose()
@@ -1283,6 +1289,12 @@ impl<'a> Prune<'a> {
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
         let new_turbo_path = self.full_directory.resolve(turbo_json_name);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;
+        if self.docker && managed_setup {
+            turborepo_fs::copy_file(
+                new_turbo_path,
+                self.docker_directory().resolve(turbo_json_name),
+            )?;
+        }
 
         Ok(())
     }
