@@ -2,10 +2,10 @@
 
 use miette::Diagnostic;
 use thiserror::Error;
-use turbopath::AbsoluteSystemPathBuf;
-use turborepo_turbo_json::RawTurboJson;
 
 use crate::cli::{Args, SetupArgs};
+
+mod root;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -14,8 +14,7 @@ pub enum Error {
         code(turbo::setup::disabled),
         help(
             "Set \"futureFlags\": {{\"experimentalSetup\": true}} in the root turbo.json or \
-             turbo.jsonc. For now, run from the repository root or select it with --cwd; \
-             automatic setup root discovery is not implemented yet."
+             turbo.jsonc. Select the intended repository with --cwd=<root> if necessary."
         )
     )]
     Disabled,
@@ -35,10 +34,7 @@ pub enum Error {
     NotImplemented,
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Config(#[from] turborepo_config::Error),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    TurboJson(#[from] turborepo_turbo_json::Error),
+    Root(#[from] root::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 }
@@ -100,21 +96,11 @@ impl SetupRequest {
 }
 
 pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
-    // Deliberately do not infer a JS repository, resolve configuration from the
-    // environment, build a package graph, or require a package manager. Root
-    // inference is a follow-up; the current root is cwd/--cwd only.
-    let root = match args.cwd.as_deref() {
-        Some(cwd) => AbsoluteSystemPathBuf::from_cwd(cwd)?,
-        None => AbsoluteSystemPathBuf::cwd()?,
-    };
-    let config_path = match args.root_turbo_json.as_deref() {
-        Some(path) => AbsoluteSystemPathBuf::from_cwd(path)?,
-        None => turborepo_config::resolve_turbo_config_path(&root)?,
-    };
-    let enabled = RawTurboJson::read(&root, &config_path, true)?
-        .and_then(|raw| raw.future_flags)
-        .is_some_and(|flags| flags.as_inner().experimental_setup);
-    if !enabled {
+    // Discovery reads files only: no environment config pipeline, graph, tool
+    // probes, package manager detection, or local CLI handoff.
+    let discovery = root::Discovery::capture(args)?;
+    tracing::debug!("setup root: {}", discovery.root_path());
+    if !discovery.flags().experimental_setup {
         return Err(Error::Disabled);
     }
 

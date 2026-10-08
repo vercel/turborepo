@@ -204,6 +204,44 @@ struct RepoState {
     pkg_dep_graph: PackageGraph,
 }
 
+/// Build repository scopes independently of file-watcher startup and hashing.
+async fn initialize_package_graph(
+    repo_root: &AbsoluteSystemPathBuf,
+    single_package: bool,
+    allow_no_package_manager: bool,
+    graph_features: RepositoryGraphFeatures,
+) -> Option<PackageGraph> {
+    let root_package_json = match graph_features.load_root_package_json(repo_root) {
+        Ok(package_json) => package_json,
+        Err(error) => {
+            tracing::debug!(
+                ?error,
+                "root package.json not available, package watcher not available"
+            );
+            return None;
+        }
+    };
+    let builder = PackageGraph::builder_optional(repo_root, root_package_json)
+        .with_single_package_mode(single_package)
+        .with_allow_no_package_manager(allow_no_package_manager);
+    // Change classification requires every toolchain's authoritative scopes.
+    // Runs may narrow their discovery, but watch bootstraps the whole graph.
+    match graph_features.configure(builder).build().await {
+        Ok(graph) => Some(graph),
+        Err(_) => {
+            tracing::debug!("package graph not available, package watcher not available");
+            None
+        }
+    }
+}
+
+fn publish_watch_spec(graph: &PackageGraph, watch_spec: &RwLock<WatchSpec>, ready: &AtomicBool) {
+    *watch_spec
+        .write()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = graph.active_watch_spec();
+    ready.store(true, Ordering::Release);
+}
+
 struct PackageHashBaseline {
     path: AnchoredSystemPathBuf,
     hashes: Arc<GitHashes>,
@@ -464,28 +502,13 @@ impl Subscriber {
     }
 
     async fn initialize_repo_state(&self) -> Option<RepoState> {
-        let root_package_json = match self.graph_features.load_root_package_json(&self.repo_root) {
-            Ok(package_json) => package_json,
-            Err(error) => {
-                tracing::debug!(
-                    ?error,
-                    "root package.json not available, package watcher not available"
-                );
-                return None;
-            }
-        };
-        let builder = PackageGraph::builder_optional(&self.repo_root, root_package_json.clone())
-            .with_single_package_mode(self.single_package)
-            .with_allow_no_package_manager(self.allow_no_package_manager);
-        // The watcher bootstraps from a complete graph snapshot: its change
-        // classification needs every toolchain's authoritative change
-        // knowledge, so it conservatively discovers everything (the accepted
-        // whole-graph tradeoff of lazy native discovery). Runs narrow and
-        // load lazily for themselves.
-        let Ok(pkg_dep_graph) = self.graph_features.configure(builder).build().await else {
-            tracing::debug!("package graph not available, package watcher not available");
-            return None;
-        };
+        let pkg_dep_graph = initialize_package_graph(
+            &self.repo_root,
+            self.single_package,
+            self.allow_no_package_manager,
+            self.graph_features,
+        )
+        .await?;
 
         let package_paths = hash_scopes(&pkg_dep_graph)
             .map(|package| package.path)
@@ -544,11 +567,7 @@ impl Subscriber {
         .ok()
         .cloned();
 
-        *self
-            .watch_spec
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = pkg_dep_graph.active_watch_spec();
-        self.watch_spec_ready.store(true, Ordering::Release);
+        publish_watch_spec(&pkg_dep_graph, &self.watch_spec, &self.watch_spec_ready);
 
         self.repository_discovery_tx.send_replace(Some(Arc::new(
             pkg_dep_graph.repository_discovery_snapshot(),
@@ -897,7 +916,15 @@ impl Subscriber {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, path::PathBuf, sync::Arc, time::Duration};
+    use std::{
+        collections::HashSet,
+        path::PathBuf,
+        sync::{
+            Arc, RwLock,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::Duration,
+    };
 
     use ignore::gitignore::GitignoreBuilder;
     use notify::event::{CreateKind, EventKind};
@@ -920,7 +947,7 @@ mod test {
         CONFIG_FILE, ChangedFiles, FileChangeAction, PackageChangeEvent, PackageChangesWatcher,
         PackageHashBaseline, RepositoryIgnore, Subscriber, accumulate_changed_files,
         ancestors_is_ignored, baseline_matches, classify_changed_files, hash_scopes,
-        is_in_git_folder,
+        initialize_package_graph, is_in_git_folder, publish_watch_spec,
     };
     use crate::repository_graph::RepositoryGraphFeatures;
 
@@ -1123,37 +1150,61 @@ mod test {
     async fn optional_root_requires_cargo_manifest_but_not_workspace_mode() {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = canonical_temp_root(&tmp);
+        let cargo_features = RepositoryGraphFeatures {
+            cargo: true,
+            python: false,
+            go: false,
+        };
         assert!(
-            initialize_test_state(&repo_root, true).await.is_none(),
+            initialize_package_graph(&repo_root, false, false, cargo_features)
+                .await
+                .is_none(),
             "registered Cargo without a root Cargo.toml must not permit a missing package.json"
         );
 
-        write_cargo_workspace(&repo_root);
+        // This case needs only the root marker, not workspace discovery, Git,
+        // hashing, or a background event source. Those have integration tests.
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(b"[workspace]\n")
+            .unwrap();
         assert!(
-            initialize_test_state(&repo_root, false).await.is_none(),
+            initialize_package_graph(
+                &repo_root,
+                false,
+                false,
+                RepositoryGraphFeatures {
+                    cargo: false,
+                    ..cargo_features
+                },
+            )
+            .await
+            .is_none(),
             "a Cargo manifest must not bypass the disabled feature"
         );
-        let subscriber = test_subscriber(&repo_root, true, true);
-        let state = subscriber
-            .initialize_repo_state()
+        let graph = initialize_package_graph(&repo_root, true, false, cargo_features)
             .await
             .expect("single-package mode permits a Cargo-backed missing package.json");
-        let contexts: Vec<_> = state.pkg_dep_graph.package_task_contexts().collect();
+        let contexts: Vec<_> = graph.package_task_contexts().collect();
         assert_eq!(contexts.len(), 1);
         assert_eq!(contexts[0].package(), &PackageName::Root);
-        assert!(!state.pkg_dep_graph.has_root_javascript_scope());
+        assert!(!graph.has_root_javascript_scope());
+        assert_eq!(graph.active_watch_spec(), WatchSpec::default());
+
+        // Exercise the production publication operation without creating
+        // unrelated watcher services. Seed stale native markers so a no-op
+        // publication cannot satisfy the assertion.
+        let watch_spec = RwLock::new(cargo_watch_spec());
+        let ready = AtomicBool::new(false);
+        publish_watch_spec(&graph, &watch_spec, &ready);
         assert_eq!(
-            state.pkg_dep_graph.active_watch_spec(),
-            WatchSpec::default()
-        );
-        assert_eq!(
-            *subscriber
-                .watch_spec
+            *watch_spec
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
             WatchSpec::default(),
             "inactive Cargo must not contribute watch markers in single-package mode"
         );
+        assert!(ready.load(Ordering::Acquire));
     }
 
     #[tokio::test(flavor = "multi_thread")]

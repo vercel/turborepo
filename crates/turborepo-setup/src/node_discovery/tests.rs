@@ -4,6 +4,9 @@ use tempfile::TempDir;
 
 use super::*;
 
+#[path = "runtime_policy.rs"]
+mod runtime_policy;
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 struct Fixture(TempDir);

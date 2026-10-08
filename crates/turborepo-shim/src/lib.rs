@@ -11,8 +11,10 @@
 //! The crate uses trait-based dependency injection to avoid circular
 //! dependencies with `turborepo-cli`.
 
+pub mod capabilities;
 mod local_turbo_config;
 mod local_turbo_state;
+pub mod managed_run;
 mod parser;
 pub mod run;
 mod turbo_state;

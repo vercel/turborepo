@@ -134,6 +134,7 @@ mod tasks;
 use javascript::{
     JavaScriptPruneLockfileArtifact, JavaScriptPruneRenderInput, JavaScriptPruneRenderResult,
     bin_paths, prune_package_json_dev_dependencies, render_javascript_prune,
+    resolve_patch_source_path,
 };
 
 fn relative_unix_path(path: &'static str) -> &'static RelativeUnixPath {
@@ -765,22 +766,29 @@ impl<'a> Prune<'a> {
     }
 
     fn copy_patch_file(&self, patch: &RelativeUnixPathBuf) -> Result<(), Error> {
-        self.validate_patch_destination_path(patch, &self.full_directory)?;
-        if self.docker {
-            self.validate_patch_destination_path(patch, &self.docker_directory())?;
+        // Revalidate at the copy boundary and read only the canonical source
+        // that was checked. Never traverse the original symlink/.. path again.
+        let source = resolve_patch_source_path(&self.root, patch)?;
+        let full_to = self.validate_patch_destination_path(patch, &self.full_directory)?;
+        let docker_to = self
+            .docker
+            .then(|| self.validate_patch_destination_path(patch, &self.docker_directory()))
+            .transpose()?;
+        let Some(source) = source else {
+            return Ok(());
+        };
+        turborepo_fs::copy_file(&source, full_to)?;
+        if let Some(docker_to) = docker_to {
+            turborepo_fs::copy_file(&source, docker_to)?;
         }
-
-        self.copy_file(
-            &patch.to_anchored_system_path_buf(),
-            Some(CopyDestination::Docker),
-        )
+        Ok(())
     }
 
     fn validate_patch_destination_path(
         &self,
         patch: &RelativeUnixPathBuf,
         destination_root: &AbsoluteSystemPath,
-    ) -> Result<(), Error> {
+    ) -> Result<AbsoluteSystemPathBuf, Error> {
         let destination_root_realpath = destination_root.to_realpath()?;
         let patch_path = destination_root.join_unix_path(patch);
 
@@ -805,7 +813,9 @@ impl<'a> Prune<'a> {
             }
         }
 
-        Ok(())
+        // Return the normalized path so copying cannot follow components that
+        // were eliminated during validation (particularly symlink/..).
+        Ok(patch_path)
     }
 
     /// Materialize a rendered JavaScript prune artifact set with path-safe

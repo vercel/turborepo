@@ -1,0 +1,11 @@
+{
+  "name": "npm-patches",
+  "private": true,
+  "packageManager": "npm@12.2.0",
+  "workspaces": [
+    "apps/*"
+  ],
+  "patchedDependencies": {
+    "is-number@7.0.0": "patches/is-number@7.0.0.patch"
+  }
+}

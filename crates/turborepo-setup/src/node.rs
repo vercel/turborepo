@@ -62,6 +62,25 @@ impl NodeArtifact {
     }
 }
 
+// Shared lock-to-vendor mapping for selection and provisioning. GNU artifact
+// identity is not runtime libc detection; there are no official musl archives.
+pub(crate) fn lock_target(platform: crate::lock::Platform) -> Option<(Platform, &'static str)> {
+    use Architecture::{Arm64, X64};
+    use OperatingSystem::{Linux, Macos, Windows};
+
+    use crate::lock::Platform as Locked;
+    let (os, arch, spelling) = match platform {
+        Locked::MacosX64 => (Macos, X64, "macos-x64"),
+        Locked::MacosArm64 => (Macos, Arm64, "macos-arm64"),
+        Locked::LinuxX64Gnu => (Linux, X64, "linux-x64-gnu"),
+        Locked::LinuxArm64Gnu => (Linux, Arm64, "linux-arm64-gnu"),
+        Locked::WindowsX64 => (Windows, X64, "windows-x64"),
+        Locked::WindowsArm64 => (Windows, Arm64, "windows-arm64"),
+        _ => return None,
+    };
+    Some((Platform::new(os, arch), spelling))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

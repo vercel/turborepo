@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, ffi::OsString, mem, process, sync::Arc};
+use std::{collections::HashMap, env, ffi::OsString, mem, sync::Arc};
 
 use camino::Utf8Path;
 pub use error::Error;
@@ -47,7 +47,7 @@ fn exit_with_heap_profile(code: i32) -> ! {
     #[cfg(feature = "heap-dhat")]
     crate::heap_profile::finish_global();
 
-    process::exit(code);
+    crate::process_exit::exit(code);
 }
 
 // Global turbo sets this environment variable to its cwd so that local
@@ -253,6 +253,11 @@ fn maintain_agent_guidance(repo_root: &AbsoluteSystemPath, args: &Args, has_repo
         }
         Ok(agent_guidance::MaintenanceStatus::Locked) => {
             warn!("Skipped AGENTS.md update because another turbo invocation is updating it");
+        }
+        Ok(agent_guidance::MaintenanceStatus::OutsideRepository) => {
+            warn!(
+                "Skipped AGENTS.md update because it is a symlink to a path outside the repository"
+            );
         }
         Err(error) => {
             warn!(

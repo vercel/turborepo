@@ -536,6 +536,199 @@ snapshots:
     }
 }
 
+/// npm 12 patch files and declarations follow the pruned lockfile in both
+/// layouts. Regression for https://github.com/vercel/turborepo/issues/14426.
+#[test]
+fn test_prune_npm_patches() {
+    const PATCH: &str = "patches/is-number@7.0.0.patch";
+    for app in ["web", "docs"] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            setup::copy_fixture("npm_patches", dir).unwrap();
+            let original_manifest = fs::read(dir.join("package.json")).unwrap();
+            let original_lockfile = fs::read(dir.join("package-lock.json")).unwrap();
+            let original_patch = fs::read(dir.join(PATCH)).unwrap();
+            let original_lockfile_json: serde_json::Value =
+                serde_json::from_slice(&original_lockfile).unwrap();
+            let mut args = vec!["prune", app];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let retains_patch = app == "web";
+            let roots = if docker {
+                vec!["out/json", "out/full"]
+            } else {
+                vec!["out"]
+            };
+            for root in roots {
+                let root = dir.join(root);
+                let manifest: serde_json::Value =
+                    serde_json::from_slice(&fs::read(root.join("package.json")).unwrap()).unwrap();
+                let expected = if retains_patch {
+                    serde_json::json!({"is-number@7.0.0": PATCH})
+                } else {
+                    serde_json::json!({})
+                };
+                assert_eq!(manifest["patchedDependencies"], expected);
+                assert_eq!(root.join(PATCH).exists(), retains_patch);
+                if retains_patch {
+                    assert_eq!(fs::read(root.join(PATCH)).unwrap(), original_patch);
+                }
+                assert_eq!(ls_dir(&root.join("apps")), [app]);
+            }
+            let pruned_lockfile = fs::read(dir.join("out/package-lock.json")).unwrap();
+            let lockfile: serde_json::Value = serde_json::from_slice(&pruned_lockfile).unwrap();
+            assert_eq!(lockfile["lockfileVersion"], 4);
+            if retains_patch {
+                assert_eq!(
+                    lockfile["packages"]["node_modules/is-number"]["patched"],
+                    original_lockfile_json["packages"]["node_modules/is-number"]["patched"]
+                );
+            } else {
+                assert!(lockfile["packages"].get("node_modules/is-number").is_none());
+            }
+            if docker {
+                assert_eq!(
+                    fs::read(dir.join("out/json/package-lock.json")).unwrap(),
+                    pruned_lockfile
+                );
+            }
+            assert_eq!(
+                fs::read(dir.join("package.json")).unwrap(),
+                original_manifest
+            );
+            assert_eq!(
+                fs::read(dir.join("package-lock.json")).unwrap(),
+                original_lockfile
+            );
+            assert_eq!(fs::read(dir.join(PATCH)).unwrap(), original_patch);
+        }
+    }
+}
+
+/// Unlike catalogs, pnpm prunes release-age exclusions after installation, and
+/// they do not participate in frozen-lockfile validation. Preserve the policy
+/// even when its entries reference packages or versions removed from the
+/// lockfile.
+#[test]
+fn test_prune_pnpm_minimum_release_age_exclude_prune() {
+    for exclude_prune in [None, Some(false), Some(true)] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            fs::write(
+                dir.join("package.json"),
+                r#"{"name":"repo","private":true,"packageManager":"pnpm@12.9.1"}"#,
+            )
+            .unwrap();
+            for (app, dependency, version) in [
+                ("app-a", "is-odd", "3.0.1"),
+                ("app-b", "is-number", "7.0.0"),
+            ] {
+                let path = dir.join("apps").join(app);
+                fs::create_dir_all(&path).unwrap();
+                fs::write(
+                    path.join("package.json"),
+                    serde_json::json!({"name": app, "dependencies": {dependency: version}})
+                        .to_string(),
+                )
+                .unwrap();
+            }
+            let mut workspace = String::from(
+                r#"packages:
+- apps/*
+minimumReleaseAge: 2880
+minimumReleaseAgeExclude:
+- is-odd
+- is-odd@3.0.1
+- is-number@6.0.0
+- is-number@7.0.0
+- is-number@6.0.0 || 7.0.0
+- '@scope/unused@1.0.0'
+- '@scope/*'
+"#,
+            );
+            if let Some(enabled) = exclude_prune {
+                workspace.push_str(&format!("minimumReleaseAgeExcludePrune: {enabled}\n"));
+            }
+            fs::write(dir.join("pnpm-workspace.yaml"), &workspace).unwrap();
+            let lockfile = r#"lockfileVersion: '9.0'
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+importers:
+  .: {}
+  apps/app-a:
+    dependencies:
+      is-odd: {specifier: 3.0.1, version: 3.0.1}
+  apps/app-b:
+    dependencies:
+      is-number: {specifier: 7.0.0, version: 7.0.0}
+packages:
+  is-number@6.0.0:
+    resolution: {integrity: sha512-test}
+  is-number@7.0.0:
+    resolution: {integrity: sha512-test}
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-test}
+snapshots:
+  is-number@6.0.0: {}
+  is-number@7.0.0: {}
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+            fs::write(dir.join("pnpm-lock.yaml"), lockfile).unwrap();
+            let mut args = vec!["prune", "app-a"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let contents = fs::read_to_string(dir.join("out/pnpm-lock.yaml")).unwrap();
+            assert!(contents.contains("apps/app-a:"));
+            assert!(!contents.contains("apps/app-b:"));
+            assert!(contents.contains("is-odd@3.0.1:"));
+            // Keep the transitive version, but remove the excluded version that
+            // was only used by app-b. Neither change should rewrite the policy.
+            assert!(contents.contains("is-number@6.0.0:"));
+            assert!(!contents.contains("is-number@7.0.0:"));
+            let workspace_paths = if docker {
+                vec![
+                    "out/pnpm-workspace.yaml",
+                    "out/full/pnpm-workspace.yaml",
+                    "out/json/pnpm-workspace.yaml",
+                ]
+            } else {
+                vec!["out/pnpm-workspace.yaml"]
+            };
+            for path in workspace_paths {
+                let actual = fs::read_to_string(dir.join(path)).unwrap();
+                assert_eq!(actual, workspace, "workspace config in {path}");
+            }
+            if docker {
+                assert_eq!(
+                    fs::read_to_string(dir.join("out/json/pnpm-lock.yaml")).unwrap(),
+                    contents
+                );
+            }
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-workspace.yaml")).unwrap(),
+                workspace
+            );
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-lock.yaml")).unwrap(),
+                lockfile
+            );
+        }
+    }
+}
+
 #[test]
 fn test_prune_docker_filters_pnpm_workspace_patched_dependencies() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -647,6 +840,122 @@ fn test_prune_docker_keeps_version_range_patches() {
             .exists(),
         "patch file should be copied into pruned output"
     );
+}
+
+/// A symlink followed by `..` must be resolved by the filesystem, not
+/// eliminated lexically before checking containment.
+#[cfg(unix)]
+#[test]
+fn test_prune_rejects_patch_symlink_parent_traversal() {
+    for fixture in ["npm_patches", "monorepo_with_root_dep"] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            setup::copy_fixture(fixture, dir).unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            fs::create_dir(outside.path().join("child")).unwrap();
+            let secret = outside.path().join("host.patch");
+            fs::write(&secret, "host contents must not be exported\n").unwrap();
+            std::os::unix::fs::symlink(outside.path().join("child"), dir.join("patches/link"))
+                .unwrap();
+            // The lexically normalized path points to this harmless decoy;
+            // filesystem resolution of link/.. instead reaches the host file.
+            fs::write(dir.join("patches/host.patch"), "repository decoy\n").unwrap();
+            let malicious_path = "patches/link/../host.patch";
+            let lockfile = if fixture == "npm_patches" {
+                "package-lock.json"
+            } else {
+                "pnpm-lock.yaml"
+            };
+            for name in ["package.json", lockfile] {
+                let path = dir.join(name);
+                let contents = fs::read_to_string(&path).unwrap();
+                fs::write(
+                    path,
+                    contents.replace("patches/is-number@7.0.0.patch", malicious_path),
+                )
+                .unwrap();
+            }
+            let mut args = vec!["prune", "web"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            let output_text = combined_output(&output);
+            assert!(
+                !output.status.success(),
+                "unexpected success: {output_text}"
+            );
+            assert!(
+                output_text.contains("Invalid patched dependency path"),
+                "unexpected output: {output_text}"
+            );
+            for root in ["out", "out/full", "out/json"] {
+                assert!(!dir.join(root).join("patches/host.patch").exists());
+            }
+            assert_eq!(
+                fs::read_to_string(secret).unwrap(),
+                "host contents must not be exported\n"
+            );
+        }
+    }
+}
+
+/// Safe source symlinks must resolve before `..`, while output paths must
+/// use their validated normalized components rather than a pre-existing link.
+#[cfg(unix)]
+#[test]
+fn test_prune_copies_patch_to_validated_destination() {
+    for docker in [false, true] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup::copy_fixture("npm_patches", dir).unwrap();
+        fs::create_dir_all(dir.join("internal/child")).unwrap();
+        fs::write(dir.join("internal/actual.patch"), "canonical source\n").unwrap();
+        fs::write(dir.join("patches/actual.patch"), "lexical decoy\n").unwrap();
+        std::os::unix::fs::symlink("../internal/child", dir.join("patches/link")).unwrap();
+        let patch_path = "patches/link/../actual.patch";
+        for name in ["package.json", "package-lock.json"] {
+            let path = dir.join(name);
+            let contents = fs::read_to_string(&path).unwrap();
+            fs::write(
+                path,
+                contents.replace("patches/is-number@7.0.0.patch", patch_path),
+            )
+            .unwrap();
+        }
+
+        let outside = tempfile::tempdir().unwrap();
+        fs::create_dir(outside.path().join("child")).unwrap();
+        let host_file = outside.path().join("actual.patch");
+        fs::write(&host_file, "host file must not be overwritten\n").unwrap();
+        let roots = if docker {
+            vec!["out/full", "out/json"]
+        } else {
+            vec!["out"]
+        };
+        for root in &roots {
+            let patches = dir.join(root).join("patches");
+            fs::create_dir_all(&patches).unwrap();
+            std::os::unix::fs::symlink(outside.path().join("child"), patches.join("link")).unwrap();
+        }
+        let mut args = vec!["prune", "web"];
+        if docker {
+            args.push("--docker");
+        }
+        let output = run_turbo(dir, &args);
+        assert!(output.status.success(), "{}", combined_output(&output));
+        for root in roots {
+            assert_eq!(
+                fs::read_to_string(dir.join(root).join("patches/actual.patch")).unwrap(),
+                "canonical source\n"
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(host_file).unwrap(),
+            "host file must not be overwritten\n"
+        );
+    }
 }
 
 #[test]

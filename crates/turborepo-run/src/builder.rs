@@ -1752,6 +1752,8 @@ impl RunBuilder {
             needs_all_packages,
         } = modes;
 
+        let managed_setup = scope::has_committed_setup_lock(&self.repo_root, scm, root_turbo_json);
+
         // Task-level filter: resolve --filter and/or --affected against the task graph.
         if use_task_level_filter {
             let task_entrypoints = self
@@ -1819,6 +1821,7 @@ impl RunBuilder {
                             scm,
                             &self.repo_root,
                             &root_turbo_json.global_deps,
+                            managed_setup,
                         )?)
                     } else {
                         // Adding a tag must not opt --affected into task-input semantics.
@@ -1888,6 +1891,7 @@ impl RunBuilder {
                 &self.repo_root,
                 &turborepo_task_filter::TaskSelectorContext {
                     global_deps: &root_turbo_json.global_deps,
+                    managed_setup,
                     package_has_tag: &package_has_tag,
                     package_selections: &package_selections,
                 },
@@ -1920,6 +1924,7 @@ impl RunBuilder {
                 root_turbo_json,
                 scm,
                 task_level_affected_package_scope.as_ref(),
+                managed_setup,
             )?;
             engine = affected_engine;
             if let Some(selected_packages) = selected_packages {
@@ -2305,6 +2310,7 @@ impl RunBuilder {
         root_turbo_json: &TurboJson,
         change_detector: &impl ChangedFilesDetector,
         package_scope: Option<&HashSet<PackageName>>,
+        managed_setup: bool,
     ) -> Result<(RunEngine, Option<HashSet<PackageName>>), Error> {
         let (from_ref, to_ref) = self
             .opts
@@ -2322,11 +2328,12 @@ impl RunBuilder {
         match maybe_changed_files {
             Ok(changed_files) => {
                 let total_tasks = engine.task_ids().count();
-                let affected_tasks = turborepo_task_filter::affected_task_ids(
+                let affected_tasks = turborepo_task_filter::affected_task_ids_with_managed_setup(
                     &engine,
                     pkg_dep_graph,
                     &changed_files,
                     &root_turbo_json.global_deps,
+                    managed_setup,
                 );
                 tracing::info!(
                     total_tasks,
@@ -3516,6 +3523,7 @@ mod origins_match_tests {
                     calls: calls.clone(),
                 },
                 None,
+                false,
             )
             .unwrap();
 
@@ -3562,6 +3570,7 @@ mod origins_match_tests {
                     calls: Arc::new(Mutex::new(Vec::new())),
                 },
                 Some(&library_scope),
+                false,
             )
             .unwrap();
         assert!(filtered.task_ids().next().is_none());
@@ -3578,6 +3587,7 @@ mod origins_match_tests {
                     calls: Arc::new(Mutex::new(Vec::new())),
                 },
                 Some(&app_scope),
+                false,
             )
             .unwrap();
         assert!(filtered.task_definition(&app_build).is_some());
@@ -3595,6 +3605,7 @@ mod origins_match_tests {
                     calls: Arc::new(Mutex::new(Vec::new())),
                 },
                 Some(&no_test_scope),
+                false,
             )
             .unwrap();
         assert!(filtered.task_definition(&no_test_build).is_some());
@@ -3623,6 +3634,7 @@ mod origins_match_tests {
                         calls: Arc::new(Mutex::new(Vec::new())),
                     },
                     None,
+                    false,
                 )
                 .unwrap();
 

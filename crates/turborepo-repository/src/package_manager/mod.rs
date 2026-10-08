@@ -1210,9 +1210,8 @@ impl PackageManager {
                 pnpm::prune_patches(package_json, patches, repo_root)
             }
             PackageManager::Bun => bun::prune_patches(package_json, patches),
-            PackageManager::Yarn | PackageManager::Npm => {
-                unreachable!("npm and yarn 1 don't have a concept of patches")
-            }
+            PackageManager::Npm => npm::prune_patches(package_json, patches),
+            PackageManager::Yarn => unreachable!("yarn 1 doesn't have a concept of patches"),
             // nub delegates patch pruning to the underlying package manager.
             PackageManager::Nub { lockfile } | PackageManager::Aube { lockfile } => {
                 lockfile.prune_patched_packages(package_json, patches, repo_root)

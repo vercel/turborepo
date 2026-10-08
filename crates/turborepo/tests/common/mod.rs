@@ -1,6 +1,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 #![allow(dead_code)]
 
+pub mod process;
+pub mod process_launcher;
 pub mod setup;
 
 use std::{
