@@ -45,17 +45,23 @@ pub struct RegistryTransport {
 impl RegistryTransport {
     // TODO(TURBO-6219): Apply mirror/registry policy to requests and validation.
     // Never fall back to public npm or forward credentials across origins.
-    pub fn official() -> Result<Self, Error> {
+    pub fn official(policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
-            client: DownloadClient::new([ApprovedOrigin::https(REGISTRY)?])?,
-            origin: REGISTRY.into(),
+            client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
+            origin: policy.registry().into(),
         })
     }
 
     /// Loopback fixtures only; canonical provenance, no env override.
-    pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
+    #[cfg(all(test, unix))]
+    pub(crate) fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         Ok(Self {
-            client: DownloadClient::new([ApprovedOrigin::loopback_http_for_tests(origin)?])?,
+            client: DownloadClient::with_http_builder(
+                reqwest::Client::builder()
+                    .no_proxy()
+                    .tls_built_in_native_certs(false),
+                [ApprovedOrigin::loopback_http_for_tests(origin)?],
+            )?,
             origin: origin.trim_end_matches('/').into(),
         })
     }
