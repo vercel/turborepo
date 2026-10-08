@@ -1833,41 +1833,95 @@ fn untracked_uv_configuration_reason(
         .then(|| "user or system uv configuration contains untracked semantic inputs".to_string())
 }
 
+/// Configuration files read by uv and the Python tools it runs, hashed at
+/// the repository root.
+const CONFIG_FILES: [&str; 17] = [
+    PYPROJECT_TOML,
+    "uv.toml",
+    ".python-version",
+    "ruff.toml",
+    ".ruff.toml",
+    "mypy.ini",
+    ".mypy.ini",
+    "pyrightconfig.json",
+    ".pytest.ini",
+    ".pytest.toml",
+    "pytest.ini",
+    "pytest.toml",
+    "setup.py",
+    "setup.cfg",
+    "tox.ini",
+    "ty.toml",
+    "conftest.py",
+];
+
+/// Configuration files that also apply from directories between the
+/// repository root and a package. uv tasks run from the repository root, so
+/// configuration discovered from the working directory (`uv.toml`,
+/// `.python-version`, mypy, pyright, ty) only matters at the root. Ruff and
+/// pytest instead resolve configuration per file or path: ruff uses the
+/// closest `ruff.toml`, `.ruff.toml`, or `pyproject.toml` above each file,
+/// pytest searches for its ini file upward from the common ancestor of its
+/// arguments, and pytest loads `conftest.py` files from its rootdir down.
+const INTERMEDIATE_CONFIG_FILES: [&str; 10] = [
+    PYPROJECT_TOML,
+    "ruff.toml",
+    ".ruff.toml",
+    ".pytest.ini",
+    ".pytest.toml",
+    "pytest.ini",
+    "pytest.toml",
+    "setup.cfg",
+    "tox.ini",
+    "conftest.py",
+];
+
+/// Paths of the directories strictly between a directory and the one
+/// `path` is relative to, ordered by length: `../../..` yields `..` then
+/// `../..`, and `packages/group/app` yields `packages` then
+/// `packages/group`. Empty when `path` has fewer than two components.
+fn intermediate_prefixes(path: &str) -> Vec<String> {
+    let components: Vec<&str> = path
+        .split('/')
+        .filter(|component| !component.is_empty() && *component != ".")
+        .collect();
+    (1..components.len())
+        .map(|depth| components[..depth].join("/"))
+        .collect()
+}
+
+/// [`INTERMEDIATE_CONFIG_FILES`] globs for every directory strictly between
+/// the two ends of `path` (see [`intermediate_prefixes`]).
+fn intermediate_config_globs(path: &str) -> impl Iterator<Item = String> {
+    intermediate_prefixes(path)
+        .into_iter()
+        .flat_map(|directory| INTERMEDIATE_CONFIG_FILES.map(|rel| format!("{directory}/{rel}")))
+}
+
 /// Input globs whose changes should invalidate a Python task's cache: the
 /// workspace root manifest (workspace membership, sources, and
-/// requires-python live there), uv's optional configuration file, and the
-/// pinned interpreter version — expressed relative to the task's package
-/// directory via `prefix` (the path from the package to the repo root;
-/// empty for the workspace package). Globs that don't match anything (e.g.
-/// a missing `.python-version`) simply contribute nothing.
+/// requires-python live there), uv's optional configuration file, the
+/// pinned interpreter version, and tool configuration — expressed relative
+/// to the task's package directory via `prefix` (the path from the package
+/// to the repo root, e.g. `../..`; empty for the workspace package). Globs
+/// that don't match anything (e.g. a missing `.python-version`) simply
+/// contribute nothing.
+///
+/// Root entries come first, followed by the ruff and pytest configuration
+/// of each directory strictly between the package and the root (nearest the
+/// package first; see [`INTERMEDIATE_CONFIG_FILES`]). The package's own
+/// directory is covered by its default inputs.
 ///
 /// uv.lock is deliberately absent: uv workspace metadata supplies each package
 /// task's external-dependency hash, scoped to that package's transitive closure
 /// (see [`external_closures`]), so a dependency bump only invalidates packages
 /// that actually depend on it.
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
-    [
-        PYPROJECT_TOML,
-        "uv.toml",
-        ".python-version",
-        "ruff.toml",
-        ".ruff.toml",
-        "mypy.ini",
-        ".mypy.ini",
-        "pyrightconfig.json",
-        ".pytest.ini",
-        ".pytest.toml",
-        "pytest.ini",
-        "pytest.toml",
-        "setup.py",
-        "setup.cfg",
-        "tox.ini",
-        "ty.toml",
-        "conftest.py",
-    ]
-    .iter()
-    .map(|rel| join_prefix(prefix, rel))
-    .collect()
+    CONFIG_FILES
+        .iter()
+        .map(|rel| join_prefix(prefix, rel))
+        .chain(intermediate_config_globs(prefix))
+        .collect()
 }
 
 const PYTHON_CACHE_GLOBS: [&str; 7] = [
@@ -2026,6 +2080,12 @@ impl UvTaskContract {
                             .workspace_directories
                             .iter()
                             .flat_map(|directory| {
+                                // Tools resolve configuration per file, so
+                                // config between the root and each member
+                                // applies as well.
+                                let ancestors: Vec<String> = intermediate_config_globs(directory)
+                                    .map(|glob| join_prefix(path_to_root, &glob))
+                                    .collect();
                                 let directory = join_prefix(path_to_root, directory);
                                 std::iter::once(format!("{directory}/**"))
                                     .chain(std::iter::once(format!("!{directory}/.turbo/**")))
@@ -2033,6 +2093,7 @@ impl UvTaskContract {
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
                                     )
+                                    .chain(ancestors)
                             })
                             .collect();
                         globs.sort();
@@ -5044,6 +5105,69 @@ version = "0.1.0"
                 "conftest.py",
             ]
             .map(|path| format!("../../{path}"))
+            .into_iter()
+            .chain(
+                [
+                    "pyproject.toml",
+                    "ruff.toml",
+                    ".ruff.toml",
+                    ".pytest.ini",
+                    ".pytest.toml",
+                    "pytest.ini",
+                    "pytest.toml",
+                    "setup.cfg",
+                    "tox.ini",
+                    "conftest.py",
+                ]
+                .map(|path| format!("../{path}"))
+            )
+            .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_hash_input_globs_cover_directories_between_package_and_root() {
+        let root_only = hash_input_globs("");
+        assert_eq!(root_only, CONFIG_FILES.map(str::to_string));
+        assert_eq!(
+            hash_input_globs(".."),
+            CONFIG_FILES.map(|path| format!("../{path}"))
+        );
+
+        let depth_two = hash_input_globs("../..");
+        assert!(depth_two.contains(&"../ruff.toml".to_string()));
+        assert!(depth_two.contains(&"../conftest.py".to_string()));
+        assert!(depth_two.contains(&"../pyproject.toml".to_string()));
+        assert!(depth_two.contains(&"../pytest.ini".to_string()));
+        for root_only in [
+            "uv.toml",
+            ".python-version",
+            "mypy.ini",
+            ".mypy.ini",
+            "pyrightconfig.json",
+            "ty.toml",
+            "setup.py",
+        ] {
+            assert!(!depth_two.contains(&format!("../{root_only}")));
+        }
+        assert!(!depth_two.iter().any(|glob| glob.starts_with("../../../")));
+
+        let depth_three = hash_input_globs("../../..");
+        assert_eq!(
+            depth_three[..CONFIG_FILES.len()],
+            CONFIG_FILES.map(|path| format!("../../../{path}"))
+        );
+        let intermediate: Vec<_> = depth_three[CONFIG_FILES.len()..].to_vec();
+        assert_eq!(intermediate.len(), 2 * INTERMEDIATE_CONFIG_FILES.len());
+        assert_eq!(intermediate[0], "../pyproject.toml");
+        assert!(intermediate.contains(&"../conftest.py".to_string()));
+        assert!(intermediate.contains(&"../../ruff.toml".to_string()));
+        assert!(intermediate.contains(&"../../conftest.py".to_string()));
+
+        assert_eq!(intermediate_prefixes("../../"), [".."]);
+        assert_eq!(
+            intermediate_prefixes("packages/group/app"),
+            ["packages", "packages/group"]
         );
     }
 
@@ -5108,6 +5232,100 @@ version = "0.1.0"
             .derived_task_io(&package, "check", "../..", &[], true, &context)
             .unwrap();
         assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Untracked);
+    }
+
+    #[test]
+    fn member_inputs_include_config_between_package_and_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let package_directory = turbopath::AnchoredSystemPath::new("packages/core").unwrap();
+        let package = PackageTaskContext::new_for_test(
+            PackageName::from("core"),
+            &root,
+            package_directory,
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        let write = |name: &str, contents: &str| {
+            let file = root.join_components(&name.split('/').collect::<Vec<_>>());
+            file.parent().unwrap().create_dir_all().unwrap();
+            file.create_with_contents(contents).unwrap();
+        };
+        for path in ["pyproject.toml", "packages/core/pyproject.toml"] {
+            write(path, "before\n");
+        }
+        let package_root = root.resolve(package_directory);
+        for task in ["lint:ruff", "test", "check:mypy"] {
+            let io = UvTaskContract::new(UvPackageKind::Package, "core")
+                .derived_task_io(&package, task, "../..", &[], true, &context)
+                .unwrap();
+            let snapshot = || {
+                let mut includes = Vec::<globwalk::ValidatedGlob>::new();
+                let mut excludes = Vec::new();
+                for glob in &io.input_globs {
+                    if let Some(exclude) = glob.strip_prefix('!') {
+                        excludes.push(exclude.parse().unwrap());
+                    } else {
+                        includes.push(glob.parse().unwrap());
+                    }
+                }
+                globwalk::globwalk(
+                    &package_root,
+                    &includes,
+                    &excludes,
+                    globwalk::WalkType::Files,
+                )
+                .unwrap()
+                .into_iter()
+                .map(|path| {
+                    let bytes = std::fs::read(path.as_std_path()).unwrap();
+                    (
+                        turbopath::AnchoredSystemPathBuf::new(&root, &path)
+                            .unwrap()
+                            .to_unix()
+                            .to_string(),
+                        bytes,
+                    )
+                })
+                .collect::<std::collections::BTreeMap<_, _>>()
+            };
+            let baseline = snapshot();
+            assert!(baseline.contains_key("pyproject.toml"));
+            for path in INTERMEDIATE_CONFIG_FILES.map(|file| format!("packages/{file}")) {
+                let path = path.as_str();
+                write(path, "changed\n");
+                assert_ne!(snapshot(), baseline, "{path} is a {task} input");
+                std::fs::remove_file(
+                    root.join_components(&path.split('/').collect::<Vec<_>>())
+                        .as_std_path(),
+                )
+                .unwrap();
+                assert_eq!(snapshot(), baseline);
+            }
+            // uv tasks run from the repository root, so working-directory
+            // configuration between the root and the package never applies.
+            for path in ["packages/.python-version", "packages/mypy.ini"] {
+                write(path, "ignored\n");
+                assert_eq!(snapshot(), baseline, "{path} is not a {task} input");
+                std::fs::remove_file(
+                    root.join_components(&path.split('/').collect::<Vec<_>>())
+                        .as_std_path(),
+                )
+                .unwrap();
+            }
+            write("packages/other/ruff.toml", "sibling\n");
+            assert_eq!(snapshot(), baseline, "sibling config is not a {task} input");
+            std::fs::remove_file(
+                root.join_components(&["packages", "other", "ruff.toml"])
+                    .as_std_path(),
+            )
+            .unwrap();
+        }
     }
 
     #[test]
@@ -5200,6 +5418,8 @@ version = "0.1.0"
             "packages/py-app/src/py_app/__init__.py",
             "packages/py-lib/src/py_lib/__init__.py",
             "ruff.toml",
+            "packages/ruff.toml",
+            "packages/conftest.py",
         ] {
             write(path, "changed\n");
             assert_ne!(snapshot(), baseline, "{path} is a quality input");
