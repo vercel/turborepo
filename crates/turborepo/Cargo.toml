@@ -28,7 +28,7 @@ turborepo-shim = { workspace = true }
 which = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
-terminal-control = "=0.6.0"
+libghostty-vt = { workspace = true }
 
 [lints]
 workspace = true
