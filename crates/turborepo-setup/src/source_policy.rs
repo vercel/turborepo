@@ -49,8 +49,9 @@ pub enum Error {
     Locations,
 }
 
-/// Opaque permission to construct official transports. No public fixture
-/// constructor, URL override, CLI flag or environment opt-out exists.
+/// Opaque permission to construct official transports. Owned fixtures are
+/// feature-gated for dev-dependencies; production has no URL/root override,
+/// CLI flag or environment opt-out.
 pub struct OfficialSourcePolicy(());
 impl OfficialSourcePolicy {
     /// `current_node` is the wrapper's trusted CURRENT_NODE provenance, NOT a
@@ -118,7 +119,7 @@ fn system_configs() -> Vec<PathBuf> {
     }
 }
 
-// Owned inputs are the fixture seam. Only this module's tests can substitute
+// Owned inputs are the fixture seam. Only tests/test-support can substitute
 // host environment/home/system policy; production always captures real inputs.
 fn inspect_inputs(
     invocation: &Path,
@@ -198,6 +199,22 @@ fn inspect_inputs(
         }
     }
     for (path, owner) in paths {
+        // Only owned fixtures have a boundary. Check the closest existing
+        // parent before observation so an intermediate directory symlink cannot
+        // cause even a missing config lookup to inspect the contributor's host.
+        if let Some(boundary) = actual_boundary.as_deref() {
+            let mut parent = path.parent();
+            loop {
+                let candidate = parent.ok_or(Error::Inspection(owner))?;
+                match fs::canonicalize(candidate) {
+                    Ok(actual) if actual.starts_with(boundary) => break,
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                        parent = candidate.parent();
+                    }
+                    _ => return Err(Error::Inspection(owner)),
+                }
+            }
+        }
         validate(owner, observe(&path, owner))?;
     }
     Ok(OfficialSourcePolicy(()))
@@ -268,6 +285,9 @@ fn validate(owner: ConfigOwner, observation: Observation) -> Result<(), Error> {
         Observation::Unsafe => Err(Error::Inspection(owner)),
     }
 }
+
+#[cfg(any(test, feature = "test-support"))]
+pub mod test_support;
 
 #[cfg(test)]
 mod tests;

@@ -207,7 +207,12 @@ async fn environment_child() -> TestResult {
     if std::env::var_os("TURBO_DOWNLOAD_TEST_P521").is_some() {
         assert!(rustls::crypto::CryptoProvider::get_default().is_none());
     }
-    let result = DownloadClient::new([approved])?
+    let client = if std::env::var_os("TURBO_DOWNLOAD_TEST_LOOPBACK_CLIENT").is_some() {
+        DownloadClient::loopback_http_for_tests(&origin)?
+    } else {
+        DownloadClient::new([approved])?
+    };
+    let result = client
         .download_verified(&url, ExpectedSha256::from_hex(ABC_SHA256)?, limits(3)?)
         .await;
     let expected = std::env::var("TURBO_DOWNLOAD_TEST_EXPECTED")?;
@@ -248,6 +253,7 @@ async fn environment(url: &str, vars: &[(&str, &str)], expected: &str) -> TestRe
     }
     command.env_remove("TURBO_DOWNLOAD_TEST_BAD_NATIVE_ROOTS");
     command.env_remove("TURBO_DOWNLOAD_TEST_P521");
+    command.env_remove("TURBO_DOWNLOAD_TEST_LOOPBACK_CLIENT");
     command.env("TURBO_DOWNLOAD_TEST_URL", url);
     command.env("TURBO_DOWNLOAD_TEST_EXPECTED", expected);
     command.envs(vars.iter().copied());
@@ -258,6 +264,32 @@ async fn environment(url: &str, vars: &[(&str, &str)], expected: &str) -> TestRe
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn loopback_fixture_ignores_proxy_and_native_root_environment() -> TestResult {
+    let http = Fixture::new(OK, "", Duration::ZERO).await?;
+    let proxy = Local::listen(None, None, PROXY_AUTH).await?;
+    let proxy_url = proxy.http_origin();
+    environment(
+        &http.url(),
+        &[
+            ("HTTP_PROXY", &proxy_url),
+            ("http_proxy", &proxy_url),
+            ("HTTPS_PROXY", &proxy_url),
+            ("ALL_PROXY", &proxy_url),
+            ("all_proxy", &proxy_url),
+            ("NO_PROXY", ""),
+            ("SSL_CERT_FILE", INVALID_DER_PATH),
+            ("SSL_CERT_DIR", "/not-read/private-ca-path"),
+            ("TURBO_DOWNLOAD_TEST_LOOPBACK_CLIENT", "1"),
+        ],
+        "success",
+    )
+    .await?;
+    assert_eq!(http.hits(), 1);
+    assert!(proxy.requests()?.is_empty());
     Ok(())
 }
 

@@ -35,6 +35,8 @@ turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }
 turborepo-run-context = { workspace = true }
+turborepo-download = { workspace = true, features = ["test-support"] }
+turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]

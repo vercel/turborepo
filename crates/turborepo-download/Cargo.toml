@@ -9,6 +9,10 @@ description = "Bounded metadata reads and checksum-verifying artifact downloads"
 [lints]
 workspace = true
 
+[features]
+# Opt in from dev-dependencies only; never enable for production binaries.
+test-support = []
+
 [dependencies]
 hex = { workspace = true }
 reqwest = { workspace = true, features = [
