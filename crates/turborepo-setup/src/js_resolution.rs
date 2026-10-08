@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    lock::{self, Document, Installation, Lock, Platform, Tool, reconcile::Resolution},
+    lock::{self, Document, Format, Installation, Lock, Platform, Tool, reconcile::Resolution},
     node_provision::{NodePlan, NodeTransport},
     package_manager::{self, Declaration, Manager},
     registry_resolution::RegistryTransport,
@@ -30,56 +30,65 @@ pub enum Error {
 // Without an authoritative pin, only one unambiguous exact identity is in
 // scope. Never choose the first dev alternative or query a floating index.
 fn exact_pnpm(declaration: &Declaration) -> Result<String, Error> {
-    let requests: Vec<_> = declaration
+    let requests = declaration
         .package_manager
+        .as_ref()
+        .map_or(declaration.dev_engines.as_slice(), std::slice::from_ref);
+    let versions: BTreeSet<_> = requests
         .iter()
-        .chain(&declaration.dev_engines)
-        .collect();
-    if requests.iter().any(|request| {
-        request
-            .integrity
-            .as_ref()
-            .is_some_and(|pin| !matches!(pin.algorithm, "sha256" | "sha512"))
-    }) {
-        return Err(Error::Unsupported("authored integrity algorithm"));
+        .map(|request| {
+            request
+                .request
+                .as_ref()
+                .and_then(crate::VersionRequest::exact_version)
+                .ok_or(Error::Unsupported("floating pnpm request"))
+        })
+        .collect::<Result<_, _>>()?;
+    if versions.len() != 1 {
+        return Err(Error::Unsupported("ambiguous exact pnpm alternatives"));
     }
-    fn exact(request: &package_manager::Request) -> Option<&semver::Version> {
-        request
-            .request
-            .as_ref()
-            .and_then(crate::VersionRequest::exact_version)
-    }
-    let version = if let Some(pin) = &declaration.package_manager {
-        exact(pin)
-            .ok_or(Error::Unsupported("floating pnpm request"))?
-            .clone()
-    } else {
-        let versions: BTreeSet<_> = requests
-            .iter()
-            .map(|request| {
-                exact(request)
-                    .cloned()
-                    .ok_or(Error::Unsupported("floating pnpm alternative"))
-            })
-            .collect::<Result<_, _>>()?;
-        if versions.len() != 1 {
-            return Err(Error::Unsupported("ambiguous exact pnpm alternatives"));
-        }
-        versions
-            .into_iter()
-            .next()
-            .ok_or(Error::Unsupported("missing pnpm pin"))?
-    };
-    if !declaration.matches(&version) {
-        return Err(Error::Unsupported(
-            "pnpm pin contradicts native constraints",
-        ));
-    }
+    let version = versions
+        .first()
+        .ok_or(Error::Unsupported("missing pnpm pin"))?;
+    declaration.preflight_integrity(version)?;
     let version = version.to_string();
     if version.len() > 128 {
         return Err(Error::Unsupported("pnpm identity exceeds lock limit"));
     }
     Ok(version)
+}
+
+// Pure portable payload checks, matching the locked pnpm adapter without its
+// host/promotion restrictions. Inspect EVERY variant, not the current platform.
+fn validate_pnpm(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
+    let invalid = || Error::Registry(crate::registry_resolution::Error::InvalidLock);
+    let version = semver::Version::parse(&tool.version).map_err(|_| invalid())?;
+    let Installation::Managed { artifacts } = &tool.installation else {
+        return Err(invalid());
+    };
+    if tool.adapter != "pnpm" || !tool.options.is_empty() {
+        return Err(invalid());
+    }
+    for parts in artifacts.values() {
+        let artifact = parts.values().next().ok_or_else(invalid)?;
+        let paths = &artifact.executables;
+        if parts.len() != 1
+            || artifact.url != format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz")
+            || artifact.format != Format::TarGz
+            || artifact.root_prefix.as_deref() != Some("package")
+            || artifact.destination.is_some()
+            || paths.get("pnpm").map(String::as_str) != Some("bin/pnpm.cjs")
+            || paths.iter().any(|(name, path)| match name.as_str() {
+                "pnpm" => path != "bin/pnpm.cjs",
+                "pnpx" => path != "bin/pnpx.cjs",
+                _ => true,
+            })
+        {
+            return Err(invalid());
+        }
+        declaration.locked_integrity(&version, &artifact.sha256)?;
+    }
+    Ok(())
 }
 
 /// Concrete async resolver for the existing synchronous reconcile callback.
@@ -101,15 +110,11 @@ pub async fn resolve(
     if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
         return Err(Error::Unsupported("npm declaration resolution"));
     }
-    let pnpm_version = if request.version_ids().contains("pnpm") {
-        Some(exact_pnpm(
-            manager
-                .as_ref()
-                .ok_or(Error::Unsupported("missing pnpm declaration"))?,
-        )?)
-    } else {
-        None
-    };
+    let pnpm_version = manager
+        .as_ref()
+        .filter(|_| request.version_ids().contains("pnpm"))
+        .map(exact_pnpm)
+        .transpose()?;
     if request.offline() && !request.version_ids().is_empty() {
         return Err(Error::Unsupported(
             "offline resolution metadata/artifacts are not cached",
@@ -123,30 +128,39 @@ pub async fn resolve(
         .filter(|(id, _)| snapshot.declarations().contains_key(*id))
         .map(|(id, tool)| (id.clone(), tool.clone()))
         .collect();
-    if request.version_ids().contains("node") {
-        let mut selected = node.resolve_native(&requirements, true).await?.into_tool();
-        // Use Snapshot's canonical full provenance, not selection precedence.
-        selected.declarations = snapshot.declarations()["node"].clone();
-        tools.insert("node".into(), selected);
-    } else {
-        let locked = tools
-            .get("node")
+    if !request.version_ids().contains("node") {
+        let previous = snapshot
+            .previous_lock()
             .ok_or(Error::Unsupported("missing locked Node"))?;
-        let version = semver::Version::parse(&locked.version)
+        let Installation::Managed { artifacts } = &previous.tools()["node"].installation else {
+            return Err(Error::Unsupported(
+                "only managed Node artifacts are supported",
+            ));
+        };
+        for platform in artifacts.keys() {
+            NodePlan::from_lock(previous, *platform)?;
+        }
+        let version = semver::Version::parse(&previous.tools()["node"].version)
             .map_err(|_| Error::Unsupported("invalid locked Node"))?;
         if !requirements.matches_locked_version(&version) {
             return Err(Error::Unsupported(
                 "locked Node contradicts native constraints",
             ));
         }
-        // Ownership-only requests never refresh Node or infer missing npm
-        // identity. Preserve even a previously node-only export cohort.
+    }
+    if !request.version_ids().contains("pnpm")
+        && let Some(declaration) = &manager
+    {
+        validate_pnpm(&tools["pnpm"], declaration)?;
+    }
+    // Preserved shapes and native choices are checked before EITHER transport.
+    if request.version_ids().contains("node") {
+        let mut selected = node.resolve_native(&requirements, true).await?.into_tool();
+        selected.declarations = snapshot.declarations()["node"].clone();
+        tools.insert("node".into(), selected);
     }
     snapshot.ensure_current()?;
-    if let Some(version) = pnpm_version {
-        let declaration = manager
-            .as_ref()
-            .ok_or(Error::Unsupported("missing pnpm declaration"))?;
+    if let (Some(version), Some(declaration)) = (pnpm_version, &manager) {
         let selected = registry
             .resolve_exact(Manager::Pnpm, &version, None)
             .await?;
@@ -172,28 +186,8 @@ pub async fn resolve(
         schema_version: lock::SCHEMA_VERSION,
         tools,
     })?;
-    let Installation::Managed { artifacts } = &candidate.tools()["node"].installation else {
-        return Err(Error::Unsupported(
-            "only managed Node artifacts are supported",
-        ));
-    };
-    for platform in artifacts.keys() {
-        NodePlan::from_lock(&candidate, *platform)?;
-    }
-    if let Some(declaration) = &manager {
-        let pnpm = candidate
-            .tools()
-            .get("pnpm")
-            .ok_or(Error::Unsupported("missing locked pnpm"))?;
-        let version = semver::Version::parse(&pnpm.version)
-            .map_err(|_| Error::Unsupported("invalid locked pnpm"))?;
-        let Installation::Managed { artifacts } = &pnpm.installation else {
-            return Err(Error::Unsupported("only managed pnpm is supported"));
-        };
-        for artifact in artifacts.values().flat_map(BTreeMap::values) {
-            declaration.locked_integrity(&version, &artifact.sha256)?;
-        }
-    }
+    // Preserved payloads passed preflight; new payloads come from validated
+    // adapter resolutions, with native byte-specific integrity checked above.
     if !candidate.matches_native(snapshot.declarations())? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",

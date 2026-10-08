@@ -13,6 +13,24 @@ impl Declaration {
         release: &Version,
         locked_sha256: &str,
     ) -> Result<Option<CorepackIntegrity>, Error> {
+        self.integrity_for(release, Some(locked_sha256))
+    }
+
+    /// Reject unsupported or ambiguous applicable native choices before
+    /// traffic. Byte-specific SHA-256 checks still require
+    /// `locked_integrity` afterwards.
+    pub fn preflight_integrity(
+        &self,
+        release: &Version,
+    ) -> Result<Option<CorepackIntegrity>, Error> {
+        self.integrity_for(release, None)
+    }
+
+    fn integrity_for(
+        &self,
+        release: &Version,
+        locked_sha256: Option<&str>,
+    ) -> Result<Option<CorepackIntegrity>, Error> {
         if !self.matches(release) {
             return Err(invalid(
                 TOP,
@@ -54,7 +72,7 @@ impl Declaration {
     }
 }
 
-fn checked(request: &Request, locked: &str) -> Result<Option<CorepackIntegrity>, Error> {
+fn checked(request: &Request, locked: Option<&str>) -> Result<Option<CorepackIntegrity>, Error> {
     let Some(pin) = &request.integrity else {
         return Ok(None);
     };
@@ -75,7 +93,7 @@ fn checked(request: &Request, locked: &str) -> Result<Option<CorepackIntegrity>,
         algorithm: pin.algorithm,
         digest: pin.digest.to_ascii_lowercase(),
     };
-    if pin.algorithm == "sha256" && pin.digest != locked {
+    if pin.algorithm == "sha256" && locked.is_some_and(|digest| pin.digest != digest) {
         return Err(invalid(
             &request.source,
             "authored SHA-256 contradicts locked artifact",

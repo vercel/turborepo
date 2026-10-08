@@ -65,32 +65,29 @@ impl NodeTransport {
         requirements: &crate::NodeRequirements,
         include_bundled_npm: bool,
     ) -> Result<crate::node_resolution::ToolResolution, Error> {
-        use crate::{node_metadata::ReleaseIndex, node_resolution};
-        let index = self
-            .client
-            .read_metadata(
-                &format!("{}/dist/index.json", self.origin),
-                turborepo_download::Limits::new(
-                    crate::node_metadata::MAX_INDEX_BYTES,
-                    Duration::from_secs(30),
-                )?,
-            )
-            .await?;
+        use crate::{
+            node_metadata::{MAX_CHECKSUM_BYTES, MAX_INDEX_BYTES, ReleaseIndex},
+            node_resolution,
+        };
+        let read = async |path: &str, limit| {
+            self.client
+                .read_metadata(
+                    &format!("{}{path}", self.origin),
+                    turborepo_download::Limits::new(limit, Duration::from_secs(30))?,
+                )
+                .await
+        };
+        let index = read("/dist/index.json", MAX_INDEX_BYTES).await?;
         let releases = ReleaseIndex::parse(&index).map_err(node_resolution::Error::from)?;
         let selected = requirements
             .resolve(&releases.releases())
             .map_err(node_resolution::Error::from)?;
         let version = selected.version.to_string();
-        let checksums = self
-            .client
-            .read_metadata(
-                &format!("{}/dist/v{version}/SHASUMS256.txt", self.origin),
-                turborepo_download::Limits::new(
-                    crate::node_metadata::MAX_CHECKSUM_BYTES,
-                    Duration::from_secs(30),
-                )?,
-            )
-            .await?;
+        let checksums = read(
+            &format!("/dist/v{version}/SHASUMS256.txt"),
+            MAX_CHECKSUM_BYTES,
+        )
+        .await?;
         Ok(node_resolution::resolve(
             requirements,
             &index,

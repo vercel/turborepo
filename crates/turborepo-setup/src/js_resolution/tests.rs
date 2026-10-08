@@ -19,17 +19,11 @@ use crate::{
         reconcile::{self, Mode},
     },
     node::lock_target,
+    node_resolution::PLATFORMS,
     source_policy::test_support::LoopbackServer,
 };
 
-const PLATFORMS: [Platform; 6] = [
-    Platform::MacosX64,
-    Platform::MacosArm64,
-    Platform::LinuxX64Gnu,
-    Platform::LinuxArm64Gnu,
-    Platform::WindowsX64,
-    Platform::WindowsArm64,
-];
+const PNPM_PATHS: [&str; 2] = ["/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"];
 
 fn tar(files: &[(&str, String)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
@@ -45,35 +39,22 @@ fn tar(files: &[(&str, String)]) -> Vec<u8> {
     gzip.finish().unwrap()
 }
 fn pnpm_bytes() -> Vec<u8> {
+    let package = json!({"name":"pnpm","version":"10.0.0",
+        "bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"},"scripts":{"install":"exit 99"}});
+    let script = "throw new Error('must not execute');";
     tar(&[
-        (
-            "package/package.json",
-            json!({"name":"pnpm","version":"10.0.0",
-        "bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"},
-        "scripts":{"install":"exit 99"}})
-            .to_string(),
-        ),
-        (
-            "package/bin/pnpm.cjs",
-            "throw new Error('must not execute');".into(),
-        ),
-        (
-            "package/bin/pnpx.cjs",
-            "throw new Error('must not execute');".into(),
-        ),
+        ("package/package.json", package.to_string()),
+        ("package/bin/pnpm.cjs", script.into()),
+        ("package/bin/pnpx.cjs", script.into()),
     ])
 }
 fn registry_routes(bytes: &[u8]) -> Vec<(String, Vec<u8>)> {
-    vec![
-        (
-            "/pnpm/10.0.0".into(),
-            json!({"name":"pnpm","version":"10.0.0","dist":{
+    let metadata = json!({"name":"pnpm","version":"10.0.0","dist":{
         "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
-        "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(bytes)))}})
-            .to_string()
-            .into_bytes(),
-        ),
-        ("/pnpm/-/pnpm-10.0.0.tgz".into(), bytes.to_vec()),
+        "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(bytes)))}});
+    vec![
+        (PNPM_PATHS[0].into(), metadata.to_string().into_bytes()),
+        (PNPM_PATHS[1].into(), bytes.to_vec()),
     ]
 }
 fn node_bytes(platform: Platform, version: &str) -> Vec<u8> {
@@ -197,11 +178,27 @@ fn apply(
         result.map_err(|e| reconcile::Error::Resolution(e.to_string()))
     })
 }
-fn seed(root: &Path) -> Lock {
-    let world = World::new(node_routes(&["24.0.0"]), |_| {});
-    let lock = apply(root, Mode::NoLock, false, &world).unwrap().lock;
+fn fixture(versions: &[&str]) -> World {
+    let mut routes = node_routes(versions);
+    routes.extend(registry_routes(&pnpm_bytes()));
+    World::new(routes, |_| {})
+}
+fn save(root: &Path, lock: &Lock) {
     fs::write(root.join("turbo.lock"), lock.canonical_bytes().unwrap()).unwrap();
+}
+fn seed(root: &Path) -> Lock {
+    let lock = apply(root, Mode::NoLock, false, &fixture(&["24.0.0"]))
+        .unwrap()
+        .lock;
+    save(root, &lock);
     lock
+}
+fn rejected(root: &Path, world: &World, offline: bool, paths: &[&str]) {
+    let before = lock_bytes(root);
+    assert!(apply(root, Mode::Local, offline, world).is_err());
+    assert_eq!(world.paths(), paths);
+    assert_eq!(lock_bytes(root), before);
+    assert!(!root.join(".turbo").exists());
 }
 
 #[test]
@@ -221,13 +218,12 @@ fn exact_range_alias_portable_cohort_and_all_native_integrities() {
                 {"name":"pnpm","version":format!("10.0.0+sha512.{sha512}")},
                 {"name":"pnpm","version":format!("10.0.0+sha512.{sha512}")} ]}}),
         );
-        let mut routes = node_routes(&["25.0.0", "24.1.0", "24.0.0"]);
-        routes.extend(registry_routes(&bytes));
-        let world = World::new(routes, |_| {});
-        let result = apply(repo.path(), Mode::NoLock, false, &world).unwrap();
+        let world = fixture(&["25.0.0", "24.1.0", "24.0.0"]);
+        let p = repo.path();
+        let result = apply(p, Mode::NoLock, false, &world).unwrap();
         assert!(result.publication.is_none());
-        assert!(lock_bytes(repo.path()).is_none());
-        assert!(!repo.path().join(".turbo").exists());
+        assert!(lock_bytes(p).is_none());
+        assert!(!p.join(".turbo").exists());
         let node = &result.lock.tools()["node"];
         assert_eq!(node.version, expected);
         assert_eq!(node.options["bundled-npm"], ["11.6.1"]);
@@ -251,7 +247,7 @@ fn exact_range_alias_portable_cohort_and_all_native_integrities() {
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[&Platform::Any]["package"].sha256, sha256);
         assert_eq!(artifacts[&Platform::Any]["package"].executables.len(), 2);
-        let snapshot = Snapshot::capture(repo.path()).unwrap();
+        let snapshot = Snapshot::capture(p).unwrap();
         assert!(result.lock.matches_native(snapshot.declarations()).unwrap());
         for (id, tool) in result.lock.tools() {
             assert_eq!(&tool.declarations, &snapshot.declarations()[id]);
@@ -265,10 +261,8 @@ fn exact_range_alias_portable_cohort_and_all_native_integrities() {
                 "/pnpm/-/pnpm-10.0.0.tgz".into()
             ]
         );
-        assert_eq!(
-            Lock::parse(&result.lock.canonical_bytes().unwrap()).unwrap(),
-            result.lock
-        );
+        let canonical = result.lock.canonical_bytes().unwrap();
+        assert_eq!(Lock::parse(&canonical).unwrap(), result.lock);
     }
     // Identical exact dev-only alternatives are not flattened to a first entry.
     let repo = root(
@@ -276,22 +270,15 @@ fn exact_range_alias_portable_cohort_and_all_native_integrities() {
         json!({"devEngines":{"packageManager":[
         {"name":"pnpm","version":"10.0.0"},{"name":"pnpm","version":"10.0.0"}]}}),
     );
-    let mut routes = node_routes(&["24.0.0"]);
-    routes.extend(registry_routes(&bytes));
-    apply(
-        repo.path(),
-        Mode::NoLock,
-        false,
-        &World::new(routes, |_| {}),
-    )
-    .unwrap();
+    apply(repo.path(), Mode::NoLock, false, &fixture(&["24.0.0"])).unwrap();
 }
 
 #[test]
 fn manager_only_add_remove_preserves_node_and_never_reads_index() {
     for node_only in [false, true] {
         let repo = root(Some("24.x"), json!({}));
-        let mut old = seed(repo.path()).document().clone();
+        let p = repo.path();
+        let mut old = seed(p).document().clone();
         if node_only {
             let node = old.tools.get_mut("node").unwrap();
             node.options.clear();
@@ -303,29 +290,22 @@ fn manager_only_add_remove_preserves_node_and_never_reads_index() {
             }
         }
         let old = Lock::new(old).unwrap();
-        fs::write(
-            repo.path().join("turbo.lock"),
-            old.canonical_bytes().unwrap(),
-        )
-        .unwrap();
-        write_manifest(repo.path(), json!({"packageManager":"pnpm@10.0.0"}));
+        save(p, &old);
+        write_manifest(p, json!({"packageManager":"pnpm@10.0.0"}));
         // No Node routes: any accidental metadata refresh fails this test.
         let world = World::new(registry_routes(&pnpm_bytes()), |_| {});
-        let next = apply(repo.path(), Mode::Local, false, &world).unwrap().lock;
+        let next = apply(p, Mode::Local, false, &world).unwrap().lock;
         assert_eq!(next.tools()["node"], old.tools()["node"]);
         assert_eq!(world.paths(), ["/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"]);
-        assert_eq!(
-            lock_bytes(repo.path()).unwrap(),
-            next.canonical_bytes().unwrap()
-        );
-        write_manifest(repo.path(), json!({}));
+        assert_eq!(lock_bytes(p).unwrap(), next.canonical_bytes().unwrap());
+        write_manifest(p, json!({}));
         let world = World::new(vec![], |_| {});
-        let removed = apply(repo.path(), Mode::Local, true, &world).unwrap().lock;
+        let removed = apply(p, Mode::Local, true, &world).unwrap().lock;
         assert_eq!(removed.tools(), old.tools());
         assert!(world.paths().is_empty());
-        fs::remove_file(repo.path().join(".nvmrc")).unwrap();
+        fs::remove_file(p.join(".nvmrc")).unwrap();
         assert!(
-            apply(repo.path(), Mode::Local, true, &world)
+            apply(p, Mode::Local, true, &world)
                 .unwrap()
                 .lock
                 .tools()
@@ -336,40 +316,41 @@ fn manager_only_add_remove_preserves_node_and_never_reads_index() {
 
 #[test]
 fn node_drift_preserves_exact_manager_and_explicit_refresh_is_distinct() {
-    let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
-    let mut routes = node_routes(&["24.0.0"]);
-    routes.extend(registry_routes(&pnpm_bytes()));
-    let old = apply(repo.path(), Mode::Local, false, &World::new(routes, |_| {}))
-        .unwrap()
-        .lock;
-    let no_traffic = World::new(vec![], |_| {});
-    assert_eq!(
-        apply(repo.path(), Mode::Local, true, &no_traffic)
+    for platforms in [vec![Platform::Any], PLATFORMS.to_vec()] {
+        let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
+        let p = repo.path();
+        let old = apply(p, Mode::Local, false, &fixture(&["24.0.0"]))
             .unwrap()
-            .lock,
-        old
-    );
-    assert!(no_traffic.paths().is_empty());
-    fs::write(repo.path().join(".nvmrc"), "^24.0.0").unwrap();
-    let world = World::new(node_routes(&["24.0.0", "24.1.0"]), |_| {});
-    let next = apply(repo.path(), Mode::Local, false, &world).unwrap().lock;
-    assert_eq!(next.tools()["node"].version, "24.1.0");
-    assert_eq!(next.tools()["pnpm"], old.tools()["pnpm"]);
-    assert_eq!(
-        world.paths(),
-        ["/dist/index.json", "/dist/v24.1.0/SHASUMS256.txt"]
-    );
-    let mut routes = node_routes(&["24.2.0"]);
-    routes.extend(registry_routes(&pnpm_bytes()));
-    let refreshed = apply(
-        repo.path(),
-        Mode::Refresh,
-        false,
-        &World::new(routes, |_| {}),
-    )
-    .unwrap()
-    .lock;
-    assert_eq!(refreshed.tools()["node"].version, "24.2.0");
+            .lock;
+        let mut document = old.document().clone();
+        let Installation::Managed { artifacts } =
+            &mut document.tools.get_mut("pnpm").unwrap().installation
+        else {
+            panic!()
+        };
+        *artifacts = platforms
+            .into_iter()
+            .map(|p| (p, artifacts[&Platform::Any].clone()))
+            .collect();
+        let old = Lock::new(document).unwrap();
+        save(p, &old);
+        let no_traffic = World::new(vec![], |_| {});
+        assert_eq!(apply(p, Mode::Local, true, &no_traffic).unwrap().lock, old);
+        assert!(no_traffic.paths().is_empty());
+        fs::write(p.join(".nvmrc"), "^24.0.0").unwrap();
+        let world = World::new(node_routes(&["24.0.0", "24.1.0"]), |_| {});
+        let next = apply(p, Mode::Local, false, &world).unwrap().lock;
+        assert_eq!(next.tools()["node"].version, "24.1.0");
+        assert_eq!(next.tools()["pnpm"], old.tools()["pnpm"]);
+        assert_eq!(
+            world.paths(),
+            ["/dist/index.json", "/dist/v24.1.0/SHASUMS256.txt"]
+        );
+        let refreshed = apply(p, Mode::Refresh, false, &fixture(&["24.2.0"]))
+            .unwrap()
+            .lock;
+        assert_eq!(refreshed.tools()["node"].version, "24.2.0");
+    }
 }
 
 #[test]
@@ -384,11 +365,7 @@ fn removed_bundled_npm_keeps_node_identity_and_export_ownership() {
         tools: BTreeMap::from([("node".into(), node.clone()), ("npm".into(), npm)]),
     })
     .unwrap();
-    fs::write(
-        repo.path().join("turbo.lock"),
-        old.canonical_bytes().unwrap(),
-    )
-    .unwrap();
+    save(repo.path(), &old);
     write_manifest(repo.path(), json!({}));
     let world = World::new(vec![], |_| {});
     let result = apply(repo.path(), Mode::Local, true, &world).unwrap().lock;
@@ -398,34 +375,24 @@ fn removed_bundled_npm_keeps_node_identity_and_export_ownership() {
 
 #[test]
 fn unsupported_scope_and_offline_misses_fail_before_traffic_or_publication() {
-    for (node, manifest, offline) in [
-        (None, json!({"packageManager":"pnpm@10.0.0"}), false),
-        (Some("24.x"), json!({"packageManager":"npm@11.6.1"}), false),
-        (Some("24.x"), json!({"packageManager":"pnpm@10.x"}), false),
-        (
-            Some("24.x"),
-            json!({"devEngines":{"packageManager":{"name":"pnpm"}}}),
-            false,
-        ),
-        (
-            Some("24.x"),
-            json!({"devEngines":{"packageManager":[
+    let sha512 = format!("{:x}", Sha512::digest(pnpm_bytes()));
+    for manifest in [
+        json!({"packageManager":"npm@11.6.1"}),
+        json!({"packageManager":"pnpm@10.x"}),
+        json!({"devEngines":{"packageManager":{"name":"pnpm"}}}),
+        json!({"devEngines":{"packageManager":[
             {"name":"pnpm","version":"10.0.0"},{"name":"pnpm","version":"10.1.0"}]}}),
-            false,
-        ),
-        (
-            Some("24.x"),
-            json!({"packageManager":format!("pnpm@10.0.0+sha1.{}", "a".repeat(40))}),
-            false,
-        ),
-        (Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}), true),
+        json!({"packageManager":format!("pnpm@10.0.0+sha1.{}", "a".repeat(40))}),
+        json!({"packageManager":"pnpm@10.0.0", "devEngines":{"packageManager":[
+            {"name":"pnpm","version":format!("10.0.0+sha512.{sha512}")},
+            {"name":"pnpm","version":"10.0.0"}]}}),
     ] {
-        let repo = root(node, manifest);
-        let world = World::new(vec![], |_| {});
-        assert!(apply(repo.path(), Mode::Local, offline, &world).is_err());
-        assert!(world.paths().is_empty());
-        assert!(lock_bytes(repo.path()).is_none());
-        assert!(!repo.path().join(".turbo").exists());
+        let repo = root(Some("24.x"), manifest);
+        rejected(repo.path(), &World::new(vec![], |_| {}), false, &[]);
+    }
+    for (node, offline) in [(None, false), (Some("24.x"), true)] {
+        let repo = root(node, json!({"packageManager":"pnpm@10.0.0"}));
+        rejected(repo.path(), &World::new(vec![], |_| {}), offline, &[]);
     }
 }
 
@@ -433,7 +400,6 @@ fn unsupported_scope_and_offline_misses_fail_before_traffic_or_publication() {
 fn integrity_failures_and_ambiguous_applicable_alternatives_never_publish() {
     let bytes = pnpm_bytes();
     let sha256 = format!("{:x}", Sha256::digest(&bytes));
-    let sha512 = format!("{:x}", Sha512::digest(&bytes));
     for (manifest, corrupt) in [
         (
             json!({"packageManager":format!("pnpm@10.0.0+sha256.{}", "a".repeat(64))}),
@@ -449,49 +415,41 @@ fn integrity_failures_and_ambiguous_applicable_alternatives_never_publish() {
             false,
         ),
         (
-            json!({"packageManager":"pnpm@10.0.0", "devEngines":{"packageManager":[
-            {"name":"pnpm","version":format!("10.0.0+sha512.{sha512}")},
-            {"name":"pnpm","version":"10.0.0"}]}}),
-            false,
-        ),
-        (
             json!({"packageManager":format!("pnpm@10.0.0+sha256.{sha256}")}),
             true,
         ),
     ] {
         let repo = root(Some("24.x"), json!({}));
-        let old = seed(repo.path()).canonical_bytes().unwrap();
-        write_manifest(repo.path(), manifest);
+        let p = repo.path();
+        seed(p);
+        write_manifest(p, manifest);
         let mut routes = registry_routes(&bytes);
         if corrupt {
             routes[1].1 = b"corrupted archive".to_vec();
         }
         let world = World::new(routes, |_| {});
-        assert!(apply(repo.path(), Mode::Local, false, &world).is_err());
-        assert_eq!(world.paths(), ["/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"]);
-        assert_eq!(lock_bytes(repo.path()).unwrap(), old);
-        assert!(!repo.path().join(".turbo").exists());
+        rejected(p, &world, false, &PNPM_PATHS);
     }
 }
 
 #[test]
 fn fresh_source_drift_revalidation_fails_before_publication_and_next_traffic() {
     let repo = root(Some("24.x"), json!({}));
-    let old = seed(repo.path()).canonical_bytes().unwrap();
-    write_manifest(repo.path(), json!({"packageManager":"pnpm@10.0.0"}));
-    let path = repo.path().join("package.json");
+    let p = repo.path();
+    let old = seed(p).canonical_bytes().unwrap();
+    write_manifest(p, json!({"packageManager":"pnpm@10.0.0"}));
+    let path = p.join("package.json");
     let world = World::new(registry_routes(&pnpm_bytes()), move |request| {
         if request.ends_with(".tgz") {
             fs::write(&path, "{}").unwrap();
         }
     });
-    assert!(apply(repo.path(), Mode::Local, false, &world).is_err());
-    assert_eq!(lock_bytes(repo.path()).unwrap(), old);
-    assert!(!repo.path().join(".turbo").exists());
+    rejected(p, &world, false, &PNPM_PATHS);
+    assert_eq!(lock_bytes(p).unwrap(), old);
     // Already stale captured inputs are refused by resolve itself, not merely
     // by reconcile's outer entry check.
-    fs::write(repo.path().join(".nvmrc"), "24.0.0").unwrap();
-    let snapshot = Snapshot::capture(repo.path()).unwrap();
+    fs::write(p.join(".nvmrc"), "24.0.0").unwrap();
+    let snapshot = Snapshot::capture(p).unwrap();
     let world = World::new(vec![], |_| {});
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -499,14 +457,55 @@ fn fresh_source_drift_revalidation_fails_before_publication_and_next_traffic() {
         .unwrap();
     assert!(
         reconcile::reconcile(&snapshot, Mode::Local, false, |request| {
-            fs::write(repo.path().join(".nvmrc"), "24.1.0").unwrap();
+            fs::write(p.join(".nvmrc"), "24.1.0").unwrap();
             rt.block_on(resolve(request, &world.node, &world.registry))
                 .map_err(|e| reconcile::Error::Resolution(e.to_string()))
         })
         .is_err()
     );
     assert!(world.paths().is_empty());
-    assert_eq!(lock_bytes(repo.path()).unwrap(), old);
+    assert_eq!(lock_bytes(p).unwrap(), old);
+}
+
+#[test]
+fn preserved_payload_shapes_fail_before_either_transport() {
+    for id in ["node", "pnpm"] {
+        for (field, bad) in [
+            ("url", json!("https://example.invalid/pnpm.tgz")),
+            ("format", json!("tar")),
+            ("rootPrefix", json!("wrong")),
+            ("destination", json!("nested")),
+            ("executables", json!({"other":"bin/other"})),
+            ("system", json!({"kind":"verify-system","executables":[id]})),
+        ] {
+            let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
+            let p = repo.path();
+            let mut document = serde_json::to_value(seed(p).document()).unwrap();
+            let tool = &mut document["tools"][id];
+            if field == "system" {
+                tool["installation"] = bad;
+            } else {
+                let (platform, part) = if id == "node" {
+                    ("windows-arm64", "distribution")
+                } else {
+                    ("any", "package")
+                };
+                tool["installation"]["artifacts"][platform][part][field] = bad;
+            }
+            let previous = Lock::parse(&serde_json::to_vec(&document).unwrap()).unwrap();
+            save(p, &previous);
+            if id == "node" {
+                write_manifest(
+                    p,
+                    json!({"packageManager":"pnpm@10.0.0","devEngines":{
+                    "packageManager":{"name":"pnpm","version":"10.x"}}}),
+                );
+            } else {
+                fs::write(p.join(".nvmrc"), "^24.0.0").unwrap();
+            }
+            rejected(p, &fixture(&["24.1.0"]), false, &[]);
+        }
+    }
 }
 
 #[test]
@@ -522,12 +521,11 @@ fn incomplete_node_metadata_fails_without_publishing_a_partial_cohort() {
             routes[1].1 = b"aa  incomplete\n".to_vec();
         }
         let world = World::new(routes, |_| {});
-        assert!(apply(repo.path(), Mode::Local, false, &world).is_err());
-        assert_eq!(
-            world.paths(),
-            ["/dist/index.json", "/dist/v24.0.0/SHASUMS256.txt"]
+        rejected(
+            repo.path(),
+            &world,
+            false,
+            &["/dist/index.json", "/dist/v24.0.0/SHASUMS256.txt"],
         );
-        assert!(lock_bytes(repo.path()).is_none());
-        assert!(!repo.path().join(".turbo").exists());
     }
 }
