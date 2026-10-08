@@ -170,6 +170,13 @@
   },
   "overrides": [
     {
+      // @vercel/agent-eval requires this exact uppercase grader entrypoint.
+      "files": ["evals/evals/*/EVAL.ts"],
+      "rules": {
+        "unicorn/filename-case": "off"
+      }
+    },
+    {
       "files": ["apps/factory/agent/**/*.ts"],
       "rules": {
         "unicorn/filename-case": "off"

@@ -5,6 +5,8 @@
   "scripts": {
     "build:turbo": "cargo build --package turbo",
     "turbo": "pnpm run build:turbo && ./target/debug/turbo",
+    "eval": "node evals/run.mjs",
+    "eval:check": "node --test evals/tests/*.test.mjs && tsc --noEmit --project evals/tsconfig.json",
     "prepare": "husky install",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
     "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
@@ -12,6 +14,7 @@
   "devDependencies": {
     "@taplo/cli": "0.5.2",
     "@types/node": "22.15.3",
+    "@vercel/agent-eval": "2.2.1",
     "husky": "8.0.3",
     "lint-staged": "16.4.0",
     "oxfmt": "0.63.0",
