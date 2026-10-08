@@ -31,11 +31,11 @@ pretty_assertions = { workspace = true }
 serial_test = "3.0"
 test-case = { workspace = true }
 tracing.workspace = true
+turborepo-download = { workspace = true, features = ["test-support"] }
 turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }
 turborepo-run-context = { workspace = true }
-turborepo-download = { workspace = true, features = ["test-support"] }
 turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-vercel-api-mock = { workspace = true }
 
