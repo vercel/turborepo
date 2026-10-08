@@ -767,6 +767,13 @@ jobs:
     timeout-minutes: 10
     needs: [stage, npm-publish]
     if: ${{ always() && !inputs.dry_run && needs.npm-publish.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERCEL_TEAM_ID: team_nLlpyC6REAqxydlFKbrMDlud
+      VERCEL_PROJECT_ID: prj_yM4GdZnTY4prqeWVc4IDEtA5xEtl
+      VERCEL_OIDC_POLICY_ID: pol_e1dcc1e2-c117-4b83-9dd0-2b812c7aaab2
     outputs:
       success: ${{ steps.alias.outcome == 'success' }}
       subdomain: ${{ steps.version.outputs.subdomain }}
@@ -789,39 +796,81 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@53.1.0
+      - name: Exchange GitHub OIDC token for Vercel access token
+        id: vercel-token
+        run: |
+          set -euo pipefail
+          OIDC_TOKEN=$(curl --fail --silent --show-error --retry 3 \
+            --get --data-urlencode "audience=https://github.com/vercel" \
+            --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}" \
+            | jq -er '.value | select(type == "string" and length > 0)')
+          echo "::add-mask::${OIDC_TOKEN}"
+
+          VERCEL_TOKEN=$(curl --fail --silent --show-error --retry 3 \
+            --request POST https://api.vercel.com/login/oauth/token \
+            --data-urlencode "client_id=cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp" \
+            --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+            --data-urlencode "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
+            --data-urlencode "requested_token_type=urn:ietf:params:oauth:token-type:access_token" \
+            --data-urlencode "team_id=${VERCEL_TEAM_ID}" \
+            --data-urlencode "policy_id=${VERCEL_OIDC_POLICY_ID}" \
+            --data-urlencode "subject_token=${OIDC_TOKEN}" \
+            | jq -er '.access_token | select(type == "string" and length > 0)')
+          echo "::add-mask::${VERCEL_TOKEN}"
+          echo "token=${VERCEL_TOKEN}" >> "$GITHUB_OUTPUT"
 
       - name: Find Vercel deployment for SHA
         id: find-deployment
         env:
           BASE_SHA: ${{ needs.stage.outputs.base-sha }}
-          VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          VERCEL_TOKEN: ${{ steps.vercel-token.outputs.token }}
         run: |
-          SHA="${BASE_SHA}"
-          VERCEL_LIST_STDERR="${RUNNER_TEMP}/vercel-list.stderr"
-          if ! VERCEL_LIST_OUTPUT=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>"${VERCEL_LIST_STDERR}"); then
-            echo "::error::Failed to list Vercel deployments for SHA ${SHA}. Vercel CLI stderr was captured without printing to logs."
+          set -euo pipefail
+          if ! DEPLOYMENT_ID=$(curl --fail --silent --show-error --retry 3 \
+            --get https://api.vercel.com/v6/deployments \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --data-urlencode "teamId=${VERCEL_TEAM_ID}" \
+            --data-urlencode "projectId=${VERCEL_PROJECT_ID}" \
+            --data-urlencode "meta-githubCommitSha=${BASE_SHA}" \
+            --data-urlencode "state=READY" \
+            --data-urlencode "limit=1" \
+            | jq -er '.deployments[0].uid | select(type == "string" and length > 0)'); then
+            echo "::error::Failed to find a READY turbo-site deployment for SHA ${BASE_SHA}."
             exit 1
           fi
-          DEPLOYMENT_URL=$(printf '%s\n' "${VERCEL_LIST_OUTPUT}" | grep -E '^\S+\.vercel\.(app|sh)' | head -n 1 | awk '{print $1}' || true)
-
-          if [ -z "$DEPLOYMENT_URL" ]; then
-            echo "::error::No deployment found for SHA ${SHA}."
-            exit 1
-          fi
-
-          echo "deployment_url=${DEPLOYMENT_URL}" >> $GITHUB_OUTPUT
+          echo "deployment_id=${DEPLOYMENT_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Assign subdomain alias
         id: alias
         env:
-          VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          SUBDOMAIN: ${{ steps.version.outputs.subdomain }}
+          DEPLOYMENT_ID: ${{ steps.find-deployment.outputs.deployment_id }}
+          VERCEL_TOKEN: ${{ steps.vercel-token.outputs.token }}
         run: |
-          ALIAS="${{ steps.version.outputs.subdomain }}.turborepo.dev"
-          DEPLOYMENT_URL="${{ steps.find-deployment.outputs.deployment_url }}"
-          vercel alias set "${DEPLOYMENT_URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" --scope=vercel
-          echo "docs_url=https://${ALIAS}" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          ALIAS="${SUBDOMAIN}.turborepo.dev"
+          HTTP_STATUS=$(curl --silent --show-error --retry 3 \
+            --request POST \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$(jq -cn --arg alias "$ALIAS" '{alias: $alias}')" \
+            --output "${RUNNER_TEMP}/vercel-alias.json" \
+            --write-out '%{http_code}' \
+            "https://api.vercel.com/v2/deployments/${DEPLOYMENT_ID}/aliases?teamId=${VERCEL_TEAM_ID}")
+          case "$HTTP_STATUS" in
+            200)
+              jq -e --arg alias "$ALIAS" '.alias == $alias' "${RUNNER_TEMP}/vercel-alias.json" > /dev/null
+              ;;
+            409)
+              jq -e --arg alias "$ALIAS" '.error.code == "not_modified" and .error.alias == $alias' "${RUNNER_TEMP}/vercel-alias.json" > /dev/null
+              ;;
+            *)
+              echo "::error::Failed to assign ${ALIAS} (HTTP ${HTTP_STATUS})."
+              exit 1
+              ;;
+          esac
+          echo "docs_url=https://${ALIAS}" >> "$GITHUB_OUTPUT"
 
       - name: Notify Slack on failure
         if: failure()
