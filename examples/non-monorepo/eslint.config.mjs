@@ -1,36 +1,28 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import babelParser from "@babel/eslint-parser";
+import nextPlugin from "@next/eslint-plugin-next";
+import reactHooks from "eslint-plugin-react-hooks";
 
-// eslint-plugin-react (bundled by eslint-config-next) does not yet support
-// ESLint 10. Drop its plugin and rules while keeping the react-hooks,
-// jsx-a11y, import, and @next/next coverage from eslint-config-next.
-const withoutReactPlugin = (configs) =>
-  configs.map((config) => {
-    if (!config.plugins?.react) {
-      return config;
-    }
-    const plugins = { ...config.plugins };
-    delete plugins.react;
-    const rules = Object.fromEntries(
-      Object.entries(config.rules ?? {}).filter(
-        ([ruleName]) => !ruleName.startsWith("react/"),
-      ),
-    );
-    return { ...config, plugins, rules };
-  });
-
-const eslintConfig = defineConfig([
-  ...withoutReactPlugin(nextVitals),
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
+export default defineConfig([
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  {
+    files: ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
+    extends: [
+      nextPlugin.configs["core-web-vitals"],
+      reactHooks.configs.flat.recommended,
+    ],
+    languageOptions: {
+      parser: babelParser,
+      parserOptions: {
+        requireConfigFile: false,
+        babelOptions: {
+          babelrc: false,
+          configFile: false,
+          parserOpts: {
+            plugins: ["typescript", "jsx"],
+          },
+        },
+      },
+    },
+  },
 ]);
-
-export default eslintConfig;
