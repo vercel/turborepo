@@ -1,4 +1,5 @@
-//! Locked pnpm provisioning only: no resolution, hooks, probes or activation.
+//! Internal locked registry adapter shared by npm and pnpm. No resolution,
+//! hooks, probes, dependency installation or activation.
 
 use std::{fs, io, path::Path, time::Duration};
 
@@ -17,13 +18,13 @@ use crate::{
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("invalid locked pnpm artifact or executable mapping; regenerate turbo.lock")]
+    #[error("invalid locked registry artifact or executable mapping; regenerate turbo.lock")]
     InvalidLock,
-    #[error("pnpm requires the selected managed Node in the complete desired inventory")]
+    #[error("package manager requires the selected managed Node in the complete desired inventory")]
     NodeBinding,
-    #[error("pnpm promotion is unqualified for Windows, musl or non-Unix hosts")]
+    #[error("registry package promotion is unqualified for Windows, musl or non-Unix hosts")]
     UnsupportedTarget,
-    #[error("pnpm package identity or bin entries do not match the selected lock")]
+    #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
     #[error(transparent)]
     Metadata(#[from] registry_metadata::RegistryMetadataError),
@@ -33,15 +34,15 @@ pub enum Error {
     Archive(#[from] turborepo_archive::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
-    #[error("pnpm staging I/O failed")]
+    #[error("registry package staging I/O failed")]
     Io(#[from] io::Error),
 }
 
-pub struct PnpmTransport {
+pub struct RegistryTransport {
     client: DownloadClient,
     origin: String,
 }
-impl PnpmTransport {
+impl RegistryTransport {
     // TODO(TURBO-6219): Apply mirror/registry policy to requests and validation.
     // Never fall back to public npm or forward credentials across origins.
     pub fn official(policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
@@ -66,21 +67,34 @@ impl PnpmTransport {
     }
 }
 
-pub struct PnpmPlan {
+pub(crate) struct RegistryPlan {
     tool: Tool,
     node: Tool,
     artifact: lock::Artifact,
     authored: Option<CorepackIntegrity>,
     launch_directory: String,
+    manager: Manager,
 }
-impl PnpmPlan {
+impl RegistryPlan {
     /// Bind Node and authored integrity; retain locked archive SHA-256.
-    pub fn from_lock(
+    pub(crate) fn from_lock(
         lock: &Lock,
         platform: Platform,
         node: &NodePlan,
         authored: Option<&CorepackIntegrity>,
+        manager: Manager,
     ) -> Result<Self, Error> {
+        let (name, mappings): (_, &[(&str, &str)]) = match manager {
+            Manager::Npm => (
+                "npm",
+                &[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")],
+            ),
+            Manager::Pnpm => (
+                "pnpm",
+                &[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")],
+            ),
+            _ => return Err(Error::InvalidLock),
+        };
         if !cfg!(unix)
             || !matches!(
                 platform,
@@ -96,11 +110,11 @@ impl PnpmPlan {
         if node.inventory_tool() != selected_node.inventory_tool() {
             return Err(Error::NodeBinding);
         }
-        let pnpm = lock.tools().get("pnpm").ok_or(Error::InvalidLock)?;
-        if pnpm.adapter != "pnpm" || !pnpm.options.is_empty() {
+        let package = lock.tools().get(name).ok_or(Error::InvalidLock)?;
+        if package.adapter != name || !package.options.is_empty() {
             return Err(Error::InvalidLock);
         }
-        let Installation::Managed { artifacts } = &pnpm.installation else {
+        let Installation::Managed { artifacts } = &package.installation else {
             return Err(Error::InvalidLock);
         };
         let parts = artifacts
@@ -111,13 +125,16 @@ impl PnpmPlan {
             return Err(Error::InvalidLock);
         }
         let artifact = parts.values().next().ok_or(Error::InvalidLock)?.clone();
-        if artifact.url != format!("{REGISTRY}/pnpm/-/pnpm-{}.tgz", pnpm.version)
+        if artifact.url != format!("{REGISTRY}/{name}/-/{name}-{}.tgz", package.version)
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || artifact.executables.get("pnpm").map(String::as_str) != Some("bin/pnpm.cjs")
+            || artifact.executables.get(name).map(String::as_str) != Some(mappings[0].1)
+            || (manager == Manager::Npm && artifact.executables.len() != mappings.len())
             || artifact.executables.iter().any(|(name, path)| {
-                !matches!(name.as_str(), "pnpm" | "pnpx") || path != &format!("bin/{name}.cjs")
+                !mappings.iter().any(|(expected_name, expected_path)| {
+                    name == expected_name && path == expected_path
+                })
             })
         {
             return Err(Error::InvalidLock);
@@ -137,8 +154,8 @@ impl PnpmPlan {
             .collect();
         Ok(Self {
             tool: Tool {
-                id: "pnpm".into(),
-                version: pnpm.version.clone(),
+                id: name.into(),
+                version: package.version.clone(),
                 platform: node.platform.clone(),
                 artifact_sha256: artifact.sha256.clone(),
                 executables,
@@ -147,6 +164,7 @@ impl PnpmPlan {
             artifact,
             authored: authored.cloned(),
             launch_directory,
+            manager,
         })
     }
 
@@ -160,8 +178,8 @@ impl PnpmPlan {
         &self,
         store: &Store,
         desired: &[Tool],
-        transport: &PnpmTransport,
-    ) -> Result<Option<PreparedPnpm>, Error> {
+        transport: &RegistryTransport,
+    ) -> Result<Option<PreparedRegistry>, Error> {
         if !desired.contains(&self.tool) || !desired.contains(&self.node) {
             return Err(Error::NodeBinding);
         }
@@ -171,13 +189,16 @@ impl PnpmPlan {
         let metadata = transport
             .client
             .read_metadata(
-                &format!("{}/pnpm/{}", transport.origin, self.tool.version),
+                &format!(
+                    "{}/{}/{}",
+                    transport.origin, self.tool.id, self.tool.version
+                ),
                 Limits::new(MAX_METADATA_BYTES, Duration::from_secs(30))?,
             )
             .await?;
         let release = registry_metadata::parse_release(
             &metadata,
-            Manager::Pnpm,
+            self.manager,
             &self.tool.version,
             self.authored.as_ref(),
         )?;
@@ -192,7 +213,12 @@ impl PnpmPlan {
         let bytes = transport
             .client
             .download_verified_sha512(
-                &format!("{}/pnpm/-/pnpm-{}.tgz", transport.origin, self.tool.version),
+                &format!(
+                    "{}/{name}/-/{name}-{}.tgz",
+                    transport.origin,
+                    self.tool.version,
+                    name = self.tool.id
+                ),
                 ExpectedSha512::from_hex(&release.integrity.digest)?,
                 Some(ExpectedSha256::from_hex(&self.artifact.sha256)?),
                 Limits::new(64 * 1024 * 1024, Duration::from_secs(120))?,
@@ -215,8 +241,13 @@ impl PnpmPlan {
         }
         let UniqueJson(package) =
             serde_json::from_slice(&fs::read(package_path)?).map_err(|_| Error::InvalidPackage)?;
-        if package.get("name").and_then(|v| v.as_str()) != Some("pnpm")
+        if package.get("name").and_then(|v| v.as_str()) != Some(self.tool.id.as_str())
             || package.get("version").and_then(|v| v.as_str()) != Some(&self.tool.version)
+            || (self.manager == Manager::Npm
+                && package
+                    .get("bin")
+                    .and_then(|v| v.as_object())
+                    .is_none_or(|bin| bin.len() != self.artifact.executables.len()))
             || self.artifact.executables.iter().any(|(name, path)| {
                 package
                     .get("bin")
@@ -228,20 +259,22 @@ impl PnpmPlan {
         {
             return Err(Error::InvalidPackage);
         }
-        Ok(Some(PreparedPnpm {
+        Ok(Some(PreparedRegistry {
             tree,
             tool: self.tool.clone(),
             launch_directory: self.launch_directory.clone(),
+            entrypoints: self.artifact.executables.clone(),
         }))
     }
 }
 
-pub struct PreparedPnpm {
+pub struct PreparedRegistry {
     tree: ExtractedArtifact,
     tool: Tool,
     launch_directory: String,
+    entrypoints: std::collections::BTreeMap<String, String>,
 }
-impl PreparedPnpm {
+impl PreparedRegistry {
     /// Copy verified resources; launch this generation's managed Node.
     pub fn stage(
         &self,
@@ -264,8 +297,8 @@ impl PreparedPnpm {
                 "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
                  \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) tools=\"$here/../tools\";; \
                  esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) || exit 126\nexec \
-                 \"$tools/node/bin/node\" \"$tools/pnpm/bin/{name}.cjs\" \"$@\"\n",
-                self.launch_directory
+                 \"$tools/node/bin/node\" \"$tools/{}/{}\" \"$@\"\n",
+                self.launch_directory, self.tool.id, self.entrypoints[name]
             );
             fs::write(destination.join(path), script)?;
             #[cfg(unix)]
@@ -278,5 +311,33 @@ impl PreparedPnpm {
     }
 }
 
+/// Locked pnpm facade retaining the existing preparation/staging API.
+pub struct PnpmPlan(RegistryPlan);
+impl PnpmPlan {
+    pub fn from_lock(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        authored: Option<&CorepackIntegrity>,
+    ) -> Result<Self, Error> {
+        RegistryPlan::from_lock(lock, platform, node, authored, Manager::Pnpm).map(Self)
+    }
+
+    pub fn inventory_tool(&self) -> &Tool {
+        self.0.inventory_tool()
+    }
+
+    /// Prepare only; reconcile the same complete desired inventory afterward.
+    pub async fn prepare_if_needed(
+        &self,
+        store: &Store,
+        desired: &[Tool],
+        transport: &RegistryTransport,
+    ) -> Result<Option<PreparedRegistry>, Error> {
+        self.0.prepare_if_needed(store, desired, transport).await
+    }
+}
+
 #[cfg(all(test, unix))]
-mod tests;
+#[path = "pnpm_provision/tests.rs"]
+mod pnpm_tests;

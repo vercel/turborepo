@@ -8,8 +8,14 @@ pub mod node_discovery;
 pub mod node_metadata;
 pub mod node_provision;
 pub mod node_resolution;
+pub mod npm_provision;
 pub mod package_manager;
-pub mod pnpm_provision;
+mod registry_provision;
+pub mod pnpm_provision {
+    pub use crate::registry_provision::{
+        Error, PnpmPlan, PreparedRegistry as PreparedPnpm, RegistryTransport as PnpmTransport,
+    };
+}
 pub mod registry_metadata;
 pub mod source_policy;
 pub mod version_request;
