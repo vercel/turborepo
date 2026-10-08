@@ -48,6 +48,110 @@ fn no_stage(root: &Path) {
 }
 
 #[test]
+fn frozen_guard_serializes_writers_checks_drift_and_never_rewrites_lock() {
+    let root = root();
+    let first = Snapshot::capture(root.path()).unwrap();
+    first.commit(&candidate(&first, "24.0.0")).unwrap();
+    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let before = fs::read(root.path().join(LOCK_NAME)).unwrap();
+    let guard = snapshot.guard().unwrap();
+    snapshot.check_guard(&guard).unwrap();
+    let path = root.path().to_owned();
+    let (tx, rx) = mpsc::channel();
+    let writer = thread::spawn(move || {
+        let guard = WriterStorage::acquire(&path).unwrap();
+        tx.send(()).unwrap();
+        drop(guard);
+    });
+    assert!(rx.recv_timeout(Duration::from_millis(100)).is_err());
+    write_file(root.path(), CONFIG_FILE_JSONC, "{}");
+    assert!(matches!(
+        snapshot.check_guard(&guard),
+        Err(StorageError::Conflict)
+    ));
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), before);
+    drop(guard);
+    rx.recv_timeout(Duration::from_secs(5)).unwrap();
+    writer.join().unwrap();
+}
+
+#[test]
+fn frozen_guard_rejects_foreign_root_when_its_lock_misses_snapshot_lock_drift() {
+    let a = root();
+    let b = root();
+    let snapshot = Snapshot::capture(a.path()).unwrap();
+    let guard = WriterStorage::acquire(b.path()).unwrap();
+    assert!(snapshot.previous_lock().is_none());
+    assert!(guard.read_lock().unwrap().is_none());
+    assert!(matches!(
+        snapshot.check_guard(&guard),
+        Err(StorageError::Conflict)
+    ));
+    write_file(
+        a.path(),
+        LOCK_NAME,
+        candidate(&snapshot, "24.0.0").canonical_bytes().unwrap(),
+    );
+    assert!(matches!(
+        snapshot.check_guard(&guard),
+        Err(StorageError::Conflict)
+    ));
+    assert!(guard.read_lock().unwrap().is_none());
+    assert!(!a.path().join(".turbo").exists());
+}
+
+#[test]
+fn frozen_guard_accepts_same_root_through_canonical_aliases() {
+    let repo = root();
+    fs::create_dir(repo.path().join("child")).unwrap();
+    let check_alias = |alias: &Path| {
+        let snapshot = Snapshot::capture(repo.path()).unwrap();
+        let alias_snapshot = Snapshot::capture(alias).unwrap();
+        let guard = WriterStorage::acquire(alias).unwrap();
+        snapshot.check_guard(&guard).unwrap();
+        alias_snapshot.clone().check_guard(&guard).unwrap();
+        snapshot.ensure_current().unwrap();
+    };
+    for alias in [repo.path().join("."), repo.path().join("child/..")] {
+        check_alias(&alias);
+    }
+    #[cfg(unix)]
+    {
+        let alias_dir = tempfile::tempdir().unwrap();
+        let alias = alias_dir.path().join("alias");
+        std::os::unix::fs::symlink(repo.path(), &alias).unwrap();
+        check_alias(&alias);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn frozen_guard_rejects_a_replaced_directory_at_the_same_canonical_path() {
+    let repo = root();
+    let saved = tempfile::tempdir().unwrap();
+    let snapshot = Snapshot::capture(repo.path()).unwrap();
+    let guard = snapshot.guard().unwrap();
+    fs::rename(repo.path(), saved.path().join("original")).unwrap();
+    fs::create_dir(repo.path()).unwrap();
+    for (name, bytes) in &snapshot.inputs {
+        if let Some(bytes) = bytes {
+            write_file(repo.path(), name, bytes);
+        }
+    }
+    assert_eq!(inputs(repo.path()).unwrap(), snapshot.inputs);
+    assert!(guard.read_lock().unwrap().is_none());
+    assert!(matches!(
+        snapshot.check_guard(&guard),
+        Err(StorageError::Conflict)
+    ));
+    assert!(matches!(
+        snapshot.ensure_current(),
+        Err(StorageError::Conflict)
+    ));
+    assert!(!repo.path().join(".turbo").exists());
+}
+
+#[test]
 fn capture_and_resolver_inputs_are_read_only_immutable_and_redacted() {
     let root = root();
     write_file(root.path(), "package.json", json!({"description":"credential-secret",

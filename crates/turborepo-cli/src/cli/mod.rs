@@ -307,6 +307,42 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
     }
 }
 
+// Shared by real dispatch and owned CLI fixtures, never a user-facing override.
+pub(crate) fn dispatch_setup(
+    args: &Args,
+    execute: impl FnOnce(&Args, &SetupArgs) -> Result<i32, setup::Error>,
+) -> Option<Result<i32, setup::Error>> {
+    match args.command.as_ref()? {
+        Command::Setup { setup_args } => Some(execute(args, setup_args)),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn setup_dispatch_delegates_only_setup_before_worker_bootstrap()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::ffi::OsString;
+    for words in [
+        vec!["turbo", "setup", "--frozen", "--tools-only"],
+        vec!["turbo", "run", "build"],
+    ] {
+        let args = Args::parse_args(words.into_iter().map(OsString::from).collect())?;
+        let result = dispatch_setup(&args, |_, request| {
+            assert!(request.frozen && request.tools_only);
+            Err(setup::Error::NotImplemented)
+        });
+        assert_eq!(
+            result.is_some(),
+            matches!(args.command, Some(Command::Setup { .. }))
+        );
+        if let Some(result) = result {
+            assert!(matches!(result, Err(setup::Error::NotImplemented)));
+        }
+    }
+    Ok(())
+}
+
 /// Runs the CLI by parsing arguments with usage-rs, then either calling Rust
 /// code directly or returning a payload for the Go code to use.
 ///
@@ -342,8 +378,8 @@ pub fn run(
 
     // Setup must not bootstrap task configuration, telemetry, agent guidance,
     // HTTP clients, or worker runtimes. Help already exited during parsing.
-    if let Some(Command::Setup { setup_args }) = cli_args.command.as_ref() {
-        return setup::run(&cli_args, setup_args).map_err(Into::into);
+    if let Some(result) = dispatch_setup(&cli_args, setup::run) {
+        return result.map_err(Into::into);
     }
 
     // Initialize rayon's global pool before the tokio runtime so we
