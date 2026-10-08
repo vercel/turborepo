@@ -1,13 +1,18 @@
+use std::cell::OnceCell;
+
+use biome_json_parser::JsonParserOptions;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_errors::json::deserialize_from_json_str;
 
 use crate::{
+    discovery::select_turbo_config_path,
     package_json::PackageJson,
     package_manager::{self, PackageManager},
     workspaces::WorkspaceGlobs,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
@@ -33,15 +38,20 @@ struct InferInfo {
     workspace_globs: Option<WorkspaceGlobs>,
     package_manager: Result<PackageManager, package_manager::Error>,
     package_json: PackageJson,
+    // Computed on first use: a candidate without JS workspaces reads its turbo
+    // config to decide, which candidates that are never selected don't need.
+    mode: OnceCell<RepoMode>,
 }
 
 impl InferInfo {
     fn repo_mode(&self) -> RepoMode {
-        if self.workspace_globs.is_some() {
-            RepoMode::MultiPackage
-        } else {
-            RepoMode::SinglePackage
-        }
+        *self.mode.get_or_init(|| {
+            if self.workspace_globs.is_some() || has_enabled_native_workspace(&self.path) {
+                RepoMode::MultiPackage
+            } else {
+                RepoMode::SinglePackage
+            }
+        })
     }
 
     pub fn is_workspace_root_of(&self, target_path: &AbsoluteSystemPath) -> bool {
@@ -91,6 +101,7 @@ impl RepoState {
                         workspace_globs,
                         package_manager,
                         package_json,
+                        mode: OnceCell::new(),
                     }
                 })
         });
@@ -113,8 +124,65 @@ impl RepoState {
     }
 }
 
+/// Whether `dir` holds a native workspace manifest whose toolchain is enabled
+/// by the future flags of the turbo config in `dir`. Mirrors the gating `turbo
+/// setup` applies to the same markers.
+///
+/// A missing, unreadable, or malformed file counts as not enabled; the
+/// turbo.json loader reports config errors once the run starts.
+fn has_enabled_native_workspace(dir: &AbsoluteSystemPath) -> bool {
+    let Some(flags) = future_flags(dir) else {
+        return false;
+    };
+    let enabled = |flag| {
+        flags
+            .get(flag)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    };
+    let toml_marker = |name| -> Option<toml::Value> {
+        let contents = dir.join_component(name).read_existing_to_string().ok()??;
+        toml::from_str(&contents).ok()
+    };
+    (enabled("experimentalCargoWorkspaces")
+        && toml_marker("Cargo.toml").is_some_and(|cargo| cargo.get("workspace").is_some()))
+        || (enabled("experimentalPythonWorkspaces")
+            && toml_marker("pyproject.toml").is_some_and(|python| {
+                python
+                    .get("tool")
+                    .and_then(|tool| tool.get("uv"))
+                    .and_then(|uv| uv.get("workspace"))
+                    .is_some()
+            }))
+        || (enabled("experimentalGoWorkspaces") && dir.join_component("go.work").exists())
+}
+
+/// Reads only the `futureFlags` object of the turbo config in `dir`, without
+/// depending on the full turbo.json schema.
+fn future_flags(dir: &AbsoluteSystemPath) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let path = select_turbo_config_path(
+        dir,
+        dir.join_component("turbo.json").exists(),
+        dir.join_component("turbo.jsonc").exists(),
+    )
+    .ok()??;
+    let contents = path.read_existing_to_string().ok()??;
+    let (config, _) = deserialize_from_json_str::<serde_json::Value>(
+        &contents,
+        JsonParserOptions::default()
+            .with_allow_comments()
+            .with_allow_trailing_commas(),
+        path.as_str(),
+    );
+    match config?.get_mut("futureFlags")?.take() {
+        serde_json::Value::Object(flags) => Some(flags),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::{RepoMode, RepoState};
@@ -387,6 +455,128 @@ mod test {
             repo_state_from_app.package_manager.unwrap_err(),
             package_manager::Error::MissingPackageManager
         ));
+    }
+
+    const CARGO_WORKSPACE: &str = "[workspace]\nmembers = [\"crates/*\"]\n";
+    const UV_WORKSPACE: &str =
+        "[project]\nname = \"root\"\n\n[tool.uv.workspace]\nmembers = [\"packages/*\"]\n";
+
+    /// Infers from a nested directory of a root whose package.json declares no
+    /// JS workspaces, with the given root files.
+    fn infer_native_root(files: &[(&str, &str)]) -> RepoMode {
+        let (_tmp, root) = tmp_dir();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"name":"root","packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        for (name, contents) in files {
+            root.join_component(name)
+                .create_with_contents(contents)
+                .unwrap();
+        }
+        let nested = root.join_components(&["crates", "app"]);
+        nested.create_dir_all().unwrap();
+        let inferred = RepoState::infer(&nested).unwrap();
+        assert_eq!(inferred.root, root);
+        inferred.mode
+    }
+
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#),
+        ("Cargo.toml", CARGO_WORKSPACE),
+    ], RepoMode::MultiPackage ; "cargo workspace")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalPythonWorkspaces":true}}"#),
+        ("pyproject.toml", UV_WORKSPACE),
+    ], RepoMode::MultiPackage ; "uv workspace")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalGoWorkspaces":true}}"#),
+        ("go.work", "go 1.22\n"),
+    ], RepoMode::MultiPackage ; "go workspace")]
+    #[test_case(&[
+        (
+            "turbo.jsonc",
+            "{\n  // native crates\n  \"futureFlags\": {\n    /* opt in */\n    \
+             \"experimentalCargoWorkspaces\": true,\n  },\n}\n",
+        ),
+        ("Cargo.toml", CARGO_WORKSPACE),
+    ], RepoMode::MultiPackage ; "turbo jsonc with comments")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{}}"#),
+        ("Cargo.toml", CARGO_WORKSPACE),
+        ("pyproject.toml", UV_WORKSPACE),
+        ("go.work", "go 1.22\n"),
+    ], RepoMode::SinglePackage ; "markers without flags")]
+    #[test_case(&[
+        ("Cargo.toml", CARGO_WORKSPACE),
+        ("go.work", "go 1.22\n"),
+    ], RepoMode::SinglePackage ; "markers without turbo json")]
+    #[test_case(&[
+        (
+            "turbo.json",
+            r#"{"futureFlags":{"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}}"#,
+        ),
+    ], RepoMode::SinglePackage ; "flags without markers")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalCargoWorkspaces":true}"#),
+        ("Cargo.toml", CARGO_WORKSPACE),
+    ], RepoMode::SinglePackage ; "malformed turbo json")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#),
+        ("Cargo.toml", "[package]\nname = \"app\"\nversion = \"0.1.0\"\n"),
+    ], RepoMode::SinglePackage ; "cargo package without workspace")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#),
+        ("Cargo.toml", "[workspace\n"),
+    ], RepoMode::SinglePackage ; "malformed cargo toml")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalPythonWorkspaces":true}}"#),
+        ("pyproject.toml", "[project]\nname = \"root\"\n"),
+    ], RepoMode::SinglePackage ; "pyproject without uv workspace")]
+    #[test_case(&[
+        ("turbo.json", r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#),
+        ("turbo.jsonc", r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#),
+        ("Cargo.toml", CARGO_WORKSPACE),
+    ], RepoMode::SinglePackage ; "ambiguous turbo config")]
+    fn native_workspace_root_mode(files: &[(&str, &str)], expected: RepoMode) {
+        assert_eq!(infer_native_root(files), expected);
+    }
+
+    #[test]
+    fn native_workspace_root_stops_ancestor_walk() {
+        // A native multi-package root is selected like a JS one: an outer JS
+        // workspace that globs over it can't replace it.
+        let (_tmp, outer) = tmp_dir();
+        outer
+            .join_component("package.json")
+            .create_with_contents(
+                r#"{"name":"outer","packageManager":"npm@10.0.0","workspaces":["**"]}"#,
+            )
+            .unwrap();
+        let inner = outer.join_component("inner");
+        inner.create_dir_all().unwrap();
+        inner
+            .join_component("package.json")
+            .create_with_contents(r#"{"name":"inner","packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        inner
+            .join_component("Cargo.toml")
+            .create_with_contents(CARGO_WORKSPACE)
+            .unwrap();
+        let turbo_json = inner.join_component("turbo.json");
+        turbo_json
+            .create_with_contents(r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#)
+            .unwrap();
+        let inferred = RepoState::infer(&inner).unwrap();
+        assert_eq!(inferred.root, inner);
+        assert_eq!(inferred.mode, RepoMode::MultiPackage);
+
+        // Without the flag, the inner root is a JS package of the outer workspace.
+        turbo_json
+            .create_with_contents(r#"{"futureFlags":{}}"#)
+            .unwrap();
+        let inferred = RepoState::infer(&inner).unwrap();
+        assert_eq!(inferred.root, outer);
+        assert_eq!(inferred.mode, RepoMode::MultiPackage);
     }
 
     #[test]

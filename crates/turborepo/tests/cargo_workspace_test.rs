@@ -1412,6 +1412,37 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     );
 }
 
+/// A root package.json that declares no JavaScript workspaces must not put
+/// an opted-in Cargo workspace into single-package mode.
+#[test]
+fn test_cargo_workspace_with_workspaceless_package_json_is_multi_package() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_pure_workspace(tempdir.path());
+    fs::write(
+        tempdir.path().join("package.json"),
+        r#"{"name":"root","private":true,"packageManager":"npm@10.5.0","scripts":{"build":"echo root"}}"#,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry-run=json"]);
+    assert!(output.status.success(), "dry-run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("dry-run emits JSON");
+    let packages = json["packages"].as_array().expect("packages array");
+    for crate_name in ["app", "lib-a"] {
+        assert!(
+            packages.contains(&serde_json::json!(crate_name)),
+            "{crate_name} must be a package, got {packages:?}"
+        );
+    }
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let app_build = tasks
+        .iter()
+        .find(|t| t["taskId"] == "app#build")
+        .expect("app#build in graph");
+    assert_eq!(app_build["command"], "cargo build --package=app --locked");
+}
+
 #[test]
 fn test_pure_cargo_workspace_rejects_malformed_package_json() {
     let tempdir = cargo_tempdir();
