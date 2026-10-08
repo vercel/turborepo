@@ -35,6 +35,31 @@ fn manifest(store: &Store) -> Vec<u8> {
 }
 
 #[test]
+fn checked_reconciliation_preserves_selection_on_staged_and_noop_conflicts() {
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    let node = tool("node");
+    store
+        .reconcile(std::slice::from_ref(&node), populate)
+        .unwrap();
+    let before = manifest(&store);
+    for desired in [vec![node.clone()], vec![node.clone(), tool("pnpm")]] {
+        let mut checked = false;
+        assert!(
+            store
+                .reconcile_checked(&desired, populate, || {
+                    checked = true;
+                    Err(io::Error::other("source changed").into())
+                })
+                .is_err()
+        );
+        assert!(checked);
+        assert_eq!(manifest(&store), before);
+        assert_eq!(store.current().unwrap().unwrap().tools, vec![node.clone()]);
+    }
+}
+
+#[test]
 fn no_op_replacement_removal_and_full_layout() {
     let repo = tempfile::tempdir().unwrap();
     let mut store = Store::open(repo.path()).unwrap();

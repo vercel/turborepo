@@ -177,6 +177,36 @@ async fn install(
     })?)
 }
 
+#[test]
+fn declaration_preflight_binds_dev_integrity_and_rejects_known_invalid_top_pins() {
+    use crate::package_manager::discover_package_manager;
+    let bytes = archive(&package().to_string(), "bin/pnpm.cjs");
+    let lock = Lock::parse(&serde_json::to_vec(&fixture(&bytes)).unwrap()).unwrap();
+    let node = NodePlan::from_lock(&lock, TARGET).unwrap();
+    let plain = PnpmPlan::from_lock(&lock, TARGET, &node, None).unwrap();
+    for algorithm in ["sha1", "sha256"] {
+        let manager = discover_package_manager(
+            &json!({"packageManager":format!("pnpm@10.0.0+{algorithm}.{}",
+            "0".repeat(if algorithm == "sha1" {40} else {64}))}),
+        )
+        .unwrap()
+        .unwrap();
+        assert!(PnpmPlan::from_declaration(&lock, TARGET, &node, &manager).is_err());
+    }
+    let mut tools = Vec::new();
+    for digest in ["a", "b"] {
+        let manager = discover_package_manager(&json!({"devEngines":{"packageManager":{
+            "name":"pnpm","version":format!("10.0.0+sha512.{}",digest.repeat(128))
+        }}}))
+        .unwrap()
+        .unwrap();
+        let plan = PnpmPlan::from_declaration(&lock, TARGET, &node, &manager).unwrap();
+        assert_ne!(plain.inventory_tool(), plan.inventory_tool());
+        tools.push(plan.inventory_tool().clone());
+    }
+    assert_ne!(tools[0], tools[1]);
+}
+
 #[tokio::test]
 async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
     use std::os::unix::fs::PermissionsExt;

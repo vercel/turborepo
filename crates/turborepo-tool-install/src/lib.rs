@@ -253,7 +253,20 @@ impl Store {
     pub fn reconcile(
         &mut self,
         desired: &[Tool],
+        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+    ) -> Result<Outcome, Error> {
+        self.reconcile_checked(desired, stage_tool, || Ok(()))
+    }
+
+    /// Check the caller's transaction precondition after staging/flush and
+    /// before selecting the complete generation (also checked for an
+    /// unchanged result). Hold any caller-owned writer guard across this
+    /// call, not just the callback.
+    pub fn reconcile_checked(
+        &mut self,
+        desired: &[Tool],
         mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+        before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
         let old = self.healthy_inventory()?;
@@ -261,6 +274,7 @@ impl Store {
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
         if valid_old.is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())) {
+            before_publish()?;
             return Ok(Outcome::Unchanged);
         }
         let stage = tempfile::Builder::new()
@@ -313,6 +327,7 @@ impl Store {
         // manifest pointing to a dropped TempDir. Cleanup is a separate operation.
         let _ = stage.keep();
         sync_directory(&self.root)?;
+        before_publish()?;
         manifest
             .persist(self.root.join("manifest.json"))
             .map_err(|e| Error::Io(e.error))?;
