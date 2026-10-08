@@ -53,15 +53,10 @@ impl RegistryTransport {
     }
 
     /// Loopback fixtures only; canonical provenance, no env override.
-    #[cfg(all(test, unix))]
-    pub(crate) fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
+    #[cfg(any(all(test, unix), feature = "test-support"))]
+    pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         Ok(Self {
-            client: DownloadClient::with_http_builder(
-                reqwest::Client::builder()
-                    .no_proxy()
-                    .tls_built_in_native_certs(false),
-                [ApprovedOrigin::loopback_http_for_tests(origin)?],
-            )?,
+            client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
         })
     }

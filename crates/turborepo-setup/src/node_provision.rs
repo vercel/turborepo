@@ -56,16 +56,10 @@ impl NodeTransport {
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only, no env
     /// override.
-    #[cfg(test)]
-    pub(crate) fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
-        let approved = ApprovedOrigin::loopback_http_for_tests(origin)?;
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         Ok(Self {
-            client: DownloadClient::with_http_builder(
-                reqwest::Client::builder()
-                    .no_proxy()
-                    .tls_built_in_native_certs(false),
-                [approved],
-            )?,
+            client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
         })
     }
