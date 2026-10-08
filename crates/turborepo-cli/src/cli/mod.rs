@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, ffi::OsString, mem, process, sync::Arc};
+use std::{collections::HashMap, env, ffi::OsString, mem, sync::Arc};
 
 use camino::Utf8Path;
 pub use error::Error;
@@ -47,7 +47,7 @@ fn exit_with_heap_profile(code: i32) -> ! {
     #[cfg(feature = "heap-dhat")]
     crate::heap_profile::finish_global();
 
-    process::exit(code);
+    crate::process_exit::exit(code);
 }
 
 // Global turbo sets this environment variable to its cwd so that local
