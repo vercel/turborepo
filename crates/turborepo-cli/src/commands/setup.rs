@@ -1,4 +1,5 @@
-//! Native frozen provisioning and read-only tools-only checks. No execution.
+//! Native local/frozen provisioning and read-only tools-only checks. No
+//! execution.
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -25,8 +26,8 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use --frozen --tools-only provisioning or --check \
-         --tools-only readiness checks"
+        "this setup mode is not implemented; use local or frozen --tools-only provisioning or \
+         --check --tools-only readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
@@ -47,6 +48,8 @@ pub enum Error {
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
     Lock(#[from] turborepo_setup::lock::Error),
+    #[error(transparent)]
+    Reconcile(#[from] turborepo_setup::lock::reconcile::Error),
     #[error(transparent)]
     Node(#[from] turborepo_setup::node_provision::Error),
     #[error(transparent)]
@@ -160,7 +163,7 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
-        _ => provision::run(&discovery, snapshot, transports, preflight),
+        _ => provision::run(&discovery, snapshot, request.lock, transports, preflight),
     }
 }
 
@@ -175,7 +178,7 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
         return Ok(());
     }
     if request.mode != Mode::Provision
-        || request.lock != LockMode::Frozen
+        || request.lock == LockMode::NoLock
         || !request.tools_only
         || request.force
         || request.offline
@@ -257,6 +260,37 @@ mod tests {
                 let request = request(&flags, ci).unwrap();
                 assert_eq!(request.mode, Mode::Check);
                 assert!(validate_request(&request).is_ok());
+            }
+        }
+    }
+
+    #[test]
+    fn local_tools_only_requires_explicit_no_frozen_in_ci_and_rejects_future_controls() {
+        for ci in [false, true] {
+            for flags in [vec!["--tools-only"], vec!["--tools-only", "--no-frozen"]] {
+                let request = request(&flags, ci).unwrap();
+                assert!(validate_request(&request).is_ok());
+                assert_eq!(
+                    request.lock,
+                    if ci && flags.len() == 1 {
+                        LockMode::Frozen
+                    } else {
+                        LockMode::Write
+                    }
+                );
+            }
+            for control in [
+                "--update-lock",
+                "--no-lock",
+                "--force",
+                "--offline",
+                "--plan",
+            ] {
+                let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
+                assert!(matches!(
+                    validate_request(&request),
+                    Err(Error::NotImplemented)
+                ));
             }
         }
     }
