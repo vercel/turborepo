@@ -61,8 +61,8 @@ fn ordinary_float_preserves_but_refresh_selects_newer_and_repeat_is_noop() {
         }
     })
     .unwrap();
-    // Omit --no-frozen here to prove ordinary local refresh normalization too.
-    assert_eq!(f.run(&u, &["--update-lock", "--tools-only"]).unwrap(), 0);
+    // Explicitly select non-frozen refresh so the local fixture also runs in CI.
+    assert_eq!(f.run(&u, REFRESH).unwrap(), 0);
     assert_eq!(u.hits(), 7);
     let new = selected(&f);
     assert_eq!(new.tools()["node"].version, "24.1.0");
