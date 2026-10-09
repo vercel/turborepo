@@ -6,7 +6,7 @@ use std::{collections::BTreeSet, process::Command, str::FromStr};
 use tempfile::TempDir;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 
-use crate::{Error, RemovalKind, SkipReason, plan_paths};
+use crate::{Error, RemovalKind, Report, SkipReason, plan_paths};
 
 fn repo(tmp: &TempDir) -> AbsoluteSystemPathBuf {
     AbsoluteSystemPathBuf::try_from(tmp.path())
@@ -47,11 +47,13 @@ fn git(root: &AbsoluteSystemPath, args: &[&str]) {
     assert!(output.status.success(), "{output:?}");
 }
 
-/// A git repository tracking `tracked`; everything else stays untracked.
+/// A git repository tracking `tracked` and the root `package.json`;
+/// everything else stays untracked.
 fn git_repo(root: &AbsoluteSystemPath, tracked: &[&str]) {
     write(root, "README.md", "readme");
+    write(root, "package.json", "{}");
     git(root, &["init", "--quiet"]);
-    git(root, &["add", "README.md"]);
+    git(root, &["add", "README.md", "package.json"]);
     for file in tracked {
         git(root, &["add", "--force", file]);
     }
@@ -81,6 +83,16 @@ fn matches(
     .collect()
 }
 
+/// Executes a plan. Where deletion is unsupported it must be refused, and
+/// nothing is removed.
+fn execute(plan: &crate::CleanPlan) -> Report {
+    match plan.execute() {
+        Ok(report) => report,
+        Err(Error::DeletionUnsupported) if !cfg!(unix) => Report::default(),
+        Err(error) => panic!("{error}"),
+    }
+}
+
 fn removed(plan: &crate::CleanPlan) -> Vec<String> {
     let mut paths: Vec<String> = plan.removals().map(|(path, _)| path).collect();
     paths.sort();
@@ -93,6 +105,7 @@ fn skipped(plan: &crate::CleanPlan) -> Vec<(String, SkipReason)> {
         .collect()
 }
 
+#[cfg(unix)]
 #[test]
 fn removes_matched_outputs_and_keeps_exclusions() {
     let tmp = TempDir::new().unwrap();
@@ -113,7 +126,7 @@ fn removes_matched_outputs_and_keeps_exclusions() {
         ),
     )
     .unwrap();
-    let report = plan.execute();
+    let report = execute(&plan);
 
     assert_eq!(
         removed(&plan),
@@ -171,7 +184,7 @@ fn never_touches_paths_outside_the_repository_or_reserved_directories() {
     candidates.insert(path(&repo_root, "packages/web"));
     candidates.insert(path(&repo_root, "packages"));
     let plan = plan_paths(&repo_root, &["packages/web"], candidates).unwrap();
-    plan.execute();
+    execute(&plan);
 
     assert!(plan.is_empty(), "{:?}", removed(&plan));
     assert_eq!(outside.read_to_string().unwrap(), "keep");
@@ -245,7 +258,7 @@ fn a_tracked_file_spelled_with_another_case_is_kept() {
         }
     }
     let plan = plan_paths(&root, &["packages/a"], candidates.clone()).unwrap();
-    plan.execute();
+    execute(&plan);
 
     assert!(plan.is_empty());
     assert_eq!(
@@ -266,6 +279,7 @@ fn a_tracked_file_spelled_with_another_case_is_kept() {
 
 /// Security #1 / correctness F2: a name stored in one Unicode normalization
 /// and spelled (or indexed) in the other is still tracked.
+#[cfg(unix)]
 #[test]
 fn a_tracked_file_in_another_unicode_normalization_is_kept() {
     let tmp = TempDir::new().unwrap();
@@ -284,7 +298,7 @@ fn a_tracked_file_in_another_unicode_normalization_is_kept() {
         }
     }
     let plan = plan_paths(&root, &[], candidates).unwrap();
-    let report = plan.execute();
+    let report = execute(&plan);
 
     assert_eq!(removed(&plan), ["dist/generated.js"]);
     assert_eq!(report.files, 1);
@@ -322,7 +336,7 @@ fn tracked_symlinks_are_kept() {
     let mut candidates = matches(&root, &["packages/a/lib/**"], &[]);
     candidates.insert(path(&root, "packages/a/config.js"));
     let plan = plan_paths(&root, &["packages/a"], candidates).unwrap();
-    plan.execute();
+    execute(&plan);
 
     assert!(plan.is_empty(), "{:?}", removed(&plan));
     assert!(exists(&root, "packages/a/lib/srclink"));
@@ -360,14 +374,19 @@ fn submodule_and_nested_repository_contents_are_kept() {
     );
 
     let plan = plan_paths(&root, &[], matches(&root, &["dist/**"], &[])).unwrap();
-    plan.execute();
+    execute(&plan);
 
     assert_eq!(removed(&plan), ["dist/out.js"]);
     assert!(exists(&root, "dist/vendor/lib.c"));
     assert!(exists(&root, "dist/uninitialized/d/y.c"));
-    let reasons: BTreeSet<SkipReason> = plan.skipped().map(|(_, reason)| reason).collect();
-    assert!(reasons.contains(&SkipReason::NestedRepository));
-    assert!(reasons.contains(&SkipReason::InSubmodule));
+    // Each protected directory is reported once, not once per file.
+    assert_eq!(
+        skipped(&plan),
+        [
+            ("dist/uninitialized/".to_owned(), SkipReason::InSubmodule),
+            ("dist/vendor/".to_owned(), SkipReason::NestedRepository),
+        ]
+    );
 }
 
 /// Removing a symlink never touches its target, inside or outside the
@@ -398,7 +417,7 @@ fn removes_symlinks_without_following_them() {
         ),
     )
     .unwrap();
-    let report = plan.execute();
+    let report = execute(&plan);
 
     assert_eq!(outside_file.read_to_string().unwrap(), "keep");
     assert!(!exists(&repo_root, "packages/web/dist"));
@@ -442,7 +461,7 @@ fn a_parent_swapped_for_a_symlink_after_planning_is_not_followed() {
     path(&repo_root, "packages/a/dist")
         .symlink_to_dir(root.join_component("victim").as_str())
         .unwrap();
-    let report = plan.execute();
+    let report = execute(&plan);
 
     for i in 0..20 {
         assert!(exists(&root, &format!("victim/f{i}.js")), "f{i}.js deleted");
@@ -469,7 +488,7 @@ fn continues_past_failures_and_counts_what_was_removed() {
     std::fs::set_permissions(locked.as_std_path(), PermissionsExt::from_mode(0o555)).unwrap();
 
     let plan = plan_paths(&root, &[], matches(&root, &["dist/**"], &[])).unwrap();
-    let report = plan.execute();
+    let report = execute(&plan);
     std::fs::set_permissions(locked.as_std_path(), PermissionsExt::from_mode(0o755)).unwrap();
 
     assert_eq!((plan.file_count(), plan.directory_count()), (3, 3));
@@ -486,10 +505,302 @@ fn continues_past_failures_and_counts_what_was_removed() {
 
 #[test]
 fn refuses_patterns_outside_the_allowlist() {
-    assert!(crate::refused_pattern("dist/**").is_none());
-    assert!(crate::refused_pattern("{dist,build}/**").is_none());
-    assert!(crate::refused_pattern("*.tsbuildinfo").is_none());
+    let protected = crate::targets::ProtectedDirectories::from_dirs(&[]);
+    let refused = |pattern: &str| crate::patterns::refusal(pattern, &[], &protected);
+    assert!(refused("dist/**").is_none());
+    assert!(refused("{dist,build}/**").is_none());
+    assert!(refused("*.tsbuildinfo").is_none());
     for pattern in ["*.*", "?*", "../b/*.*", "dist/*/../../**", "**/*.js"] {
-        assert!(crate::refused_pattern(pattern).is_some(), "{pattern}");
+        assert!(refused(pattern).is_some(), "{pattern}");
     }
+}
+
+fn git_output(root: &AbsoluteSystemPath, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
+}
+
+/// Security round 2 #1 / correctness round 2 N0: a collapsed sparse-index
+/// directory (`packages/a/gen/`) protects everything beneath it, even when
+/// files reappear on disk at its tracked paths.
+#[test]
+fn sparse_index_directories_protect_everything_beneath_them() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    write(&root, "packages/a/gen/deep/t1.ts", "1");
+    write(&root, "packages/a/gen/t2.ts", "2");
+    write(&root, "packages/a/src/x.ts", "source");
+    git_repo(&root, &["packages"]);
+    git(
+        &root,
+        &["sparse-checkout", "init", "--cone", "--sparse-index"],
+    );
+    git(&root, &["sparse-checkout", "set", "packages/a/src"]);
+    assert!(
+        git_output(&root, &["ls-files", "--sparse"])
+            .lines()
+            .any(|line| line == "packages/a/gen/"),
+        "expected a collapsed sparse directory"
+    );
+    write(&root, "packages/a/gen/deep/t1.ts", "LOCAL");
+    write(&root, "packages/a/gen/t2.ts", "LOCAL");
+
+    let plan = plan_paths(
+        &root,
+        &["packages/a"],
+        matches(&root, &["packages/a/gen/**"], &[]),
+    )
+    .unwrap();
+    execute(&plan);
+
+    assert!(plan.is_empty(), "{:?}", removed(&plan));
+    assert_eq!(
+        skipped(&plan),
+        [("packages/a/gen/".to_owned(), SkipReason::InSubmodule)]
+    );
+    assert!(exists(&root, "packages/a/gen/deep/t1.ts"));
+    assert!(exists(&root, "packages/a/gen/t2.ts"));
+}
+
+/// Security round 2 #2: an index that does not track this repository's root
+/// manifest (here, a dotfiles `~/.git` above an untracked project) cannot
+/// tell its source from its outputs.
+#[test]
+fn an_ancestor_repository_that_does_not_track_the_project_deletes_nothing() {
+    let tmp = TempDir::new().unwrap();
+    let home = repo(&tmp);
+    write(&home, ".bashrc", "dotfiles");
+    git(&home, &["init", "--quiet"]);
+    git(&home, &["add", ".bashrc"]);
+    git(&home, &["commit", "--quiet", "-m", "dotfiles"]);
+    let project = home.join_component("project");
+    write(&project, "package.json", "{}");
+    write(&project, "packages/a/gen/t.ts", "HANDWRITTEN");
+
+    let result = plan_paths(
+        &project,
+        &["packages/a"],
+        matches(&project, &["packages/a/gen/**"], &[]),
+    );
+
+    let Err(Error::TrackedFilesUnknown { reason }) = result else {
+        panic!("expected the tracked set to be unknown: {result:?}");
+    };
+    assert!(reason.contains("package.json"), "{reason}");
+    assert!(exists(&project, "packages/a/gen/t.ts"));
+}
+
+/// Security round 2 #2: with `GIT_DIR` and `GIT_WORK_TREE`, the files their
+/// index tracks are protected, not those of the `.git` found above.
+#[test]
+fn the_repository_named_by_git_dir_is_used() {
+    let tmp = TempDir::new().unwrap();
+    let home = repo(&tmp);
+    write(&home, ".bashrc", "dotfiles");
+    git(&home, &["init", "--quiet"]);
+    git(&home, &["add", ".bashrc"]);
+    git(&home, &["commit", "--quiet", "-m", "dotfiles"]);
+    let project = home.join_component("project");
+    write(&project, "package.json", "{}");
+    write(&project, "packages/a/gen/t.ts", "HANDWRITTEN");
+    write(&project, "packages/a/gen/out.js", "built");
+    git(&home, &["init", "--quiet", "--bare", "store.git"]);
+    let output = Command::new("git")
+        .args(["add", "package.json", "packages/a/gen/t.ts"])
+        .env("GIT_DIR", home.join_component("store.git").as_str())
+        .env("GIT_WORK_TREE", project.as_str())
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+
+    let git_env = turborepo_scm::GitEnvironment {
+        cwd: project.as_std_path().to_owned(),
+        git_dir: Some("../store.git".into()),
+        work_tree: Some(".".into()),
+        ..Default::default()
+    };
+    let plan = crate::plan_paths_with(
+        &project,
+        &["packages/a"],
+        matches(&project, &["packages/a/gen/**"], &[]),
+        &git_env,
+    )
+    .unwrap();
+    execute(&plan);
+
+    assert_eq!(removed(&plan), ["packages/a/gen/out.js"]);
+    assert_eq!(
+        skipped(&plan),
+        [("packages/a/gen/t.ts".to_owned(), SkipReason::TrackedByGit)]
+    );
+    assert!(exists(&project, "packages/a/gen/t.ts"));
+}
+
+/// Security round 2 #3: on APFS `STRAẞE.ts` and `straße.ts` are one file,
+/// but no name folding equates `ẞ` and `ß` with `ss`-folding `ß`. The
+/// filesystem decides instead: same device and inode as a tracked name in
+/// the same directory means tracked.
+#[test]
+fn a_tracked_file_the_filesystem_equates_with_the_match_is_kept() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    let indexed = "packages/a/gen/stra\u{df}e.ts";
+    let on_disk = "packages/a/gen/STRA\u{1e9e}E.ts";
+    write(&root, indexed, "committed");
+    git_repo(&root, &[indexed]);
+    std::fs::rename(
+        path(&root, indexed).as_std_path(),
+        path(&root, on_disk).as_std_path(),
+    )
+    .unwrap();
+    if path(&root, indexed).symlink_metadata().is_err() {
+        // A filesystem that tells the two names apart: nothing to protect.
+        return;
+    }
+    write(&root, indexed, "UNCOMMITTED EDIT");
+    assert_ne!(
+        crate::names::fold("STRA\u{1e9e}E.ts"),
+        crate::names::fold("stra\u{df}e.ts"),
+        "folding alone would have protected it"
+    );
+
+    let plan = plan_paths(
+        &root,
+        &["packages/a"],
+        matches(&root, &["packages/a/gen/**"], &[]),
+    )
+    .unwrap();
+    execute(&plan);
+
+    assert!(plan.is_empty(), "{:?}", removed(&plan));
+    assert_eq!(
+        skipped(&plan),
+        [(on_disk.to_owned(), SkipReason::TrackedByGit)]
+    );
+    assert_eq!(
+        path(&root, indexed).read_to_string().unwrap(),
+        "UNCOMMITTED EDIT"
+    );
+}
+
+/// Security round 2 #4: a directory renamed into a planned path after
+/// planning (`src` moved to `dist/b`) is not emptied in its place: every
+/// directory and entry is checked against its planned (device, inode).
+#[cfg(unix)]
+#[test]
+fn a_directory_renamed_into_a_planned_path_is_not_emptied() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    write(&root, "packages/a/src/index.js", "TRACKED");
+    git_repo(&root, &["packages/a/src/index.js"]);
+    write(&root, "packages/a/src/index.js", "uncommitted");
+    write(&root, "packages/a/dist/a/f.js", "built");
+    write(&root, "packages/a/dist/b/index.js", "built");
+
+    let plan = plan_paths(
+        &root,
+        &["packages/a"],
+        matches(&root, &["packages/a/dist/**"], &[]),
+    )
+    .unwrap();
+    assert!(removed(&plan).contains(&"packages/a/dist/b/index.js".to_owned()));
+    std::fs::rename(
+        path(&root, "packages/a/dist/b").as_std_path(),
+        path(&root, "packages/a/dist.b.old").as_std_path(),
+    )
+    .unwrap();
+    std::fs::rename(
+        path(&root, "packages/a/src").as_std_path(),
+        path(&root, "packages/a/dist/b").as_std_path(),
+    )
+    .unwrap();
+    let report = execute(&plan);
+
+    assert_eq!(
+        path(&root, "packages/a/dist/b/index.js")
+            .read_to_string()
+            .unwrap(),
+        "uncommitted"
+    );
+    assert!(!exists(&root, "packages/a/dist/a/f.js"));
+    assert_eq!(
+        report
+            .failures
+            .iter()
+            .map(|failure| failure.path.as_str())
+            .collect::<Vec<_>>(),
+        ["packages/a/dist/b/index.js"]
+    );
+    assert!(!report.is_complete());
+}
+
+/// The same check for a single file replaced after planning.
+#[cfg(unix)]
+#[test]
+fn a_file_replaced_after_planning_is_kept() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    write(&root, "dist/out.js", "built");
+    git_repo(&root, &[]);
+
+    let plan = plan_paths(&root, &[], matches(&root, &["dist/**"], &[])).unwrap();
+    path(&root, "dist/out.js").remove_file().unwrap();
+    write(&root, "dist/out.js", "someone else's");
+    let report = execute(&plan);
+
+    assert_eq!(
+        path(&root, "dist/out.js").read_to_string().unwrap(),
+        "someone else's"
+    );
+    assert_eq!(report.failures.len(), 1);
+}
+
+/// Correctness round 2 N1: `node_modules` inside an output stays protected,
+/// and is reported once rather than once per file.
+#[test]
+fn reserved_directories_inside_outputs_are_reported_once() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    write(&root, "apps/web/.next/standalone/server.js", "built");
+    for file in ["react/index.js", "react/package.json", ".pnpm/x/y.js"] {
+        write(
+            &root,
+            &format!("apps/web/.next/standalone/node_modules/{file}"),
+            "dep",
+        );
+    }
+    git_repo(&root, &[]);
+
+    let plan = plan_paths(
+        &root,
+        &["apps/web"],
+        matches(&root, &["apps/web/.next/**"], &[]),
+    )
+    .unwrap();
+
+    assert_eq!(
+        skipped(&plan),
+        [(
+            "apps/web/.next/standalone/node_modules/".to_owned(),
+            SkipReason::ReservedDirectory
+        )]
+    );
+    assert_eq!(removed(&plan), ["apps/web/.next/standalone/server.js"]);
+    assert_eq!(
+        plan.describe(true)[0],
+        "• Not removing apps/web/.next/standalone/node_modules/ (node_modules, .git and .turbo \
+         are never cleaned)"
+    );
+}
+
+/// Security round 2 #5 / correctness round 2 N7: only unix deletes.
+#[test]
+fn deletion_is_refused_where_unsupported() {
+    assert_eq!(crate::ensure_deletion_supported().is_ok(), cfg!(unix));
 }

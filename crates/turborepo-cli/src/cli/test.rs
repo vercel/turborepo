@@ -8,7 +8,7 @@ use turborepo_run_opts::{ExecutionSelector, RunSelector};
 use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsMode};
 
 use crate::cli::{
-    ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
+    CleanDryRunMode, ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
     GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
     RunArgs, should_maintain_agent_guidance,
 };
@@ -1656,7 +1656,7 @@ fn test_parse_clean() {
     };
     let clean = |expected: Expected| Args {
         command: Some(Command::Clean {
-            dry_run: expected.dry_run,
+            dry_run: expected.dry_run.then_some(CleanDryRunMode::Text),
             filter: expected.filter.iter().map(|f| f.to_string()).collect(),
             affected: expected.affected,
             only: expected.only,
@@ -1678,7 +1678,7 @@ fn test_parse_clean() {
             ..defaults
         })
     );
-    for dry in ["--dry", "--dry-run"] {
+    for dry in ["--dry", "--dry-run", "--dry=text", "--dry-run=text"] {
         assert_eq!(
             parse_clean_enabled(["turbo", "clean", "build", dry]).unwrap(),
             clean(Expected {
@@ -1687,6 +1687,25 @@ fn test_parse_clean() {
             })
         );
     }
+    // A bare `--dry` never takes the next word as its value.
+    assert_eq!(
+        parse_clean_enabled(["turbo", "clean", "--dry", "build"]).unwrap(),
+        clean(Expected {
+            dry_run: true,
+            ..defaults
+        })
+    );
+    // Correctness round 2 N3: JSON (or any other mode) is refused, never
+    // silently listed as text.
+    for dry in ["--dry=json", "--dry-run=json", "--dry=false", "--dry-run=0"] {
+        let error = parse_clean_enabled(["turbo", "clean", "build", dry]).unwrap_err();
+        assert!(error.contains("text"), "{dry}: {error}");
+    }
+    assert!(
+        parse_clean_enabled(["turbo", "clean", "build", "--dry=json"])
+            .unwrap_err()
+            .contains("no JSON output")
+    );
     assert_eq!(
         parse_clean_enabled([
             "turbo",

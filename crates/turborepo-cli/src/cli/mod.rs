@@ -36,10 +36,11 @@ mod test;
 
 #[allow(unused_imports)]
 pub use args::{
-    AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
-    EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
-    GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
-    QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
+    AffectedArgs, Args, BoundariesIgnore, CleanDryRunMode, Command, ContinueModeArg, DaemonCommand,
+    DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs,
+    GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath,
+    OutputFormat, OutputLogsModeArg, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand,
+    Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -922,11 +923,11 @@ async fn run_main(
         Command::Clean { dry_run, tasks, .. } => {
             let event = CommandEventBuilder::new("clean").with_parent(&root_telemetry);
             event.track_call();
-            event.track_arg_usage("dry-run", *dry_run);
+            event.track_arg_usage("dry-run", dry_run.is_some());
             if tasks.is_empty() {
                 return Err(Error::CleanNothingSelected);
             }
-            let dry_run = *dry_run;
+            let dry_run = dry_run.is_some();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             clean::run(base, event, dry_run).await?;

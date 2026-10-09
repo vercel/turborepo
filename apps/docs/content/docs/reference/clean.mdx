@@ -44,6 +44,11 @@ turbo clean build --dry
 }
 ```
 
+<Callout type="warn" title="Windows">
+  On Windows, `turbo clean` doesn't delete anything yet: it exits with an error
+  and suggests `turbo clean --dry-run`, which lists what would be deleted.
+</Callout>
+
 <Callout type="info" title="Running a task named clean">
   Without the flag, `turbo clean` runs a task named `clean`, as it always has.
   This includes forms like `turbo clean --filter=web` and `turbo clean build`.
@@ -53,7 +58,17 @@ turbo clean build --dry
 
 ## What gets deleted
 
-For each selected task, `turbo clean` deletes the files and symlinks that match its `outputs`. A directory is deleted only when everything inside it has been deleted. For example, with `"outputs": ["dist/**", "!dist/keep.txt"]`, the files in `dist` are deleted but `dist/keep.txt` and the `dist` directory are kept.
+For each selected task, `turbo clean` deletes the files and symlinks that match its `outputs`.
+
+<Callout type="warn" title="Untracked and gitignored files are deleted">
+  Any file that matches `outputs` and isn't tracked by git is treated as a
+  build output and deleted. That includes new files you haven't committed yet
+  and gitignored files, such as `.env.local`, when an `outputs` pattern matches
+  them. Only git-tracked files are protected. Check with `turbo clean --dry`
+  first.
+</Callout>
+
+A directory is deleted only when everything inside it has been deleted. For example, with `"outputs": ["dist/**", "!dist/keep.txt"]`, the files in `dist` are deleted but `dist/keep.txt` and the `dist` directory are kept.
 
 These tasks are skipped and reported:
 
@@ -75,18 +90,20 @@ When some files can't be deleted, for example because of permissions, `turbo cle
 - A brace set of literal directories, like `"{dist,build}/**"`.
 - A file extension at the package root, like `"*.tsbuildinfo"`.
 
-Other patterns are skipped and reported, and nothing they match is deleted. This includes patterns with a `..` segment, patterns that start with a wildcard (`"**/*.js"`, `"*.*"`, `"?*"`), and patterns whose wildcards would apply to a package directory (`"packages/**"` in a root task). Outputs outside the package, such as those reached with `..` or `$TURBO_ROOT$`, are not cleaned. To clean such outputs, anchor them in a directory, like `"dist/**"`.
+Other patterns are skipped and reported, and nothing they match is deleted. This includes patterns with a `..` segment, patterns that start with a wildcard (`"**/*.js"`, `"*.*"`, `"?*"`), and patterns whose wildcards would apply to a package directory (`"packages/**"` in a root task). Outputs outside the package, such as those reached with `..` or `$TURBO_ROOT$`, are not cleaned. To clean such outputs, anchor them in a directory, like `"dist/**"`. Outputs that native toolchains derive outside the package, such as Cargo's `target` directory, are not cleaned either; use the toolchain's own command (`cargo clean`).
 
 ### Safety
 
 `turbo clean` deletes files on your machine. When it can't prove that a path is a build output, it keeps the path and reports it:
 
-- `turbo clean` needs a git repository with a readable index. Git-tracked files are never deleted, and that includes tracked symlinks. If it can't read the set of tracked files, `turbo clean` deletes nothing. It reads the index directly, so it doesn't need a `git` binary.
-- Paths are compared using the names stored on disk. On case-insensitive or Unicode-normalizing filesystems, an output spelled `Index.ts` can't delete a tracked `index.ts`.
-- Nothing inside a git submodule or a nested repository is deleted.
-- Nothing outside the repository is deleted. Nothing reached through a symlink is deleted either: a symlink that matches `outputs` is deleted itself, but its target is never touched. On Linux and macOS, if a directory is replaced by a symlink while `turbo clean` runs, the deletion fails instead of following the link.
+- `turbo clean` needs a git repository with a readable index that tracks the repository's root `package.json` or `turbo.json`. Git-tracked files are never deleted, and that includes tracked symlinks. If it can't read the set of tracked files, `turbo clean` deletes nothing. It reads the index directly, so it doesn't need a `git` binary.
+- It reads the index git itself would use: `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE` and `core.worktree` are honored. When the repository can't be determined unambiguously (for example, `GIT_DIR` without `GIT_WORK_TREE` or `core.worktree`, a bare repository, or a working tree that doesn't contain the repository root), it deletes nothing.
+- Untracked and gitignored files that match `outputs` are deleted (see above).
+- Paths are compared using the names stored on disk, and then by file identity: a match that is the same file on disk as a tracked file in its directory is kept. On case-insensitive or Unicode-normalizing filesystems, an output spelled `Index.ts` can't delete a tracked `index.ts`.
+- Nothing inside a git submodule, a nested repository, or a directory a sparse checkout leaves out is deleted.
+- Nothing outside the repository is deleted. Nothing reached through a symlink is deleted either: a symlink that matches `outputs` is deleted itself, but its target is never touched. If a directory or file is replaced, moved, or swapped for a symlink while `turbo clean` runs, that deletion is skipped and reported instead of following the change.
 - The repository root, package directories, and any directory that contains a package are never deleted.
-- Nothing inside `node_modules`, `.git`, or `.turbo` is deleted.
+- Nothing inside `node_modules`, `.git`, or `.turbo` is deleted, even inside an output directory (such as `.next/standalone/node_modules`). Each such directory is reported once.
 
 Planning never touches the cache. `turbo clean` doesn't read, write, or evict cache entries, even with [`cacheMaxAge`](/docs/reference/configuration#cachemaxage) set.
 
@@ -94,7 +111,7 @@ Planning never touches the cache. `turbo clean` doesn't read, write, or evict ca
 
 #### `--dry` / `--dry-run`
 
-List what would be deleted without deleting anything. Directories that would be deleted are listed once, with a trailing `/`.
+List what would be deleted without deleting anything. Directories that would be deleted are listed once, with a trailing `/`. The listing is text only: unlike `turbo run`, `--dry=json` is an error.
 
 #### `--filter <string>`
 

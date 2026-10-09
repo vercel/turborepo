@@ -41,7 +41,7 @@ mod git_path;
 #[cfg(test)]
 mod test_utils;
 
-pub use index_paths::IndexPaths;
+pub use index_paths::{GitEnvironment, IndexPaths};
 pub use repo_index::{RepoGitIndex, walk_candidate_files};
 pub use slowest_files::{SlowestFile, SlowestFiles};
 pub use turborepo_hash::OidHash;

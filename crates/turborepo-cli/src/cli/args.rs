@@ -394,6 +394,36 @@ impl fmt::Display for DryRunModeArg {
     }
 }
 
+/// `turbo clean --dry`'s output format. Only text exists, and asking for
+/// another format is an error rather than a silent text listing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CleanDryRunMode {
+    Text,
+}
+impl FromStr for CleanDryRunMode {
+    type Err = String;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "text" => Ok(Self::Text),
+            "json" => Err(
+                "`turbo clean` has no JSON output yet; use `--dry` to list what would be removed \
+                 as text"
+                    .to_owned(),
+            ),
+            _ => Err(format!(
+                "invalid dry-run mode: {value} (`turbo clean` only lists as text)"
+            )),
+        }
+    }
+}
+impl fmt::Display for CleanDryRunMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Text => "text",
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CompletionShell {
     Bash,
@@ -1255,8 +1285,14 @@ pub enum Command {
     /// removes git-tracked files.
     Clean {
         /// List what would be deleted without deleting anything
-        #[usage(alias = "dry", long = "dry-run")]
-        dry_run: bool,
+        #[usage(
+            alias = "dry",
+            long = "dry-run",
+            num_args = 0..=1,
+            default_missing = "text",
+            require_equals = true
+        )]
+        dry_run: Option<CleanDryRunMode>,
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in

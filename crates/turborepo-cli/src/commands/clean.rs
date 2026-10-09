@@ -31,6 +31,10 @@ pub async fn run(
     telemetry: CommandEventBuilder,
     dry_run: bool,
 ) -> Result<(), Error> {
+    if !dry_run {
+        // Refused before any planning output, so nothing suggests a removal.
+        turborepo_clean::ensure_deletion_supported()?;
+    }
     let handler = SignalHandler::new(get_signal()?);
     let mut input = base.run_builder_input()?;
     // Planning reads the task graph only: no cache (and so no eviction or
@@ -55,7 +59,7 @@ pub async fn run(
         return Ok(());
     }
 
-    let report = planned.plan.execute();
+    let report = planned.plan.execute()?;
     for line in report.describe() {
         println!("{line}");
     }
@@ -177,7 +181,7 @@ mod tests {
             ColorConfig::new(true),
         )
         .unwrap();
-        run(base, CommandEventBuilder::new("clean"), dry_run).await
+        run(base, CommandEventBuilder::new("clean"), dry_run.is_some()).await
     }
 
     #[tokio::test(flavor = "multi_thread")]

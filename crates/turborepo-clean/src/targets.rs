@@ -34,6 +34,7 @@ impl ProtectedDirectories {
         Self { directories }
     }
 
+    #[cfg(test)]
     pub(crate) fn from_dirs(dirs: &[&str]) -> Self {
         let mut directories = vec![Vec::new()];
         directories.extend(dirs.iter().map(|dir| Self::folded(dir)));

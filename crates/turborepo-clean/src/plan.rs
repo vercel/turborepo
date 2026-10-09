@@ -4,9 +4,11 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_scm::GitEnvironment;
 
 use crate::{
     Error,
+    ids::{FileId, Identities},
     names::{DiskNames, EntryKind, Resolution, fold},
     targets::{ProtectedDirectories, path_segments},
     tracked::TrackedFiles,
@@ -47,9 +49,9 @@ impl std::fmt::Display for SkipReason {
             SkipReason::AmbiguousName => "several files on disk match its name",
             SkipReason::Unreadable => "its directory cannot be read",
             SkipReason::PackageDirectory => "a package directory",
-            SkipReason::ReservedDirectory => "inside node_modules, .git or .turbo",
-            SkipReason::NestedRepository => "inside a nested git repository",
-            SkipReason::InSubmodule => "inside a git submodule",
+            SkipReason::ReservedDirectory => "node_modules, .git and .turbo are never cleaned",
+            SkipReason::NestedRepository => "a nested git repository",
+            SkipReason::InSubmodule => "a git submodule or sparse-checkout directory",
             SkipReason::TrackedByGit => "tracked by git",
         })
     }
@@ -60,6 +62,10 @@ pub(crate) struct Removal {
     /// The stored name of each component below the repository root.
     pub(crate) components: Vec<String>,
     pub(crate) kind: RemovalKind,
+    /// What the path was when planned, and its directory. Removal checks
+    /// both again on the opened handles and skips anything that changed.
+    pub(crate) id: Option<FileId>,
+    pub(crate) parent_id: Option<FileId>,
 }
 
 impl Removal {
@@ -102,7 +108,10 @@ impl CleanPlan {
         self.removals.is_empty()
     }
 
-    /// Paths that match an output but are kept, repository-relative.
+    /// Paths that match an output but are kept, repository-relative. A
+    /// protected directory (`node_modules/`, a submodule, a nested
+    /// repository) is listed once, with a trailing `/`, for everything
+    /// below it.
     pub fn skipped(&self) -> impl Iterator<Item = (&str, SkipReason)> {
         self.skipped
             .iter()
@@ -185,6 +194,7 @@ pub(crate) fn plan_removals(
     repo_root: &AbsoluteSystemPath,
     protected: &ProtectedDirectories,
     candidates: BTreeSet<AbsoluteSystemPathBuf>,
+    git: &GitEnvironment,
 ) -> Result<CleanPlan, Error> {
     let real_root = repo_root.to_realpath()?;
     if candidates.is_empty() {
@@ -192,9 +202,10 @@ pub(crate) fn plan_removals(
     }
     // Fail closed: without the tracked set nothing can be told apart from
     // source, so nothing is removed.
-    let tracked = TrackedFiles::load(&real_root)?;
+    let mut tracked = TrackedFiles::load(&real_root, git)?;
     let mut plan = CleanPlan::empty(real_root.clone());
     let mut names = DiskNames::new(&real_root);
+    let mut identities = Identities::new(real_root.as_std_path());
     let mut files = BTreeSet::new();
     let mut symlinks = BTreeSet::new();
     let mut directories = BTreeSet::new();
@@ -211,12 +222,12 @@ pub(crate) fn plan_removals(
             continue;
         }
         let shown = spelled.join("/");
-        let (components, kind, in_nested_repository) = match names.resolve(&spelled) {
+        let (components, kind, nested_repository) = match names.resolve(&spelled) {
             Resolution::Found {
                 components,
                 kind,
-                in_nested_repository,
-            } => (components, kind, in_nested_repository),
+                nested_repository,
+            } => (components, kind, nested_repository),
             // Vanished since the walk; nothing to remove.
             Resolution::Missing => continue,
             Resolution::Ambiguous => {
@@ -232,23 +243,39 @@ pub(crate) fn plan_removals(
                 continue;
             }
         };
-        let shown = components.join("/");
-        let reason = if components.iter().any(|component| {
+        let reserved = components.iter().position(|component| {
             RESERVED_DIRECTORIES
                 .iter()
                 .any(|reserved| fold(component) == *reserved)
-        }) {
-            Some(SkipReason::ReservedDirectory)
+        });
+        // The outermost protected directory explains everything below it.
+        let directory = match (reserved.map(|position| position + 1), nested_repository) {
+            (Some(reserved), Some(nested)) if nested < reserved => {
+                Some((SkipReason::NestedRepository, nested))
+            }
+            (Some(reserved), _) => Some((SkipReason::ReservedDirectory, reserved)),
+            (None, nested) => nested.map(|nested| (SkipReason::NestedRepository, nested)),
+        };
+        let protection = if directory.is_some() {
+            directory
         } else if protected.covers(&components) {
-            Some(SkipReason::PackageDirectory)
-        } else if in_nested_repository {
-            Some(SkipReason::NestedRepository)
+            Some((SkipReason::PackageDirectory, components.len()))
         } else {
             // Before looking at the kind: a tracked symlink is source too.
-            tracked.protects(&components)
+            tracked.protects(&components, &mut identities)
         };
-        if let Some(reason) = reason {
+        if let Some((reason, depth)) = protection {
+            // Everything below a protected directory is reported once, as
+            // the directory.
+            let mut shown = components[..depth].join("/");
+            if depth < components.len() || (kind == EntryKind::Directory && depth > 0) {
+                shown.push('/');
+            }
             plan.skipped.insert(shown, reason);
+            continue;
+        }
+        // Gone since the walk: nothing to remove.
+        if cfg!(unix) && identities.of(&components).is_none() {
             continue;
         }
         match kind {
@@ -278,16 +305,26 @@ pub(crate) fn plan_removals(
 
     let mut removed: HashSet<Vec<String>> = files.iter().cloned().collect();
     removed.extend(symlinks.iter().cloned());
-    plan.removals
-        .extend(files.into_iter().map(|components| Removal {
+    let mut removal = |components: Vec<String>, kind| {
+        let id = identities.of(&components);
+        let parent_id = identities.of(&components[..components.len() - 1]);
+        Removal {
             components,
-            kind: RemovalKind::File,
-        }));
-    plan.removals
-        .extend(symlinks.into_iter().map(|components| Removal {
-            components,
-            kind: RemovalKind::Symlink,
-        }));
+            kind,
+            id,
+            parent_id,
+        }
+    };
+    plan.removals.extend(
+        files
+            .into_iter()
+            .map(|components| removal(components, RemovalKind::File)),
+    );
+    plan.removals.extend(
+        symlinks
+            .into_iter()
+            .map(|components| removal(components, RemovalKind::Symlink)),
+    );
 
     // Deepest first, so a directory sees whether its children are removed.
     let mut directories: Vec<Vec<String>> = directories.into_iter().collect();
@@ -296,17 +333,15 @@ pub(crate) fn plan_removals(
         let Some(listing) = names.listing(&directory) else {
             continue;
         };
-        let empties = listing.names().all(|name| {
+        let empties = listing.emptied_by(|name| {
             let mut child = directory.clone();
             child.push(name.to_owned());
             removed.contains(&child)
         });
         if empties {
             removed.insert(directory.clone());
-            plan.removals.push(Removal {
-                components: directory,
-                kind: RemovalKind::Directory,
-            });
+            plan.removals
+                .push(removal(directory, RemovalKind::Directory));
         }
     }
 

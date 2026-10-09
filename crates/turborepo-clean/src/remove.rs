@@ -1,13 +1,20 @@
 //! Acting on a plan.
 //!
-//! Every removal starts again from the real repository root. On unix the
-//! walk uses directory handles opened with `O_NOFOLLOW`, and the final
+//! Only on unix. Every removal starts again from the real repository root,
+//! walking with directory handles opened with `O_NOFOLLOW`, and the final
 //! `unlinkat` never follows a link, so a directory replaced by a symlink
 //! after planning makes that removal fail instead of reaching outside the
-//! repository. Elsewhere each component is re-checked immediately before
-//! the removal.
+//! repository. Each opened directory and each entry is checked against the
+//! (device, inode) recorded when it was planned, so a directory renamed into
+//! a planned path is not emptied in its place.
+//!
+//! Elsewhere (Windows) nothing is deleted: path-based removal cannot rule
+//! out a junction swapped in between the check and the removal.
 
-use crate::plan::{CleanPlan, RemovalKind, counts};
+use crate::{
+    Error,
+    plan::{CleanPlan, counts},
+};
 
 /// A removal that failed. Other removals still ran.
 #[derive(Debug)]
@@ -49,14 +56,43 @@ impl Report {
     }
 }
 
+#[cfg(unix)]
 fn changed_since_planning() -> std::io::Error {
     std::io::Error::other("it changed since it was planned for removal")
+}
+
+/// Whether this platform can delete: `Ok` on unix. Elsewhere,
+/// [`Error::DeletionUnsupported`]; dry runs still work.
+pub fn ensure_deletion_supported() -> Result<(), Error> {
+    if cfg!(unix) {
+        Ok(())
+    } else {
+        Err(Error::DeletionUnsupported)
+    }
 }
 
 impl CleanPlan {
     /// Removes everything in the plan. A failed removal is reported and the
     /// rest still run; directories above a failure are left in place.
-    pub fn execute(&self) -> Report {
+    ///
+    /// Errors without removing anything where deletion is unsupported
+    /// ([`ensure_deletion_supported`]).
+    pub fn execute(&self) -> Result<Report, Error> {
+        ensure_deletion_supported()?;
+        #[cfg(unix)]
+        {
+            Ok(self.remove_all())
+        }
+        #[cfg(not(unix))]
+        {
+            unreachable!("deletion is refused above")
+        }
+    }
+
+    #[cfg(unix)]
+    fn remove_all(&self) -> Report {
+        use crate::plan::RemovalKind;
+
         let mut report = Report::default();
         let mut remover = sys::Remover::new(self.real_root.as_std_path());
         let mut failed: Vec<&[String]> = Vec::new();
@@ -68,7 +104,7 @@ impl CleanPlan {
             {
                 continue;
             }
-            match remover.remove(&removal.components, removal.kind) {
+            match remover.remove(removal) {
                 Ok(()) => match removal.kind {
                     RemovalKind::Directory => report.directories += 1,
                     RemovalKind::File | RemovalKind::Symlink => report.files += 1,
@@ -97,15 +133,36 @@ impl CleanPlan {
 mod sys {
     use std::{os::fd::OwnedFd, path::PathBuf};
 
-    use rustix::fs::{AtFlags, FileType, Mode, OFlags, open, openat, statat, unlinkat};
+    use rustix::fs::{
+        AtFlags, FileType, Mode, OFlags, Stat, fstat, open, openat, statat, unlinkat,
+    };
 
     use super::changed_since_planning;
-    use crate::plan::RemovalKind;
+    use crate::{
+        ids::FileId,
+        plan::{Removal, RemovalKind},
+    };
 
     const DIRECTORY: OFlags = OFlags::RDONLY
         .union(OFlags::DIRECTORY)
         .union(OFlags::NOFOLLOW)
         .union(OFlags::CLOEXEC);
+
+    #[allow(clippy::unnecessary_cast, clippy::useless_conversion)]
+    fn id(stat: &Stat) -> FileId {
+        FileId {
+            dev: stat.st_dev as u64,
+            ino: stat.st_ino as u64,
+        }
+    }
+
+    /// Errors unless what was opened or found is what was planned.
+    fn verify(stat: &Stat, planned: Option<FileId>) -> std::io::Result<()> {
+        match planned {
+            Some(planned) if planned == id(stat) => Ok(()),
+            _ => Err(changed_since_planning()),
+        }
+    }
 
     pub(super) struct Remover {
         root: PathBuf,
@@ -121,7 +178,11 @@ mod sys {
             }
         }
 
-        fn open_parent(&mut self, components: &[String]) -> std::io::Result<&OwnedFd> {
+        fn open_parent(
+            &mut self,
+            components: &[String],
+            planned: Option<FileId>,
+        ) -> std::io::Result<&OwnedFd> {
             let cached = self
                 .parent
                 .as_ref()
@@ -132,6 +193,7 @@ mod sys {
                 for component in components {
                     directory = openat(&directory, component.as_str(), DIRECTORY, Mode::empty())?;
                 }
+                verify(&fstat(&directory)?, planned)?;
                 self.parent = Some((components.to_vec(), directory));
             }
             match &self.parent {
@@ -140,19 +202,15 @@ mod sys {
             }
         }
 
-        pub(super) fn remove(
-            &mut self,
-            components: &[String],
-            kind: RemovalKind,
-        ) -> std::io::Result<()> {
-            let Some((name, parents)) = components.split_last() else {
+        pub(super) fn remove(&mut self, removal: &Removal) -> std::io::Result<()> {
+            let Some((name, parents)) = removal.components.split_last() else {
                 return Err(changed_since_planning());
             };
-            let directory = self.open_parent(parents)?;
+            let directory = self.open_parent(parents, removal.parent_id)?;
             let stat = statat(directory, name.as_str(), AtFlags::SYMLINK_NOFOLLOW)?;
             #[allow(clippy::useless_conversion)]
             let file_type = FileType::from_raw_mode(stat.st_mode.into());
-            let expected = match kind {
+            let expected = match removal.kind {
                 RemovalKind::File => {
                     file_type != FileType::Directory && file_type != FileType::Symlink
                 }
@@ -162,81 +220,14 @@ mod sys {
             if !expected {
                 return Err(changed_since_planning());
             }
-            let flags = if kind == RemovalKind::Directory {
+            verify(&stat, removal.id)?;
+            let flags = if removal.kind == RemovalKind::Directory {
                 AtFlags::REMOVEDIR
             } else {
                 AtFlags::empty()
             };
             unlinkat(directory, name.as_str(), flags)?;
             Ok(())
-        }
-    }
-}
-
-#[cfg(not(unix))]
-mod sys {
-    use std::path::{Path, PathBuf};
-
-    use super::changed_since_planning;
-    use crate::plan::RemovalKind;
-
-    pub(super) struct Remover {
-        root: PathBuf,
-    }
-
-    fn is_link(metadata: &std::fs::Metadata) -> bool {
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::MetadataExt;
-            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
-            if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-                return true;
-            }
-        }
-        metadata.file_type().is_symlink()
-    }
-
-    impl Remover {
-        pub(super) fn new(root: &Path) -> Self {
-            Self {
-                root: root.to_owned(),
-            }
-        }
-
-        /// Re-verifies every component just before removing, as close to
-        /// the removal as path-based APIs allow.
-        pub(super) fn remove(
-            &mut self,
-            components: &[String],
-            kind: RemovalKind,
-        ) -> std::io::Result<()> {
-            let Some((name, parents)) = components.split_last() else {
-                return Err(changed_since_planning());
-            };
-            let mut path = self.root.clone();
-            for component in parents {
-                path.push(component);
-                let metadata = std::fs::symlink_metadata(&path)?;
-                if is_link(&metadata) || !metadata.is_dir() {
-                    return Err(changed_since_planning());
-                }
-            }
-            path.push(name);
-            let metadata = std::fs::symlink_metadata(&path)?;
-            match kind {
-                RemovalKind::File if !is_link(&metadata) && !metadata.is_dir() => {
-                    std::fs::remove_file(&path)
-                }
-                // A directory link (symlink or junction) needs `remove_dir`,
-                // which never recurses into the target.
-                RemovalKind::Symlink if is_link(&metadata) => {
-                    std::fs::remove_file(&path).or_else(|_| std::fs::remove_dir(&path))
-                }
-                RemovalKind::Directory if !is_link(&metadata) && metadata.is_dir() => {
-                    std::fs::remove_dir(&path)
-                }
-                _ => Err(changed_since_planning()),
-            }
         }
     }
 }
