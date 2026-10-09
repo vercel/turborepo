@@ -24,6 +24,10 @@ pub enum Error {
     UnsafePath,
     #[error("invalid inventory, tool identity or executable collision")]
     InvalidInventory,
+    /// Hash drift only, after all generation paths, exports and records
+    /// validate.
+    #[error("managed tool contents changed within a structurally valid generation")]
+    DamagedContents,
     #[error("another setup transaction is running")]
     Busy,
     #[error("managed shims require a qualified Unix host")]
@@ -311,7 +315,7 @@ impl Store {
         let Some(inventory) = Self::inventory(&root)? else {
             return Ok(None);
         };
-        let record = Self::check(&root, &inventory)?;
+        let record = Self::check(&root, &inventory);
         if Self::manifest_bytes(&root)? != before {
             return Err(Error::InvalidInventory);
         }
@@ -329,7 +333,7 @@ impl Store {
         Ok(Some(Current {
             bin: root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
-            record,
+            record: record?,
         }))
     }
 
@@ -423,7 +427,7 @@ impl Store {
             Ok(_) => Ok(Some(old)),
             // Metadata/path validation above remains fail-closed. Damaged install
             // contents can be rebuilt, but must never be copied into staging.
-            Err(Error::InvalidInventory | Error::UnsafePath) => Ok(None),
+            Err(Error::InvalidInventory | Error::UnsafePath | Error::DamagedContents) => Ok(None),
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
         }
@@ -470,11 +474,10 @@ impl Store {
         let bin = generation.join("bin");
         real_directory(&bin)?;
         let mut names = BTreeSet::new();
+        let mut damaged = false;
         for installed in &inventory.tools {
             let tree = tools.join(&installed.tool.id);
-            if tree_hash(&tree)? != installed.tree_sha256 {
-                return Err(Error::InvalidInventory);
-            }
+            damaged |= tree_hash(&tree)? != installed.tree_sha256;
             check_executables(&tree, &installed.tool)?;
             for (name, executable) in &installed.tool.executables {
                 names.insert(name.clone());
@@ -492,7 +495,12 @@ impl Store {
         if actual != names {
             return Err(Error::InvalidInventory);
         }
-        Self::record(root, inventory)
+        let record = Self::record(root, inventory)?;
+        // Never let content drift mask an unsafe shim, path or corrupt record.
+        if damaged {
+            return Err(Error::DamagedContents);
+        }
+        Ok(record)
     }
 
     /// Mutable access serializes transactions sharing this lock handle.

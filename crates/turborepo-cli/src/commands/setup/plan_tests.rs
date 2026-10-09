@@ -127,6 +127,7 @@ fn damaged_plans_never_report_reuse_or_change_any_owned_bytes() {
             1 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
             2 => fs::write(f.owned.root().join(".turbo/tools/manifest.json"), "invalid").unwrap(),
             3 => {
+                fs::write(current.bin.join("../tools/node/resource"), "damage").unwrap();
                 fs::remove_file(current.bin.join("node")).unwrap();
                 std::os::unix::fs::symlink("../tools/pnpm/bin/pnpm.cjs", current.bin.join("node"))
                     .unwrap();
@@ -147,15 +148,20 @@ fn damaged_plans_never_report_reuse_or_change_any_owned_bytes() {
             if force {
                 flags.push("--force");
             }
-            if case == 4 {
+            if matches!(case, 0 | 1 | 4) {
                 assert_eq!(f.run(&u, &flags).unwrap(), 0);
                 let action = if force {
                     "reinstall (--force)"
-                } else {
+                } else if case == 4 {
                     "repair (installation does not match turbo.lock)"
+                } else {
+                    "repair (damaged installation)"
                 };
                 let report = f.plan_report(force).unwrap();
                 assert!(report.contains(action) && !report.contains("reuse"));
+                if case != 4 {
+                    assert_eq!(report, f.expected_plan(action));
+                }
             } else {
                 assert!(matches!(
                     f.run(&u, &flags),
@@ -173,7 +179,72 @@ fn damaged_plans_never_report_reuse_or_change_any_owned_bytes() {
         }
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
         assert_eq!(u.hits(), 3);
+        if matches!(case, 0 | 1) {
+            assert_eq!(
+                f.run(&u, &["--force", "--tools-only", "--frozen"]).unwrap(),
+                0
+            );
+            assert_eq!(u.hits(), 6);
+            assert_eq!(
+                f.plan_report(false).unwrap(),
+                f.expected_plan("reuse (healthy installation)")
+            );
+        }
         f.no_execution();
+    }
+}
+
+#[test]
+fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
+    for installed in [false, true] {
+        for late in [false, true] {
+            let f = Fixture::new();
+            let u = Upstream::new(&f, false, None);
+            if installed {
+                f.install(&u);
+            }
+            let edit = || {
+                if installed {
+                    track(f.owned.root());
+                } else {
+                    fs::write(f.owned.root().join(".gitignore"), "").unwrap();
+                }
+            };
+            if !late {
+                edit();
+            }
+            let expected = std::cell::RefCell::new(snapshot(f.owned.root().parent().unwrap()));
+            let discovery = root::Discovery::capture(&f.args(PLAN)).unwrap();
+            let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+            let calls = std::cell::Cell::new(0);
+            let result = plan::inspect(&discovery, sources, installed, || {
+                calls.set(calls.get() + 1);
+                if late && calls.get() == 2 {
+                    edit();
+                    *expected.borrow_mut() = snapshot(f.owned.root().parent().unwrap());
+                }
+                Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
+            });
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("storage must be untracked and Git-ignored")
+            );
+            assert!(
+                f.run(&u, FROZEN)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("storage must be untracked and Git-ignored")
+            );
+            assert_eq!(
+                snapshot(f.owned.root().parent().unwrap()),
+                expected.into_inner()
+            );
+            assert_eq!(u.hits(), if installed { 3 } else { 0 });
+            assert_eq!(f.owned.root().join(".turbo").exists(), installed);
+            f.no_execution();
+        }
     }
 }
 

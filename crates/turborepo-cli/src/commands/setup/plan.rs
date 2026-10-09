@@ -21,10 +21,14 @@ pub(super) fn inspect(
     ))?;
     // Share frozen provisioning's native request, artifact and integrity gates.
     provision::plans(&sources, lock)?;
+    provision::storage(discovery.snapshot_root()?.as_std_path())?;
     let action = match ActivationPlan::inspect_captured(&sources, context) {
         Ok(_) => "reuse (healthy installation)",
         Err(ReadinessError::MissingInventory) => "install (missing installation)",
         Err(ReadinessError::StaleInventory) => "repair (installation does not match turbo.lock)",
+        Err(ReadinessError::DamagedInventory(turborepo_tool_install::Error::DamagedContents)) => {
+            "repair (damaged installation)"
+        }
         Err(error) => return Err(error.into()),
     };
     let action = if force { "reinstall (--force)" } else { action };
@@ -64,6 +68,7 @@ pub(super) fn inspect(
         ));
     }
     sources.ensure_current()?;
+    provision::storage(discovery.snapshot_root()?.as_std_path())?;
     lines.push("Dependencies skipped (--tools-only); dependency readiness was not checked.".into());
     lines.push("Tracked changes: none. No downloads, probes, or tasks run.".into());
     Ok(lines.join("\n"))
