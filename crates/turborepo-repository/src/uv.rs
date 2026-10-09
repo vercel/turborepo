@@ -3132,6 +3132,16 @@ impl RepositoryContributor for UvContributor {
                     (Some(metadata), workspace, Ok(lockfile), None)
                 }
                 Err(error) => {
+                    let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
+                    let message = error.to_string();
+                    // Warn before manifest discovery so that, if the fallback
+                    // fails too, the user still learns why exact discovery
+                    // was skipped.
+                    tracing::warn!(
+                        "Unable to resolve uv.lock; using conservative Python task hashing. Run \
+                         `uv lock` and commit uv.lock to restore dependency-aware caching: {}",
+                        message
+                    );
                     // The fallback fails closed on local path sources it
                     // cannot hash, exactly as exact discovery would.
                     let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
@@ -3140,13 +3150,6 @@ impl RepositoryContributor for UvContributor {
                         Ok::<_, Error>(workspace)
                     })
                     .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
-                    let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
-                    let message = error.to_string();
-                    tracing::warn!(
-                        "Unable to resolve uv.lock; using conservative Python task hashing. Run \
-                         `uv lock` and commit uv.lock to restore dependency-aware caching: {}",
-                        message
-                    );
                     let raw_lockfile = if can_prune_without_metadata {
                         read_lockfile(&self.repo_root).map_err(|error| error.to_string())
                     } else {
