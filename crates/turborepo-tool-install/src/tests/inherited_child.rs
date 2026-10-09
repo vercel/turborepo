@@ -17,6 +17,21 @@ pub(super) struct InheritedChild {
 
 impl InheritedChild {
     pub(super) fn spawn(descriptors: &[i32]) -> Self {
+        // SAFETY: the no-op callback cannot allocate or touch thread locks.
+        let mut child = unsafe { Self::spawn_with(descriptors, || Ok(())) };
+        child.assert_open();
+        child
+    }
+
+    /// # Safety
+    /// Teardown runs only in the fork copy, exactly once, before exec. It must
+    /// not allocate, deallocate heap fields, panic, or touch process/thread
+    /// locks. Any captured addresses must stay valid until the child
+    /// acknowledges them.
+    pub(super) unsafe fn spawn_with(
+        descriptors: &[i32],
+        teardown: impl Fn() -> io::Result<()> + Send + Sync + 'static,
+    ) -> Self {
         let (control, child_control) = UnixStream::pair().unwrap();
         control
             .set_read_timeout(Some(Duration::from_secs(5)))
@@ -27,10 +42,11 @@ impl InheritedChild {
         let fd = child_control.as_raw_fd();
         let descriptors = descriptors.to_vec();
         let mut command = Command::new("/usr/bin/true");
-        // SAFETY: captured data is allocated before fork. The child only uses
-        // poll/read/write/fcntl; no Rust locks, allocation or destructors run.
+        // SAFETY: captured data is allocated before fork. After the caller's
+        // allocation-free teardown, the child only uses poll/read/write/fcntl.
         unsafe {
             command.pre_exec(move || {
+                teardown()?;
                 loop {
                     let mut poll = libc::pollfd {
                         fd,
@@ -48,8 +64,8 @@ impl InheritedChild {
                     if byte == 0 {
                         return Ok(());
                     }
-                    // These are the owner's original fds, NOT duplicates
-                    // installed by this fixture. CLOEXEC has not run yet.
+                    // Supplied fds were opened before fork, not installed in
+                    // the child by this fixture. CLOEXEC has not run yet.
                     for descriptor in &descriptors {
                         if libc::fcntl(*descriptor, libc::F_GETFD) == -1 {
                             return Err(io::Error::last_os_error());
@@ -66,12 +82,10 @@ impl InheritedChild {
             drop(child_control);
             result
         });
-        let mut child = Self {
+        Self {
             control,
             spawning: Some(spawning),
-        };
-        child.assert_open();
-        child
+        }
     }
 
     pub(super) fn assert_open(&mut self) {
