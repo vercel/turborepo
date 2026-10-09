@@ -34,11 +34,24 @@ pub enum Error {
     Check(#[from] io::Error),
 }
 
+enum Generation {
+    Baseline(Box<Baseline>),
+    Empty(GenerationExpectation),
+}
+impl Generation {
+    fn expectation(&self) -> &GenerationExpectation {
+        match self {
+            Self::Baseline(baseline) => baseline.generation(),
+            Self::Empty(expected) => expected,
+        }
+    }
+}
+
 /// Private fields retain actual disk CAS and live Store evidence, not a fake
 /// lock.
 pub struct Staged {
     snapshot: Snapshot,
-    generation: GenerationExpectation,
+    generation: Generation,
     native: NativeRecord,
     node: NodePlan,
     pnpm: Option<PnpmPlan>,
@@ -68,12 +81,20 @@ pub fn stage(
     {
         return Err(Error::Unsupported);
     }
-    let baseline = Baseline::capture(snapshot, store)?;
-    let previous = baseline
-        .as_ref()
-        .map(|b| b.native(snapshot, store))
-        .transpose()?;
-    let generation = store.generation().or_else(|_| store.repair_generation())?;
+    let generation = match Baseline::capture(snapshot, store)? {
+        Some(baseline) => Generation::Baseline(Box::new(baseline)),
+        None => {
+            let expected = store.generation()?;
+            if expected.current().is_some_and(|c| c.record.is_some()) {
+                return Err(Error::Unsupported);
+            }
+            Generation::Empty(expected)
+        }
+    };
+    let previous = match &generation {
+        Generation::Baseline(baseline) => Some(baseline.native(snapshot, store)?),
+        Generation::Empty(_) => None,
+    };
     let candidate = reconcile::reconcile_previous(
         snapshot,
         previous.map(NativeRecord::selection),
@@ -89,7 +110,7 @@ pub fn stage(
             check()?;
             snapshot.ensure_current().map_err(io::Error::other)?;
             store
-                .check_generation(&generation)
+                .check_generation(generation.expectation())
                 .map_err(io::Error::other)
         },
     )?;
@@ -139,7 +160,7 @@ impl Staged {
         }
         self.snapshot.ensure_current()?;
         snapshot.ensure_current()?;
-        store.check_generation(&self.generation)?;
+        store.check_generation(self.generation.expectation())?;
         Ok(())
     }
 
@@ -160,7 +181,7 @@ impl Staged {
         Ok(store.reconcile_recorded_checked(
             &self.desired,
             self.native.record(),
-            &self.generation,
+            self.generation.expectation(),
             force,
             |tool, tree| {
                 stage_tool(tool, tree)?;

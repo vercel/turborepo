@@ -322,25 +322,8 @@ fn foreign_live_store_and_real_lock_and_unsupported_integrity_fail_closed() {
     );
     let snapshot = Snapshot::capture(repo.path()).unwrap();
     let before = manifest(repo.path());
-    assert!(
-        ephemeral_reconcile::stage(
-            &snapshot,
-            &reopened,
-            Platform::MacosArm64,
-            false,
-            |request| {
-                let runtime = tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap();
-                let world = fixture(&["24.0.0"]);
-                runtime
-                    .block_on(resolve(request, &world.node, &world.registry))
-                    .map_err(|e| reconcile::Error::Resolution(e.to_string()))
-            },
-            || Ok(())
-        )
-        .is_err()
-    );
+    let world = fixture(&["24.0.0"]);
+    assert!(staged(&snapshot, &reopened, &world).is_err());
+    assert_eq!(world.paths(), PNPM_PATHS);
     assert_eq!(manifest(repo.path()), before);
 }
