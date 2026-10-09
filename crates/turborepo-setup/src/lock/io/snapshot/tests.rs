@@ -338,7 +338,10 @@ fn final_post_flush_check_aborts_source_and_lock_races_and_failures() {
         let snapshot = Snapshot::capture(root.path()).unwrap();
         let previous = snapshot.bytes.clone();
         let external = candidate(&snapshot, "27.0.0").canonical_bytes().unwrap();
-        let result = snapshot.commit_with(&candidate(&snapshot, "25.0.0"), || {
+        let result = snapshot.commit_checked(&candidate(&snapshot, "25.0.0"), || {
+            if !root.path().join(".turbo/setup-lock/staged").exists() {
+                return Ok(());
+            }
             assert_eq!(
                 fs::read(root.path().join(".turbo/setup-lock/staged"))?,
                 candidate(&snapshot, "25.0.0").canonical_bytes().unwrap()
@@ -392,7 +395,14 @@ fn competing_resolver_candidates_cannot_publish_last_writer_wins() {
     let (staged_tx, staged_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let first = thread::spawn(move || {
-        first_snapshot.commit_with(&candidate(&first_snapshot, "25.0.0"), || {
+        first_snapshot.commit_checked(&candidate(&first_snapshot, "25.0.0"), || {
+            if !first_snapshot
+                .root
+                .join(".turbo/setup-lock/staged")
+                .exists()
+            {
+                return Ok(());
+            }
             staged_tx.send(()).unwrap();
             release_rx.recv().unwrap();
             Ok(())
@@ -419,6 +429,70 @@ fn competing_resolver_candidates_cannot_publish_last_writer_wins() {
     assert_eq!(first.join().unwrap().unwrap(), WriteOutcome::Written);
     assert_conflict(second.join().unwrap());
     assert_eq!(locked_version(root.path()), "25.0.0");
+    no_stage(root.path());
+}
+
+#[test]
+fn checked_noop_and_post_publication_never_recapture_foreign_state() {
+    let root = root();
+    let original = Snapshot::capture(root.path()).unwrap();
+    let desired = candidate(&original, "24.0.0");
+    original.commit(&desired).unwrap();
+    let published = original.after_publication(&desired).unwrap();
+    let before = fs::read(root.path().join(LOCK_NAME)).unwrap();
+    let mut checks = 0;
+    assert!(
+        published
+            .commit_checked(&desired, || {
+                checks += 1;
+                Err(io::Error::other("late consumer precondition"))
+            })
+            .is_err()
+    );
+    assert_eq!(checks, 1);
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), before);
+    write_file(
+        root.path(),
+        LOCK_NAME,
+        candidate(&original, "25.0.0").canonical_bytes().unwrap(),
+    );
+    assert!(matches!(
+        original.after_publication(&desired),
+        Err(StorageError::Conflict)
+    ));
+    write_file(root.path(), LOCK_NAME, &before);
+    write_file(root.path(), ".nvmrc", ">=24 <30\n\n"); // Same declarations, different original source bytes.
+    assert!(matches!(
+        original.after_publication(&desired),
+        Err(StorageError::Conflict)
+    ));
+    no_stage(root.path());
+}
+
+#[test]
+fn checked_reconcile_noop_runs_consumer_check_under_writer_guard() {
+    let root = root();
+    let first = Snapshot::capture(root.path()).unwrap();
+    first.commit(&candidate(&first, "24.0.0")).unwrap();
+    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let mut checks = 0;
+    let result = crate::lock::reconcile::reconcile_checked(
+        &snapshot,
+        crate::lock::reconcile::Mode::Local,
+        false,
+        |_| panic!("unchanged declarations never resolve"),
+        |_| Ok(()),
+        || {
+            checks += 1;
+            if checks == 3 {
+                return Err(io::Error::other("post-wait policy drift"));
+            }
+            Ok(())
+        },
+    );
+    assert!(result.is_err());
+    assert_eq!(checks, 3);
+    assert_eq!(locked_version(root.path()), "24.0.0");
     no_stage(root.path());
 }
 

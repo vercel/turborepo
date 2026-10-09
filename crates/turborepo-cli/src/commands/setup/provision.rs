@@ -47,7 +47,7 @@ fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error> {
     Ok(())
 }
 
-fn storage(root: &Path) -> Result<(), Error> {
+pub(super) fn storage(root: &Path) -> Result<(), Error> {
     for path in [
         root.join(".turbo"),
         root.join(".turbo/tools"),
@@ -85,17 +85,17 @@ fn storage(root: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-pub(super) fn run(
-    discovery: &super::root::Discovery,
-    snapshot: Snapshot,
-    transports: Option<Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
-) -> Result<i32, Error> {
-    let root = discovery.snapshot_root()?.as_std_path();
+/// Read-only current-host selection, shared by frozen execution and checked
+/// publication. No storage, transports, probes or writes are initialized here.
+pub(super) struct Plans {
+    pub node: NodePlan,
+    pub pnpm: Option<PnpmPlan>,
+}
+pub(super) fn plans(
+    snapshot: &Snapshot,
+    lock: &turborepo_setup::lock::Lock,
+) -> Result<Plans, Error> {
     let platform = platform()?;
-    let lock = snapshot
-        .previous_lock()
-        .ok_or(Error::Unsupported("frozen mode requires turbo.lock"))?;
     if !lock.matches_native(snapshot.declarations())? {
         return Err(Error::Unsupported(
             "turbo.lock declarations changed; run setup locally and commit the updated lock",
@@ -130,6 +130,20 @@ pub(super) fn run(
     } else {
         None
     };
+    Ok(Plans { node, pnpm })
+}
+
+pub(super) fn run(
+    discovery: &super::root::Discovery,
+    snapshot: Snapshot,
+    transports: Option<Transports>,
+    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+) -> Result<i32, Error> {
+    let root = discovery.snapshot_root()?.as_std_path();
+    let lock = snapshot
+        .previous_lock()
+        .ok_or(Error::Unsupported("frozen mode requires turbo.lock"))?;
+    let Plans { node, pnpm } = plans(&snapshot, lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
         desired.push(pnpm.inventory_tool().clone());

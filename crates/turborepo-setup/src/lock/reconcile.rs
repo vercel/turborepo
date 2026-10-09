@@ -102,6 +102,21 @@ pub fn reconcile(
     offline: bool,
     resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
 ) -> Result<Outcome, Error> {
+    reconcile_checked(snapshot, mode, offline, resolve, |_| Ok(()), || Ok(()))
+}
+
+/// Consumer preconditions supplement, never replace, immutable Snapshot CAS.
+/// Candidate validation is read-only and runs even for unchanged selections,
+/// before any writer. Checks run before resolution, after waits and staging.
+pub fn reconcile_checked(
+    snapshot: &Snapshot,
+    mode: Mode,
+    offline: bool,
+    resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
+    validate: impl FnOnce(&Lock) -> std::io::Result<()>,
+    mut check: impl FnMut() -> std::io::Result<()>,
+) -> Result<Outcome, Error> {
+    check().map_err(StorageError::from)?;
     snapshot.check_native_coverage(None)?;
     snapshot.ensure_current()?;
     let previous = snapshot.previous_lock();
@@ -188,9 +203,13 @@ pub fn reconcile(
             }
         }
     }
+    // Every complete candidate, including unchanged/removal-only selections,
+    // must pass the consumer's host/plan validation BEFORE any writer exists.
+    validate(&candidate).map_err(StorageError::from)?;
     let publication = match mode {
-        Mode::Local | Mode::Refresh => Some(snapshot.commit(&candidate)?),
+        Mode::Local | Mode::Refresh => Some(snapshot.commit_checked(&candidate, check)?),
         Mode::Frozen | Mode::NoLock => {
+            check().map_err(StorageError::from)?;
             snapshot.ensure_current()?;
             None
         }

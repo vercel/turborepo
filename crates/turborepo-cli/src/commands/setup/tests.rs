@@ -191,6 +191,8 @@ fn track(root: &std::path::Path) {
     );
 }
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "publication_guards.rs"]
+mod publication_guards;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
