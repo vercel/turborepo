@@ -15,6 +15,7 @@ import {
   FACTORY_IMAGE_REBUILD_ACTION
 } from "../agent/lib/factory-image-types";
 import { Button } from "../components/ui/button";
+import { FactorySandboxCommand } from "./factory-sandbox-command";
 
 const POLL_INTERVAL_MS = 15_000;
 
@@ -259,6 +260,10 @@ export function FactoryImage({
           </dd>
         </div>
       </dl>
+
+      <div className="col-start-2 mb-6">
+        <FactorySandboxCommand snapshotId={pointer?.snapshotId ?? null} />
+      </div>
 
       {pointer?.warnings && pointer.warnings.length > 0 ? (
         <div

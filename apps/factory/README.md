@@ -65,6 +65,13 @@ pnpm --filter examples-agent factory ssh ws_...
 The same workspace remains available from the web while the local terminal is
 attached.
 
+The homepage and **Factory image** page show a **Copy command** button for
+`sandbox create --snapshot <published-snapshot-id> --vcpus 8 --timeout 45m --connect`.
+The command uses the same published pointer as the agents and updates when the
+pages poll for a newer image. A copied command pins that snapshot. Authenticate
+the Sandbox CLI and select the Factory's Vercel project before running the
+command. Once connected, run `cd turborepo`.
+
 ## Factory image
 
 Every agent in this app runs against the same sandbox base layer, the
