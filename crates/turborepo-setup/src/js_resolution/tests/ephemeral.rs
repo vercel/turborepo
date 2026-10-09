@@ -52,8 +52,6 @@ fn populate(tool: &InstalledTool, tree: &Path) -> Result<(), turborepo_tool_inst
         fs::write(package.join("package.json"), json!({"name":"npm","version":"11.6.1","bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}).to_string())?;
     } else if tool.id == "pnpm" {
         fs::write(tree.join("package.json"), json!({"name":"pnpm","version":tool.version,"bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}).to_string())?;
-        executable(&tree.join("bin/pnpm.cjs"));
-        executable(&tree.join("bin/pnpx.cjs"));
     }
     fs::write(tree.join("resource"), b"adjacent resource")?;
     Ok(())
@@ -97,8 +95,8 @@ fn seed_ephemeral(root: &Path, store: &mut Store) -> Lock {
     lock
 }
 
-fn installed(node: &str) -> (tempfile::TempDir, Store, Lock) {
-    let repo = root(Some(node), json!({"packageManager":"pnpm@10.0.0"}));
+fn installed(node: &str, manifest: Value) -> (tempfile::TempDir, Store, Lock) {
+    let repo = root(Some(node), manifest);
     let mut store = Store::open(repo.path()).unwrap();
     let lock = seed_ephemeral(repo.path(), &mut store);
     (repo, store, lock)
@@ -107,7 +105,7 @@ fn installed(node: &str) -> (tempfile::TempDir, Store, Lock) {
 #[test]
 fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_after_advance() {
     for legacy in [false, true] {
-        let (repo, mut store, lock) = installed("24.x");
+        let (repo, mut store, lock) = installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
         let p = repo.path();
         if legacy {
             fs::remove_file(recovery(p, &lock)).unwrap();
@@ -123,17 +121,12 @@ fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_aft
             assert_eq!(selection.selection(), &lock);
             assert!(world.paths().is_empty());
             let mut calls = Vec::new();
+            let stage_tool = |tool: &InstalledTool, tree: &Path| {
+                calls.push(tool.id.clone());
+                populate(tool, tree)
+            };
             let result = selection
-                .publish(
-                    &snapshot,
-                    &mut store,
-                    force,
-                    |tool, tree| {
-                        calls.push(tool.id.clone());
-                        populate(tool, tree)
-                    },
-                    || Ok(()),
-                )
+                .publish(&snapshot, &mut store, force, stage_tool, || Ok(()))
                 .unwrap();
             assert_eq!(result, expected);
             assert_eq!(calls, expected_calls);
@@ -149,7 +142,7 @@ fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_aft
 
 #[test]
 fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes() {
-    let (repo, mut store, old) = installed("24.x");
+    let (repo, mut store, old) = installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
     let p = repo.path();
     write_manifest(
         p,
@@ -199,7 +192,7 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
 #[test]
 fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requests() {
     for damage in 0..6 {
-        let (repo, mut store, lock) = installed("lts/*");
+        let (repo, mut store, lock) = installed("lts/*", json!({"packageManager":"pnpm@10.0.0"}));
         let p = repo.path();
         let current = store.current().unwrap().unwrap();
         let tree = current.tool_tree(&current.tools[0]).unwrap();
@@ -243,7 +236,8 @@ fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requ
 fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root() {
     for (changed, force) in [(false, false), (true, false), (false, true)] {
         for race in 0..if changed { 6 } else { 7 } {
-            let (repo, mut store, lock) = installed("24.x");
+            let (repo, mut store, lock) =
+                installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
             let p = repo.path();
             if changed {
                 write_manifest(p, json!({}));
@@ -295,21 +289,16 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
 
 #[test]
 fn foreign_live_store_and_real_lock_and_unsupported_integrity_fail_closed() {
-    let repo = root(Some("24.x"), json!({}));
+    let (repo, store, lock) = installed("24.x", json!({}));
     let other = root(Some("24.x"), json!({}));
-    let mut store = Store::open(repo.path()).unwrap();
-    let lock = seed_ephemeral(repo.path(), &mut store);
     let snapshot = Snapshot::capture(repo.path()).unwrap();
     let selection = staged(&snapshot, &store, &World::new(vec![], |_| {})).unwrap();
     let foreign = Store::open(other.path()).unwrap();
     assert!(selection.check(&snapshot, &foreign).is_err());
     drop(store);
     let mut reopened = Store::open(repo.path()).unwrap();
-    assert!(
-        selection
-            .publish(&snapshot, &mut reopened, false, |_, _| panic!(), || Ok(()))
-            .is_err()
-    );
+    let result = selection.publish(&snapshot, &mut reopened, false, |_, _| panic!(), || Ok(()));
+    assert!(result.is_err());
     save(repo.path(), &lock);
     let actual = Snapshot::capture(repo.path()).unwrap();
     assert!(staged(&actual, &reopened, &World::new(vec![], |_| {})).is_err());

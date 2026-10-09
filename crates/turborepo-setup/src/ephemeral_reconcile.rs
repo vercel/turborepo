@@ -85,7 +85,8 @@ pub fn stage(
         Some(baseline) => Generation::Baseline(Box::new(baseline)),
         None => {
             let expected = store.generation()?;
-            if expected.current().is_some_and(|c| c.record.is_some()) {
+            // A present generation requires sealed native provenance, even when healthy.
+            if expected.current().is_some() {
                 return Err(Error::Unsupported);
             }
             Generation::Empty(expected)
