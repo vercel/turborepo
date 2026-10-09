@@ -1,11 +1,13 @@
-//! Internal locked registry adapter shared by npm and pnpm. No resolution,
-//! hooks, probes, dependency installation or activation.
+//! Shared exact registry verification and locked preparation for npm/pnpm.
+//! No hooks, probes, dependency installation or activation.
 
-use std::{fs, io, path::Path, time::Duration};
+use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
 use sha2::{Digest, Sha256};
 use turborepo_archive::{ExtractedArtifact, Layout};
-use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits};
+use turborepo_download::{
+    ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
+};
 use turborepo_tool_install::{Store, Tool};
 
 use crate::{
@@ -54,6 +56,86 @@ impl RegistryTransport {
         })
     }
 
+    /// Resolve only a canonical exact npm/pnpm release, verifying registry
+    /// SHA-512 and optional authored integrity against bytes before
+    /// deriving lock SHA-256. Private bounded scratch is dropped before
+    /// return; no repository path or I/O.
+    pub async fn resolve_exact(
+        &self,
+        manager: Manager,
+        exact_version: &str,
+        authored: Option<&CorepackIntegrity>,
+    ) -> Result<crate::registry_resolution::ResolvedRegistry, Error> {
+        // A selected version must also fit the portable lock's identity bound.
+        if exact_version.len() > 128 {
+            return Err(registry_metadata::RegistryMetadataError::InvalidVersion.into());
+        }
+        let (release, bytes) = self
+            .verified_release(manager, exact_version, authored, None)
+            .await?;
+        let (_, mappings) = standard_mappings(manager)?;
+        let executables = mappings
+            .iter()
+            .map(|(name, path)| (name.to_string(), path.to_string()))
+            .collect();
+        let tree = extract_package(&bytes, manager, exact_version, &executables, true)?;
+        drop(tree);
+        let artifact = lock::Artifact {
+            url: release.tarball.clone(),
+            sha256: bytes.sha256_hex(),
+            format: Format::TarGz,
+            root_prefix: Some("package".into()),
+            destination: None,
+            executables,
+        };
+        Ok(crate::registry_resolution::ResolvedRegistry::new(
+            release, artifact,
+        ))
+    }
+
+    async fn verified_release(
+        &self,
+        manager: Manager,
+        version: &str,
+        authored: Option<&CorepackIntegrity>,
+        locked_sha256: Option<&str>,
+    ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
+        // Validate before interpolating any request path or making traffic.
+        let (name, _) = registry_metadata::validate_selection(manager, version)?;
+        let metadata = self
+            .client
+            .read_metadata(
+                &format!("{}/{name}/{version}", self.origin),
+                Limits::new(MAX_METADATA_BYTES, Duration::from_secs(30))?,
+            )
+            .await?;
+        let release = registry_metadata::parse_release(&metadata, manager, version, authored)?;
+        let additional = release
+            .additional_sha256
+            .as_ref()
+            .map(|pin| pin.digest.as_str());
+        if locked_sha256
+            .zip(additional)
+            .is_some_and(|(locked, pin)| locked != pin)
+        {
+            return Err(Error::InvalidLock);
+        }
+        let sha256 = locked_sha256
+            .or(additional)
+            .map(ExpectedSha256::from_hex)
+            .transpose()?;
+        let bytes = self
+            .client
+            .download_verified_sha512(
+                &format!("{}/{name}/-/{name}-{version}.tgz", self.origin),
+                ExpectedSha512::from_hex(&release.integrity.digest)?,
+                sha256,
+                Limits::new(64 * 1024 * 1024, Duration::from_secs(120))?,
+            )
+            .await?;
+        Ok((release, bytes))
+    }
+
     /// Loopback fixtures only; canonical provenance, no env override.
     #[cfg(any(all(test, unix), feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
@@ -62,6 +144,66 @@ impl RegistryTransport {
             origin: origin.trim_end_matches('/').into(),
         })
     }
+}
+
+type Mappings = &'static [(&'static str, &'static str)];
+fn standard_mappings(manager: Manager) -> Result<(&'static str, Mappings), Error> {
+    match manager {
+        Manager::Npm => Ok((
+            "npm",
+            &[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")],
+        )),
+        Manager::Pnpm => Ok((
+            "pnpm",
+            &[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")],
+        )),
+        _ => Err(Error::InvalidLock),
+    }
+}
+
+fn extract_package(
+    bytes: &VerifiedArtifact,
+    manager: Manager,
+    version: &str,
+    executables: &BTreeMap<String, String>,
+    exact_bins: bool,
+) -> Result<ExtractedArtifact, Error> {
+    let (name, _) = standard_mappings(manager)?;
+    let mut required = vec!["package.json"];
+    required.extend(executables.values().map(String::as_str));
+    let tree = turborepo_archive::extract(
+        bytes,
+        turborepo_archive::Format::TarGz,
+        turborepo_archive::Limits::new(256 * 1024 * 1024, 100_000, 4096, 64)?,
+        Layout {
+            root: "package",
+            required_files: &required,
+        },
+    )?;
+    let package_path = tree.root_path().join("package.json");
+    if fs::metadata(&package_path)?.len() > MAX_METADATA_BYTES as u64 {
+        return Err(Error::InvalidPackage);
+    }
+    let UniqueJson(package) =
+        serde_json::from_slice(&fs::read(package_path)?).map_err(|_| Error::InvalidPackage)?;
+    if package.get("name").and_then(|v| v.as_str()) != Some(name)
+        || package.get("version").and_then(|v| v.as_str()) != Some(version)
+        || (exact_bins
+            && package
+                .get("bin")
+                .and_then(|v| v.as_object())
+                .is_none_or(|bin| bin.len() != executables.len()))
+        || executables.iter().any(|(name, path)| {
+            package
+                .get("bin")
+                .and_then(|v| v.get(name))
+                .and_then(|v| v.as_str())
+                != Some(path)
+        })
+    {
+        return Err(Error::InvalidPackage);
+    }
+    Ok(tree)
 }
 
 pub(crate) struct RegistryPlan {
@@ -81,17 +223,7 @@ impl RegistryPlan {
         authored: Option<&CorepackIntegrity>,
         manager: Manager,
     ) -> Result<Self, Error> {
-        let (name, mappings): (_, &[(&str, &str)]) = match manager {
-            Manager::Npm => (
-                "npm",
-                &[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")],
-            ),
-            Manager::Pnpm => (
-                "pnpm",
-                &[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")],
-            ),
-            _ => return Err(Error::InvalidLock),
-        };
+        let (name, mappings) = standard_mappings(manager)?;
         if !cfg!(unix)
             || !matches!(
                 platform,
@@ -183,77 +315,22 @@ impl RegistryPlan {
         if store.can_reuse(&self.tool)? {
             return Ok(None);
         }
-        let metadata = transport
-            .client
-            .read_metadata(
-                &format!(
-                    "{}/{}/{}",
-                    transport.origin, self.tool.id, self.tool.version
-                ),
-                Limits::new(MAX_METADATA_BYTES, Duration::from_secs(30))?,
+        let (_, bytes) = transport
+            .verified_release(
+                self.manager,
+                &self.tool.version,
+                self.authored.as_ref(),
+                Some(&self.artifact.sha256),
             )
             .await?;
-        let release = registry_metadata::parse_release(
-            &metadata,
+        let tree = extract_package(
+            &bytes,
             self.manager,
             &self.tool.version,
-            self.authored.as_ref(),
+            &self.artifact.executables,
+            self.manager == Manager::Npm,
         )?;
-        if release.tarball != self.artifact.url
-            || release
-                .additional_sha256
-                .as_ref()
-                .is_some_and(|pin| pin.digest != self.artifact.sha256)
-        {
-            return Err(Error::InvalidLock);
-        }
-        let bytes = transport
-            .client
-            .download_verified_sha512(
-                &format!(
-                    "{}/{name}/-/{name}-{}.tgz",
-                    transport.origin,
-                    self.tool.version,
-                    name = self.tool.id
-                ),
-                ExpectedSha512::from_hex(&release.integrity.digest)?,
-                Some(ExpectedSha256::from_hex(&self.artifact.sha256)?),
-                Limits::new(64 * 1024 * 1024, Duration::from_secs(120))?,
-            )
-            .await?;
-        let mut required = vec!["package.json"];
-        required.extend(self.artifact.executables.values().map(String::as_str));
-        let tree = turborepo_archive::extract(
-            &bytes,
-            turborepo_archive::Format::TarGz,
-            turborepo_archive::Limits::new(256 * 1024 * 1024, 100_000, 4096, 64)?,
-            Layout {
-                root: "package",
-                required_files: &required,
-            },
-        )?;
-        let package_path = tree.root_path().join("package.json");
-        if fs::metadata(&package_path)?.len() > MAX_METADATA_BYTES as u64 {
-            return Err(Error::InvalidPackage);
-        }
-        let UniqueJson(package) =
-            serde_json::from_slice(&fs::read(package_path)?).map_err(|_| Error::InvalidPackage)?;
-        if package.get("name").and_then(|v| v.as_str()) != Some(self.tool.id.as_str())
-            || package.get("version").and_then(|v| v.as_str()) != Some(&self.tool.version)
-            || (self.manager == Manager::Npm
-                && package
-                    .get("bin")
-                    .and_then(|v| v.as_object())
-                    .is_none_or(|bin| bin.len() != self.artifact.executables.len()))
-            || self.artifact.executables.iter().any(|(name, path)| {
-                package
-                    .get("bin")
-                    .and_then(|v| v.get(name))
-                    .and_then(|v| v.as_str())
-                    != Some(path)
-            })
-            || tree.root_path().join(&self.launch_directory).try_exists()?
-        {
+        if tree.root_path().join(&self.launch_directory).try_exists()? {
             return Err(Error::InvalidPackage);
         }
         Ok(Some(PreparedRegistry {
