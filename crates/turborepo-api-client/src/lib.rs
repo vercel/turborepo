@@ -40,12 +40,11 @@ mod error;
 mod retry;
 mod shared_http_client;
 pub mod telemetry;
-#[cfg(feature = "rustls-tls")]
-mod tls;
-
 pub use bytes::Bytes;
 pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
+#[cfg(feature = "rustls-tls")]
+use turborepo_tls as tls;
 
 fn allows_authorization_header(allowed_headers: &str) -> bool {
     allowed_headers == "*"
@@ -752,7 +751,7 @@ impl APIClient {
     ) -> Result<reqwest::Client> {
         // Make sure rustls can verify P-521 certificate chains before we build
         // any client. ring (rustls' default provider) cannot, which breaks
-        // remote caches sitting behind P-521 issuers. See `tls.rs`.
+        // remote caches sitting behind P-521 issuers. See `turborepo-tls`.
         #[cfg(feature = "rustls-tls")]
         tls::ensure_crypto_provider();
 

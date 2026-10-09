@@ -14,6 +14,11 @@ use super::*;
 
 const CA: &[u8] = include_bytes!("fixtures/ca.pem");
 const SERVER: &[u8] = include_bytes!("fixtures/server.pem");
+const P521_SERVER: &[u8] = include_bytes!("fixtures/p521-server.pem");
+const P521_CA_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/src/tests/fixtures/p521-ca.pem"
+);
 const EXPIRED: &[u8] = include_bytes!("fixtures/expired.pem");
 const KEY: &[u8] = include_bytes!("fixtures/server-key.pem");
 const PROXY_AUTH: &str = "HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: \
@@ -197,7 +202,17 @@ async fn environment_child() -> TestResult {
             Err(Error::UnapprovedOrigin)
         );
     }
-    let result = DownloadClient::new([approved])?
+    // This fresh subprocess has not constructed an API client or any rustls
+    // client. The default download bootstrap must install P-521 itself.
+    if std::env::var_os("TURBO_DOWNLOAD_TEST_P521").is_some() {
+        assert!(rustls::crypto::CryptoProvider::get_default().is_none());
+    }
+    let client = if std::env::var_os("TURBO_DOWNLOAD_TEST_LOOPBACK_CLIENT").is_some() {
+        DownloadClient::loopback_http_for_tests(&origin)?
+    } else {
+        DownloadClient::new([approved])?
+    };
+    let result = client
         .download_verified(&url, ExpectedSha256::from_hex(ABC_SHA256)?, limits(3)?)
         .await;
     let expected = std::env::var("TURBO_DOWNLOAD_TEST_EXPECTED")?;
@@ -237,6 +252,8 @@ async fn environment(url: &str, vars: &[(&str, &str)], expected: &str) -> TestRe
         command.env_remove(name);
     }
     command.env_remove("TURBO_DOWNLOAD_TEST_BAD_NATIVE_ROOTS");
+    command.env_remove("TURBO_DOWNLOAD_TEST_P521");
+    command.env_remove("TURBO_DOWNLOAD_TEST_LOOPBACK_CLIENT");
     command.env("TURBO_DOWNLOAD_TEST_URL", url);
     command.env("TURBO_DOWNLOAD_TEST_EXPECTED", expected);
     command.envs(vars.iter().copied());
@@ -247,6 +264,32 @@ async fn environment(url: &str, vars: &[(&str, &str)], expected: &str) -> TestRe
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn loopback_fixture_ignores_proxy_and_native_root_environment() -> TestResult {
+    let http = Fixture::new(OK, "", Duration::ZERO).await?;
+    let proxy = Local::listen(None, None, PROXY_AUTH).await?;
+    let proxy_url = proxy.http_origin();
+    environment(
+        &http.url(),
+        &[
+            ("HTTP_PROXY", &proxy_url),
+            ("http_proxy", &proxy_url),
+            ("HTTPS_PROXY", &proxy_url),
+            ("ALL_PROXY", &proxy_url),
+            ("all_proxy", &proxy_url),
+            ("NO_PROXY", ""),
+            ("SSL_CERT_FILE", INVALID_DER_PATH),
+            ("SSL_CERT_DIR", "/not-read/private-ca-path"),
+            ("TURBO_DOWNLOAD_TEST_LOOPBACK_CLIENT", "1"),
+        ],
+        "success",
+    )
+    .await?;
+    assert_eq!(http.hits(), 1);
+    assert!(proxy.requests()?.is_empty());
     Ok(())
 }
 
@@ -283,6 +326,52 @@ async fn pem_valid_der_invalid_default_fallback_keeps_verification() -> TestResu
     assert!(http.requests()?.is_empty());
     assert_eq!(proxy.requests()?.len(), 1);
     assert!(https.requests()?.is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn p521_issuer_default_bootstrap_trust_and_proxy() -> TestResult {
+    let origin = Local::listen(Some(P521_SERVER), None, OK).await?;
+    let proxy = Local::listen(None, Some(origin.addr), "").await?;
+    let url = format!("{}/artifact", origin.https_origin());
+    // Negative control: trusting this CA with unaugmented ring is insufficient.
+    let mut roots = rustls::RootCertStore::empty();
+    roots.add(CertificateDer::from_pem_slice(include_bytes!(
+        "fixtures/p521-ca.pem"
+    ))?)?;
+    let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()?
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    let client = DownloadClient::with_http_builder(
+        Client::builder().no_proxy().use_preconfigured_tls(tls),
+        [ApprovedOrigin::https(&origin.https_origin())?],
+    )?;
+    assert_eq!(
+        client.read_metadata(&url, limits(3)?).await,
+        Err(Error::CertificateFailed)
+    );
+    environment(
+        &url,
+        &[("TURBO_DOWNLOAD_TEST_P521", "1")],
+        "CertificateFailed",
+    )
+    .await?;
+    environment(
+        &url,
+        &[
+            ("TURBO_DOWNLOAD_TEST_P521", "1"),
+            ("SSL_CERT_FILE", P521_CA_PATH),
+            ("HTTPS_PROXY", &proxy.http_origin()),
+            ("NO_PROXY", ""),
+        ],
+        "success",
+    )
+    .await?;
+    assert_eq!(proxy.requests()?.len(), 1);
+    assert_eq!(origin.requests()?.len(), 1);
     Ok(())
 }
 
