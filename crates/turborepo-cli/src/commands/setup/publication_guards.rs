@@ -234,7 +234,7 @@ fn workspace_symlinks_reject_before_writers_and_new_links_abort_after_staging() 
 }
 #[test]
 fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging() {
-    for case in 0..5 {
+    for case in 0..6 {
         let f = Fixture::new();
         let root = f.owned.root();
         fs::rename(root.join(".git"), root.join("common")).unwrap();
@@ -258,6 +258,18 @@ fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging(
                 .success()
         );
         fs::rename(other.join(".git"), root.join("other-common")).unwrap();
+        let worktree = root.parent().unwrap().join("worktree-link");
+        if case == 5 {
+            std::os::unix::fs::symlink(root, &worktree).unwrap();
+            fs::write(root.join(".git"), "gitdir: common\n").unwrap();
+            let config = fs::read_to_string(root.join("common/config")).unwrap();
+            fs::write(
+                root.join("common/config"),
+                format!("{config}\n[core]\nworktree = {}\n", worktree.display()),
+            )
+            .unwrap();
+        }
+        let config_before = fs::read(root.join("common/config")).unwrap();
         let desired = Lock::parse(f.lock.to_string().as_bytes()).unwrap();
         fs::remove_file(root.join("turbo.lock")).unwrap();
         let original_gitfile = fs::read(root.join(".git")).unwrap();
@@ -288,6 +300,12 @@ fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging(
                     format!("{}\n", root.join("replacement/.git").display()),
                 )
                 .unwrap(),
+                5 => {
+                    fs::remove_file(&worktree).unwrap();
+                    std::os::unix::fs::symlink(root.parent().unwrap(), &worktree).unwrap();
+                    assert_eq!(fs::read(root.join("common/config")).unwrap(), config_before);
+                    assert!(provision::storage(root).is_ok());
+                }
                 _ => {
                     fs::rename(root.join("common/config"), root.join("common/old-config")).unwrap();
                     fs::copy(root.join("common/old-config"), root.join("common/config")).unwrap();

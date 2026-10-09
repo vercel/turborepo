@@ -136,8 +136,8 @@ fn run_with_policy(
     transports: Option<provision::Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
-    // Discovery reads files only: no environment config pipeline, graph, tool
-    // probes, package manager detection, or local CLI handoff.
+    // Discovery reads files/Git metadata: no language-tool probes, environment
+    // config pipeline, graph, package manager detection, or local CLI handoff.
     let discovery = root::Discovery::capture(args)?;
     tracing::debug!("setup root: {}", discovery.root_path());
     if !discovery.flags().experimental_setup {

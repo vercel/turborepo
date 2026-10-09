@@ -22,7 +22,7 @@ enum Entry {
     Link(PathBuf),
 }
 #[derive(Default, PartialEq, Eq)]
-pub(super) struct Inputs(BTreeMap<PathBuf, Entry>);
+pub(super) struct Inputs(BTreeMap<PathBuf, Entry>, BTreeMap<PathBuf, PathBuf>);
 impl Inputs {
     fn record(&mut self, path: &Path, directory: bool, links: bool) -> io::Result<Option<Vec<u8>>> {
         if self.0.len() >= 256 && !self.0.contains_key(path) {
@@ -136,6 +136,27 @@ impl Inputs {
             None => dir.clone(),
         };
         self.directory(&common)?;
+        // Git resolves core.worktree, includes and worktree config; do not parse
+        // its grammar here. Empty read-only fixture boundaries have no HEAD.
+        if self.record(&dir.join("HEAD"), false, true)?.is_some() {
+            let output = std::process::Command::new("git")
+                .current_dir(
+                    marker
+                        .parent()
+                        .ok_or_else(|| io::Error::other("invalid Git boundary"))?,
+                )
+                .env_remove("GIT_DIR")
+                .env_remove("GIT_WORK_TREE")
+                .env_remove("GIT_INDEX_FILE")
+                .args(["rev-parse", "--show-toplevel"])
+                .output()?;
+            if !output.status.success() {
+                return Err(io::Error::other("cannot guard effective Git worktree"));
+            }
+            let worktree = pointer(marker, &output.stdout, "")?.canonicalize()?;
+            self.directory(&worktree)?;
+            self.1.insert(marker.to_owned(), worktree);
+        }
         // config/core.worktree and config.worktree can redirect Git's effective
         // worktree. Pin their bytes as well as common/worktree pointer targets.
         for base in [&dir, &common] {
