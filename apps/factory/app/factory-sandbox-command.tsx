@@ -44,7 +44,8 @@ export function FactorySandboxCommand({
       </div>
       <p className="mt-2 text-sm text-muted-foreground">
         Start a fresh sandbox from the same published snapshot Factory uses. Run
-        with an authenticated Vercel Sandbox CLI in the Factory project.
+        with an authenticated Vercel Sandbox CLI in the Factory project, a local
+        GitHub CLI login, and <code>AI_GATEWAY_API_KEY</code> set locally.
       </p>
       {command ? (
         <pre className="mt-3 overflow-x-auto rounded-md bg-secondary p-3 font-mono text-xs">
@@ -58,6 +59,11 @@ export function FactorySandboxCommand({
       <p className="mt-3 text-xs text-muted-foreground">
         Once connected, run <code>cd turborepo</code>. The sandbox stops after
         45 minutes.
+      </p>
+      <p className="mt-2 text-xs text-muted-foreground">
+        Credentials resolve locally when you run the command, not on this page
+        or in the snapshot. Expanded values may be visible to local process
+        inspection.
       </p>
       <p className="mt-2 text-xs text-muted-foreground" role="status">
         {error ??

@@ -16,11 +16,19 @@ export function factorySandboxArgs(snapshotId: string): string[] {
 }
 
 export function factorySandboxCommand(snapshotId: string): string {
-  return ["sandbox", ...factorySandboxArgs(snapshotId)]
+  const command = ["sandbox", ...factorySandboxArgs(snapshotId)]
     .map((argument) =>
       /^[a-zA-Z0-9_./-]+$/.test(argument)
         ? argument
         : `'${argument.replaceAll("'", "'\\''")}'`
     )
     .join(" ");
+
+  // These are shell expressions, not credentials. Resolve them only on the
+  // operator's machine, never while rendering the page or building the image.
+  return [
+    command,
+    '--env "GH_TOKEN=$(gh auth token)"',
+    '--env "AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY:?Set AI_GATEWAY_API_KEY locally first}"'
+  ].join(" ");
 }

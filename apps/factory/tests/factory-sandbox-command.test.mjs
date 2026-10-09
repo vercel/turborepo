@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -8,6 +9,27 @@ import {
 } from "../lib/factory-sandbox-command.ts";
 
 const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+const credentialExpressions =
+  ' --env "GH_TOKEN=$(gh auth token)"' +
+  ' --env "AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY:?Set AI_GATEWAY_API_KEY locally first}"';
+
+function runCommand(apiKey) {
+  return spawnSync(
+    "bash",
+    [
+      "--noprofile",
+      "--norc",
+      "-c",
+      `gh() { printf '%s' 'test-github-token'; }
+       sandbox() { printf '%s\\n' "$@"; }
+       ${factorySandboxCommand("snap_published")}`
+    ],
+    {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH, AI_GATEWAY_API_KEY: apiKey }
+    }
+  );
+}
 
 test("opens the published snapshot with an interactive shell and factory resources", () => {
   assert.deepEqual(factorySandboxArgs("snap_published"), [
@@ -22,7 +44,8 @@ test("opens the published snapshot with an interactive shell and factory resourc
   ]);
   assert.equal(
     factorySandboxCommand("snap_published"),
-    "sandbox create --snapshot snap_published --vcpus 8 --timeout 45m --connect"
+    "sandbox create --snapshot snap_published --vcpus 8 --timeout 45m --connect" +
+      credentialExpressions
   );
 });
 
@@ -34,9 +57,32 @@ test("does not create a sandbox from scratch when no image is published", () => 
 test("quotes snapshot IDs in the copyable shell command", () => {
   assert.equal(
     factorySandboxCommand("snap_'$(echo unexpected)"),
-    "sandbox create --snapshot 'snap_'\\''$(echo unexpected)' --vcpus 8 --timeout 45m --connect"
+    "sandbox create --snapshot 'snap_'\\''$(echo unexpected)' --vcpus 8 --timeout 45m --connect" +
+      credentialExpressions
   );
   assert.equal(factorySandboxArgs("snap_$value")[2], "snap_$value");
+});
+
+test("credentials expand locally and remain single arguments", () => {
+  const apiKey = 'test-key with spaces; $(echo unexpected) "quoted"';
+  const result = runCommand(apiKey);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.trimEnd().split("\n"), [
+    ...factorySandboxArgs("snap_published"),
+    "--env",
+    "GH_TOKEN=test-github-token",
+    "--env",
+    `AI_GATEWAY_API_KEY=${apiKey}`
+  ]);
+});
+
+test("missing or empty AI Gateway key prevents sandbox creation", () => {
+  for (const apiKey of [undefined, ""]) {
+    const result = runCommand(apiKey);
+    assert.notEqual(result.status, 0);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /Set AI_GATEWAY_API_KEY locally first/);
+  }
 });
 
 test("the command is exposed without a factory CLI shortcut", () => {
