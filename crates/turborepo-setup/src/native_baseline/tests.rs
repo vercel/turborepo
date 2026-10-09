@@ -401,6 +401,12 @@ fn selected_payload_inventory_and_corruption_cannot_be_replaced_by_caller_data()
             }
             assert!(baseline.check(&snapshot, &store).is_err());
         }
-        assert!(Baseline::capture(&snapshot, &store).is_err(), "case {case}");
+        if case >= 6 {
+            let repair = Baseline::capture(&snapshot, &store).unwrap().unwrap();
+            assert!(!repair.generation().healthy());
+            assert_eq!(repair.native(&snapshot, &store).unwrap().selection(), &lock);
+        } else {
+            assert!(Baseline::capture(&snapshot, &store).is_err(), "case {case}");
+        }
     }
 }

@@ -121,16 +121,16 @@ pub async fn resolve(
         ));
     }
     let requirements = snapshot.node_requirements()?;
-    let mut tools: BTreeMap<_, _> = snapshot
-        .previous_lock()
+    let mut tools: BTreeMap<_, _> = request
+        .previous_selection()
         .into_iter()
         .flat_map(Lock::tools)
         .filter(|(id, _)| snapshot.declarations().contains_key(*id))
         .map(|(id, tool)| (id.clone(), tool.clone()))
         .collect();
     if !request.version_ids().contains("node") {
-        let previous = snapshot
-            .previous_lock()
+        let previous = request
+            .previous_selection()
             .ok_or(Error::Unsupported("missing locked Node"))?;
         let Installation::Managed { artifacts } = &previous.tools()["node"].installation else {
             return Err(Error::Unsupported(

@@ -46,6 +46,7 @@ pub enum Error {
 /// Offline resolvers must use approved cached metadata or return an error.
 pub struct Resolution<'a> {
     snapshot: &'a Snapshot,
+    previous: Option<&'a Lock>,
     version_ids: BTreeSet<String>,
     ownership_ids: BTreeSet<String>,
     offline: bool,
@@ -53,6 +54,10 @@ pub struct Resolution<'a> {
 impl Resolution<'_> {
     pub fn snapshot(&self) -> &Snapshot {
         self.snapshot
+    }
+    /// Semantic previous selection; never changes Snapshot's real disk CAS.
+    pub fn previous_selection(&self) -> Option<&Lock> {
+        self.previous
     }
     pub fn version_ids(&self) -> &BTreeSet<String> {
         &self.version_ids
@@ -114,12 +119,33 @@ pub fn reconcile_checked(
     offline: bool,
     resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
     validate: impl FnOnce(&Lock) -> std::io::Result<()>,
+    check: impl FnMut() -> std::io::Result<()>,
+) -> Result<Outcome, Error> {
+    reconcile_previous(
+        snapshot,
+        snapshot.previous_lock(),
+        mode,
+        offline,
+        resolve,
+        validate,
+        check,
+    )
+}
+
+// Only the sealed baseline consumer can supply a nondisk previous selection.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn reconcile_previous(
+    snapshot: &Snapshot,
+    previous: Option<&Lock>,
+    mode: Mode,
+    offline: bool,
+    resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
+    validate: impl FnOnce(&Lock) -> std::io::Result<()>,
     mut check: impl FnMut() -> std::io::Result<()>,
 ) -> Result<Outcome, Error> {
     check().map_err(StorageError::from)?;
     snapshot.check_native_coverage(None)?;
     snapshot.ensure_current()?;
-    let previous = snapshot.previous_lock();
     let current = snapshot.declarations();
     let mut changed = BTreeSet::new();
     for id in current
@@ -143,7 +169,8 @@ pub fn reconcile_checked(
     if mode == Mode::Frozen && previous.is_none() {
         return Err(Error::Missing);
     }
-    if !changed.is_empty() && (mode == Mode::Frozen || (mode == Mode::NoLock && previous.is_some()))
+    if !changed.is_empty()
+        && (mode == Mode::Frozen || (mode == Mode::NoLock && snapshot.previous_lock().is_some()))
     {
         return Err(Error::Drift(changed));
     }
@@ -176,6 +203,7 @@ pub fn reconcile_checked(
     } else {
         resolve(Resolution {
             snapshot,
+            previous,
             version_ids: version_ids.clone(),
             ownership_ids: ownership_ids.clone(),
             offline,
