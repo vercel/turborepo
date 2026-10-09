@@ -18,6 +18,11 @@ use crate::{
 pub enum Error {
     #[error("invalid or unsupported native resolution record")]
     Invalid,
+    #[error(
+        "unsupported native baseline gap at package.json#devEngines.runtime[{0}]; this record \
+         format does not retain ignored non-Node runtime entries"
+    )]
+    RuntimeArrayGap(usize),
     #[error(transparent)]
     Storage(#[from] crate::lock::StorageError),
     #[error(transparent)]
@@ -36,13 +41,10 @@ pub struct NativeRecord {
 impl NativeRecord {
     pub fn from_snapshot(snapshot: &Snapshot, selection: &Lock) -> Result<Self, Error> {
         snapshot.ensure_current()?;
-        if !selection
-            .matches_native(snapshot.declarations())
-            .map_err(|_| Error::Invalid)?
-        {
+        if !validated(selection.matches_native(snapshot.declarations()))? {
             return Err(Error::Invalid);
         }
-        let native = Self::decode(&selection.canonical_bytes().map_err(|_| Error::Invalid)?)?;
+        let native = Self::decode(&validated(selection.canonical_bytes())?)?;
         snapshot.ensure_current()?;
         Ok(native)
     }
@@ -61,8 +63,8 @@ impl NativeRecord {
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, Error> {
-        let selection = Lock::parse(bytes).map_err(|_| Error::Invalid)?;
-        if selection.canonical_bytes().map_err(|_| Error::Invalid)? != bytes
+        let selection = validated(Lock::parse(bytes))?;
+        if validated(selection.canonical_bytes())? != bytes
             || !selection.tools().contains_key("node")
             || selection
                 .tools()
@@ -73,7 +75,7 @@ impl NativeRecord {
         }
         let (node, manager) = provenance(&selection)?;
         let tool = &selection.tools()["node"];
-        let version = semver::Version::parse(&tool.version).map_err(|_| Error::Invalid)?;
+        let version = validated(semver::Version::parse(&tool.version))?;
         if !node.matches_locked_version(&version) {
             return Err(Error::Invalid);
         }
@@ -81,17 +83,16 @@ impl NativeRecord {
             return Err(Error::Invalid);
         };
         for platform in artifacts.keys() {
-            NodePlan::from_lock(&selection, *platform).map_err(|_| Error::Invalid)?;
+            validated(NodePlan::from_lock(&selection, *platform))?;
         }
         if let Some(manager) = &manager {
             let pnpm = &selection.tools()["pnpm"];
             if manager.manager != Manager::Pnpm
-                || crate::js_resolution::exact_pnpm(manager).map_err(|_| Error::Invalid)?
-                    != pnpm.version
+                || validated(crate::js_resolution::exact_pnpm(manager))? != pnpm.version
             {
                 return Err(Error::Invalid);
             }
-            crate::js_resolution::validate_pnpm(pnpm, manager).map_err(|_| Error::Invalid)?;
+            validated(crate::js_resolution::validate_pnpm(pnpm, manager))?;
             // SHA-512 cannot be proven from archive SHA-256 bookkeeping. Never
             // invent byte-verification evidence for an unsupported record.
             if manager
@@ -155,16 +156,19 @@ impl Baseline {
             .keys()
             .filter(|p| !matches!(p, Platform::WindowsX64 | Platform::WindowsArm64))
         {
-            let node =
-                NodePlan::from_lock(&native.selection, *platform).map_err(|_| Error::Invalid)?;
+            let node = validated(NodePlan::from_lock(&native.selection, *platform))?;
+            if !current.tools.contains(node.inventory_tool()) {
+                continue;
+            }
             let mut tools = vec![node.inventory_tool().clone()];
             if let Some(manager) = &native.manager {
-                tools.push(
-                    PnpmPlan::from_declaration(&native.selection, *platform, &node, manager)
-                        .map_err(|_| Error::Invalid)?
-                        .inventory_tool()
-                        .clone(),
-                );
+                let pnpm = validated(PnpmPlan::from_declaration(
+                    &native.selection,
+                    *platform,
+                    &node,
+                    manager,
+                ))?;
+                tools.push(pnpm.inventory_tool().clone());
             }
             tools.sort_by(|a, b| a.id.cmp(&b.id));
             if tools == current.tools {
@@ -173,12 +177,10 @@ impl Baseline {
             }
         }
         let node = desired.ok_or(Error::Invalid)?;
-        node.verify_bundled_npm(
-            &current
-                .tool_tree(node.inventory_tool())
-                .ok_or(Error::Invalid)?,
-        )
-        .map_err(|_| Error::Invalid)?;
+        let tree = current
+            .tool_tree(node.inventory_tool())
+            .ok_or(Error::Invalid)?;
+        validated(node.verify_bundled_npm(&tree))?;
         if let Some(tool) = current.tools.iter().find(|t| t.id == "pnpm") {
             let tree = current.tool_tree(tool).ok_or(Error::Invalid)?;
             use std::io::Read;
@@ -198,22 +200,15 @@ impl Baseline {
             }
             let crate::node_discovery::UniqueJson(package) =
                 serde_json::from_slice(&bytes).map_err(|_| Error::Invalid)?;
-            if package.get("name").and_then(Value::as_str) != Some("pnpm")
-                || package.get("version").and_then(Value::as_str) != Some(tool.version.as_str())
-                || package
-                    .get("bin")
-                    .and_then(Value::as_object)
-                    .is_none_or(|bin| {
-                        !matches!(
-                            bin.get("pnpm").and_then(Value::as_str),
-                            Some("bin/pnpm.cjs")
-                        ) || tool.executables.keys().any(|name| !bin.contains_key(name))
-                            || bin.iter().any(|(name, path)| match name.as_str() {
-                                "pnpm" => path.as_str() != Some("bin/pnpm.cjs"),
-                                "pnpx" => path.as_str() != Some("bin/pnpx.cjs"),
-                                _ => true,
-                            })
-                    })
+            let bin = package["bin"].as_object().ok_or(Error::Invalid)?;
+            if package["name"] != "pnpm"
+                || package["version"] != tool.version
+                || tool.executables.keys().any(|name| !bin.contains_key(name))
+                || bin.iter().any(|(name, path)| match name.as_str() {
+                    "pnpm" => path != "bin/pnpm.cjs",
+                    "pnpx" => path != "bin/pnpx.cjs",
+                    _ => true,
+                })
             {
                 return Err(Error::Invalid);
             }
@@ -279,11 +274,7 @@ fn provenance(selection: &Lock) -> Result<(NodeRequirements, Option<Declaration>
             let field = source.field.as_deref().ok_or(Error::Invalid)?;
             if id == "node" {
                 if field == "engines.node" {
-                    put(
-                        &mut manifest,
-                        &["engines", "node"],
-                        Value::String(source.request.clone().ok_or(Error::Invalid)?),
-                    )?;
+                    put(&mut manifest, &["engines", "node"], json!(source.request))?;
                 } else {
                     let rest = field
                         .strip_prefix("devEngines.runtime")
@@ -315,35 +306,38 @@ fn provenance(selection: &Lock) -> Result<(NodeRequirements, Option<Declaration>
                     .split('/')
                     .collect();
                 // Round-trip below also rejects unrelated/unknown pointers.
-                put(
-                    &mut manifest,
-                    &path,
-                    Value::String(source.request.clone().ok_or(Error::Invalid)?),
-                )?;
+                put(&mut manifest, &path, json!(source.request))?;
             }
         }
     }
-    let text = serde_json::to_string(&manifest).map_err(|_| Error::Invalid)?;
-    files.insert("package.json".into(), text.clone());
-    let actual = crate::lock::probe_native_with(|file, _| {
-        Ok(files.get(file).map(|s| s.as_bytes().to_vec()))
-    })
-    .map_err(|_| Error::Invalid)?;
-    if !selection
-        .matches_native(&actual)
-        .map_err(|_| Error::Invalid)?
+    if let Some(entries) = manifest
+        .pointer("/devEngines/runtime")
+        .and_then(Value::as_array)
+        && let Some(index) = entries.iter().position(Value::is_null)
     {
+        return Err(Error::RuntimeArrayGap(index));
+    }
+    let text = validated(serde_json::to_string(&manifest))?;
+    files.insert("package.json".into(), text.clone());
+    let actual = validated(crate::lock::probe_native_with(|file, _| {
+        Ok(files.get(file).map(|s| s.as_bytes().to_vec()))
+    }))?;
+    if !validated(selection.matches_native(&actual))? {
         return Err(Error::Invalid);
     }
-    let node = NodeRequirements::from_sources(
+    let node = validated(NodeRequirements::from_sources(
         Some(&text),
         files.get(".nvmrc").map(String::as_str),
         files.get(".node-version").map(String::as_str),
-    )
-    .map_err(|_| Error::Invalid)?;
-    let manager =
-        package_manager::discover_package_manager(&manifest).map_err(|_| Error::Invalid)?;
+    ))?;
+    let manager = validated(package_manager::discover_package_manager(&manifest))?;
     Ok((node, manager))
+}
+
+// Keep untrusted schema/adapter diagnostics opaque; retain CAS errors
+// separately.
+fn validated<T, E>(result: Result<T, E>) -> Result<T, Error> {
+    result.map_err(|_| Error::Invalid)
 }
 
 fn put(value: &mut Value, path: &[&str], leaf: Value) -> Result<(), Error> {
@@ -355,7 +349,7 @@ fn put(value: &mut Value, path: &[&str], leaf: Value) -> Result<(), Error> {
         return Ok(());
     };
     let child = if key.bytes().all(|b| b.is_ascii_digit()) {
-        let index: usize = key.parse().map_err(|_| Error::Invalid)?;
+        let index: usize = validated(key.parse())?;
         if index >= 64 || index.to_string() != *key {
             return Err(Error::Invalid);
         }
