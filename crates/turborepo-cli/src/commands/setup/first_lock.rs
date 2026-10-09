@@ -4,6 +4,8 @@ use sha2::Sha512;
 use super::*;
 
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
+#[path = "refresh.rs"]
+mod refresh;
 #[test]
 fn actual_local_missing_host_plan_leaves_zero_repository_state() {
     let f = fresh();

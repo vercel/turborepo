@@ -135,10 +135,44 @@ pub(super) fn plans(
     Ok(Plans { node, pnpm })
 }
 
+pub(super) fn lock_report(
+    previous: Option<&turborepo_setup::lock::Lock>,
+    current: &turborepo_setup::lock::Lock,
+) -> String {
+    let mut lines = vec![format!(
+        "turbo.lock {}. Commit turbo.lock to share the exact managed tool selections.",
+        if previous.is_some() {
+            "updated"
+        } else {
+            "created"
+        }
+    )];
+    for (id, tool) in current.tools() {
+        let old = previous.and_then(|lock| lock.tools().get(id));
+        if old == Some(tool) {
+            continue;
+        }
+        lines.push(match old {
+            Some(old) if old.version != tool.version => {
+                format!("{id}: {} -> {}", old.version, tool.version)
+            }
+            Some(_) => format!("{id}: {} (selection changed)", tool.version),
+            None => format!("{id}: locked {}", tool.version),
+        });
+    }
+    for (id, tool) in previous.into_iter().flat_map(|lock| lock.tools()) {
+        if !current.tools().contains_key(id) {
+            lines.push(format!("{id}: {} -> removed from lock", tool.version));
+        }
+    }
+    lines.join("\n")
+}
+
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
     lock_mode: super::LockMode,
+    resolution_mode: turborepo_setup::lock::reconcile::Mode,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
@@ -153,20 +187,29 @@ pub(super) fn run(
     if write && !snapshot.declarations().contains_key("node") {
         return Err(Error::Unsupported("a native Node declaration is required"));
     }
-    // Validate matching old selections before even entering the no-op writer
-    // path. The candidate callback below independently gates EVERY selection.
-    if write
-        && let Some(lock) = snapshot.previous_lock()
-        && lock.matches_native(snapshot.declarations())?
-    {
-        plans(&snapshot, lock)?;
+    // Ordinary setup validates matching pins before its no-op writer. Explicit
+    // refresh may repair invalid native selections within this supported cohort;
+    // the candidate callback still gates EVERY new selection before any writer.
+    if write && let Some(lock) = snapshot.previous_lock() {
+        if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
+            && lock
+                .tools()
+                .keys()
+                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+        {
+            return Err(Error::Unsupported(
+                "only managed Node and pnpm are supported",
+            ));
+        }
+        if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
+            && lock.matches_native(snapshot.declarations())?
+        {
+            plans(&snapshot, lock)?;
+        }
     }
     let mut transports = transports;
     let snapshot = if write {
-        use turborepo_setup::lock::{
-            WriteOutcome,
-            reconcile::{self, Mode},
-        };
+        use turborepo_setup::lock::{WriteOutcome, reconcile};
         let check = || {
             preflight()?;
             revalidate(discovery)?;
@@ -185,7 +228,7 @@ pub(super) fn run(
             .build()?;
         let outcome = reconcile::reconcile_checked(
             &snapshot,
-            Mode::Local,
+            resolution_mode,
             false,
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
@@ -209,28 +252,7 @@ pub(super) fn run(
         check()?;
         let published = snapshot.after_publication(&outcome.lock)?;
         if outcome.publication == Some(WriteOutcome::Written) {
-            println!(
-                "turbo.lock {}. Commit turbo.lock to share the exact managed tool selections.",
-                if snapshot.previous_lock().is_some() {
-                    "updated"
-                } else {
-                    "created"
-                }
-            );
-            for (id, tool) in outcome.lock.tools() {
-                if snapshot.previous_lock().and_then(|old| old.tools().get(id)) != Some(tool) {
-                    println!("{id}: locked {}", tool.version);
-                }
-            }
-            for id in snapshot
-                .previous_lock()
-                .into_iter()
-                .flat_map(|old| old.tools().keys())
-            {
-                if !outcome.lock.tools().contains_key(id) {
-                    println!("{id}: removed from lock");
-                }
-            }
+            println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
         }
         transports = Some(sources);
         published

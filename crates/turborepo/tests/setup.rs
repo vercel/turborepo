@@ -259,6 +259,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--no-frozen"],
         vec!["--offline"],
         vec!["--tools-only"],
+        vec!["--tools-only", "--update-lock", "--no-frozen"],
         vec!["--no-lock"],
         vec!["--update-lock"],
         vec!["--plan", "--force", "--update-lock"],
@@ -877,6 +878,45 @@ fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
         true,
         "frozen mode requires turbo.lock",
     );
+}
+
+#[test]
+fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_traffic() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(
+        root,
+        "turbo.lock",
+        "must not be parsed for a denied request",
+    );
+    for words in [
+        vec!["setup", "--update-lock", "--tools-only"],
+        vec!["setup", "--update-lock", "--tools-only", "--plan"],
+    ] {
+        failure(root, &words, true, "inferred in CI");
+    }
+    for ci in [false, true] {
+        for control in [Some("--force"), Some("--offline"), Some("--plan"), None] {
+            let mut words = vec!["setup", "--no-frozen", "--update-lock"];
+            if let Some(control) = control {
+                words.extend(["--tools-only", control]);
+            }
+            failure(root, &words, ci, PENDING);
+        }
+        for conflict in ["--frozen", "--no-lock", "--check"] {
+            let (code, text) = invoke(
+                root,
+                &["setup", "--update-lock", "--tools-only", conflict],
+                ci,
+            );
+            assert_eq!(code, 1, "{text}");
+            assert!(
+                !text.contains("prepared") && !text.contains("must not be parsed"),
+                "{text}"
+            );
+        }
+    }
 }
 
 #[test]
