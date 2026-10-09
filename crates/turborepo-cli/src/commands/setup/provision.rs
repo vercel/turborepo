@@ -41,7 +41,7 @@ pub(super) fn platform() -> Result<Platform, Error> {
     }
 }
 
-fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error> {
+pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error> {
     if !discovery.revalidate()? {
         return Err(Error::Unsupported(
             "setup discovery changed during provisioning",

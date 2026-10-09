@@ -324,6 +324,6 @@ fn foreign_live_store_and_real_lock_and_unsupported_integrity_fail_closed() {
     let before = manifest(repo.path());
     let world = fixture(&["24.0.0"]);
     assert!(staged(&snapshot, &reopened, &world).is_err());
-    assert_eq!(world.paths(), PNPM_PATHS);
+    assert!(world.paths().is_empty()); // Unsupported record constraints preflight before traffic.
     assert_eq!(manifest(repo.path()), before);
 }
