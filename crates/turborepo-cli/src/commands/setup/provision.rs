@@ -1,5 +1,5 @@
-//! Frozen tools-only executor. No resolution, probes, activation or lock
-//! writes.
+//! Local reconciliation followed by the frozen tools-only executor.
+//! No probes, dependency execution or activation.
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
@@ -16,12 +16,14 @@ use super::Error;
 pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
+    pub registry: turborepo_setup::registry_resolution::RegistryTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             node: NodeTransport::official(policy)?,
             pnpm: PnpmTransport::official(policy)?,
+            registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
         })
     }
 }
@@ -136,10 +138,111 @@ pub(super) fn plans(
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
+    lock_mode: super::LockMode,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
+    let write = lock_mode == super::LockMode::Write;
     let root = discovery.snapshot_root()?.as_std_path();
+    platform()?;
+    // Unsupported native requests must fail before ANY writer, even no-op locks.
+    let manager = snapshot.package_manager()?;
+    if manager.as_ref().is_some_and(|m| {
+        m.manager != Manager::Pnpm
+            || m.package_manager
+                .iter()
+                .chain(&m.dev_engines)
+                .any(|r| r.manager != Manager::Pnpm)
+    }) {
+        return Err(Error::Unsupported("npm override provisioning"));
+    }
+    if write && !snapshot.declarations().contains_key("node") {
+        return Err(Error::Unsupported("a native Node declaration is required"));
+    }
+    // Validate matching old selections before even entering the no-op writer
+    // path. The candidate callback below independently gates EVERY selection.
+    if write
+        && let Some(lock) = snapshot.previous_lock()
+        && lock.matches_native(snapshot.declarations())?
+    {
+        plans(&snapshot, lock)?;
+    }
+    let mut transports = transports;
+    let snapshot = if write {
+        use turborepo_setup::lock::{
+            WriteOutcome,
+            reconcile::{self, Mode},
+        };
+        let check = || {
+            preflight()?;
+            revalidate(discovery)?;
+            storage(root)?;
+            Ok::<_, Error>(())
+        };
+        check()?;
+        snapshot.ensure_current()?;
+        let policy = preflight()?;
+        let sources = transports
+            .take()
+            .map(Ok)
+            .unwrap_or_else(|| Transports::official(&policy))?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        let outcome = reconcile::reconcile_checked(
+            &snapshot,
+            Mode::Local,
+            false,
+            |request| {
+                check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
+                runtime
+                    .block_on(turborepo_setup::js_resolution::resolve(
+                        request,
+                        &sources.node,
+                        &sources.registry,
+                    ))
+                    .map_err(|e| reconcile::Error::Resolution(e.to_string()))
+            },
+            |candidate| {
+                plans(&snapshot, candidate)
+                    .map(drop)
+                    .map_err(io::Error::other)
+            },
+            || check().map_err(io::Error::other),
+        )?;
+        // Preserve the original root/sources; accepting a freshly captured lock
+        // here would hide a competing candidate or concurrent declaration edit.
+        check()?;
+        let published = snapshot.after_publication(&outcome.lock)?;
+        if outcome.publication == Some(WriteOutcome::Written) {
+            println!(
+                "turbo.lock {}. Commit turbo.lock to share the exact managed tool selections.",
+                if snapshot.previous_lock().is_some() {
+                    "updated"
+                } else {
+                    "created"
+                }
+            );
+            for (id, tool) in outcome.lock.tools() {
+                if snapshot.previous_lock().and_then(|old| old.tools().get(id)) != Some(tool) {
+                    println!("{id}: locked {}", tool.version);
+                }
+            }
+            for id in snapshot
+                .previous_lock()
+                .into_iter()
+                .flat_map(|old| old.tools().keys())
+            {
+                if !outcome.lock.tools().contains_key(id) {
+                    println!("{id}: removed from lock");
+                }
+            }
+        }
+        transports = Some(sources);
+        published
+    } else {
+        snapshot
+    };
     let lock = snapshot
         .previous_lock()
         .ok_or(Error::Unsupported("frozen mode requires turbo.lock"))?;

@@ -112,13 +112,14 @@ impl Fixture {
         words.extend(flags.iter().map(std::ffi::OsString::from));
         Args::parse_args(words).unwrap()
     }
-    fn run(&self, upstream: &Upstream, flags: &[&str]) -> Result<i32, Error> {
+    fn run(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
         let args = self.args(flags);
         crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(
                 args,
                 setup_args,
                 Some(provision::Transports {
+                    registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
                         upstream.origin(),
                     )
@@ -194,6 +195,8 @@ fn track(root: &std::path::Path) {
 mod checks;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "first_lock.rs"]
+mod first_lock;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[test]
@@ -268,9 +271,14 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
-        assert_eq!(u.hits(), 0);
-        assert!(!f.owned.root().join(".turbo").exists());
+        if flags == ["--no-frozen", "--tools-only"] {
+            assert_eq!(f.run(&u, &flags).unwrap(), 0);
+            assert_eq!(u.hits(), 3);
+        } else {
+            assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+            assert_eq!(u.hits(), 0);
+            assert!(!f.owned.root().join(".turbo").exists());
+        }
         f.no_execution();
     }
     for path in [".npmrc", "apps/web/.npmrc", "turbo.json"] {

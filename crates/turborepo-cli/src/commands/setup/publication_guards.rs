@@ -1,5 +1,5 @@
-//! Safety precursor: parser/discovery + existing library publication, not a
-//! locally enabled setup mode. Fixture tools and lifecycle hooks never execute.
+//! Parser/discovery and library publication guards, plus actual local/frozen
+//! consumers. Fixture tools and lifecycle hooks never execute.
 use std::path::Path;
 
 use turborepo_setup::lock::{
@@ -9,7 +9,7 @@ use turborepo_setup::lock::{
 
 use super::*;
 
-fn state(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+pub(super) fn state(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     let mut result = Vec::new();
     for entry in fs::read_dir(root).unwrap() {
         let path = entry.unwrap().path();
@@ -110,6 +110,7 @@ fn unsupported_unchanged_plans_fail_before_any_writes_in_both_consumers() {
         assert_eq!(state(f.owned.root()), before);
         let u = Upstream::new(&f, false, None);
         assert!(f.run(&u, FROZEN).is_err());
+        assert!(f.run(&u, &["--tools-only", "--no-frozen"]).is_err());
         assert_eq!(state(f.owned.root()), before);
         assert_eq!(u.hits(), 0);
         f.no_execution();
@@ -322,21 +323,21 @@ fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging(
     }
 }
 #[test]
-fn frozen_indirect_git_reuse_remains_supported_and_local_mode_stays_disabled() {
+fn frozen_and_local_indirect_git_reuse_remain_supported() {
     let f = Fixture::new();
     let root = f.owned.root();
     fs::rename(root.join(".git"), root.join("gitdir")).unwrap();
     fs::write(root.join(".git"), "gitdir: gitdir\n").unwrap();
+    let selected = Lock::parse(f.lock.to_string().as_bytes()).unwrap();
+    fs::write(root.join("turbo.lock"), selected.canonical_bytes().unwrap()).unwrap();
     let u = Upstream::new(&f, false, None);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     let before = state(root);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(state(root), before);
     assert_eq!(u.hits(), 3);
-    assert!(matches!(
-        f.run(&u, &["--tools-only", "--no-frozen"]),
-        Err(Error::NotImplemented)
-    ));
+    assert_eq!(f.run(&u, &["--tools-only", "--no-frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
     assert_eq!(state(root), before);
     f.no_execution();
 }
