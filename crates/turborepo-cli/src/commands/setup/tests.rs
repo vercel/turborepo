@@ -232,6 +232,42 @@ fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_
     f.no_execution();
 }
 #[test]
+fn authoritative_pnpm_keeps_wrong_manager_advisories_in_frozen_local_and_check() {
+    for on_fail in ["warn", "ignore"] {
+        let mut f = Fixture::new();
+        f.declare(
+            json!({"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{
+                "name":"npm","version":"11.6.1","onFail":on_fail
+            }}}),
+        );
+        let snapshot = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let declaration = snapshot.package_manager().unwrap().unwrap();
+        assert_eq!(
+            declaration.manager,
+            turborepo_setup::package_manager::Manager::Pnpm
+        );
+        assert_eq!(declaration.warnings.len(), usize::from(on_fail == "warn"));
+        fs::write(
+            f.owned.root().join("turbo.lock"),
+            snapshot.previous_lock().unwrap().canonical_bytes().unwrap(),
+        )
+        .unwrap();
+        let u = Upstream::new(&f, false, None);
+        assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+        let before = publication_guards::state(f.owned.root());
+        for flags in [
+            FROZEN,
+            &["--tools-only", "--no-frozen"],
+            &["--check", "--tools-only", "--offline"],
+        ] {
+            assert_eq!(f.run(&u, flags).unwrap(), 0);
+            assert_eq!(publication_guards::state(f.owned.root()), before);
+        }
+        assert_eq!(u.hits(), 3);
+        f.no_execution();
+    }
+}
+#[test]
 fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
     let f = Fixture::new();
     let u = Upstream::new(&f, false, None);

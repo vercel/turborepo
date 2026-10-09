@@ -317,7 +317,7 @@ fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
             2 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.x"}"#).unwrap(),
             3 => fs::write(f.owned.root().join(".npmrc"), "").unwrap(),
             4 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
-            5 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"warn"}}}"#).unwrap(),
+            5 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
             _ => {},
         }
         assert!(

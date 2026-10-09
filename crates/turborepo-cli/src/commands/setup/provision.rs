@@ -147,13 +147,7 @@ pub(super) fn run(
     platform()?;
     // Unsupported native requests must fail before ANY writer, even no-op locks.
     let manager = snapshot.package_manager()?;
-    if manager.as_ref().is_some_and(|m| {
-        m.manager != Manager::Pnpm
-            || m.package_manager
-                .iter()
-                .chain(&m.dev_engines)
-                .any(|r| r.manager != Manager::Pnpm)
-    }) {
+    if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
         return Err(Error::Unsupported("npm override provisioning"));
     }
     if write && !snapshot.declarations().contains_key("node") {
