@@ -612,8 +612,9 @@ impl Store {
         }) {
             before_publish()?;
             self.check_root()?;
-            if let Some((_, expected)) = recorded {
+            if let Some((record, expected)) = recorded {
                 self.check_generation(expected)?;
+                self.preserve_record(record)?;
             }
             return Ok(Outcome::Unchanged);
         }

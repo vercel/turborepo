@@ -61,6 +61,7 @@ fn populate(tool: &InstalledTool, tree: &Path) -> Result<(), turborepo_tool_inst
 fn manifest(root: &Path) -> Vec<u8> {
     fs::read(root.join(".turbo/tools/manifest.json")).unwrap()
 }
+// Legacy fixtures remove only this copy, keeping the bound generation record.
 fn recovery(root: &Path, lock: &Lock) -> std::path::PathBuf {
     let hash = format!("{:x}", Sha256::digest(lock.canonical_bytes().unwrap()));
     root.join(format!(".turbo/tools/record-{hash}.json"))
@@ -96,19 +97,26 @@ fn seed_ephemeral(root: &Path, store: &mut Store) -> Lock {
     lock
 }
 
+fn installed(node: &str) -> (tempfile::TempDir, Store, Lock) {
+    let repo = root(Some(node), json!({"packageManager":"pnpm@10.0.0"}));
+    let mut store = Store::open(repo.path()).unwrap();
+    let lock = seed_ephemeral(repo.path(), &mut store);
+    (repo, store, lock)
+}
+
 #[test]
 fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_after_advance() {
     for legacy in [false, true] {
-        let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
+        let (repo, mut store, lock) = installed("24.x");
         let p = repo.path();
-        let mut store = Store::open(p).unwrap();
-        let lock = seed_ephemeral(p, &mut store);
         if legacy {
-            // Exact legacy layout before the healthy no-op: generation record only.
             fs::remove_file(recovery(p, &lock)).unwrap();
         }
         let before = manifest(p);
-        for force in [false, true] {
+        for (force, expected, expected_calls) in [
+            (false, Outcome::Unchanged, vec![]),
+            (true, Outcome::Replaced, vec!["node", "pnpm"]),
+        ] {
             let snapshot = Snapshot::capture(p).unwrap();
             let world = fixture(&["24.1.0", "24.0.0"]);
             let selection = staged(&snapshot, &store, &world).unwrap();
@@ -127,15 +135,8 @@ fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_aft
                     || Ok(()),
                 )
                 .unwrap();
-            assert_eq!(
-                result,
-                if force {
-                    Outcome::Replaced
-                } else {
-                    Outcome::Unchanged
-                }
-            );
-            assert_eq!(calls, if force { vec!["node", "pnpm"] } else { vec![] });
+            assert_eq!(result, expected);
+            assert_eq!(calls, expected_calls);
             assert_installed(p, &lock);
             assert_eq!(
                 fs::read(recovery(p, &lock)).unwrap(),
@@ -148,10 +149,8 @@ fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_aft
 
 #[test]
 fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes() {
-    let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
+    let (repo, mut store, old) = installed("24.x");
     let p = repo.path();
-    let mut store = Store::open(p).unwrap();
-    let old = seed_ephemeral(p, &mut store);
     write_manifest(
         p,
         json!({"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"pnpm","version":"10.0.0"}}}),
@@ -200,10 +199,8 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
 #[test]
 fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requests() {
     for damage in 0..6 {
-        let repo = root(Some("lts/*"), json!({"packageManager":"pnpm@10.0.0"}));
+        let (repo, mut store, lock) = installed("lts/*");
         let p = repo.path();
-        let mut store = Store::open(p).unwrap();
-        let lock = seed_ephemeral(p, &mut store);
         let current = store.current().unwrap().unwrap();
         let tree = current.tool_tree(&current.tools[0]).unwrap();
         match damage {
@@ -212,7 +209,6 @@ fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requ
             2 => fs::write(tree.join("resource"), b"damaged").unwrap(),
             3 => fs::remove_file(current.bin.join("node")).unwrap(),
             5 => {
-                // No prior migration: missing resource, intact manifest-bound record.
                 fs::remove_file(recovery(p, &lock)).unwrap();
                 fs::remove_file(tree.join("resource")).unwrap();
             }
@@ -245,12 +241,10 @@ fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requ
 
 #[test]
 fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root() {
-    for changed in [false, true] {
-        for race in 0..6 {
-            let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
+    for (changed, force) in [(false, false), (true, false), (false, true)] {
+        for race in 0..if changed { 6 } else { 7 } {
+            let (repo, mut store, lock) = installed("24.x");
             let p = repo.path();
-            let mut store = Store::open(p).unwrap();
-            let lock = seed_ephemeral(p, &mut store);
             if changed {
                 write_manifest(p, json!({}));
             }
@@ -260,7 +254,7 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
             let current = store.current().unwrap().unwrap();
             let tree = current.tool_tree(&current.tools[0]).unwrap();
             let mut calls = 0;
-            let result = selection.publish(&snapshot, &mut store, false, populate, || {
+            let result = selection.publish(&snapshot, &mut store, force, populate, || {
                 calls += 1;
                 if calls == 3 {
                     match race {
@@ -269,6 +263,7 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
                             .unwrap(),
                         2 => fs::write(p.join("turbo.json"), b"{}").unwrap(),
                         3 => fs::write(tree.join("resource"), b"wait drift").unwrap(),
+                        6 => fs::write(recovery(p, &lock), b"corrupt").unwrap(),
                         5 => {
                             fs::rename(p.join(".turbo/tools"), p.join(".turbo/old-tools")).unwrap();
                             fs::create_dir(p.join(".turbo/tools")).unwrap();
@@ -284,14 +279,16 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
                 Ok(())
             });
             assert!(result.is_err(), "changed={changed}, race={race}");
-            assert_eq!(
-                manifest(p),
-                if race == 4 {
-                    [before.as_slice(), b" "].concat()
-                } else {
-                    before
-                }
-            );
+            let expected_manifest = if race == 4 {
+                [before.as_slice(), b" "].concat()
+            } else {
+                before
+            };
+            assert_eq!(manifest(p), expected_manifest);
+            if race == 6 {
+                assert_installed(p, &lock);
+                assert_eq!(fs::read(recovery(p, &lock)).unwrap(), b"corrupt");
+            }
         }
     }
 }
