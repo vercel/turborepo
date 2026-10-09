@@ -298,22 +298,21 @@ mod test {
 
         {
             let docs_json = loader.load(&PackageName::from("docs")).unwrap();
-            for task_name in ["dev"] {
-                if let Some(def) = docs_json.tasks.get(&TaskName::from(task_name)) {
-                    assert_eq!(
-                        def.cache.as_ref().map(|cache| *cache.as_inner()),
-                        Some(false)
-                    );
-                    assert!(
-                        def.with
-                            .as_ref()
-                            .unwrap()
-                            .iter()
-                            .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") })
-                    );
-                } else {
-                    panic!("didn't find {task_name}");
-                }
+            let task_name = "dev";
+            if let Some(def) = docs_json.tasks.get(&TaskName::from(task_name)) {
+                assert_eq!(
+                    def.cache.as_ref().map(|cache| *cache.as_inner()),
+                    Some(false)
+                );
+                assert!(
+                    def.with
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") })
+                );
+            } else {
+                panic!("didn't find {task_name}");
             }
         }
     }
