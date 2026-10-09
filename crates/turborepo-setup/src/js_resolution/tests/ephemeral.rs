@@ -61,16 +61,35 @@ fn populate(tool: &InstalledTool, tree: &Path) -> Result<(), turborepo_tool_inst
 fn manifest(root: &Path) -> Vec<u8> {
     fs::read(root.join(".turbo/tools/manifest.json")).unwrap()
 }
+fn recovery(root: &Path, lock: &Lock) -> std::path::PathBuf {
+    let hash = format!("{:x}", Sha256::digest(lock.canonical_bytes().unwrap()));
+    root.join(format!(".turbo/tools/record-{hash}.json"))
+}
+fn assert_installed(root: &Path, lock: &Lock) -> turborepo_tool_install::Current {
+    let current = Store::inspect(root).unwrap().unwrap();
+    let record = current.record.as_ref().unwrap();
+    assert_eq!(record.bytes(), lock.canonical_bytes().unwrap());
+    for tool in &current.tools {
+        assert_eq!(
+            fs::read(current.tool_tree(tool).unwrap().join("resource")).unwrap(),
+            b"adjacent resource"
+        );
+        for name in tool.executables.keys() {
+            assert!(current.bin.join(name).is_symlink());
+        }
+    }
+    assert!(!root.join("turbo.lock").exists());
+    current
+}
+fn publish(next: Staged, snapshot: &Snapshot, store: &mut Store) -> Outcome {
+    next.publish(snapshot, store, false, populate, || Ok(()))
+        .unwrap()
+}
 fn seed_ephemeral(root: &Path, store: &mut Store) -> Lock {
     let snapshot = Snapshot::capture(root).unwrap();
     let selection = staged(&snapshot, store, &fixture(&["24.0.0"])).unwrap();
     let lock = selection.selection().clone();
-    assert_eq!(
-        selection
-            .publish(&snapshot, store, false, populate, || Ok(()))
-            .unwrap(),
-        Outcome::Replaced
-    );
+    assert_eq!(publish(selection, &snapshot, store), Outcome::Replaced);
     assert!(snapshot.previous_lock().is_none());
     snapshot.ensure_current().unwrap();
     assert!(snapshot.after_publication(&lock).is_err());
@@ -79,55 +98,51 @@ fn seed_ephemeral(root: &Path, store: &mut Store) -> Lock {
 
 #[test]
 fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_after_advance() {
-    let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
-    let p = repo.path();
-    let mut store = Store::open(p).unwrap();
-    let lock = seed_ephemeral(p, &mut store);
-    let before = manifest(p);
-    for force in [false, true] {
-        let snapshot = Snapshot::capture(p).unwrap();
-        let world = fixture(&["24.1.0", "24.0.0"]);
-        let selection = staged(&snapshot, &store, &world).unwrap();
-        assert_eq!(selection.selection(), &lock);
-        assert!(world.paths().is_empty());
-        let mut calls = Vec::new();
-        let result = selection
-            .publish(
-                &snapshot,
-                &mut store,
-                force,
-                |tool, tree| {
-                    calls.push(tool.id.clone());
-                    populate(tool, tree)
-                },
-                || Ok(()),
-            )
-            .unwrap();
-        assert_eq!(
-            result,
-            if force {
-                Outcome::Replaced
-            } else {
-                Outcome::Unchanged
-            }
-        );
-        assert_eq!(calls, if force { vec!["node", "pnpm"] } else { vec![] });
-        let current = Store::inspect(p).unwrap().unwrap();
-        assert_eq!(
-            current.record.as_ref().unwrap().bytes(),
-            lock.canonical_bytes().unwrap()
-        );
-        for tool in &current.tools {
-            assert_eq!(
-                fs::read(current.tool_tree(tool).unwrap().join("resource")).unwrap(),
-                b"adjacent resource"
-            );
-            for name in tool.executables.keys() {
-                assert!(current.bin.join(name).is_symlink());
-            }
+    for legacy in [false, true] {
+        let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
+        let p = repo.path();
+        let mut store = Store::open(p).unwrap();
+        let lock = seed_ephemeral(p, &mut store);
+        if legacy {
+            // Exact legacy layout before the healthy no-op: generation record only.
+            fs::remove_file(recovery(p, &lock)).unwrap();
         }
-        assert!(!p.join("turbo.lock").exists());
-        assert_eq!(manifest(p) == before, !force);
+        let before = manifest(p);
+        for force in [false, true] {
+            let snapshot = Snapshot::capture(p).unwrap();
+            let world = fixture(&["24.1.0", "24.0.0"]);
+            let selection = staged(&snapshot, &store, &world).unwrap();
+            assert_eq!(selection.selection(), &lock);
+            assert!(world.paths().is_empty());
+            let mut calls = Vec::new();
+            let result = selection
+                .publish(
+                    &snapshot,
+                    &mut store,
+                    force,
+                    |tool, tree| {
+                        calls.push(tool.id.clone());
+                        populate(tool, tree)
+                    },
+                    || Ok(()),
+                )
+                .unwrap();
+            assert_eq!(
+                result,
+                if force {
+                    Outcome::Replaced
+                } else {
+                    Outcome::Unchanged
+                }
+            );
+            assert_eq!(calls, if force { vec!["node", "pnpm"] } else { vec![] });
+            assert_installed(p, &lock);
+            assert_eq!(
+                fs::read(recovery(p, &lock)).unwrap(),
+                lock.canonical_bytes().unwrap()
+            );
+            assert_eq!(manifest(p) == before, !force);
+        }
     }
 }
 
@@ -147,8 +162,7 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
     assert_eq!(next.selection().tools()["node"], old.tools()["node"]);
     assert_eq!(world.paths(), PNPM_PATHS);
     let manager = next.selection().tools()["pnpm"].clone();
-    next.publish(&snapshot, &mut store, false, populate, || Ok(()))
-        .unwrap();
+    assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
     fs::write(p.join(".nvmrc"), "^24.0.0").unwrap();
     let snapshot = Snapshot::capture(p).unwrap();
     let world = World::new(node_routes(&["24.1.0", "24.0.0"]), |_| {});
@@ -160,8 +174,7 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
         ["/dist/index.json", "/dist/v24.1.0/SHASUMS256.txt"]
     );
     let node = next.selection().tools()["node"].clone();
-    next.publish(&snapshot, &mut store, false, populate, || Ok(()))
-        .unwrap();
+    assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
     write_manifest(p, json!({}));
     let snapshot = Snapshot::capture(p).unwrap();
     let world = World::new(vec![], |_| {});
@@ -186,7 +199,7 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
 
 #[test]
 fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requests() {
-    for damage in 0..5 {
+    for damage in 0..6 {
         let repo = root(Some("lts/*"), json!({"packageManager":"pnpm@10.0.0"}));
         let p = repo.path();
         let mut store = Store::open(p).unwrap();
@@ -198,6 +211,11 @@ fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requ
             1 => fs::remove_dir_all(&tree).unwrap(),
             2 => fs::write(tree.join("resource"), b"damaged").unwrap(),
             3 => fs::remove_file(current.bin.join("node")).unwrap(),
+            5 => {
+                // No prior migration: missing resource, intact manifest-bound record.
+                fs::remove_file(recovery(p, &lock)).unwrap();
+                fs::remove_file(tree.join("resource")).unwrap();
+            }
             _ => fs::remove_file(current.bin.parent().unwrap().join("record.json")).unwrap(),
         }
         assert!(store.generation().is_err());
@@ -207,30 +225,13 @@ fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requ
         let next = staged(&snapshot, &store, &world).unwrap();
         assert_eq!(next.selection(), &lock);
         next.check(&snapshot, &store).unwrap();
-        assert_eq!(
-            next.publish(&snapshot, &mut store, false, populate, || Ok(()))
-                .unwrap(),
-            Outcome::Replaced
-        );
+        assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
         assert!(store.is_current(&current.tools).unwrap());
-        assert_eq!(
-            store
-                .current()
-                .unwrap()
-                .unwrap()
-                .record
-                .as_ref()
-                .unwrap()
-                .bytes(),
-            lock.canonical_bytes().unwrap()
-        );
+        let selected = assert_installed(p, &lock);
         assert!(world.paths().is_empty());
-        assert!(!p.join("turbo.lock").exists());
         if damage < 2 {
-            let selected = store.current().unwrap().unwrap();
             fs::remove_dir_all(selected.bin.parent().unwrap()).unwrap();
-            let hash = format!("{:x}", Sha256::digest(lock.canonical_bytes().unwrap()));
-            let record = p.join(format!(".turbo/tools/record-{hash}.json"));
+            let record = recovery(p, &lock);
             if damage == 0 {
                 fs::remove_file(record).unwrap();
             } else {

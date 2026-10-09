@@ -116,7 +116,7 @@ pub struct GenerationExpectation {
     identity: Arc<()>,
     manifest: Option<Vec<u8>>,
     current: Option<Current>,
-    repair: Option<Option<String>>,
+    repair: Option<(PathBuf, Option<String>)>,
 }
 
 impl GenerationExpectation {
@@ -290,7 +290,7 @@ impl Store {
         self.check_root()?;
         if !Arc::ptr_eq(&self.identity, &expected.identity)
             || Self::manifest_bytes(&self.root)? != expected.manifest
-            || if let Some(state) = &expected.repair {
+            || if let Some((_, state)) = &expected.repair {
                 self.repair_state(expected)? != *state
             } else {
                 self.current()?.is_none() != expected.current.is_none()
@@ -597,8 +597,9 @@ impl Store {
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
-        if let Some((_, expected)) = recorded {
+        if let Some((record, expected)) = recorded {
             self.check_generation(expected)?;
+            self.preserve_record(record)?;
         }
         let record_sha256 = recorded.map(|(record, _)| record.hash());
         let old = self.healthy_inventory()?;
@@ -643,7 +644,6 @@ impl Store {
             installed.push(Installed { tool, tree_sha256 });
         }
         if let Some((record, _)) = recorded {
-            self.preserve_record(record)?;
             let mut options = OpenOptions::new();
             options.write(true).create_new(true);
             #[cfg(unix)]

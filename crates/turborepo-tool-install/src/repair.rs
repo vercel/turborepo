@@ -3,9 +3,9 @@ use super::*;
 
 impl Store {
     /// Capture a recorded selection even when its resources are
-    /// missing/damaged. Invalid metadata is never absence. The independent
-    /// hash-bound record must survive; legacy generations lacking it cannot
-    /// recover a deleted record.
+    /// missing/damaged. Invalid metadata is never absence. Capture the
+    /// independent record, or an intact legacy generation record. Missing both
+    /// fails closed; checks retain the exact captured record path.
     pub fn repair_generation(&self) -> Result<GenerationExpectation, Error> {
         self.check_root()?;
         let manifest = Self::manifest_bytes(&self.root)?;
@@ -14,12 +14,21 @@ impl Store {
             .record_sha256
             .as_ref()
             .ok_or(Error::InvalidInventory)?;
-        let path = self.root.join(format!("record-{hash}.json"));
-        let record = Self::read_record(&path, &fs::symlink_metadata(&path)?, hash)?;
         let generation = self.root.join(&inventory.generation);
+        let independent = self.root.join(format!("record-{hash}.json"));
+        let path = match fs::symlink_metadata(&independent) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                real_directory(&generation)?;
+                generation.join("record.json")
+            }
+            Err(e) => return Err(e.into()),
+            Ok(_) => independent,
+        };
+        let record = Self::read_record(&path, &fs::symlink_metadata(&path)?, hash)?;
         // Existing corrupt record bytes are not repaired by silently ignoring them.
         match fs::symlink_metadata(generation.join("record.json")) {
             Ok(_) => {
+                real_directory(&generation)?;
                 if Self::record(&self.root, &inventory)?.as_ref() != Some(&record) {
                     return Err(Error::InvalidInventory);
                 }
@@ -35,9 +44,9 @@ impl Store {
                 bin: generation.join("bin"),
                 record: Some(record),
             }),
-            repair: Some(None),
+            repair: Some((path.clone(), None)),
         };
-        expected.repair = Some(self.repair_state(&expected)?);
+        expected.repair = Some((path, self.repair_state(&expected)?));
         self.check_generation(&expected)?;
         Ok(expected)
     }
@@ -48,8 +57,8 @@ impl Store {
     ) -> Result<Option<String>, Error> {
         let current = expected.current.as_ref().ok_or(Error::InvalidInventory)?;
         let record = current.record.as_ref().ok_or(Error::InvalidInventory)?;
-        let path = self.root.join(format!("record-{}.json", record.hash()));
-        if Self::read_record(&path, &fs::symlink_metadata(&path)?, &record.hash())? != *record {
+        let (path, _) = expected.repair.as_ref().ok_or(Error::InvalidInventory)?;
+        if Self::read_record(path, &fs::symlink_metadata(path)?, &record.hash())? != *record {
             return Err(Error::InvalidInventory);
         }
         let generation = current.bin.parent().ok_or(Error::UnsafePath)?;
