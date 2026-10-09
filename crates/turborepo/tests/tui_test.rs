@@ -2,6 +2,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 mod common;
+#[path = "common/tui.rs"]
+mod tui;
 
 use std::{
     collections::BTreeMap,
@@ -14,11 +16,7 @@ use std::{
 use anyhow::{Context, Result, bail};
 use serde_json::json;
 use tempfile::TempDir;
-use terminal_control::{
-    frame::{Cell, Color, Frame},
-    session::Session,
-    shot::{Options, Shot},
-};
+use tui::{Cell, Color, Frame, Options, Session, Shot};
 
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -81,7 +79,6 @@ fn launch_tui_with(
     let session = Session::start(
         &command,
         Some(directory.path()),
-        None,
         &Options {
             cols,
             rows,
@@ -98,7 +95,7 @@ fn launch_tui_with(
 }
 
 fn capture(session: &mut Session) -> Result<Shot> {
-    Ok(session.capture(Duration::ZERO, Duration::ZERO)?.shot)
+    session.capture()
 }
 
 fn wait_for_screen(
@@ -137,11 +134,11 @@ fn wait_for_initial_screen(session: &mut Session) -> Result<Shot> {
 
 fn wait_for_transcript_idle(session: &mut Session) -> Result<Vec<u8>> {
     let deadline = Instant::now() + STARTUP_TIMEOUT;
-    let mut transcript = session.logs(true)?;
+    let mut transcript = session.logs()?;
     let mut quiet_since = Instant::now();
     loop {
         thread::sleep(Duration::from_millis(50));
-        let next = session.logs(true)?;
+        let next = session.logs()?;
         if next.len() != transcript.len() {
             transcript = next;
             quiet_since = Instant::now();
@@ -420,7 +417,7 @@ fn repaints_the_tui_immediately_after_a_terminal_resize() -> Result<()> {
 
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        let after = context.session.logs(true)?;
+        let after = context.session.logs()?;
         let screen = capture(&mut context.session)?;
         let repainted = after.get(before.len()..).is_some_and(|repaint| {
             repaint

@@ -24,6 +24,8 @@ pub enum Error {
     UnsupportedAdapter,
     #[error("selected tool has no artifact set for the execution platform")]
     MissingArtifacts,
+    #[error("native bundled npm and its installation owner must be selected together")]
+    MissingOwner,
     #[error("cannot encode execution identity")]
     Encode(#[from] serde_json::Error),
 }
@@ -144,6 +146,9 @@ pub enum SelectedInstallation {
         platform: Platform,
         parts: BTreeMap<String, SelectedArtifact>,
     },
+    Bundled {
+        owner: String,
+    },
     // Requirements only: adapters must verify exact version, semantic options
     // and these executable names before activation. No invented artifact hash.
     VerifySystem {
@@ -170,6 +175,14 @@ impl ExecutionSnapshot {
         if selected_ids.is_empty() {
             return Err(Error::EmptySelection);
         }
+        // Node exposes the bundled commands: selecting it cannot silently drop
+        // the repository's native npm declaration/identity from this snapshot.
+        if lock.tools().iter().any(|(id, tool)| {
+            matches!(&tool.installation, Installation::Bundled { owner }
+                if selected_ids.contains(owner) && !selected_ids.contains(id))
+        }) {
+            return Err(Error::MissingOwner);
+        }
         let mut tools = BTreeMap::new();
         for id in selected_ids {
             let tool = lock.tools().get(id).ok_or(Error::MissingTool)?;
@@ -190,6 +203,14 @@ impl ExecutionSnapshot {
                                 (name.clone(), SelectedArtifact::from(artifact))
                             })
                             .collect(),
+                    }
+                }
+                Installation::Bundled { owner } => {
+                    if !selected_ids.contains(owner) {
+                        return Err(Error::MissingOwner);
+                    }
+                    SelectedInstallation::Bundled {
+                        owner: owner.clone(),
                     }
                 }
                 Installation::VerifySystem { executables } => SelectedInstallation::VerifySystem {
@@ -259,6 +280,9 @@ enum InstallationIdentity<'a> {
     Managed {
         parts: &'a BTreeMap<String, SelectedArtifact>,
     },
+    Bundled {
+        owner: &'a str,
+    },
     VerifySystem {
         executables: &'a BTreeSet<String>,
     },
@@ -271,6 +295,7 @@ impl<'a> From<&'a SelectedTool> for ToolIdentity<'a> {
             // Identical active bytes/layout have identical identity on the same
             // explicit execution context, regardless of the selector key.
             SelectedInstallation::Managed { parts, .. } => InstallationIdentity::Managed { parts },
+            SelectedInstallation::Bundled { owner } => InstallationIdentity::Bundled { owner },
             SelectedInstallation::VerifySystem { executables } => {
                 InstallationIdentity::VerifySystem { executables }
             }

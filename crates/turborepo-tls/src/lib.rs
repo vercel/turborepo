@@ -33,7 +33,7 @@ static INSTALL: Once = Once::new();
 /// fixes every TLS client we build. The work happens at most once and is cheap
 /// to call repeatedly. If another provider has already been installed we leave
 /// it in place rather than fighting over the global default.
-pub(crate) fn ensure_crypto_provider() {
+pub fn ensure_crypto_provider() {
     INSTALL.call_once(|| {
         if CryptoProvider::get_default().is_some() {
             return;

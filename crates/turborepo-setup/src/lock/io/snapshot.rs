@@ -2,6 +2,7 @@ use std::{
     collections::BTreeMap,
     fmt, io,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use super::{
@@ -22,6 +23,7 @@ type Inputs = BTreeMap<&'static str, Option<Vec<u8>>>;
 #[derive(Clone)]
 pub struct Snapshot {
     root: PathBuf,
+    root_identity: Arc<same_file::Handle>,
     bytes: Option<Vec<u8>>,
     previous: Option<Lock>,
     inputs: Inputs,
@@ -52,6 +54,7 @@ impl Snapshot {
     /// No storage initialization, resolver, network, or binary execution.
     pub fn capture(root: &Path) -> Result<Self, StorageError> {
         let root = root.canonicalize()?;
+        let root_identity = Arc::new(same_file::Handle::from_path(&root)?);
         let bytes = read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?;
         let previous = bytes.as_deref().map(Lock::parse).transpose()?;
         let captured = inputs(&root)?;
@@ -63,11 +66,15 @@ impl Snapshot {
         })?;
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
-        if read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)? != bytes || inputs(&root)? != captured {
+        if same_file::Handle::from_path(&root)? != *root_identity
+            || read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)? != bytes
+            || inputs(&root)? != captured
+        {
             return Err(StorageError::Conflict);
         }
         Ok(Self {
             root,
+            root_identity,
             bytes,
             previous,
             inputs: captured,
@@ -118,21 +125,66 @@ impl Snapshot {
     /// revalidated after staging/flush immediately before promotion; later
     /// editor changes are ordinary declaration drift, not an atomic editor txn.
     pub fn commit(&self, candidate: &Lock) -> Result<WriteOutcome, StorageError> {
-        self.commit_with(candidate, || Ok(()))
+        self.commit_checked(candidate, || Ok(()))
     }
 
     fn matches(&self, guard: &WriterStorage) -> Result<bool, StorageError> {
-        Ok(guard.read_lock()? == self.bytes && inputs(&self.root)? == self.inputs)
+        // Compare the pinned guard before reading its lock: equal bytes alone
+        // cannot authorize a different repository, even when both locks are absent.
+        Ok(guard.matches_root(&self.root_identity)?
+            && same_file::Handle::from_path(&self.root)? == *self.root_identity
+            && guard.read_lock()? == self.bytes
+            && inputs(&self.root)? == self.inputs)
     }
 
-    fn commit_with(
+    /// Hold this writer guard through frozen preparation and inventory
+    /// selection.
+    pub fn guard(&self) -> Result<WriterStorage, StorageError> {
+        let guard = WriterStorage::acquire(&self.root)?;
+        self.check_guard(&guard)?;
+        Ok(guard)
+    }
+
+    pub fn check_guard(&self, guard: &WriterStorage) -> Result<(), StorageError> {
+        if !self.matches(guard)? {
+            return Err(StorageError::Conflict);
+        }
+        Ok(())
+    }
+
+    /// Read-only revalidation for frozen/no-lock transactions, without storage.
+    pub fn ensure_current(&self) -> Result<(), StorageError> {
+        if same_file::Handle::from_path(&self.root)? != *self.root_identity
+            || read_optional(&self.root, LOCK_NAME, MAX_LOCK_BYTES)? != self.bytes
+            || inputs(&self.root)? != self.inputs
+        {
+            return Err(StorageError::Conflict);
+        }
+        Ok(())
+    }
+
+    /// Advance only the intentional lock replacement, never recapture sources
+    /// or root identity. A foreign lock (even with matching declarations)
+    /// fails.
+    pub fn after_publication(&self, candidate: &Lock) -> Result<Self, StorageError> {
+        self.check_native_coverage(Some(candidate))?;
+        if !candidate.matches_native(&self.native)? {
+            return Err(StorageError::Conflict);
+        }
+        let mut published = self.clone();
+        published.bytes = Some(candidate.canonical_bytes()?);
+        published.previous = Some(candidate.clone());
+        published.guard()?;
+        Ok(published)
+    }
+
+    pub(crate) fn check_native_coverage(
         &self,
-        candidate: &Lock,
-        before_check: impl FnOnce() -> io::Result<()>,
-    ) -> Result<WriteOutcome, StorageError> {
+        candidate: Option<&Lock>,
+    ) -> Result<(), StorageError> {
         // Only canonical native IDs and these fixed input files are covered.
         // Refuse to publish or silently remove aliases/extra sources.
-        for lock in std::iter::once(candidate).chain(self.previous.as_ref()) {
+        for lock in candidate.into_iter().chain(self.previous.as_ref()) {
             if lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
@@ -147,13 +199,28 @@ impl Snapshot {
                 .into());
             }
         }
+        Ok(())
+    }
+
+    /// Check caller-owned discovery/policy after waiting and after staging,
+    /// including unchanged publication. The original source/lock CAS is
+    /// retained.
+    pub fn commit_checked(
+        &self,
+        candidate: &Lock,
+        mut before_check: impl FnMut() -> io::Result<()>,
+    ) -> Result<WriteOutcome, StorageError> {
+        self.check_native_coverage(Some(candidate))?;
         if !candidate.matches_native(&self.native)? {
             return Err(
                 Error::Invalid("candidate provenance does not match captured sources").into(),
             );
         }
         let bytes = candidate.canonical_bytes()?;
+        self.ensure_current()?;
+        before_check()?;
         let mut guard = WriterStorage::acquire(&self.root)?;
+        before_check()?;
         if !self.matches(&guard)? {
             return Err(StorageError::Conflict);
         }

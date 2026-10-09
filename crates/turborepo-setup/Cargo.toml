@@ -8,9 +8,15 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# Cross-crate fixtures only. Consumers must enable this via dev-dependencies.
+test-support = ["turborepo-download/test-support"]
+
 [dependencies]
 base64 = "0.22.1"
 hex = { workspace = true }
+jsonc-parser = "0.23.0"
+same-file = "1.0.6"
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -31,6 +37,8 @@ rustix = { version = "1.1", features = ["fs"] }
 
 [dev-dependencies]
 flate2 = "1.1.9"
+reqwest = { workspace = true }
 tar = { version = "0.4.45", default-features = false }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "net", "io-util"] }
+turborepo-download = { workspace = true, features = ["test-support"] }

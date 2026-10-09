@@ -17,6 +17,8 @@ use turborepo_tool_install::Outcome;
 use super::*;
 
 #[cfg(unix)]
+mod bundled;
+#[cfg(unix)]
 mod recovery;
 #[cfg(unix)]
 const SCOPED_RESOURCE: &str = "lib/node_modules/npm/node_modules/@npmcli/config/package.json";
@@ -95,6 +97,16 @@ fn plan(value: &Value, platform: Platform) -> Result<NodePlan, Error> {
 }
 #[cfg(unix)]
 fn unix_archive(os: &str, arch: &str, bad_link: bool, missing: bool) -> Vec<u8> {
+    unix_archive_with_package(os, arch, bad_link, missing, "{\"name\":\"npm\"}")
+}
+#[cfg(unix)]
+fn unix_archive_with_package(
+    os: &str,
+    arch: &str,
+    bad_link: bool,
+    missing: bool,
+    package: &str,
+) -> Vec<u8> {
     let root = format!("node-v24.0.0-{os}-{arch}");
     let mut archive = tar::Builder::new(Vec::new());
     let cli = "#!/usr/bin/env node\n";
@@ -106,7 +118,7 @@ fn unix_archive(os: &str, arch: &str, bad_link: bool, missing: bool) -> Vec<u8> 
         ),
         ("lib/node_modules/npm/bin/npm-cli.js", cli),
         ("lib/node_modules/npm/bin/npx-cli.js", cli),
-        ("lib/node_modules/npm/package.json", "{\"name\":\"npm\"}"),
+        ("lib/node_modules/npm/package.json", package),
         (SCOPED_RESOURCE, "{\"name\":\"@npmcli/config\"}"),
         ("share/man/man1/node.1", "fixture resource"),
     ] {

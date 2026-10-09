@@ -19,6 +19,7 @@ pub mod devtools;
 mod heap_profile;
 
 mod panic_handler;
+pub mod process_exit;
 mod shim;
 
 // Re-export daemon types from the new crate location

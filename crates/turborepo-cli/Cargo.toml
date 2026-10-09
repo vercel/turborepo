@@ -25,16 +25,21 @@ pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+flate2 = "1.1.9"
 insta = { workspace = true }
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 serial_test = "3.0"
+sha2 = { workspace = true }
+tar = { version = "0.4.45", default-features = false }
 test-case = { workspace = true }
 tracing.workspace = true
+turborepo-download = { workspace = true, features = ["test-support"] }
 turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }
 turborepo-run-context = { workspace = true }
+turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -56,6 +61,7 @@ pidlock = { path = "../turborepo-pidlock" }
 rand = { workspace = true }
 rayon = "1.7.0"
 reqwest = { workspace = true, default-features = false, features = ["json"] }
+same-file = "=1.0.6"
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -89,6 +95,7 @@ turborepo-log = { workspace = true }
 turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-config = { workspace = true }
 turborepo-package-watcher = { workspace = true }
+turborepo-platform = { workspace = true }
 turborepo-process = { workspace = true }
 turborepo-profile-md = { workspace = true }
 turborepo-prune = { workspace = true }
@@ -98,10 +105,12 @@ turborepo-rayon-compat = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-run = { workspace = true, default-features = false }
 turborepo-run-opts = { workspace = true }
+turborepo-setup = { path = "../turborepo-setup" }
 turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
+turborepo-tool-install = { path = "../turborepo-tool-install" }
 turborepo-tracing = { workspace = true }
 turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { workspace = true }
@@ -110,3 +119,9 @@ turborepo-vercel-api = { path = "../turborepo-vercel-api" }
 turborepo-watch = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Threading",
+] }
