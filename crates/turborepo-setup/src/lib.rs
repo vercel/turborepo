@@ -25,6 +25,14 @@ pub mod source_policy;
 pub mod version_request;
 pub mod writer_storage;
 
+/// Locked artifact preparation policy; never changes resolution or health
+/// evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Preparation {
+    IfNeeded,
+    Fresh,
+}
+
 pub use node::{NodeArtifact, NodeArtifactError};
 pub use node_discovery::{
     NodeDiscoveryError, NodeRelease, NodeRequirements, NodeSource, ResolvedNode,

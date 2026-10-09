@@ -160,7 +160,7 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
-        _ => provision::run(&discovery, snapshot, transports, preflight),
+        _ => provision::run(&discovery, snapshot, request.force, transports, preflight),
     }
 }
 
@@ -174,10 +174,12 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
         // CI/frozen/offline never change a check into resolution or repair.
         return Ok(());
     }
+    // Force is locked-only even when local normalization says Write: this
+    // executor cannot resolve, create or update turbo.lock. Future combinations
+    // remain explicitly fail-closed, rather than being promoted by force.
     if request.mode != Mode::Provision
-        || request.lock != LockMode::Frozen
+        || !(request.lock == LockMode::Frozen || (request.force && request.lock == LockMode::Write))
         || !request.tools_only
-        || request.force
         || request.offline
         || request.update_lock
     {

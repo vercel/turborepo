@@ -1,4 +1,4 @@
-//! Frozen tools-only executor. No resolution, probes, activation or lock
+//! Locked tools-only executor. No resolution, probes, activation or lock
 //! writes.
 use std::{fs, io, path::Path, process::Command};
 
@@ -136,13 +136,14 @@ pub(super) fn plans(
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
+    force: bool,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     let root = discovery.snapshot_root()?.as_std_path();
-    let lock = snapshot
-        .previous_lock()
-        .ok_or(Error::Unsupported("frozen mode requires turbo.lock"))?;
+    let lock = snapshot.previous_lock().ok_or(Error::Unsupported(
+        "locked provisioning requires turbo.lock",
+    ))?;
     let Plans { node, pnpm } = plans(&snapshot, lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
@@ -168,45 +169,52 @@ pub(super) fn run(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
+    let preparation = if force {
+        turborepo_setup::Preparation::Fresh
+    } else {
+        turborepo_setup::Preparation::IfNeeded
+    };
     let (prepared_node, prepared_pnpm) = runtime.block_on(async {
         let node = node
-            .prepare_if_needed(&store, &desired, &transports.node)
+            .prepare(&store, &desired, &transports.node, preparation)
             .await?;
         preflight()?;
         revalidate(discovery)?;
         snapshot.check_guard(&guard)?;
         let pnpm = match &pnpm {
             Some(plan) => {
-                plan.prepare_if_needed(&store, &desired, &transports.pnpm)
+                plan.prepare(&store, &desired, &transports.pnpm, preparation)
                     .await?
             }
             None => None,
         };
         Ok::<_, Error>((node, pnpm))
     })?;
-    store.reconcile_checked(
-        &desired,
-        |tool, destination| {
-            if tool == node.inventory_tool() {
-                prepared_node
-                    .as_ref()
-                    .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                    .stage(tool, destination)
-            } else {
-                prepared_pnpm
-                    .as_ref()
-                    .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                    .stage(tool, destination)
-            }
-        },
-        || {
-            storage(root).map_err(io::Error::other)?;
-            preflight().map_err(io::Error::other)?;
-            revalidate(discovery).map_err(io::Error::other)?;
-            snapshot.check_guard(&guard).map_err(io::Error::other)?;
-            Ok(())
-        },
-    )?;
+    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
+        if tool == node.inventory_tool() {
+            prepared_node
+                .as_ref()
+                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
+                .stage(tool, destination)
+        } else {
+            prepared_pnpm
+                .as_ref()
+                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
+                .stage(tool, destination)
+        }
+    };
+    let before_publish = || {
+        storage(root).map_err(io::Error::other)?;
+        preflight().map_err(io::Error::other)?;
+        revalidate(discovery).map_err(io::Error::other)?;
+        snapshot.check_guard(&guard).map_err(io::Error::other)?;
+        Ok(())
+    };
+    if force {
+        store.force_reconcile_checked(&desired, stage, before_publish)?;
+    } else {
+        store.reconcile_checked(&desired, stage, before_publish)?;
+    }
     for tool in &desired {
         println!(
             "{} {}: {}",

@@ -305,12 +305,35 @@ impl Store {
     pub fn reconcile_checked(
         &mut self,
         desired: &[Tool],
+        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+        before_publish: impl FnOnce() -> Result<(), Error>,
+    ) -> Result<Outcome, Error> {
+        self.reconcile_prepared(desired, false, stage_tool, before_publish)
+    }
+
+    /// Replace the whole generation using fresh adapter preparations, including
+    /// healthy identical tools. Never copy old trees or change readiness truth.
+    /// The same validation and final precondition apply as in ordinary
+    /// reconcile.
+    pub fn force_reconcile_checked(
+        &mut self,
+        desired: &[Tool],
+        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+        before_publish: impl FnOnce() -> Result<(), Error>,
+    ) -> Result<Outcome, Error> {
+        self.reconcile_prepared(desired, true, stage_tool, before_publish)
+    }
+
+    fn reconcile_prepared(
+        &mut self,
+        desired: &[Tool],
+        force: bool,
         mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
         let old = self.healthy_inventory()?;
-        let valid_old = old.as_ref();
+        let valid_old = old.as_ref().filter(|_| !force);
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
         if valid_old.is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())) {

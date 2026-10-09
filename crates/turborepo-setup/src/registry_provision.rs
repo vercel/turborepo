@@ -309,10 +309,23 @@ impl RegistryPlan {
         desired: &[Tool],
         transport: &RegistryTransport,
     ) -> Result<Option<PreparedRegistry>, Error> {
+        self.prepare(store, desired, transport, crate::Preparation::IfNeeded)
+            .await
+    }
+
+    pub async fn prepare(
+        &self,
+        store: &Store,
+        desired: &[Tool],
+        transport: &RegistryTransport,
+        preparation: crate::Preparation,
+    ) -> Result<Option<PreparedRegistry>, Error> {
         if !desired.contains(&self.tool) || !desired.contains(&self.node) {
             return Err(Error::NodeBinding);
         }
-        if store.can_reuse(&self.tool)? {
+        if store.reusable_tree(&self.tool, desired)?.is_some()
+            && preparation == crate::Preparation::IfNeeded
+        {
             return Ok(None);
         }
         let (_, bytes) = transport
@@ -428,6 +441,17 @@ impl PnpmPlan {
         transport: &RegistryTransport,
     ) -> Result<Option<PreparedRegistry>, Error> {
         self.0.prepare_if_needed(store, desired, transport).await
+    }
+
+    /// Select fresh verification without changing the locked identity.
+    pub async fn prepare(
+        &self,
+        store: &Store,
+        desired: &[Tool],
+        transport: &RegistryTransport,
+        preparation: crate::Preparation,
+    ) -> Result<Option<PreparedRegistry>, Error> {
+        self.0.prepare(store, desired, transport, preparation).await
     }
 }
 

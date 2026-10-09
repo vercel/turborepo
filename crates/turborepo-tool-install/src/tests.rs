@@ -7,6 +7,7 @@ use std::{
 
 use super::*;
 
+mod force;
 mod paths_permissions;
 mod recovery;
 
