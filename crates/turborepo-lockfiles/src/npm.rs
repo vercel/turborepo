@@ -761,13 +761,123 @@ impl NpmPackage {
             .keys()
             .chain(self.dev_dependencies.keys())
             .chain(self.optional_dependencies.keys())
-            .chain(self.peer_dependencies.keys())
+            // npm does not install optional peers. A hoisted package that is
+            // only reachable through such a peer should not survive pruning
+            // (nor should its patch). Other dependency kinds above still keep
+            // the package if it is also explicitly depended on.
+            .chain(self.peer_dependencies.keys().filter(|name| {
+                self.peer_dependencies_meta
+                    .as_ref()
+                    .and_then(|meta| meta.get(name.as_str()))
+                    .and_then(|meta| meta.get("optional"))
+                    .and_then(Value::as_bool)
+                    != Some(true)
+            }))
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test_case::test_case(serde_json::json!({"encoding": {"optional": true}}), false; "optional peer")]
+    #[test_case::test_case(serde_json::json!({"encoding": {"optional": false}}), true; "required peer")]
+    #[test_case::test_case(serde_json::json!({"encoding": {}}), true; "unspecified optionality")]
+    #[test_case::test_case(serde_json::json!({}), true; "missing peer metadata")]
+    #[test_case::test_case(serde_json::Value::Null, true; "no metadata")]
+    fn test_optional_peer_dependencies(meta: Value, retained: bool) {
+        let json = serde_json::json!({
+            "lockfileVersion": 4,
+            "packages": {
+                "node_modules/node-fetch": {
+                    "version": "2.7.0",
+                    "peerDependencies": {"encoding": "^0.1.0"},
+                    "peerDependenciesMeta": meta
+                },
+                "node_modules/encoding": {"version": "0.1.13"}
+            }
+        });
+        let lockfile = NpmLockfile::load(&serde_json::to_vec(&json).unwrap()).unwrap();
+        let deps = lockfile
+            .all_dependencies("node_modules/node-fetch")
+            .unwrap()
+            .unwrap();
+        assert_eq!(deps.contains_key("node_modules/encoding"), retained);
+        assert_eq!(
+            serde_json::to_value(&lockfile).unwrap()["packages"]["node_modules/node-fetch"]
+                ["peerDependenciesMeta"],
+            meta
+        );
+    }
+
+    #[test_case::test_case("dependencies")]
+    #[test_case::test_case("devDependencies")]
+    #[test_case::test_case("optionalDependencies")]
+    fn test_optional_peer_also_declared_as_dependency(dependency_kind: &str) {
+        let mut package = serde_json::json!({
+            "peerDependencies": {"encoding": "^0.1.0"},
+            "peerDependenciesMeta": {"encoding": {"optional": true}}
+        });
+        package[dependency_kind] = serde_json::json!({"encoding": "^0.1.0"});
+        let package: NpmPackage = serde_json::from_value(package).unwrap();
+        assert!(package.dep_keys().any(|name| name == "encoding"));
+    }
+
+    // Regression for https://github.com/vercel/turborepo/issues/14469.
+    #[test_case::test_case("apps/docs", false; "optional peer only")]
+    #[test_case::test_case("apps/web", true; "explicit dependency")]
+    fn test_prune_optional_peer_patch(workspace: &str, retained: bool) {
+        let json = serde_json::json!({
+            "lockfileVersion": 4,
+            "packages": {
+                "": {},
+                "apps/docs": {"dependencies": {"node-fetch": "2.7.0"}},
+                "apps/web": {"dependencies": {"encoding": "0.1.13"}},
+                "node_modules/node-fetch": {
+                    "version": "2.7.0",
+                    "peerDependencies": {"encoding": "^0.1.0"},
+                    "peerDependenciesMeta": {"encoding": {"optional": true}}
+                },
+                "node_modules/encoding": {
+                    "version": "0.1.13",
+                    "patched": {"path": "patches/encoding@0.1.13.patch"}
+                }
+            }
+        });
+        let lockfile = NpmLockfile::load(&serde_json::to_vec(&json).unwrap()).unwrap();
+        let dependencies = lockfile.packages[workspace].dependencies.clone();
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            HashMap::from([(workspace.to_string(), dependencies)]),
+            false,
+        )
+        .unwrap();
+        let packages = closures[workspace]
+            .iter()
+            .map(|package| package.key.clone())
+            .collect::<Vec<_>>();
+        let pruned = lockfile
+            .subgraph(&[workspace.to_string()], &packages)
+            .unwrap();
+        let reparsed = NpmLockfile::load(&pruned.encode().unwrap()).unwrap();
+        assert_eq!(
+            reparsed.packages.contains_key("node_modules/encoding"),
+            retained
+        );
+        let expected_patches = if retained {
+            vec![RelativeUnixPathBuf::new("patches/encoding@0.1.13.patch").unwrap()]
+        } else {
+            vec![]
+        };
+        assert_eq!(reparsed.patches().unwrap(), expected_patches);
+        if !retained {
+            assert!(reparsed.packages.contains_key("node_modules/node-fetch"));
+            assert_eq!(
+                reparsed.packages["node_modules/node-fetch"].peer_dependencies_meta,
+                lockfile.packages["node_modules/node-fetch"].peer_dependencies_meta
+            );
+        }
+    }
 
     #[test]
     fn test_patch_paths_follow_subgraph() {
