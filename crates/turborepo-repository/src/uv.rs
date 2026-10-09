@@ -259,6 +259,15 @@ struct TurboToolTable {
     name: Option<toml::Value>,
 }
 
+/// Recognize a uv workspace using the native root-manifest parser only.
+/// Member expansion, workspace naming, and toolchain discovery stay lazy.
+pub(crate) fn is_workspace_root(dir: &AbsoluteSystemPath) -> Result<bool, Error> {
+    Ok(
+        PyProjectManifest::load(&dir.join_component(PYPROJECT_TOML))?
+            .is_some_and(|manifest| manifest.has_workspace()),
+    )
+}
+
 impl PyProjectManifest {
     fn load(path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
         let contents = match path.read_to_string() {

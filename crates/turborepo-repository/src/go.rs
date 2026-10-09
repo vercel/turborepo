@@ -23,6 +23,8 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 
 mod scope_inventory;
 
+pub(crate) use scope_inventory::validate_workspace_root;
+
 use crate::{
     change_knowledge::ChangeObservation,
     external_resolution::{

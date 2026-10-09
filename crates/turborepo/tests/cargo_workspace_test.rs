@@ -1412,6 +1412,65 @@ fn test_pure_cargo_workspace_dry_run_has_no_package_json() {
     );
 }
 
+/// Native scope identities, rather than CLI/inference single-package flags,
+/// determine the loader, engine, and dry-run output shape.
+#[test]
+fn test_cargo_workspace_single_package_flag_preserves_execution_shape() {
+    for with_root_package_json in [false, true] {
+        let tempdir = cargo_tempdir();
+        setup_cargo_pure_workspace(tempdir.path());
+        if with_root_package_json {
+            // This manifest would imply single-package execution without the
+            // opted-in native contributor, but cannot erase native scopes.
+            fs::write(
+                tempdir.path().join("package.json"),
+                r#"{"name":"root","private":true,"packageManager":"npm@10.5.0","scripts":{"build":"echo root"}}"#,
+            )
+            .unwrap();
+        }
+
+        // Exact filters can use lazy inventories; dependency expansion requires
+        // complete graph loading. Both must retain the same execution shape.
+        for selection in ["--filter=app", "--filter=app..."] {
+            let args = ["run", "build", selection, "--dry-run=json"];
+            let baseline = run_turbo(tempdir.path(), &args);
+            assert_command_success(&baseline, "native workspace baseline");
+            let baseline: serde_json::Value = serde_json::from_slice(&baseline.stdout).unwrap();
+
+            let mut flagged_args = args.to_vec();
+            flagged_args.push("--single-package");
+            let flagged = run_turbo(tempdir.path(), &flagged_args);
+            assert_command_success(&flagged, "native workspace with --single-package");
+            let flagged: serde_json::Value = serde_json::from_slice(&flagged.stdout).unwrap();
+
+            assert_eq!(flagged["packages"], baseline["packages"]);
+            let task_ids = |json: &serde_json::Value| {
+                json["tasks"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|task| task["taskId"].as_str().unwrap().to_owned())
+                    .collect::<std::collections::BTreeSet<_>>()
+            };
+            assert_eq!(task_ids(&flagged), task_ids(&baseline));
+            assert!(task_ids(&flagged).contains("app#build"));
+            let app = flagged["tasks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|task| task["taskId"] == "app#build")
+                .unwrap();
+            assert_eq!(app["command"], "cargo build --package=app --locked");
+            assert_eq!(app["dependencies"], serde_json::json!(["lib-a#build"]));
+        }
+        assert_eq!(
+            tempdir.path().join("package.json").exists(),
+            with_root_package_json,
+            "execution must not synthesize a JavaScript manifest"
+        );
+    }
+}
+
 /// A root package.json that declares no JavaScript workspaces must not put
 /// an opted-in Cargo workspace into single-package mode.
 #[test]

@@ -29,7 +29,7 @@ use turborepo_repository::{
     toolchain::WatchSpec,
 };
 use turborepo_scm::GitHashes;
-use turborepo_turbo_json::{FutureFlags, TurboJson, TurboJsonReader};
+use turborepo_turbo_json::{FutureFlags, RawTurboJson, TurboJson, TurboJsonReader};
 
 use crate::repository_graph::RepositoryGraphFeatures;
 
@@ -211,8 +211,11 @@ async fn initialize_package_graph(
     allow_no_package_manager: bool,
     graph_features: RepositoryGraphFeatures,
 ) -> Option<PackageGraph> {
-    let root_package_json = match graph_features.load_root_package_json(repo_root) {
-        Ok(package_json) => package_json,
+    let (root_package_json, contributor_plan) = match graph_features
+        .observe_root(repo_root)
+        .and_then(|root| root.into_graph_parts().map_err(Into::into))
+    {
+        Ok(parts) => parts,
         Err(error) => {
             tracing::debug!(
                 ?error,
@@ -226,7 +229,11 @@ async fn initialize_package_graph(
         .with_allow_no_package_manager(allow_no_package_manager);
     // Change classification requires every toolchain's authoritative scopes.
     // Runs may narrow their discovery, but watch bootstraps the whole graph.
-    match graph_features.configure(builder).build().await {
+    match graph_features
+        .configure_with_plan(builder, &contributor_plan)
+        .build()
+        .await
+    {
         Ok(graph) => Some(graph),
         Err(_) => {
             tracing::debug!("package graph not available, package watcher not available");
@@ -502,24 +509,8 @@ impl Subscriber {
     }
 
     async fn initialize_repo_state(&self) -> Option<RepoState> {
-        let pkg_dep_graph = initialize_package_graph(
-            &self.repo_root,
-            self.single_package,
-            self.allow_no_package_manager,
-            self.graph_features,
-        )
-        .await?;
-
-        let package_paths = hash_scopes(&pkg_dep_graph)
-            .map(|package| package.path)
-            .collect();
-        if let Err(error) = self.hash_watcher.set_package_paths(package_paths).await {
-            tracing::debug!(
-                ?error,
-                "repository graph package paths unavailable to hash watcher"
-            );
-        }
-
+        // Select configuration before observing roots so every generation's
+        // registry and config reader use the same effective future flags.
         // Use custom turbo.json path if provided, otherwise use standard paths
         let config_path = if let Some(custom_path) = &self.custom_turbo_json_path {
             custom_path.clone()
@@ -537,9 +528,50 @@ impl Subscriber {
             }
         };
 
-        let reader =
-            TurboJsonReader::new(self.repo_root.clone()).with_future_flags(self.future_flags);
-        let root_turbo_json = if self.single_package {
+        // TurboJsonReader overwrites parsed future flags with its supplied
+        // flags. Read the root config directly first to obtain this generation's
+        // flags, and reject invalid selected config rather than reuse an old plan.
+        let selected_config = match RawTurboJson::read(&self.repo_root, &config_path, true)
+            .and_then(|raw| raw.map(TurboJson::try_from).transpose())
+        {
+            Ok(config) => config,
+            Err(error) => {
+                tracing::debug!(
+                    ?error,
+                    "selected turbo config unavailable to package watcher"
+                );
+                return None;
+            }
+        };
+        let (graph_features, future_flags) = match &selected_config {
+            Some(config) => (
+                RepositoryGraphFeatures::new(&config.future_flags),
+                config.future_flags,
+            ),
+            // API callers and no-turbo fixtures can inject a registry without
+            // authoring a config. Preserve that only while config is absent.
+            None => (self.graph_features.clone(), self.future_flags),
+        };
+        let pkg_dep_graph = initialize_package_graph(
+            &self.repo_root,
+            self.single_package,
+            self.allow_no_package_manager,
+            graph_features,
+        )
+        .await?;
+
+        let package_paths = hash_scopes(&pkg_dep_graph)
+            .map(|package| package.path)
+            .collect();
+        if let Err(error) = self.hash_watcher.set_package_paths(package_paths).await {
+            tracing::debug!(
+                ?error,
+                "repository graph package paths unavailable to hash watcher"
+            );
+        }
+
+        let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
+        let root_turbo_json = if pkg_dep_graph.resolved_single_package(self.single_package) {
             let root_scripts = pkg_dep_graph
                 .package_task_context(&PackageName::Root)
                 .map(|context| {
@@ -564,8 +596,18 @@ impl Subscriber {
             )
         }
         .load(&PackageName::Root)
-        .ok()
         .cloned();
+        let root_turbo_json = match root_turbo_json {
+            Ok(config) => Some(config),
+            Err(error) if selected_config.is_some() => {
+                tracing::debug!(
+                    ?error,
+                    "selected turbo config unavailable to package watcher"
+                );
+                return None;
+            }
+            Err(_) => None,
+        };
 
         publish_watch_spec(&pkg_dep_graph, &self.watch_spec, &self.watch_spec_ready);
 
@@ -1037,6 +1079,10 @@ mod test {
         let (_file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
         let (_discovery_tx, discovery_rx) = watch::channel(None);
         let (_hash_events_tx, hash_events) = WatchSource::channel_for_root(repo_root.as_std_path());
+        let future_flags = FutureFlags {
+            experimental_cargo_workspaces: cargo_enabled,
+            ..FutureFlags::default()
+        };
         Subscriber::new(
             repo_root.clone(),
             file_events,
@@ -1051,12 +1097,8 @@ mod test {
             None,
             single_package,
             false,
-            RepositoryGraphFeatures {
-                cargo: cargo_enabled,
-                python: false,
-                go: false,
-            },
-            FutureFlags::default(),
+            RepositoryGraphFeatures::new(&future_flags),
+            future_flags,
         )
     }
 
@@ -1084,7 +1126,9 @@ mod test {
         write_cargo_workspace(&repo_root);
         repo_root
             .join_component("turbo.json")
-            .create_with_contents(b"{\"tasks\":{\"build\":{}}}")
+            .create_with_contents(
+                br#"{"futureFlags":{"experimentalCargoWorkspaces":true},"tasks":{"build":{}}}"#,
+            )
             .unwrap();
 
         let state = initialize_test_state(&repo_root, true)
@@ -1146,63 +1190,165 @@ mod test {
         assert!(state.pkg_dep_graph.has_root_javascript_scope());
     }
 
+    #[tokio::test]
+    async fn config_generations_refresh_native_watch_specs_and_scopes() {
+        for config_name in ["turbo.json", "turbo.jsonc", "custom.json"] {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo_root = canonical_temp_root(&tmp);
+            write_cargo_workspace(&repo_root);
+            repo_root
+                .join_component("package.json")
+                .create_with_contents(
+                    br#"{"name":"root","packageManager":"npm@10.0.0","scripts":{"build":"echo"}}"#,
+                )
+                .unwrap();
+            repo_root
+                .join_component("package-lock.json")
+                .create_with_contents(br#"{"lockfileVersion":3}"#)
+                .unwrap();
+
+            // Start with no native injection: the selected config must enable
+            // Cargo even on the first generation. Keep the same subscriber.
+            let mut subscriber = test_subscriber(&repo_root, true, false);
+            let config_path = repo_root.join_component(config_name);
+            if config_name == "custom.json" {
+                subscriber.custom_turbo_json_path = Some(config_path.clone());
+            }
+            for enabled in [true, false, true] {
+                if config_name == "custom.json" {
+                    // The default deliberately disagrees with the custom path.
+                    repo_root
+                        .join_component("turbo.json")
+                        .create_with_contents(
+                            format!(
+                                r#"{{"futureFlags":{{"experimentalCargoWorkspaces":{}}}}}"#,
+                                !enabled
+                            )
+                            .as_bytes(),
+                        )
+                        .unwrap();
+                }
+                let contents = if enabled {
+                    r#"{"futureFlags":{"experimentalCargoWorkspaces":true,"watchUsingTaskInputs":true},"tasks":{"build":{}}}"#
+                } else {
+                    // Removing flags must reset them, not retain old enablement.
+                    r#"{"tasks":{"build":{}}}"#
+                };
+                config_path
+                    .create_with_contents(contents.as_bytes())
+                    .unwrap();
+                let state = subscriber
+                    .initialize_repo_state()
+                    .await
+                    .expect("valid root JavaScript keeps every generation available");
+                let expected_spec = if enabled {
+                    cargo_watch_spec()
+                } else {
+                    WatchSpec::default()
+                };
+                assert_eq!(state.pkg_dep_graph.active_watch_spec(), expected_spec);
+                assert_eq!(*subscriber.watch_spec.read().unwrap(), expected_spec);
+                assert!(subscriber.watch_spec_ready.load(Ordering::Acquire));
+                assert!(state.pkg_dep_graph.has_root_javascript_scope());
+                let scopes: HashSet<_> = hash_scopes(&state.pkg_dep_graph)
+                    .map(|scope| (scope.name, scope.path.to_unix().to_string()))
+                    .collect();
+                let mut expected_scopes = HashSet::from([(PackageName::Root, String::new())]);
+                if enabled {
+                    expected_scopes.insert((PackageName::from("native"), String::new()));
+                    expected_scopes
+                        .insert((PackageName::from("native-app"), "crates/app".to_string()));
+                }
+                assert_eq!(scopes, expected_scopes, "{config_name}, enabled={enabled}");
+                let flags = state.root_turbo_json.unwrap().future_flags;
+                assert_eq!(flags.experimental_cargo_workspaces, enabled);
+                assert_eq!(flags.watch_using_task_inputs, enabled);
+                let snapshot = subscriber.repository_discovery_tx.borrow().clone().unwrap();
+
+                // Bad selected config must not yield a new state or publish a
+                // generation based on the previous registry, even with a valid
+                // default config available in the custom-path case.
+                for invalid in [
+                    "{",
+                    r#"{"futureFlags":{"experimentalCargoWorkspaces":"yes"}}"#,
+                ] {
+                    config_path
+                        .create_with_contents(invalid.as_bytes())
+                        .unwrap();
+                    assert!(subscriber.initialize_repo_state().await.is_none());
+                    assert_eq!(*subscriber.watch_spec.read().unwrap(), expected_spec);
+                    assert!(Arc::ptr_eq(
+                        &snapshot,
+                        subscriber
+                            .repository_discovery_tx
+                            .borrow()
+                            .as_ref()
+                            .unwrap()
+                    ));
+                }
+            }
+        }
+    }
+
     #[tokio::test(flavor = "multi_thread")]
-    async fn optional_root_requires_cargo_manifest_but_not_workspace_mode() {
+    async fn optional_root_requires_native_workspace_and_preserves_single_package_inventory() {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = canonical_temp_root(&tmp);
-        let cargo_features = RepositoryGraphFeatures {
-            cargo: true,
-            python: false,
-            go: false,
-        };
+        let cargo_features = RepositoryGraphFeatures::new(&FutureFlags {
+            experimental_cargo_workspaces: true,
+            ..FutureFlags::default()
+        });
         assert!(
-            initialize_package_graph(&repo_root, false, false, cargo_features)
+            initialize_package_graph(&repo_root, false, false, cargo_features.clone())
                 .await
                 .is_none(),
             "registered Cargo without a root Cargo.toml must not permit a missing package.json"
         );
 
-        // This case needs only the root marker, not workspace discovery, Git,
-        // hashing, or a background event source. Those have integration tests.
         repo_root
             .join_component("Cargo.toml")
-            .create_with_contents(b"[workspace]\n")
+            .create_with_contents(b"[package]\nname = \"standalone\"\nversion = \"0.1.0\"\n")
             .unwrap();
         assert!(
-            initialize_package_graph(
-                &repo_root,
-                false,
-                false,
-                RepositoryGraphFeatures {
-                    cargo: false,
-                    ..cargo_features
-                },
-            )
-            .await
-            .is_none(),
+            initialize_package_graph(&repo_root, true, false, cargo_features.clone())
+                .await
+                .is_none(),
+            "a standalone manifest is not a workspace root"
+        );
+        write_cargo_workspace(&repo_root);
+        assert!(
+            initialize_package_graph(&repo_root, false, false, RepositoryGraphFeatures::default(),)
+                .await
+                .is_none(),
             "a Cargo manifest must not bypass the disabled feature"
         );
         let graph = initialize_package_graph(&repo_root, true, false, cargo_features)
             .await
-            .expect("single-package mode permits a Cargo-backed missing package.json");
-        let contexts: Vec<_> = graph.package_task_contexts().collect();
-        assert_eq!(contexts.len(), 1);
-        assert_eq!(contexts[0].package(), &PackageName::Root);
+            .expect("single-package mode preserves the native workspace");
+        let names: HashSet<_> = graph
+            .package_task_contexts()
+            .map(|context| context.package().clone())
+            .collect();
+        for expected in ["//", "native", "native-app"] {
+            assert!(
+                names.contains(&PackageName::from(expected)),
+                "missing {expected}"
+            );
+        }
         assert!(!graph.has_root_javascript_scope());
-        assert_eq!(graph.active_watch_spec(), WatchSpec::default());
+        assert_eq!(graph.active_watch_spec(), cargo_watch_spec());
 
-        // Exercise the production publication operation without creating
-        // unrelated watcher services. Seed stale native markers so a no-op
-        // publication cannot satisfy the assertion.
-        let watch_spec = RwLock::new(cargo_watch_spec());
+        // Publish the active native markers even when a caller requested
+        // single-package mode. No watcher services are needed for this check.
+        let watch_spec = RwLock::new(WatchSpec::default());
         let ready = AtomicBool::new(false);
         publish_watch_spec(&graph, &watch_spec, &ready);
         assert_eq!(
             *watch_spec
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
-            WatchSpec::default(),
-            "inactive Cargo must not contribute watch markers in single-package mode"
+            cargo_watch_spec(),
+            "registered Cargo must contribute watch markers in single-package mode"
         );
         assert!(ready.load(Ordering::Acquire));
     }
@@ -1218,11 +1364,10 @@ mod test {
             .create_with_contents(b"{")
             .unwrap();
         assert!(
-            RepositoryGraphFeatures {
-                cargo: true,
-                python: false,
-                go: false,
-            }
+            RepositoryGraphFeatures::new(&FutureFlags {
+                experimental_cargo_workspaces: true,
+                ..FutureFlags::default()
+            })
             .load_root_package_json(&repo_root)
             .is_err()
         );
@@ -1261,7 +1406,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn single_package_ignores_registered_cargo_watch_spec() {
+    async fn single_package_preserves_registered_cargo_watch_spec() {
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = canonical_temp_root(&tmp);
         repo_root
@@ -1287,27 +1432,26 @@ mod test {
         let state = subscriber
             .initialize_repo_state()
             .await
-            .expect("single-package JavaScript graph initializes");
+            .expect("single-package request preserves the mixed graph");
         let active_spec = state.pkg_dep_graph.active_watch_spec();
+        assert_eq!(active_spec, cargo_watch_spec());
         assert!(
-            !active_spec
-                .definition_file_names
-                .iter()
-                .any(|name| name == "Cargo.toml")
+            state
+                .pkg_dep_graph
+                .package_task_context(&PackageName::from("native"))
+                .is_some()
         );
-        assert!(
-            !active_spec
-                .ignore_prefixes
-                .iter()
-                .any(|prefix| prefix == "target")
+        publish_watch_spec(
+            &state.pkg_dep_graph,
+            &subscriber.watch_spec,
+            &subscriber.watch_spec_ready,
         );
-        assert_eq!(active_spec, WatchSpec::default());
         assert_eq!(
             *subscriber
                 .watch_spec
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner()),
-            WatchSpec::default()
+            cargo_watch_spec()
         );
         assert_eq!(
             state
@@ -1930,11 +2074,7 @@ mod test {
             repo_root,
             single_package,
             allow_no_package_manager,
-            RepositoryGraphFeatures {
-                cargo: false,
-                python: false,
-                go: false,
-            },
+            RepositoryGraphFeatures::default(),
         )
     }
 
@@ -1963,6 +2103,12 @@ mod test {
             scm,
         ));
 
+        let future_flags = FutureFlags {
+            experimental_cargo_workspaces: graph_features.cargo_enabled(),
+            experimental_python_workspaces: graph_features.python_enabled(),
+            experimental_go_workspaces: graph_features.go_enabled(),
+            ..FutureFlags::default()
+        };
         let watcher = PackageChangesWatcher::new(
             repo_root.clone(),
             file_events,
@@ -1971,7 +2117,7 @@ mod test {
             single_package,
             allow_no_package_manager,
             graph_features,
-            FutureFlags::default(),
+            future_flags,
         );
 
         TestWatcherHandle {
@@ -2136,6 +2282,12 @@ mod test {
     #[tokio::test(flavor = "multi_thread")]
     async fn watcher_emits_events_for_all_colocated_packages() {
         let (_tmp, repo_root) = setup_git_repo();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(
+                br#"{"futureFlags":{"experimentalCargoWorkspaces":true},"tasks":{"build":{}}}"#,
+            )
+            .unwrap();
         repo_root.join_component("Cargo.toml").create_with_contents(
             b"[workspace]\nmembers = [\"packages/a\"]\nresolver = \"2\"\n\n[workspace.metadata]\nname = \"native\"\n",
         ).unwrap();
@@ -2173,11 +2325,10 @@ mod test {
             &repo_root,
             false,
             false,
-            RepositoryGraphFeatures {
-                cargo: true,
-                python: false,
-                go: false,
-            },
+            RepositoryGraphFeatures::new(&FutureFlags {
+                experimental_cargo_workspaces: true,
+                ..FutureFlags::default()
+            }),
         );
         // Use the original receiver so a fast startup cannot discard Rediscover.
         let rx = &mut handle.watcher.package_change_events_rx;
