@@ -537,7 +537,9 @@ snapshots:
 }
 
 /// npm 12 patch files and declarations follow the pruned lockfile in both
-/// layouts. Regression for https://github.com/vercel/turborepo/issues/14426.
+/// layouts, including when the removed patch belongs to an optional peer.
+/// Regressions for https://github.com/vercel/turborepo/issues/14426 and
+/// https://github.com/vercel/turborepo/issues/14469.
 #[test]
 fn test_prune_npm_patches() {
     const PATCH: &str = "patches/is-number@7.0.0.patch";
@@ -546,6 +548,17 @@ fn test_prune_npm_patches() {
             let tempdir = tempfile::tempdir().unwrap();
             let dir = tempdir.path();
             setup::copy_fixture("npm_patches", dir).unwrap();
+            // Model a transitive optional peer that is hoisted only because
+            // another workspace (web) depends on it. Pruning docs must not
+            // retain that peer or its patch merely because it can be resolved.
+            let lockfile_path = dir.join("package-lock.json");
+            let mut lockfile: serde_json::Value =
+                serde_json::from_slice(&fs::read(&lockfile_path).unwrap()).unwrap();
+            lockfile["packages"]["node_modules/ms"]["peerDependencies"] =
+                serde_json::json!({"is-number": "^7.0.0"});
+            lockfile["packages"]["node_modules/ms"]["peerDependenciesMeta"] =
+                serde_json::json!({"is-number": {"optional": true}});
+            fs::write(&lockfile_path, serde_json::to_vec(&lockfile).unwrap()).unwrap();
             let original_manifest = fs::read(dir.join("package.json")).unwrap();
             let original_lockfile = fs::read(dir.join("package-lock.json")).unwrap();
             let original_patch = fs::read(dir.join(PATCH)).unwrap();
