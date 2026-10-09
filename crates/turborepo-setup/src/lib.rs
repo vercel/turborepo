@@ -6,6 +6,7 @@ pub mod bundled_npm;
 pub mod execution_identity;
 pub mod js_resolution;
 pub mod lock;
+pub mod native_baseline;
 pub mod node;
 pub mod node_discovery;
 pub mod node_metadata;
