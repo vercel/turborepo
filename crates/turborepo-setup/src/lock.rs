@@ -13,6 +13,7 @@ use crate::node_discovery::UniqueJson;
 
 mod io;
 pub mod reconcile;
+pub(crate) use io::probe_native_with;
 pub use io::{DeclarationMap, Snapshot, StorageError, WriteOutcome, probe_native, write};
 
 pub const SCHEMA_VERSION: u32 = 0;

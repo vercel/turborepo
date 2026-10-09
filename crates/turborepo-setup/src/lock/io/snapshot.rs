@@ -82,6 +82,10 @@ impl Snapshot {
         })
     }
 
+    pub(crate) fn repository_root(&self) -> &Path {
+        &self.root
+    }
+
     pub fn previous_lock(&self) -> Option<&Lock> {
         self.previous.as_ref()
     }

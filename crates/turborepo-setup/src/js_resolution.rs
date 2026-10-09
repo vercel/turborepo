@@ -31,7 +31,7 @@ pub enum Error {
 
 // Without an authoritative pin, only one unambiguous exact identity is in
 // scope. Never choose the first dev alternative or query a floating index.
-fn exact_manager(declaration: &Declaration) -> Result<String, Error> {
+pub(crate) fn exact_manager(declaration: &Declaration) -> Result<String, Error> {
     let (floating, ambiguous, missing, limit) = if declaration.manager == Manager::Npm {
         (
             "floating npm request",
@@ -77,7 +77,7 @@ fn exact_manager(declaration: &Declaration) -> Result<String, Error> {
 
 // Pure portable payload checks, matching the locked registry adapters without
 // host/promotion restrictions. Inspect EVERY variant, not the current platform.
-fn validate_registry(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
+pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
     let invalid = || Error::Registry(crate::registry_resolution::Error::InvalidLock);
     let (id, version) =
         crate::registry_metadata::validate_selection(declaration.manager, &tool.version)
