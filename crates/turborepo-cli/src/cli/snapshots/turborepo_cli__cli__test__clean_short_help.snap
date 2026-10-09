@@ -1,38 +1,32 @@
 ---
 source: crates/turborepo-cli/src/cli/test.rs
-expression: "Args::render_help(Args::command(), true).unwrap()"
+expression: "Args::render_help(cmd, false).unwrap()"
 ---
-The build system that makes ship happen
+Delete the outputs of tasks in your monorepo
 
-Usage: turbo [FLAGS] <SUBCOMMAND>
+Usage: turbo clean [FLAGS] [TASK]…
 
-Commands:
-  bin           Get the path to the Turbo binary
-  clean         Delete the outputs of tasks in your monorepo
-  completion    Generate the autocompletion script for the specified shell
-  daemon        Runs the Turborepo background daemon
-  devtools      Visualize your monorepo's package graph in the browser
-  docs          Search the Turborepo documentation
-  generate      Generate a new app / package [aliases: g, gen]
-  get-mfe-port  Get the port assigned to the current microfrontend
-  info          Print debugging information
-  link          Link your local directory to a Vercel organization and enable
-                remote caching.
-  login         Login to your Vercel account
-  logout        Logout to your Vercel account
-  ls            List packages in your monorepo.
-  prune         Prepare a subset of your monorepo.
-  query         Query your monorepo using GraphQL. If no query is provided,
-                spins up a GraphQL server with GraphiQL.
-  run           Run tasks across projects in your monorepo
-  setup         EXPERIMENTAL: Provision repository tools and dependencies (not
-                yet implemented)
-  telemetry     Enable or disable anonymous telemetry
-  unlink        Unlink the current directory from your Vercel organization and
-                disable Remote Caching
-  watch
+Arguments:
+  [TASK]…  The tasks whose outputs should be deleted
 
 Flags:
+      --dry-run                   List what would be deleted without deleting
+                                  anything
+      --cache                     Remove the entries of the local filesystem
+                                  cache
+  -F, --filter <FILTER>           Use the given selector to specify package(s)
+                                  to act as entry points. The syntax mirrors
+                                  pnpm's syntax, and additional documentation
+                                  and examples can be found in turbo's
+                                  documentation
+                                  https://turborepo.dev/docs/reference/run#--filter-string
+      --affected                  Filter to only packages that are affected by
+                                  changes between the current branch and `main`
+      --only                      Only clean the tasks specified, not the tasks
+                                  they depend on
+  -h, --help                      Print help
+
+Global flags:
       --version
       --skip-infer                Skip any attempts to infer which version of
                                   Turbo the project is configured to use
@@ -76,10 +70,6 @@ Flags:
       --dangerously-disable-package-manager-check
                                   Allow for missing `packageManager` in
                                   `package.json`.
-
-                                  `turbo` will use hints from codebase to guess
-                                  which package manager should be used.
       --root-turbo-json <ROOT_TURBO_JSON>  Use the `turbo.json` located at the
                                   provided path instead of one at the
                                   root of the repository.
-  -h, --help                      Print help

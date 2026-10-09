@@ -1,0 +1,89 @@
+---
+title: clean
+description: API reference for the `turbo clean` command
+product: turborepo
+type: reference
+summary: All flags and options for the `turbo clean` command that deletes the outputs of tasks and clears the local cache.
+related:
+  - /docs/reference/run
+  - /docs/reference/configuration
+---
+
+Delete the files that tasks write as their [`outputs`](/docs/reference/configuration#outputs), and optionally clear the local cache.
+
+```bash title="Terminal"
+turbo clean [tasks] [options]
+```
+
+Turborepo already knows every task's outputs, so you don't have to repeat them in `rm -rf` scripts. `turbo clean` selects tasks and resolves their outputs the same way [`turbo run`](/docs/reference/run) does. That includes `dependsOn`, [Package Configurations](/docs/reference/package-configurations), `!` exclusions, and outputs that Turborepo derives for native toolchains. It deletes the files a cache restore would write back, except for the protected paths listed under [Safety](#safety).
+
+```bash title="Terminal"
+# Delete the outputs of every package's `build` task
+turbo clean build
+
+# Delete the outputs of web#build and of the tasks it depends on
+turbo clean build --filter=web
+
+# Preview what would be deleted
+turbo clean build --dry
+
+# Clear the local cache
+turbo clean --cache
+```
+
+<Callout type="info" title="Running a task named clean">
+  `turbo clean` runs this command, not a task named `clean`. To run such a task,
+  use `turbo run clean`.
+</Callout>
+
+## What gets deleted
+
+For each selected task, `turbo clean` deletes the files and symlinks that match its `outputs`. A directory is deleted only when everything inside it has been deleted. For example, with `"outputs": ["dist/**", "!dist/keep.txt"]`, the files in `dist` are deleted but `dist/keep.txt` and the `dist` directory are kept.
+
+These tasks are skipped and reported:
+
+- Tasks without `outputs`.
+- Tasks with [`"cache": false`](/docs/reference/configuration#cache).
+- [Persistent](/docs/reference/configuration#persistent) tasks.
+
+Task logs in `.turbo` are not deleted; the next cache hit rewrites them.
+
+### Safety
+
+`turbo clean` deletes files on your machine, so it never deletes:
+
+- Anything outside the repository.
+- Anything reached through a symlink. A symlink that matches `outputs` is deleted itself, but its target is never touched.
+- The repository root, a package directory, or any directory that contains a package.
+- Anything inside `node_modules`, `.git`, or `.turbo`. Use `--cache` to clear the local cache.
+- Files tracked by git. Build outputs aren't committed, so tracked files that match `outputs` are kept and reported.
+
+Output globs that would sweep a whole package are skipped and reported. These are globs that start at a package directory or above and are recursive (`**`) or a bare `*`, for example `"**"` or `"../*"`. Anchor such outputs in a directory instead, like `"dist/**"`.
+
+## Options
+
+#### `--dry` / `--dry-run`
+
+List what would be deleted without deleting anything. Directories that would be deleted are listed once, with a trailing `/`.
+
+#### `--cache`
+
+Delete the entries of the local filesystem cache. The cache directory is resolved like it is for `turbo run`: [`cacheDir`](/docs/reference/configuration#cachedir), `TURBO_CACHE_DIR`, or `.turbo/cache` by default.
+
+Only cache artifacts and their metadata files are deleted. The directory itself, other files, and temporary files from cache writes still in progress are kept. A cache directory outside the repository, such as the shared cache of a linked Git worktree, is not cleared.
+
+`--cache` can be used without tasks, or combined with them to also delete task outputs.
+
+#### `--filter <string>`
+
+Aliased as `-F`.
+
+Select the packages whose tasks are cleaned. The syntax is the same as [`turbo run --filter`](/docs/reference/run#--filter-string).
+
+#### `--affected`
+
+Select packages that are affected by changes between the current branch and `main`, the same as [`turbo run --affected`](/docs/reference/run#--affected).
+
+#### `--only`
+
+Clean only the tasks specified, not the tasks they depend on. The same as [`turbo run --only`](/docs/reference/run#--only).

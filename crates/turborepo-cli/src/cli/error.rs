@@ -58,6 +58,14 @@ pub enum Error {
     #[diagnostic(transparent)]
     Prune(#[from] prune::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
+    Clean(#[from] crate::commands::clean::Error),
+    #[error(
+        "Nothing to clean. Pass one or more tasks (e.g. `turbo clean build`) and/or `--cache`. To \
+         run a task named `clean`, use `turbo run clean`."
+    )]
+    CleanNothingSelected,
+    #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
     #[error(transparent)]
     PackageManager(#[from] turborepo_repository::package_manager::Error),

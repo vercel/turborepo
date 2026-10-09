@@ -1,5 +1,5 @@
 use tracing::{debug, trace};
-use turbopath::RelativeUnixPathBuf;
+use turbopath::{RelativeUnixPath, RelativeUnixPathBuf};
 
 use crate::{
     Error, GitHashes, GitRepo, OidHash,
@@ -696,6 +696,19 @@ impl RepoGitIndex {
         );
 
         Ok((hashes, to_hash))
+    }
+
+    /// Whether `path` (relative to the git root) is tracked by the index,
+    /// including tracked files that are modified or deleted in the working
+    /// tree. Untracked entries layered on later never count as tracked.
+    pub fn is_tracked(&self, path: &RelativeUnixPath) -> bool {
+        self.ls_tree_hashes
+            .binary_search_by(|(entry_path, _)| entry_path.as_str().cmp(path.as_str()))
+            .is_ok()
+            || self
+                .status_entries
+                .binary_search_by(|entry| entry.path.as_str().cmp(path.as_str()))
+                .is_ok_and(|idx| !self.status_entries[idx].is_untracked)
     }
 
     /// Partition a set of existing git-root-relative file paths into:
@@ -1730,6 +1743,31 @@ mod tests {
             args,
             String::from_utf8_lossy(&output.stderr)
         );
+    }
+
+    #[test]
+    fn test_is_tracked_covers_clean_and_modified_files_only() {
+        let tempdir = TempDir::new().unwrap();
+        let root = tempdir.path();
+        git(root, &["init"]);
+        git(root, &["config", "--local", "core.autocrlf", "false"]);
+        write_file(root, "clean.txt", "clean");
+        write_file(root, "modified.txt", "before");
+        git(root, &["add", "clean.txt", "modified.txt"]);
+        write_file(root, "modified.txt", "after, and longer");
+        write_file(root, "untracked.txt", "untracked");
+
+        let mut index = RepoGitIndex::new_tracked(&test_git_repo(root)).unwrap();
+        index.populate_untracked_from_candidates(vec![
+            path("clean.txt"),
+            path("modified.txt"),
+            path("untracked.txt"),
+        ]);
+
+        assert!(index.is_tracked(&path("clean.txt")));
+        assert!(index.is_tracked(&path("modified.txt")));
+        assert!(!index.is_tracked(&path("untracked.txt")));
+        assert!(!index.is_tracked(&path("missing.txt")));
     }
 
     /// A tracked file whose raw size changed since `git add` must classify as

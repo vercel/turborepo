@@ -1026,6 +1026,26 @@ impl Args {
                     ..Default::default()
                 },
             ),
+            // Clean plans tasks exactly like `turbo run --dry`, so it shares the
+            // run selectors for task and package selection and nothing else.
+            Some(Command::Clean {
+                filter,
+                affected,
+                only,
+                pkg_inference_root,
+                tasks,
+                ..
+            }) => (
+                RunSelector::default(),
+                ExecutionSelector {
+                    tasks: tasks.clone(),
+                    filter: filter.clone(),
+                    affected: *affected,
+                    only: *only,
+                    pkg_inference_root: pkg_inference_root.clone(),
+                    ..default_execution_selector
+                },
+            ),
             Some(Command::Query {
                 subcommand: Some(QuerySubcommand::Ls(ls_args)),
                 ..
@@ -1143,6 +1163,37 @@ pub enum Command {
         ignore: Option<BoundariesIgnore>,
         #[usage(long, requires = "ignore")]
         reason: Option<String>,
+    },
+    /// Delete the outputs of tasks in your monorepo
+    ///
+    /// Removes the files matching each selected task's `outputs`, resolved the
+    /// same way `turbo run` resolves them. Tasks are selected exactly like
+    /// `turbo run` selects them.
+    Clean {
+        /// List what would be deleted without deleting anything
+        #[usage(alias = "dry", long = "dry-run")]
+        dry_run: bool,
+        /// Remove the entries of the local filesystem cache
+        #[usage(long)]
+        cache: bool,
+        /// Use the given selector to specify package(s) to act as
+        /// entry points. The syntax mirrors pnpm's syntax, and
+        /// additional documentation and examples can be found in
+        /// turbo's documentation https://turborepo.dev/docs/reference/run#--filter-string
+        #[usage(short = 'F', long)]
+        filter: Vec<String>,
+        /// Filter to only packages that are affected by changes between
+        /// the current branch and `main`
+        #[usage(long)]
+        affected: bool,
+        /// Only clean the tasks specified, not the tasks they depend on
+        #[usage(long)]
+        only: bool,
+        #[usage(long, hide = true)]
+        pkg_inference_root: Option<String>,
+        /// The tasks whose outputs should be deleted
+        #[usage(value_name = "TASK")]
+        tasks: Vec<String>,
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: CompletionShell },

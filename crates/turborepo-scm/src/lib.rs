@@ -578,6 +578,25 @@ impl SCM {
         }
     }
 
+    /// Read the tracked portion of the git index, failing loudly rather than
+    /// falling back. `None` when the repository is not managed by git or
+    /// nothing has been staged yet (no index file), i.e. nothing is tracked.
+    ///
+    /// Callers that must never touch tracked files (e.g. `turbo clean`) use
+    /// this instead of the best-effort `build_*_eager` variants.
+    pub fn tracked_repo_index(&self) -> Result<Option<RepoGitIndex>, Error> {
+        match self {
+            SCM::Git(git) => {
+                let git_dir = worktree::resolve_git_dir(&git.root)?;
+                if !git_dir.join_component("index").exists() {
+                    return Ok(None);
+                }
+                RepoGitIndex::new_tracked(git).map(Some)
+            }
+            SCM::Manual => Ok(None),
+        }
+    }
+
     pub fn populate_repo_index_untracked(
         &self,
         repo_index: &mut RepoGitIndex,

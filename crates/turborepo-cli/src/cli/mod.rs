@@ -20,8 +20,8 @@ use turborepo_watch::WatchClient;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, setup, telemetry, unlink,
+        CommandBase, bin, boundaries, clean, config, daemon, docs, generate, get_mfe_port, info,
+        link, login, logout, ls, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
@@ -155,25 +155,20 @@ fn set_run_flags<'a>(
                     .unwrap_or(false);
             // If this is a run command, and we know the actual invocation path, set the
             // inference root, as long as the user hasn't overridden the cwd
-            if cli_args.cwd.is_none() {
-                if let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) {
-                    // TODO: this calculation can probably be wrapped into the path library
-                    // and made a little more robust or clear
-                    let invocation_path = Utf8Path::new(&invocation_dir);
-
-                    // If repo state doesn't exist, we're either local turbo running at the root
-                    // (cwd), or inference failed.
-                    // If repo state does exist, we're global turbo, and want to calculate
-                    // package inference based on the repo root
-                    let this_dir = AbsoluteSystemPathBuf::cwd()?;
-                    let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
-                    if let Some(relative_path) = inferred_package_root(invocation_path, repo_root) {
-                        debug!("pkg_inference_root set to \"{}\"", relative_path);
-                        execution_args.pkg_inference_root = Some(relative_path);
-                    }
-                } else {
-                    debug!("{} not set", INVOCATION_DIR_ENV_VAR);
-                }
+            if let Some(relative_path) = invocation_pkg_inference_root(repo_state, cli_args)? {
+                execution_args.pkg_inference_root = Some(relative_path);
+            }
+        }
+        Command::Clean {
+            pkg_inference_root, ..
+        } => {
+            // Clean selects tasks like `turbo run`, including repository mode and
+            // package inference from the invocation directory.
+            cli_args.single_package |= repo_state
+                .as_ref()
+                .is_some_and(|state| matches!(state.mode, RepoMode::SinglePackage));
+            if let Some(relative_path) = invocation_pkg_inference_root(repo_state, cli_args)? {
+                *pkg_inference_root = Some(relative_path);
             }
         }
         Command::Query { .. } => {
@@ -185,6 +180,37 @@ fn set_run_flags<'a>(
         _ => {}
     }
     Ok(command)
+}
+
+/// Package inference root for task-selecting commands, derived from the
+/// directory global turbo was invoked from. `None` when the user overrode the
+/// cwd or the invocation was at the repository root.
+fn invocation_pkg_inference_root(
+    repo_state: &Option<RepoState>,
+    cli_args: &Args,
+) -> Result<Option<String>, Error> {
+    if cli_args.cwd.is_some() {
+        return Ok(None);
+    }
+    let Ok(invocation_dir) = env::var(INVOCATION_DIR_ENV_VAR) else {
+        debug!("{} not set", INVOCATION_DIR_ENV_VAR);
+        return Ok(None);
+    };
+    // TODO: this calculation can probably be wrapped into the path library
+    // and made a little more robust or clear
+    let invocation_path = Utf8Path::new(&invocation_dir);
+
+    // If repo state doesn't exist, we're either local turbo running at the root
+    // (cwd), or inference failed.
+    // If repo state does exist, we're global turbo, and want to calculate
+    // package inference based on the repo root
+    let this_dir = AbsoluteSystemPathBuf::cwd()?;
+    let repo_root = repo_state.as_ref().map_or(&this_dir, |r| &r.root);
+    let relative_path = inferred_package_root(invocation_path, repo_root);
+    if let Some(relative_path) = &relative_path {
+        debug!("pkg_inference_root set to \"{}\"", relative_path);
+    }
+    Ok(relative_path)
 }
 
 fn should_maintain_agent_guidance(
@@ -871,6 +897,29 @@ async fn run_main(
                 event_child,
             )
             .await?;
+            Ok(0)
+        }
+        Command::Clean {
+            dry_run,
+            cache,
+            tasks,
+            ..
+        } => {
+            let event = CommandEventBuilder::new("clean").with_parent(&root_telemetry);
+            event.track_call();
+            event.track_arg_usage("dry-run", *dry_run);
+            event.track_arg_usage("cache", *cache);
+            let options = clean::CleanOptions {
+                dry_run: *dry_run,
+                cache: *cache,
+                clean_outputs: !tasks.is_empty(),
+            };
+            if !options.clean_outputs && !options.cache {
+                return Err(Error::CleanNothingSelected);
+            }
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            event.track_ui_mode(base.opts.run_opts.ui_mode);
+            clean::run(base, event, options).await?;
             Ok(0)
         }
         Command::Completion { shell } => {

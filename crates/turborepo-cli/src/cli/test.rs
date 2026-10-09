@@ -499,6 +499,12 @@ fn logout_short_help() {
 }
 
 #[test]
+fn clean_short_help() {
+    let cmd = get_subcommand("clean");
+    assert_snapshot!(Args::render_help(cmd, false).unwrap());
+}
+
+#[test]
 fn devtools_short_help() {
     let cmd = get_subcommand("devtools");
     assert_snapshot!(Args::render_help(cmd, false).unwrap());
@@ -1620,6 +1626,93 @@ fn test_parse_unlink() {
         },
     }
     .test();
+}
+
+#[test]
+fn test_parse_clean() {
+    struct Expected {
+        dry_run: bool,
+        cache: bool,
+        filter: &'static [&'static str],
+        affected: bool,
+        only: bool,
+        tasks: &'static [&'static str],
+    }
+    let defaults = Expected {
+        dry_run: false,
+        cache: false,
+        filter: &[],
+        affected: false,
+        only: false,
+        tasks: &["build"],
+    };
+    let clean = |expected: Expected| Args {
+        command: Some(Command::Clean {
+            dry_run: expected.dry_run,
+            cache: expected.cache,
+            filter: expected.filter.iter().map(|f| f.to_string()).collect(),
+            affected: expected.affected,
+            only: expected.only,
+            pkg_inference_root: None,
+            tasks: expected.tasks.iter().map(|t| t.to_string()).collect(),
+        }),
+        ..Args::default()
+    };
+
+    assert_eq!(
+        parse_args(["turbo", "clean", "build", "lint"]).unwrap(),
+        clean(Expected {
+            tasks: &["build", "lint"],
+            ..defaults
+        })
+    );
+    for dry in ["--dry", "--dry-run"] {
+        assert_eq!(
+            parse_args(["turbo", "clean", "build", dry]).unwrap(),
+            clean(Expected {
+                dry_run: true,
+                ..defaults
+            })
+        );
+    }
+    assert_eq!(
+        parse_args([
+            "turbo",
+            "clean",
+            "build",
+            "-F",
+            "web",
+            "--filter=docs",
+            "--only",
+            "--affected"
+        ])
+        .unwrap(),
+        clean(Expected {
+            filter: &["web", "docs"],
+            only: true,
+            affected: true,
+            ..defaults
+        })
+    );
+    assert_eq!(
+        parse_args(["turbo", "clean", "--cache"]).unwrap(),
+        clean(Expected {
+            cache: true,
+            tasks: &[],
+            ..defaults
+        })
+    );
+    // Clean has no run-only flags.
+    assert!(parse_args(["turbo", "clean", "build", "--concurrency=1"]).is_err());
+}
+
+#[test]
+fn clean_selects_tasks_like_run() {
+    let args = parse_args(["turbo", "clean", "build", "--filter=web", "--only"]).unwrap();
+    let (_, execution) = args.selectors();
+    assert_eq!(execution.tasks, ["build"]);
+    assert_eq!(execution.filter, ["web"]);
+    assert!(execution.only);
 }
 
 #[test]

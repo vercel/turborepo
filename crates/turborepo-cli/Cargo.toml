@@ -35,9 +35,11 @@ tar = { version = "0.4.45", default-features = false }
 test-case = { workspace = true }
 tracing.workspace = true
 turborepo-download = { workspace = true, features = ["test-support"] }
+turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }
+turborepo-run-cache = { workspace = true }
 turborepo-run-context = { workspace = true }
 turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-vercel-api-mock = { workspace = true }
@@ -52,6 +54,7 @@ dhat = { workspace = true, optional = true }
 dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
 dirs-next = "2.0.0"
 futures = { workspace = true }
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
 humantime = "2.1.0"
 itertools = { workspace = true }
@@ -82,6 +85,7 @@ turborepo-ai-agents = { workspace = true }
 turborepo-api-client = { workspace = true }
 turborepo-auth = { path = "../turborepo-auth" }
 turborepo-boundaries = { workspace = true }
+turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-config = { path = "../turborepo-config" }
 turborepo-daemon = { workspace = true }
@@ -103,6 +107,7 @@ turborepo-rayon-compat = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-run = { workspace = true, default-features = false }
 turborepo-run-opts = { workspace = true }
+turborepo-scm = { workspace = true }
 turborepo-setup = { path = "../turborepo-setup" }
 turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }
