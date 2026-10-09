@@ -12,6 +12,7 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -60,6 +61,34 @@ struct Inventory {
     schema: u32,
     generation: String,
     tools: Vec<Installed>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    record_sha256: Option<String>,
+}
+
+const RECORD_LIMIT: u64 = 1024 * 1024;
+
+/// Opaque bookkeeping, never execution authorization. The caller must exclude
+/// secrets, raw source manifests and machine paths, and validate canonical
+/// encoding, provenance and native semantics. This backend cannot validate
+/// those properties; it only bounds and binds bytes to a complete generation.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Record(Vec<u8>);
+
+impl Record {
+    pub fn new(bytes: Vec<u8>) -> Result<Self, Error> {
+        if bytes.is_empty() || bytes.len() as u64 > RECORD_LIMIT {
+            return Err(Error::InvalidInventory);
+        }
+        Ok(Self(bytes))
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    fn hash(&self) -> String {
+        hex::encode(Sha256::digest(&self.0))
+    }
 }
 
 impl Inventory {
@@ -73,6 +102,26 @@ pub struct Store {
     // Never unlink a lock file: all processes must lock the same inode.
     _lock: File,
     owner_pid: u32,
+    root_handle: File,
+    repo_handle: File,
+    identity: Arc<()>,
+}
+
+/// Sealed evidence from one live Store guard, not a caller-authored path or
+/// Current. Recheck after waits; hold caller source/writer guards through
+/// reconciliation. This is integrity evidence, never execution authorization.
+pub struct GenerationExpectation {
+    identity: Arc<()>,
+    manifest: Option<Vec<u8>>,
+    current: Option<Current>,
+}
+
+impl GenerationExpectation {
+    /// Full inspected trees and hash-bound metadata for caller validation.
+    /// None means truly absent manifest, not a broken selected generation.
+    pub fn current(&self) -> Option<&Current> {
+        self.current.as_ref()
+    }
 }
 
 impl Drop for Store {
@@ -90,6 +139,9 @@ pub struct Current {
     pub tools: Vec<Tool>,
     /// For bookkeeping only; not a trusted activation PATH.
     pub bin: PathBuf,
+    /// Hash-checked bookkeeping from this generation. Caller validation
+    /// required.
+    pub record: Option<Record>,
 }
 
 impl Current {
@@ -114,10 +166,12 @@ impl Store {
         }
         let repo = fs::canonicalize(repo)?;
         real_directory(&repo)?;
+        let repo_handle = File::open(&repo)?;
         let turbo = repo.join(".turbo");
         directory(&turbo)?;
         let root = turbo.join("tools");
         directory(&root)?;
+        let root_handle = File::open(&root)?;
         let path = root.join("transaction.lock");
         match fs::symlink_metadata(&path) {
             Ok(m) if !m.is_file() || m.file_type().is_symlink() => return Err(Error::UnsafePath),
@@ -136,11 +190,101 @@ impl Store {
             std::fs::TryLockError::WouldBlock => Error::Busy,
             std::fs::TryLockError::Error(e) => Error::Io(e),
         })?;
-        Ok(Self {
+        let store = Self {
             root,
             _lock: lock,
             owner_pid,
-        })
+            root_handle,
+            repo_handle,
+            identity: Arc::new(()),
+        };
+        store.check_root()?;
+        Ok(store)
+    }
+
+    /// Canonical actual caller-selected repository, never derived from
+    /// metadata.
+    pub fn repository_root(&self) -> Result<&Path, Error> {
+        self.root
+            .parent()
+            .and_then(Path::parent)
+            .ok_or(Error::UnsafePath)
+    }
+
+    fn check_root(&self) -> Result<(), Error> {
+        real_directory(self.repository_root()?)?;
+        real_directory(self.root.parent().ok_or(Error::UnsafePath)?)?;
+        real_directory(&self.root)?;
+        if self.owner_pid != std::process::id() || fs::canonicalize(&self.root)? != self.root {
+            return Err(Error::UnsafePath);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            for (handle, path) in [
+                (&self.root_handle, self.root.as_path()),
+                (&self.repo_handle, self.repository_root()?),
+            ] {
+                let held = handle.metadata()?;
+                let now = fs::metadata(path)?;
+                if (held.dev(), held.ino()) != (now.dev(), now.ino()) {
+                    return Err(Error::UnsafePath);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn manifest_bytes(root: &Path) -> Result<Option<Vec<u8>>, Error> {
+        let path = root.join("manifest.json");
+        match fs::symlink_metadata(&path) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+            Ok(m) if !m.is_file() || m.file_type().is_symlink() => return Err(Error::UnsafePath),
+            _ => {}
+        }
+        let mut bytes = Vec::new();
+        File::open(path)?
+            .take(RECORD_LIMIT + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() as u64 > RECORD_LIMIT {
+            return Err(Error::InvalidInventory);
+        }
+        Ok(Some(bytes))
+    }
+
+    /// Capture the actual manifest and full healthy selection under this guard.
+    /// Present invalid metadata or a missing generation is not an absent
+    /// baseline.
+    pub fn generation(&self) -> Result<GenerationExpectation, Error> {
+        self.check_root()?;
+        let manifest = Self::manifest_bytes(&self.root)?;
+        let current = self.current()?;
+        if manifest.is_some() && current.is_none() {
+            return Err(Error::InvalidInventory);
+        }
+        let expected = GenerationExpectation {
+            identity: self.identity.clone(),
+            manifest,
+            current,
+        };
+        self.check_generation(&expected)?;
+        Ok(expected)
+    }
+
+    /// Reverify exact bytes, held root identity, complete trees/shims and
+    /// record. Tokens are valid only on the acquiring live Store, including
+    /// after waits.
+    pub fn check_generation(&self, expected: &GenerationExpectation) -> Result<(), Error> {
+        self.check_root()?;
+        if !Arc::ptr_eq(&self.identity, &expected.identity)
+            || Self::manifest_bytes(&self.root)? != expected.manifest
+            || self.current()?.is_none() != expected.current.is_none()
+            || Self::manifest_bytes(&self.root)? != expected.manifest
+        {
+            return Err(Error::InvalidInventory);
+        }
+        self.check_root()
     }
 
     /// Read-only readiness at this exact repository root, never an ancestor.
@@ -162,29 +306,43 @@ impl Store {
                 result => result?,
             }
         }
+        let root_handle = File::open(&root)?;
+        let before = Self::manifest_bytes(&root)?;
         let Some(inventory) = Self::inventory(&root)? else {
             return Ok(None);
         };
-        Self::check(&root, &inventory)?;
-        if Self::inventory(&root)?.as_ref() != Some(&inventory) {
+        let record = Self::check(&root, &inventory)?;
+        if Self::manifest_bytes(&root)? != before {
             return Err(Error::InvalidInventory);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            real_directory(&turbo)?;
+            real_directory(&root)?;
+            let held = root_handle.metadata()?;
+            let now = fs::metadata(&root)?;
+            if (held.dev(), held.ino()) != (now.dev(), now.ino()) {
+                return Err(Error::UnsafePath);
+            }
         }
         Ok(Some(Current {
             bin: root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
+            record,
         }))
     }
 
     fn inventory(root: &Path) -> Result<Option<Inventory>, Error> {
-        let path = root.join("manifest.json");
-        match fs::symlink_metadata(&path) {
-            Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
-            Ok(m) if !m.is_file() || m.file_type().is_symlink() => return Err(Error::UnsafePath),
-            Ok(_) => {}
-        }
-        let inventory: Inventory = serde_json::from_reader(File::open(path)?.take(1024 * 1024))?;
+        let Some(bytes) = Self::manifest_bytes(root)? else {
+            return Ok(None);
+        };
+        let inventory: Inventory = serde_json::from_slice(&bytes)?;
         if inventory.schema != 1
+            || inventory
+                .record_sha256
+                .as_ref()
+                .is_some_and(|h| !is_sha256(h))
             || !inventory.generation.starts_with("generation-")
             || inventory
                 .tools
@@ -209,13 +367,15 @@ impl Store {
     }
 
     pub fn current(&self) -> Result<Option<Current>, Error> {
+        self.check_root()?;
         let Some(inventory) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
-        Self::check(&self.root, &inventory)?;
+        let record = Self::check(&self.root, &inventory)?;
         Ok(Some(Current {
             bin: self.root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
+            record,
         }))
     }
 
@@ -255,11 +415,12 @@ impl Store {
     }
 
     fn healthy_inventory(&self) -> Result<Option<Inventory>, Error> {
+        self.check_root()?;
         let Some(old) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
         match Self::check(&self.root, &old) {
-            Ok(()) => Ok(Some(old)),
+            Ok(_) => Ok(Some(old)),
             // Metadata/path validation above remains fail-closed. Damaged install
             // contents can be rebuilt, but must never be copied into staging.
             Err(Error::InvalidInventory | Error::UnsafePath) => Ok(None),
@@ -268,8 +429,42 @@ impl Store {
         }
     }
 
-    fn check(root: &Path, inventory: &Inventory) -> Result<(), Error> {
+    fn record(root: &Path, inventory: &Inventory) -> Result<Option<Record>, Error> {
+        let path = root.join(&inventory.generation).join("record.json");
+        let metadata = match fs::symlink_metadata(&path) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound && inventory.record_sha256.is_none() => {
+                return Ok(None);
+            }
+            result => result?,
+        };
+        let expected = inventory
+            .record_sha256
+            .as_ref()
+            .ok_or(Error::InvalidInventory)?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(Error::UnsafePath);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if metadata.nlink() != 1 || metadata.mode() & 0o7022 != 0 {
+                return Err(Error::UnsafePath);
+            }
+        }
+        let mut bytes = Vec::new();
+        File::open(path)?
+            .take(RECORD_LIMIT + 1)
+            .read_to_end(&mut bytes)?;
+        let record = Record::new(bytes)?;
+        if record.hash() != *expected {
+            return Err(Error::InvalidInventory);
+        }
+        Ok(Some(record))
+    }
+
+    fn check(root: &Path, inventory: &Inventory) -> Result<Option<Record>, Error> {
         let generation = root.join(&inventory.generation);
+        real_directory(&generation)?;
         let tools = generation.join("tools");
         real_directory(&tools)?;
         let bin = generation.join("bin");
@@ -297,7 +492,7 @@ impl Store {
         if actual != names {
             return Err(Error::InvalidInventory);
         }
-        Ok(())
+        Self::record(root, inventory)
     }
 
     /// Mutable access serializes transactions sharing this lock handle.
@@ -325,7 +520,7 @@ impl Store {
         stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
-        self.reconcile_prepared(desired, false, stage_tool, before_publish)
+        self.reconcile_prepared(desired, false, None, stage_tool, before_publish)
     }
 
     /// Replace the whole generation using fresh adapter preparations, including
@@ -338,23 +533,61 @@ impl Store {
         stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
-        self.reconcile_prepared(desired, true, stage_tool, before_publish)
+        self.reconcile_prepared(desired, true, None, stage_tool, before_publish)
+    }
+
+    /// Select caller-validated metadata atomically with the complete cohort.
+    /// Capture generation(), validate its record and full tool resources under
+    /// caller guards, and check_generation() after waits. This call rechecks at
+    /// entry and after the final caller check on BOTH unchanged and changed
+    /// paths. Metadata differences replace the generation; force freshly
+    /// stages every tool without changing can_reuse health truth. Ordinary
+    /// wrappers select record=None, rather than preserving potentially
+    /// stale caller metadata.
+    pub fn reconcile_recorded_checked(
+        &mut self,
+        desired: &[Tool],
+        record: &Record,
+        expected: &GenerationExpectation,
+        force: bool,
+        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+        before_publish: impl FnOnce() -> Result<(), Error>,
+    ) -> Result<Outcome, Error> {
+        self.reconcile_prepared(
+            desired,
+            force,
+            Some((record, expected)),
+            stage_tool,
+            before_publish,
+        )
     }
 
     fn reconcile_prepared(
         &mut self,
         desired: &[Tool],
         force: bool,
+        recorded: Option<(&Record, &GenerationExpectation)>,
         mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
+        if let Some((_, expected)) = recorded {
+            self.check_generation(expected)?;
+        }
+        let record_sha256 = recorded.map(|(record, _)| record.hash());
         let old = self.healthy_inventory()?;
         let valid_old = old.as_ref().filter(|_| !force);
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
-        if valid_old.is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())) {
+        if valid_old.is_some_and(|old| {
+            old.tools.iter().map(|t| &t.tool).eq(desired.iter())
+                && old.record_sha256 == record_sha256
+        }) {
             before_publish()?;
+            self.check_root()?;
+            if let Some((_, expected)) = recorded {
+                self.check_generation(expected)?;
+            }
             return Ok(Outcome::Unchanged);
         }
         let stage = tempfile::Builder::new()
@@ -383,8 +616,21 @@ impl Store {
             }
             installed.push(Installed { tool, tree_sha256 });
         }
+        if let Some((record, _)) = recorded {
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            options
+                .open(stage.path().join("record.json"))?
+                .write_all(record.bytes())?;
+        }
         let inventory = Inventory {
             schema: 1,
+            record_sha256,
             generation: stage
                 .path()
                 .file_name()
@@ -408,6 +654,11 @@ impl Store {
         let _ = stage.keep();
         sync_directory(&self.root)?;
         before_publish()?;
+        self.check_root()?;
+        Self::check(&self.root, &inventory)?;
+        if let Some((_, expected)) = recorded {
+            self.check_generation(expected)?;
+        }
         manifest
             .persist(self.root.join("manifest.json"))
             .map_err(|e| Error::Io(e.error))?;

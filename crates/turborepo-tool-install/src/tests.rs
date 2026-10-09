@@ -11,6 +11,7 @@ mod force;
 mod inherited_child;
 mod inherited_lock;
 mod paths_permissions;
+mod record;
 mod recovery;
 
 fn tool(id: &str) -> Tool {
