@@ -537,7 +537,9 @@ snapshots:
 }
 
 /// npm 12 patch files and declarations follow the pruned lockfile in both
-/// layouts. Regression for https://github.com/vercel/turborepo/issues/14426.
+/// layouts, including when the removed patch belongs to an optional peer.
+/// Regressions for https://github.com/vercel/turborepo/issues/14426 and
+/// https://github.com/vercel/turborepo/issues/14469.
 #[test]
 fn test_prune_npm_patches() {
     const PATCH: &str = "patches/is-number@7.0.0.patch";
@@ -546,6 +548,17 @@ fn test_prune_npm_patches() {
             let tempdir = tempfile::tempdir().unwrap();
             let dir = tempdir.path();
             setup::copy_fixture("npm_patches", dir).unwrap();
+            // Model a transitive optional peer that is hoisted only because
+            // another workspace (web) depends on it. Pruning docs must not
+            // retain that peer or its patch merely because it can be resolved.
+            let lockfile_path = dir.join("package-lock.json");
+            let mut lockfile: serde_json::Value =
+                serde_json::from_slice(&fs::read(&lockfile_path).unwrap()).unwrap();
+            lockfile["packages"]["node_modules/ms"]["peerDependencies"] =
+                serde_json::json!({"is-number": "^7.0.0"});
+            lockfile["packages"]["node_modules/ms"]["peerDependenciesMeta"] =
+                serde_json::json!({"is-number": {"optional": true}});
+            fs::write(&lockfile_path, serde_json::to_vec(&lockfile).unwrap()).unwrap();
             let original_manifest = fs::read(dir.join("package.json")).unwrap();
             let original_lockfile = fs::read(dir.join("package-lock.json")).unwrap();
             let original_patch = fs::read(dir.join(PATCH)).unwrap();
@@ -606,6 +619,125 @@ fn test_prune_npm_patches() {
                 original_lockfile
             );
             assert_eq!(fs::read(dir.join(PATCH)).unwrap(), original_patch);
+        }
+    }
+}
+
+/// Unlike catalogs, pnpm prunes release-age exclusions after installation, and
+/// they do not participate in frozen-lockfile validation. Preserve the policy
+/// even when its entries reference packages or versions removed from the
+/// lockfile.
+#[test]
+fn test_prune_pnpm_minimum_release_age_exclude_prune() {
+    for exclude_prune in [None, Some(false), Some(true)] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            fs::write(
+                dir.join("package.json"),
+                r#"{"name":"repo","private":true,"packageManager":"pnpm@12.9.1"}"#,
+            )
+            .unwrap();
+            for (app, dependency, version) in [
+                ("app-a", "is-odd", "3.0.1"),
+                ("app-b", "is-number", "7.0.0"),
+            ] {
+                let path = dir.join("apps").join(app);
+                fs::create_dir_all(&path).unwrap();
+                fs::write(
+                    path.join("package.json"),
+                    serde_json::json!({"name": app, "dependencies": {dependency: version}})
+                        .to_string(),
+                )
+                .unwrap();
+            }
+            let mut workspace = String::from(
+                r#"packages:
+- apps/*
+minimumReleaseAge: 2880
+minimumReleaseAgeExclude:
+- is-odd
+- is-odd@3.0.1
+- is-number@6.0.0
+- is-number@7.0.0
+- is-number@6.0.0 || 7.0.0
+- '@scope/unused@1.0.0'
+- '@scope/*'
+"#,
+            );
+            if let Some(enabled) = exclude_prune {
+                workspace.push_str(&format!("minimumReleaseAgeExcludePrune: {enabled}\n"));
+            }
+            fs::write(dir.join("pnpm-workspace.yaml"), &workspace).unwrap();
+            let lockfile = r#"lockfileVersion: '9.0'
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+importers:
+  .: {}
+  apps/app-a:
+    dependencies:
+      is-odd: {specifier: 3.0.1, version: 3.0.1}
+  apps/app-b:
+    dependencies:
+      is-number: {specifier: 7.0.0, version: 7.0.0}
+packages:
+  is-number@6.0.0:
+    resolution: {integrity: sha512-test}
+  is-number@7.0.0:
+    resolution: {integrity: sha512-test}
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-test}
+snapshots:
+  is-number@6.0.0: {}
+  is-number@7.0.0: {}
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+            fs::write(dir.join("pnpm-lock.yaml"), lockfile).unwrap();
+            let mut args = vec!["prune", "app-a"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let contents = fs::read_to_string(dir.join("out/pnpm-lock.yaml")).unwrap();
+            assert!(contents.contains("apps/app-a:"));
+            assert!(!contents.contains("apps/app-b:"));
+            assert!(contents.contains("is-odd@3.0.1:"));
+            // Keep the transitive version, but remove the excluded version that
+            // was only used by app-b. Neither change should rewrite the policy.
+            assert!(contents.contains("is-number@6.0.0:"));
+            assert!(!contents.contains("is-number@7.0.0:"));
+            let workspace_paths = if docker {
+                vec![
+                    "out/pnpm-workspace.yaml",
+                    "out/full/pnpm-workspace.yaml",
+                    "out/json/pnpm-workspace.yaml",
+                ]
+            } else {
+                vec!["out/pnpm-workspace.yaml"]
+            };
+            for path in workspace_paths {
+                let actual = fs::read_to_string(dir.join(path)).unwrap();
+                assert_eq!(actual, workspace, "workspace config in {path}");
+            }
+            if docker {
+                assert_eq!(
+                    fs::read_to_string(dir.join("out/json/pnpm-lock.yaml")).unwrap(),
+                    contents
+                );
+            }
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-workspace.yaml")).unwrap(),
+                workspace
+            );
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-lock.yaml")).unwrap(),
+                lockfile
+            );
         }
     }
 }

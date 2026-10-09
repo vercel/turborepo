@@ -285,6 +285,21 @@ pub struct DownloadClient {
 }
 
 impl DownloadClient {
+    /// Isolated fixture transport: exactly one literal-loopback HTTP origin,
+    /// no DNS names, proxies, or native/bundled certificate roots.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
+        let approved = ApprovedOrigin::loopback_http_for_tests(origin)?;
+        Self::with_http_builder(
+            Client::builder()
+                .use_rustls_tls()
+                .no_proxy()
+                .tls_built_in_native_certs(false)
+                .tls_built_in_webpki_certs(false),
+            [approved],
+        )
+    }
+
     pub fn new(origins: impl IntoIterator<Item = ApprovedOrigin>) -> Result<Self, Error> {
         // Match Remote Cache's native -> bundled trust fallback, without an
         // API-client dependency or overriding reqwest's proxy discovery.
@@ -319,6 +334,7 @@ impl DownloadClient {
         builder: ClientBuilder,
         origins: impl IntoIterator<Item = ApprovedOrigin>,
     ) -> Result<Self, Error> {
+        turborepo_tls::ensure_crypto_provider();
         let client = builder
             .redirect(Policy::none())
             .retry(reqwest::retry::never())

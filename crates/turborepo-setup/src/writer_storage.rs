@@ -222,6 +222,11 @@ impl WriterStorage {
         })
     }
 
+    /// Match the actual pinned root, not a caller-provided path spelling.
+    pub(crate) fn matches_root(&self, root: &same_file::Handle) -> io::Result<bool> {
+        Ok(same_file::Handle::from_file(self.root.file.try_clone()?)? == *root)
+    }
+
     pub fn read_lock(&self) -> io::Result<Option<Vec<u8>>> {
         let Some(file) = self.root.optional(TARGET)? else {
             return Ok(None);

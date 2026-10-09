@@ -31,6 +31,10 @@ pub enum Error {
     UnsupportedTarget,
     #[error("the complete desired inventory must include this Node plan unchanged")]
     InventoryMismatch,
+    #[error("bundled npm package identity or entrypoints do not match the selected resolution")]
+    InvalidBundledNpm,
+    #[error(transparent)]
+    Resolution(#[from] crate::node_resolution::Error),
     #[error(transparent)]
     Download(#[from] turborepo_download::Error),
     #[error(transparent)]
@@ -47,19 +51,60 @@ pub struct NodeTransport {
     origin: String,
 }
 impl NodeTransport {
-    pub fn official() -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             origin: "https://nodejs.org".into(),
         })
     }
 
+    /// Read only bounded official metadata for a native portable selection.
+    /// No caller URL, artifact download, installation or executable probing.
+    pub async fn resolve_native(
+        &self,
+        requirements: &crate::NodeRequirements,
+        include_bundled_npm: bool,
+    ) -> Result<crate::node_resolution::ToolResolution, Error> {
+        use crate::{
+            node_metadata::{MAX_CHECKSUM_BYTES, MAX_INDEX_BYTES, ReleaseIndex},
+            node_resolution,
+        };
+        let read = async |path: &str, limit| {
+            self.client
+                .read_metadata(
+                    &format!("{}{path}", self.origin),
+                    turborepo_download::Limits::new(limit, Duration::from_secs(30))?,
+                )
+                .await
+        };
+        let index = read("/dist/index.json", MAX_INDEX_BYTES).await?;
+        let releases = ReleaseIndex::parse(&index).map_err(node_resolution::Error::from)?;
+        let selected = requirements
+            .resolve(&releases.releases())
+            .map_err(node_resolution::Error::from)?;
+        let version = selected.version.to_string();
+        let checksums = read(
+            &format!("/dist/v{version}/SHASUMS256.txt"),
+            MAX_CHECKSUM_BYTES,
+        )
+        .await?;
+        Ok(node_resolution::resolve(
+            requirements,
+            &index,
+            node_resolution::ChecksumManifest {
+                version: &version,
+                bytes: &checksums,
+            },
+            include_bundled_npm,
+        )?)
+    }
+
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only, no env
     /// override.
+    #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
-        let approved = ApprovedOrigin::loopback_http_for_tests(origin)?;
         Ok(Self {
-            client: DownloadClient::new([approved])?,
+            client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
         })
     }
@@ -69,6 +114,7 @@ pub struct NodePlan {
     tool: Tool,
     artifact: lock::Artifact,
     windows: bool,
+    bundled_npm: Option<String>,
 }
 impl NodePlan {
     /// Validate only the selected platform's metadata, without modifying the
@@ -138,6 +184,10 @@ impl NodePlan {
             },
             artifact,
             windows,
+            bundled_npm: node
+                .options
+                .get("bundled-npm")
+                .map(|values| values[0].clone()),
         })
     }
 
@@ -164,7 +214,9 @@ impl NodePlan {
         if !desired.iter().any(|tool| tool == &self.tool) {
             return Err(Error::InventoryMismatch);
         }
-        if store.can_reuse(&self.tool)? {
+        // Validate the full cohort's IDs/ownership before any download.
+        if let Some(tree) = store.reusable_tree(&self.tool, desired)? {
+            self.verify_bundled_npm(&tree)?;
             return Ok(None);
         }
         self.download(transport).await.map(Some)
@@ -228,10 +280,56 @@ impl NodePlan {
                 }
             }
         }
+        self.verify_bundled_npm(&tree.root_path())?;
         Ok(PreparedNode {
             tree,
             tool: self.tool.clone(),
         })
+    }
+
+    pub(crate) fn verify_bundled_npm(&self, tree: &Path) -> Result<(), Error> {
+        let Some(version) = &self.bundled_npm else {
+            return Ok(());
+        };
+        let root = tree.join(if self.windows {
+            "node_modules/npm"
+        } else {
+            "lib/node_modules/npm"
+        });
+        let path = root.join("package.json");
+        let metadata = fs::symlink_metadata(&path)?;
+        if !metadata.is_file()
+            || metadata.len() > crate::registry_metadata::MAX_METADATA_BYTES as u64
+        {
+            return Err(Error::InvalidBundledNpm);
+        }
+        let crate::node_discovery::UniqueJson(package) =
+            serde_json::from_slice(&fs::read(path)?).map_err(|_| Error::InvalidBundledNpm)?;
+        if package.get("name").and_then(|v| v.as_str()) != Some("npm")
+            || package.get("version").and_then(|v| v.as_str()) != Some(version)
+            || package
+                .get("bin")
+                .and_then(|v| v.as_object())
+                .is_none_or(|bin| bin.len() != 2)
+        {
+            return Err(Error::InvalidBundledNpm);
+        }
+        for name in ["npm", "npx"] {
+            let cli = format!("bin/{name}-cli.js");
+            if package
+                .get("bin")
+                .and_then(|v| v.get(name))
+                .and_then(|v| v.as_str())
+                != Some(&cli)
+                || !fs::symlink_metadata(root.join(&cli))?.is_file()
+                || (!self.windows
+                    && fs::read_link(tree.join(format!("bin/{name}")))?
+                        != Path::new(&format!("../lib/node_modules/npm/{cli}")))
+            {
+                return Err(Error::InvalidBundledNpm);
+            }
+        }
+        Ok(())
     }
 }
 

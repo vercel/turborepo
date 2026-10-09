@@ -82,7 +82,7 @@ export const FACTORY_IMAGE_SPEC: FactoryImageSpec = {
   rustComponents: ["rustfmt", "clippy"],
   rustupHome: "/usr/local/rustup",
   stateDirectory: "/factory/state",
-  zigVersion: "0.15.2"
+  zigVersion: "0.17.0"
 };
 
 /** Vercel Sandbox image every factory sandbox starts from. */
