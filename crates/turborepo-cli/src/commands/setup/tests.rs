@@ -112,13 +112,14 @@ impl Fixture {
         words.extend(flags.iter().map(std::ffi::OsString::from));
         Args::parse_args(words).unwrap()
     }
-    fn run(&self, upstream: &Upstream, flags: &[&str]) -> Result<i32, Error> {
+    fn run(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
         let args = self.args(flags);
         crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(
                 args,
                 setup_args,
                 Some(provision::Transports {
+                    registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
                         upstream.origin(),
                     )
@@ -194,6 +195,8 @@ fn track(root: &std::path::Path) {
 mod checks;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "first_lock.rs"]
+mod first_lock;
 #[path = "force_tests.rs"]
 mod force;
 #[path = "publication_guards.rs"]
@@ -229,6 +232,42 @@ fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_
     assert_eq!(u.hits(), 4); // Reused Node, but the new dev pin requires registry verification.
     assert_eq!(f.manifest().unwrap(), before);
     f.no_execution();
+}
+#[test]
+fn authoritative_pnpm_keeps_wrong_manager_advisories_in_frozen_local_and_check() {
+    for on_fail in ["warn", "ignore"] {
+        let mut f = Fixture::new();
+        f.declare(
+            json!({"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{
+                "name":"npm","version":"11.6.1","onFail":on_fail
+            }}}),
+        );
+        let snapshot = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let declaration = snapshot.package_manager().unwrap().unwrap();
+        assert_eq!(
+            declaration.manager,
+            turborepo_setup::package_manager::Manager::Pnpm
+        );
+        assert_eq!(declaration.warnings.len(), usize::from(on_fail == "warn"));
+        fs::write(
+            f.owned.root().join("turbo.lock"),
+            snapshot.previous_lock().unwrap().canonical_bytes().unwrap(),
+        )
+        .unwrap();
+        let u = Upstream::new(&f, false, None);
+        assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+        let before = publication_guards::state(f.owned.root());
+        for flags in [
+            FROZEN,
+            &["--tools-only", "--no-frozen"],
+            &["--check", "--tools-only", "--offline"],
+        ] {
+            assert_eq!(f.run(&u, flags).unwrap(), 0);
+            assert_eq!(publication_guards::state(f.owned.root()), before);
+        }
+        assert_eq!(u.hits(), 3);
+        f.no_execution();
+    }
 }
 #[test]
 fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
@@ -270,9 +309,14 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
-        assert_eq!(u.hits(), 0);
-        assert!(!f.owned.root().join(".turbo").exists());
+        if flags == ["--no-frozen", "--tools-only"] {
+            assert_eq!(f.run(&u, &flags).unwrap(), 0);
+            assert_eq!(u.hits(), 3);
+        } else {
+            assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+            assert_eq!(u.hits(), 0);
+            assert!(!f.owned.root().join(".turbo").exists());
+        }
         f.no_execution();
     }
     for path in [".npmrc", "apps/web/.npmrc", "turbo.json"] {

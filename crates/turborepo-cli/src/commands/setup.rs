@@ -1,4 +1,5 @@
-//! Native frozen provisioning and read-only tools-only checks. No execution.
+//! Native local/frozen provisioning and read-only tools-only checks. No
+//! execution.
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -25,8 +26,8 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use --frozen --tools-only provisioning or --check \
-         --tools-only readiness checks"
+        "this setup mode is not implemented; use local or frozen --tools-only provisioning or \
+         --check --tools-only readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
@@ -47,6 +48,8 @@ pub enum Error {
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
     Lock(#[from] turborepo_setup::lock::Error),
+    #[error(transparent)]
+    Reconcile(#[from] turborepo_setup::lock::reconcile::Error),
     #[error(transparent)]
     Node(#[from] turborepo_setup::node_provision::Error),
     #[error(transparent)]
@@ -160,7 +163,19 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
-        _ => provision::run(&discovery, snapshot, request.force, transports, preflight),
+        _ => provision::run(
+            &discovery,
+            snapshot,
+            request.lock,
+            if request.update_lock {
+                turborepo_setup::lock::reconcile::Mode::Refresh
+            } else {
+                turborepo_setup::lock::reconcile::Mode::Local
+            },
+            request.force,
+            transports,
+            preflight,
+        ),
     }
 }
 
@@ -174,14 +189,13 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
         // CI/frozen/offline never change a check into resolution or repair.
         return Ok(());
     }
-    // Force is locked-only even when local normalization says Write: this
-    // executor cannot resolve, create or update turbo.lock. Future combinations
-    // remain explicitly fail-closed, rather than being promoted by force.
+    // Force reinstalls existing locked selections, independently of local
+    // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
-        || !(request.lock == LockMode::Frozen || (request.force && request.lock == LockMode::Write))
+        || request.lock == LockMode::NoLock
         || !request.tools_only
         || request.offline
-        || request.update_lock
+        || (request.force && request.update_lock)
     {
         return Err(Error::NotImplemented);
     }
@@ -259,6 +273,41 @@ mod tests {
                 let request = request(&flags, ci).unwrap();
                 assert_eq!(request.mode, Mode::Check);
                 assert!(validate_request(&request).is_ok());
+            }
+        }
+    }
+
+    #[test]
+    fn local_tools_only_requires_explicit_no_frozen_in_ci_and_rejects_future_controls() {
+        for ci in [false, true] {
+            for flags in [vec!["--tools-only"], vec!["--tools-only", "--no-frozen"]] {
+                let request = request(&flags, ci).unwrap();
+                assert!(validate_request(&request).is_ok());
+                assert_eq!(
+                    request.lock,
+                    if ci && flags.len() == 1 {
+                        LockMode::Frozen
+                    } else {
+                        LockMode::Write
+                    }
+                );
+            }
+            assert!(
+                validate_request(
+                    &request(&["--tools-only", "--no-frozen", "--update-lock"], ci).unwrap()
+                )
+                .is_ok()
+            );
+            for control in ["--no-lock", "--force", "--offline", "--plan"] {
+                let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
+                if control == "--force" {
+                    assert!(validate_request(&request).is_ok());
+                } else {
+                    assert!(matches!(
+                        validate_request(&request),
+                        Err(Error::NotImplemented)
+                    ));
+                }
             }
         }
     }

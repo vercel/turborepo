@@ -1,5 +1,6 @@
-//! Locked tools-only executor. No resolution, probes, activation or lock
-//! writes.
+//! Local reconciliation followed by locked tools-only provisioning.
+//! Force reinstalls committed selections without resolution or lock writes.
+//! No probes, dependency execution or activation.
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
@@ -16,12 +17,14 @@ use super::Error;
 pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
+    pub registry: turborepo_setup::registry_resolution::RegistryTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             node: NodeTransport::official(policy)?,
             pnpm: PnpmTransport::official(policy)?,
+            registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
         })
     }
 }
@@ -133,17 +136,139 @@ pub(super) fn plans(
     Ok(Plans { node, pnpm })
 }
 
+pub(super) fn lock_report(
+    previous: Option<&turborepo_setup::lock::Lock>,
+    current: &turborepo_setup::lock::Lock,
+) -> String {
+    let mut lines = vec![format!(
+        "turbo.lock {}. Commit turbo.lock to share the exact managed tool selections.",
+        if previous.is_some() {
+            "updated"
+        } else {
+            "created"
+        }
+    )];
+    for (id, tool) in current.tools() {
+        let old = previous.and_then(|lock| lock.tools().get(id));
+        if old == Some(tool) {
+            continue;
+        }
+        lines.push(match old {
+            Some(old) if old.version != tool.version => {
+                format!("{id}: {} -> {}", old.version, tool.version)
+            }
+            Some(_) => format!("{id}: {} (selection changed)", tool.version),
+            None => format!("{id}: locked {}", tool.version),
+        });
+    }
+    for (id, tool) in previous.into_iter().flat_map(|lock| lock.tools()) {
+        if !current.tools().contains_key(id) {
+            lines.push(format!("{id}: {} -> removed from lock", tool.version));
+        }
+    }
+    lines.join("\n")
+}
+
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
+    lock_mode: super::LockMode,
+    resolution_mode: turborepo_setup::lock::reconcile::Mode,
     force: bool,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
+    // Force never enters resolution or lock publication, even in local Write.
+    let write = lock_mode == super::LockMode::Write && !force;
     let root = discovery.snapshot_root()?.as_std_path();
-    let lock = snapshot.previous_lock().ok_or(Error::Unsupported(
-        "locked provisioning requires turbo.lock",
-    ))?;
+    platform()?;
+    // Unsupported native requests must fail before ANY writer, even no-op locks.
+    let manager = snapshot.package_manager()?;
+    if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
+        return Err(Error::Unsupported("npm override provisioning"));
+    }
+    if write && !snapshot.declarations().contains_key("node") {
+        return Err(Error::Unsupported("a native Node declaration is required"));
+    }
+    // Ordinary setup validates matching pins before its no-op writer. Explicit
+    // refresh may repair invalid native selections within this supported cohort;
+    // the candidate callback still gates EVERY new selection before any writer.
+    if write && let Some(lock) = snapshot.previous_lock() {
+        if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
+            && lock
+                .tools()
+                .keys()
+                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+        {
+            return Err(Error::Unsupported(
+                "only managed Node and pnpm are supported",
+            ));
+        }
+        if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
+            && lock.matches_native(snapshot.declarations())?
+        {
+            plans(&snapshot, lock)?;
+        }
+    }
+    let mut transports = transports;
+    let snapshot = if write {
+        use turborepo_setup::lock::{WriteOutcome, reconcile};
+        let check = || {
+            preflight()?;
+            revalidate(discovery)?;
+            storage(root)?;
+            Ok::<_, Error>(())
+        };
+        check()?;
+        snapshot.ensure_current()?;
+        let policy = preflight()?;
+        let sources = transports
+            .take()
+            .map(Ok)
+            .unwrap_or_else(|| Transports::official(&policy))?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        let outcome = reconcile::reconcile_checked(
+            &snapshot,
+            resolution_mode,
+            false,
+            |request| {
+                check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
+                runtime
+                    .block_on(turborepo_setup::js_resolution::resolve(
+                        request,
+                        &sources.node,
+                        &sources.registry,
+                    ))
+                    .map_err(|e| reconcile::Error::Resolution(e.to_string()))
+            },
+            |candidate| {
+                plans(&snapshot, candidate)
+                    .map(drop)
+                    .map_err(io::Error::other)
+            },
+            || check().map_err(io::Error::other),
+        )?;
+        // Preserve the original root/sources; accepting a freshly captured lock
+        // here would hide a competing candidate or concurrent declaration edit.
+        check()?;
+        let published = snapshot.after_publication(&outcome.lock)?;
+        if outcome.publication == Some(WriteOutcome::Written) {
+            println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
+        }
+        transports = Some(sources);
+        published
+    } else {
+        snapshot
+    };
+    let lock = snapshot
+        .previous_lock()
+        .ok_or(Error::Unsupported(if force {
+            "locked provisioning requires turbo.lock"
+        } else {
+            "frozen mode requires turbo.lock"
+        }))?;
     let Plans { node, pnpm } = plans(&snapshot, lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {

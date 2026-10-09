@@ -146,7 +146,7 @@ fn diagnostic_contains(text: &str, expected: &str) -> bool {
     any(target_arch = "x86_64", target_arch = "aarch64"),
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
-fn frozen_unsupported_plan_is_read_only_and_local_tools_only_is_not_enabled() {
+fn frozen_and_local_unsupported_plans_are_read_only() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
@@ -166,7 +166,7 @@ fn frozen_unsupported_plan_is_read_only_and_local_tools_only_is_not_enabled() {
         root,
         &["setup", "--no-frozen", "--tools-only"],
         true,
-        PENDING,
+        "invalid locked Node artifact or mappings",
     );
 }
 
@@ -259,6 +259,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--no-frozen"],
         vec!["--offline"],
         vec!["--tools-only"],
+        vec!["--tools-only", "--update-lock", "--no-frozen"],
         vec!["--no-lock"],
         vec!["--update-lock"],
         vec!["--plan", "--force", "--update-lock"],
@@ -271,8 +272,20 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--__test-run"],
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        let text = failure(root, &words, false, PENDING);
-        assert!(text.contains("no tasks were run"), "{text}");
+        let supported = words.contains(&"--tools-only");
+        let text = failure(
+            root,
+            &words,
+            false,
+            if supported {
+                "non-JavaScript workspace setup"
+            } else {
+                PENDING
+            },
+        );
+        if !supported {
+            assert!(text.contains("no tasks were run"), "{text}");
+        }
         assert!(!text.contains("test run successful"), "{text}");
     }
     failure(
@@ -824,6 +837,86 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
         true,
         "managed installation is damaged or unsafe; run turbo setup",
     );
+}
+
+#[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
+    for (node, package, expected) in [
+        (None, "{}", "a native Node declaration is required"),
+        (
+            Some("24.x"),
+            r#"{"packageManager":"npm@11.6.1"}"#,
+            "npm override provisioning",
+        ),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        write(temp.path(), "turbo.json", ENABLED);
+        write(temp.path(), "package.json", package);
+        if let Some(node) = node {
+            write(temp.path(), ".nvmrc", node);
+        }
+        // Real binary, empty PATH, observed proxy, exact recursive file snapshot.
+        for ci in [false, true] {
+            failure(
+                temp.path(),
+                &["setup", "--tools-only", "--no-frozen"],
+                ci,
+                expected,
+            );
+        }
+    }
+    let temp = tempfile::tempdir().unwrap();
+    write(temp.path(), "turbo.json", ENABLED);
+    write(temp.path(), ".nvmrc", "24.x");
+    failure(
+        temp.path(),
+        &["setup", "--tools-only"],
+        true,
+        "frozen mode requires turbo.lock",
+    );
+}
+
+#[test]
+fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_traffic() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(
+        root,
+        "turbo.lock",
+        "must not be parsed for a denied request",
+    );
+    for words in [
+        vec!["setup", "--update-lock", "--tools-only"],
+        vec!["setup", "--update-lock", "--tools-only", "--plan"],
+    ] {
+        failure(root, &words, true, "inferred in CI");
+    }
+    for ci in [false, true] {
+        for control in [Some("--force"), Some("--offline"), Some("--plan"), None] {
+            let mut words = vec!["setup", "--no-frozen", "--update-lock"];
+            if let Some(control) = control {
+                words.extend(["--tools-only", control]);
+            }
+            failure(root, &words, ci, PENDING);
+        }
+        for conflict in ["--frozen", "--no-lock", "--check"] {
+            let (code, text) = invoke(
+                root,
+                &["setup", "--update-lock", "--tools-only", conflict],
+                ci,
+            );
+            assert_eq!(code, 1, "{text}");
+            assert!(
+                !text.contains("prepared") && !text.contains("must not be parsed"),
+                "{text}"
+            );
+        }
+    }
 }
 
 #[test]
