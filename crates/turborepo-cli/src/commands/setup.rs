@@ -1,4 +1,4 @@
-//! Native frozen tools-only setup. No task/dependency execution or activation.
+//! Native frozen provisioning and read-only tools-only checks. No execution.
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -6,6 +6,7 @@ use turborepo_setup::source_policy::OfficialSourcePolicy;
 
 use crate::cli::{Args, SetupArgs};
 
+mod check;
 mod provision;
 mod root;
 
@@ -24,15 +25,15 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; only --frozen --tools-only provisioning is supported"
+        "this setup mode is not implemented; use --frozen --tools-only provisioning or --check \
+         --tools-only readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run. Plan and check \
-             are also not implemented; see turbo setup --help for the experimental command \
-             surface."
+             No tools, dependencies, or locks were changed and no tasks were run. Plan and \
+             dependency checks are not implemented."
         )
     )]
     NotImplemented,
@@ -40,6 +41,8 @@ pub enum Error {
     Unsupported(&'static str),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
+    #[error(transparent)]
+    Activation(#[from] turborepo_setup::activation::Error),
     #[error(transparent)]
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
@@ -155,10 +158,22 @@ fn run_with_policy(
     }
     let snapshot =
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
-    provision::run(&discovery, snapshot, transports, preflight)
+    match request.mode {
+        Mode::Check => check::run(&discovery, snapshot, preflight),
+        _ => provision::run(&discovery, snapshot, transports, preflight),
+    }
 }
 
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
+    if request.mode == Mode::Check
+        && request.tools_only
+        && request.lock != LockMode::NoLock
+        && !request.force
+        && !request.update_lock
+    {
+        // CI/frozen/offline never change a check into resolution or repair.
+        return Ok(());
+    }
     if request.mode != Mode::Provision
         || request.lock != LockMode::Frozen
         || !request.tools_only
@@ -228,6 +243,22 @@ mod tests {
             Err(Error::FrozenUpdateLock)
         ));
         assert!(request(&["--update-lock"], false).unwrap().update_lock);
+    }
+
+    #[test]
+    fn tools_only_check_accepts_ci_frozen_and_offline_without_resolution() {
+        for ci in [false, true] {
+            for flags in [
+                vec!["--check", "--tools-only"],
+                vec!["--check", "--tools-only", "--offline"],
+                vec!["--check", "--tools-only", "--frozen"],
+                vec!["--check", "--tools-only", "--no-frozen", "--offline"],
+            ] {
+                let request = request(&flags, ci).unwrap();
+                assert_eq!(request.mode, Mode::Check);
+                assert!(validate_request(&request).is_ok());
+            }
+        }
     }
 
     #[test]

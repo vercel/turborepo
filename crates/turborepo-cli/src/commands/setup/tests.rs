@@ -190,6 +190,9 @@ fn track(root: &std::path::Path) {
             .success()
     );
 }
+#[path = "check_tests.rs"]
+mod checks;
+
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
