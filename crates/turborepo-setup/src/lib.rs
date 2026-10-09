@@ -1,6 +1,7 @@
 //! Internal setup adapters. Shared OS/architecture values live in
 //! `turborepo-platform`; vendor artifact policy lives in each adapter.
 
+pub mod activation;
 pub mod bundled_npm;
 pub mod execution_identity;
 pub mod lock;
