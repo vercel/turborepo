@@ -15,7 +15,7 @@ use crate::{
 };
 
 const BUNDLED_NPM: &str = "bundled-npm";
-const PLATFORMS: [Platform; 6] = [
+pub(crate) const PLATFORMS: [Platform; 6] = [
     Platform::MacosX64,
     Platform::MacosArm64,
     Platform::LinuxX64Gnu,

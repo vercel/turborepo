@@ -11,7 +11,7 @@ Turborepo-specific integration:
 
 ## Build requirements
 
-Zig 0.15.2+ must be on `PATH` when building (CI installs it via `setup-zig`).
+Zig 0.17.x must be on `PATH` when building (CI installs it via `setup-zig`).
 `libghostty-vt-sys` fetches and compiles Ghostty sources at build time.
 
 On Windows MSVC, Turborepo patches `libghostty-vt-sys` (via `[patch.crates-io]`) so release

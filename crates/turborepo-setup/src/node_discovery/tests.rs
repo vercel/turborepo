@@ -9,6 +9,32 @@ mod runtime_policy;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+#[test]
+fn locked_versions_check_exact_identity_ranges_and_runtime_alternatives_without_metadata()
+-> TestResult {
+    let version = Version::parse("24.0.0+locked")?;
+    for (request, expected) in [
+        ("24.0.0+locked", true),
+        ("24.0.0+other", false),
+        ("24.x", true),
+        ("26.x", false),
+        ("node", true),
+        ("lts/krypton", true),
+    ] {
+        let requirements = NodeRequirements::from_sources(None, Some(request), None)?;
+        assert_eq!(requirements.matches_locked_version(&version), expected);
+    }
+    let runtime = r#"{"devEngines":{"runtime":[{"name":"node","version":"26.x"},{"name":"node","version":"24.x"}]}}"#;
+    let requirements = NodeRequirements::from_sources(Some(runtime), Some("24.x"), None)?;
+    assert!(requirements.matches_locked_version(&version));
+    assert!(!requirements.matches_locked_version(&Version::parse("26.0.0")?));
+    assert!(
+        !NodeRequirements::from_sources(None, Some("lts/*"), None)?
+            .matches_locked_version(&Version::parse("24.0.0-rc.1")?)
+    );
+    Ok(())
+}
+
 struct Fixture(TempDir);
 impl Fixture {
     fn put(&self, file: &str, text: impl AsRef<[u8]>) -> io::Result<()> {

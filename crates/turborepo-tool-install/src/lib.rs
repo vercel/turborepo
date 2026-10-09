@@ -47,14 +47,14 @@ pub struct Tool {
     pub executables: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Installed {
     tool: Tool,
     tree_sha256: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Inventory {
     schema: u32,
@@ -78,6 +78,14 @@ pub struct Current {
     pub tools: Vec<Tool>,
     /// For bookkeeping only; not a trusted activation PATH.
     pub bin: PathBuf,
+}
+
+impl Current {
+    /// Resources for an inspected member, not execution authorization.
+    pub fn tool_tree(&self, tool: &Tool) -> Option<PathBuf> {
+        self.tools.contains(tool).then_some(())?;
+        Some(self.bin.parent()?.join("tools").join(&tool.id))
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -118,8 +126,40 @@ impl Store {
         Ok(Self { root, _lock: lock })
     }
 
-    fn inventory(&self) -> Result<Option<Inventory>, Error> {
-        let path = self.root.join("manifest.json");
+    /// Read-only readiness at this exact repository root, never an ancestor.
+    /// No directories, transaction lock, or user state are created. This is
+    /// integrity/bookkeeping evidence, NOT authorization to execute repo data.
+    /// Reject publication observed during inspection; callers must still handle
+    /// later changes (this does not lease a generation against hostile edits).
+    pub fn inspect(repo: &Path) -> Result<Option<Current>, Error> {
+        if !cfg!(unix) {
+            return Err(Error::UnsupportedPlatform);
+        }
+        let repo = fs::canonicalize(repo)?;
+        real_directory(&repo)?;
+        let turbo = repo.join(".turbo");
+        let root = turbo.join("tools");
+        for path in [&turbo, &root] {
+            match real_directory(path) {
+                Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+                result => result?,
+            }
+        }
+        let Some(inventory) = Self::inventory(&root)? else {
+            return Ok(None);
+        };
+        Self::check(&root, &inventory)?;
+        if Self::inventory(&root)?.as_ref() != Some(&inventory) {
+            return Err(Error::InvalidInventory);
+        }
+        Ok(Some(Current {
+            bin: root.join(inventory.generation).join("bin"),
+            tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
+        }))
+    }
+
+    fn inventory(root: &Path) -> Result<Option<Inventory>, Error> {
+        let path = root.join("manifest.json");
         match fs::symlink_metadata(&path) {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.into()),
@@ -144,7 +184,7 @@ impl Store {
                 .map(|t| t.tool.clone())
                 .collect::<Vec<_>>(),
         )?;
-        match real_directory(&self.root.join(&inventory.generation)) {
+        match real_directory(&root.join(&inventory.generation)) {
             Ok(()) => Ok(Some(inventory)),
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
@@ -152,10 +192,10 @@ impl Store {
     }
 
     pub fn current(&self) -> Result<Option<Current>, Error> {
-        let Some(inventory) = self.inventory()? else {
+        let Some(inventory) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
-        self.check(&inventory)?;
+        Self::check(&self.root, &inventory)?;
         Ok(Some(Current {
             bin: self.root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
@@ -184,11 +224,24 @@ impl Store {
             .is_some_and(|old| old.contains(tool)))
     }
 
+    /// Healthy tree for adapter-specific resource verification while holding
+    /// this Store guard. Not activation authorization or resolution semantics.
+    pub fn reusable_tree(&self, tool: &Tool, desired: &[Tool]) -> Result<Option<PathBuf>, Error> {
+        validate_tools(desired)?;
+        if !desired.contains(tool) {
+            return Err(Error::InvalidInventory);
+        }
+        Ok(self
+            .healthy_inventory()?
+            .filter(|old| old.contains(tool))
+            .map(|old| self.root.join(old.generation).join("tools").join(&tool.id)))
+    }
+
     fn healthy_inventory(&self) -> Result<Option<Inventory>, Error> {
-        let Some(old) = self.inventory()? else {
+        let Some(old) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
-        match self.check(&old) {
+        match Self::check(&self.root, &old) {
             Ok(()) => Ok(Some(old)),
             // Metadata/path validation above remains fail-closed. Damaged install
             // contents can be rebuilt, but must never be copied into staging.
@@ -198,8 +251,8 @@ impl Store {
         }
     }
 
-    fn check(&self, inventory: &Inventory) -> Result<(), Error> {
-        let generation = self.root.join(&inventory.generation);
+    fn check(root: &Path, inventory: &Inventory) -> Result<(), Error> {
+        let generation = root.join(&inventory.generation);
         let tools = generation.join("tools");
         real_directory(&tools)?;
         let bin = generation.join("bin");
@@ -240,7 +293,20 @@ impl Store {
     pub fn reconcile(
         &mut self,
         desired: &[Tool],
+        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+    ) -> Result<Outcome, Error> {
+        self.reconcile_checked(desired, stage_tool, || Ok(()))
+    }
+
+    /// Check the caller's transaction precondition after staging/flush and
+    /// before selecting the complete generation (also checked for an
+    /// unchanged result). Hold any caller-owned writer guard across this
+    /// call, not just the callback.
+    pub fn reconcile_checked(
+        &mut self,
+        desired: &[Tool],
         mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+        before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
         let old = self.healthy_inventory()?;
@@ -248,6 +314,7 @@ impl Store {
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
         if valid_old.is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())) {
+            before_publish()?;
             return Ok(Outcome::Unchanged);
         }
         let stage = tempfile::Builder::new()
@@ -300,6 +367,7 @@ impl Store {
         // manifest pointing to a dropped TempDir. Cleanup is a separate operation.
         let _ = stage.keep();
         sync_directory(&self.root)?;
+        before_publish()?;
         manifest
             .persist(self.root.join("manifest.json"))
             .map_err(|e| Error::Io(e.error))?;

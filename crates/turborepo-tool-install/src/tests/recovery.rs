@@ -10,7 +10,7 @@ fn missing_generation_is_absent_and_failed_repair_preserves_manifest() {
     let bin = store.current().unwrap().unwrap().bin;
     fs::remove_dir_all(bin.parent().unwrap()).unwrap();
 
-    assert!(store.inventory().unwrap().is_none());
+    assert!(Store::inventory(&store.root).unwrap().is_none());
     assert!(store.current().unwrap().is_none());
     assert!(!store.is_current(&desired).unwrap());
     for tool in &desired {
@@ -298,7 +298,10 @@ fn malformed_tree_digest_is_rejected_before_inspecting_generation() {
                 serde_json::to_vec(&forged).unwrap(),
             )
             .unwrap();
-            assert!(matches!(store.inventory(), Err(Error::InvalidInventory)));
+            assert!(matches!(
+                Store::inventory(&store.root),
+                Err(Error::InvalidInventory)
+            ));
             assert_rejected(&mut store, &node);
         }
     }

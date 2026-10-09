@@ -236,6 +236,25 @@ impl NodeRequirements {
             .chain(&self.policy_sources)
     }
 
+    /// Check a committed pin without refreshing release metadata. LTS channel
+    /// identity remains the resolver's responsibility; reject prereleases for
+    /// those channels and enforce all statically checkable native constraints.
+    pub fn matches_locked_version(&self, version: &Version) -> bool {
+        let release = NodeRelease {
+            version: version.clone(),
+            lts: None,
+        };
+        let matches = |d: &Declaration| match &d.request {
+            Request::Lts(_) => version.pre.is_empty(),
+            _ => d.matches(&release),
+        };
+        let (alternatives, constraints) = self.declarations.split_at(self.runtime_end);
+        crate::version_request::is_valid_release(version)
+            && !self.declarations.is_empty()
+            && (alternatives.is_empty() || alternatives.iter().any(matches))
+            && constraints.iter().all(matches)
+    }
+
     /// Injected metadata only. Validate all identities, even ineligible
     /// releases. Conflicts/unavailable releases never return a partial
     /// result.

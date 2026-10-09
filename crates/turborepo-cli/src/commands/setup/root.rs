@@ -6,6 +6,9 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 use turborepo_turbo_json::{FutureFlags, RawTurboJson};
 
+mod discovery;
+pub(super) use discovery::Discovery;
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("ambiguous setup roots: {near} and {outer}")]
@@ -51,6 +54,12 @@ pub enum Error {
         path: AbsoluteSystemPathBuf,
         reason: String,
     },
+    #[error("setup discovery cannot guard a custom root configuration outside snapshot scope")]
+    #[diagnostic(
+        code(turbo::setup::unsupported_config),
+        help("Use a root turbo.json or turbo.jsonc before provisioning with a snapshot guard.")
+    )]
+    UnsupportedConfig,
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] turborepo_config::Error),
@@ -61,16 +70,18 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
 }
 
-pub(super) struct SetupRoot {
-    pub path: AbsoluteSystemPathBuf,
-    pub flags: FutureFlags,
+#[derive(PartialEq, Eq)]
+struct SetupRoot {
+    path: AbsoluteSystemPathBuf,
+    flags: FutureFlags,
+    config: Option<AbsoluteSystemPathBuf>,
 }
 
 /// `--cwd` is a discovery starting point. An exact root selected with it is
 /// authoritative; a nested starting point still needs unambiguous inference.
 /// Explicit config paths retain the global option's invocation-relative
 /// meaning.
-pub(super) fn infer(
+fn infer(
     cwd: &AbsoluteSystemPath,
     explicit_cwd: bool,
     config: Option<&AbsoluteSystemPath>,
@@ -88,7 +99,7 @@ pub(super) fn infer(
         })
         .collect();
 
-    let (path, raw) = if let Some(config) = config {
+    let (path, raw, selected_config) = if let Some(config) = config {
         let config = config.to_realpath()?;
         let root = config.parent().ok_or_else(|| {
             marker_error(
@@ -100,21 +111,25 @@ pub(super) fn infer(
             return Err(Error::Outside { cwd, config });
         }
         let raw = RawTurboJson::read(&cwd, &config, true)?.unwrap_or_default();
-        (root.to_owned(), raw)
+        (root.to_owned(), raw, Some(config))
     } else {
-        let mut selected: Option<(AbsoluteSystemPathBuf, RawTurboJson)> = None;
+        let mut selected: Option<(
+            AbsoluteSystemPathBuf,
+            RawTurboJson,
+            Option<AbsoluteSystemPathBuf>,
+        )> = None;
         for dir in &directories {
             let config = turborepo_config::resolve_turbo_config_path(dir)?;
             let Some(raw) = read_root_config(&cwd, &config)? else {
                 continue;
             };
-            if let Some((near, _)) = &selected {
+            if let Some((near, _, _)) = &selected {
                 return Err(Error::Ambiguous {
                     near: near.clone(),
                     outer: dir.clone(),
                 });
             }
-            selected = Some((dir.clone(), raw));
+            selected = Some((dir.clone(), raw, Some(config)));
             if explicit_cwd && dir == &cwd {
                 break;
             }
@@ -127,7 +142,7 @@ pub(super) fn infer(
                 .find(|dir| dir.join_component("package.json").exists())
                 .unwrap_or(&cwd)
                 .clone();
-            (path, RawTurboJson::default())
+            (path, RawTurboJson::default(), None)
         })
     };
     let flags = raw
@@ -158,7 +173,11 @@ pub(super) fn infer(
             check_nested_markers(dir, &path, flags)?;
         }
     }
-    Ok(SetupRoot { path, flags })
+    Ok(SetupRoot {
+        path,
+        flags,
+        config: selected_config,
+    })
 }
 
 fn read_root_config(

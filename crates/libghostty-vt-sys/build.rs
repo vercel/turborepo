@@ -6,7 +6,7 @@ use std::{
 
 /// Pinned ghostty commit. Update this to pull a newer version.
 const GHOSTTY_REPO: &str = "https://github.com/ghostty-org/ghostty.git";
-const GHOSTTY_COMMIT: &str = "a887df42c56f6de86c0fe6da9c4eeca37931e083";
+const GHOSTTY_COMMIT: &str = "5147c0a503cdeed7615cce245cdd815ed7a6b692";
 
 #[derive(Clone, Copy)]
 enum LinkMode {
@@ -126,6 +126,7 @@ fn build_vendored(link_mode: LinkMode) {
                 let deployment_target = env::var("MACOSX_DEPLOYMENT_TARGET")
                     .expect("MACOSX_DEPLOYMENT_TARGET must be set for macOS builds");
                 set_ghostty_macos_deployment_target(&dir, &deployment_target);
+                localize_libsystem_symbols_in_every_archive_member(&dir);
             }
             dir
         }
@@ -190,11 +191,21 @@ fn build_vendored(link_mode: LinkMode) {
         build.arg(format!(
             "-Dtarget={architecture}-macos.{deployment_target}-none"
         ));
-    } else if target != host {
+    } else if target.contains("windows") || target != host {
+        // Rust's HOST describes rustc, which may differ from the Zig compiler
+        // architecture when Windows runs a compiler under emulation.
         build.arg(format!("-Dtarget={}", zig_target(&target)));
     }
 
     run(build, "zig build");
+
+    if target.contains("apple-darwin") && matches!(link_mode, LinkMode::Static) {
+        let archive = install_prefix.join("lib/libghostty-vt.a");
+        // Source overrides must remain untouched. Localize the build-owned
+        // output too, so an upstream checkout gets the same protection.
+        localize_libsystem_symbols_in_archive(&archive);
+        assert_libsystem_symbols_not_overridden(&archive);
+    }
 
     let lib_dir = install_prefix.join("lib");
     let include_dir = install_prefix.join("include");
@@ -228,6 +239,10 @@ fn build_vendored(link_mode: LinkMode) {
         include_dir.join("ghostty").join("vt.h").display()
     );
 
+    println!(
+        "cargo:rustc-env=LIBGHOSTTY_VT_SYS_INCLUDE_DIR={}",
+        include_dir.display()
+    );
     for dir in &search_dirs {
         println!("cargo:rustc-link-search=native={}", dir.display());
     }
@@ -320,36 +335,32 @@ fn emit_include_metadata(include_paths: &[PathBuf]) {
     println!("cargo:include={}", joined.to_string_lossy());
 }
 
-/// Decide which Zig `OptimizeMode` to pass to `zig build`.
+/// Decide which Zig 0.17 optimization mode to pass to `zig build`.
 ///
-/// The `LIBGHOSTTY_VT_SYS_OPTIMIZE` environment variable overrides this
-/// unconditionally; accepted values are the four Zig `OptimizeMode` names
-/// (`Debug`, `ReleaseSafe`, `ReleaseFast`, `ReleaseSmall`).
-///
-/// Defaults to `ReleaseFast` for optimized builds. If `DEBUG` is `true` (as
-/// cargo sets for the `dev` profile), `Debug` mode is used. Otherwise, if
-/// `OPT_LEVEL` is `s` or `z`, `ReleaseSmall` is used.
+/// `LIBGHOSTTY_VT_SYS_OPTIMIZE` accepts `debug`, `safe`, `fast`, and `small`.
+/// The pre-0.17 names remain accepted for compatibility with existing builds.
+/// Defaults to `fast`, or `debug` when Cargo enables debug information.
 fn zig_optimize_mode() -> &'static str {
     if let Ok(override_mode) = env::var("LIBGHOSTTY_VT_SYS_OPTIMIZE") {
         return match override_mode.as_str() {
-            "Debug" => "Debug",
-            "ReleaseSafe" => "ReleaseSafe",
-            "ReleaseFast" => "ReleaseFast",
-            "ReleaseSmall" => "ReleaseSmall",
+            "Debug" | "debug" => "debug",
+            "ReleaseSafe" | "safe" => "safe",
+            "ReleaseFast" | "fast" => "fast",
+            "ReleaseSmall" | "small" => "small",
             other => panic!(
-                "LIBGHOSTTY_VT_SYS_OPTIMIZE must be one of Debug, ReleaseSafe, ReleaseFast, \
-                 ReleaseSmall (got '{other}')"
+                "LIBGHOSTTY_VT_SYS_OPTIMIZE must be debug, safe, fast, or small (legacy \
+                 Debug/Release* names are also accepted; got '{other}')"
             ),
         };
     }
 
     if env::var("DEBUG").as_deref() == Ok("true") {
-        return "Debug";
+        return "debug";
     }
 
     match env::var("OPT_LEVEL").as_deref() {
-        Ok("s") | Ok("z") => "ReleaseSmall",
-        _ => "ReleaseFast",
+        Ok("s") | Ok("z") => "small",
+        _ => "fast",
     }
 }
 
@@ -423,6 +434,122 @@ fn set_ghostty_macos_deployment_target(ghostty_dir: &Path, deployment_target: &s
 
     std::fs::write(&config_path, source.replacen(old, &new, 1))
         .unwrap_or_else(|error| panic!("failed to write {}: {error}", config_path.display()));
+}
+
+/// Libc symbols that the static library must leave to libSystem. If the
+/// archive defines them globally, the linker binds every caller in the final
+/// executable to them, replacing libSystem's `memset` and friends for the whole
+/// process. Ghostty's own `libsystem_override.sh` removes these definitions.
+const LIBSYSTEM_SYMBOLS: [&str; 6] = [
+    "_bcmp", "_memcmp", "_memcpy", "_memmove", "_memset", "_strlen",
+];
+
+/// Marker line in `libsystem_override.sh` at which the archive rewrite starts.
+const LIBSYSTEM_OVERRIDE_REWRITE_START: &str = "xcrun ar x \"$out\" compiler_rt.o";
+
+/// The archive rewrite, applied to every member instead of only
+/// `compiler_rt.o`.
+const LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS: &str = r#"xcrun ar x "$out"
+sort -u localize.txt >loc.txt
+for member in *.o; do
+  chmod 644 "$member"
+  xcrun nm -g "$member" | awk '$2 ~ /^[A-TV-Z]$/ {print $3}' | sort -u >all.txt
+  if comm -12 all.txt loc.txt | grep -q .; then
+    comm -23 all.txt loc.txt >keep.txt
+    xcrun nmedit -s keep.txt "$member"
+  fi
+done
+xcrun ar r "$out" *.o
+xcrun ranlib "$out" 2>/dev/null || true
+"#;
+
+/// Ghostty's `libsystem_override.sh` localises the libc symbols that Zig
+/// defines only in the `compiler_rt.o` archive member. Zig 0.16 also defines
+/// `memset` in the library's main object, where the script leaves it global, so
+/// the executable ends up using Zig's `memset` instead of libSystem's. Rewrite
+/// the script to localise them in every member.
+fn localize_libsystem_symbols_in_every_archive_member(ghostty_dir: &Path) {
+    let script_path = ghostty_dir.join("src/build/libsystem_override.sh");
+    let source = std::fs::read_to_string(&script_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", script_path.display()));
+
+    if source.contains(LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS) {
+        return;
+    }
+    let start = source
+        .find(LIBSYSTEM_OVERRIDE_REWRITE_START)
+        .unwrap_or_else(|| {
+            panic!(
+                "expected the compiler_rt.o archive rewrite in {}",
+                script_path.display()
+            )
+        });
+
+    let rewritten = format!(
+        "{}{LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS}",
+        &source[..start]
+    );
+    std::fs::write(&script_path, rewritten)
+        .unwrap_or_else(|error| panic!("failed to write {}: {error}", script_path.display()));
+}
+
+/// Localize guarded libc symbols in the installed archive without modifying
+/// the source checkout, including when GHOSTTY_SOURCE_DIR is set.
+fn localize_libsystem_symbols_in_archive(archive: &Path) {
+    let parent = archive
+        .parent()
+        .unwrap_or_else(|| panic!("archive has no parent: {}", archive.display()));
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let work_dir = parent.join(format!("libsystem-localize-{}-{nonce}", std::process::id()));
+    std::fs::create_dir(&work_dir)
+        .unwrap_or_else(|error| panic!("failed to create {}: {error}", work_dir.display()));
+    std::fs::write(work_dir.join("localize.txt"), LIBSYSTEM_SYMBOLS.join("\n"))
+        .unwrap_or_else(|error| panic!("failed to write localization symbols: {error}"));
+
+    let mut localize = Command::new("/bin/sh");
+    localize
+        .arg("-c")
+        .arg(format!(
+            "set -eu\nout=\"$1\"\n{LIBSYSTEM_OVERRIDE_REWRITE_ALL_MEMBERS}"
+        ))
+        .arg("libsystem-localize")
+        .arg(archive)
+        .current_dir(&work_dir);
+    run(localize, "localize libSystem symbols in installed archive");
+    std::fs::remove_dir_all(&work_dir)
+        .unwrap_or_else(|error| panic!("failed to remove {}: {error}", work_dir.display()));
+}
+
+/// Fails the build if the static library still defines libSystem's symbols
+/// globally.
+fn assert_libsystem_symbols_not_overridden(archive: &Path) {
+    let output = Command::new("nm")
+        .arg("-gU")
+        .arg(archive)
+        .output()
+        .unwrap_or_else(|error| panic!("failed to execute nm on {}: {error}", archive.display()));
+    assert!(
+        output.status.success(),
+        "nm failed on {}: {}",
+        archive.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let listing = String::from_utf8_lossy(&output.stdout);
+    let overridden = listing
+        .lines()
+        .filter_map(|line| line.split_whitespace().last())
+        .filter(|symbol| LIBSYSTEM_SYMBOLS.contains(symbol))
+        .collect::<Vec<_>>();
+    assert!(
+        overridden.is_empty(),
+        "{} exports {overridden:?}, which would replace libSystem's implementations in the final \
+         executable",
+        archive.display()
+    );
 }
 
 fn run(mut command: Command, context: &str) {

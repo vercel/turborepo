@@ -86,19 +86,7 @@ pub fn parse_release(
     if bytes.len() > MAX_METADATA_BYTES {
         return Err(RegistryMetadataError::TooLarge);
     }
-    let name = match manager {
-        Manager::Npm => "npm",
-        Manager::Pnpm => "pnpm",
-        _ => return Err(RegistryMetadataError::UnsupportedManager),
-    };
-    if exact_version.len() > MAX_VERSION_BYTES {
-        return Err(RegistryMetadataError::InvalidVersion);
-    }
-    let version =
-        Version::parse(exact_version).map_err(|_| RegistryMetadataError::InvalidVersion)?;
-    if !is_valid_release(&version) || version.to_string() != exact_version {
-        return Err(RegistryMetadataError::InvalidVersion);
-    }
+    let (name, version) = validate_selection(manager, exact_version)?;
     // Typed deserialization rejects duplicate security-relevant fields; ignore
     // unrelated upstream enrichment within the bounded complete JSON document.
     let mut deserializer = serde_json::Deserializer::from_slice(bytes);
@@ -150,6 +138,26 @@ pub fn parse_release(
         integrity,
         additional_sha256,
     })
+}
+
+pub(crate) fn validate_selection(
+    manager: Manager,
+    exact_version: &str,
+) -> Result<(&'static str, Version), RegistryMetadataError> {
+    let name = match manager {
+        Manager::Npm => "npm",
+        Manager::Pnpm => "pnpm",
+        _ => return Err(RegistryMetadataError::UnsupportedManager),
+    };
+    if exact_version.len() > MAX_VERSION_BYTES {
+        return Err(RegistryMetadataError::InvalidVersion);
+    }
+    let version =
+        Version::parse(exact_version).map_err(|_| RegistryMetadataError::InvalidVersion)?;
+    if !is_valid_release(&version) || version.to_string() != exact_version {
+        return Err(RegistryMetadataError::InvalidVersion);
+    }
+    Ok((name, version))
 }
 
 fn sri_sha512(value: &str) -> Result<CorepackIntegrity, RegistryMetadataError> {
