@@ -72,6 +72,18 @@ pub struct Store {
     root: PathBuf,
     // Never unlink a lock file: all processes must lock the same inode.
     _lock: File,
+    owner_pid: u32,
+}
+
+impl Drop for Store {
+    fn drop(&mut self) {
+        // Closing alone can leave flock held by a forked child's inherited
+        // open-file description. A fork copy must only close its File, never
+        // unlock the surviving acquiring process's shared description.
+        if self.owner_pid == std::process::id() {
+            let _ = self._lock.unlock();
+        }
+    }
 }
 
 pub struct Current {
@@ -119,11 +131,16 @@ impl Store {
             .create(true)
             .truncate(false)
             .open(path)?;
+        let owner_pid = std::process::id();
         lock.try_lock().map_err(|e| match e {
             std::fs::TryLockError::WouldBlock => Error::Busy,
             std::fs::TryLockError::Error(e) => Error::Io(e),
         })?;
-        Ok(Self { root, _lock: lock })
+        Ok(Self {
+            root,
+            _lock: lock,
+            owner_pid,
+        })
     }
 
     /// Read-only readiness at this exact repository root, never an ancestor.

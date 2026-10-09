@@ -167,17 +167,84 @@ pub struct WriterStorage {
     _cache: Directory,
     storage: Directory,
     _guard: File,
+    writer_owner_pid: u32,
+    #[cfg(unix)]
+    root_owner_pid: u32,
+}
+
+// Own cleanup only after lock succeeds. Local guards unwind writer-before-root
+// on every fallible acquire path, then transfer ownership to WriterStorage.
+struct AcquiredLock<'a> {
+    file: Option<&'a File>,
+    owner_pid: u32,
+}
+
+impl<'a> AcquiredLock<'a> {
+    fn acquire(file: &'a File) -> io::Result<Self> {
+        let owner_pid = std::process::id();
+        Self::from_result(file, file.lock(), owner_pid)
+    }
+
+    fn from_result(file: &'a File, result: io::Result<()>, owner_pid: u32) -> io::Result<Self> {
+        result?;
+        Ok(Self {
+            file: Some(file),
+            owner_pid,
+        })
+    }
+
+    fn transfer(mut self) -> u32 {
+        self.file = None;
+        // Preserve the acquirer's PID even if transfer happens in a fork copy.
+        self.owner_pid
+    }
+}
+
+impl Drop for AcquiredLock<'_> {
+    fn drop(&mut self) {
+        if self.owner_pid != std::process::id() {
+            return;
+        }
+        if let Some(file) = self.file {
+            // File close is insufficient when a child inherited this flock.
+            let _ = file.unlock();
+        }
+    }
+}
+
+impl Drop for WriterStorage {
+    fn drop(&mut self) {
+        // Keep the stable root excluded until the writer inode is released.
+        // Fork copies only close File fields, not the acquirer's shared locks.
+        let pid = std::process::id();
+        if self.writer_owner_pid == pid {
+            let _ = self._guard.unlock();
+        }
+        #[cfg(unix)]
+        if self.root_owner_pid == pid {
+            let _ = self.root.file.unlock();
+        }
+    }
 }
 
 impl WriterStorage {
     pub fn acquire(root: &Path) -> io::Result<Self> {
+        Self::acquire_with(root, |_| Ok(()))
+    }
+
+    fn acquire_with(
+        root: &Path,
+        mut after_lock: impl FnMut(&mut AcquiredLock<'_>) -> io::Result<()>,
+    ) -> io::Result<Self> {
         let root_path = root.canonicalize()?;
         let root = Directory::root(&root_path)?;
         // Unix permits renaming an open cache directory. Lock the stable root
         // inode first so a recreated cache cannot split concurrent writers.
         // Windows directory handles already deny deletion of the pinned chain.
         #[cfg(unix)]
-        root.file.lock()?;
+        let mut root_lock = AcquiredLock::acquire(&root.file)?;
+        #[cfg(unix)]
+        after_lock(&mut root_lock)?;
         let paths = [".turbo/setup-lock/writer", ".turbo/setup-lock/staged"];
         let output = Command::new("git")
             .current_dir(&root_path)
@@ -207,18 +274,26 @@ impl WriterStorage {
             }
         }
         let guard = storage.open(WRITER, true, false)?;
-        guard.lock()?;
+        let mut writer_lock = AcquiredLock::acquire(&guard)?;
+        after_lock(&mut writer_lock)?;
         // A prior process may have died after creating/flushing its stage.
         // Inspect without following links, then remove only this owned entry.
         if let Some(file) = storage.optional(STAGED)? {
             drop(file);
             storage.remove_stage()?;
         }
+        // No fallible work remains: the returned owner now releases both locks.
+        let writer_owner_pid = writer_lock.transfer();
+        #[cfg(unix)]
+        let root_owner_pid = root_lock.transfer();
         Ok(Self {
             root,
             _cache: cache,
             storage,
             _guard: guard,
+            writer_owner_pid,
+            #[cfg(unix)]
+            root_owner_pid,
         })
     }
 
