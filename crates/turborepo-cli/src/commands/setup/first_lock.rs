@@ -258,7 +258,7 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     let f = fresh();
     fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
     let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
-    assert_eq!(f.run(&u, &["--tools-only"]).unwrap(), 0);
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     assert_eq!(u.hits(), 7); // Four resolution requests, then exact frozen provisioning.
     let initial = selected(&f);
     let manifest = f.manifest().unwrap();
