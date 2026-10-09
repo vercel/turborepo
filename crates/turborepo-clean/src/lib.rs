@@ -23,12 +23,14 @@
 //!   rules.
 //! - The tracked set comes from the index git itself uses: `git rev-parse`
 //!   names the working tree and the index, so every setting git honors is
-//!   honored. When `GIT_INDEX_FILE` names another index than the repository's
-//!   own (a partial commit's temporary index), both are read. Without git on
-//!   `PATH`, or when an index cannot be read, the setup is ambiguous, or the
-//!   index does not track the repository's root `package.json`, `turbo.json` or
-//!   `turbo.jsonc` as the file on disk (by its recorded stat data, or as
-//!   confirmed by `git ls-files`), nothing is removed.
+//!   honored (git 2.31 or later). `GIT_DIR` without `GIT_WORK_TREE` (as in the
+//!   hooks of a linked worktree) is refused wherever turbo runs. When
+//!   `GIT_INDEX_FILE` names another index than the repository's own (a partial
+//!   commit's temporary index), both are read. Without git on `PATH`, or when
+//!   an index cannot be read, the setup is ambiguous, or the index does not
+//!   track the repository's root `package.json`, `turbo.json` or `turbo.jsonc`
+//!   as the file on disk (by its recorded stat data, or as confirmed by `git
+//!   ls-files` against that same working tree and index), nothing is removed.
 //! - Untracked and gitignored files that match an allowed output pattern are
 //!   build output and are removed.
 //! - On unix, removal walks from the repository root with directory handles
@@ -77,7 +79,8 @@ pub enum Error {
             "`turbo clean` relies on git to tell source files from build outputs. Run it with git \
              on PATH, inside a git repository whose index can be read and tracks the repository's \
              package.json, turbo.json or turbo.jsonc. git decides which working tree and index \
-             apply; GIT_WORK_TREE needs GIT_DIR, and GIT_COMMON_DIR is not supported."
+             apply (git 2.31 or later); GIT_DIR and GIT_WORK_TREE must be set together, and \
+             GIT_COMMON_DIR is not supported."
         )
     )]
     TrackedFilesUnknown { reason: String },

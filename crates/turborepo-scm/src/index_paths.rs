@@ -122,6 +122,81 @@ pub struct IndexPaths {
     git: Git,
 }
 
+/// Asks `git rev-parse` (2.31+) for absolute paths.
+const PATH_FORMAT_ABSOLUTE: &str = "--path-format=absolute";
+
+/// The toplevel, git directory and index lines of `git rev-parse
+/// --path-format=absolute --show-toplevel --git-dir --git-path index`.
+///
+/// git before 2.31 does not know `--path-format` and echoes it back as a line
+/// of its own (its other answers may then be relative), so that output is
+/// refused with the version git needs.
+fn parse_rev_parse_output(stdout: &[u8]) -> Result<[&[u8]; 3], Error> {
+    let lines: Vec<&[u8]> = stdout
+        .strip_suffix(b"\n")
+        .unwrap_or(stdout)
+        .split(|byte| *byte == b'\n')
+        .collect();
+    if lines.first() == Some(&PATH_FORMAT_ABSOLUTE.as_bytes()) {
+        return Err(Error::git_error(
+            "turbo clean requires git >= 2.31: this git does not support `git rev-parse \
+             --path-format`"
+                .to_owned(),
+        ));
+    }
+    let [top, git_dir, index_file] = lines[..] else {
+        return Err(Error::git_error(format!(
+            "unexpected git rev-parse output: {}",
+            String::from_utf8_lossy(stdout)
+        )));
+    };
+    Ok([top, git_dir, index_file])
+}
+
+thread_local! {
+    /// Set while this thread decodes an index under `catch_unwind`.
+    static DECODING_INDEX: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Serializes the panic hook swaps of [`without_panic_hook`].
+static PANIC_HOOK_SWAP: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Runs `decode`, turning a panic into `None` without running the process's
+/// panic hook for it (turbo's prints a crash banner and writes a report).
+///
+/// The hook is process-wide, so it is swapped for one that stays silent only
+/// for a panic on this thread while `decode` runs (a thread-local flag), and
+/// passes every other panic, on any thread, to the previous hook. Swaps hold
+/// a lock, so concurrent reads restore hooks in order. Even if code elsewhere
+/// swapped the hook meanwhile, a wrapper left installed behaves exactly like
+/// the hook it wraps once the flag is unset, so no interleaving silences
+/// another panic.
+fn without_panic_hook<T>(decode: impl FnOnce() -> T + std::panic::UnwindSafe) -> Option<T> {
+    type Hook = Box<dyn Fn(&std::panic::PanicHookInfo<'_>) + Sync + Send + 'static>;
+    // `decode` cannot unwind past `catch_unwind`, so the lock is never
+    // poisoned by it.
+    let _swap = PANIC_HOOK_SWAP
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let previous: std::sync::Arc<Hook> = std::sync::Arc::new(std::panic::take_hook());
+    let delegate = previous.clone();
+    std::panic::set_hook(Box::new(move |info| {
+        if !DECODING_INDEX.with(std::cell::Cell::get) {
+            delegate(info);
+        }
+    }));
+    DECODING_INDEX.with(|flag| flag.set(true));
+    let result = std::panic::catch_unwind(decode);
+    DECODING_INDEX.with(|flag| flag.set(false));
+    // Dropping the wrapper releases its reference to the previous hook.
+    drop(std::panic::take_hook());
+    match std::sync::Arc::try_unwrap(previous) {
+        Ok(previous) => std::panic::set_hook(previous),
+        Err(previous) => std::panic::set_hook(Box::new(move |info| previous(info))),
+    }
+    result.ok()
+}
+
 /// An index git wrote has a 12-byte header and a trailing hash.
 const MINIMUM_INDEX_LEN: u64 = 12 + 20;
 
@@ -148,7 +223,7 @@ fn read_index(path: &Path) -> Result<gix_index::File, Error> {
     }
     // gix-index trusts the file's structure in places; a panic while
     // decoding means the index is unreadable, not that nothing is tracked.
-    std::panic::catch_unwind(|| {
+    without_panic_hook(|| {
         gix_index::File::at(
             path,
             gix_index::hash::Kind::Sha1,
@@ -156,7 +231,7 @@ fn read_index(path: &Path) -> Result<gix_index::File, Error> {
             gix_index::decode::Options::default(),
         )
     })
-    .map_err(|_| unreadable("could not be decoded".to_owned()))?
+    .ok_or_else(|| unreadable("could not be decoded".to_owned()))?
     .map_err(|error| unreadable(format!("could not be read: {error}")))
 }
 
@@ -221,8 +296,8 @@ impl IndexPaths {
     /// `path_in_repo` (or there is none), when an index is missing or cannot
     /// be read, and for environments that would make git answer differently
     /// here than in the calling process (`GIT_COMMON_DIR`, `GIT_WORK_TREE`
-    /// without `GIT_DIR`, `GIT_DIR` without `GIT_WORK_TREE` away from
-    /// `path_in_repo`).
+    /// without `GIT_DIR`, `GIT_DIR` without `GIT_WORK_TREE`). Requires git
+    /// 2.31 or later (`rev-parse --path-format`).
     pub fn read_with(
         path_in_repo: &AbsoluteSystemPath,
         env: &GitEnvironment,
@@ -238,12 +313,13 @@ impl IndexPaths {
         }
         match (&env.git_dir, &env.work_tree) {
             (None, Some(_)) => return Err(unsupported("GIT_WORK_TREE is set without GIT_DIR")),
-            // Without `GIT_WORK_TREE` or `core.worktree`, git takes the
-            // directory it runs from as the top of the working tree.
-            (Some(_), None) if real(&env.cwd).ok().as_ref() != Some(&real_path) => {
-                return Err(unsupported(
-                    "GIT_DIR is set without GIT_WORK_TREE and turbo runs from another directory",
-                ));
+            // Without `GIT_WORK_TREE`, git takes the directory it runs from as
+            // the top of the working tree. git hooks of a linked worktree run
+            // like this, and a hook that runs turbo from a subdirectory would
+            // make git report that subdirectory as the top, hiding every
+            // tracked path in it. So this is refused wherever turbo runs.
+            (Some(_), None) => {
+                return Err(unsupported("GIT_DIR is set without GIT_WORK_TREE"));
             }
             _ => {}
         }
@@ -253,7 +329,7 @@ impl IndexPaths {
             .command()
             .args([
                 "rev-parse",
-                "--path-format=absolute",
+                PATH_FORMAT_ABSOLUTE,
                 "--show-toplevel",
                 "--git-dir",
                 "--git-path",
@@ -271,18 +347,7 @@ impl IndexPaths {
                 stderr.trim()
             )));
         }
-        let lines: Vec<&[u8]> = output
-            .stdout
-            .strip_suffix(b"\n")
-            .unwrap_or(&output.stdout)
-            .split(|byte| *byte == b'\n')
-            .collect();
-        let [top, git_dir, index_file] = lines[..] else {
-            return Err(Error::git_error(format!(
-                "unexpected git rev-parse output: {}",
-                String::from_utf8_lossy(&output.stdout)
-            )));
-        };
+        let [top, git_dir, index_file] = parse_rev_parse_output(&output.stdout)?;
         let git_root = real(&path_from_bytes(top)?)?;
         if !real_path.as_std_path().starts_with(git_root.as_std_path()) {
             return Err(Error::git_error(format!(
@@ -290,7 +355,8 @@ impl IndexPaths {
             )));
         }
         let index_file = path_from_bytes(index_file)?;
-        let default_index = path_from_bytes(git_dir)?.join("index");
+        let git_dir = path_from_bytes(git_dir)?;
+        let default_index = git_dir.join("index");
 
         let mut indexes = vec![read_index(&index_file)?];
         let same_file = match (
@@ -336,13 +402,25 @@ impl IndexPaths {
         directories.sort();
         directories.dedup();
         Ok(Some(Self {
+            // git confirms a root manifest against exactly the repository,
+            // working tree and index validated above, whatever the
+            // environment says.
+            git: Git {
+                vars: vec![
+                    ("GIT_DIR", Some(git_dir.into())),
+                    ("GIT_WORK_TREE", Some(git_root.as_std_path().into())),
+                    ("GIT_INDEX_FILE", Some(index_file.clone().into())),
+                    ("GIT_COMMON_DIR", None),
+                    ("GIT_CEILING_DIRECTORIES", None),
+                ],
+                ..git
+            },
             git_root,
             index_file,
             files,
             directories,
             root: real_path,
             root_entries,
-            git,
         }))
     }
 
@@ -357,7 +435,9 @@ impl IndexPaths {
     /// Whether the index demonstrably describes the file `name` directly in
     /// the directory it was read for: the stat data recorded for it (size,
     /// modification time, and inode where recorded) matches the file on disk,
-    /// or `git ls-files --error-unmatch` reports it as tracked.
+    /// or `git ls-files --error-unmatch` reports it as tracked. git runs with
+    /// the repository, working tree and index validated by
+    /// [`IndexPaths::read_with`], never those of the environment.
     pub fn describes_file_on_disk(&self, name: &str) -> bool {
         let on_disk = self.root.as_std_path().join(name);
         let Ok(metadata) = std::fs::symlink_metadata(&on_disk) else {
@@ -536,23 +616,18 @@ mod tests {
         assert_eq!(paths.git_root, project);
         assert!(paths.contains_file("gen/t.ts"));
 
-        // `GIT_DIR` alone: the store is bare, so git has no working tree.
+        // `GIT_DIR` alone does not say where the working tree is.
         let env = GitEnvironment {
             work_tree: None,
             ..env
         };
         assert!(IndexPaths::read_with(&project, &env).is_err());
-        // For a repository with a working tree (as in `git submodule
-        // foreach`), git takes the directory it runs from as its top.
+        // Not even for a repository with a working tree, run from its top.
         let env = GitEnvironment {
             git_dir: Some(".git".into()),
             ..clean_env(&home)
         };
-        let paths = IndexPaths::read_with(&home, &env).unwrap().unwrap();
-        assert_eq!(paths.git_root, home);
-        assert!(paths.contains_file(".bashrc"));
-        // Run from elsewhere, git would take that directory instead, so it is
-        // refused.
+        assert!(IndexPaths::read_with(&home, &env).is_err());
         assert!(IndexPaths::read_with(&project, &env).is_err());
         // Nor does `GIT_WORK_TREE` alone say which repository.
         let env = GitEnvironment {
@@ -780,5 +855,135 @@ mod tests {
         let paths = IndexPaths::read_with(&root, &env).unwrap().unwrap();
         assert!(paths.contains_file("package.json"));
         assert!(!paths.describes_file_on_disk("package.json"));
+    }
+
+    /// Round 4 G1: git hooks of a linked worktree run with `GIT_DIR` set and
+    /// no `GIT_WORK_TREE`. From a subdirectory, git then takes that
+    /// subdirectory as the top of the working tree, so it is refused there
+    /// as everywhere. With both set, `git ls-files` confirms against the
+    /// validated working tree.
+    #[test]
+    fn git_dir_without_a_work_tree_is_refused_in_a_linked_worktree() {
+        let (_tmp, base) = repo();
+        let main = base.join_component("main");
+        write(
+            &main,
+            &["package.json"],
+            "{\"devDependencies\": {\"husky\": \"9\"}}",
+        );
+        write(&main, &["web", "package.json"], "{}");
+        committed_all(&main);
+        git(&main, &["worktree", "add", "--quiet", "../wt"]);
+        let worktree = base.join_component("wt");
+        let web = worktree.join_component("web");
+        let output = Command::new("git")
+            .args(["rev-parse", "--absolute-git-dir"])
+            .env_remove("GIT_DIR")
+            .current_dir(&worktree)
+            .output()
+            .unwrap();
+        let git_dir = String::from_utf8(output.stdout).unwrap().trim().to_owned();
+
+        for dir in [&web, &worktree] {
+            let env = GitEnvironment {
+                git_dir: Some(git_dir.clone().into()),
+                ..clean_env(dir)
+            };
+            assert!(IndexPaths::read_with(dir, &env).is_err(), "{dir}");
+        }
+
+        let env = GitEnvironment {
+            git_dir: Some(git_dir.into()),
+            work_tree: Some("..".into()),
+            ..clean_env(&web)
+        };
+        let paths = IndexPaths::read_with(&web, &env).unwrap().unwrap();
+        assert_eq!(paths.git_root, worktree);
+        write(&web, &["package.json"], "{\"name\": \"edited\"}");
+        assert!(paths.describes_file_on_disk("package.json"));
+    }
+
+    fn committed_all(root: &AbsoluteSystemPath) {
+        git(root, &["init", "--quiet"]);
+        git(root, &["add", "."]);
+        git(root, &["commit", "--quiet", "-m", "init"]);
+    }
+
+    /// Round 4 G2: git before 2.31 echoes `--path-format=absolute` back.
+    #[test]
+    fn rev_parse_output_without_path_format_support_needs_a_newer_git() {
+        let old = b"--path-format=absolute\n/repo\n.git\n.git/index\n";
+        let error = parse_rev_parse_output(old).unwrap_err().to_string();
+        assert!(
+            error.contains("turbo clean requires git >= 2.31"),
+            "{error}"
+        );
+
+        let [top, git_dir, index] =
+            parse_rev_parse_output(b"/repo\n/repo/.git\n/repo/.git/index\n").unwrap();
+        assert_eq!(top, b"/repo");
+        assert_eq!(git_dir, b"/repo/.git");
+        assert_eq!(index, b"/repo/.git/index");
+
+        let error = parse_rev_parse_output(b"/repo\n/repo/.git\n")
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("unexpected git rev-parse output"), "{error}");
+    }
+
+    thread_local! {
+        static HOOK_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// Round 4 I1: a panic caught while decoding the index does not reach
+    /// the process's panic hook (turbo's prints "Oops! Turbo has crashed"),
+    /// and the hook is back in place afterwards.
+    #[test]
+    fn a_panic_while_decoding_the_index_skips_the_panic_hook() {
+        let (_tmp, root) = repo();
+        committed(&root);
+        // One entry whose path runs to the end of the file: gix-index slices
+        // past the end looking for the padding after it.
+        let name = b"package.json";
+        let index = [
+            &b"DIRC\0\0\0\x02\0\0\0\x01"[..],
+            &[0; 60],
+            &((name.len() + 20) as u16).to_be_bytes(),
+            name,
+            &[0; 20],
+        ]
+        .concat();
+        std::fs::write(
+            root.join_components(&[".git", "index"]).as_std_path(),
+            index,
+        )
+        .unwrap();
+
+        let swap = || {
+            PANIC_HOOK_SWAP
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        let previous = {
+            let _swap = swap();
+            let previous = std::panic::take_hook();
+            std::panic::set_hook(Box::new(|_| {
+                HOOK_CALLS.with(|calls| calls.set(calls.get() + 1))
+            }));
+            previous
+        };
+        let error = read(&root).map(|_| ()).unwrap_err().to_string();
+        let calls_while_decoding = HOOK_CALLS.with(std::cell::Cell::get);
+        let caught = std::panic::catch_unwind(|| panic!("outside the index read"));
+        let calls_after = HOOK_CALLS.with(std::cell::Cell::get);
+        {
+            let _swap = swap();
+            std::panic::set_hook(previous);
+        }
+
+        assert!(error.contains("could not be decoded"), "{error}");
+        assert_eq!(calls_while_decoding, 0);
+        assert!(caught.is_err());
+        assert_eq!(calls_after, 1);
     }
 }

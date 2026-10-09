@@ -991,3 +991,51 @@ fn a_root_manifest_the_index_does_not_describe_deletes_nothing() {
     assert!(reason.contains("does not match"), "{reason}");
     assert!(exists(&root, "packages/a/gen/t.ts"));
 }
+
+/// Round 4 G1: in a linked worktree, git runs hooks with `GIT_DIR` set and
+/// no `GIT_WORK_TREE`. A hook running `cd web && turbo clean` made git take
+/// `web` as the top of the working tree, so no path below it looked tracked
+/// and the repository root's `package.json` vouched for the index. Nothing
+/// may be deleted.
+#[test]
+fn a_linked_worktree_hook_run_from_a_subdirectory_deletes_nothing() {
+    let tmp = TempDir::new().unwrap();
+    let base = repo(&tmp);
+    let main = path(&base, "main");
+    write(
+        &main,
+        "package.json",
+        "{\"devDependencies\": {\"husky\": \"9\"}}",
+    );
+    write(&main, "web/package.json", "{}");
+    write(&main, "web/turbo.json", "{}");
+    write(&main, "web/packages/a/dist/tracked.js", "TRACKED");
+    git(&main, &["init", "--quiet"]);
+    git(&main, &["add", "--force", "."]);
+    git(&main, &["commit", "--quiet", "-m", "init"]);
+    git(&main, &["worktree", "add", "--quiet", "../wt"]);
+    let worktree = path(&base, "wt");
+    let web = path(&worktree, "web");
+    write(&web, "packages/a/dist/tracked.js", "TRACKED\nEDIT");
+    let git_dir = git_output(&worktree, &["rev-parse", "--absolute-git-dir"]);
+
+    let git_env = turborepo_scm::GitEnvironment {
+        cwd: web.as_std_path().to_owned(),
+        git_dir: Some(git_dir.trim().into()),
+        ..Default::default()
+    };
+    let result = crate::plan_paths_with(
+        &web,
+        &["packages/a"],
+        matches(&web, &["packages/a/dist/**"], &[]),
+        &git_env,
+    );
+    let Err(Error::TrackedFilesUnknown { reason }) = result else {
+        panic!("expected the tracked set to be unknown: {result:?}");
+    };
+    assert!(
+        reason.contains("GIT_DIR is set without GIT_WORK_TREE"),
+        "{reason}"
+    );
+    assert!(exists(&web, "packages/a/dist/tracked.js"));
+}
