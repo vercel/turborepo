@@ -74,6 +74,14 @@ pub struct Store {
     _lock: File,
 }
 
+impl Drop for Store {
+    fn drop(&mut self) {
+        // Closing alone can leave flock held by a forked child's inherited
+        // open-file description. Only a successfully opened Store owns it.
+        let _ = self._lock.unlock();
+    }
+}
+
 pub struct Current {
     pub tools: Vec<Tool>,
     /// For bookkeeping only; not a trusted activation PATH.

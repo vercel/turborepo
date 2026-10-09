@@ -169,15 +169,61 @@ pub struct WriterStorage {
     _guard: File,
 }
 
+// Own cleanup only after lock succeeds. Local guards unwind writer-before-root
+// on every fallible acquire path, then transfer ownership to WriterStorage.
+struct AcquiredLock<'a>(Option<&'a File>);
+
+impl<'a> AcquiredLock<'a> {
+    fn acquire(file: &'a File) -> io::Result<Self> {
+        Self::from_result(file, file.lock())
+    }
+
+    fn from_result(file: &'a File, result: io::Result<()>) -> io::Result<Self> {
+        result?;
+        Ok(Self(Some(file)))
+    }
+
+    fn transfer(mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for AcquiredLock<'_> {
+    fn drop(&mut self) {
+        if let Some(file) = self.0 {
+            // File close is insufficient when a child inherited this flock.
+            let _ = file.unlock();
+        }
+    }
+}
+
+impl Drop for WriterStorage {
+    fn drop(&mut self) {
+        // Keep the stable root excluded until the writer inode is released.
+        let _ = self._guard.unlock();
+        #[cfg(unix)]
+        let _ = self.root.file.unlock();
+    }
+}
+
 impl WriterStorage {
     pub fn acquire(root: &Path) -> io::Result<Self> {
+        Self::acquire_with(root, |_| Ok(()))
+    }
+
+    fn acquire_with(
+        root: &Path,
+        mut after_lock: impl FnMut(&File) -> io::Result<()>,
+    ) -> io::Result<Self> {
         let root_path = root.canonicalize()?;
         let root = Directory::root(&root_path)?;
         // Unix permits renaming an open cache directory. Lock the stable root
         // inode first so a recreated cache cannot split concurrent writers.
         // Windows directory handles already deny deletion of the pinned chain.
         #[cfg(unix)]
-        root.file.lock()?;
+        let root_lock = AcquiredLock::acquire(&root.file)?;
+        #[cfg(unix)]
+        after_lock(&root.file)?;
         let paths = [".turbo/setup-lock/writer", ".turbo/setup-lock/staged"];
         let output = Command::new("git")
             .current_dir(&root_path)
@@ -207,13 +253,18 @@ impl WriterStorage {
             }
         }
         let guard = storage.open(WRITER, true, false)?;
-        guard.lock()?;
+        let writer_lock = AcquiredLock::acquire(&guard)?;
+        after_lock(&guard)?;
         // A prior process may have died after creating/flushing its stage.
         // Inspect without following links, then remove only this owned entry.
         if let Some(file) = storage.optional(STAGED)? {
             drop(file);
             storage.remove_stage()?;
         }
+        // No fallible work remains: the returned owner now releases both locks.
+        writer_lock.transfer();
+        #[cfg(unix)]
+        root_lock.transfer();
         Ok(Self {
             root,
             _cache: cache,
