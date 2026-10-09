@@ -163,7 +163,18 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
-        _ => provision::run(&discovery, snapshot, request.lock, transports, preflight),
+        _ => provision::run(
+            &discovery,
+            snapshot,
+            request.lock,
+            if request.update_lock {
+                turborepo_setup::lock::reconcile::Mode::Refresh
+            } else {
+                turborepo_setup::lock::reconcile::Mode::Local
+            },
+            transports,
+            preflight,
+        ),
     }
 }
 
@@ -182,7 +193,6 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
         || !request.tools_only
         || request.force
         || request.offline
-        || request.update_lock
     {
         return Err(Error::NotImplemented);
     }
@@ -279,13 +289,13 @@ mod tests {
                     }
                 );
             }
-            for control in [
-                "--update-lock",
-                "--no-lock",
-                "--force",
-                "--offline",
-                "--plan",
-            ] {
+            assert!(
+                validate_request(
+                    &request(&["--tools-only", "--no-frozen", "--update-lock"], ci).unwrap()
+                )
+                .is_ok()
+            );
+            for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
                 assert!(matches!(
                     validate_request(&request),
