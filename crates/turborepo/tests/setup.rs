@@ -142,6 +142,35 @@ fn diagnostic_contains(text: &str, expected: &str) -> bool {
 }
 
 #[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn frozen_unsupported_plan_is_read_only_and_local_tools_only_is_not_enabled() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(root, ".nvmrc", "24.0.0");
+    write(
+        root,
+        "turbo.lock",
+        r#"{"schemaVersion":0,"tools":{"node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],"installation":{"kind":"verify-system","executables":["node"]}}}}"#,
+    );
+    failure(
+        root,
+        &["setup", "--frozen", "--tools-only"],
+        false,
+        "invalid locked Node artifact or mappings",
+    );
+    failure(
+        root,
+        &["setup", "--no-frozen", "--tools-only"],
+        true,
+        PENDING,
+    );
+}
+
+#[test]
 fn standalone_help_needs_no_js_or_gate_and_does_not_parse_config() {
     let temp = tempfile::tempdir().unwrap();
     for malformed_config in [false, true] {

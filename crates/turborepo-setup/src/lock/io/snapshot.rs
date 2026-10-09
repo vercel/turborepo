@@ -125,7 +125,7 @@ impl Snapshot {
     /// revalidated after staging/flush immediately before promotion; later
     /// editor changes are ordinary declaration drift, not an atomic editor txn.
     pub fn commit(&self, candidate: &Lock) -> Result<WriteOutcome, StorageError> {
-        self.commit_with(candidate, || Ok(()))
+        self.commit_checked(candidate, || Ok(()))
     }
 
     fn matches(&self, guard: &WriterStorage) -> Result<bool, StorageError> {
@@ -163,6 +163,21 @@ impl Snapshot {
         Ok(())
     }
 
+    /// Advance only the intentional lock replacement, never recapture sources
+    /// or root identity. A foreign lock (even with matching declarations)
+    /// fails.
+    pub fn after_publication(&self, candidate: &Lock) -> Result<Self, StorageError> {
+        self.check_native_coverage(Some(candidate))?;
+        if !candidate.matches_native(&self.native)? {
+            return Err(StorageError::Conflict);
+        }
+        let mut published = self.clone();
+        published.bytes = Some(candidate.canonical_bytes()?);
+        published.previous = Some(candidate.clone());
+        published.guard()?;
+        Ok(published)
+    }
+
     pub(crate) fn check_native_coverage(
         &self,
         candidate: Option<&Lock>,
@@ -187,10 +202,13 @@ impl Snapshot {
         Ok(())
     }
 
-    fn commit_with(
+    /// Check caller-owned discovery/policy after waiting and after staging,
+    /// including unchanged publication. The original source/lock CAS is
+    /// retained.
+    pub fn commit_checked(
         &self,
         candidate: &Lock,
-        before_check: impl FnOnce() -> io::Result<()>,
+        mut before_check: impl FnMut() -> io::Result<()>,
     ) -> Result<WriteOutcome, StorageError> {
         self.check_native_coverage(Some(candidate))?;
         if !candidate.matches_native(&self.native)? {
@@ -199,7 +217,10 @@ impl Snapshot {
             );
         }
         let bytes = candidate.canonical_bytes()?;
+        self.ensure_current()?;
+        before_check()?;
         let mut guard = WriterStorage::acquire(&self.root)?;
+        before_check()?;
         if !self.matches(&guard)? {
             return Err(StorageError::Conflict);
         }

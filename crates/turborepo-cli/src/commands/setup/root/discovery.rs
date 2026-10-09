@@ -3,6 +3,8 @@
 
 use std::fmt;
 
+mod markers;
+
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_turbo_json::FutureFlags;
 
@@ -99,8 +101,9 @@ fn config_scope(
 /// silently. Fields stay private; callers cannot substitute an outer root or
 /// new flags.
 ///
-/// This captures discovery identity and policy, NOT config/declaration bytes.
-/// The locked executor must capture its Snapshot at `snapshot_root()`, reject a
+/// Bounded discovery markers and effective Git indirections supplement, never
+/// replace, Snapshot's root/native/config CAS. The locked executor must capture
+/// its Snapshot at `snapshot_root()`, reject a
 /// false/error `revalidate()` before initializing storage, and check again
 /// inside Store's checked pre-publication callback while holding the Snapshot
 /// writer guard AND Store lock through promotion. Byte drift remains Snapshot's
@@ -113,6 +116,7 @@ pub(in crate::commands::setup) struct Discovery {
     root: SetupRoot,
     scope: ConfigScope,
     eligibility: SourceEligibility,
+    inputs: Option<markers::Inputs>,
 }
 
 // Do not expose config contents, invocation paths, or policy in debug output.
@@ -141,6 +145,11 @@ impl Discovery {
         let root = infer(&cwd, explicit_cwd, config.as_deref())?;
         let scope = config_scope(&root, config.as_deref())?;
         let eligibility = SourceEligibility::from_flags(root.flags);
+        let inputs = if root.flags.experimental_setup {
+            Some(markers::capture(&cwd, root.flags)?)
+        } else {
+            None
+        };
         Ok(Self {
             cwd,
             explicit_cwd,
@@ -148,6 +157,7 @@ impl Discovery {
             root,
             scope,
             eligibility,
+            inputs,
         })
     }
 
@@ -178,11 +188,14 @@ impl Discovery {
     pub fn revalidate(&self) -> Result<bool, Error> {
         self.snapshot_root()?;
         let current = infer(&self.cwd, self.explicit_cwd, self.config.as_deref())?;
-        Ok(
-            config_scope(&current, self.config.as_deref())? == self.scope
-                && SourceEligibility::from_flags(current.flags) == self.eligibility
-                && current == self.root,
-        )
+        let same_inputs = match &self.inputs {
+            Some(expected) => markers::capture(&self.cwd, self.root.flags)? == *expected,
+            None => true,
+        };
+        Ok(same_inputs
+            && config_scope(&current, self.config.as_deref())? == self.scope
+            && SourceEligibility::from_flags(current.flags) == self.eligibility
+            && current == self.root)
     }
 }
 
