@@ -1,22 +1,27 @@
-//! The paths a git index records, read without the `git` binary.
+//! The paths a git index records.
 //!
 //! Callers that must never touch tracked content (e.g. `turbo clean`) need a
-//! complete answer or none at all. Unlike the best-effort repository index
-//! used for hashing, this never falls back: it works without a `git` binary
-//! on `PATH`, and a repository whose index is missing or unreadable is an
-//! error rather than "nothing is tracked".
+//! complete answer or none at all. git itself decides which working tree and
+//! index apply (`git rev-parse`), so every setting git honors is honored here
+//! too; the index file it names is then read directly. Nothing falls back:
+//! without a `git` binary, or when the index is missing or unreadable, the
+//! answer is an error rather than "nothing is tracked".
 
 use std::{
+    collections::HashMap,
     ffi::OsString,
+    io::Read,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-use crate::{Error, worktree::resolve_git_dir};
+use crate::Error;
 
 /// The environment variables that change which repository, working tree and
 /// index git uses, plus the directory relative values are resolved against.
+/// Every other variable is inherited by git unchanged.
 #[derive(Debug, Clone, Default)]
 pub struct GitEnvironment {
     /// The process working directory: `GIT_DIR` and `GIT_WORK_TREE` are
@@ -26,6 +31,7 @@ pub struct GitEnvironment {
     pub work_tree: Option<OsString>,
     pub index_file: Option<OsString>,
     pub common_dir: Option<OsString>,
+    pub ceiling_directories: Option<OsString>,
 }
 
 impl GitEnvironment {
@@ -38,7 +44,59 @@ impl GitEnvironment {
             work_tree: var("GIT_WORK_TREE"),
             index_file: var("GIT_INDEX_FILE"),
             common_dir: var("GIT_COMMON_DIR"),
+            ceiling_directories: var("GIT_CEILING_DIRECTORIES"),
         })
+    }
+}
+
+/// A `git` binary run from one directory with one environment.
+#[derive(Debug, Clone)]
+struct Git {
+    bin: PathBuf,
+    dir: PathBuf,
+    vars: Vec<(&'static str, Option<OsString>)>,
+}
+
+impl Git {
+    /// Runs from `dir`. Relative `GIT_DIR` and `GIT_WORK_TREE` values are
+    /// made absolute against `env.cwd`, so they mean what they mean to the
+    /// process that set them.
+    fn new(dir: &Path, env: &GitEnvironment) -> Result<Self, Error> {
+        let bin = which::which("git").map_err(|error| {
+            Error::git_error(format!(
+                "git was not found on PATH ({error}), so which files git tracks is unknown"
+            ))
+        })?;
+        let absolute = |value: &Option<OsString>| value.as_ref().map(|v| env.cwd.join(v).into());
+        Ok(Self {
+            bin,
+            dir: dir.to_owned(),
+            vars: vec![
+                ("GIT_DIR", absolute(&env.git_dir)),
+                ("GIT_WORK_TREE", absolute(&env.work_tree)),
+                // Like git, a relative `GIT_INDEX_FILE` is relative to the top
+                // of the working tree.
+                ("GIT_INDEX_FILE", env.index_file.clone()),
+                ("GIT_COMMON_DIR", absolute(&env.common_dir)),
+                ("GIT_CEILING_DIRECTORIES", env.ceiling_directories.clone()),
+            ],
+        })
+    }
+
+    fn command(&self) -> Command {
+        let mut command = Command::new(&self.bin);
+        command
+            .current_dir(&self.dir)
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            // Messages are matched below; keep them untranslated.
+            .env("LC_ALL", "C");
+        for (name, value) in &self.vars {
+            match value {
+                Some(value) => command.env(name, value),
+                None => command.env_remove(name),
+            };
+        }
+        command
     }
 }
 
@@ -47,132 +105,100 @@ impl GitEnvironment {
 pub struct IndexPaths {
     /// The real path of the working tree root the paths are relative to.
     pub git_root: AbsoluteSystemPathBuf,
-    /// The index file that was read.
+    /// The index file git uses (`GIT_INDEX_FILE`, else the repository's own).
     pub index_file: PathBuf,
     /// Tracked files and symlinks: `/`-separated, relative to `git_root`,
-    /// sorted.
+    /// sorted. When `GIT_INDEX_FILE` names another index than the
+    /// repository's own, the files of both.
     pub files: Vec<String>,
     /// Directory entries, without a trailing `/`: submodules (gitlinks) and
     /// the collapsed directories of a sparse index. Everything below them
     /// belongs to another tree, or is tracked without being listed.
     pub directories: Vec<String>,
+    /// The real path the index was read for.
+    root: AbsoluteSystemPathBuf,
+    /// The recorded stat data of the files directly in `root`, by name.
+    root_entries: HashMap<String, Vec<gix_index::entry::Stat>>,
+    git: Git,
 }
 
-fn unsupported(reason: impl std::fmt::Display) -> Error {
-    Error::git_error(format!(
-        "{reason}, so it is unclear which working tree and index git would use"
-    ))
-}
+/// An index git wrote has a 12-byte header and a trailing hash.
+const MINIMUM_INDEX_LEN: u64 = 12 + 20;
 
-/// The settings in the `[core]` section of a repository's own config file
-/// that move or remove its working tree.
-#[derive(Debug, Default, PartialEq, Eq)]
-struct CoreConfig {
-    worktree: Option<String>,
-    bare: Option<bool>,
-}
-
-impl CoreConfig {
-    fn read(path: &Path) -> Result<Self, Error> {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => Self::parse(&contents)
-                .ok_or_else(|| unsupported(format!("{} could not be parsed", path.display()))),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(error) => Err(Error::git_error(format!(
-                "failed to read {}: {error}",
-                path.display()
-            ))),
+/// Reads the index at `path`, failing (never panicking) on anything that is
+/// not a readable index.
+fn read_index(path: &Path) -> Result<gix_index::File, Error> {
+    let unreadable =
+        |reason: String| Error::git_error(format!("the git index {} {reason}", path.display()));
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Err(unreadable("does not exist".to_owned()));
         }
+        Err(error) => return Err(unreadable(format!("could not be read: {error}"))),
+    };
+    let len = file.metadata()?.len();
+    let mut header = [0u8; 8];
+    if len < MINIMUM_INDEX_LEN || file.read_exact(&mut header).is_err() {
+        return Err(unreadable("is truncated".to_owned()));
     }
-
-    /// Parses just enough of git's config syntax to find `core.worktree`
-    /// and `core.bare`. Returns `None` for anything it does not understand
-    /// in the `[core]` section, so callers fail closed.
-    fn parse(contents: &str) -> Option<Self> {
-        let mut config = Self::default();
-        let mut in_core = false;
-        for line in contents.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
-                continue;
-            }
-            if let Some(header) = line.strip_prefix('[') {
-                let (name, rest) = header.split_once(']')?;
-                if !rest.trim().is_empty()
-                    && !rest.trim_start().starts_with(['#', ';'])
-                    && name.trim().eq_ignore_ascii_case("core")
-                {
-                    // `[core] key = value` on one line.
-                    return None;
-                }
-                in_core = name.trim().eq_ignore_ascii_case("core");
-                continue;
-            }
-            if !in_core {
-                continue;
-            }
-            let (key, value) = match line.split_once('=') {
-                Some((key, value)) => (key.trim(), Some(value.trim())),
-                None => (line, None),
-            };
-            let value = match value {
-                Some(value) => Some(unquote(value)?),
-                None => None,
-            };
-            if key.eq_ignore_ascii_case("worktree") {
-                config.worktree = Some(value?);
-            } else if key.eq_ignore_ascii_case("bare") {
-                config.bare = Some(match value.as_deref().map(str::to_ascii_lowercase) {
-                    None => true,
-                    Some(value) => match value.as_str() {
-                        "true" | "yes" | "on" | "1" => true,
-                        "false" | "no" | "off" | "0" | "" => false,
-                        _ => return None,
-                    },
-                });
-            }
-        }
-        Some(config)
+    let version = u32::from_be_bytes([header[4], header[5], header[6], header[7]]);
+    if &header[..4] != b"DIRC" || !(2..=4).contains(&version) {
+        return Err(unreadable("is not a git index".to_owned()));
     }
+    // gix-index trusts the file's structure in places; a panic while
+    // decoding means the index is unreadable, not that nothing is tracked.
+    std::panic::catch_unwind(|| {
+        gix_index::File::at(
+            path,
+            gix_index::hash::Kind::Sha1,
+            false,
+            gix_index::decode::Options::default(),
+        )
+    })
+    .map_err(|_| unreadable("could not be decoded".to_owned()))?
+    .map_err(|error| unreadable(format!("could not be read: {error}")))
 }
 
-/// A config value without comments or quotes. `None` for escapes or line
-/// continuations, which this reader does not interpret.
-fn unquote(value: &str) -> Option<String> {
-    let mut out = String::new();
-    let mut quoted = false;
-    for char in value.chars() {
-        match char {
-            '"' => quoted = !quoted,
-            '#' | ';' if !quoted => break,
-            '\\' => return None,
-            _ => out.push(char),
-        }
+fn path_from_bytes(bytes: &[u8]) -> Result<PathBuf, Error> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        Ok(PathBuf::from(std::ffi::OsStr::from_bytes(bytes)))
     }
-    (!quoted).then(|| out.trim().to_owned())
-}
-
-/// `path` itself when it is a git directory, or the directory a `.git`-style
-/// `gitdir:` file points to.
-fn git_dir_at(path: &Path) -> Result<PathBuf, Error> {
-    let metadata = std::fs::metadata(path).map_err(|error| {
-        Error::git_error(format!("GIT_DIR {} is not usable: {error}", path.display()))
-    })?;
-    if metadata.is_dir() {
-        return Ok(path.to_owned());
+    #[cfg(not(unix))]
+    {
+        Ok(PathBuf::from(String::from_utf8(bytes.to_vec())?))
     }
-    let contents = std::fs::read_to_string(path)?;
-    let target = contents
-        .strip_prefix("gitdir: ")
-        .map(str::trim)
-        .ok_or_else(|| unsupported(format!("GIT_DIR {} is not a git directory", path.display())))?;
-    Ok(path.parent().unwrap_or(path).join(target))
 }
 
 fn real(path: &Path) -> Result<AbsoluteSystemPathBuf, Error> {
     AbsoluteSystemPathBuf::try_from(path)?
         .to_realpath()
         .map_err(|error| Error::git_error(format!("failed to resolve {}: {error}", path.display())))
+}
+
+/// Whether the stat data git recorded for a file still describes `metadata`.
+/// git keeps the low 32 bits of sizes, times and inode numbers.
+fn stat_matches(stat: &gix_index::entry::Stat, metadata: &std::fs::Metadata) -> bool {
+    if stat.size != metadata.len() as u32 {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        stat.mtime.secs == metadata.mtime() as u32
+            && (stat.mtime.nsecs == 0 || stat.mtime.nsecs == metadata.mtime_nsec() as u32)
+            && (stat.ino == 0 || stat.ino == metadata.ino() as u32)
+    }
+    #[cfg(not(unix))]
+    {
+        metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
+            .is_some_and(|mtime| stat.mtime.secs == mtime.as_secs() as u32)
+    }
 }
 
 impl IndexPaths {
@@ -184,100 +210,124 @@ impl IndexPaths {
 
     /// Reads the index git would use for `path_in_repo`.
     ///
-    /// The repository is the one `GIT_DIR` names, or else the first ancestor
-    /// with a `.git` entry. The working tree is `GIT_WORK_TREE`, else
-    /// `core.worktree`, else the directory holding `.git`. The index is
-    /// `GIT_INDEX_FILE`, else the repository's own.
+    /// git decides: `git rev-parse --show-toplevel --git-dir --git-path
+    /// index`, run from `path_in_repo` with `env`, names the working tree and
+    /// the index. When that index is not the repository's own (a
+    /// `GIT_INDEX_FILE` such as the temporary index of a partial commit), the
+    /// paths of both are returned.
     ///
-    /// Returns `Ok(None)` when no repository is found. Errors when a
-    /// repository is found but its index is missing or cannot be read, when
-    /// the working tree does not contain `path_in_repo`, and for setups this
-    /// reader cannot resolve unambiguously (`GIT_COMMON_DIR`, `GIT_DIR`
-    /// without a working tree, `GIT_WORK_TREE` without `GIT_DIR`, a bare
-    /// repository, `core.worktree` in a linked worktree).
+    /// Returns `Ok(None)` when git finds no repository. Errors when git is
+    /// missing or fails, when the working tree does not contain
+    /// `path_in_repo` (or there is none), when an index is missing or cannot
+    /// be read, and for environments that would make git answer differently
+    /// here than in the calling process (`GIT_COMMON_DIR`, `GIT_WORK_TREE`
+    /// without `GIT_DIR`, `GIT_DIR` without `GIT_WORK_TREE` away from
+    /// `path_in_repo`).
     pub fn read_with(
         path_in_repo: &AbsoluteSystemPath,
         env: &GitEnvironment,
     ) -> Result<Option<Self>, Error> {
         let real_path = path_in_repo.to_realpath()?;
+        let unsupported = |reason: &str| {
+            Error::git_error(format!(
+                "{reason}, so it is unclear which working tree and index git would use"
+            ))
+        };
         if env.common_dir.is_some() {
             return Err(unsupported("GIT_COMMON_DIR is set"));
         }
-        let (git_dir, work_tree) = match (&env.git_dir, &env.work_tree) {
-            (Some(git_dir), work_tree) => {
-                let git_dir = git_dir_at(&env.cwd.join(git_dir))?;
-                let config = Self::core_config(&git_dir)?;
-                let work_tree = match (work_tree, config.worktree) {
-                    (Some(work_tree), _) => env.cwd.join(work_tree),
-                    (None, Some(work_tree)) => git_dir.join(work_tree),
-                    (None, None) => {
-                        return Err(unsupported(
-                            "GIT_DIR is set but neither GIT_WORK_TREE nor core.worktree names a \
-                             working tree",
-                        ));
-                    }
-                };
-                (git_dir, work_tree)
-            }
+        match (&env.git_dir, &env.work_tree) {
             (None, Some(_)) => return Err(unsupported("GIT_WORK_TREE is set without GIT_DIR")),
-            (None, None) => {
-                let Some(top) = real_path
-                    .as_std_path()
-                    .ancestors()
-                    .find(|dir| std::fs::symlink_metadata(dir.join(".git")).is_ok())
-                else {
-                    return Ok(None);
-                };
-                let top = AbsoluteSystemPathBuf::try_from(top)?;
-                let git_dir = resolve_git_dir(&top)?.as_std_path().to_owned();
-                let config = Self::core_config(&git_dir)?;
-                let work_tree = match (config.worktree, config.bare) {
-                    (Some(work_tree), _) => git_dir.join(work_tree),
-                    (None, Some(true)) => {
-                        return Err(unsupported(format!(
-                            "the repository at {} is bare",
-                            git_dir.display()
-                        )));
-                    }
-                    (None, _) => top.as_std_path().to_owned(),
-                };
-                (git_dir, work_tree)
+            // Without `GIT_WORK_TREE` or `core.worktree`, git takes the
+            // directory it runs from as the top of the working tree.
+            (Some(_), None) if real(&env.cwd).ok().as_ref() != Some(&real_path) => {
+                return Err(unsupported(
+                    "GIT_DIR is set without GIT_WORK_TREE and turbo runs from another directory",
+                ));
             }
+            _ => {}
+        }
+
+        let git = Git::new(real_path.as_std_path(), env)?;
+        let output = git
+            .command()
+            .args([
+                "rev-parse",
+                "--path-format=absolute",
+                "--show-toplevel",
+                "--git-dir",
+                "--git-path",
+                "index",
+            ])
+            .output()
+            .map_err(|error| Error::git_error(format!("failed to run git rev-parse: {error}")))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if stderr.contains("not a git repository") {
+                return Ok(None);
+            }
+            return Err(Error::git_error(format!(
+                "git rev-parse failed: {}",
+                stderr.trim()
+            )));
+        }
+        let lines: Vec<&[u8]> = output
+            .stdout
+            .strip_suffix(b"\n")
+            .unwrap_or(&output.stdout)
+            .split(|byte| *byte == b'\n')
+            .collect();
+        let [top, git_dir, index_file] = lines[..] else {
+            return Err(Error::git_error(format!(
+                "unexpected git rev-parse output: {}",
+                String::from_utf8_lossy(&output.stdout)
+            )));
         };
-        let git_root = real(&work_tree)?;
+        let git_root = real(&path_from_bytes(top)?)?;
         if !real_path.as_std_path().starts_with(git_root.as_std_path()) {
             return Err(Error::git_error(format!(
                 "the git working tree {git_root} does not contain {real_path}"
             )));
         }
-        // Like git, a relative `GIT_INDEX_FILE` is relative to the top of the
-        // working tree.
-        let index_file = match &env.index_file {
-            Some(index_file) => git_root.as_std_path().join(index_file),
-            None => git_dir.join("index"),
-        };
-        if !index_file.exists() {
-            return Err(Error::git_error(format!(
-                "the git index {} does not exist",
-                index_file.display()
-            )));
-        }
-        let index = gix_index::File::at(
-            &index_file,
-            gix_index::hash::Kind::Sha1,
-            false,
-            gix_index::decode::Options::default(),
-        )
-        .map_err(|e| Error::git_error(format!("failed to read git index: {e}")))?;
+        let index_file = path_from_bytes(index_file)?;
+        let default_index = path_from_bytes(git_dir)?.join("index");
 
-        let mut files = Vec::with_capacity(index.entries().len());
+        let mut indexes = vec![read_index(&index_file)?];
+        let same_file = match (
+            std::fs::canonicalize(&index_file),
+            std::fs::canonicalize(&default_index),
+        ) {
+            (Ok(effective), Ok(default)) => effective == default,
+            _ => false,
+        };
+        if !same_file {
+            indexes.push(read_index(&default_index)?);
+        }
+
+        let prefix = git_root.anchor(&real_path)?.to_unix().as_str().to_owned();
+        let mut files = Vec::new();
         let mut directories = Vec::new();
-        for entry in index.entries() {
-            let path = String::from_utf8_lossy(entry.path(&index)).into_owned();
-            if entry.mode.is_submodule() || entry.mode.is_sparse() {
-                // A sparse directory entry is stored as `dir/`.
-                directories.push(path.trim_end_matches('/').to_owned());
-            } else {
+        let mut root_entries: HashMap<String, Vec<gix_index::entry::Stat>> = HashMap::new();
+        for index in &indexes {
+            for entry in index.entries() {
+                let path = String::from_utf8_lossy(entry.path(index)).into_owned();
+                if entry.mode.is_submodule() || entry.mode.is_sparse() {
+                    // A sparse directory entry is stored as `dir/`.
+                    directories.push(path.trim_end_matches('/').to_owned());
+                    continue;
+                }
+                let name = if prefix.is_empty() {
+                    Some(path.as_str())
+                } else {
+                    path.strip_prefix(prefix.as_str())
+                        .and_then(|rest| rest.strip_prefix('/'))
+                };
+                if let Some(name) = name.filter(|name| !name.contains('/')) {
+                    root_entries
+                        .entry(name.to_owned())
+                        .or_default()
+                        .push(entry.stat);
+                }
                 files.push(path);
             }
         }
@@ -290,29 +340,10 @@ impl IndexPaths {
             index_file,
             files,
             directories,
+            root: real_path,
+            root_entries,
+            git,
         }))
-    }
-
-    /// The `[core]` settings git applies to `git_dir`. For a linked worktree
-    /// the shared config applies too; `core.worktree` there is refused as
-    /// ambiguous.
-    fn core_config(git_dir: &Path) -> Result<CoreConfig, Error> {
-        let own = CoreConfig::read(&git_dir.join("config"))?;
-        let Ok(common_dir) = std::fs::read_to_string(git_dir.join("commondir")) else {
-            return Ok(own);
-        };
-        let common_dir = git_dir.join(common_dir.trim());
-        let shared = CoreConfig::read(&common_dir.join("config"))?;
-        let worktree = CoreConfig::read(&git_dir.join("config.worktree"))?;
-        if own.worktree.is_some() || shared.worktree.is_some() || worktree.worktree.is_some() {
-            return Err(unsupported(format!(
-                "core.worktree is set for the linked worktree at {}",
-                git_dir.display()
-            )));
-        }
-        // A linked worktree always has a working tree, even when the shared
-        // repository is bare.
-        Ok(CoreConfig::default())
     }
 
     /// Whether `path` (relative to `git_root`, `/`-separated) is a tracked
@@ -321,6 +352,30 @@ impl IndexPaths {
         self.files
             .binary_search_by(|entry| entry.as_str().cmp(path))
             .is_ok()
+    }
+
+    /// Whether the index demonstrably describes the file `name` directly in
+    /// the directory it was read for: the stat data recorded for it (size,
+    /// modification time, and inode where recorded) matches the file on disk,
+    /// or `git ls-files --error-unmatch` reports it as tracked.
+    pub fn describes_file_on_disk(&self, name: &str) -> bool {
+        let on_disk = self.root.as_std_path().join(name);
+        let Ok(metadata) = std::fs::symlink_metadata(&on_disk) else {
+            return false;
+        };
+        let stat_matches = self
+            .root_entries
+            .get(name)
+            .is_some_and(|stats| stats.iter().any(|stat| stat_matches(stat, &metadata)));
+        stat_matches
+            || self
+                .git
+                .command()
+                .env("GIT_LITERAL_PATHSPECS", "1")
+                .args(["ls-files", "--error-unmatch", "--"])
+                .arg(name)
+                .output()
+                .is_ok_and(|output| output.status.success())
     }
 }
 
@@ -481,11 +536,23 @@ mod tests {
         assert_eq!(paths.git_root, project);
         assert!(paths.contains_file("gen/t.ts"));
 
-        // `GIT_DIR` alone does not say where the working tree is.
+        // `GIT_DIR` alone: the store is bare, so git has no working tree.
         let env = GitEnvironment {
             work_tree: None,
             ..env
         };
+        assert!(IndexPaths::read_with(&project, &env).is_err());
+        // For a repository with a working tree (as in `git submodule
+        // foreach`), git takes the directory it runs from as its top.
+        let env = GitEnvironment {
+            git_dir: Some(".git".into()),
+            ..clean_env(&home)
+        };
+        let paths = IndexPaths::read_with(&home, &env).unwrap().unwrap();
+        assert_eq!(paths.git_root, home);
+        assert!(paths.contains_file(".bashrc"));
+        // Run from elsewhere, git would take that directory instead, so it is
+        // refused.
         assert!(IndexPaths::read_with(&project, &env).is_err());
         // Nor does `GIT_WORK_TREE` alone say which repository.
         let env = GitEnvironment {
@@ -568,19 +635,150 @@ mod tests {
         assert!(read(&root).is_err());
     }
 
+    /// A committed repository whose root holds `package.json`.
+    fn committed(root: &AbsoluteSystemPath) {
+        git(root, &["init", "--quiet"]);
+        write(root, &["package.json"], "{}");
+        git(root, &["add", "package.json"]);
+        git(root, &["commit", "--quiet", "-m", "init"]);
+    }
+
+    /// Security round 3 F1: git also reads `core.worktree` from
+    /// `config.worktree` in the main worktree (with
+    /// `extensions.worktreeConfig`). The working tree is then a package
+    /// directory, which does not contain the root.
     #[test]
-    fn parses_core_settings_or_refuses() {
-        let parse = CoreConfig::parse;
-        assert_eq!(
-            parse("[core]\n\tbare = false\n\tworktree = \"../a b\" # moved\n[user]\nworktree = x"),
-            Some(CoreConfig {
-                worktree: Some("../a b".to_owned()),
-                bare: Some(false),
-            })
+    fn core_worktree_from_config_worktree_is_honored() {
+        let (_tmp, root) = repo();
+        write(&root, &["packages", "a", "package.json"], "{}");
+        committed(&root);
+        git(&root, &["config", "extensions.worktreeConfig", "true"]);
+        git(
+            &root,
+            &["config", "--worktree", "core.worktree", "../packages/a"],
         );
-        assert_eq!(parse("[CORE]\nBare\n").unwrap().bare, Some(true));
-        assert_eq!(parse("[core]\nworktree = a\\\\b\n"), None);
-        assert_eq!(parse("[core] worktree = a\n"), None);
-        assert_eq!(parse("[core]\nbare = maybe\n"), None);
+        assert!(read(&root).is_err());
+        assert_eq!(
+            read(&root.join_components(&["packages", "a"]))
+                .unwrap()
+                .unwrap()
+                .git_root,
+            root.join_components(&["packages", "a"])
+        );
+    }
+
+    /// Security round 3 F1: git skips a UTF-8 byte order mark before the
+    /// first section of a config file.
+    #[test]
+    fn config_with_a_byte_order_mark_is_honored() {
+        let (_tmp, root) = repo();
+        write(&root, &["packages", "a", "package.json"], "{}");
+        committed(&root);
+        let config = root.join_components(&[".git", "config"]);
+        let original = std::fs::read_to_string(config.as_std_path()).unwrap();
+        std::fs::write(
+            config.as_std_path(),
+            format!("\u{feff}[core]\n\tworktree = ../packages/a\n{original}"),
+        )
+        .unwrap();
+        assert!(read(&root).is_err());
+    }
+
+    /// Security round 3 F2: `GIT_CEILING_DIRECTORIES` hides an ancestor
+    /// repository from git, so it is not used here either.
+    #[test]
+    fn honors_git_ceiling_directories() {
+        let (_tmp, home) = repo();
+        let project = home.join_component("project");
+        write(&project, &["package.json"], "{}");
+        git(&home, &["init", "--quiet"]);
+        git(&home, &["add", "project/package.json"]);
+        assert_eq!(read(&project).unwrap().unwrap().git_root, home);
+
+        let env = GitEnvironment {
+            ceiling_directories: Some(home.as_std_path().into()),
+            ..clean_env(&project)
+        };
+        assert!(IndexPaths::read_with(&project, &env).unwrap().is_none());
+    }
+
+    /// Security round 3 F3: a truncated or corrupt index is an error, never a
+    /// panic.
+    #[test]
+    fn a_corrupt_index_is_an_error_not_a_panic() {
+        let (_tmp, root) = repo();
+        committed(&root);
+        let index = root.join_components(&[".git", "index"]);
+        for contents in [
+            &b"DIRC\0\0\0\x02garbage"[..],
+            &b""[..],
+            &b"DIRC\0\0\0\x09"[..],
+            &[b"DIRC\0\0\0\x02\xff\xff\xff\xff".as_slice(), &[0; 40]].concat()[..],
+        ] {
+            std::fs::write(index.as_std_path(), contents).unwrap();
+            assert!(read(&root).is_err(), "{contents:?}");
+        }
+    }
+
+    /// Correctness round 3 R3-1: a `GIT_INDEX_FILE` other than the
+    /// repository's own (the temporary index of a partial commit) adds to the
+    /// repository's index rather than replacing it.
+    #[test]
+    fn another_index_file_is_read_with_the_repository_index() {
+        let (_tmp, root) = repo();
+        committed(&root);
+        let temporary = root.join_components(&[".git", "next-index.lock"]);
+        std::fs::copy(
+            root.join_components(&[".git", "index"]).as_std_path(),
+            temporary.as_std_path(),
+        )
+        .unwrap();
+        write(&root, &["dist", "staged.js"], "staged");
+        git(&root, &["add", "dist/staged.js"]);
+
+        let env = GitEnvironment {
+            index_file: Some(temporary.as_std_path().into()),
+            ..clean_env(&root)
+        };
+        let paths = IndexPaths::read_with(&root, &env).unwrap().unwrap();
+        assert_eq!(paths.index_file, temporary.as_std_path());
+        assert!(paths.contains_file("dist/staged.js"));
+        assert!(paths.contains_file("package.json"));
+    }
+
+    /// Security round 3 F1 (defense in depth): the index describes a file
+    /// when its stat data matches the file on disk, or when git confirms it
+    /// is tracked.
+    #[test]
+    fn describes_files_by_stat_data_or_by_git() {
+        let (_tmp, root) = repo();
+        committed(&root);
+        write(&root, &["untracked.json"], "{}");
+        let paths = read(&root).unwrap().unwrap();
+        assert!(paths.describes_file_on_disk("package.json"));
+        assert!(!paths.describes_file_on_disk("untracked.json"));
+        assert!(!paths.describes_file_on_disk("missing.json"));
+
+        // Edited since it was staged: the stat data no longer matches, but
+        // git still reports the file as tracked.
+        write(&root, &["package.json"], "{\"name\": \"edited\"}");
+        let paths = read(&root).unwrap().unwrap();
+        assert!(paths.describes_file_on_disk("package.json"));
+
+        // Only the repository's own index records it, with stale stat data,
+        // and the index git uses does not track it.
+        let other = root.join_components(&[".git", "other-index"]);
+        git_in(
+            root.as_std_path(),
+            &[("GIT_INDEX_FILE", other.as_std_path())],
+            &["add", "untracked.json"],
+        );
+        let env = GitEnvironment {
+            index_file: Some(other.as_std_path().into()),
+            ..clean_env(&root)
+        };
+        let paths = IndexPaths::read_with(&root, &env).unwrap().unwrap();
+        assert!(paths.contains_file("package.json"));
+        assert!(!paths.describes_file_on_disk("package.json"));
     }
 }

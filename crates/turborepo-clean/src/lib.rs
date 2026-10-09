@@ -21,10 +21,14 @@
 //!   filesystem: a match that is the same file (device and inode) as a tracked
 //!   name in its directory is kept, whatever the filesystem's case and Unicode
 //!   rules.
-//! - The tracked set comes from the index git itself would use (`GIT_DIR`,
-//!   `GIT_WORK_TREE`, `GIT_INDEX_FILE` and `core.worktree` are honored). If it
-//!   cannot be read, is ambiguous, or does not track the repository's root
-//!   `package.json` or `turbo.json`, nothing is removed.
+//! - The tracked set comes from the index git itself uses: `git rev-parse`
+//!   names the working tree and the index, so every setting git honors is
+//!   honored. When `GIT_INDEX_FILE` names another index than the repository's
+//!   own (a partial commit's temporary index), both are read. Without git on
+//!   `PATH`, or when an index cannot be read, the setup is ambiguous, or the
+//!   index does not track the repository's root `package.json`, `turbo.json` or
+//!   `turbo.jsonc` as the file on disk (by its recorded stat data, or as
+//!   confirmed by `git ls-files`), nothing is removed.
 //! - Untracked and gitignored files that match an allowed output pattern are
 //!   build output and are removed.
 //! - On unix, removal walks from the repository root with directory handles
@@ -70,10 +74,10 @@ pub enum Error {
     #[diagnostic(
         code(turbo::clean::tracked_files_unknown),
         help(
-            "`turbo clean` relies on the git index to tell source files from build outputs. Run \
-             it inside a git repository whose index can be read and tracks the repository's \
-             package.json or turbo.json. GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE and core.worktree \
-             are honored; GIT_DIR needs GIT_WORK_TREE or core.worktree."
+            "`turbo clean` relies on git to tell source files from build outputs. Run it with git \
+             on PATH, inside a git repository whose index can be read and tracks the repository's \
+             package.json, turbo.json or turbo.jsonc. git decides which working tree and index \
+             apply; GIT_WORK_TREE needs GIT_DIR, and GIT_COMMON_DIR is not supported."
         )
     )]
     TrackedFilesUnknown { reason: String },

@@ -804,3 +804,190 @@ fn reserved_directories_inside_outputs_are_reported_once() {
 fn deletion_is_refused_where_unsupported() {
     assert_eq!(crate::ensure_deletion_supported().is_ok(), cfg!(unix));
 }
+
+/// A repository at `root` whose git working tree is `packages/a`, tracking
+/// its `package.json` and `gen/t.ts`, as in the security round 3 F1
+/// fixtures. `configure` moves the working tree.
+fn package_worktree(root: &AbsoluteSystemPath, configure: impl FnOnce(&AbsoluteSystemPath)) {
+    write(root, "package.json", "{}");
+    write(root, "turbo.json", "{}");
+    write(root, "packages/a/package.json", "{}");
+    write(root, "packages/a/gen/t.ts", "HANDWRITTEN");
+    git(root, &["init", "--quiet"]);
+    configure(root);
+    let package = path(root, "packages/a");
+    git(&package, &["add", "package.json", "gen/t.ts"]);
+    git(&package, &["commit", "--quiet", "-m", "init"]);
+    write(root, "packages/a/gen/t.ts", "HANDWRITTEN\nUNCOMMITTED");
+}
+
+fn assert_nothing_deleted(root: &AbsoluteSystemPath) {
+    let result = plan_paths(
+        root,
+        &["packages/a"],
+        matches(root, &["packages/a/gen/**"], &[]),
+    );
+    assert!(
+        matches!(result, Err(Error::TrackedFilesUnknown { .. })),
+        "{result:?}"
+    );
+    assert!(exists(root, "packages/a/gen/t.ts"));
+}
+
+/// Security round 3 F1: `core.worktree` in `config.worktree` (with
+/// `extensions.worktreeConfig`) makes `packages/a` git's working tree. Its
+/// index does not describe the repository root, so nothing is deleted.
+#[test]
+fn a_working_tree_set_in_config_worktree_deletes_nothing() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    package_worktree(&root, |root| {
+        git(root, &["config", "extensions.worktreeConfig", "true"]);
+        git(
+            root,
+            &["config", "--worktree", "core.worktree", "../packages/a"],
+        );
+    });
+    assert_nothing_deleted(&root);
+}
+
+/// Security round 3 F1: git reads a config file that starts with a UTF-8
+/// byte order mark, `core.worktree` included.
+#[test]
+fn a_working_tree_set_after_a_byte_order_mark_deletes_nothing() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    package_worktree(&root, |root| {
+        let config = path(root, ".git/config");
+        let original = std::fs::read_to_string(config.as_std_path()).unwrap();
+        std::fs::write(
+            config.as_std_path(),
+            format!("\u{feff}[core]\n\tworktree = ../packages/a\n{original}"),
+        )
+        .unwrap();
+    });
+    assert_nothing_deleted(&root);
+}
+
+/// Correctness round 3 R3-1: in a `pre-commit` hook of a partial commit,
+/// `GIT_INDEX_FILE` is a temporary index without the files staged only in
+/// the repository's own index. Those are protected too.
+#[cfg(unix)]
+#[test]
+fn files_staged_outside_a_partial_commit_are_kept() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    write(&root, "y.txt", "y");
+    git_repo(&root, &["y.txt"]);
+    write(&root, "packages/a/dist/staged.js", "STAGED");
+    write(&root, "packages/a/dist/out.js", "built");
+    git(&root, &["add", "--force", "packages/a/dist/staged.js"]);
+    write(&root, "y.txt", "y2");
+    // The hook keeps a copy of the temporary index git hands it.
+    let hook = write(
+        &root,
+        "hooks/pre-commit",
+        "#!/bin/sh\ncp \"$GIT_INDEX_FILE\" .git/partial-index\n",
+    );
+    std::fs::set_permissions(hook.as_std_path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    let hooks_path = format!("core.hooksPath={}", path(&root, "hooks"));
+    git(
+        &root,
+        &[
+            "-c",
+            &hooks_path,
+            "commit",
+            "--quiet",
+            "-m",
+            "partial",
+            "y.txt",
+        ],
+    );
+
+    let git_env = turborepo_scm::GitEnvironment {
+        cwd: root.as_std_path().to_owned(),
+        index_file: Some(".git/partial-index".into()),
+        ..Default::default()
+    };
+    let plan = crate::plan_paths_with(
+        &root,
+        &["packages/a"],
+        matches(&root, &["packages/a/dist/**"], &[]),
+        &git_env,
+    )
+    .unwrap();
+    execute(&plan);
+
+    assert_eq!(removed(&plan), ["packages/a/dist/out.js"]);
+    assert_eq!(
+        skipped(&plan),
+        [(
+            "packages/a/dist/staged.js".to_owned(),
+            SkipReason::TrackedByGit
+        )]
+    );
+    assert!(exists(&root, "packages/a/dist/staged.js"));
+}
+
+/// Correctness round 3 R3-2: a tracked `turbo.jsonc` identifies the
+/// repository on its own.
+#[test]
+fn a_tracked_turbo_jsonc_identifies_the_repository() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    write(&root, "package.json", "{}");
+    write(&root, "turbo.jsonc", "{}");
+    write(&root, "packages/a/gen/out.js", "built");
+    git(&root, &["init", "--quiet"]);
+    git(&root, &["add", "turbo.jsonc"]);
+    git(&root, &["commit", "--quiet", "-m", "init"]);
+
+    let plan = plan_paths(
+        &root,
+        &["packages/a"],
+        matches(&root, &["packages/a/gen/**"], &[]),
+    )
+    .unwrap();
+    assert_eq!(removed(&plan), ["packages/a/gen", "packages/a/gen/out.js"]);
+}
+
+/// Security round 3 F1 (defense in depth): an index that lists the root
+/// manifest, but whose record of it does not match the file on disk and
+/// which git does not confirm, may describe another working tree.
+#[test]
+fn a_root_manifest_the_index_does_not_describe_deletes_nothing() {
+    let tmp = TempDir::new().unwrap();
+    let root = repo(&tmp);
+    write(&root, "packages/a/gen/t.ts", "HANDWRITTEN");
+    git_repo(&root, &[]);
+    // Edited since it was staged: the recorded stat data is stale.
+    write(&root, "package.json", "{\"name\": \"edited\"}");
+    // The index git uses does not track it at all.
+    let other = path(&root, ".git/other-index");
+    let output = Command::new("git")
+        .args(["add", "README.md"])
+        .env("GIT_INDEX_FILE", other.as_str())
+        .current_dir(&root)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+
+    let git_env = turborepo_scm::GitEnvironment {
+        cwd: root.as_std_path().to_owned(),
+        index_file: Some(other.as_std_path().into()),
+        ..Default::default()
+    };
+    let result = crate::plan_paths_with(
+        &root,
+        &["packages/a"],
+        matches(&root, &["packages/a/gen/**"], &[]),
+        &git_env,
+    );
+    let Err(Error::TrackedFilesUnknown { reason }) = result else {
+        panic!("expected the tracked set to be unknown: {result:?}");
+    };
+    assert!(reason.contains("does not match"), "{reason}");
+    assert!(exists(&root, "packages/a/gen/t.ts"));
+}

@@ -16,6 +16,9 @@ use crate::{
 /// directory.
 pub(crate) type Protection = (SkipReason, usize);
 
+/// The root files that identify the repository, one of which git must track.
+const ROOT_MANIFESTS: [&str; 3] = ["package.json", "turbo.json", "turbo.jsonc"];
+
 pub(crate) struct TrackedFiles {
     /// The repository root relative to the git root, one name per component.
     prefix: Vec<String>,
@@ -38,10 +41,12 @@ pub(crate) struct TrackedFiles {
 }
 
 impl TrackedFiles {
-    /// Fails closed: outside git, when the index is missing or unreadable,
-    /// or when the index does not track the repository's own root manifest
-    /// (so it may belong to another repository, such as a dotfiles `~/.git`),
-    /// the tracked set is unknown and nothing may be deleted.
+    /// Fails closed: without git, outside a repository, when an index is
+    /// missing or unreadable, or when the index does not track the
+    /// repository's own root manifest (`package.json`, `turbo.json` or
+    /// `turbo.jsonc`) as the file on disk (so it may belong to another
+    /// repository, such as a dotfiles `~/.git`), the tracked set is unknown
+    /// and nothing may be deleted.
     pub(crate) fn load(
         real_repo_root: &AbsoluteSystemPath,
         git: &GitEnvironment,
@@ -102,16 +107,36 @@ impl TrackedFiles {
             index_directory_ids: HashMap::new(),
             tracked_ids: HashMap::new(),
         };
-        let owns_root = ["package.json", "turbo.json"].iter().any(|manifest| {
-            let path = tracked.git_path(&[(*manifest).to_owned()]);
-            tracked.index.contains_file(&path) || tracked.folded_files.contains(&fold(&path))
-        });
-        if !owns_root {
+        let tracked_manifests: Vec<&str> = ROOT_MANIFESTS
+            .into_iter()
+            .filter(|manifest| {
+                let path = tracked.git_path(&[(*manifest).to_owned()]);
+                tracked.index.contains_file(&path) || tracked.folded_files.contains(&fold(&path))
+            })
+            .collect();
+        if tracked_manifests.is_empty() {
             return Err(Error::TrackedFilesUnknown {
                 reason: format!(
-                    "the git index {} tracks neither package.json nor turbo.json at \
+                    "the git index {} tracks none of package.json, turbo.json or turbo.jsonc at \
                      {real_repo_root}, so it may belong to another repository",
                     tracked.index.index_file.display()
+                ),
+            });
+        }
+        // Defense in depth: a path in the index proves little if the index
+        // describes another working tree, so its record of a root manifest
+        // must match the file on disk, or git must confirm it.
+        if !tracked_manifests
+            .iter()
+            .any(|manifest| tracked.index.describes_file_on_disk(manifest))
+        {
+            return Err(Error::TrackedFilesUnknown {
+                reason: format!(
+                    "the git index {} records {} at {real_repo_root} with stat data that does not \
+                     match the file on disk, and git does not report it as tracked, so the index \
+                     may describe another working tree",
+                    tracked.index.index_file.display(),
+                    tracked_manifests.join(" and "),
                 ),
             });
         }
