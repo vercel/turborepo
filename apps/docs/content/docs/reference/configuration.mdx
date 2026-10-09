@@ -573,6 +573,16 @@ When enabled, Turborepo will honor the `experimentalObservability.otel` configur
 
 [Visit the Experimental observability section to learn more](#experimental-observability).
 
+#### `experimentalClean`
+
+<ExperimentalBadge />
+
+Default: `false`
+
+Make `turbo clean <tasks>` delete the outputs of the selected tasks instead of running a task named `clean`. Without this flag, `turbo clean` keeps running the `clean` task.
+
+[Visit the `turbo clean` reference to learn more](/docs/reference/clean).
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"

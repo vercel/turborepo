@@ -307,6 +307,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalClean": {
+          "description": "Make `turbo clean <task...>` delete the outputs of the selected tasks instead of running a task named `clean`.\n\nWithout this flag, `turbo clean` keeps running the `clean` task. This feature is experimental.",
+          "default": false,
+          "type": "boolean"
+        },
         "experimentalSetup": {
           "description": "Opt into experimental setup features that are still in progress.\n\nSetup invocation requires this flag; help is available without it. The `turbo.lock` format is unstable. Only parsing and help are implemented; provisioning, planning, and checking return a diagnostic. Setup does not interpret `turbo.lock` or change run or hash behavior.",
           "default": false,

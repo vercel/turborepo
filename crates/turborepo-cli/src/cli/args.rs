@@ -653,8 +653,11 @@ impl Args {
         false
     }
 
+    /// Parses argv. `clean_enabled` resolves `futureFlags.experimentalClean`
+    /// for the repository, given the arguments as provisionally parsed. It is
+    /// only called when the flag changes how argv parses.
     #[tracing::instrument(skip_all)]
-    pub fn new(os_args: Vec<OsString>) -> Self {
+    pub fn new(os_args: Vec<OsString>, clean_enabled: impl FnOnce(Option<&Args>) -> bool) -> Self {
         if os_args.len() == 1 {
             let help_args = [OsString::from("--help")];
             if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
@@ -669,10 +672,21 @@ impl Args {
             .take_while(|arg| *arg != "--")
             .any(|arg| matches!(arg.to_str(), Some("-h" | "--help")));
         if help_requested {
-            let (_, words) = Self::remove_single_package(os_args);
-            let mut words: Vec<_> = words.collect();
-            Self::normalize_leading_run_flags(&mut words);
-            let help_args: Vec<_> = words.into_iter().skip(1).collect();
+            let help_words = |enabled: bool| {
+                let (_, words) = Self::remove_single_package(os_args.clone());
+                let mut words: Vec<_> = words.collect();
+                if !enabled {
+                    Self::route_clean_to_run(&mut words);
+                }
+                Self::normalize_leading_run_flags(&mut words, enabled);
+                words.into_iter().skip(1).collect::<Vec<_>>()
+            };
+            let (disabled, enabled) = (help_words(false), help_words(true));
+            let help_args = if disabled != enabled && clean_enabled(None) {
+                enabled
+            } else {
+                disabled
+            };
             if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
                 print_help(&exit.text);
                 exit_with_heap_profile(exit.code);
@@ -680,7 +694,7 @@ impl Args {
             unreachable!("a help flag must produce an exit outcome");
         }
 
-        let parsed_args = match Args::parse_args(os_args.clone()) {
+        let parsed_args = match Args::parse_args_gated(os_args.clone(), clean_enabled) {
             Ok(args) => args,
             Err(error_text) => {
                 if let Some(error) = duplicate_argument(&os_args, &error_text) {
@@ -771,7 +785,47 @@ impl Args {
         parsed_args
     }
 
+    /// Parses argv as a repository without `futureFlags.experimentalClean`
+    /// does: `turbo clean ...` runs the `clean` task.
+    #[cfg(test)]
     pub(crate) fn parse_args(os_args: Vec<OsString>) -> Result<Self, String> {
+        Self::parse_args_with(os_args, false)
+    }
+
+    /// Parses argv, resolving `futureFlags.experimentalClean` only when it
+    /// changes the result: when argv could select the built-in `clean`
+    /// command. Otherwise both parses agree and the flag is never read.
+    pub(crate) fn parse_args_gated(
+        os_args: Vec<OsString>,
+        clean_enabled: impl FnOnce(Option<&Args>) -> bool,
+    ) -> Result<Self, String> {
+        let mentions_clean = os_args
+            .iter()
+            .skip(1)
+            .take_while(|word| *word != "--")
+            .any(|word| word == "clean");
+        let disabled = Self::parse_args_with(os_args.clone(), false);
+        if !mentions_clean {
+            return disabled;
+        }
+        let enabled = Self::parse_args_with(os_args, true);
+        if enabled == disabled {
+            return disabled;
+        }
+        let provisional = disabled.as_ref().or(enabled.as_ref()).ok();
+        if clean_enabled(provisional) {
+            enabled
+        } else {
+            disabled
+        }
+    }
+
+    /// Parses argv with the built-in `clean` command enabled or, as without
+    /// `futureFlags.experimentalClean`, with `clean` treated as a task name.
+    pub(crate) fn parse_args_with(
+        os_args: Vec<OsString>,
+        clean_enabled: bool,
+    ) -> Result<Self, String> {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
         let mut words: Vec<OsString> = single_package_free.collect();
         let config_flags = [
@@ -798,8 +852,10 @@ impl Args {
         if trailing_config {
             words.pop();
             words.insert(1, OsString::from("__turbo_config_options"));
+        } else if !clean_enabled {
+            Self::route_clean_to_run(&mut words);
         }
-        Self::normalize_leading_run_flags(&mut words);
+        Self::normalize_leading_run_flags(&mut words, clean_enabled);
         Self::reject_duplicate_scalar_flags(&words)?;
         for word in &words {
             if matches!(
@@ -889,7 +945,26 @@ impl Args {
     /// accepting them before explicit subcommands. Let the parser consume
     /// flag values and short bundles rather than guessing which word is the
     /// task name.
-    fn normalize_leading_run_flags(words: &mut Vec<OsString>) {
+    /// Without `futureFlags.experimentalClean`, `clean` is a task name as it
+    /// always was: `turbo clean ...` means `turbo run clean ...`. Make that
+    /// explicit where the grammar would otherwise select the `clean` command.
+    fn route_clean_to_run(words: &mut Vec<OsString>) {
+        let argv: Vec<_> = words.iter().skip(1).map(OsString::as_os_str).collect();
+        let mut parser = usage::Parser::new(Self::command(), &argv);
+        while let Some(Ok(event)) = parser.next_event() {
+            if let usage::Event::Command(command) = event {
+                if command.name == "clean" {
+                    // `command_start` is the argv index just after the name;
+                    // argv is `words[1..]`, so the name is `words[start]`.
+                    let start = parser.command_start();
+                    words.insert(start, OsString::from("run"));
+                }
+                return;
+            }
+        }
+    }
+
+    fn normalize_leading_run_flags(words: &mut Vec<OsString>, clean_enabled: bool) {
         let root = Self::command();
         let Some(run) = root.default_subcommand else {
             return;
@@ -913,6 +988,11 @@ impl Args {
                         .any(|run_flag| std::ptr::eq(*run_flag, flag));
                 }
                 Ok(usage::Event::Arg { .. }) => break,
+                // Without the future flag, `clean` is a task name like any
+                // other positional.
+                Ok(usage::Event::Command(command)) if !clean_enabled && command.name == "clean" => {
+                    break;
+                }
                 // A named command (including an alias) must retain its own
                 // flag scope. Leave malformed argv to the normal parser too.
                 _ => return,
@@ -1034,11 +1114,13 @@ impl Args {
                 only,
                 pkg_inference_root,
                 tasks,
+                pass_through_args,
                 ..
             }) => (
                 RunSelector::default(),
                 ExecutionSelector {
                     tasks: tasks.clone(),
+                    pass_through_args: pass_through_args.clone(),
                     filter: filter.clone(),
                     affected: *affected,
                     only: *only,
@@ -1164,18 +1246,17 @@ pub enum Command {
         #[usage(long, requires = "ignore")]
         reason: Option<String>,
     },
-    /// Delete the outputs of tasks in your monorepo
+    /// Delete the outputs of tasks in your monorepo (experimental)
     ///
-    /// Removes the files matching each selected task's `outputs`, resolved the
-    /// same way `turbo run` resolves them. Tasks are selected exactly like
-    /// `turbo run` selects them.
+    /// Requires root futureFlags.experimentalClean. Without it, `turbo clean`
+    /// runs the `clean` task as before. Removes the files matching each
+    /// selected task's `outputs`, resolved the same way `turbo run` caches
+    /// them. Tasks are selected exactly like `turbo run` selects them. Never
+    /// removes git-tracked files.
     Clean {
         /// List what would be deleted without deleting anything
         #[usage(alias = "dry", long = "dry-run")]
         dry_run: bool,
-        /// Remove the entries of the local filesystem cache
-        #[usage(long)]
-        cache: bool,
         /// Use the given selector to specify package(s) to act as
         /// entry points. The syntax mirrors pnpm's syntax, and
         /// additional documentation and examples can be found in
@@ -1194,6 +1275,10 @@ pub enum Command {
         /// The tasks whose outputs should be deleted
         #[usage(value_name = "TASK")]
         tasks: Vec<String>,
+        /// Arguments after `--`, which shape derived task outputs exactly as
+        /// they do for `turbo run`
+        #[usage(double_dash = "required", hide = true)]
+        pass_through_args: Vec<String>,
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: CompletionShell },

@@ -29,6 +29,7 @@ turborepo-ui = { workspace = true, features = ["tui"] }
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }

@@ -261,6 +261,115 @@ fn has_scoped_task_log_name(path: &AbsoluteSystemPath) -> bool {
         .is_some_and(turborepo_types::is_scoped_task_log_filename)
 }
 
+fn is_managed_scoped_log(
+    path: &AbsoluteSystemPath,
+    shared_physical_directories: &HashSet<std::path::PathBuf>,
+) -> bool {
+    is_scoped_task_log(path)
+        && path
+            .as_std_path()
+            .parent()
+            .and_then(std::path::Path::parent)
+            .is_some_and(|directory| shared_physical_directories.contains(directory))
+}
+
+/// The files a task's outputs capture: exactly the set
+/// [`TaskCache::save_outputs`] stores in the cache.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskOutputFiles {
+    /// Every captured path, including outputs found under symlinked output
+    /// directories and the task's log file when it is captured.
+    pub files: HashSet<AbsoluteSystemPathBuf>,
+    /// The task's own log file, which turbo writes rather than the task.
+    pub log_file: AbsoluteSystemPathBuf,
+}
+
+/// Resolves the files `TaskCache::save_outputs` would capture for a task,
+/// without touching the cache. Both saving and `turbo clean` use this, so
+/// they agree on what a task's outputs are.
+pub fn task_output_files(
+    task_definition: &TaskDefinition,
+    package_context: &PackageTaskContext<'_>,
+    task_id: &TaskId<'_>,
+) -> Result<TaskOutputFiles, Error> {
+    let repo_root = package_context.repository_root();
+    let package_directory = package_context.directory();
+    let log_file =
+        repo_root
+            .resolve(package_directory)
+            .resolve(&TaskDefinition::workspace_relative_log_file(
+                task_id.task(),
+                package_context.log_namespace(),
+            ));
+    let globs = task_definition.repo_relative_hashable_outputs(
+        task_id,
+        package_directory,
+        package_context.log_namespace(),
+    );
+    let files = collect_output_files(OutputFilesInput {
+        repo_root,
+        inclusions: &globs.validated_inclusions()?,
+        exclusions: &globs.validated_exclusions()?,
+        log_file_path: &log_file,
+        scoped_log: package_context.log_namespace().is_some(),
+        shared_physical_directories: &package_context.shared_physical_directories(),
+    })?;
+    Ok(TaskOutputFiles { files, log_file })
+}
+
+struct OutputFilesInput<'a> {
+    repo_root: &'a AbsoluteSystemPath,
+    inclusions: &'a [globwalk::ValidatedGlob],
+    exclusions: &'a [globwalk::ValidatedGlob],
+    log_file_path: &'a AbsoluteSystemPath,
+    scoped_log: bool,
+    shared_physical_directories: &'a HashSet<std::path::PathBuf>,
+}
+
+fn collect_output_files(
+    input: OutputFilesInput<'_>,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
+    let OutputFilesInput {
+        repo_root,
+        inclusions,
+        exclusions,
+        log_file_path,
+        scoped_log,
+        shared_physical_directories,
+    } = input;
+    let files = globwalk::globwalk(repo_root, inclusions, exclusions, globwalk::WalkType::All)?;
+    let followed_outputs = expand_symlinked_output_roots(repo_root, inclusions, exclusions)?;
+    let mut files = files
+        .into_iter()
+        .chain(followed_outputs.iter().cloned())
+        .collect::<HashSet<_>>();
+
+    // Broad user output globs must not bundle a peer's managed task log,
+    // including through an output-directory symlink. Only followed outputs
+    // and digest-named log candidates need physical-path lookups; ordinary
+    // artifacts stay cheap. Literal alias paths need the same protection.
+    if !shared_physical_directories.is_empty() {
+        files.retain(|path| {
+            if path.as_path() == log_file_path.as_path() {
+                return true;
+            }
+            if is_managed_scoped_log(path, shared_physical_directories) {
+                return false;
+            }
+            (!followed_outputs.contains(path) && !has_scoped_task_log_name(path))
+                || path
+                    .to_realpath()
+                    .map(|physical| !is_managed_scoped_log(&physical, shared_physical_directories))
+                    .unwrap_or(true)
+        });
+    }
+    // Scoped logs are implicit outputs, even when a user glob excludes them.
+    if scoped_log && log_file_path.exists() {
+        files.insert(log_file_path.to_owned());
+    }
+    Ok(files)
+}
+
 fn expand_symlinked_output_roots(
     repo_root: &AbsoluteSystemPath,
     inclusions: &[globwalk::ValidatedGlob],
@@ -488,15 +597,6 @@ impl TaskCache {
         }
 
         Ok(log_writer)
-    }
-
-    fn is_managed_scoped_log(&self, path: &AbsoluteSystemPath) -> bool {
-        is_scoped_task_log(path)
-            && path
-                .as_std_path()
-                .parent()
-                .and_then(std::path::Path::parent)
-                .is_some_and(|directory| self.shared_physical_directories.contains(directory))
     }
 
     fn scoped_log_glob(&self) -> Option<String> {
@@ -774,45 +874,14 @@ impl TaskCache {
 
         let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
         let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
-        let files_to_be_cached = globwalk::globwalk(
-            &self.run_cache.repo_root,
-            &validated_inclusions,
-            &validated_exclusions,
-            globwalk::WalkType::All,
-        )?;
-        let followed_outputs = expand_symlinked_output_roots(
-            &self.run_cache.repo_root,
-            &validated_inclusions,
-            &validated_exclusions,
-        )?;
-        let mut files_to_be_cached = files_to_be_cached
-            .into_iter()
-            .chain(followed_outputs.iter().cloned())
-            .collect::<HashSet<_>>();
-
-        // Broad user output globs must not bundle a peer's managed task log,
-        // including through an output-directory symlink. Only followed outputs
-        // and digest-named log candidates need physical-path lookups; ordinary
-        // artifacts stay cheap. Literal alias paths need the same protection.
-        if !self.shared_physical_directories.is_empty() {
-            files_to_be_cached.retain(|path| {
-                if path == &self.log_file_path {
-                    return true;
-                }
-                if self.is_managed_scoped_log(path) {
-                    return false;
-                }
-                (!followed_outputs.contains(path) && !has_scoped_task_log_name(path))
-                    || path
-                        .to_realpath()
-                        .map(|physical| !self.is_managed_scoped_log(&physical))
-                        .unwrap_or(true)
-            });
-        }
-        // Scoped logs are implicit outputs, even when a user glob excludes them.
-        if self.scoped_log && self.log_file_path.exists() {
-            files_to_be_cached.insert(self.log_file_path.clone());
-        }
+        let files_to_be_cached = collect_output_files(OutputFilesInput {
+            repo_root: &self.run_cache.repo_root,
+            inclusions: &validated_inclusions,
+            exclusions: &validated_exclusions,
+            log_file_path: &self.log_file_path,
+            scoped_log: self.scoped_log,
+            shared_physical_directories: &self.shared_physical_directories,
+        })?;
 
         for path in &files_to_be_cached {
             if !self.run_cache.repo_root.contains(path) {
@@ -2125,5 +2194,285 @@ mod test {
         .unwrap();
 
         assert!(task_cache.expanded_outputs().contains(&expected));
+    }
+
+    /// `turbo clean` deletes exactly what `task_output_files` returns, so it
+    /// must be the set `save_outputs` stores: plain matches, exclusions,
+    /// outputs under a symlinked output directory, and the task log.
+    #[tokio::test]
+    async fn task_output_files_matches_what_save_outputs_captures() {
+        let tmp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let graph = javascript_graph(&repo_root, "packages").await;
+        let app = repo_root.join_components(&["packages", "app"]);
+        for file in [
+            &["dist", "index.js"][..],
+            &["dist", "nested", "chunk.js"],
+            &["dist", "keep.txt"],
+            &["src", "index.ts"],
+            &["actual-out", "bundle.js"],
+            &[".turbo", "turbo-build.log"],
+        ] {
+            let path = app.join_components(file);
+            path.ensure_dir().unwrap();
+            path.create_with_contents("x").unwrap();
+        }
+        #[cfg(unix)]
+        app.join_component("out")
+            .symlink_to_dir("actual-out")
+            .unwrap();
+
+        let definition = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec!["dist/**".to_string(), "out/**".to_string()],
+                exclusions: vec!["dist/keep.txt".to_string()],
+            },
+            ..TaskDefinition::default()
+        };
+        let context = graph
+            .package_task_context(&PackageName::from("app"))
+            .unwrap();
+        let task_id = TaskId::new("app", "build");
+
+        let resolved = super::task_output_files(&definition, &context, &task_id).unwrap();
+        let mut resolved_relative: Vec<AnchoredSystemPathBuf> = resolved
+            .files
+            .iter()
+            .map(|path| AnchoredSystemPathBuf::relative_path_between(&repo_root, path))
+            .collect();
+        resolved_relative.sort();
+
+        let cache = run_cache(&repo_root);
+        let mut task_cache = cache
+            .task_cache(TaskCacheContext {
+                task_definition: &definition,
+                package_context: &context,
+                task_id: task_id.clone(),
+                hash: "parity",
+            })
+            .unwrap();
+        task_cache
+            .save_outputs(
+                Duration::from_millis(1),
+                &PackageTaskEventBuilder::new("app", "build"),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(task_cache.expanded_outputs(), resolved_relative.as_slice());
+        assert_eq!(resolved.log_file, task_cache.log_file_path);
+        assert!(resolved.files.contains(&resolved.log_file));
+        assert!(
+            !resolved
+                .files
+                .contains(&app.join_components(&["dist", "keep.txt"]))
+        );
+        #[cfg(unix)]
+        assert!(
+            resolved
+                .files
+                .contains(&app.join_components(&["out", "bundle.js"]))
+        );
+    }
+
+    /// `turbo run build` → delete the outputs (what `turbo clean build` does)
+    /// → `turbo run build` must be a cache hit that writes them back. With
+    /// an output watcher (`turbo watch`), a restore is skipped when the
+    /// watcher reports the outputs unchanged, so it must see the deletions.
+    mod restore_after_deleting_outputs {
+        use std::{collections::HashSet, pin::Pin, sync::Arc, time::Duration};
+
+        use tempfile::tempdir;
+        use turbopath::AbsoluteSystemPathBuf;
+        use turborepo_cache::AsyncCache;
+        use turborepo_filewatch::{
+            FileSystemWatcher,
+            cookies::CookieWriter,
+            globwatcher::{GlobSet, GlobWatcher},
+        };
+        use turborepo_repository::package_graph::PackageName;
+        use turborepo_task_id::TaskId;
+        use turborepo_telemetry::events::task::PackageTaskEventBuilder;
+        use turborepo_types::{RunCacheOpts, TaskDefinition, TaskOutputs};
+        use turborepo_ui::ColorConfig;
+
+        use super::{javascript_graph, local_cache_opts};
+        use crate::{OutputWatcher, OutputWatcherError, RunCache, TaskCacheContext};
+
+        /// The adapter `turbo watch` uses to back output tracking with a
+        /// file-system `GlobWatcher`.
+        struct GlobOutputWatcher(Arc<GlobWatcher>);
+
+        type Boxed<T> = Pin<Box<dyn std::future::Future<Output = T> + Send>>;
+
+        impl OutputWatcher for GlobOutputWatcher {
+            fn get_changed_outputs(
+                &self,
+                hash: String,
+                output_globs: Vec<String>,
+            ) -> Boxed<Result<HashSet<String>, OutputWatcherError>> {
+                let watcher = self.0.clone();
+                Box::pin(async move {
+                    watcher
+                        .get_changed_globs(
+                            hash,
+                            output_globs.into_iter().collect(),
+                            Duration::from_secs(2),
+                        )
+                        .await
+                        .map_err(|e| OutputWatcherError(Box::new(e)))
+                })
+            }
+
+            fn notify_outputs_written(
+                &self,
+                hash: String,
+                output_globs: Vec<String>,
+                output_exclusion_globs: Vec<String>,
+                _time_saved: u64,
+            ) -> Boxed<Result<(), OutputWatcherError>> {
+                let watcher = self.0.clone();
+                Box::pin(async move {
+                    let globs = GlobSet::from_raw(output_globs, output_exclusion_globs)
+                        .map_err(|e| OutputWatcherError(Box::new(e)))?;
+                    watcher
+                        .watch_globs(hash, globs, Duration::from_secs(2))
+                        .await
+                        .map_err(|e| OutputWatcherError(Box::new(e)))
+                })
+            }
+        }
+
+        fn task_handle() -> turborepo_log::grouping::TaskHandle {
+            let logger = Arc::new(turborepo_log::Logger::new(vec![]));
+            turborepo_log::grouping::GroupingLayer::new(
+                logger,
+                turborepo_log::grouping::GroupingMode::Passthrough,
+            )
+            .task("app#build")
+        }
+
+        async fn build_then_delete_then_build(watch: bool) {
+            let tmp = tempdir().unwrap();
+            let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+                .unwrap()
+                .to_realpath()
+                .unwrap();
+            let graph = javascript_graph(&repo_root, "packages").await;
+            let app = repo_root.join_components(&["packages", "app"]);
+            let index_js = app.join_components(&["dist", "index.js"]);
+            index_js.ensure_dir().unwrap();
+            index_js.create_with_contents("built").unwrap();
+            let log = app.join_components(&[".turbo", "turbo-build.log"]);
+            log.ensure_dir().unwrap();
+            log.create_with_contents("build output\n").unwrap();
+
+            // Keep the file system watcher alive for the whole test.
+            let mut fs_watcher = None;
+            let output_watcher: Option<Arc<dyn OutputWatcher>> = if watch {
+                let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+                let cookie_writer = CookieWriter::new(
+                    watcher.cookie_dir(),
+                    Duration::from_secs(2),
+                    watcher.watch(),
+                );
+                let glob_watcher =
+                    GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
+                fs_watcher = Some(watcher);
+                Some(Arc::new(GlobOutputWatcher(Arc::new(glob_watcher))))
+            } else {
+                None
+            };
+
+            let cache_opts = local_cache_opts(&repo_root);
+            let async_cache = AsyncCache::new(
+                &cache_opts,
+                &repo_root,
+                None,
+                None,
+                None,
+                turborepo_cache::LazyScmState::resolved(None),
+            )
+            .unwrap();
+            let run_cache = Arc::new(RunCache::new(
+                async_cache.clone(),
+                &repo_root,
+                RunCacheOpts::default(),
+                &cache_opts,
+                output_watcher,
+                ColorConfig::new(true),
+                false,
+            ));
+            let context = graph
+                .package_task_context(&PackageName::from("app"))
+                .unwrap();
+            let definition = TaskDefinition {
+                outputs: TaskOutputs {
+                    inclusions: vec!["dist/**".to_string()],
+                    exclusions: Vec::new(),
+                },
+                ..TaskDefinition::default()
+            };
+            let task_id = TaskId::new("app", "build");
+            let task_cache = || {
+                run_cache
+                    .task_cache(TaskCacheContext {
+                        task_definition: &definition,
+                        package_context: &context,
+                        task_id: task_id.clone(),
+                        hash: "app-build-hash",
+                    })
+                    .unwrap()
+            };
+            let telemetry = PackageTaskEventBuilder::new("app", "build");
+
+            // turbo run build: the task ran and its outputs were cached.
+            task_cache()
+                .save_outputs(Duration::from_millis(10), &telemetry)
+                .await
+                .unwrap();
+            async_cache.wait().await.unwrap();
+
+            // turbo clean build: delete the resolved outputs, keep the log.
+            let outputs = crate::task_output_files(&definition, &context, &task_id).unwrap();
+            let mut files: Vec<_> = outputs
+                .files
+                .iter()
+                .filter(|path| **path != outputs.log_file)
+                .collect();
+            files.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+            for path in files {
+                if path.symlink_metadata().unwrap().is_dir() {
+                    path.remove_dir().unwrap();
+                } else {
+                    path.remove_file().unwrap();
+                }
+            }
+            assert!(!index_js.exists());
+
+            // turbo run build: a cache hit that writes the outputs back.
+            log.create_with_contents("stale log\n").unwrap();
+            let hit = task_cache()
+                .restore_outputs(&mut task_handle(), None, &telemetry)
+                .await
+                .unwrap();
+            assert!(hit.is_some(), "expected a cache hit");
+            assert_eq!(index_js.read_to_string().unwrap(), "built");
+            assert_eq!(log.read_to_string().unwrap(), "build output\n");
+            drop(fs_watcher);
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn without_an_output_watcher() {
+            build_then_delete_then_build(false).await;
+        }
+
+        #[tokio::test(flavor = "multi_thread")]
+        async fn with_the_watch_mode_output_watcher() {
+            build_then_delete_then_build(true).await;
+        }
     }
 }

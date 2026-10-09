@@ -403,6 +403,17 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalSetup?: boolean;
+
+  /**
+   * Make `turbo clean <task...>` delete the outputs of the selected tasks
+   * instead of running a task named `clean`.
+   *
+   * Without this flag, `turbo clean` keeps running the `clean` task. This
+   * feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalClean?: boolean;
 }
 
 export interface GlobalConfig {

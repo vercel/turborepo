@@ -3,19 +3,23 @@ title: clean
 description: API reference for the `turbo clean` command
 product: turborepo
 type: reference
-summary: All flags and options for the `turbo clean` command that deletes the outputs of tasks and clears the local cache.
+summary: All flags and options for the experimental `turbo clean` command that deletes the outputs of tasks.
 related:
   - /docs/reference/run
   - /docs/reference/configuration
 ---
 
-Delete the files that tasks write as their [`outputs`](/docs/reference/configuration#outputs), and optionally clear the local cache.
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Delete the files that tasks write as their [`outputs`](/docs/reference/configuration#outputs).
 
 ```bash title="Terminal"
 turbo clean [tasks] [options]
 ```
 
-Turborepo already knows every task's outputs, so you don't have to repeat them in `rm -rf` scripts. `turbo clean` selects tasks and resolves their outputs the same way [`turbo run`](/docs/reference/run) does. That includes `dependsOn`, [Package Configurations](/docs/reference/package-configurations), `!` exclusions, and outputs that Turborepo derives for native toolchains. It deletes the files a cache restore would write back, except for the protected paths listed under [Safety](#safety).
+Turborepo already knows every task's outputs, so you don't have to repeat them in `rm -rf` scripts. `turbo clean` selects tasks the same way [`turbo run`](/docs/reference/run) does, including `dependsOn` and [Package Configurations](/docs/reference/package-configurations). It resolves each task's outputs exactly as the cache does when it saves them, including `!` exclusions and outputs under symlinked output directories. It then deletes those files, except for the paths it can't prove are build outputs (see [Safety](#safety)).
 
 ```bash title="Terminal"
 # Delete the outputs of every package's `build` task
@@ -26,14 +30,25 @@ turbo clean build --filter=web
 
 # Preview what would be deleted
 turbo clean build --dry
+```
 
-# Clear the local cache
-turbo clean --cache
+## Enabling `turbo clean`
+
+`turbo clean` is experimental. Enable it with the `experimentalClean` [future flag](/docs/reference/configuration#futureflags) in your root `turbo.json`:
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalClean": true,
+  },
+}
 ```
 
 <Callout type="info" title="Running a task named clean">
-  `turbo clean` runs this command, not a task named `clean`. To run such a task,
-  use `turbo run clean`.
+  Without the flag, `turbo clean` runs a task named `clean`, as it always has.
+  This includes forms like `turbo clean --filter=web` and `turbo clean build`.
+  With the flag, `turbo clean` runs this command instead. To run a task named
+  `clean`, use `turbo run clean`.
 </Callout>
 
 ## What gets deleted
@@ -48,31 +63,38 @@ These tasks are skipped and reported:
 
 Task logs in `.turbo` are not deleted; the next cache hit rewrites them.
 
+Arguments after `--` are passed to task planning the same way as for `turbo run`, so outputs that depend on them resolve the same way.
+
+When some files can't be deleted, for example because of permissions, `turbo clean` keeps going. It reports each failure and how many files were actually deleted, and exits with a non-zero code.
+
+### Allowed output patterns
+
+`turbo clean` only expands output patterns that are anchored inside their package:
+
+- A literal first segment, like `"dist/**"`, `".next/**"` or `"tsconfig.tsbuildinfo"`.
+- A brace set of literal directories, like `"{dist,build}/**"`.
+- A file extension at the package root, like `"*.tsbuildinfo"`.
+
+Other patterns are skipped and reported, and nothing they match is deleted. This includes patterns with a `..` segment, patterns that start with a wildcard (`"**/*.js"`, `"*.*"`, `"?*"`), and patterns whose wildcards would apply to a package directory (`"packages/**"` in a root task). Outputs outside the package, such as those reached with `..` or `$TURBO_ROOT$`, are not cleaned. To clean such outputs, anchor them in a directory, like `"dist/**"`.
+
 ### Safety
 
-`turbo clean` deletes files on your machine, so it never deletes:
+`turbo clean` deletes files on your machine. When it can't prove that a path is a build output, it keeps the path and reports it:
 
-- Anything outside the repository.
-- Anything reached through a symlink. A symlink that matches `outputs` is deleted itself, but its target is never touched.
-- The repository root, a package directory, or any directory that contains a package.
-- Anything inside `node_modules`, `.git`, or `.turbo`. Use `--cache` to clear the local cache.
-- Files tracked by git. Build outputs aren't committed, so tracked files that match `outputs` are kept and reported.
+- `turbo clean` needs a git repository with a readable index. Git-tracked files are never deleted, and that includes tracked symlinks. If it can't read the set of tracked files, `turbo clean` deletes nothing. It reads the index directly, so it doesn't need a `git` binary.
+- Paths are compared using the names stored on disk. On case-insensitive or Unicode-normalizing filesystems, an output spelled `Index.ts` can't delete a tracked `index.ts`.
+- Nothing inside a git submodule or a nested repository is deleted.
+- Nothing outside the repository is deleted. Nothing reached through a symlink is deleted either: a symlink that matches `outputs` is deleted itself, but its target is never touched. On Linux and macOS, if a directory is replaced by a symlink while `turbo clean` runs, the deletion fails instead of following the link.
+- The repository root, package directories, and any directory that contains a package are never deleted.
+- Nothing inside `node_modules`, `.git`, or `.turbo` is deleted.
 
-Output globs that would sweep a whole package are skipped and reported. These are globs that start at a package directory or above and are recursive (`**`) or a bare `*`, for example `"**"` or `"../*"`. Anchor such outputs in a directory instead, like `"dist/**"`.
+Planning never touches the cache. `turbo clean` doesn't read, write, or evict cache entries, even with [`cacheMaxAge`](/docs/reference/configuration#cachemaxage) set.
 
 ## Options
 
 #### `--dry` / `--dry-run`
 
 List what would be deleted without deleting anything. Directories that would be deleted are listed once, with a trailing `/`.
-
-#### `--cache`
-
-Delete the entries of the local filesystem cache. The cache directory is resolved like it is for `turbo run`: [`cacheDir`](/docs/reference/configuration#cachedir), `TURBO_CACHE_DIR`, or `.turbo/cache` by default.
-
-Only cache artifacts and their metadata files are deleted. The directory itself, other files, and temporary files from cache writes still in progress are kept. A cache directory outside the repository, such as the shared cache of a linked Git worktree, is not cleared.
-
-`--cache` can be used without tasks, or combined with them to also delete task outputs.
 
 #### `--filter <string>`
 

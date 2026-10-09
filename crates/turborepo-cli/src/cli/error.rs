@@ -61,8 +61,8 @@ pub enum Error {
     #[diagnostic(transparent)]
     Clean(#[from] crate::commands::clean::Error),
     #[error(
-        "Nothing to clean. Pass one or more tasks (e.g. `turbo clean build`) and/or `--cache`. To \
-         run a task named `clean`, use `turbo run clean`."
+        "Nothing to clean. Pass one or more tasks (e.g. `turbo clean build`). To run a task named \
+         `clean`, use `turbo run clean`."
     )]
     CleanNothingSelected,
     #[error(transparent)]

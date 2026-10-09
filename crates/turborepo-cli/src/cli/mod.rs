@@ -369,6 +369,24 @@ fn setup_dispatch_delegates_only_setup_before_worker_bootstrap()
     Ok(())
 }
 
+/// Whether the repository opts into the built-in `turbo clean` with
+/// `futureFlags.experimentalClean`. Only consulted when argv could select it.
+/// Any failure to read the configuration counts as "not enabled": `turbo
+/// clean` then runs the `clean` task, which reports the problem itself.
+fn experimental_clean_enabled(repo_state: Option<&RepoState>, args: Option<&Args>) -> bool {
+    let repo_root = match (repo_state, args.and_then(|args| args.cwd.as_deref())) {
+        (Some(state), _) => Ok(state.root.clone()),
+        (None, Some(cwd)) => AbsoluteSystemPathBuf::from_cwd(cwd),
+        (None, None) => AbsoluteSystemPathBuf::cwd(),
+    };
+    let Ok(repo_root) = repo_root else {
+        return false;
+    };
+    let default_args = Args::default();
+    CommandBase::load_config(&repo_root, args.unwrap_or(&default_args))
+        .is_ok_and(|config| config.future_flags().experimental_clean)
+}
+
 /// Runs the CLI by parsing arguments with usage-rs, then either calling Rust
 /// code directly or returning a payload for the Go code to use.
 ///
@@ -399,7 +417,9 @@ pub fn run(
     // correct local binary and configured diagnostics.
     let cli_args = {
         let _span = tracing::info_span!("cli_arg_parsing").entered();
-        Args::new(env::args_os().collect())
+        Args::new(env::args_os().collect(), |args| {
+            experimental_clean_enabled(repo_state.as_ref(), args)
+        })
     };
 
     // Setup must not bootstrap task configuration, telemetry, agent guidance,
@@ -899,27 +919,17 @@ async fn run_main(
             .await?;
             Ok(0)
         }
-        Command::Clean {
-            dry_run,
-            cache,
-            tasks,
-            ..
-        } => {
+        Command::Clean { dry_run, tasks, .. } => {
             let event = CommandEventBuilder::new("clean").with_parent(&root_telemetry);
             event.track_call();
             event.track_arg_usage("dry-run", *dry_run);
-            event.track_arg_usage("cache", *cache);
-            let options = clean::CleanOptions {
-                dry_run: *dry_run,
-                cache: *cache,
-                clean_outputs: !tasks.is_empty(),
-            };
-            if !options.clean_outputs && !options.cache {
+            if tasks.is_empty() {
                 return Err(Error::CleanNothingSelected);
             }
+            let dry_run = *dry_run;
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            clean::run(base, event, options).await?;
+            clean::run(base, event, dry_run).await?;
             Ok(0)
         }
         Command::Completion { shell } => {

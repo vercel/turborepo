@@ -1,0 +1,29 @@
+[package]
+name = "turborepo-clean"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Fail-closed deletion of task outputs for `turbo clean`"
+
+[lints]
+workspace = true
+
+[dependencies]
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
+miette = { workspace = true }
+thiserror = { workspace = true }
+turbopath = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-engine = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-run-cache = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-types = { workspace = true }
+unicode-normalization = "0.1.25"
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1", features = ["fs"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }

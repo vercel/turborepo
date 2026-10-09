@@ -154,6 +154,13 @@ pub struct FutureFlags {
     /// hash behavior.
     #[serde(default)]
     pub experimental_setup: bool,
+    /// Make `turbo clean <task...>` delete the outputs of the selected tasks
+    /// instead of running a task named `clean`.
+    ///
+    /// Without this flag, `turbo clean` keeps running the `clean` task. This
+    /// feature is experimental.
+    #[serde(default)]
+    pub experimental_clean: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Deserializable
@@ -174,7 +181,7 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean }"
+         experimentalSetup?: boolean, experimentalClean?: boolean }"
             .to_string()
     }
 
@@ -185,7 +192,7 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean }"
+         experimentalSetup?: boolean, experimentalClean?: boolean }"
             .to_string()
     }
 
@@ -196,7 +203,8 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean, experimentalClean?: \
+         boolean };"
             .to_string()
     }
 
@@ -207,7 +215,8 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean, experimentalClean?: \
+         boolean };"
             .to_string()
     }
 
@@ -231,6 +240,19 @@ mod tests {
             FutureFlags::decl_concrete(),
         ] {
             assert!(typescript.contains("experimentalSetup?: boolean"));
+        }
+    }
+
+    #[test]
+    fn experimental_clean_is_optional_in_all_typescript_forms() {
+        assert!(!FutureFlags::default().experimental_clean);
+        for typescript in [
+            FutureFlags::inline(),
+            FutureFlags::inline_flattened(),
+            FutureFlags::decl(),
+            FutureFlags::decl_concrete(),
+        ] {
+            assert!(typescript.contains("experimentalClean?: boolean"));
         }
     }
 }

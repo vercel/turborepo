@@ -316,6 +316,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalClean": {
+          "description": "Make `turbo clean <task...>` delete the outputs of the selected tasks instead of running a task named `clean`.\n\nWithout this flag, `turbo clean` keeps running the `clean` task. This feature is experimental.",
+          "default": false,
+          "type": "boolean"
+        },
         "experimentalGoWorkspaces": {
           "description": "Treat the modules listed in a `go.work` file as Turborepo packages.\n\nWhen enabled, Go modules are discovered from the repository-root `go.work` via the Go toolchain and participate in the package graph: they resolve in `--filter` expressions, propagate `--affected`, and appear in `turbo query`. This feature is experimental.",
           "default": false,

@@ -26,6 +26,7 @@ pub(crate) mod crlf;
 mod env_local;
 pub mod git;
 mod hash_object;
+mod index_paths;
 mod ls_tree;
 pub mod manual;
 pub mod package_deps;
@@ -40,6 +41,7 @@ mod git_path;
 #[cfg(test)]
 mod test_utils;
 
+pub use index_paths::IndexPaths;
 pub use repo_index::{RepoGitIndex, walk_candidate_files};
 pub use slowest_files::{SlowestFile, SlowestFiles};
 pub use turborepo_hash::OidHash;
@@ -575,25 +577,6 @@ impl SCM {
                 }
             },
             SCM::Manual => None,
-        }
-    }
-
-    /// Read the tracked portion of the git index, failing loudly rather than
-    /// falling back. `None` when the repository is not managed by git or
-    /// nothing has been staged yet (no index file), i.e. nothing is tracked.
-    ///
-    /// Callers that must never touch tracked files (e.g. `turbo clean`) use
-    /// this instead of the best-effort `build_*_eager` variants.
-    pub fn tracked_repo_index(&self) -> Result<Option<RepoGitIndex>, Error> {
-        match self {
-            SCM::Git(git) => {
-                let git_dir = worktree::resolve_git_dir(&git.root)?;
-                if !git_dir.join_component("index").exists() {
-                    return Ok(None);
-                }
-                RepoGitIndex::new_tracked(git).map(Some)
-            }
-            SCM::Manual => Ok(None),
         }
     }
 

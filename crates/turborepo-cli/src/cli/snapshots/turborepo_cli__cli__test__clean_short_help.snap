@@ -2,7 +2,7 @@
 source: crates/turborepo-cli/src/cli/test.rs
 expression: "Args::render_help(cmd, false).unwrap()"
 ---
-Delete the outputs of tasks in your monorepo
+Delete the outputs of tasks in your monorepo (experimental)
 
 Usage: turbo clean [FLAGS] [TASK]…
 
@@ -12,8 +12,6 @@ Arguments:
 Flags:
       --dry-run                   List what would be deleted without deleting
                                   anything
-      --cache                     Remove the entries of the local filesystem
-                                  cache
   -F, --filter <FILTER>           Use the given selector to specify package(s)
                                   to act as entry points. The syntax mirrors
                                   pnpm's syntax, and additional documentation

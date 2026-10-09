@@ -1628,39 +1628,51 @@ fn test_parse_unlink() {
     .test();
 }
 
+fn parse_clean_enabled<I, S>(args: I) -> Result<Args, String>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<OsString>,
+{
+    Args::parse_args_with(args.into_iter().map(Into::into).collect(), true)
+}
+
 #[test]
 fn test_parse_clean() {
     struct Expected {
         dry_run: bool,
-        cache: bool,
         filter: &'static [&'static str],
         affected: bool,
         only: bool,
         tasks: &'static [&'static str],
+        pass_through_args: &'static [&'static str],
     }
     let defaults = Expected {
         dry_run: false,
-        cache: false,
         filter: &[],
         affected: false,
         only: false,
         tasks: &["build"],
+        pass_through_args: &[],
     };
     let clean = |expected: Expected| Args {
         command: Some(Command::Clean {
             dry_run: expected.dry_run,
-            cache: expected.cache,
             filter: expected.filter.iter().map(|f| f.to_string()).collect(),
             affected: expected.affected,
             only: expected.only,
             pkg_inference_root: None,
             tasks: expected.tasks.iter().map(|t| t.to_string()).collect(),
+            pass_through_args: expected
+                .pass_through_args
+                .iter()
+                .map(|a| a.to_string())
+                .collect(),
         }),
         ..Args::default()
     };
 
     assert_eq!(
-        parse_args(["turbo", "clean", "build", "lint"]).unwrap(),
+        parse_clean_enabled(["turbo", "clean", "build", "lint"]).unwrap(),
         clean(Expected {
             tasks: &["build", "lint"],
             ..defaults
@@ -1668,7 +1680,7 @@ fn test_parse_clean() {
     );
     for dry in ["--dry", "--dry-run"] {
         assert_eq!(
-            parse_args(["turbo", "clean", "build", dry]).unwrap(),
+            parse_clean_enabled(["turbo", "clean", "build", dry]).unwrap(),
             clean(Expected {
                 dry_run: true,
                 ..defaults
@@ -1676,7 +1688,7 @@ fn test_parse_clean() {
         );
     }
     assert_eq!(
-        parse_args([
+        parse_clean_enabled([
             "turbo",
             "clean",
             "build",
@@ -1695,24 +1707,74 @@ fn test_parse_clean() {
         })
     );
     assert_eq!(
-        parse_args(["turbo", "clean", "--cache"]).unwrap(),
+        parse_clean_enabled(["turbo", "clean", "build", "--", "--release"]).unwrap(),
         clean(Expected {
-            cache: true,
-            tasks: &[],
+            pass_through_args: &["--release"],
             ..defaults
         })
     );
-    // Clean has no run-only flags.
-    assert!(parse_args(["turbo", "clean", "build", "--concurrency=1"]).is_err());
+    // Clean has no run-only flags, and `--cache` is not a clean flag.
+    assert!(parse_clean_enabled(["turbo", "clean", "build", "--concurrency=1"]).is_err());
+    assert!(parse_clean_enabled(["turbo", "clean", "--cache"]).is_err());
 }
 
 #[test]
 fn clean_selects_tasks_like_run() {
-    let args = parse_args(["turbo", "clean", "build", "--filter=web", "--only"]).unwrap();
+    let args = parse_clean_enabled(["turbo", "clean", "build", "--filter=web", "--only"]).unwrap();
     let (_, execution) = args.selectors();
     assert_eq!(execution.tasks, ["build"]);
     assert_eq!(execution.filter, ["web"]);
     assert!(execution.only);
+}
+
+/// Without `futureFlags.experimentalClean`, every way of writing `turbo
+/// clean` parses exactly as it does without the built-in command: as the
+/// `clean` task, the same as the explicit `turbo run clean` form.
+#[test_case::test_case(&["turbo", "clean"], &["turbo", "run", "clean"]; "bare")]
+#[test_case::test_case(&["turbo", "clean", "-F", "x"], &["turbo", "run", "clean", "-F", "x"]; "trailing filter")]
+#[test_case::test_case(&["turbo", "clean", "--filter=x"], &["turbo", "run", "clean", "--filter=x"]; "trailing long filter")]
+#[test_case::test_case(&["turbo", "-F", "x", "clean"], &["turbo", "run", "-F", "x", "clean"]; "leading filter")]
+#[test_case::test_case(&["turbo", "--filter=x", "clean", "build"], &["turbo", "run", "--filter=x", "clean", "build"]; "leading long filter")]
+#[test_case::test_case(&["turbo", "clean", "build"], &["turbo", "run", "clean", "build"]; "with another task")]
+#[test_case::test_case(&["turbo", "build", "clean"], &["turbo", "run", "build", "clean"]; "as a later task")]
+#[test_case::test_case(&["turbo", "clean", "--dry"], &["turbo", "run", "clean", "--dry"]; "dry run")]
+#[test_case::test_case(&["turbo", "clean", "--cache=local:r"], &["turbo", "run", "clean", "--cache=local:r"]; "run cache flag")]
+#[test_case::test_case(&["turbo", "--cwd", "repo", "clean"], &["turbo", "--cwd", "repo", "run", "clean"]; "after a global flag")]
+#[test_case::test_case(&["turbo", "clean", "--", "--watch"], &["turbo", "run", "clean", "--", "--watch"]; "pass through")]
+#[test_case::test_case(&["turbo", "--single-package", "clean"], &["turbo", "--single-package", "run", "clean"]; "single package")]
+fn clean_without_the_future_flag_runs_the_clean_task(argv: &[&str], explicit: &[&str]) {
+    let parsed = parse_args(argv.iter().copied()).unwrap();
+    assert_eq!(parsed, parse_args(explicit.iter().copied()).unwrap());
+    let Some(Command::Run { execution_args, .. }) = &parsed.command else {
+        panic!("expected `{}` to run tasks", argv.join(" "));
+    };
+    assert!(execution_args.tasks.contains(&"clean".to_string()));
+
+    // Through the gate, with the flag off, the result is the same.
+    let gated = Args::parse_args_gated(argv.iter().map(OsString::from).collect(), |_| false);
+    assert_eq!(gated.unwrap(), parsed);
+}
+
+#[test]
+fn the_future_flag_is_only_read_when_argv_could_select_clean() {
+    for argv in [
+        &["turbo", "build"][..],
+        &["turbo", "run", "build", "--filter=clean"],
+        &["turbo", "build", "--", "clean"],
+        &["turbo", "daemon", "clean"],
+        &["turbo", "build", "clean"],
+    ] {
+        let args = Args::parse_args_gated(argv.iter().map(OsString::from).collect(), |_| {
+            panic!("`{}` must not read the future flag", argv.join(" "))
+        });
+        assert_eq!(args, parse_args(argv.iter().copied()));
+    }
+    let enabled = Args::parse_args_gated(
+        ["turbo", "clean", "build"].map(OsString::from).to_vec(),
+        |_| true,
+    )
+    .unwrap();
+    assert!(matches!(enabled.command, Some(Command::Clean { .. })));
 }
 
 #[test]

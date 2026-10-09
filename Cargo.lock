@@ -7373,6 +7373,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-clean"
+version = "0.1.0"
+dependencies = [
+ "globwalk",
+ "miette",
+ "rustix 1.1.3",
+ "tempfile",
+ "thiserror 2.0.18",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-engine",
+ "turborepo-repository",
+ "turborepo-run-cache",
+ "turborepo-scm",
+ "turborepo-task-id",
+ "turborepo-types",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "turborepo-cli"
 version = "0.1.0"
 dependencies = [
@@ -7384,7 +7404,6 @@ dependencies = [
  "dirs-next",
  "flate2",
  "futures",
- "globwalk",
  "go-parse-duration",
  "humantime",
  "insta",
@@ -7417,15 +7436,14 @@ dependencies = [
  "turborepo-api-client",
  "turborepo-auth",
  "turborepo-boundaries",
- "turborepo-cache",
  "turborepo-ci",
+ "turborepo-clean",
  "turborepo-config",
  "turborepo-daemon",
  "turborepo-devtools",
  "turborepo-dirs",
  "turborepo-download",
  "turborepo-engine",
- "turborepo-filewatch",
  "turborepo-gitignore",
  "turborepo-json-rewrite",
  "turborepo-log",
@@ -7440,10 +7458,8 @@ dependencies = [
  "turborepo-rayon-compat",
  "turborepo-repository",
  "turborepo-run",
- "turborepo-run-cache",
  "turborepo-run-context",
  "turborepo-run-opts",
- "turborepo-scm",
  "turborepo-setup",
  "turborepo-shim",
  "turborepo-signals",
@@ -8181,6 +8197,7 @@ dependencies = [
  "tracing",
  "turbopath",
  "turborepo-cache",
+ "turborepo-filewatch",
  "turborepo-hash",
  "turborepo-log",
  "turborepo-repository",

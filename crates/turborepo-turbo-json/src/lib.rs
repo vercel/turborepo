@@ -725,6 +725,23 @@ mod tests {
         assert_eq!(config.future_flags.experimental_setup, expected);
     }
 
+    #[test_case(r#"{}"#, false; "omitted future flags")]
+    #[test_case(r#"{"futureFlags":{}}"#, false; "omitted clean flag")]
+    #[test_case(r#"{"futureFlags":{"experimentalClean":true}}"#, true; "enabled")]
+    #[test_case(r#"{"futureFlags":{"experimentalClean":false}}"#, false; "disabled")]
+    fn test_deserialize_future_flags_experimental_clean(json: &str, expected: bool) {
+        let raw = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        let raw: RawTurboJson = raw.try_into().unwrap();
+        let config = TurboJson::try_from(raw).unwrap();
+        assert_eq!(config.future_flags.experimental_clean, expected);
+    }
+
+    #[test]
+    fn test_experimental_clean_not_allowed_in_package() {
+        let json = r#"{"extends":["//"],"futureFlags":{"experimentalClean":true}}"#;
+        assert!(RawPackageTurboJson::parse(json, "packages/web/turbo.json").is_err());
+    }
+
     #[test]
     fn test_deserialize_future_flags_errors_only_show_hash() {
         let json = r#"{
