@@ -287,7 +287,7 @@ impl NodePlan {
         })
     }
 
-    fn verify_bundled_npm(&self, tree: &Path) -> Result<(), Error> {
+    pub(crate) fn verify_bundled_npm(&self, tree: &Path) -> Result<(), Error> {
         let Some(version) = &self.bundled_npm else {
             return Ok(());
         };
