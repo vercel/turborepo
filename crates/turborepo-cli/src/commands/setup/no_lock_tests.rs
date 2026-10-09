@@ -122,8 +122,10 @@ fn no_lock_targeted_drift_retains_unaffected_pins_and_removes_manager() {
 #[test]
 fn no_lock_existing_disk_lock_is_unchanged_and_stale_rejects_before_traffic_or_writer() {
     let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
     let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
     f.run(&u, LOCAL).unwrap();
+    assert!(current(&f).record.is_none());
     let before = tracked(&f);
     let pinned = selected(&f);
     let empty = LoopbackServer::new([], |_| {}).unwrap();
@@ -139,6 +141,35 @@ fn no_lock_existing_disk_lock_is_unchanged_and_stale_rejects_before_traffic_or_w
     assert!(f.run(&empty, NO_LOCK).is_err());
     assert_eq!(empty.hits(), 0);
     assert_eq!(publication_guards::state(f.owned.root()), before);
+    untouched(&f);
+}
+#[test]
+fn no_lock_recordless_inventory_without_disk_lock_rejects_without_refresh() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let seed = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    f.run(&seed, LOCAL).unwrap();
+    let before = current(&f);
+    assert!(before.record.is_none());
+    assert_eq!(before.tools[0].version, "24.0.0");
+    fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+    let manifest = f.manifest();
+    let sources = tracked(&f);
+    let advanced = LoopbackServer::new(routes(&f, "24.1.0", "10.0.0"), |_| {}).unwrap();
+    let result = f.run(&advanced, NO_LOCK);
+    assert!(
+        result.is_err(),
+        "recordless repeat: {result:?}, {} requests",
+        advanced.hits()
+    );
+    assert_eq!(advanced.hits(), 0);
+    let after = current(&f);
+    assert_eq!(after.tools, before.tools);
+    assert_eq!(after.bin, before.bin);
+    assert!(after.record.is_none());
+    assert_eq!(f.manifest(), manifest);
+    assert_eq!(tracked(&f), sources);
+    assert!(!f.owned.root().join("turbo.lock").exists());
     untouched(&f);
 }
 #[test]
