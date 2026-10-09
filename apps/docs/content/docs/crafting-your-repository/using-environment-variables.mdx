@@ -61,27 +61,55 @@ Turborepo needs to be aware of your environment variables to account for changes
 
 Turborepo automatically adds prefix wildcards to your [`env`](/docs/reference/configuration#env) key for common frameworks. If you're using one of the frameworks below in a package, you don't need to specify environment variables with these prefixes:
 
-| Framework        | `env` wildcards        |
-| ---------------- | ---------------------- |
-| Next.js          | `NEXT_PUBLIC_*`        |
-| Vite             | `VITE_*`               |
-| Create React App | `REACT_APP_*`          |
-| Gatsby           | `GATSBY_*`             |
-| Nuxt             | `NUXT_*`, `NUXT_ENV_*` |
-| Expo             | `EXPO_PUBLIC_*`        |
-| Astro            | `PUBLIC_*`             |
-| SvelteKit        | `PUBLIC_*`             |
-| Remix            | `REMIX_*`              |
-| SolidStart       | `VITE_*`               |
-| RedwoodJS        | `REDWOOD_ENV_*`        |
-| Sanity           | `SANITY_STUDIO_*`      |
+| Framework        | `env` wildcards                                                                                           |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| Next.js          | `NEXT_PUBLIC_*`, `NEXT_DEPLOYMENT_ID`, and `VERCEL_DEPLOYMENT_ID` when `VERCEL_SKEW_PROTECTION_ENABLED=1` |
+| Vite             | `VITE_*`                                                                                                  |
+| Create React App | `REACT_APP_*`                                                                                             |
+| Gatsby           | `GATSBY_*`                                                                                                |
+| Nuxt             | `NUXT_*`, `NUXT_ENV_*`                                                                                    |
+| Expo             | `EXPO_PUBLIC_*`                                                                                           |
+| Astro            | `PUBLIC_*`                                                                                                |
+| SvelteKit        | `PUBLIC_*`                                                                                                |
+| Remix            | `REMIX_*`                                                                                                 |
+| SolidStart       | `VITE_*`                                                                                                  |
+| RedwoodJS        | `REDWOOD_ENV_*`                                                                                           |
+| Sanity           | `SANITY_STUDIO_*`                                                                                         |
 
-<Callout type="info">Framework inference is per-package.</Callout>
+<Callout type="info">
+  Framework inference is per-package, and applies to every task in the package,
+  not only `build`. On Vercel with Skew Protection enabled, the deployment ID
+  variables (`VERCEL_DEPLOYMENT_ID`, `NEXT_DEPLOYMENT_ID`) are unique to each
+  deployment, so every task of a Next.js package gets a new hash on each
+  deployment unless you opt out for that task.
+</Callout>
 
 If you'd like to opt out of Framework Inference, you can do so by:
 
 - Running your tasks with `--framework-inference=false`
 - Adding a negative wildcard to the `env` key (for example, `"env": ["!NEXT_PUBLIC_*"]`)
+
+For tasks whose outputs don't contain the deployment ID, like code generation, linting, type checking, or tests, you can exclude the deployment ID variables on that task so it stays cached across deployments:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "codegen": {
+      "env": ["!VERCEL_DEPLOYMENT_ID", "!NEXT_DEPLOYMENT_ID"]
+    },
+    "lint": {
+      "env": ["!VERCEL_DEPLOYMENT_ID", "!NEXT_DEPLOYMENT_ID"]
+    }
+  }
+}
+```
+
+<Callout type="warn">
+  Don't exclude `VERCEL_DEPLOYMENT_ID` or `NEXT_DEPLOYMENT_ID` from a Next.js
+  `build` task. `next build` writes the deployment ID into its output
+  (prerendered HTML, `?dpl=` asset URLs, and manifests), so a cache hit would
+  restore output pinned to an earlier deployment and break Skew Protection.
+</Callout>
 
 ## Environment Modes
 
