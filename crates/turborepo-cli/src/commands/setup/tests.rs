@@ -190,6 +190,9 @@ fn track(root: &std::path::Path) {
             .success()
     );
 }
+#[path = "check_tests.rs"]
+mod checks;
+
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 #[path = "publication_guards.rs"]
 mod publication_guards;
