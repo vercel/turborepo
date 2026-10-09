@@ -107,6 +107,9 @@ impl LoopbackServer {
     pub fn hits(&self) -> usize {
         self.requests.lock().unwrap().len()
     }
+    pub fn requests(&self) -> Vec<String> {
+        self.requests.lock().unwrap().clone()
+    }
 }
 impl Drop for LoopbackServer {
     fn drop(&mut self) {

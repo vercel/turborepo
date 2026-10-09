@@ -197,6 +197,8 @@ mod checks;
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 #[path = "first_lock.rs"]
 mod first_lock;
+#[path = "force_tests.rs"]
+mod force;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[test]
@@ -301,7 +303,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         vec!["--no-frozen", "--tools-only"],
         vec!["--no-lock", "--tools-only"],
         vec!["--frozen"],
-        vec!["--frozen", "--tools-only", "--force"],
+        vec!["--plan", "--tools-only", "--force"],
         vec!["--frozen", "--tools-only", "--offline"],
         vec!["--no-frozen", "--update-lock"],
     ] {

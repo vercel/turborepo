@@ -172,6 +172,7 @@ fn run_with_policy(
             } else {
                 turborepo_setup::lock::reconcile::Mode::Local
             },
+            request.force,
             transports,
             preflight,
         ),
@@ -188,11 +189,13 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
         // CI/frozen/offline never change a check into resolution or repair.
         return Ok(());
     }
+    // Force reinstalls existing locked selections, independently of local
+    // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
         || request.lock == LockMode::NoLock
         || !request.tools_only
-        || request.force
         || request.offline
+        || (request.force && request.update_lock)
     {
         return Err(Error::NotImplemented);
     }
@@ -297,10 +300,14 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                assert!(matches!(
-                    validate_request(&request),
-                    Err(Error::NotImplemented)
-                ));
+                if control == "--force" {
+                    assert!(validate_request(&request).is_ok());
+                } else {
+                    assert!(matches!(
+                        validate_request(&request),
+                        Err(Error::NotImplemented)
+                    ));
+                }
             }
         }
     }

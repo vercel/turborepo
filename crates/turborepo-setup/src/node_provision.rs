@@ -208,6 +208,20 @@ impl NodePlan {
         desired: &[Tool],
         transport: &NodeTransport,
     ) -> Result<Option<PreparedNode>, Error> {
+        self.prepare(store, desired, transport, crate::Preparation::IfNeeded)
+            .await
+    }
+
+    /// Fresh preparation verifies a new complete artifact even for healthy
+    /// tools. The same Store guard and complete cohort are required through
+    /// publication.
+    pub async fn prepare(
+        &self,
+        store: &Store,
+        desired: &[Tool],
+        transport: &NodeTransport,
+        preparation: crate::Preparation,
+    ) -> Result<Option<PreparedNode>, Error> {
         if self.windows || !cfg!(unix) {
             return Err(Error::UnsupportedTarget);
         }
@@ -215,7 +229,9 @@ impl NodePlan {
             return Err(Error::InventoryMismatch);
         }
         // Validate the full cohort's IDs/ownership before any download.
-        if let Some(tree) = store.reusable_tree(&self.tool, desired)? {
+        if let Some(tree) = store.reusable_tree(&self.tool, desired)?
+            && preparation == crate::Preparation::IfNeeded
+        {
             self.verify_bundled_npm(&tree)?;
             return Ok(None);
         }
