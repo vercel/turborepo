@@ -816,6 +816,16 @@ fn test_uv_virtual_environment_cannot_be_cached_as_output() {
 fn test_uv_prune() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
+    // Root tool configuration is hashed into task inputs, so pruned tasks need it.
+    for (name, contents) in [
+        ("conftest.py", "import pytest\n"),
+        ("ruff.toml", "line-length = 100\n"),
+        ("pytest.ini", "[pytest]\n"),
+        // Packaging configuration for a root project whose sources aren't kept.
+        ("setup.cfg", "[options]\npackage_dir = =src\n"),
+    ] {
+        fs::write(tempdir.path().join(name), contents).unwrap();
+    }
 
     let output = common::run_turbo_with_env(
         tempdir.path(),
@@ -827,6 +837,13 @@ fn test_uv_prune() {
 
     assert!(out.join("packages/py-app/pyproject.toml").exists());
     assert!(out.join("packages/py-lib/pyproject.toml").exists());
+    for name in ["conftest.py", "ruff.toml", "pytest.ini"] {
+        assert!(out.join(name).exists(), "{name} must be carried into out/");
+    }
+    assert!(
+        !out.join("setup.cfg").exists(),
+        "setup.cfg can configure an unpruned root package and must stay behind"
+    );
 
     let lock = fs::read_to_string(out.join("uv.lock")).unwrap();
     assert!(lock.contains("name = \"py-app\""));

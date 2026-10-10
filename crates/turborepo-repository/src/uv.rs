@@ -2683,13 +2683,33 @@ impl PruneDomain for UvPruneKnowledge {
                 (UV_LOCK.to_string(), pruned_lock.lockfile),
                 (PYPROJECT_TOML.to_string(), pruned_manifest),
             ],
-            copy_paths: [".python-version", "uv.toml"]
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
+            copy_paths: PRUNE_COPY_PATHS.into_iter().map(str::to_string).collect(),
         }))
     }
 }
+
+/// Root files carried into a pruned uv workspace: uv's own configuration and
+/// the tool configuration [`hash_input_globs`] treats as task inputs, so tasks
+/// in the pruned output see the same configuration they were hashed with.
+/// `pyproject.toml` is rewritten separately. `setup.py` and `setup.cfg` are
+/// left out: they can configure a root setuptools package whose sources are
+/// not carried over, which would break installing the pruned workspace.
+const PRUNE_COPY_PATHS: [&str; 14] = [
+    ".python-version",
+    "uv.toml",
+    "ruff.toml",
+    ".ruff.toml",
+    "mypy.ini",
+    ".mypy.ini",
+    "pyrightconfig.json",
+    ".pytest.ini",
+    ".pytest.toml",
+    "pytest.ini",
+    "pytest.toml",
+    "tox.ini",
+    "ty.toml",
+    "conftest.py",
+];
 
 fn uv_change_observation(
     repo_root: &AbsoluteSystemPath,
