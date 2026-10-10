@@ -1,11 +1,16 @@
 import Link from "next/link";
 
+import { readFactoryImagePointer } from "../agent/lib/factory-image-registry";
+import { LatestFactorySandboxCommand } from "./latest-factory-sandbox-command";
 import { WorkspaceList } from "./workspace-list";
+
+export const dynamic = "force-dynamic";
 
 const AGENT_RUNS_URL =
   "https://vercel.com/vercel-internal-apps/turborepo-factory/observability/agent-runs";
 
-export default function WorkspacesPage() {
+export default async function WorkspacesPage() {
+  const pointer = await readFactoryImagePointer();
   return (
     <main
       className="mx-auto w-[min(960px,calc(100%_-_48px))] py-12 max-[720px]:w-[min(960px,calc(100%_-_32px))]"
@@ -38,6 +43,11 @@ export default function WorkspacesPage() {
           </a>
         </div>
       </header>
+      <div className="mt-8">
+        <LatestFactorySandboxCommand
+          initialSnapshotId={pointer?.snapshotId ?? null}
+        />
+      </div>
       <section className="mt-8" aria-label="Factory workspaces">
         <WorkspaceList />
       </section>

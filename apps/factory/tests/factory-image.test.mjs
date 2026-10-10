@@ -156,6 +156,27 @@ test("phases install every tool an agent needs", () => {
   }
 });
 
+test("fx provisioning pins both Linux architectures and changes the image fingerprint", () => {
+  const phase = factoryImagePhases({ revision: COMMIT }).find(
+    ({ id }) => id === "fx"
+  );
+  assert.ok(phase);
+  assert.ok(phase.script.includes(`want=${FACTORY_IMAGE_SPEC.fxVersion}`));
+  for (const arch of ["aarch64", "x86_64"]) {
+    assert.match(FACTORY_IMAGE_SPEC.fxSha256[arch], /^[0-9a-f]{64}$/);
+    assert.ok(
+      phase.script.includes(
+        `${arch}) checksum=${FACTORY_IMAGE_SPEC.fxSha256[arch]}`
+      )
+    );
+  }
+  assert.ok(phase.script.includes("sha256sum --check --strict"));
+  assert.notEqual(
+    factoryImageFingerprint(),
+    factoryImageFingerprint({ ...FACTORY_IMAGE_SPEC, fxVersion: "0.0.5" })
+  );
+});
+
 test("the warm build is opt-in", () => {
   const lean = factoryImagePhases({ revision: COMMIT });
   const warm = factoryImagePhases({ revision: COMMIT, warmBuild: true });
