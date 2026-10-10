@@ -1,34 +1,13 @@
-const { resolve } = require("node:path");
+import nextPlugin from "@next/eslint-plugin-next";
+import { defineConfig } from "eslint/config";
+import prettier from "eslint-config-prettier/flat";
+import { config as baseConfig } from "./base.js";
 
-const project = resolve(process.cwd(), "tsconfig.json");
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: [
-    "eslint:recommended",
-    "prettier",
-    require.resolve("@vercel/style-guide/eslint/next"),
-    "turbo",
-  ],
-  globals: {
-    React: true,
-    JSX: true,
+export const config = defineConfig([
+  baseConfig,
+  {
+    ...nextPlugin.configs["core-web-vitals"],
+    files: ["**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}"],
   },
-  env: {
-    node: true,
-  },
-  plugins: ["only-warn"],
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
-      },
-    },
-  },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-  ],
-  overrides: [{ files: ["*.js?(x)", "*.ts?(x)"] }],
-};
+  prettier,
+]);
