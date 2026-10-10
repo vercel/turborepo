@@ -972,8 +972,31 @@ fn reject_unsupported_local_sources(
                 continue;
             };
             let dependency = normalize_name(name);
-            // A PEP 508 direct reference to a local file (`name @ file:///...`)
-            // bypasses `[tool.uv.sources]` but is just as unhashable.
+            // uv sources override even direct references. Resolve the member's
+            // override before the root's, and validate only the effective source.
+            let source = manifest
+                .source(&dependency)
+                .map(|source| (source, &manifest_path))
+                .or_else(|| {
+                    root_manifest
+                        .source(&dependency)
+                        .map(|source| (source, &root_manifest_path))
+                });
+            if let Some((source, declared_in)) = source {
+                let base = declared_in
+                    .parent()
+                    .ok_or_else(|| Error::InvalidMemberManifestPath(declared_in.to_string()))?;
+                if let Some(path) = non_member_path_source(source, base, &member_dirs) {
+                    return Err(Error::UnsupportedLocalPathSource {
+                        manifest: declared_in.to_string(),
+                        dependency,
+                        path: path.to_string(),
+                    });
+                }
+                continue;
+            }
+            // Without a source override, a direct reference to a local file
+            // (`name @ file:///...`) is just as unhashable as a path source.
             if let Some((_, reference)) = requirement.split_once('@')
                 && let Some(url) = reference.split(';').next().map(str::trim)
                 && url
@@ -984,23 +1007,6 @@ fn reject_unsupported_local_sources(
                     manifest: manifest_path.to_string(),
                     dependency,
                     path: url.to_string(),
-                });
-            }
-            let (source, declared_in) = match manifest.source(&dependency) {
-                Some(source) => (source, &manifest_path),
-                None => match root_manifest.source(&dependency) {
-                    Some(source) => (source, &root_manifest_path),
-                    None => continue,
-                },
-            };
-            let base = declared_in
-                .parent()
-                .ok_or_else(|| Error::InvalidMemberManifestPath(declared_in.to_string()))?;
-            if let Some(path) = non_member_path_source(source, base, &member_dirs) {
-                return Err(Error::UnsupportedLocalPathSource {
-                    manifest: declared_in.to_string(),
-                    dependency,
-                    path: path.to_string(),
                 });
             }
         }
@@ -4492,6 +4498,90 @@ version = "0.1.0"
                 rejected,
                 "{requirement}: {result:?}"
             );
+        }
+    }
+
+    #[test]
+    fn test_manifest_fallback_source_overrides_local_file_reference() {
+        for (member_sources, root_sources, rejected) in [
+            ("util = { workspace = true }", "", false),
+            ("", "util = { workspace = true }", false),
+            (
+                "util = { workspace = true }",
+                "util = { path = \"vendor/util\" }",
+                false,
+            ),
+            (
+                "util = { index = \"pypi\" }",
+                "util = { path = \"vendor/util\" }",
+                false,
+            ),
+            (
+                "util = { git = \"https://example.com/util.git\" }",
+                "",
+                false,
+            ),
+            (
+                "",
+                "util = { url = \"https://example.com/util-1.0.tar.gz\" }",
+                false,
+            ),
+            (
+                "util = { path = \"../../vendor/util\" }",
+                "util = { workspace = true }",
+                true,
+            ),
+            ("", "util = { path = \"vendor/util\" }", true),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            root.join_component(PYPROJECT_TOML)
+                .create_with_contents(format!(
+                    "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = \
+                     [\"packages/*\"]\n\n[tool.uv.sources]\n{root_sources}\n"
+                ))
+                .unwrap();
+            for (name, dependencies) in [
+                (
+                    "core",
+                    format!(
+                        "dependencies = [\"util @ file:///nonexistent/vendor/util\"]\n\n\
+                         [tool.uv.sources]\n{member_sources}\n"
+                    ),
+                ),
+                ("util", String::new()),
+            ] {
+                let manifest = root.join_components(&["packages", name, PYPROJECT_TOML]);
+                manifest.ensure_dir().unwrap();
+                manifest
+                    .create_with_contents(format!(
+                        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\n{dependencies}"
+                    ))
+                    .unwrap();
+            }
+            let workspace = discover_workspace_from_manifests(&root, true).unwrap();
+            let result = reject_unsupported_local_sources(&root, &workspace);
+            if rejected {
+                let Err(Error::UnsupportedLocalPathSource { path, .. }) = result else {
+                    panic!("expected a local path source error, got {result:?}");
+                };
+                assert!(path.ends_with("vendor/util"), "{path}");
+                assert!(!path.starts_with("file:"), "{path}");
+            } else {
+                assert!(result.is_ok(), "{member_sources}{root_sources}: {result:?}");
+            }
+            if member_sources.contains("workspace = true")
+                || (member_sources.is_empty() && root_sources.contains("workspace = true"))
+            {
+                let core = &workspace.packages[0];
+                assert_eq!(core.name, "core");
+                assert!(
+                    core.relationships.iter().any(|relationship| {
+                        relationship.declaration_name() == "util" && relationship.orders_tasks()
+                    }),
+                    "workspace override must retain the internal dependency edge"
+                );
+            }
         }
     }
 
