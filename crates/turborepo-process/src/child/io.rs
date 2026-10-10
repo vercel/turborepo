@@ -7,11 +7,9 @@ use tokio::{
     io::{AsyncBufRead, AsyncReadExt, BufReader},
     sync::mpsc,
 };
-use tracing::{debug, trace};
+use tracing::trace;
 
 use super::{Child, ChildExit};
-
-const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
 
 pub(super) struct ChildIO {
     pub(super) stdin: Option<ChildInput>,
@@ -233,15 +231,13 @@ impl Child {
         let mut stdout_buffer = Vec::with_capacity(OUTPUT_CHUNK_BYTES);
         let mut stderr_buffer = Vec::with_capacity(OUTPUT_CHUNK_BYTES);
         // Whether the last byte written for the stream was a newline. Used to
-        // append a trailing newline for partial output at drain/EOF, matching
+        // append a trailing newline for partial output at EOF, matching
         // the previous per-line reader's add_trailing_newline behavior.
         let mut stdout_ends_with_newline = true;
         let mut stderr_ends_with_newline = true;
 
         let mut is_exited = false;
         let mut exit_status = None;
-        let mut draining_after_exit = false;
-        let mut drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
         loop {
             tokio::select! {
                 Some(result) = next_chunk(&mut stdout_lines, &mut stdout_buffer) => {
@@ -260,31 +256,9 @@ impl Child {
                     trace!("child process exited: {}", self.label());
                     is_exited = true;
                     exit_status = status;
-                    // We don't abort in the cases of a zero exit code as we could be
-                    // caching this task and should read all the logs it produces.
-                    if status == Some(ChildExit::Finished(Some(0))) {
-                        continue;
-                    }
-
-                    if self.is_closing() {
-                        // During Turbo-initiated shutdown, give the pipe readers a
-                        // short grace window to pull the child's final log lines.
-                        draining_after_exit = true;
-                        drain_deadline = tokio::time::Instant::now() + POST_EXIT_OUTPUT_DRAIN_TIMEOUT;
-                    } else {
-                        debug!("child process failed, skipping reading stdout/stderr");
-                        return Ok(status);
-                    }
-                }
-                _ = tokio::time::sleep_until(drain_deadline), if draining_after_exit => {
-                    trace!("post-exit output drain timed out");
-                    if !stdout_ends_with_newline {
-                        stdout_pipe.write_all(b"\n")?;
-                    }
-                    if !stderr_ends_with_newline {
-                        stdout_pipe.write_all(b"\n")?;
-                    }
-                    return Ok(exit_status);
+                    // Exiting does not imply EOF: output can still be buffered,
+                    // or a descendant can keep either pipe open. Read all output
+                    // regardless of exit status, including during shutdown.
                 }
                 else => {
                     trace!("flushing child stdout/stderr buffers");
@@ -304,8 +278,125 @@ impl Child {
         // The chunk buffers still hold the final chunk (already written);
         // dropping them here is fine.
 
-        let status = exit_status.or(self.wait().await);
-        self.cleanup_if_successful(status);
-        Ok(status)
+        self.cleanup_if_successful(exit_status);
+        Ok(exit_status)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{Arc, Mutex, atomic::AtomicBool};
+
+    use futures::poll;
+    use test_case::test_case;
+    use tokio::{io::AsyncWriteExt, sync::watch};
+
+    use super::*;
+    use crate::child::{ChildCommandChannel, ShutdownStyle};
+
+    // Make exit ready independently of output, without process-scheduling races.
+    fn exited_child(status: ChildExit, closing: bool) -> Child {
+        let (_, exit_channel) = watch::channel(Some(status));
+        let (command_channel, _) = ChildCommandChannel::new();
+        Child {
+            pid: None,
+            #[cfg(unix)]
+            target_identity: None,
+            #[cfg(windows)]
+            root_identity: None,
+            command_channel,
+            exit_channel,
+            stdin: Arc::new(Mutex::new(None)),
+            output: Arc::new(Mutex::new(None)),
+            label: "output drain test".into(),
+            shutdown_style: ShutdownStyle::Kill,
+            closing: Arc::new(AtomicBool::new(closing)),
+            _pty_test_guard: None,
+        }
+    }
+
+    #[test_case(ChildExit::Finished(Some(0)), false; "success")]
+    #[test_case(ChildExit::Finished(Some(42)), false; "failure")]
+    #[test_case(ChildExit::Interrupted, true; "shutdown")]
+    #[test_case(ChildExit::Killed, false; "restart")]
+    #[test_case(ChildExit::KilledExternal, false; "external_kill")]
+    #[tokio::test(start_paused = true)]
+    async fn drains_both_streams_after_exit(status: ChildExit, closing: bool) {
+        let mut child = exited_child(status, closing);
+        let (mut stdout_tx, stdout_rx) = tokio::io::duplex(1024);
+        let (mut stderr_tx, stderr_rx) = tokio::io::duplex(1024);
+        let mut output = Vec::new();
+        {
+            let drain = child.wait_with_piped_async_outputs(
+                &mut output,
+                Some(BufReader::new(stdout_rx)),
+                Some(BufReader::new(stderr_rx)),
+            );
+            tokio::pin!(drain);
+            // Both reads are pending: the ready exit branch must run first.
+            assert!(poll!(drain.as_mut()).is_pending());
+            // Held-open pipes must not cause an automatic early return.
+            tokio::time::advance(std::time::Duration::from_secs(10)).await;
+            assert!(poll!(drain.as_mut()).is_pending());
+
+            let stdout = async move {
+                stdout_tx.write_all(&vec![b'x'; 262144]).await.unwrap();
+                stdout_tx.write_all(b"\nFINAL_STDOUT\n").await.unwrap();
+            };
+            let stderr = async move {
+                stderr_tx.write_all(&vec![b'y'; 262144]).await.unwrap();
+                stderr_tx.write_all(b"\nFINAL_STDERR\n").await.unwrap();
+            };
+            let (exit, (), ()) = tokio::join!(drain, stdout, stderr);
+            assert_eq!(exit.unwrap(), Some(status));
+        }
+        assert_eq!(output.iter().filter(|&&b| b == b'x').count(), 262144);
+        assert_eq!(output.iter().filter(|&&b| b == b'y').count(), 262144);
+        let output = String::from_utf8(output).unwrap();
+        assert!(output.contains("FINAL_STDOUT\n"));
+        assert!(output.contains("FINAL_STDERR\n"));
+    }
+
+    #[test_case(false; "stdout")]
+    #[test_case(true; "stderr")]
+    #[tokio::test]
+    async fn failure_drains_with_slow_sink(use_stderr: bool) {
+        struct SlowSink(Vec<u8>);
+        impl Write for SlowSink {
+            fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                self.0.extend_from_slice(bytes);
+                Ok(bytes.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let status = ChildExit::Finished(Some(42));
+        let mut child = exited_child(status, false);
+        let (mut tx, rx) = tokio::io::duplex(8192);
+        let mut output = SlowSink(Vec::new());
+        let mut expected = vec![0xff; 32768];
+        expected.extend_from_slice(b"FINAL_LINE");
+        {
+            let (stdout, stderr) = if use_stderr {
+                (None, Some(BufReader::new(rx)))
+            } else {
+                (Some(BufReader::new(rx)), None)
+            };
+            let drain = child.wait_with_piped_async_outputs(&mut output, stdout, stderr);
+            tokio::pin!(drain);
+            assert!(poll!(drain.as_mut()).is_pending());
+            let producer = async {
+                tx.write_all(&expected).await.unwrap();
+                drop(tx);
+            };
+            let (exit, ()) = tokio::join!(drain, producer);
+            assert_eq!(exit.unwrap(), Some(status));
+        }
+        expected.push(b'\n');
+        assert_eq!(output.0, expected);
     }
 }
