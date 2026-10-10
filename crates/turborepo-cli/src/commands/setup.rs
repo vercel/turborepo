@@ -8,6 +8,7 @@ use turborepo_setup::source_policy::OfficialSourcePolicy;
 use crate::cli::{Args, SetupArgs};
 
 mod check;
+mod no_lock;
 mod provision;
 mod root;
 
@@ -54,6 +55,10 @@ pub enum Error {
     Node(#[from] turborepo_setup::node_provision::Error),
     #[error(transparent)]
     Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
+    #[error(transparent)]
+    Native(#[from] turborepo_setup::native_baseline::Error),
+    #[error(transparent)]
+    Ephemeral(#[from] turborepo_setup::ephemeral_reconcile::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
@@ -163,6 +168,9 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
+        _ if request.lock == LockMode::NoLock => {
+            no_lock::run(&discovery, snapshot, transports, preflight)
+        }
         _ => provision::run(
             &discovery,
             snapshot,
@@ -192,7 +200,7 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // Force reinstalls existing locked selections, independently of local
     // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
-        || request.lock == LockMode::NoLock
+        || (request.lock == LockMode::NoLock && (request.force || request.update_lock))
         || !request.tools_only
         || request.offline
         || (request.force && request.update_lock)
@@ -300,7 +308,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if control == "--force" {
+                if matches!(control, "--force" | "--no-lock") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(

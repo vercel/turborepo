@@ -39,6 +39,38 @@ pub struct NativeRecord {
 }
 
 impl NativeRecord {
+    /// Reject unsupported record provenance before resolution or writer/storage
+    /// initialization. Uses captured declarations, never rereads raw manifests.
+    pub fn preflight(snapshot: &Snapshot) -> Result<(), Error> {
+        snapshot.ensure_current()?;
+        if !snapshot.declarations().contains_key("node")
+            || snapshot
+                .declarations()
+                .keys()
+                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+        {
+            return Err(Error::Invalid);
+        }
+        let (_, manager) = provenance(snapshot.declarations())?;
+        if let Some(manager) = manager {
+            validated(crate::js_resolution::exact_pnpm(&manager))?;
+            if manager
+                .package_manager
+                .iter()
+                .chain(&manager.dev_engines)
+                .any(|r| {
+                    r.integrity
+                        .as_ref()
+                        .is_some_and(|pin| pin.algorithm != "sha256")
+                })
+            {
+                return Err(Error::Invalid);
+            }
+        }
+        snapshot.ensure_current()?;
+        Ok(())
+    }
+
     pub fn from_snapshot(snapshot: &Snapshot, selection: &Lock) -> Result<Self, Error> {
         snapshot.ensure_current()?;
         if !validated(selection.matches_native(snapshot.declarations()))? {
@@ -73,7 +105,12 @@ impl NativeRecord {
         {
             return Err(Error::Invalid);
         }
-        let (node, manager) = provenance(&selection)?;
+        let declarations = selection
+            .tools()
+            .iter()
+            .map(|(id, tool)| (id.clone(), tool.declarations.clone()))
+            .collect();
+        let (node, manager) = provenance(&declarations)?;
         let tool = &selection.tools()["node"];
         let version = validated(semver::Version::parse(&tool.version))?;
         if !node.matches_locked_version(&version) {
@@ -262,11 +299,13 @@ impl Baseline {
 // Reconstruct only native declaration fields, never raw manifests, secrets or
 // disk inputs. Existing discovery revalidates grammar, OR/onFail and integrity;
 // exact provenance round-trip rejects invented fields, normalization and holes.
-fn provenance(selection: &Lock) -> Result<(NodeRequirements, Option<Declaration>), Error> {
+fn provenance(
+    declarations: &crate::lock::DeclarationMap,
+) -> Result<(NodeRequirements, Option<Declaration>), Error> {
     let mut manifest = json!({});
     let mut files = BTreeMap::new();
-    for (id, tool) in selection.tools() {
-        for source in &tool.declarations {
+    for (id, sources) in declarations {
+        for source in sources {
             if id == "node"
                 && matches!(source.file.as_str(), ".nvmrc" | ".node-version")
                 && source.field.is_none()
@@ -331,7 +370,14 @@ fn provenance(selection: &Lock) -> Result<(NodeRequirements, Option<Declaration>
     let actual = validated(crate::lock::probe_native_with(|file, _| {
         Ok(files.get(file).map(|s| s.as_bytes().to_vec()))
     }))?;
-    if !validated(selection.matches_native(&actual))? {
+    if actual.len() != declarations.len()
+        || actual.iter().any(|(id, sources)| {
+            declarations.get(id).is_none_or(|expected| {
+                expected.len() != sources.len()
+                    || sources.iter().any(|source| !expected.contains(source))
+            })
+        })
+    {
         return Err(Error::Invalid);
     }
     let node = validated(NodeRequirements::from_sources(

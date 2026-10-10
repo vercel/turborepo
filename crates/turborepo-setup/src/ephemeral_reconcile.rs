@@ -67,7 +67,7 @@ pub fn stage(
     mut check: impl FnMut() -> io::Result<()>,
 ) -> Result<Staged, Error> {
     check()?;
-    snapshot.ensure_current()?;
+    NativeRecord::preflight(snapshot)?;
     if snapshot.previous_lock().is_some()
         || !snapshot.declarations().contains_key("node")
         || snapshot.repository_root() != store.repository_root()?
@@ -170,14 +170,29 @@ impl Staged {
         snapshot: &Snapshot,
         store: &mut Store,
         force: bool,
-        mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), turborepo_tool_install::Error>,
+        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), turborepo_tool_install::Error>,
         mut check: impl FnMut() -> io::Result<()>,
     ) -> Result<turborepo_tool_install::Outcome, Error> {
         check()?;
         self.check(snapshot, store)?;
         let guard = self.snapshot.guard()?;
+        self.publish_guarded(snapshot, store, &guard, force, stage_tool, check)
+    }
+
+    /// Caller acquires WRITER before Store and retains both through
+    /// publication. Never reacquire the writer while a caller-held guard is
+    /// live.
+    pub fn publish_guarded(
+        self,
+        snapshot: &Snapshot,
+        store: &mut Store,
+        guard: &crate::writer_storage::WriterStorage,
+        force: bool,
+        mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), turborepo_tool_install::Error>,
+        mut check: impl FnMut() -> io::Result<()>,
+    ) -> Result<turborepo_tool_install::Outcome, Error> {
         check()?;
-        self.snapshot.check_guard(&guard)?;
+        self.snapshot.check_guard(guard)?;
         self.check(snapshot, store)?;
         Ok(store.reconcile_recorded_checked(
             &self.desired,
@@ -197,9 +212,7 @@ impl Staged {
             },
             || {
                 check()?;
-                self.snapshot
-                    .check_guard(&guard)
-                    .map_err(io::Error::other)?;
+                self.snapshot.check_guard(guard).map_err(io::Error::other)?;
                 snapshot.ensure_current().map_err(io::Error::other)?;
                 Ok(())
             },
