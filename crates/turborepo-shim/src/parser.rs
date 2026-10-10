@@ -96,7 +96,7 @@ impl ShimArgs {
         Self::parse_from_iter(invocation_dir, std::env::args())
     }
 
-    fn parse_from_iter(
+    pub(crate) fn parse_from_iter(
         invocation_dir: AbsoluteSystemPathBuf,
         args: impl Iterator<Item = String>,
     ) -> Result<Self, Error> {

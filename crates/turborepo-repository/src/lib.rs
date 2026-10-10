@@ -13,6 +13,7 @@
 // are reviewed separately from lint suppression cleanup.
 #![allow(clippy::result_large_err)]
 
+pub mod bootstrap;
 pub mod cargo;
 pub mod change_knowledge;
 pub mod change_mapper;

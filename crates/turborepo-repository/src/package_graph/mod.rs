@@ -1100,6 +1100,18 @@ impl PackageGraph {
         })
     }
 
+    /// Resolve the legacy single-package execution optimization from both the
+    /// requested mode and authoritative execution scopes. Native package and
+    /// aggregate scopes veto it; a root-only empty workspace does not enable it
+    /// unless it was requested. Run and watch loaders must use the same
+    /// decision.
+    pub fn resolved_single_package(&self, requested: bool) -> bool {
+        let mut scopes = self.package_scope_directories();
+        requested
+            && matches!(scopes.next(), Some((PackageName::Root, _)))
+            && scopes.next().is_none()
+    }
+
     /// Native definition path for a package or execution scope. A pure Cargo
     /// repository's compatibility root node has no native definition.
     pub fn package_definition_path(&self, package: &PackageName) -> Option<&AnchoredSystemPath> {

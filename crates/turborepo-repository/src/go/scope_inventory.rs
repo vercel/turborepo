@@ -202,6 +202,19 @@ fn read_manifest(path: &AbsoluteSystemPath) -> Result<String, Error> {
     })
 }
 
+/// Validate only the repository-root `go.work` syntax with the inventory
+/// parser.
+///
+/// This neither reads member manifests nor validates their paths. An empty
+/// member list is a valid root definition here; inventory remains responsible
+/// for rejecting an empty workspace when membership is actually requested.
+pub(crate) fn validate_workspace_root(
+    contents: &str,
+    work_path: &AbsoluteSystemPath,
+) -> Result<(), Error> {
+    parse_go_work(contents, work_path).map(|_| ())
+}
+
 fn parse_go_work(text: &str, work_path: &AbsoluteSystemPath) -> Result<ParsedGoWork, Error> {
     let mut parsed = ParsedGoWork::default();
     let mut go: Option<String> = None;
@@ -648,6 +661,43 @@ mod tests {
             "/repo/go.mod"
         })
         .unwrap()
+    }
+
+    // ---- Root-only validation, without filesystem or toolchain discovery ----
+
+    #[test]
+    fn root_validation_does_not_require_or_read_members() {
+        for contents in [
+            "",
+            "go 1.22\n",
+            "go 1.22\nuse (\n)\n",
+            "go 1.22\nuse ./missing\n",
+            "go 1.22\nuse ../outside\n",
+        ] {
+            validate_workspace_root(contents, &work_file()).unwrap();
+        }
+    }
+
+    #[test]
+    fn root_validation_preserves_existing_parser_errors() {
+        let path = work_file();
+        let error = validate_workspace_root("unsupported ./member\n", &path).unwrap_err();
+        assert!(matches!(
+            error,
+            Error::UnknownGoWorkDirective { path: error_path, directive }
+                if error_path == path.as_str() && directive == "unsupported"
+        ));
+        for contents in [
+            "use (\n ./member\n",
+            "use ./member ./other\n",
+            "go 1.22\ngo 1.23\n",
+            "use \"./member\n",
+        ] {
+            assert!(matches!(
+                validate_workspace_root(contents, &path),
+                Err(Error::MalformedGoWork { .. })
+            ));
+        }
     }
 
     // ---- Inventory, without invoking `go` ----
