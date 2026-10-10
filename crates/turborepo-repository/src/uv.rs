@@ -134,6 +134,16 @@ pub enum Error {
          source."
     )]
     UnsupportedLocalMetadataNode(String),
+    #[error(
+        "{manifest} declares local path source {path:?} for {dependency:?}, but only uv workspace \
+         members are supported. Add it to [tool.uv.workspace] or replace it with a non-local \
+         source."
+    )]
+    UnsupportedLocalPathSource {
+        manifest: String,
+        dependency: String,
+        path: String,
+    },
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::UvLockError),
     #[error("uv workspace member manifest has no parent directory: {0}")]
@@ -317,11 +327,7 @@ impl PyProjectManifest {
     /// `lib = { index = "pypi" }` must not fall through to a root
     /// `lib = { workspace = true }` and be misread as an internal edge.
     fn source_override(&self, package: &str) -> Option<bool> {
-        let source = self.uv().and_then(|uv| {
-            uv.sources
-                .iter()
-                .find_map(|(name, source)| (normalize_name(name) == package).then_some(source))
-        })?;
+        let source = self.source(package)?;
         Some(
             source
                 .as_table()
@@ -329,6 +335,14 @@ impl PyProjectManifest {
                 .and_then(toml::Value::as_bool)
                 .unwrap_or(false),
         )
+    }
+
+    /// The raw `[tool.uv.sources]` entry for a normalized package name.
+    fn source(&self, package: &str) -> Option<&toml::Value> {
+        self.uv()?
+            .sources
+            .iter()
+            .find_map(|(name, source)| (normalize_name(name) == package).then_some(source))
     }
 
     fn is_buildable(&self) -> bool {
@@ -808,6 +822,9 @@ pub struct DiscoveredWorkspace {
 /// Discover package membership and internal relationships without consulting
 /// uv.lock. Exact metadata remains authoritative when available, but this
 /// snapshot keeps graph construction usable when lockfile resolution fails.
+/// It does not validate dependency sources: full discovery's fallback pairs it
+/// with [`reject_unsupported_local_sources`], while the lazy callers only need
+/// scope identity.
 ///
 /// `emit_warnings` follows the caller: the lazy scope inventory passes `false`
 /// because it only reports names and full discovery owns every user-facing
@@ -905,6 +922,110 @@ fn discover_workspace_from_manifests(
         quality_plan,
         pytest,
     })
+}
+
+/// Reject local `path` sources that full discovery's manifest fallback cannot
+/// hash or prune, failing closed like exact discovery does for the same
+/// dependencies (see [`Error::UnsupportedLocalMetadataNode`]).
+///
+/// A local path dependency outside the workspace belongs to no package, so
+/// edits to its files would never invalidate dependent tasks. Every declared
+/// dependency of each member and of the root project is checked against its
+/// effective source: the declaring manifest's own `[tool.uv.sources]` entry,
+/// else the root's, with paths resolved relative to the manifest that declares
+/// the source. Paths resolving to a member directory (or to the root project)
+/// are allowed, as are `workspace`, `git`, `url`, and `index` sources.
+fn reject_unsupported_local_sources(
+    repo_root: &AbsoluteSystemPath,
+    workspace: &DiscoveredWorkspace,
+) -> Result<(), Error> {
+    let root_manifest_path = repo_root.join_component(PYPROJECT_TOML);
+    let Some(root_manifest) = PyProjectManifest::load(&root_manifest_path)? else {
+        return Ok(());
+    };
+    let mut member_dirs = workspace
+        .packages
+        .iter()
+        .filter_map(|package| package.manifest_path.parent())
+        .collect::<Vec<_>>();
+    if workspace.root_project_name.is_some() {
+        member_dirs.push(repo_root);
+    }
+    let mut manifests = Vec::new();
+    for package in &workspace.packages {
+        let Some(manifest) = PyProjectManifest::load(&package.manifest_path)? else {
+            continue;
+        };
+        manifests.push((package.manifest_path.clone(), manifest));
+    }
+    let root_project = workspace
+        .root_project_name
+        .is_some()
+        .then_some((root_manifest_path.clone(), &root_manifest));
+    for (manifest_path, manifest) in manifests
+        .iter()
+        .map(|(path, manifest)| (path.clone(), manifest))
+        .chain(root_project)
+    {
+        for (requirement, _) in manifest.dependencies_with_kind() {
+            let Some(name) = pep508_name(requirement) else {
+                continue;
+            };
+            let dependency = normalize_name(name);
+            // A PEP 508 direct reference to a local file (`name @ file:///...`)
+            // bypasses `[tool.uv.sources]` but is just as unhashable.
+            if let Some((_, reference)) = requirement.split_once('@')
+                && let Some(url) = reference.split(';').next().map(str::trim)
+                && url
+                    .get(..5)
+                    .is_some_and(|scheme| scheme.eq_ignore_ascii_case("file:"))
+            {
+                return Err(Error::UnsupportedLocalPathSource {
+                    manifest: manifest_path.to_string(),
+                    dependency,
+                    path: url.to_string(),
+                });
+            }
+            let (source, declared_in) = match manifest.source(&dependency) {
+                Some(source) => (source, &manifest_path),
+                None => match root_manifest.source(&dependency) {
+                    Some(source) => (source, &root_manifest_path),
+                    None => continue,
+                },
+            };
+            let base = declared_in
+                .parent()
+                .ok_or_else(|| Error::InvalidMemberManifestPath(declared_in.to_string()))?;
+            if let Some(path) = non_member_path_source(source, base, &member_dirs) {
+                return Err(Error::UnsupportedLocalPathSource {
+                    manifest: declared_in.to_string(),
+                    dependency,
+                    path: path.to_string(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The first `path` in a `[tool.uv.sources]` entry (or list of
+/// marker-scoped entries) that does not resolve to a workspace member.
+fn non_member_path_source<'a>(
+    source: &'a toml::Value,
+    base: &AbsoluteSystemPath,
+    member_dirs: &[&AbsoluteSystemPath],
+) -> Option<&'a str> {
+    if let Some(sources) = source.as_array() {
+        return sources
+            .iter()
+            .find_map(|source| non_member_path_source(source, base, member_dirs));
+    }
+    let path = source.get("path")?.as_str()?;
+    let resolved = AbsoluteSystemPathBuf::from_unknown(base, path);
+    (!member_dirs
+        .iter()
+        .any(|dir| dir.as_std_path() == resolved.as_std_path()))
+    .then_some(path)
 }
 
 /// Discover the uv workspace from uv's authoritative metadata, parsing member
@@ -3020,17 +3141,24 @@ impl RepositoryContributor for UvContributor {
                     (Some(metadata), workspace, Ok(lockfile), None)
                 }
                 Err(error) => {
-                    let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
-                        discover_workspace_from_manifests(&self.repo_root, true)
-                    })
-                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                     let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
                     let message = error.to_string();
+                    // Warn before manifest discovery so that, if the fallback
+                    // fails too, the user still learns why exact discovery
+                    // was skipped.
                     tracing::warn!(
                         "Unable to resolve uv.lock; using conservative Python task hashing. Run \
                          `uv lock` and commit uv.lock to restore dependency-aware caching: {}",
                         message
                     );
+                    // The fallback fails closed on local path sources it
+                    // cannot hash, exactly as exact discovery would.
+                    let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
+                        let workspace = discover_workspace_from_manifests(&self.repo_root, true)?;
+                        reject_unsupported_local_sources(&self.repo_root, &workspace)?;
+                        Ok::<_, Error>(workspace)
+                    })
+                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                     let raw_lockfile = if can_prune_without_metadata {
                         read_lockfile(&self.repo_root).map_err(|error| error.to_string())
                     } else {
@@ -4252,6 +4380,144 @@ version = "0.1.0"
                 .all(|relationship| relationship.declaration_name() == "py-lib"
                     && relationship.orders_tasks())
         );
+    }
+
+    /// Writes a two-member workspace (`core`, `util`) with no uv.lock, where
+    /// `core` depends on `helper` through the given member and root
+    /// `[tool.uv.sources]` tables.
+    fn manifest_fallback_sources(member_sources: &str, root_sources: &str) -> Result<(), Error> {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(format!(
+                "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = \
+                 [\"packages/*\"]\n\n[tool.uv.sources]\n{root_sources}\n"
+            ))
+            .unwrap();
+        for (dir, contents) in [
+            (
+                "core",
+                format!(
+                    "[project]\nname = \"core\"\nversion = \"0.1.0\"\ndependencies = \
+                     [\"helper>=1\"]\n\n[tool.uv.sources]\n{member_sources}\n"
+                ),
+            ),
+            (
+                "util",
+                "[project]\nname = \"util\"\nversion = \"0.1.0\"\n".to_string(),
+            ),
+        ] {
+            let manifest = root.join_components(&["packages", dir, PYPROJECT_TOML]);
+            manifest.ensure_dir().unwrap();
+            manifest.create_with_contents(contents).unwrap();
+        }
+        let vendored = root.join_components(&["vendor", "helper", PYPROJECT_TOML]);
+        vendored.ensure_dir().unwrap();
+        vendored
+            .create_with_contents("[project]\nname = \"helper\"\nversion = \"0.1.0\"\n")
+            .unwrap();
+        let workspace = discover_workspace_from_manifests(&root, true).unwrap();
+        reject_unsupported_local_sources(&root, &workspace)
+    }
+
+    #[test]
+    fn test_manifest_fallback_rejects_non_member_path_sources() {
+        for (member_sources, root_sources, declared_in) in [
+            (
+                "helper = { path = \"../../vendor/helper\", editable = true }",
+                "",
+                "packages/core",
+            ),
+            ("", "helper = { path = \"vendor/helper\" }", ""),
+            (
+                "helper = [{ path = \"../../vendor/helper\", marker = \"sys_platform == 'linux'\" \
+                 }, { index = \"pypi\" }]",
+                "",
+                "packages/core",
+            ),
+        ] {
+            let result = manifest_fallback_sources(member_sources, root_sources);
+            let Err(Error::UnsupportedLocalPathSource {
+                manifest,
+                dependency,
+                ..
+            }) = result
+            else {
+                panic!(
+                    "expected a local path source error for {member_sources}{root_sources}, got \
+                     {result:?}"
+                );
+            };
+            assert_eq!(dependency, "helper");
+            let manifest = std::path::PathBuf::from(manifest);
+            assert!(
+                manifest.parent().unwrap().ends_with(declared_in),
+                "{manifest:?} must declare the source"
+            );
+        }
+    }
+
+    #[test]
+    fn test_manifest_fallback_rejects_local_file_direct_references() {
+        for (requirement, rejected) in [
+            ("helper @ file:///opt/vendor/helper", true),
+            (
+                "helper[cli] @ file:///opt/vendor/helper ; python_version >= '3.11'",
+                true,
+            ),
+            ("helper @ FILE:///opt/vendor/helper", true),
+            ("helper @ git+https://example.com/helper@v1", false),
+            ("helper>=1", false),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            root.join_component(PYPROJECT_TOML)
+                .create_with_contents(
+                    "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = \
+                     [\"packages/*\"]\n",
+                )
+                .unwrap();
+            let manifest = root.join_components(&["packages", "core", PYPROJECT_TOML]);
+            manifest.ensure_dir().unwrap();
+            manifest
+                .create_with_contents(format!(
+                    "[project]\nname = \"core\"\nversion = \"0.1.0\"\ndependencies = \
+                     [\"{requirement}\"]\n"
+                ))
+                .unwrap();
+            let workspace = discover_workspace_from_manifests(&root, true).unwrap();
+            let result = reject_unsupported_local_sources(&root, &workspace);
+            assert_eq!(
+                matches!(result, Err(Error::UnsupportedLocalPathSource { .. })),
+                rejected,
+                "{requirement}: {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_manifest_fallback_allows_member_and_non_local_sources() {
+        for (member_sources, root_sources) in [
+            ("helper = { path = \"../util\" }", ""),
+            ("", "helper = { path = \"packages/util\", editable = true }"),
+            ("helper = { workspace = true }", ""),
+            ("helper = { git = \"https://example.com/helper.git\" }", ""),
+            (
+                "helper = { url = \"https://example.com/helper-1.0.tar.gz\" }",
+                "",
+            ),
+            (
+                "helper = { index = \"pypi\" }",
+                "helper = { path = \"vendor/helper\" }",
+            ),
+            ("", "other = { path = \"vendor/helper\" }"),
+        ] {
+            let result = manifest_fallback_sources(member_sources, root_sources);
+            assert!(
+                result.is_ok(),
+                "{member_sources}{root_sources} must be accepted: {result:?}"
+            );
+        }
     }
 
     #[test]
