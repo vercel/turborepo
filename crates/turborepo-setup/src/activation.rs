@@ -70,6 +70,20 @@ impl ActivationPlan {
     /// storage creation. A missing lock is an error, not unconfigured-mode
     /// policy for future callers.
     pub fn inspect(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
+        Self::qualify(&context)?;
+        let sources = Snapshot::capture(repo)?;
+        Self::inspect_captured(&sources, context)
+    }
+
+    /// Inspect the caller's original source/lock snapshot, never recapture it
+    /// after drift. The snapshot binds its own canonical repository root.
+    pub fn inspect_captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
+        Self::qualify(&context)?;
+        sources.ensure_current()?;
+        Self::from_sources(sources.root(), sources, context)
+    }
+
+    fn qualify(context: &ExecutionContext) -> Result<(), Error> {
         let platform = context.artifact_platform();
         if !cfg!(unix)
             || !matches!(
@@ -82,9 +96,7 @@ impl ActivationPlan {
         {
             return Err(Error::UnsupportedPlatform);
         }
-        let repo = repo.canonicalize().map_err(StorageError::from)?;
-        let sources = Snapshot::capture(&repo)?;
-        Self::from_sources(&repo, &sources, context)
+        Ok(())
     }
 
     fn from_sources(

@@ -8,7 +8,7 @@ use turborepo_setup::{
 
 use super::{Error, root::Discovery};
 
-fn context() -> Result<ExecutionContext, Error> {
+pub(super) fn context() -> Result<ExecutionContext, Error> {
     // Share provisioning's qualification: notably no Windows/musl fallback.
     let platform = super::provision::platform()?;
     let libc = match platform {
