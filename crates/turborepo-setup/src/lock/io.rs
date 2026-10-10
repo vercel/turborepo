@@ -146,7 +146,7 @@ pub fn probe_native(root: &Path) -> Result<DeclarationMap, StorageError> {
     probe_native_with(|file, limit| read_optional(&root, file, limit))
 }
 
-fn probe_native_with(
+pub(crate) fn probe_native_with(
     mut read: impl FnMut(&'static str, usize) -> io::Result<Option<Vec<u8>>>,
 ) -> Result<DeclarationMap, StorageError> {
     let manifest = read("package.json", crate::node_discovery::MAX_MANIFEST_BYTES)?

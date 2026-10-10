@@ -29,7 +29,7 @@ pub enum Error {
 
 // Without an authoritative pin, only one unambiguous exact identity is in
 // scope. Never choose the first dev alternative or query a floating index.
-fn exact_pnpm(declaration: &Declaration) -> Result<String, Error> {
+pub(crate) fn exact_pnpm(declaration: &Declaration) -> Result<String, Error> {
     let requests = declaration
         .package_manager
         .as_ref()
@@ -60,7 +60,7 @@ fn exact_pnpm(declaration: &Declaration) -> Result<String, Error> {
 
 // Pure portable payload checks, matching the locked pnpm adapter without its
 // host/promotion restrictions. Inspect EVERY variant, not the current platform.
-fn validate_pnpm(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
+pub(crate) fn validate_pnpm(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
     let invalid = || Error::Registry(crate::registry_resolution::Error::InvalidLock);
     let version = semver::Version::parse(&tool.version).map_err(|_| invalid())?;
     let Installation::Managed { artifacts } = &tool.installation else {
