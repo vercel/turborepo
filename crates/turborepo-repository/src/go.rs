@@ -350,6 +350,11 @@ fn run_go(
     Command::new("go")
         .args(args)
         .current_dir(repo_root.as_std_path())
+        // Go reports directories through `os.Getwd`, which keeps `$PWD`'s
+        // spelling only when it names the working directory and otherwise
+        // resolves symlinks. Pin it so reported paths share our spelling of a
+        // repository reached through a symlink.
+        .env("PWD", repo_root.as_std_path())
         .output()
         .map_err(|source| {
             if source.kind() == io::ErrorKind::NotFound {
@@ -565,6 +570,45 @@ fn go_environment(repo_root: &AbsoluteSystemPath) -> Result<GoEnvironment, Error
         module_cache: value("GOMODCACHE")?,
         fingerprint_values: fingerprinted_go_environment(&values)?,
     })
+}
+
+/// Whether `member_dir` traverses a symlink below the repository root.
+/// A symlink in the root's own spelling is harmless; a member or intermediate
+/// directory symlink is not followed by file hashing. Inspect the filesystem
+/// rather than comparing canonical spellings, which can also differ only in
+/// capitalization. Unreadable components count as resolving elsewhere.
+fn member_resolves_elsewhere(
+    repo_root: &AbsoluteSystemPath,
+    member_dir: &AbsoluteSystemPath,
+) -> bool {
+    let Ok(relative) = member_dir
+        .as_std_path()
+        .strip_prefix(repo_root.as_std_path())
+    else {
+        return true;
+    };
+    let mut current = repo_root.as_std_path().to_path_buf();
+    for component in relative.components() {
+        current.push(component);
+        let Ok(metadata) = std::fs::symlink_metadata(&current) else {
+            return true;
+        };
+        if metadata.file_type().is_symlink() {
+            return true;
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+
+            // Junctions and other reparse points also require conservative
+            // handling, even when FileType does not identify them as symlinks.
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+            if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn module_package_inputs(
@@ -1228,7 +1272,15 @@ pub fn discover_workspace(repo_root: &AbsoluteSystemPath) -> Result<DiscoveredWo
         );
         member_paths.insert(module_path.clone());
 
-        let (runnable_target, root_source_inputs) = module_package_inputs(&member_dir)?;
+        // File hashing does not follow a member reached through an
+        // in-repository symlink, so its sources would be missing from the
+        // task hash. Infer nothing rather than cache its build.
+        let (runnable_target, root_source_inputs) =
+            if member_resolves_elsewhere(repo_root, &member_dir) {
+                (None, None)
+            } else {
+                module_package_inputs(&member_dir)?
+            };
         let mut module = GoModule {
             module_path,
             manifest_path: member_dir.join_component(GO_MOD),
@@ -2967,10 +3019,10 @@ mod tests {
     }
 
     fn resolution_root(tempdir: &tempfile::TempDir) -> AbsoluteSystemPathBuf {
-        // Canonicalized onto the path `go` reports: `go list -m all` emits
-        // canonical replacement directories, so a tempdir behind a symlink
-        // (for example `/var` -> `/private/var` on macOS) would otherwise
-        // look outside this repository to the authoritative resolver.
+        // Canonicalized so fixtures behind a symlinked tempdir (for example
+        // `/var` -> `/private/var` on macOS) compare equal to the realpaths
+        // some assertions build. `go` itself now reports paths in the
+        // repository root's own spelling (see `run_go`).
         AbsoluteSystemPathBuf::try_from(tempdir.path())
             .expect("temporary repository root is absolute")
             .to_realpath()
@@ -4306,6 +4358,133 @@ mod tests {
             module_package_inputs(&module_dir).unwrap().0.as_deref(),
             Some("./cmd/server/v2")
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn module_inputs_resolve_through_a_symlinked_repository_path() {
+        if !go_available() {
+            return;
+        }
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir).join_component("repo");
+        write_workspace(&root, &[("app", "example.com/app", "")]);
+        root.join_components(&["app", "main.go"])
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        let link = resolution_root(&tempdir).join_component("link");
+        std::os::unix::fs::symlink(root.as_std_path(), link.as_std_path()).unwrap();
+
+        let (runnable_target, root_source_inputs) =
+            module_package_inputs(&link.join_component("app")).unwrap();
+        assert_eq!(runnable_target.as_deref(), Some("."));
+        assert_eq!(
+            root_source_inputs,
+            Some(HashSet::from(["main.go".to_string()]))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn only_members_reached_through_an_in_repository_symlink_resolve_elsewhere() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir).join_component("repo");
+        let service = root.join_components(&["services", "api"]);
+        service.create_dir_all().unwrap();
+        root.join_component("apps").create_dir_all().unwrap();
+        std::os::unix::fs::symlink(
+            service.as_std_path(),
+            root.join_components(&["apps", "api"]).as_std_path(),
+        )
+        .unwrap();
+        let link = resolution_root(&tempdir).join_component("link");
+        std::os::unix::fs::symlink(root.as_std_path(), link.as_std_path()).unwrap();
+        std::os::unix::fs::symlink(
+            root.join_component("services").as_std_path(),
+            root.join_component("linked-services").as_std_path(),
+        )
+        .unwrap();
+
+        assert!(!member_resolves_elsewhere(&root, &service));
+        assert!(!member_resolves_elsewhere(
+            &link,
+            &link.join_components(&["services", "api"])
+        ));
+        assert!(member_resolves_elsewhere(
+            &root,
+            &root.join_components(&["apps", "api"])
+        ));
+        assert!(member_resolves_elsewhere(
+            &link,
+            &link.join_components(&["apps", "api"])
+        ));
+        assert!(member_resolves_elsewhere(
+            &root,
+            &root.join_components(&["linked-services", "api"])
+        ));
+        assert!(member_resolves_elsewhere(
+            &link,
+            &link.join_components(&["linked-services", "api"])
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn member_junction_keeps_the_conservative_fallback() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        let service = root.join_components(&["services", "api"]);
+        service.create_dir_all().unwrap();
+        let link = root.join_component("linked-services");
+        let status = Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(link.as_std_path())
+            .arg(root.join_component("services").as_std_path())
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert!(!member_resolves_elsewhere(&root, &service));
+        assert!(member_resolves_elsewhere(
+            &root,
+            &link.join_component("api")
+        ));
+    }
+
+    #[test]
+    fn case_only_member_spelling_preserves_the_runnable_target() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        write_workspace(&root, &[("app", "example.com/app", "")]);
+        root.join_components(&["app", "main.go"])
+            .create_with_contents("package main\nfunc main() {}\n")
+            .unwrap();
+        let member = root.join_component("APP");
+        if !member.exists() {
+            // This regression requires a case-insensitive filesystem.
+            return;
+        }
+        assert!(!member_resolves_elsewhere(&root, &member));
+        if !go_available() {
+            return;
+        }
+        root.join_component(GO_WORK)
+            .create_with_contents("go 1.22\n\nuse ./APP\n")
+            .unwrap();
+        let workspace = discover_workspace(&root).unwrap();
+        assert_eq!(workspace.modules.len(), 1);
+        assert_eq!(workspace.modules[0].runnable_target.as_deref(), Some("."));
+    }
+
+    #[test]
+    fn member_resolution_fails_closed_for_missing_or_outside_paths() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir).join_component("repo");
+        root.create_dir_all().unwrap();
+        assert!(member_resolves_elsewhere(
+            &root,
+            &root.join_component("missing")
+        ));
+        assert!(member_resolves_elsewhere(&root, &resolution_root(&tempdir)));
     }
 
     #[test]
