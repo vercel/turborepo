@@ -138,7 +138,7 @@ impl Baseline {
         if snapshot.repository_root() != store.repository_root()? {
             return Err(Error::Invalid);
         }
-        let generation = store.generation()?;
+        let generation = store.generation().or_else(|_| store.repair_generation())?;
         let Some(current) = generation.current() else {
             return Ok(None);
         };
@@ -177,6 +177,15 @@ impl Baseline {
             }
         }
         let node = desired.ok_or(Error::Invalid)?;
+        if !generation.healthy() {
+            let baseline = Self {
+                snapshot: snapshot.clone(),
+                generation,
+                native,
+            };
+            baseline.check(snapshot, store)?;
+            return Ok(Some(baseline));
+        }
         let tree = current
             .tool_tree(node.inventory_tool())
             .ok_or(Error::Invalid)?;

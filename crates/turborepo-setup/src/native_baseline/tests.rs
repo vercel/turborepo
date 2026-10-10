@@ -5,6 +5,7 @@ use turborepo_tool_install::{Error as InstallError, Tool as InstalledTool};
 
 use super::*;
 use crate::{
+    ephemeral_reconcile::{Error as EphemeralError, stage},
     lock::{Artifact, Document, Format},
     node_resolution::PLATFORMS as TARGETS,
 };
@@ -291,6 +292,17 @@ fn root_live_guard_real_lock_sources_and_generation_remain_bound() {
     assert!(Baseline::capture(&snapshot, &store).unwrap().is_none());
     store.reconcile(&tools, populate).unwrap();
     assert!(Baseline::capture(&snapshot, &store).unwrap().is_none());
+    let expected = store.generation().unwrap();
+    let result = stage(
+        &snapshot,
+        &store,
+        Platform::MacosArm64,
+        false,
+        |_| panic!("present unrecorded inventory must never resolve"),
+        || Ok(()),
+    );
+    assert!(matches!(result, Err(EphemeralError::Unsupported)));
+    store.check_generation(&expected).unwrap();
     publish(&mut store, &tools, lock.canonical_bytes().unwrap());
     let baseline = Baseline::capture(&snapshot, &store).unwrap().unwrap();
     let other_snapshot = Snapshot::capture(other.path()).unwrap();
@@ -361,7 +373,13 @@ fn selected_payload_inventory_and_corruption_cannot_be_replaced_by_caller_data()
             }
             assert!(baseline.check(&snapshot, &store).is_err());
         }
-        assert!(Baseline::capture(&snapshot, &store).is_err(), "case {case}");
+        if case >= 6 {
+            let repair = Baseline::capture(&snapshot, &store).unwrap().unwrap();
+            assert!(!repair.generation().healthy());
+            assert_eq!(repair.native(&snapshot, &store).unwrap().selection(), &lock);
+        } else {
+            assert!(Baseline::capture(&snapshot, &store).is_err(), "case {case}");
+        }
     }
 }
 
