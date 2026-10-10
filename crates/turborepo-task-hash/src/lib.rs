@@ -560,14 +560,42 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         package_context: &PackageTaskContext<'_>,
     ) -> Result<(), Error> {
         self.validate_package_context(task_id, package_context)?;
-        let env_vars = self.calculate_env_vars(task_id, task_definition, task_env_mode, None)?;
+        // Report the same framework and inferred env vars that the hash will
+        // include once it is computed at execution time, so a dry run doesn't
+        // hide them.
+        let framework = self.infer_framework(task_id, package_context);
+        let env_vars =
+            self.calculate_env_vars(task_id, task_definition, task_env_mode, framework)?;
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
             Arc::from(deferred_task_hash_message(task_definition.inputs())),
-            None,
+            framework.map(|f| f.slug()),
         );
         Ok(())
+    }
+
+    /// Infers the framework of a task's package, if framework inference is
+    /// enabled. The result only depends on the package's external
+    /// declarations, so it's memoized per package and shared by all of the
+    /// package's tasks. A racing recompute between `get` and `insert`
+    /// produces the same value, so it's harmless.
+    fn infer_framework(
+        &self,
+        task_id: &TaskId<'static>,
+        package_context: &PackageTaskContext<'_>,
+    ) -> Option<&'static Framework> {
+        if !self.run_opts.framework_inference() {
+            return None;
+        }
+        if let Some(cached) = self.framework_cache.get(task_id.package()) {
+            return *cached;
+        }
+        let is_monorepo = !self.run_opts.single_package();
+        let inferred = infer_framework(package_context.external_declarations(), is_monorepo);
+        self.framework_cache
+            .insert(task_id.package().to_string(), inferred);
+        inferred
     }
 
     fn calculate_task_hash_with_file_hash<T: TaskDefinitionHashInfo>(
@@ -584,25 +612,10 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             dependency_set,
             telemetry,
         } = task;
-        let do_framework_inference = self.run_opts.framework_inference();
         let is_monorepo = !self.run_opts.single_package();
 
-        // See if we can infer a framework. The result only depends on the
-        // package's external declarations, so it's memoized per package and
-        // shared by all of the package's tasks. A racing recompute between
-        // `get` and `insert` produces the same value, so it's harmless.
-        let framework = do_framework_inference
-            .then(|| match self.framework_cache.get(task_id.package()) {
-                Some(cached) => *cached,
-                None => {
-                    let inferred =
-                        infer_framework(package_context.external_declarations(), is_monorepo);
-                    self.framework_cache
-                        .insert(task_id.package().to_string(), inferred);
-                    inferred
-                }
-            })
-            .flatten()
+        let framework = self
+            .infer_framework(task_id, package_context)
             .inspect(|framework| {
                 debug!("auto detected framework for {}", task_id.package());
                 debug!(
@@ -1187,8 +1200,23 @@ mod test {
             .unwrap()
     }
 
-    #[tokio::test]
-    async fn nextjs_inference_changes_only_its_task_hash_and_env_projection() {
+    struct InferenceOpts(bool);
+    impl RunOptsHashInfo for InferenceOpts {
+        fn framework_inference(&self) -> bool {
+            self.0
+        }
+
+        fn single_package(&self) -> bool {
+            false
+        }
+
+        fn pass_through_args(&self) -> &[String] {
+            &[]
+        }
+    }
+
+    /// A monorepo with a Next.js package `web` and a plain package `other`.
+    async fn nextjs_graph_at(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
         use turborepo_repository::{
             discovery::{DiscoveryResponse, PackageDiscovery},
             package_manager::PackageManager,
@@ -1212,26 +1240,8 @@ mod test {
             }
         }
 
-        struct InferenceOpts(bool);
-        impl RunOptsHashInfo for InferenceOpts {
-            fn framework_inference(&self) -> bool {
-                self.0
-            }
-
-            fn single_package(&self) -> bool {
-                false
-            }
-
-            fn pass_through_args(&self) -> &[String] {
-                &[]
-            }
-        }
-
-        let tmp = tempdir().unwrap();
-        let repo_root =
-            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
-        let graph = PackageGraph::builder(
-            &repo_root,
+        PackageGraph::builder(
+            repo_root,
             PackageJson::from_value(json!({ "name": "root" })).unwrap(),
         )
         .with_package_discovery(InjectedDiscovery)
@@ -1251,7 +1261,15 @@ mod test {
         ])))
         .build()
         .await
-        .unwrap();
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn nextjs_inference_changes_only_its_task_hash_and_env_projection() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = nextjs_graph_at(&repo_root).await;
 
         let task_id = TaskId::new("web", "build").into_owned();
         let other_task_id = TaskId::new("other", "build").into_owned();
@@ -1362,6 +1380,101 @@ mod test {
         assert_eq!(enabled["other"], changed_public["other"]);
         assert_eq!(enabled["other"], changed_unrelated["other"]);
         assert_eq!(enabled["other"], disabled["other"]);
+    }
+
+    #[tokio::test]
+    async fn deferred_hash_reports_the_framework_env_its_final_hash_uses() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = nextjs_graph_at(&repo_root).await;
+        let external_hashes = compute_external_deps_hashes(&graph).unwrap();
+
+        let task_id = TaskId::new("web", "codegen").into_owned();
+        let other_task_id = TaskId::new("other", "codegen").into_owned();
+        // Opting out of NEXT_PUBLIC_* does not opt out of the skew protection
+        // conditional, so VERCEL_DEPLOYMENT_ID stays in the hash.
+        let definition = TaskDefinition {
+            env: vec!["!NEXT_PUBLIC_*".to_string()],
+            ..Default::default()
+        };
+        let env = EnvironmentVariableMap::from(HashMap::from([
+            (
+                "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+                "1".to_string(),
+            ),
+            ("VERCEL_DEPLOYMENT_ID".to_string(), "dpl_123".to_string()),
+        ]));
+        let file_hash = FileHashes(Vec::new()).hash();
+
+        let project = |deferred: bool| {
+            let opts = InferenceOpts(true);
+            let mut hasher = TaskHasher::new(
+                PackageInputsHashes {
+                    hashes: HashMap::from([
+                        (task_id.clone(), file_hash.clone()),
+                        (other_task_id.clone(), file_hash.clone()),
+                    ]),
+                    expanded_hashes: HashMap::new(),
+                },
+                &opts,
+                &env,
+                "global-hash",
+                &repo_root,
+                EnvironmentVariableMap::default(),
+                &[],
+            );
+            hasher.set_external_deps_hash_cache(external_hashes.clone());
+            for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
+                let context = graph
+                    .package_task_context(&PackageName::from(package))
+                    .unwrap();
+                if deferred {
+                    hasher
+                        .insert_deferred_hash(id, &definition, EnvMode::Strict, &context)
+                        .unwrap();
+                } else {
+                    hasher
+                        .calculate_task_hash(
+                            id,
+                            &definition,
+                            EnvMode::Strict,
+                            &context,
+                            &[],
+                            PackageTaskEventBuilder::new(package, "codegen"),
+                        )
+                        .unwrap();
+                }
+            }
+            let tracker = hasher.task_hash_tracker();
+            (
+                tracker.framework(&task_id),
+                tracker.env_vars(&task_id).unwrap(),
+                tracker.framework(&other_task_id),
+                tracker.env_vars(&other_task_id).unwrap(),
+            )
+        };
+
+        let (framework, env_vars, other_framework, other_env_vars) = project(true);
+        let (hashed_framework, hashed_env_vars, _, _) = project(false);
+
+        assert_eq!(framework.as_ref().unwrap().as_str(), "nextjs");
+        assert_eq!(
+            env_vars.by_source.matching.names(),
+            ["VERCEL_DEPLOYMENT_ID"]
+        );
+        assert_eq!(env_vars.all.to_hashable(), ["VERCEL_DEPLOYMENT_ID=dpl_123"]);
+        assert_eq!(framework, hashed_framework);
+        assert_eq!(
+            env_vars.all.to_hashable(),
+            hashed_env_vars.all.to_hashable()
+        );
+        assert_eq!(
+            env_vars.by_source.matching.to_hashable(),
+            hashed_env_vars.by_source.matching.to_hashable()
+        );
+        assert!(other_framework.is_none());
+        assert!(other_env_vars.all.is_empty());
     }
 
     const FIXTURE_RUSTC_VERSION: &str = concat!(
