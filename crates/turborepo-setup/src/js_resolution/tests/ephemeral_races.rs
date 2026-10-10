@@ -3,10 +3,8 @@ use super::*;
 #[test]
 fn resolution_wait_preserves_actual_absent_lock_and_source_expectations() {
     for real_lock in [false, true] {
-        let repo = root(Some("24.x"), json!({}));
+        let (repo, store, lock) = installed("24.x", json!({}));
         let p = repo.path();
-        let mut store = Store::open(p).unwrap();
-        let lock = seed_ephemeral(p, &mut store);
         fs::write(p.join(".nvmrc"), "^24.0.0").unwrap();
         let snapshot = Snapshot::capture(p).unwrap();
         let before = manifest(p);
