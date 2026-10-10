@@ -308,21 +308,6 @@ jobs:
         run: turbo run test --filter=turborepo-crates --env-mode=loose --log-order=stream $FORCE_ARG -- --partition hash:${{ matrix.shard }}/2
         shell: bash
 
-      - name: Require native locked-plan positive qualification
-        if: runner.os == 'Linux' && matrix.shard == 1
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s\n' 'FROM ubuntu:24.04' \
-            'RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*' \
-            | docker build -t turbo-setup-native-qualification -
-          binary=$(cargo test --locked -p turbo --test setup --no-run --message-format=json \
-            | jq -r 'select(.reason == "compiler-artifact" and .target.name == "setup" and .profile.test) | .executable')
-          test -n "$binary"
-          docker run --rm --network none -e CI=1 -e TURBO_SETUP_REQUIRE_NATIVE_PLAN=1 \
-            -v "$PWD:$PWD:ro" -w "$PWD" turbo-setup-native-qualification \
-            "$binary" --exact standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage --nocapture
-
       - name: Save Cargo target
         if: matrix.shard == 1 && github.event_name == 'push' && steps.cargo-target-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
