@@ -618,8 +618,15 @@ fn test_uv_fallback_rejection_reports_why_it_fell_back() {
         combined.contains("using conservative Python task hashing"),
         "{combined}"
     );
+    // The diagnostic renderer wraps the error and prefixes continuation lines
+    // with a gutter, so match its message independently of terminal width.
+    let diagnostic = combined
+        .lines()
+        .map(|line| line.trim().trim_start_matches('|').trim())
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(
-        combined.contains("only uv workspace members are supported"),
+        diagnostic.contains("only uv workspace members are supported"),
         "{combined}"
     );
 }
