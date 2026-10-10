@@ -66,6 +66,10 @@ impl RepositoryGraphFeatures {
     /// Load the JavaScript root, validating every enabled native root as well.
     /// A missing package.json is valid only for a recognized native workspace;
     /// merely having a native manifest (or enabling its flag) is insufficient.
+    #[allow(
+        clippy::result_large_err,
+        reason = "preserve the repository's typed package graph diagnostics"
+    )]
     pub fn load_root_package_json(
         &self,
         repo_root: &AbsoluteSystemPath,
@@ -87,6 +91,10 @@ impl RepositoryGraphFeatures {
     /// Explicit generation boundary: revalidate roots using this feature set.
     /// Recreate the feature set when configuration flags change. The caller
     /// must use the returned plan, not independently probe again.
+    #[allow(
+        clippy::result_large_err,
+        reason = "preserve the repository's typed package graph diagnostics"
+    )]
     pub fn observe_root(
         &self,
         repo_root: &AbsoluteSystemPath,

@@ -205,6 +205,10 @@ struct RepoState {
 }
 
 /// Build repository scopes independently of file-watcher startup and hashing.
+#[allow(
+    clippy::result_large_err,
+    reason = "the bootstrap result uses the repository's typed package graph diagnostics"
+)]
 async fn initialize_package_graph(
     repo_root: &AbsoluteSystemPathBuf,
     single_package: bool,
@@ -508,6 +512,10 @@ impl Subscriber {
         }
     }
 
+    #[allow(
+        clippy::result_large_err,
+        reason = "config conversion preserves the turbo.json parser's typed diagnostics"
+    )]
     async fn initialize_repo_state(&self) -> Option<RepoState> {
         // Select configuration before observing roots so every generation's
         // registry and config reader use the same effective future flags.

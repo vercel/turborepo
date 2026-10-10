@@ -878,7 +878,10 @@ mod tests {
                 .into_iter()
                 .collect();
             let registry = Registry::from_flags(&flags);
-            assert_eq!(registry.enabled_ids().collect::<Vec<_>>(), [id.clone()]);
+            assert_eq!(
+                registry.enabled_ids().collect::<Vec<_>>(),
+                std::slice::from_ref(&id)
+            );
             assert_eq!(registry.probe(&root).unwrap_err().toolchain, id);
         }
     }

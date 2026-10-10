@@ -1386,7 +1386,7 @@ mod test {
                 }
             };
 
-        let inferred = RepoState::infer_with_registry(&root, None, &registry_for).unwrap();
+        let inferred = RepoState::infer_with_registry(&root, None, registry_for).unwrap();
         assert_eq!(inferred.root, root);
         assert_eq!(inferred.mode, RepoMode::MultiPackage);
         assert!(inferred.javascript.is_none());
@@ -1397,7 +1397,7 @@ mod test {
         );
 
         visited.borrow_mut().clear();
-        let inferred = RepoState::infer_with_registry(&src, None, &registry_for).unwrap();
+        let inferred = RepoState::infer_with_registry(&src, None, registry_for).unwrap();
         assert_eq!(inferred.root, root);
         assert_eq!(inferred.mode, RepoMode::MultiPackage);
         assert!(inferred.javascript.is_none());
@@ -1413,7 +1413,7 @@ mod test {
         // An aggregate at the root must not claim arbitrary descendant packages.
         let unrelated = root.join_component("unrelated");
         write(&unrelated, "package.json", r#"{"name":"unrelated"}"#);
-        let inferred = RepoState::infer_with_registry(&unrelated, None, &registry_for).unwrap();
+        let inferred = RepoState::infer_with_registry(&unrelated, None, registry_for).unwrap();
         assert_eq!(inferred.root, unrelated);
         assert_eq!(inferred.mode, RepoMode::SinglePackage);
         assert_eq!(inventories.load(Ordering::SeqCst), 2);
@@ -1424,7 +1424,7 @@ mod test {
             r#"{"futureFlags":{"experimentalFourthWorkspaces":true}}"#,
         );
         let config = root.join_component("custom.json");
-        let inferred = RepoState::infer_with_registry(&src, Some(&config), &registry_for).unwrap();
+        let inferred = RepoState::infer_with_registry(&src, Some(&config), registry_for).unwrap();
         assert_eq!(inferred.root, root);
         assert_eq!(inferred.mode, RepoMode::MultiPackage);
         assert_eq!(inventories.load(Ordering::SeqCst), 3);
@@ -1434,7 +1434,7 @@ mod test {
             "turbo.json",
             r#"{"futureFlags":{"experimentalFourthWorkspaces":false}}"#,
         );
-        let inferred = RepoState::infer_with_registry(&src, None, &registry_for).unwrap();
+        let inferred = RepoState::infer_with_registry(&src, None, registry_for).unwrap();
         assert_eq!(inferred.root, javascript);
         assert_eq!(inferred.mode, RepoMode::SinglePackage);
         assert_eq!(
