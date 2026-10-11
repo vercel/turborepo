@@ -63,11 +63,9 @@ impl TurboRunner for TurboCliRunner<'_> {
         root: &AbsoluteSystemPath,
         ui: ColorConfig,
     ) -> Result<Option<u32>, Self::Error> {
-        let args = cli::Args::parse_args(std::env::args_os().collect())
-            .map_err(|e| turborepo_run::Error::ManagedTools(e.to_string()))?;
-        if !matches!(args.command, Some(cli::Command::Run { .. })) {
+        let Some(args) = managed_run_args(std::env::args_os().collect()) else {
             return Ok(None);
-        }
+        };
         let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
         crate::commands::run::managed::select(&base)
             .map(|tools| tools.map(|_| 0))
@@ -77,6 +75,22 @@ impl TurboRunner for TurboCliRunner<'_> {
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
         cli::run(repo_state, self.subscriber, ui, self.query_server.clone())
     }
+}
+
+/// Info exits and argument errors belong to normal CLI parsing, not setup
+/// authorization. Match Args::new's help policy, including the `--` boundary.
+fn managed_run_args(words: Vec<std::ffi::OsString>) -> Option<cli::Args> {
+    if words.len() <= 1
+        || words
+            .iter()
+            .take_while(|word| *word != "--")
+            .any(|word| matches!(word.to_str(), Some("-h" | "--help")))
+    {
+        return None;
+    }
+    cli::Args::parse_args(words)
+        .ok()
+        .filter(|args| !args.version && matches!(args.command, Some(cli::Command::Run { .. })))
 }
 
 /// Implementation of `ConfigProvider` that uses `turborepo-cli`'s configuration
@@ -284,7 +298,38 @@ mod tests {
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::read_no_update_notifier_from_turbo_json;
+    use super::{managed_run_args, read_no_update_notifier_from_turbo_json};
+
+    #[test]
+    fn info_exits_and_usage_errors_do_not_request_managed_authorization() {
+        for tail in [
+            vec![],
+            vec!["--help"],
+            vec!["run", "--help"],
+            vec!["run", "build", "-h"],
+            vec!["--version"],
+            vec!["run", "build", "--version"],
+            vec!["run", "--invalid-option"],
+            vec!["ls"],
+        ] {
+            let words = std::iter::once("turbo")
+                .chain(tail)
+                .map(Into::into)
+                .collect();
+            assert!(managed_run_args(words).is_none());
+        }
+        for tail in [
+            vec!["run", "build"],
+            vec!["build"],
+            vec!["run", "build", "--", "--help", "--version"],
+        ] {
+            let words = std::iter::once("turbo")
+                .chain(tail)
+                .map(Into::into)
+                .collect();
+            assert!(managed_run_args(words).is_some());
+        }
+    }
 
     #[test]
     fn fallback_reads_true_from_turbo_json() {

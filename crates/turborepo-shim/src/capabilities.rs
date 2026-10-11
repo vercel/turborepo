@@ -40,6 +40,15 @@ struct Report {
 }
 
 impl Capabilities {
+    /// Single source for both the native query and the shim's self-local case.
+    /// Keep schema 0 unadvertised until the complete initial Unix contract is
+    /// qualified, including actual self-local/identical-copy startup, proxy
+    /// lookup and cache-hit validation. Parsing locks or synthetic peers is not
+    /// qualification. Do not enable unsupported platforms by implication.
+    pub fn current(cli_version: &str) -> Self {
+        Self::unsupported(cli_version)
+    }
+
     /// The current CLI has no complete managed-run implementation. Keep this
     /// empty until all guarantees above are delivered and verified; prelaunch
     /// schema 0 parsing must not accidentally advertise execution support.

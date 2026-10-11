@@ -204,6 +204,9 @@ mod first_lock;
 mod force;
 #[path = "managed_run_tests.rs"]
 mod managed_run;
+#[cfg(unix)]
+#[path = "managed_startup_tests.rs"]
+mod managed_startup;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[cfg(target_os = "macos")]

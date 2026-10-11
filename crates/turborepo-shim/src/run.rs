@@ -317,9 +317,8 @@ where
             Err(e) => return ShimResult::ShimError(Error::LocalTurboPath(e.to_string())),
         };
         if let Some(local) = local {
-            let capabilities = crate::capabilities::Capabilities::unsupported(
-                runtime.version_provider.get_version(),
-            );
+            let capabilities =
+                crate::capabilities::Capabilities::current(runtime.version_provider.get_version());
             if let Err(error) =
                 crate::managed_run::select(schema, &capabilities, Some(local.binary()))
             {
@@ -589,6 +588,12 @@ fn modify_args_for_local(
         Vec::new()
     };
 
+    // The shim consumes this option and changes cwd to the repository root.
+    // Forward the already resolved absolute path, before task arguments, so the
+    // child cannot silently select a different root policy (json vs jsonc).
+    if let Some(config) = &shim_args.root_turbo_json {
+        raw_args.push(format!("--root-turbo-json={config}"));
+    }
     raw_args.append(&mut shim_args.remaining_turbo_args);
 
     // We add this flag after the raw args to avoid accidentally passing it

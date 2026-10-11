@@ -23,7 +23,7 @@ fn select(f: &Fixture) -> Result<Option<Arc<ManagedRun>>, String> {
 const NODE_RUNTIME: &str = "#!/bin/sh\nprintf '%s\\n' \"$0\" \"$PATH\" \"$TURBO_HASH\" \"$*\" \
                             \"${RUSTUP_TOOLCHAIN-unset}\" > managed-result\n";
 
-fn runnable() -> Fixture {
+pub(super) fn runnable() -> Fixture {
     let mut f = Fixture::new();
     f.declare(json!({"name":"repo","private":true,"packageManager":"pnpm@10.0.0"}));
     fs::write(
