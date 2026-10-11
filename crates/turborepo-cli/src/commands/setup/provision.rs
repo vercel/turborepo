@@ -385,8 +385,6 @@ pub(super) fn run(
             }
         );
     }
-    println!(
-        "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."
-    );
+    println!("Dependencies skipped (--tools-only). No tasks run.");
     Ok(0)
 }

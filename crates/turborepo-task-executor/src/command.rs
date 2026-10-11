@@ -167,6 +167,7 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
     /// Lazily resolved package-manager binary path for JS framing.
     package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    managed_path: bool,
     /// Lazily resolved cargo binary path for Cargo framing.
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     /// Lazily resolved uv binary path for Python framing.
@@ -188,20 +189,38 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             mfe_configs,
             command_overrides,
             package_manager_binary: std::sync::OnceLock::new(),
+            managed_path: false,
             cargo_binary: std::sync::OnceLock::new(),
             uv_binary: std::sync::OnceLock::new(),
             go_binary: std::sync::OnceLock::new(),
         }
     }
 
-    fn package_manager_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+    /// Use the caller's freshly authorized task PATH for managed dispatch only.
+    /// Ordinary repositories retain their original process-PATH lookup.
+    pub fn with_managed_path(mut self) -> Self {
+        self.managed_path = true;
+        self
+    }
+
+    fn package_manager_binary(
+        &self,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<&std::path::Path>, CommandProviderError> {
         let Some(package_manager) = self.package_graph.package_manager() else {
             return Ok(None);
         };
-        match self
-            .package_manager_binary
-            .get_or_init(|| which::which(package_manager.command()))
-        {
+        match self.package_manager_binary.get_or_init(|| {
+            if self.managed_path {
+                which::which_in(
+                    package_manager.command(),
+                    environment.get("PATH"),
+                    self.package_graph.repo_root().as_std_path(),
+                )
+            } else {
+                which::which(package_manager.command())
+            }
+        }) {
             Ok(path) => Ok(Some(path.as_path())),
             Err(error) => Err(CommandProviderError::Which(*error)),
         }
@@ -268,7 +287,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             } else {
                 match native_task.command().map(|command| &command.program) {
                     Some(NativeCommandProgram::PackageManager) => {
-                        (self.package_manager_binary()?, None)
+                        (self.package_manager_binary(environment)?, None)
                     }
                     Some(NativeCommandProgram::Tool(tool)) if tool == "cargo" => {
                         (None, self.cargo_binary()?)

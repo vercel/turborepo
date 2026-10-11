@@ -68,6 +68,11 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
             visitor.micro_frontends_configs,
             command_overrides,
         );
+        let pkg_graph_provider = if visitor.managed_environment.is_some() {
+            pkg_graph_provider.with_managed_path()
+        } else {
+            pkg_graph_provider
+        };
         let mut command_factory = CommandFactory::new();
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {
             command_factory.add_provider(MicroFrontendProxyProvider::new(
@@ -98,6 +103,11 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
     ) -> Result<Option<ExecContext>, super::Error> {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         self.populate_env(&mut execution_env, &task_hash, &task_access);
+        // Overlay only managed values AFTER normal strict/loose filtering.
+        // Lookup sees the same freshly validated PATH as the task process.
+        if let Some(tools) = &self.visitor.managed_environment {
+            execution_env.union(&tools.revalidate().map_err(super::Error::ManagedTools)?);
+        }
 
         let Some(cmd) = self.command_factory.command(&task_id, &execution_env)? else {
             return Ok(None);
@@ -112,6 +122,7 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
             cmd,
             execution_env,
             manager: self.manager.clone(),
+            managed_environment: self.visitor.managed_environment.clone(),
             takes_input,
             continue_on_error: self.visitor.run_opts.continue_on_error(),
             ui_mode: self.visitor.run_opts.ui_mode(),

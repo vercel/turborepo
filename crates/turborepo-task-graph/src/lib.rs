@@ -1,5 +1,6 @@
 mod visitor;
 
+pub use turborepo_task_executor::ManagedEnvironment;
 use turborepo_types::{
     ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, RunOptsHashInfo, RunOptsInfo,
     TaskArgs, TaskDefinition, UIMode,
