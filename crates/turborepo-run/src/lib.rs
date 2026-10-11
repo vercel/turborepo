@@ -7,6 +7,8 @@ pub mod boundaries;
 pub mod builder;
 pub mod engine_loader;
 mod error;
+
+pub use turborepo_task_graph::ManagedEnvironment;
 pub(crate) mod scope;
 #[cfg(test)]
 mod task_definition_test;
@@ -42,7 +44,7 @@ pub struct RunBuilderInput {
 
 use turborepo_ci::Vendor;
 use turborepo_engine::{Built, Engine};
-use turborepo_env::EnvironmentVariableMap;
+pub use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
@@ -132,6 +134,7 @@ pub(crate) struct ExecutionContext {
     pub(crate) start_at: DateTime<Local>,
     pub(crate) opts: Arc<Opts>,
     pub(crate) env_at_execution_start: EnvironmentVariableMap,
+    pub(crate) managed_environment: Option<Arc<dyn ManagedEnvironment>>,
     pub(crate) filtered_pkgs: HashSet<PackageName>,
     pub(crate) remote_cache_status: RemoteCacheStatus,
     pub(crate) engine: Arc<Engine<Built, TaskDefinition>>,
@@ -1201,8 +1204,19 @@ impl Run {
             EnvMode::Strict => self.root_turbo_json().global_pass_through_env.as_deref(),
         };
 
+        // Bind every task to the selected portable snapshot, never the local
+        // generation path. Preserve the exact original key when unconfigured.
+        let managed_cache_key = self.execution.managed_environment.as_ref().map(|tools| {
+            format!(
+                "{GLOBAL_CACHE_KEY}:turborepo.setup.execution.v1:{}",
+                tools.cache_identity()
+            )
+        });
+        if let Some(tools) = &self.execution.managed_environment {
+            tools.revalidate().map_err(Error::ManagedTools)?;
+        }
         let global_hash_inputs = GlobalHashableInputs {
-            global_cache_key: GLOBAL_CACHE_KEY,
+            global_cache_key: managed_cache_key.as_deref().unwrap_or(GLOBAL_CACHE_KEY),
             global_file_hash_map: global_file_inputs.global_file_hash_map,
             root_external_dependencies_hash: root_external_dependencies_hash.as_deref(),
             root_internal_dependencies_hash: root_internal_dependencies_hash.as_deref(),
@@ -1259,6 +1273,9 @@ impl Run {
         )
         .await?;
 
+        if let Some(tools) = &self.execution.managed_environment {
+            visitor = visitor.with_managed_environment(tools.clone());
+        }
         if self.execution.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
         }

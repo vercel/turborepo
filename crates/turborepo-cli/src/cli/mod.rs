@@ -426,14 +426,6 @@ async fn run_main(
 
     let version = get_version();
 
-    // Initialize telemetry immediately so events are captured from startup.
-    // The shared HTTP client is only activated if telemetry is actually
-    // enabled for this invocation.
-    let telemetry_handle = {
-        let _span = tracing::info_span!("telemetry_init").entered();
-        initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
-    };
-
     let mut command = get_command(&mut cli_args)?;
 
     // Skip the standalone version banner when the command reports the version
@@ -484,6 +476,16 @@ async fn run_main(
     };
 
     cli_args.command = Some(command);
+    // Also guard direct/wrapper --skip-infer paths before telemetry activation
+    // or agent-file maintenance; shim handoff validation is not sufficient.
+    if matches!(cli_args.command, Some(Command::Run { .. })) {
+        let base = CommandBase::new(cli_args.clone(), repo_root.clone(), version, color_config)?;
+        run::managed::select(&base)?;
+    }
+    let telemetry_handle = {
+        let _span = tracing::info_span!("telemetry_init").entered();
+        initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
+    };
 
     maintain_agent_guidance(&repo_root, &cli_args, repo_state.is_some());
 
