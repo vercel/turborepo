@@ -4,7 +4,12 @@
 //! This module provides parsing functionality for turbo.json using biome's
 //! JSON parser with support for comments and trailing commas.
 
-use std::{backtrace, collections::BTreeMap, fmt::Debug, sync::Arc};
+use std::{
+    backtrace,
+    collections::BTreeMap,
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 use biome_deserialize::{
     Deserializable, DeserializableValue, DeserializationDiagnostic, DeserializationVisitor,
@@ -561,8 +566,31 @@ impl WithMetadata for RawPackageTurboJson {
 }
 
 impl RawRootTurboJson {
+    /// Parses a root turbo.json.
+    ///
+    /// One invocation parses the same root turbo.json several times with
+    /// identical inputs: the shim's and the CLI's configuration resolution,
+    /// then the run's turbo.json loader. Parsing is a pure function of `text`
+    /// and `file_path`, so the last successful result is kept and cloned when
+    /// both match exactly; cloning is much cheaper than building the syntax
+    /// tree again. Errors are not cached. A single slot bounds memory in
+    /// long-lived processes such as `turbo watch` and the daemon.
     pub fn parse(text: &str, file_path: &str) -> Result<Self, BiomeParseError> {
-        parse_turbo_json::<RawRootTurboJson>(text, file_path)
+        static LAST_PARSE: Mutex<Option<(String, String, RawRootTurboJson)>> = Mutex::new(None);
+
+        if let Ok(last) = LAST_PARSE.lock()
+            && let Some((last_path, last_text, parsed)) = last.as_ref()
+            && last_path == file_path
+            && last_text == text
+        {
+            return Ok(parsed.clone());
+        }
+
+        let parsed = parse_turbo_json::<RawRootTurboJson>(text, file_path)?;
+        if let Ok(mut last) = LAST_PARSE.lock() {
+            *last = Some((file_path.to_owned(), text.to_owned(), parsed.clone()));
+        }
+        Ok(parsed)
     }
 }
 
