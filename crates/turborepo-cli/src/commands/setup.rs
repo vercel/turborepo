@@ -11,6 +11,7 @@ use crate::cli::{Args, SetupArgs};
 mod acl;
 pub(crate) mod authorization;
 mod check;
+mod offline;
 mod provision;
 mod root;
 mod trust;
@@ -48,6 +49,8 @@ pub enum Error {
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
+    #[error(transparent)]
+    Offline(#[from] offline::Error),
     #[error(transparent)]
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
@@ -167,6 +170,9 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
+        Mode::Provision if request.offline => {
+            offline::run(&discovery, snapshot, transports.as_ref(), preflight)
+        }
         _ => provision::run(
             &discovery,
             snapshot,
@@ -198,10 +204,15 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     if request.mode != Mode::Provision
         || request.lock == LockMode::NoLock
         || !request.tools_only
-        || request.offline
         || (request.force && request.update_lock)
     {
         return Err(Error::NotImplemented);
+    }
+    if request.offline && (request.force || request.update_lock) {
+        return Err(Error::Unsupported(
+            "--offline cannot verify fresh artifacts for --force or resolve --update-lock; run \
+             turbo setup --tools-only online without --offline",
+        ));
     }
     Ok(())
 }
@@ -304,7 +315,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if control == "--force" {
+                if matches!(control, "--force" | "--offline") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(

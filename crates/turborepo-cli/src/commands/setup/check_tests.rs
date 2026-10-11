@@ -3,11 +3,11 @@ use std::{os::unix::fs::MetadataExt, path::Path, time::SystemTime};
 use super::*;
 
 #[derive(Debug, PartialEq, Eq)]
-struct Entry(PathBuf, u32, SystemTime, Vec<u8>, Option<PathBuf>);
+pub(super) struct Entry(PathBuf, u32, SystemTime, Vec<u8>, Option<PathBuf>);
 
 // All owned files, including the Git index, ignored generations, links,
 // directories and synthetic user/system state. No host inputs or exclusions.
-fn snapshot(root: &Path) -> Vec<Entry> {
+pub(super) fn snapshot(root: &Path) -> Vec<Entry> {
     fn visit(path: &Path, entries: &mut Vec<Entry>) {
         let metadata = fs::symlink_metadata(path).unwrap();
         let link = metadata.file_type().is_symlink();

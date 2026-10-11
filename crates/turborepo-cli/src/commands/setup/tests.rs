@@ -204,6 +204,8 @@ mod first_lock;
 mod force;
 #[path = "managed_run_tests.rs"]
 mod managed_run;
+#[path = "offline_tests.rs"]
+mod offline_repeat;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[cfg(target_os = "macos")]
@@ -325,7 +327,12 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else {
-            assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+            let result = f.run(&u, &flags);
+            if flags.contains(&"--offline") {
+                assert!(matches!(result, Err(Error::Offline(_))));
+            } else {
+                assert!(matches!(result, Err(Error::NotImplemented)));
+            }
             assert_eq!(u.hits(), 0);
             assert!(!f.owned.root().join(".turbo").exists());
         }
