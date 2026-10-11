@@ -412,7 +412,7 @@ pub struct RunBuilder {
     // workspace configuration) changed since the graph was built; the watch
     // client checks the changed-file set before sharing it.
     shared_pkg_graph: Option<Arc<PackageGraph>>,
-    managed_environment: Option<Arc<dyn crate::ManagedEnvironment>>,
+    managed_environment: Option<Arc<crate::ManagedRun>>,
 }
 
 impl RunBuilder {
@@ -436,6 +436,7 @@ impl RunBuilder {
             opts,
             version,
             api_auth,
+            managed_environment,
         } = input;
 
         Ok(Self {
@@ -456,13 +457,8 @@ impl RunBuilder {
             skip_repo_index_and_scm_state: false,
             skip_external_dependencies: false,
             shared_pkg_graph: None,
-            managed_environment: None,
+            managed_environment,
         })
-    }
-
-    pub fn with_managed_environment(mut self, tools: Arc<dyn crate::ManagedEnvironment>) -> Self {
-        self.managed_environment = Some(tools);
-        self
     }
 
     pub fn skip_repo_index_and_scm_state(mut self) -> Self {
@@ -3295,6 +3291,7 @@ mod origins_match_tests {
                 opts: affected_opts(repo_root, filters),
                 version: "test",
                 api_auth: None,
+                managed_environment: None,
             },
             None,
         )
@@ -3557,6 +3554,7 @@ mod origins_match_tests {
                 opts,
                 version: "test",
                 api_auth: None,
+                managed_environment: None,
             },
             None,
         )

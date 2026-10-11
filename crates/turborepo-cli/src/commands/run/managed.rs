@@ -3,14 +3,14 @@
 
 use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 
-use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment};
+use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
 use turborepo_setup::execution_identity::{ExecutionContext, Libc};
 
 use crate::commands::setup::authorization::Authorization;
 
 pub(crate) fn select(
     base: &crate::commands::CommandBase,
-) -> Result<Option<Arc<ManagedTools>>, turborepo_run::Error> {
+) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
     if !base.opts.future_flags.experimental_setup {
         return Ok(None);
     }
@@ -59,7 +59,7 @@ impl ManagedTools {
         enabled: bool,
         user_base: &Path,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
-    ) -> Result<Option<Arc<Self>>, String> {
+    ) -> Result<Option<Arc<ManagedRun>>, String> {
         // A lock alone must never change unconfigured-repository behavior.
         if !enabled {
             return Ok(None);
@@ -86,16 +86,17 @@ impl ManagedTools {
         }
         let authorization =
             Authorization::inspect(&canonical, user_base, context()?).map_err(|e| e.to_string())?;
-        let identity = authorization
-            .with_current(|p| p.snapshot().fingerprint().to_owned())
+        let snapshot = authorization
+            .with_current(|p| p.snapshot().clone())
             .map_err(|e| e.to_string())?;
+        let identity = snapshot.fingerprint().to_owned();
         let tools = Arc::new(Self {
             authorization,
             inherited_path: std::env::var_os("PATH"),
             identity,
         });
         tools.revalidate()?;
-        Ok(Some(tools))
+        Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
     }
 }
 
