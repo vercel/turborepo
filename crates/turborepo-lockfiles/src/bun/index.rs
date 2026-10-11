@@ -158,6 +158,21 @@ impl PackageIndex {
         self.by_key.get(key)
     }
 
+    /// Names of packages with a nested entry (`parent/name`) directly under
+    /// any of `parents`. These are the only names for which
+    /// [`Self::get_workspace_scoped`] and [`Self::find_package`] can return a
+    /// parent-specific entry when `parents` are the queried workspaces.
+    pub fn names_scoped_under<'a>(
+        &'a self,
+        parents: &std::collections::HashSet<&str>,
+    ) -> std::collections::HashSet<&'a str> {
+        self.workspace_scoped
+            .keys()
+            .filter(|(parent, _)| parents.contains(parent.as_ref()))
+            .map(|(_, name)| name.as_ref())
+            .collect()
+    }
+
     /// Get a bundled dependency entry.
     ///
     /// For example, get_bundled("parent", "dep") looks up "parent/dep" if it's
