@@ -52,9 +52,28 @@ impl WindowsArchiveAnchor {
     }
 }
 
+/// A directory opened while walking from the archive anchor to an output's
+/// parent, kept so later outputs in the same directory can reuse it.
+#[cfg(unix)]
+struct OpenDir {
+    name: String,
+    file: fs::File,
+    path: AbsoluteSystemPathBuf,
+}
+
+/// What [`CacheWriter::add_file`] archived, so callers recording a restore
+/// manifest don't need to stat the output again.
+pub(crate) enum ArchivedEntry {
+    /// A regular file, with the metadata of the opened file that was archived.
+    File(fs::Metadata),
+    Directory,
+    Other,
+}
+
 enum ArchiveSource {
     Regular {
         file: fs::File,
+        file_info: fs::Metadata,
         header: Header,
     },
     Symlink {
@@ -101,6 +120,12 @@ pub struct CacheWriter<'a> {
     // to reopen and canonicalize the same root directory.
     #[cfg(unix)]
     anchor: Option<ArchiveAnchor>,
+    // Directories opened (from the anchor down) for the previous output.
+    // Task outputs are added in sorted order, so consecutive outputs share
+    // most of this chain and only the differing suffix is reopened. Any order
+    // is correct; an unsorted one just reopens more directories.
+    #[cfg(unix)]
+    dir_stack: Vec<OpenDir>,
     #[cfg(windows)]
     windows_anchor: Option<WindowsArchiveAnchor>,
 }
@@ -175,6 +200,8 @@ impl<'a> CacheWriter<'a> {
                 final_path: None,
                 #[cfg(unix)]
                 anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
                 #[cfg(windows)]
                 windows_anchor: None,
             })
@@ -185,6 +212,8 @@ impl<'a> CacheWriter<'a> {
                 final_path: None,
                 #[cfg(unix)]
                 anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
                 #[cfg(windows)]
                 windows_anchor: None,
             })
@@ -220,6 +249,8 @@ impl<'a> CacheWriter<'a> {
                 final_path: Some(path.to_owned()),
                 #[cfg(unix)]
                 anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
                 #[cfg(windows)]
                 windows_anchor: None,
             })
@@ -230,6 +261,8 @@ impl<'a> CacheWriter<'a> {
                 final_path: Some(path.to_owned()),
                 #[cfg(unix)]
                 anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
                 #[cfg(windows)]
                 windows_anchor: None,
             })
@@ -273,9 +306,15 @@ impl<'a> CacheWriter<'a> {
         &mut self,
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
-    ) -> Result<(), CacheError> {
+    ) -> Result<ArchivedEntry, CacheError> {
         #[cfg(unix)]
-        let source = archive_source(self.archive_anchor(anchor)?, file_path)?;
+        let source = {
+            self.archive_anchor(anchor)?;
+            let Some(archive_anchor) = self.anchor.as_ref() else {
+                unreachable!("archive anchor must be initialized")
+            };
+            archive_source(archive_anchor, &mut self.dir_stack, file_path)?
+        };
         #[cfg(windows)]
         let source = archive_source(self.windows_archive_anchor(anchor)?, file_path)?;
         #[cfg(not(any(unix, windows)))]
@@ -283,9 +322,14 @@ impl<'a> CacheWriter<'a> {
         let mut file_path = file_path.to_unix();
 
         match source {
-            ArchiveSource::Regular { file, mut header } => {
+            ArchiveSource::Regular {
+                file,
+                file_info,
+                mut header,
+            } => {
                 file_path.make_canonical_for_tar(false);
                 self.append_data(&mut header, file_path.as_str(), file)?;
+                Ok(ArchivedEntry::File(file_info))
             }
             ArchiveSource::Symlink { target, mut header } => {
                 file_path.make_canonical_for_tar(false);
@@ -293,15 +337,19 @@ impl<'a> CacheWriter<'a> {
                 // Unix-style. This will get restored to a system path.
                 let target = target.into_unix();
                 self.append_link(&mut header, file_path.as_str(), &target)?;
+                Ok(ArchivedEntry::Other)
             }
             ArchiveSource::Other { mut header } => {
-                file_path
-                    .make_canonical_for_tar(matches!(header.entry_type(), EntryType::Directory));
+                let is_dir = matches!(header.entry_type(), EntryType::Directory);
+                file_path.make_canonical_for_tar(is_dir);
                 self.append_data(&mut header, file_path.as_str(), &mut std::io::empty())?;
+                Ok(if is_dir {
+                    ArchivedEntry::Directory
+                } else {
+                    ArchivedEntry::Other
+                })
             }
         }
-
-        Ok(())
     }
 
     fn create_header(file_info: &fs::Metadata) -> Result<Header, CacheError> {
@@ -355,7 +403,11 @@ fn archive_source(
     if path_info.is_file() {
         let (file, file_info) = open_regular_file_for_archive(&source_path)?;
         let header = CacheWriter::create_header(&file_info)?;
-        Ok(ArchiveSource::Regular { file, header })
+        Ok(ArchiveSource::Regular {
+            file,
+            file_info,
+            header,
+        })
     } else if path_info.is_symlink() {
         let target = source_path.read_link()?.into_unix();
         let header = CacheWriter::create_header(&path_info)?;
@@ -378,7 +430,11 @@ fn archive_source(
         let (file, file_info) = open_regular_file_for_archive(&source_path)?;
         ensure_windows_handle_is_under_anchor(&anchor.real_path, &file)?;
         let header = CacheWriter::create_header(&file_info)?;
-        Ok(ArchiveSource::Regular { file, header })
+        Ok(ArchiveSource::Regular {
+            file,
+            file_info,
+            header,
+        })
     } else if path_info.is_symlink() {
         ensure_windows_parent_is_under_anchor(&anchor.real_path, &source_path)?;
         let target = source_path.read_link()?.into_unix();
@@ -394,25 +450,30 @@ fn archive_source(
 #[cfg(unix)]
 fn archive_source(
     anchor: &ArchiveAnchor,
+    dir_stack: &mut Vec<OpenDir>,
     file_path: &AnchoredSystemPath,
 ) -> Result<ArchiveSource, CacheError> {
     use std::os::unix::io::AsRawFd;
 
-    let (parent, file_name) = open_parent_dir(anchor, file_path)?;
-    let file_info = fstatat_no_follow(parent.as_raw_fd(), &file_name)?;
+    let (parent, file_name) = open_parent_dir(anchor, dir_stack, file_path)?;
+    let file_info = fstatat_no_follow(parent.as_raw_fd(), file_name)?;
     let file_type = file_info.st_mode & libc::S_IFMT;
 
     if file_type == libc::S_IFREG {
-        let file = open_file_at(parent.as_raw_fd(), &file_name)?;
+        let file = open_file_at(parent.as_raw_fd(), file_name)?;
         let file_info = file.metadata()?;
         if !file_info.is_file() {
             return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
         }
 
         let header = CacheWriter::create_header(&file_info)?;
-        Ok(ArchiveSource::Regular { file, header })
+        Ok(ArchiveSource::Regular {
+            file,
+            file_info,
+            header,
+        })
     } else if file_type == libc::S_IFLNK {
-        let target = read_link_at(parent.as_raw_fd(), &file_name)?;
+        let target = read_link_at(parent.as_raw_fd(), file_name)?;
         let header = create_header_from_stat(&file_info)?;
         Ok(ArchiveSource::Symlink { target, header })
     } else {
@@ -421,37 +482,59 @@ fn archive_source(
     }
 }
 
+/// Opens the parent directory of `file_path` one component at a time from
+/// the anchor, reusing the directories in `dir_stack` that the previous output
+/// shares with this one. Every directory on the stack was opened by this same
+/// walk, so reuse keeps the no-follow and internal-symlink checks intact.
 #[cfg(unix)]
-fn open_parent_dir(
-    anchor: &ArchiveAnchor,
-    file_path: &AnchoredSystemPath,
-) -> Result<(fs::File, String), CacheError> {
+fn open_parent_dir<'a, 'p>(
+    anchor: &'a ArchiveAnchor,
+    dir_stack: &'a mut Vec<OpenDir>,
+    file_path: &'p AnchoredSystemPath,
+) -> Result<(&'a fs::File, &'p str), CacheError> {
     use std::os::unix::io::AsRawFd;
 
-    let mut dir = anchor.directory.try_clone()?;
-    let mut dir_path = anchor.real_path.clone();
-    let mut components = file_path.components().peekable();
+    let mut components = file_path
+        .components()
+        .map(|component| component.as_str())
+        .collect::<Vec<_>>();
+    let Some(file_name) = components.pop() else {
+        return Err(CacheError::InvalidFilePath(
+            file_path.to_string(),
+            Backtrace::capture(),
+        ));
+    };
 
-    while let Some(component) = components.next() {
-        let component = component.as_str();
-        if components.peek().is_none() {
-            return Ok((dir, component.to_string()));
-        }
+    let shared = dir_stack
+        .iter()
+        .zip(&components)
+        .take_while(|(open, component)| open.name == **component)
+        .count();
+    dir_stack.truncate(shared);
 
-        let (next_dir, next_dir_path) = open_dir_at_allowing_internal_symlink(
+    for component in &components[shared..] {
+        let (parent_fd, parent_path) = match dir_stack.last() {
+            Some(dir) => (dir.file.as_raw_fd(), &dir.path),
+            None => (anchor.directory.as_raw_fd(), &anchor.real_path),
+        };
+        let (file, path) = open_dir_at_allowing_internal_symlink(
             &anchor.real_path,
-            &dir_path,
-            dir.as_raw_fd(),
+            parent_path,
+            parent_fd,
             component,
         )?;
-        dir = next_dir;
-        dir_path = next_dir_path;
+        dir_stack.push(OpenDir {
+            name: (*component).to_string(),
+            file,
+            path,
+        });
     }
 
-    Err(CacheError::InvalidFilePath(
-        file_path.to_string(),
-        Backtrace::capture(),
-    ))
+    let parent = match dir_stack.last() {
+        Some(dir) => &dir.file,
+        None => &anchor.directory,
+    };
+    Ok((parent, file_name))
 }
 
 #[cfg(unix)]
