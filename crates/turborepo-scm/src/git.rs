@@ -88,13 +88,25 @@ impl SCM {
         }
         match self {
             Self::Git(git) => {
-                match git.changed_files(
-                    turbo_root,
-                    from_commit,
-                    to_commit,
+                let key = ChangedFilesKey {
+                    turbo_root: turbo_root.to_owned(),
+                    from_commit: from_commit.map(str::to_owned),
+                    to_commit: to_commit.map(str::to_owned),
                     include_uncommitted,
                     merge_base,
-                ) {
+                };
+                let result = match git.change_prefetch.take_changed_files(&key) {
+                    Some(result) => result,
+                    None => git.changed_files(
+                        turbo_root,
+                        from_commit,
+                        to_commit,
+                        include_uncommitted,
+                        merge_base,
+                        |_| {},
+                    ),
+                };
+                match result {
                     Ok(files) => Ok(Ok(files)),
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects
@@ -148,9 +160,196 @@ impl SCM {
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         match self {
-            Self::Git(git) => git.previous_content(from_commit, file_path),
+            Self::Git(git) => git
+                .change_prefetch
+                .take_previous_content(from_commit, file_path)
+                .unwrap_or_else(|| git.previous_content(from_commit, file_path)),
             Self::Manual => Err(Error::GitRequired(file_path.to_owned())),
         }
+    }
+
+    /// Starts change detection for `requests` on background threads so the
+    /// git subprocesses overlap package graph construction. A later
+    /// [`Self::changed_files`] call with identical arguments consumes the
+    /// result instead of spawning git again; any other call is unaffected.
+    ///
+    /// For each request, the base-revision content of every
+    /// `previous_content_candidates` path that turns out to be changed is
+    /// fetched as well, for a matching later [`Self::previous_content`] call.
+    /// Each prefetched result is consumed at most once, so callers observe
+    /// exactly one computation per query, as without the prefetch.
+    pub fn prefetch_changes(
+        &self,
+        requests: Vec<ChangedFilesRequest>,
+        previous_content_candidates: Vec<AbsoluteSystemPathBuf>,
+    ) {
+        let Self::Git(git) = self else {
+            return;
+        };
+        let candidates = std::sync::Arc::new(previous_content_candidates);
+        for request in requests {
+            let ChangedFilesRequest {
+                turbo_root,
+                from_commit,
+                to_commit,
+                include_uncommitted,
+                merge_base,
+            } = request;
+            let key = ChangedFilesKey {
+                turbo_root,
+                from_commit,
+                to_commit,
+                include_uncommitted,
+                merge_base,
+            };
+            if git.change_prefetch.contains(&key) {
+                continue;
+            }
+            let worker = git.clone();
+            let candidates = candidates.clone();
+            let thread_key = key.clone();
+            let spawned = std::thread::Builder::new()
+                .name("turbo-scm-prefetch".to_string())
+                .spawn(move || {
+                    let key = thread_key;
+                    let from_commit = key.from_commit.as_deref();
+                    let mut previous = Vec::new();
+                    let fetch_previous =
+                        |files: &HashSet<AnchoredSystemPathBuf>,
+                         previous: &mut Vec<PrefetchedContent>| {
+                            for candidate in candidates.iter() {
+                                if previous.iter().any(|(path, _)| path == candidate) {
+                                    continue;
+                                }
+                                let Ok(anchored) = key.turbo_root.anchor(candidate) else {
+                                    continue;
+                                };
+                                if files.contains(&anchored) {
+                                    previous.push((
+                                        candidate.clone(),
+                                        worker.previous_content(from_commit, candidate),
+                                    ));
+                                }
+                            }
+                        };
+                    // Committed changes are known first; their base content is
+                    // fetched while the uncommitted-change scans still run.
+                    let files = worker.changed_files(
+                        &key.turbo_root,
+                        from_commit,
+                        key.to_commit.as_deref(),
+                        key.include_uncommitted,
+                        key.merge_base,
+                        |committed| fetch_previous(committed, &mut previous),
+                    );
+                    if let Ok(files) = &files {
+                        fetch_previous(files, &mut previous);
+                    }
+                    PrefetchedChanges { files, previous }
+                });
+            if let Ok(handle) = spawned {
+                git.change_prefetch.insert(key, handle);
+            }
+        }
+    }
+}
+
+/// Arguments for one [`SCM::prefetch_changes`] change-detection query.
+#[derive(Debug, Clone)]
+pub struct ChangedFilesRequest {
+    pub turbo_root: AbsoluteSystemPathBuf,
+    pub from_commit: Option<String>,
+    pub to_commit: Option<String>,
+    pub include_uncommitted: bool,
+    pub merge_base: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ChangedFilesKey {
+    turbo_root: AbsoluteSystemPathBuf,
+    from_commit: Option<String>,
+    to_commit: Option<String>,
+    include_uncommitted: bool,
+    merge_base: bool,
+}
+
+/// A prefetched base-revision file: its path and `git show` result.
+type PrefetchedContent = (AbsoluteSystemPathBuf, Result<Vec<u8>, Error>);
+
+struct PrefetchedChanges {
+    files: Result<HashSet<AnchoredSystemPathBuf>, Error>,
+    previous: Vec<PrefetchedContent>,
+}
+
+type PreviousContentEntry = (
+    Option<String>,
+    AbsoluteSystemPathBuf,
+    Result<Vec<u8>, Error>,
+);
+
+/// Pending and completed prefetched change-detection results.
+#[derive(Default)]
+pub(crate) struct ChangePrefetch {
+    pending: std::sync::Mutex<Vec<(ChangedFilesKey, std::thread::JoinHandle<PrefetchedChanges>)>>,
+    previous_content: std::sync::Mutex<Vec<PreviousContentEntry>>,
+}
+
+impl ChangePrefetch {
+    fn contains(&self, key: &ChangedFilesKey) -> bool {
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .any(|(pending, _)| pending == key)
+    }
+
+    fn insert(&self, key: ChangedFilesKey, handle: std::thread::JoinHandle<PrefetchedChanges>) {
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push((key, handle));
+    }
+
+    fn take_changed_files(
+        &self,
+        key: &ChangedFilesKey,
+    ) -> Option<Result<HashSet<AnchoredSystemPathBuf>, Error>> {
+        let handle = {
+            let mut pending = self
+                .pending
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let index = pending.iter().position(|(pending, _)| pending == key)?;
+            pending.swap_remove(index).1
+        };
+        let PrefetchedChanges { files, previous } = match handle.join() {
+            Ok(prefetched) => prefetched,
+            Err(payload) => std::panic::resume_unwind(payload),
+        };
+        self.previous_content
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .extend(
+                previous
+                    .into_iter()
+                    .map(|(path, content)| (key.from_commit.clone(), path, content)),
+            );
+        Some(files)
+    }
+
+    fn take_previous_content(
+        &self,
+        from_commit: Option<&str>,
+        file_path: &AbsoluteSystemPath,
+    ) -> Option<Result<Vec<u8>, Error>> {
+        let mut previous = self
+            .previous_content
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let index = previous
+            .iter()
+            .position(|(from, path, _)| from.as_deref() == from_commit && &**path == file_path)?;
+        Some(previous.swap_remove(index).2)
     }
 }
 
@@ -576,6 +775,9 @@ impl GitRepo {
         default_base_ref(|branch| self.execute_git_command(&["rev-parse", branch], "").is_ok())
     }
 
+    /// `on_committed` runs with the committed (`diff-tree`) changes as soon
+    /// as they are known, while the uncommitted-change scans may still be
+    /// running. It is not called if the committed diff fails.
     fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -583,6 +785,7 @@ impl GitRepo {
         to_commit: Option<&str>,
         include_uncommitted: bool,
         merge_base: bool,
+        on_committed: impl FnOnce(&HashSet<AnchoredSystemPathBuf>),
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
         let turbo_root_relative_to_git_root = self.root.anchor(turbo_root)?;
         let pathspec = turbo_root_relative_to_git_root.as_str();
@@ -603,32 +806,51 @@ impl GitRepo {
 
         args.extend(["--end-of-options", &valid_from, to_commit]);
 
-        let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output)?;
-
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
-        if include_uncommitted {
-            // Add untracked files or unstaged changes, i.e. files that are not in git at
-            // all
-            let ls_files_output = self.execute_git_command(
-                &[
-                    "ls-files",
-                    "--others",
-                    "--modified",
-                    "--exclude-standard",
-                    "-z",
-                ],
-                pathspec,
-            )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
-            // Include any files that have been staged, but not committed
-            let diff_output =
-                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
+        if !include_uncommitted {
+            let output = self.execute_git_command(&args, pathspec)?;
+            self.add_files_from_stdout(&mut files, turbo_root, output)?;
+            on_committed(&files);
+            return Ok(files);
         }
 
-        Ok(files)
+        // The three queries are independent read-only git invocations, so they
+        // run concurrently. Results are applied, and errors reported, in the
+        // same order as running them one after another.
+        std::thread::scope(|scope| {
+            // Add untracked files or unstaged changes, i.e. files that are not in git at
+            // all
+            let ls_files = scope.spawn(|| {
+                self.execute_git_command(
+                    &[
+                        "ls-files",
+                        "--others",
+                        "--modified",
+                        "--exclude-standard",
+                        "-z",
+                    ],
+                    pathspec,
+                )
+            });
+            // Include any files that have been staged, but not committed
+            let staged = scope.spawn(|| {
+                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)
+            });
+            let join = |handle: std::thread::ScopedJoinHandle<'_, Result<Vec<u8>, Error>>| {
+                handle
+                    .join()
+                    .unwrap_or_else(|payload| std::panic::resume_unwind(payload))
+            };
+
+            let output = self.execute_git_command(&args, pathspec)?;
+            self.add_files_from_stdout(&mut files, turbo_root, output)?;
+            on_committed(&files);
+
+            self.add_files_from_stdout(&mut files, turbo_root, join(ls_files)?)?;
+            self.add_files_from_stdout(&mut files, turbo_root, join(staged)?)?;
+            Ok(files)
+        })
     }
 
     pub fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
@@ -1077,6 +1299,132 @@ mod tests {
             HashSet::from(["qux.js".to_string(), "baz.js".to_string()])
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn prefetched_changes_match_direct_queries_and_are_consumed_once() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        fs::write(repo_root.path().join("yarn.lock"), "old")?;
+        fs::write(repo_root.path().join("foo.js"), "let z = 0;")?;
+        run_git(&repo_path, &["add", "yarn.lock"]);
+        let base = commit_file(&repo_path, Path::new("foo.js"), None);
+        fs::write(repo_root.path().join("yarn.lock"), "new")?;
+        commit_file(&repo_path, Path::new("yarn.lock"), None);
+        // Unstaged, untracked, and staged changes on top of the commits.
+        fs::write(repo_root.path().join("foo.js"), "let z = 1;")?;
+        fs::write(repo_root.path().join("untracked.js"), "")?;
+        fs::write(repo_root.path().join("staged.js"), "")?;
+        run_git(&repo_path, &["add", "staged.js"]);
+
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let lockfile = root.join_component("yarn.lock");
+        let direct_scm = SCM::new(&root);
+        let direct = direct_scm
+            .changed_files(&root, Some(&base), None, true, true, true)?
+            .unwrap();
+        let direct_previous = direct_scm.previous_content(Some(&base), &lockfile)?;
+        assert_eq!(direct_previous, b"old");
+
+        let scm = SCM::new(&root);
+        scm.prefetch_changes(
+            vec![super::ChangedFilesRequest {
+                turbo_root: root.clone(),
+                from_commit: Some(base.clone()),
+                to_commit: None,
+                include_uncommitted: true,
+                merge_base: true,
+            }],
+            vec![lockfile.clone(), root.join_component("pnpm-lock.yaml")],
+        );
+        // Clones share the prefetched results.
+        let clone = scm.clone();
+        let SCM::Git(git) = &clone else {
+            panic!("expected git scm");
+        };
+        let prefetched = clone
+            .changed_files(&root, Some(&base), None, true, true, true)?
+            .unwrap();
+        assert_eq!(prefetched, direct);
+        assert_eq!(
+            prefetched
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<HashSet<_>>(),
+            HashSet::from([
+                "yarn.lock".to_string(),
+                "foo.js".to_string(),
+                "untracked.js".to_string(),
+                "staged.js".to_string(),
+            ])
+        );
+        assert!(git.change_prefetch.pending.lock().unwrap().is_empty());
+        assert_eq!(
+            git.change_prefetch.previous_content.lock().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            clone.previous_content(Some(&base), &lockfile)?,
+            direct_previous
+        );
+        assert!(
+            git.change_prefetch
+                .previous_content
+                .lock()
+                .unwrap()
+                .is_empty()
+        );
+        // Consumed results fall back to direct queries.
+        assert_eq!(
+            scm.changed_files(&root, Some(&base), None, true, true, true)?
+                .unwrap(),
+            direct
+        );
+        assert_eq!(
+            scm.previous_content(Some(&base), &lockfile)?,
+            direct_previous
+        );
+
+        // A mismatched query is not served from the prefetch.
+        scm.prefetch_changes(
+            vec![super::ChangedFilesRequest {
+                turbo_root: root.clone(),
+                from_commit: Some(base.clone()),
+                to_commit: None,
+                include_uncommitted: false,
+                merge_base: true,
+            }],
+            Vec::new(),
+        );
+        assert_eq!(
+            scm.changed_files(&root, Some(&base), None, true, true, true)?
+                .unwrap(),
+            direct
+        );
+        assert_eq!(
+            scm.changed_files(&root, Some(&base), None, false, true, true)?
+                .unwrap()
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<HashSet<_>>(),
+            HashSet::from(["yarn.lock".to_string()])
+        );
+
+        // Errors are preserved through the prefetch.
+        scm.prefetch_changes(
+            vec![super::ChangedFilesRequest {
+                turbo_root: root.clone(),
+                from_commit: Some("does-not-exist".to_string()),
+                to_commit: None,
+                include_uncommitted: true,
+                merge_base: true,
+            }],
+            Vec::new(),
+        );
+        assert!(
+            scm.changed_files(&root, Some("does-not-exist"), None, true, false, true)
+                .is_err()
+        );
         Ok(())
     }
 
@@ -2560,6 +2908,7 @@ mod tests {
             attrs: std::sync::OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
+            change_prefetch: Default::default(),
         }
     }
 
