@@ -8,6 +8,7 @@ use turborepo_setup::source_policy::OfficialSourcePolicy;
 use crate::cli::{Args, SetupArgs};
 
 mod check;
+mod lock_diagnostics;
 mod provision;
 mod root;
 
@@ -40,6 +41,9 @@ pub enum Error {
     NotImplemented,
     #[error("unsupported setup request: {0}")]
     Unsupported(&'static str),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LockDiagnostics(#[from] lock_diagnostics::Error),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
@@ -192,7 +196,7 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // Force reinstalls existing locked selections, independently of local
     // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
-        || request.lock == LockMode::NoLock
+        || (request.lock == LockMode::NoLock && request.force)
         || !request.tools_only
         || request.offline
         || (request.force && request.update_lock)
@@ -300,7 +304,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if control == "--force" {
+                if matches!(control, "--force" | "--no-lock") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(

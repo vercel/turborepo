@@ -4,6 +4,8 @@ use sha2::Sha512;
 use super::*;
 
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
+#[path = "ci_tests.rs"]
+mod ci;
 #[path = "refresh.rs"]
 mod refresh;
 #[test]

@@ -99,11 +99,7 @@ pub(super) fn plans(
     lock: &turborepo_setup::lock::Lock,
 ) -> Result<Plans, Error> {
     let platform = platform()?;
-    if !lock.matches_native(snapshot.declarations())? {
-        return Err(Error::Unsupported(
-            "turbo.lock declarations changed; run setup locally and commit the updated lock",
-        ));
-    }
+    super::lock_diagnostics::matching(snapshot, lock)?;
     if lock
         .tools()
         .keys()
@@ -182,6 +178,13 @@ pub(super) fn run(
     let write = lock_mode == super::LockMode::Write && !force;
     let root = discovery.snapshot_root()?.as_std_path();
     platform()?;
+    if lock_mode == super::LockMode::Frozen {
+        super::lock_diagnostics::frozen(&snapshot)?;
+    } else if lock_mode == super::LockMode::NoLock
+        && let Some(lock) = snapshot.previous_lock()
+    {
+        super::lock_diagnostics::matching(&snapshot, lock)?;
+    }
     // Unsupported native requests must fail before ANY writer, even no-op locks.
     let manager = snapshot.package_manager()?;
     if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
@@ -211,7 +214,8 @@ pub(super) fn run(
         }
     }
     let mut transports = transports;
-    let snapshot = if write {
+    let mut ephemeral = None;
+    let snapshot = if write || lock_mode == super::LockMode::NoLock {
         use turborepo_setup::lock::{WriteOutcome, reconcile};
         let check = || {
             preflight()?;
@@ -231,7 +235,11 @@ pub(super) fn run(
             .build()?;
         let outcome = reconcile::reconcile_checked(
             &snapshot,
-            resolution_mode,
+            if write {
+                resolution_mode
+            } else {
+                reconcile::Mode::NoLock
+            },
             false,
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
@@ -253,17 +261,26 @@ pub(super) fn run(
         // Preserve the original root/sources; accepting a freshly captured lock
         // here would hide a competing candidate or concurrent declaration edit.
         check()?;
-        let published = snapshot.after_publication(&outcome.lock)?;
-        if outcome.publication == Some(WriteOutcome::Written) {
-            println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
-        }
         transports = Some(sources);
-        published
+        if write {
+            let published = snapshot.after_publication(&outcome.lock)?;
+            if outcome.publication == Some(WriteOutcome::Written) {
+                println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
+            }
+            published
+        } else {
+            // Keep the original missing/existing lock snapshot for every CAS.
+            // Ephemeral resolution is never presented as a committed lock.
+            ephemeral = Some(outcome.lock);
+            println!("turbo.lock not written (--no-lock); selections are local to this clone.");
+            snapshot
+        }
     } else {
         snapshot
     };
-    let lock = snapshot
-        .previous_lock()
+    let lock = ephemeral
+        .as_ref()
+        .or_else(|| snapshot.previous_lock())
         .ok_or(Error::Unsupported(if force {
             "locked provisioning requires turbo.lock"
         } else {
