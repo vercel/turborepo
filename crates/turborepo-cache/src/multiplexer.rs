@@ -304,6 +304,25 @@ impl CacheMultiplexer {
         Ok(None)
     }
 
+    /// Whether [`Self::batch_exists`] could ever consult the remote cache.
+    /// When this is false a batch reduces to independent local lookups, so
+    /// there is nothing to gain from waiting for other keys.
+    pub(crate) fn may_read_remote(&self) -> bool {
+        self.cache_config.remote.read && self.http.is_some()
+    }
+
+    /// The local half of [`Self::batch_exists`] for a single key.
+    pub(crate) fn local_exists(&self, key: &str) -> Option<CacheHitMetadata> {
+        if self.cache_config.local.read
+            && let Some(fs) = &self.fs
+            && let Ok(Some(hit)) = fs.exists(key)
+        {
+            Some(hit)
+        } else {
+            None
+        }
+    }
+
     /// Dry-run-only batched existence check. Local hits take precedence; a
     /// server without the query endpoint still works through individual HEADs.
     pub async fn batch_exists(&self, keys: &[String]) -> Vec<Option<CacheHitMetadata>> {
