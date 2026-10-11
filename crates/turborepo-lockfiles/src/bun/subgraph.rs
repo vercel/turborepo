@@ -24,6 +24,16 @@ fn keys_with_prefix<'a>(
         .take_while(move |(key, _)| key.starts_with(prefix))
 }
 
+/// Drop one top-level entry named `name` from the per-name counts.
+fn remove_top_level_name(top_level_pkg_names: &mut HashMap<String, usize>, name: &str) {
+    if let Some(count) = top_level_pkg_names.get_mut(name) {
+        *count -= 1;
+        if *count == 0 {
+            top_level_pkg_names.remove(name);
+        }
+    }
+}
+
 fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
     if version == "*" {
         return Some(name);
@@ -49,8 +59,9 @@ impl BunLockfile {
                     .push(key.clone());
             }
 
-            let current_keys: std::collections::HashSet<String> =
-                pruned_data.packages.keys().cloned().collect();
+            // `pruned_data.packages` is not modified until the additions are
+            // applied, so it holds exactly the keys present at the start of this
+            // pass. Children of a key are the contiguous range after `"{key}/"`.
             let mut additions = BTreeMap::new();
 
             for keys in keys_by_ident.values().filter(|keys| keys.len() > 1) {
@@ -58,17 +69,17 @@ impl BunLockfile {
                 for key in keys {
                     let prefix = format!("{key}/");
                     child_suffixes.extend(
-                        current_keys
-                            .iter()
-                            .filter_map(|current_key| current_key.strip_prefix(&prefix))
-                            .map(ToString::to_string),
+                        keys_with_prefix(&pruned_data.packages, &prefix)
+                            .map(|(current_key, _)| current_key[prefix.len()..].to_string()),
                     );
                 }
 
                 for key in keys {
                     for suffix in &child_suffixes {
                         let child_key = format!("{key}/{suffix}");
-                        if current_keys.contains(&child_key) || additions.contains_key(&child_key) {
+                        if pruned_data.packages.contains_key(&child_key)
+                            || additions.contains_key(&child_key)
+                        {
                             continue;
                         }
                         if let Some(entry) = self.data.packages.get(&child_key) {
@@ -653,31 +664,49 @@ impl BunLockfile {
             .map(|workspace| workspace.name.clone())
             .collect();
 
-        loop {
-            let top_level_pkg_names: HashSet<String> = pruned_data
-                .packages
-                .iter()
-                .filter(|(key, _)| PackageKey::parse(key).parent().is_none())
-                .filter_map(|(_, entry)| {
-                    let ident = PackageIdent::parse(&entry.ident);
-                    if !ident.is_workspace() {
-                        Some(ident.name().to_string())
-                    } else {
-                        None
-                    }
+        // Promotion is decided by package names, which only depend on a key or
+        // an ident string, so parse each string once. Top-level names are
+        // counted so that each promotion can update them for just the keys it
+        // renames, including entries a rename overwrites.
+        let mut key_parents: HashMap<String, Option<String>> = HashMap::new();
+        let mut ident_names: HashMap<String, Option<String>> = HashMap::new();
+        let mut parent_of = |key: &str| -> Option<String> {
+            key_parents
+                .entry(key.to_string())
+                .or_insert_with(|| PackageKey::parse(key).parent())
+                .clone()
+        };
+        // The package name of a non-workspace ident, `None` for workspaces.
+        let mut non_workspace_name = |ident: &str| -> Option<String> {
+            ident_names
+                .entry(ident.to_string())
+                .or_insert_with(|| {
+                    let ident = PackageIdent::parse(ident);
+                    (!ident.is_workspace()).then(|| ident.name().to_string())
                 })
-                .collect();
+                .clone()
+        };
+        let patched_pkg_names: HashSet<String> = required_patched_idents
+            .iter()
+            .map(|patched_ident| PackageIdent::parse(patched_ident).name().to_string())
+            .collect();
+        let mut top_level_pkg_names: HashMap<String, usize> = HashMap::new();
+        for (key, entry) in &pruned_data.packages {
+            if parent_of(key).is_none()
+                && let Some(name) = non_workspace_name(&entry.ident)
+            {
+                *top_level_pkg_names.entry(name).or_default() += 1;
+            }
+        }
 
+        loop {
             // Find the first nested entry (by sorted key order) whose package
             // name has no top-level entry. We promote one package per iteration
             // because promotion renames children, which may expose further
             // entries that need promotion.
-            let mut sorted_pkg_keys: Vec<_> = pruned_data.packages.keys().cloned().collect();
-            sorted_pkg_keys.sort();
-
             let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
-            for key in &sorted_pkg_keys {
-                if let Some(parent) = PackageKey::parse(key).parent() {
+            for (key, entry) in &pruned_data.packages {
+                if let Some(parent) = parent_of(key) {
                     if pruned_workspace_names.contains(&parent) {
                         continue;
                     }
@@ -690,20 +719,13 @@ impl BunLockfile {
                     continue;
                 }
 
-                let entry = &pruned_data.packages[key];
-                let ident = PackageIdent::parse(&entry.ident);
-                if ident.is_workspace() {
+                let Some(pkg_name) = non_workspace_name(&entry.ident) else {
+                    continue;
+                };
+                if patched_pkg_names.contains(&pkg_name) {
                     continue;
                 }
-
-                let pkg_name = ident.name().to_string();
-                if required_patched_idents
-                    .iter()
-                    .any(|patched_ident| PackageIdent::parse(patched_ident).name() == pkg_name)
-                {
-                    continue;
-                }
-                if !top_level_pkg_names.contains(&pkg_name) {
+                if !top_level_pkg_names.contains_key(&pkg_name) {
                     promote_target = Some((pkg_name, key.clone()));
                     break;
                 }
@@ -717,16 +739,33 @@ impl BunLockfile {
             let old_prefix = format!("{old_key}/");
             let new_prefix = format!("{pkg_name}/");
             let mut renames: Vec<(String, String)> = vec![(old_key, pkg_name)];
-            for key in &sorted_pkg_keys {
-                if key.starts_with(&old_prefix) {
-                    let new_key = format!("{new_prefix}{}", &key[old_prefix.len()..]);
-                    renames.push((key.clone(), new_key));
-                }
-            }
+            renames.extend(
+                keys_with_prefix(&pruned_data.packages, &old_prefix).map(|(key, _)| {
+                    (
+                        key.clone(),
+                        format!("{new_prefix}{}", &key[old_prefix.len()..]),
+                    )
+                }),
+            );
 
             for (old, new) in renames {
                 if let Some(entry) = pruned_data.packages.remove(&old) {
-                    pruned_data.packages.insert(new, entry);
+                    if parent_of(&old).is_none()
+                        && let Some(name) = non_workspace_name(&entry.ident)
+                    {
+                        remove_top_level_name(&mut top_level_pkg_names, &name);
+                    }
+                    let new_is_top_level = parent_of(&new).is_none();
+                    let added_name = non_workspace_name(&entry.ident);
+                    if let Some(replaced) = pruned_data.packages.insert(new, entry)
+                        && new_is_top_level
+                        && let Some(name) = non_workspace_name(&replaced.ident)
+                    {
+                        remove_top_level_name(&mut top_level_pkg_names, &name);
+                    }
+                    if new_is_top_level && let Some(name) = added_name {
+                        *top_level_pkg_names.entry(name).or_default() += 1;
+                    }
                 }
             }
         }
@@ -804,14 +843,11 @@ impl BunLockfile {
         // addressable from the new key, otherwise bun treats required deps as
         // missing during frozen installs.
         loop {
-            let package_snapshot: Vec<(String, PackageEntry)> = pruned_data
-                .packages
-                .iter()
-                .map(|(key, entry)| (key.clone(), entry.clone()))
-                .collect();
+            // Additions are applied after the pass, so the pass can read the
+            // current packages in place instead of from a snapshot copy.
             let mut additions = Vec::new();
 
-            for (key, entry) in package_snapshot {
+            for (key, entry) in &pruned_data.packages {
                 let Some(info) = &entry.info else {
                     continue;
                 };
@@ -851,7 +887,7 @@ impl BunLockfile {
                     let exact_source = self
                         .data
                         .packages
-                        .get_key_value(&key)
+                        .get_key_value(key)
                         .filter(|(_, source_entry)| source_entry.ident == entry.ident)
                         .and_then(|(source_key, _)| {
                             self.nested_dependency_entry(source_key, dep_name, dep_version)
@@ -863,7 +899,8 @@ impl BunLockfile {
                             .packages
                             .iter()
                             .filter(|(source_key, source_entry)| {
-                                source_key.as_str() != key && source_entry.ident == entry.ident
+                                source_key.as_str() != key.as_str()
+                                    && source_entry.ident == entry.ident
                             })
                             .find_map(|(source_key, _)| {
                                 self.nested_dependency_entry(source_key, dep_name, dep_version)
