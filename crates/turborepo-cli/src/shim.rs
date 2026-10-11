@@ -58,6 +58,22 @@ impl TurboRunner for TurboCliRunner<'_> {
         cli::Args::is_setup_command(&std::env::args_os().collect::<Vec<_>>())
     }
 
+    fn managed_run_schema(
+        &self,
+        root: &AbsoluteSystemPath,
+        ui: ColorConfig,
+    ) -> Result<Option<u32>, Self::Error> {
+        let args = cli::Args::parse_args(std::env::args_os().collect())
+            .map_err(|e| turborepo_run::Error::ManagedTools(e.to_string()))?;
+        if !matches!(args.command, Some(cli::Command::Run { .. })) {
+            return Ok(None);
+        }
+        let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
+        crate::commands::run::managed::select(&base)
+            .map(|tools| tools.map(|_| 0))
+            .map_err(Into::into)
+    }
+
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
         cli::run(repo_state, self.subscriber, ui, self.query_server.clone())
     }

@@ -87,6 +87,9 @@ where
 /// Errors that can occur during shim execution (excluding CLI errors).
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ManagedRun(#[from] crate::managed_run::Error),
     /// Error from argument parsing
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -303,6 +306,45 @@ where
     S: ChildSpawner,
     V: VersionProvider,
 {
+    let schema = match runtime.runner.managed_run_schema(&repo_state.root, ui) {
+        Ok(schema) => schema,
+        Err(error) => return ShimResult::CliError(error),
+    };
+    if let Some(schema) = schema {
+        // Managed mode never enters update checks or implicit CLI downloads.
+        let local = match LocalTurboState::infer_managed(&repo_state.root) {
+            Ok(local) => local,
+            Err(e) => return ShimResult::ShimError(Error::LocalTurboPath(e.to_string())),
+        };
+        if let Some(local) = local {
+            let capabilities = crate::capabilities::Capabilities::unsupported(
+                runtime.version_provider.get_version(),
+            );
+            if let Err(error) =
+                crate::managed_run::select(schema, &capabilities, Some(local.binary()))
+            {
+                return ShimResult::ShimError(error.into());
+            }
+            // Revalidate after the peer query, immediately before dispatch.
+            match runtime.runner.managed_run_schema(&repo_state.root, ui) {
+                Ok(Some(current)) if current == schema => {}
+                Err(error) => return ShimResult::CliError(error),
+                _ => {
+                    return ShimResult::ShimError(Error::LocalTurboPath(
+                        "managed root changed during CLI selection; run turbo setup".into(),
+                    ));
+                }
+            }
+            return spawn_local_turbo(runtime, &repo_state, local, shim_args);
+        }
+        // No installed pin: execute this CLI's native, guarded Node/pnpm path.
+        // Its public complete-schema handshake stays unadvertised pending the
+        // complete platform/peer qualification; never substitute an installed pin.
+        unsafe {
+            env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+        }
+        return run_cli(runtime, Some(repo_state), ui);
+    }
     let package_manager = repo_state
         .javascript
         .as_ref()
@@ -684,6 +726,99 @@ mod tests {
 
     use super::*;
     use crate::DefaultChildSpawner;
+
+    #[cfg(unix)]
+    #[test]
+    fn managed_dispatch_preserves_compatible_peers_and_never_downloads_or_substitutes_pins() {
+        use std::os::unix::fs::PermissionsExt;
+        struct ManagedRunner;
+        impl TurboRunner for ManagedRunner {
+            type Error = std::io::Error;
+            fn managed_run_schema(
+                &self,
+                _: &turbopath::AbsoluteSystemPath,
+                _: ColorConfig,
+            ) -> Result<Option<u32>, Self::Error> {
+                Ok(Some(0))
+            }
+            fn run(&self, state: Option<RepoState>, _: ColorConfig) -> Result<i32, Self::Error> {
+                assert!(state.is_some());
+                Ok(7)
+            }
+        }
+        struct CheckedSpawner(std::path::PathBuf);
+        impl ChildSpawner for CheckedSpawner {
+            fn spawn(&self, command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+                assert_eq!(
+                    std::path::Path::new(command.get_program()).canonicalize()?,
+                    self.0.canonicalize()?
+                );
+                DefaultChildSpawner.spawn(command)
+            }
+        }
+        for case in 0..4 {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            root.join_component("package.json").create_with_contents(
+                br#"{"name":"fixture","packageManager":"pnpm@10.0.0","devDependencies":{"turbo":"2.0.0"}}"#).unwrap();
+            root.join_component("turbo.json")
+                .create_with_contents(br#"{"futureFlags":{"experimentalSetup":true}}"#)
+                .unwrap();
+            let package = root.join_components(&[
+                "node_modules",
+                crate::TurboState::scoped_platform_package_scope(),
+                crate::TurboState::scoped_platform_package_dir(),
+            ]);
+            let binary = package.join_components(&["bin", crate::TurboState::binary_name()]);
+            let marker = root.join_component("peer-ran");
+            if case != 0 {
+                std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+                package
+                    .join_component("package.json")
+                    .create_with_contents(br#"{"version":"2.0.0"}"#)
+                    .unwrap();
+                if case != 1 {
+                    let schemas = if case == 3 { "[0]" } else { "[]" };
+                    let script = format!(
+                        "#!/bin/sh\nif [ \"$1\" = '--__internal-managed-run-capabilities' ]; \
+                         then\n  printf '%s\\n' \
+                         '{{\"abiVersion\":1,\"cliVersion\":\"fixture\",\"managedRunSchemas\":\
+                         {schemas}}}'\nelse\n  touch '{}'\n  exit 17\nfi\n",
+                        marker
+                    );
+                    std::fs::write(&binary, script).unwrap();
+                    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))
+                        .unwrap();
+                }
+            }
+            let runtime = ShimRuntime::new(
+                ManagedRunner,
+                MockConfigProvider,
+                CheckedSpawner(binary.as_std_path().to_owned()),
+                MockVersionProvider,
+            );
+            let state = RepoState::infer_with_config(&root, None).unwrap();
+            let result = run_correct_turbo(
+                &runtime,
+                state,
+                boundary_args(&root, &[]),
+                ColorConfig::new(true),
+            );
+            match case {
+                0 => assert!(matches!(result, ShimResult::Ok(7))),
+                1 => assert!(matches!(
+                    result,
+                    ShimResult::ShimError(Error::LocalTurboPath(_))
+                )),
+                2 => assert!(matches!(
+                    result,
+                    ShimResult::ShimError(Error::ManagedRun(_))
+                )),
+                _ => assert!(matches!(result, ShimResult::Ok(17))),
+            }
+            assert_eq!(marker.exists(), case == 3);
+        }
+    }
 
     // Mock implementations for testing
     struct MockRunner;
