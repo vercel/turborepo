@@ -66,6 +66,17 @@ pub trait TurboRunner: Send + Sync {
         false
     }
 
+    /// The CLI grammar/config owner validates managed setup before any local
+    /// handoff, update check, or implicit download. No managed policy by
+    /// default.
+    fn managed_run_schema(
+        &self,
+        _root: &AbsoluteSystemPath,
+        _ui: ColorConfig,
+    ) -> Result<Option<u32>, Self::Error> {
+        Ok(None)
+    }
+
     /// Run the turbo CLI with the given repository state and UI configuration.
     ///
     /// # Arguments
