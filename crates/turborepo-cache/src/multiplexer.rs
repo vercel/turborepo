@@ -10,9 +10,14 @@ use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
     CacheConfig, CacheError, CacheHitMetadata, CacheOpts, LazyScmState,
-    fs::FSCache,
+    fs::{FSCache, LocalLookup},
     http::{HTTPCache, UploadMap},
 };
+
+/// Restore manifests up to this size (roughly 1,700 recorded outputs with
+/// typical path lengths) are checked against disk in place by
+/// [`CacheMultiplexer::fetch`]; larger ones on the blocking pool.
+const MAX_IN_PLACE_MANIFEST_BYTES: u64 = 256 * 1024;
 
 pub struct CacheMultiplexer {
     // We use an `AtomicBool` instead of removing the cache because that would require
@@ -255,12 +260,35 @@ impl CacheMultiplexer {
         if self.cache_config.local.read
             && let Some(fs) = &self.fs
         {
-            // Local restore (decompression + extraction) is synchronous; keep
-            // it off the runtime workers.
-            let fs = fs.clone();
-            let anchor = anchor.to_owned();
-            let key = key.to_owned();
-            let response = tokio::task::spawn_blocking(move || fs.fetch(&anchor, &key)).await?;
+            // Checking whether the recorded outputs are still on disk only
+            // reads metadata (the manifest and one stat per output), small
+            // synchronous I/O of the kind task log replay already does in
+            // place, so it runs here. Most cache hits end at this check, and
+            // doing it in place saves two thread hand-offs per task. Manifests
+            // over the limit are checked on the blocking pool so a huge output
+            // set can't stall a worker.
+            let response = match fs.lookup(anchor, key, MAX_IN_PLACE_MANIFEST_BYTES) {
+                Ok(LocalLookup::Miss) => Ok(None),
+                Ok(LocalLookup::Unchanged(metadata, files)) => Ok(Some((metadata, files))),
+                // Local restore (decompression + extraction) is synchronous;
+                // keep it off the runtime workers.
+                Ok(LocalLookup::Restore(previous_manifest)) => {
+                    let fs = fs.clone();
+                    let anchor = anchor.to_owned();
+                    let key = key.to_owned();
+                    tokio::task::spawn_blocking(move || {
+                        fs.restore(&anchor, &key, previous_manifest)
+                    })
+                    .await?
+                }
+                Ok(LocalLookup::ManifestTooLarge) => {
+                    let fs = fs.clone();
+                    let anchor = anchor.to_owned();
+                    let key = key.to_owned();
+                    tokio::task::spawn_blocking(move || fs.fetch(&anchor, &key)).await?
+                }
+                Err(error) => Err(error),
+            };
             if let response @ Ok(Some(_)) = response {
                 return response;
             }
