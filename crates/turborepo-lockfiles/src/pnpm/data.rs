@@ -414,6 +414,141 @@ impl PnpmLockfile {
         Ok(())
     }
 
+    /// Same bytes as `serde_yaml_ng::to_string(self)`, with the large
+    /// top-level sections serialized concurrently.
+    ///
+    /// The document is a block mapping whose entries are emitted at column
+    /// zero, and serde_yaml_ng disables line wrapping, so each top-level entry
+    /// serializes independently of the others: the document is the
+    /// concatenation of single-entry documents in field order. The one piece
+    /// of cross-entry state is libyaml's open-ended marker (`...` after a
+    /// keep-chomped block scalar), so any section other than the last that
+    /// ends with it falls back to the single-pass serializer.
+    fn to_yaml(&self) -> Result<String, serde_yaml_ng::Error> {
+        self.to_yaml_chunked(YAML_CHUNK_MIN_ENTRIES)
+    }
+
+    fn to_yaml_chunked(&self, chunk_min_entries: usize) -> Result<String, serde_yaml_ng::Error> {
+        // Mirrors `PnpmLockfile`'s serialized fields up to `importers`, in
+        // declaration order. The exhaustive destructuring below makes adding a
+        // field to `PnpmLockfile` a compile error here until it is placed.
+        #[derive(Serialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Head<'a> {
+            lockfile_version: &'a LockfileVersion,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            settings: Option<&'a LockfileSettings>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            catalogs: Option<&'a Map<String, Map<String, Dependency>>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pnpmfile_checksum: Option<&'a String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            never_built_dependencies: Option<&'a Vec<String>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            only_built_dependencies: Option<&'a Vec<String>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            ignored_optional_dependencies: Option<&'a Vec<String>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            overrides: Option<&'a Map<String, String>>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            package_extensions_checksum: Option<&'a String>,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            patched_dependencies: Option<&'a Map<String, PatchFile>>,
+        }
+        #[derive(Serialize)]
+        struct ImportersSection<'a> {
+            importers: &'a BTreeMap<String, ProjectSnapshot>,
+        }
+        #[derive(Serialize)]
+        struct TimeSection<'a> {
+            time: &'a Map<String, String>,
+        }
+
+        let PnpmLockfile {
+            lockfile_version,
+            cached_version: _,
+            leading_documents: _,
+            settings,
+            catalogs,
+            pnpmfile_checksum,
+            never_built_dependencies,
+            only_built_dependencies,
+            ignored_optional_dependencies,
+            overrides,
+            package_extensions_checksum,
+            patched_dependencies,
+            // Not serialized (normalized into `importers` after parsing).
+            specifiers: _,
+            dependencies: _,
+            optional_dependencies: _,
+            dev_dependencies: _,
+            root_dependencies_meta: _,
+            importers,
+            packages,
+            snapshots,
+            dependency_index: _,
+            time,
+        } = self;
+
+        let head = Head {
+            lockfile_version,
+            settings: settings.as_ref(),
+            catalogs: catalogs.as_ref(),
+            pnpmfile_checksum: pnpmfile_checksum.as_ref(),
+            never_built_dependencies: never_built_dependencies.as_ref(),
+            only_built_dependencies: only_built_dependencies.as_ref(),
+            ignored_optional_dependencies: ignored_optional_dependencies.as_ref(),
+            overrides: overrides.as_ref(),
+            package_extensions_checksum: package_extensions_checksum.as_ref(),
+            patched_dependencies: patched_dependencies.as_ref(),
+        };
+        let ((head, importers), (packages, snapshots)) = rayon::join(
+            || {
+                rayon::join(
+                    || serde_yaml_ng::to_string(&head),
+                    || serde_yaml_ng::to_string(&ImportersSection { importers }),
+                )
+            },
+            || {
+                rayon::join(
+                    || {
+                        packages
+                            .as_ref()
+                            .map(|packages| {
+                                map_section_yaml("packages", packages, chunk_min_entries)
+                            })
+                            .transpose()
+                    },
+                    || {
+                        snapshots
+                            .as_ref()
+                            .map(|snapshots| {
+                                map_section_yaml("snapshots", snapshots, chunk_min_entries)
+                            })
+                            .transpose()
+                    },
+                )
+            },
+        );
+        let time = time
+            .as_ref()
+            .map(|time| serde_yaml_ng::to_string(&TimeSection { time }))
+            .transpose()?;
+        let sections: Vec<String> = [Some(head?), Some(importers?), packages?, snapshots?, time]
+            .into_iter()
+            .flatten()
+            .collect();
+
+        let self_contained = sections.split_last().is_some_and(|(_, rest)| {
+            rest.iter()
+                .all(|section| section.ends_with('\n') && !section.ends_with("\n...\n"))
+        });
+        if !self_contained {
+            return serde_yaml_ng::to_string(self);
+        }
+        Ok(sections.concat())
+    }
+
     fn build_dependency_index(&mut self) {
         let capacity = self.snapshots.as_ref().map_or(0, |s| s.len())
             + self.packages.as_ref().map_or(0, |p| p.len());
@@ -803,12 +938,15 @@ impl PnpmLockfile {
                 return Ok(());
             };
 
-            if let Some(pruned_snapshots) = pruned_snapshots.as_mut()
-                && pruned_snapshots
-                    .insert(key.to_string(), snapshot.clone())
-                    .is_some()
-            {
-                return Ok(());
+            if let Some(pruned_snapshots) = pruned_snapshots.as_mut() {
+                // Already retained: this is a revisit through another
+                // dependency edge, closure key, or importer. Checking first
+                // avoids cloning the snapshot only to replace an identical
+                // copy (most visits are revisits).
+                if pruned_snapshots.contains_key(key) {
+                    return Ok(());
+                }
+                pruned_snapshots.insert(key.to_string(), snapshot.clone());
             }
 
             let package_key = self.package_key_for_snapshot(key)?;
@@ -837,6 +975,75 @@ impl PnpmLockfile {
         }
 
         Ok(())
+    }
+}
+
+/// A top-level map section with fewer than twice this many entries is
+/// serialized in one piece; larger ones in about
+/// `rayon::current_num_threads()` chunks.
+const YAML_CHUNK_MIN_ENTRIES: usize = 256;
+
+/// Same bytes as serializing `name: map` as one entry of the root mapping.
+///
+/// Large maps are split into chunks that serialize concurrently as root-level
+/// mappings and are then nested under `name:` by indenting every line two
+/// spaces. With line wrapping disabled, libyaml's output for a mapping entry
+/// depends on its depth only through indentation, except for block scalars
+/// (whose blank lines carry no indentation) and the open-ended `...` marker.
+/// A chunk containing either falls back to serializing the whole map in one
+/// piece.
+fn map_section_yaml<V: Serialize + Sync>(
+    name: &str,
+    map: &BTreeMap<String, V>,
+    chunk_min_entries: usize,
+) -> Result<String, serde_yaml_ng::Error> {
+    use rayon::prelude::*;
+
+    let single = || serde_yaml_ng::to_string(&BTreeMap::from([(name, map)]));
+    let chunk_count = rayon::current_num_threads();
+    if map.len() < chunk_min_entries.max(1) * 2 || chunk_count < 2 {
+        return single();
+    }
+    let entries: Vec<(&String, &V)> = map.iter().collect();
+    let chunks = entries
+        .par_chunks(entries.len().div_ceil(chunk_count))
+        .map(|chunk| serde_yaml_ng::to_string(&MapEntries(chunk)))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut output = String::with_capacity(chunks.iter().map(|c| c.len() + c.len() / 8).sum());
+    output.push_str(name);
+    output.push_str(":\n");
+    for chunk in &chunks {
+        if !chunk.ends_with('\n') || chunk.ends_with("\n...\n") {
+            return single();
+        }
+        for line in chunk.split_terminator('\n') {
+            if line.is_empty() || is_block_scalar_header(line) {
+                return single();
+            }
+            output.push_str("  ");
+            output.push_str(line);
+            output.push('\n');
+        }
+    }
+    Ok(output)
+}
+
+/// Whether `line` may end with a block scalar header (`|`, `>-`, `|2+`, ...).
+/// Conservative: a plain scalar that happens to end the same way also matches,
+/// which only costs the chunked fast path.
+fn is_block_scalar_header(line: &str) -> bool {
+    let trimmed = line.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-' || c == '+');
+    trimmed.ends_with('|') || trimmed.ends_with('>')
+}
+
+/// A slice of map entries serialized as a mapping, with the same events as
+/// serializing the `BTreeMap` they came from.
+struct MapEntries<'a, V>(&'a [(&'a String, &'a V)]);
+
+impl<V: Serialize> Serialize for MapEntries<'_, V> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_map(self.0.iter().copied())
     }
 }
 
@@ -1071,7 +1278,7 @@ impl crate::Lockfile for PnpmLockfile {
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
         if self.leading_documents.is_empty() {
-            return Ok(serde_yaml_ng::to_string(&self)?.into_bytes());
+            return Ok(self.to_yaml()?.into_bytes());
         }
 
         let mut output = String::new();
@@ -1080,7 +1287,7 @@ impl crate::Lockfile for PnpmLockfile {
             output.push_str(&serde_yaml_ng::to_string(document)?);
         }
         output.push_str("---\n");
-        output.push_str(&serde_yaml_ng::to_string(&self)?);
+        output.push_str(&self.to_yaml()?);
         Ok(output.into_bytes())
     }
 
@@ -1342,6 +1549,123 @@ mod tests {
 
     use super::*;
     use crate::Lockfile;
+
+    fn assert_to_yaml_matches_serde(lockfile: &PnpmLockfile, context: &str) {
+        let expected = serde_yaml_ng::to_string(lockfile).unwrap();
+        assert_eq!(
+            lockfile.to_yaml().unwrap(),
+            expected,
+            "sectioned encode diverged for {context}"
+        );
+        // Force chunking on every map with at least two entries.
+        assert_eq!(
+            lockfile.to_yaml_chunked(1).unwrap(),
+            expected,
+            "chunked encode diverged for {context}"
+        );
+    }
+
+    #[test]
+    fn test_to_yaml_matches_single_pass_on_fixtures() {
+        let fixtures =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lockfile-tests/fixtures");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&fixtures).unwrap() {
+            let path = entry.unwrap().path().join("pnpm-lock.yaml");
+            let Ok(contents) = std::fs::read(&path) else {
+                continue;
+            };
+            let lockfile = PnpmLockfile::from_bytes(&contents).unwrap();
+            assert_to_yaml_matches_serde(&lockfile, &path.display().to_string());
+
+            // Pruned lockfiles take the same path through `encode`.
+            let workspaces: Vec<String> = lockfile
+                .importers
+                .keys()
+                .filter(|key| key.as_str() != ".")
+                .cloned()
+                .collect();
+            let closures =
+                crate::all_transitive_closures(&lockfile, lockfile.test_workspaces(), true)
+                    .unwrap();
+            let mut packages: Vec<String> = closures
+                .values()
+                .flatten()
+                .map(|package| package.key.clone())
+                .collect();
+            packages.sort();
+            packages.dedup();
+            let pruned = lockfile.subgraph(&workspaces, &packages).unwrap();
+            let pruned = (pruned.as_ref() as &dyn Any)
+                .downcast_ref::<PnpmLockfile>()
+                .unwrap();
+            assert_to_yaml_matches_serde(pruned, &format!("pruned {}", path.display()));
+            checked += 1;
+        }
+        assert!(checked > 0, "expected pnpm fixtures");
+    }
+
+    #[test]
+    fn test_to_yaml_chunked_falls_back_on_block_scalar() {
+        // Block scalars' blank lines carry no indentation, so a chunk holding
+        // one can't be re-indented; the map must serialize in one piece.
+        let yaml = r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      a:
+        specifier: ^1.0.0
+        version: 1.0.0
+packages:
+  a@1.0.0:
+    resolution: {integrity: sha512-a}
+    deprecated: "first\n\nsecond"
+  b@1.0.0:
+    resolution: {integrity: sha512-b}
+  c@1.0.0:
+    resolution: {integrity: sha512-c}
+  d@1.0.0:
+    resolution: {integrity: sha512-d}
+snapshots:
+  a@1.0.0: {}
+  b@1.0.0: {}
+  c@1.0.0: {}
+  d@1.0.0: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        assert_to_yaml_matches_serde(&lockfile, "block scalar in chunked map");
+        let encoded = lockfile.to_yaml_chunked(1).unwrap();
+        assert!(encoded.contains("deprecated: |-"), "{encoded}");
+        assert!(encoded.contains("\n\n"), "{encoded}");
+        assert!(is_block_scalar_header("    deprecated: |-"));
+        assert!(is_block_scalar_header("- >2+"));
+        assert!(!is_block_scalar_header("    engines: {node: '>=14'}"));
+    }
+
+    #[test]
+    fn test_to_yaml_falls_back_on_open_ended_section() {
+        // A trailing keep-chomped block scalar makes libyaml end a standalone
+        // `packages` document with `...`; that section is not self-contained,
+        // so the sectioned encode must produce the single-pass output.
+        let yaml = r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      a:
+        specifier: ^1.0.0
+        version: 1.0.0
+packages:
+  a@1.0.0:
+    resolution: {integrity: sha512-a}
+    deprecated: "trailing\n\n"
+snapshots:
+  a@1.0.0: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        assert_to_yaml_matches_serde(&lockfile, "open-ended section");
+        let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+        assert!(encoded.contains("deprecated: |+"), "{encoded}");
+    }
 
     #[test]
     fn test_subgraph_prunes_catalog_snapshots_by_importer_reference() {
