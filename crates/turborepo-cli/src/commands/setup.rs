@@ -250,7 +250,7 @@ fn run_with_policy(
     // Never claim dependencies are ready: they are skipped until dependency
     // policy and installers exist, even without --tools-only.
     println!(
-        "Dependencies skipped ({}). No tasks run; managed activation is not enabled.",
+        "Dependencies skipped ({}). No tasks run.",
         if request.tools_only {
             "--tools-only"
         } else {

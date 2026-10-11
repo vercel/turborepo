@@ -212,6 +212,8 @@ mod authorization;
 mod first_lock;
 #[path = "force_tests.rs"]
 mod force;
+#[path = "managed_run_tests.rs"]
+mod managed_run;
 #[path = "npm_tests.rs"]
 mod npm;
 #[path = "publication_guards.rs"]

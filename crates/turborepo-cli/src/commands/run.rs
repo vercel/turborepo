@@ -13,6 +13,8 @@ use turborepo_ui::{LogSinks, sender::UISender};
 
 use crate::commands::CommandBase;
 
+pub(crate) mod managed;
+
 #[derive(Debug, PartialEq, Eq)]
 enum RunOutcome<T> {
     Completed(T),
@@ -56,6 +58,7 @@ pub async fn run(
     subscriber: &TurboSubscriber,
     verbosity: u8,
 ) -> Result<i32, run::Error> {
+    let managed = managed::select(&base)?;
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
@@ -103,6 +106,9 @@ pub async fn run(
         let _span = tracing::info_span!("run_builder_new").entered();
         RunBuilder::new(base.run_builder_input()?, Some(http_client))?
     };
+    if let Some(tools) = managed {
+        run_builder = run_builder.with_managed_environment(tools);
+    }
     if let Some(qs) = query_server {
         run_builder = run_builder.with_query_server(qs);
     }
