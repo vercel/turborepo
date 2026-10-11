@@ -317,9 +317,8 @@ where
             Err(e) => return ShimResult::ShimError(Error::LocalTurboPath(e.to_string())),
         };
         if let Some(local) = local {
-            let capabilities = crate::capabilities::Capabilities::unsupported(
-                runtime.version_provider.get_version(),
-            );
+            let capabilities =
+                crate::capabilities::Capabilities::current(runtime.version_provider.get_version());
             if let Err(error) =
                 crate::managed_run::select(schema, &capabilities, Some(local.binary()))
             {
@@ -334,6 +333,12 @@ where
                         "managed root changed during CLI selection; run turbo setup".into(),
                     ));
                 }
+            }
+            if local.local_is_self() {
+                unsafe {
+                    env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+                }
+                return run_cli(runtime, Some(repo_state), ui);
             }
             return spawn_local_turbo(runtime, &repo_state, local, shim_args);
         }
@@ -590,6 +595,12 @@ fn modify_args_for_local(
     };
 
     raw_args.extend(shim_args.remaining_turbo_args.drain(..).map(OsString::from));
+
+    // The shim consumes this flag and changes cwd to the repository root.
+    // Preserve its already-resolved absolute path before the task-args boundary.
+    if let Some(config) = &shim_args.root_turbo_json {
+        raw_args.push(format!("--root-turbo-json={config}"));
+    }
 
     // We add this flag after the raw args to avoid accidentally passing it
     // as a global flag instead of as a run flag.
@@ -910,6 +921,35 @@ mod tests {
                 .map(str::to_owned),
         )
         .unwrap()
+    }
+
+    #[test_case::test_case(&["--root-turbo-json", "turbo.jsonc"] ; "separate value")]
+    #[test_case::test_case(&["--root-turbo-json=turbo.jsonc"] ; "equals value")]
+    fn local_handoff_preserves_resolved_config_before_forwarded_arguments(extra: &[&str]) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(b"{}")
+            .unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(b"{}")
+            .unwrap();
+        let state = RepoState::infer_with_config(&root, None).unwrap();
+        let mut args = boundary_args(&root, extra);
+        args.forwarded_args = vec![
+            "--root-turbo-json=task-value".into(),
+            "argument with spaces".into(),
+        ];
+        let raw = modify_args_for_local(&mut args, &state, "2.0.0");
+        let separator = raw.iter().position(|arg| arg == "--").unwrap();
+        assert!(raw[..separator].contains(&format!(
+            "--root-turbo-json={}",
+            root.join_component("turbo.jsonc")
+        )));
+        assert_eq!(
+            &raw[separator + 1..],
+            &["--root-turbo-json=task-value", "argument with spaces"]
+        );
     }
 
     #[test_case::test_case("experimentalCargoWorkspaces", "Cargo.toml", "[workspace]\nmembers = []\n" ; "cargo")]
