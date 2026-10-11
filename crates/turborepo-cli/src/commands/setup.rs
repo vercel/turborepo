@@ -7,6 +7,8 @@ use turborepo_setup::source_policy::OfficialSourcePolicy;
 
 use crate::cli::{Args, SetupArgs};
 
+#[cfg(all(test, target_os = "macos"))]
+mod acl;
 mod check;
 mod provision;
 mod root;
