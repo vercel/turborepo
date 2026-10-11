@@ -242,11 +242,18 @@ impl TrustStore {
         if store.repository_root().map_err(io::Error::other)? != self.root {
             return Err(unsafe_state());
         }
+        self.inspect_installation(|| store.current().map_err(io::Error::other))
+    }
+
+    fn inspect_installation(
+        &self,
+        inspect: impl FnOnce() -> io::Result<Option<turborepo_tool_install::Current>>,
+    ) -> io::Result<Option<Installation>> {
         let path = self.root.join(".turbo/tools/manifest.json");
         let Some(before) = read(&path, false)? else {
             return Ok(None);
         };
-        let Some(current) = store.current().map_err(io::Error::other)? else {
+        let Some(current) = inspect()? else {
             return Ok(None);
         };
         if read(&path, false)?.as_deref() != Some(before.as_slice()) {
@@ -282,6 +289,33 @@ impl TrustStore {
         };
         // Damaged inventory is repairable, never reusable.
         Ok(self.installation(store).ok().flatten().as_ref() == Some(&record.installation))
+    }
+
+    /// Strict read-only consumer check, unlike setup reuse. The supplied plan
+    /// must already validate native declarations and be revalidated before use.
+    /// Never opens a writable Store or creates missing user state.
+    pub(super) fn authorizes(
+        &self,
+        plan: &turborepo_setup::activation::ActivationPlan,
+    ) -> io::Result<bool> {
+        let Some(record) = self.load()? else {
+            return Ok(false);
+        };
+        let Some(lock) = read(&self.root.join("turbo.lock"), false)? else {
+            return Ok(false);
+        };
+        if hash(&lock) != record.lock_sha256 {
+            return Ok(false);
+        }
+        let installation =
+            self.inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))?;
+        Ok(installation.as_ref() == Some(&record.installation)
+            && record.installation.bin == plan.path_prepend()
+            && record.installation.tools == plan.tools()
+            && read(&self.root.join("turbo.lock"), false)?.as_deref() == Some(lock.as_slice())
+            && self.load()?.is_some_and(|after| {
+                after.lock_sha256 == record.lock_sha256 && after.installation == record.installation
+            }))
     }
 
     /// Only call under source/writer/Store guards after the cohort was freshly
