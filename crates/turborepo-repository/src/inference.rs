@@ -208,17 +208,22 @@ fn future_flags(
             path: path.clone(),
             reason: "configuration does not exist".into(),
         })?;
-    let (config, diagnostics) = deserialize_from_json_str::<serde_json::Value>(
-        &contents,
-        JsonParserOptions::default()
-            .with_allow_comments()
-            .with_allow_trailing_commas(),
-        path.as_str(),
-    );
-    let mut config = config.ok_or_else(|| Error::Config {
-        path: path.clone(),
-        reason: format!("invalid JSON: {diagnostics:?}"),
-    })?;
+    let mut config = match parse_strict_json_without_escapes(&contents) {
+        Some(config) => config,
+        None => {
+            let (config, diagnostics) = deserialize_from_json_str::<serde_json::Value>(
+                &contents,
+                JsonParserOptions::default()
+                    .with_allow_comments()
+                    .with_allow_trailing_commas(),
+                path.as_str(),
+            );
+            config.ok_or_else(|| Error::Config {
+                path: path.clone(),
+                reason: format!("invalid JSON: {diagnostics:?}"),
+            })?
+        }
+    };
     if !config.is_object() {
         return Err(Error::Config {
             path,
@@ -236,6 +241,23 @@ fn future_flags(
             reason: "futureFlags must be an object".into(),
         }),
     }
+}
+
+/// Fast path for `future_flags`, which runs during repository inference before
+/// every repository-scoped command. The biome parser builds a full syntax tree,
+/// which is costly for large configs, only for us to read two keys. Most
+/// turbo.json files are strict JSON, which `serde_json` parses directly into
+/// the same `Value`: biome's `serde_json::Value` deserializer parses numbers
+/// with `serde_json`, keeps the last duplicate key, and builds the same `Map`.
+/// The one difference is that biome keeps string escapes verbatim while
+/// `serde_json` decodes them, so inputs containing any backslash take the biome
+/// path. Comments, trailing commas, and invalid input fail here and also take
+/// the biome path, which keeps its diagnostics unchanged.
+fn parse_strict_json_without_escapes(contents: &str) -> Option<serde_json::Value> {
+    if contents.contains('\\') {
+        return None;
+    }
+    serde_json::from_str(contents).ok()
 }
 
 #[cfg(test)]
@@ -266,6 +288,41 @@ mod test {
             .to_realpath()
             .unwrap();
         (tmp_dir, dir)
+    }
+
+    #[test]
+    fn strict_json_fast_path_matches_biome_value() {
+        let biome = |contents: &str| {
+            super::deserialize_from_json_str::<serde_json::Value>(
+                contents,
+                super::JsonParserOptions::default()
+                    .with_allow_comments()
+                    .with_allow_trailing_commas(),
+                "turbo.json",
+            )
+            .0
+        };
+        for contents in [
+            r#"{"$schema":"https://turborepo.dev/schema.json","futureFlags":{"experimentalCargoWorkspaces":true},"tasks":{"build":{"dependsOn":["^build"],"outputs":["dist/**"]}}}"#,
+            r#"{"extends":["//"],"futureFlags":{"a":1.5e3,"b":null,"c":[1,-0,{"d":false}],"e":18446744073709551616}}"#,
+            r#"{"dup":1,"dup":{"x":"é"}}"#,
+            "\n[1, 2, \"three\"]\n",
+            "{}",
+        ] {
+            let fast = super::parse_strict_json_without_escapes(contents);
+            assert!(fast.is_some(), "fast path should accept {contents}");
+            assert_eq!(fast, biome(contents), "mismatch for {contents}");
+        }
+        // Escapes, comments, trailing commas, and invalid input use the biome path.
+        for contents in [
+            r#"{"a":"\n"}"#,
+            "{\n  // comment\n  \"a\": 1\n}",
+            r#"{"a":1,}"#,
+            r#"{"a":"#,
+            "",
+        ] {
+            assert!(super::parse_strict_json_without_escapes(contents).is_none());
+        }
     }
 
     #[test]
