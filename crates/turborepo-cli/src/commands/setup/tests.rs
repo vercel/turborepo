@@ -204,6 +204,8 @@ mod first_lock;
 mod force;
 #[path = "managed_run_tests.rs"]
 mod managed_run;
+#[path = "native_handoff_tests.rs"]
+mod native_handoff;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[cfg(target_os = "macos")]

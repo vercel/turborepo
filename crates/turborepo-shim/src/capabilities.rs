@@ -37,17 +37,66 @@ struct Report {
     /// portable toolchain hashing. Accepting a lock schema alone is
     /// insufficient.
     managed_run_schemas: Vec<u32>,
+    /// Internal, adapter/platform-bounded contract, NOT complete public schema
+    /// support. Older readers reject this extension rather than treating it
+    /// as complete.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    experimental_node_pnpm: Option<NodePnpm>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NodePnpm {
+    contract_version: u32,
+    lock_schema: u32,
+    platform: String,
+}
+
+/// Observed startup hosts only, NOT complete peer-contract qualification.
+/// Agent/proxy lookup, cache-hit and late validation remain pending combined
+/// activation tests. Linux is separately owned; never populate the public
+/// schema support matrix from this startup-only internal ABI.
+fn qualified_platform() -> Option<&'static str> {
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        Some("macos-arm64")
+    } else {
+        None
+    }
 }
 
 impl Capabilities {
-    /// The current CLI has no complete managed-run implementation. Keep this
-    /// empty until all guarantees above are delivered and verified; prelaunch
-    /// schema 0 parsing must not accidentally advertise execution support.
+    /// No managed execution support, regardless of readable schemas/version.
     pub fn unsupported(cli_version: &str) -> Self {
         Self(Report {
             abi_version: ABI_VERSION,
             cli_version: cli_version.to_owned(),
             managed_run_schemas: Vec::new(),
+            experimental_node_pnpm: None,
+        })
+    }
+
+    /// Current startup-only internal ABI. Complete public schema support stays
+    /// empty until the combined activation/probe/cache/late-validation contract
+    /// is delivered and tested; this report is not that qualification.
+    pub fn current(cli_version: &str) -> Self {
+        let mut report = Self::unsupported(cli_version);
+        report.0.experimental_node_pnpm = qualified_platform().map(|platform| NodePnpm {
+            contract_version: 1,
+            lock_schema: 0,
+            platform: platform.to_owned(),
+        });
+        report
+    }
+
+    /// Only for consumers which already authorized a managed Node/pnpm cohort.
+    /// Never use this to infer full schema support or skip lock/tool
+    /// validation.
+    pub fn supports_experimental_node_pnpm(&self, schema: u32) -> bool {
+        self.0.experimental_node_pnpm.as_ref().is_some_and(|scope| {
+            scope.contract_version == 1
+                && scope.lock_schema == 0
+                && scope.lock_schema == schema
+                && qualified_platform() == Some(scope.platform.as_str())
         })
     }
 
@@ -87,6 +136,11 @@ impl Capabilities {
             || report.cli_version.len() > 128
             || !report.cli_version.bytes().all(|b| b.is_ascii_graphic())
             || report.managed_run_schemas.len() > MAX_SCHEMAS
+            || report.experimental_node_pnpm.as_ref().is_some_and(|scope| {
+                scope.platform.is_empty()
+                    || scope.platform.len() > 64
+                    || !scope.platform.bytes().all(|b| b.is_ascii_graphic())
+            })
             || report
                 .managed_run_schemas
                 .windows(2)
@@ -114,6 +168,50 @@ mod tests {
         assert_eq!(Capabilities::parse(&bytes).unwrap(), report);
         for schema in [0, 1, u32::MAX] {
             assert!(!report.supports_schema(schema));
+        }
+    }
+
+    #[test]
+    fn experimental_scope_never_advertises_complete_schema_support() {
+        let current = Capabilities::current("current");
+        assert_eq!(
+            Capabilities::parse(&current.encode().unwrap()).unwrap(),
+            current
+        );
+        assert!(!current.supports_schema(0));
+        assert_eq!(
+            current.supports_experimental_node_pnpm(0),
+            qualified_platform().is_some()
+        );
+        assert!(!current.supports_experimental_node_pnpm(1));
+        for (contract, schema, platform) in [
+            (2, 0, "macos-arm64"),
+            (1, 1, "macos-arm64"),
+            (1, 0, "windows-arm64"),
+            (1, 0, "linux-x64-musl"),
+        ] {
+            let peer = Capabilities::parse(format!(r#"{{"abiVersion":1,"cliVersion":"v","managedRunSchemas":[],"experimentalNodePnpm":{{"contractVersion":{contract},"lockSchema":{schema},"platform":"{platform}"}}}}"#).as_bytes()).unwrap();
+            assert!(!peer.supports_schema(0));
+            assert!(!peer.supports_experimental_node_pnpm(0));
+            assert!(!peer.supports_experimental_node_pnpm(1));
+        }
+        for scope in [
+            "null",
+            "{}",
+            r#"{"contractVersion":1,"lockSchema":0,"platform":"macos-arm64","complete":true}"#,
+        ] {
+            let json = format!(
+                r#"{{"abiVersion":1,"cliVersion":"v","managedRunSchemas":[],"experimentalNodePnpm":{scope}}}"#
+            );
+            if scope == "null" {
+                assert!(
+                    !Capabilities::parse(json.as_bytes())
+                        .unwrap()
+                        .supports_experimental_node_pnpm(0)
+                );
+            } else {
+                assert_eq!(Capabilities::parse(json.as_bytes()), Err(Error::Json));
+            }
         }
     }
 
@@ -166,6 +264,7 @@ mod tests {
                 abi_version: ABI_VERSION,
                 cli_version: version,
                 managed_run_schemas: schemas,
+                experimental_node_pnpm: None,
             });
             assert_eq!(report.encode(), Err(Error::Metadata));
             let bytes = serde_json::to_vec(&report.0).unwrap();
