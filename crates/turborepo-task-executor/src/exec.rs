@@ -360,11 +360,13 @@ where
         }
 
         let tui_sender = task_output.sender();
-        let cache_result = self
-            .task_cache
-            .restore_outputs(task_handle, tui_sender, telemetry)
-            .instrument(tracing::info_span!("cache_restore", task = %self.task_id))
-            .await;
+        let cache_result = validated_restore(
+            self.task_cache
+                .restore_outputs(task_handle, tui_sender, telemetry)
+                .instrument(tracing::info_span!("cache_restore", task = %self.task_id)),
+            self.managed_environment.as_deref(),
+        )
+        .await?;
         match cache_result {
             Ok(Some(status)) => {
                 self.hash_tracker.insert_expanded_outputs(
@@ -612,6 +614,19 @@ where
     }
 }
 
+/// Cache I/O can await a remote fetch or another setup transaction. A hit is
+/// not success until the original managed selection is current after that wait.
+async fn validated_restore<F: std::future::Future>(
+    restore: F,
+    tools: Option<&dyn crate::ManagedEnvironment>,
+) -> Result<F::Output, InternalError> {
+    let result = restore.await;
+    if let Some(tools) = tools {
+        tools.revalidate().map_err(InternalError::ManagedTools)?;
+    }
+    Ok(result)
+}
+
 fn stop_execution_for_task_error(continue_on_error: ContinueMode) -> Result<(), StopExecution> {
     match continue_on_error {
         ContinueMode::Always => Ok(()),
@@ -648,6 +663,75 @@ impl<H: HashTrackerProvider> DryRunExecutor<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ManagedEnvironment;
+
+    struct FileGeneration(std::path::PathBuf);
+    impl crate::ManagedEnvironment for FileGeneration {
+        fn revalidate(&self) -> Result<EnvironmentVariableMap, String> {
+            match std::fs::read(&self.0) {
+                Ok(bytes) if bytes == b"selected generation" => {
+                    Ok(EnvironmentVariableMap::default())
+                }
+                _ => Err("setup generation changed; run turbo setup".into()),
+            }
+        }
+        fn cache_identity(&self) -> &str {
+            "selected-snapshot"
+        }
+    }
+
+    #[tokio::test]
+    async fn delayed_cache_hit_rejects_ordinary_source_or_setup_generation_changes() {
+        for remove in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("generation");
+            std::fs::write(&path, b"selected generation").unwrap();
+            let tools = FileGeneration(path.clone());
+            tools.revalidate().unwrap(); // Selection before the restore wait.
+            let (started, waiting) = oneshot::channel();
+            let (resume, resumed) = oneshot::channel();
+            let restore = async {
+                started.send(()).unwrap();
+                resumed.await.unwrap();
+                Some("cache hit")
+            };
+            let edit = async {
+                waiting.await.unwrap();
+                if remove {
+                    std::fs::remove_file(path).unwrap();
+                } else {
+                    std::fs::write(path, b"new setup generation").unwrap();
+                }
+                resume.send(()).unwrap();
+            };
+            let (result, ()) = tokio::join!(validated_restore(restore, Some(&tools)), edit);
+            assert!(result.unwrap_err().to_string().contains("turbo setup"));
+        }
+    }
+
+    #[tokio::test]
+    async fn unchanged_and_unconfigured_cache_hits_preserve_results() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("generation");
+        std::fs::write(&path, b"selected generation").unwrap();
+        let tools = FileGeneration(path);
+        assert_eq!(
+            validated_restore(async { Some("hit") }, Some(&tools))
+                .await
+                .unwrap(),
+            Some("hit")
+        );
+        assert_eq!(
+            validated_restore(async { Some("hit") }, None)
+                .await
+                .unwrap(),
+            Some("hit")
+        );
+        assert_eq!(
+            validated_restore(async { None::<()> }, None).await.unwrap(),
+            None
+        );
+    }
 
     #[test]
     fn task_error_stop_signal_matches_continue_mode() {

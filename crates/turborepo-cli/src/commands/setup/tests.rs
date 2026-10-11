@@ -204,6 +204,8 @@ mod first_lock;
 mod force;
 #[path = "managed_run_tests.rs"]
 mod managed_run;
+#[path = "native_plain_run_tests.rs"]
+mod native_plain_run;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[cfg(target_os = "macos")]
@@ -213,6 +215,8 @@ mod trust_acl;
 mod trust_publication;
 #[path = "trust_tests.rs"]
 mod trusted_roots;
+#[path = "unlocked_trust_tests.rs"]
+mod unlocked_trust;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
