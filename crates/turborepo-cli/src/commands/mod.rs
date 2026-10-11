@@ -96,6 +96,7 @@ impl CommandBase {
             opts: self.opts.clone(),
             version: self.version,
             api_auth: self.api_auth()?,
+            managed_environment: None,
         })
     }
 

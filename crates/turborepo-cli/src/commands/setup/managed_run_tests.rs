@@ -1,6 +1,6 @@
 use std::{path::Path, sync::Arc};
 
-use turborepo_run::{ManagedEnvironment, builder::RunBuilder};
+use turborepo_run::{ManagedEnvironment, ManagedRun, builder::RunBuilder};
 use turborepo_signals::SignalHandler;
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
@@ -10,7 +10,7 @@ use crate::commands::{
     run::managed::{self, ManagedTools},
 };
 
-fn select(f: &Fixture) -> Result<Option<Arc<ManagedTools>>, String> {
+fn select(f: &Fixture) -> Result<Option<Arc<ManagedRun>>, String> {
     ManagedTools::inspect(
         f.owned.root(),
         &f.owned.root().join("turbo.json"),
@@ -89,12 +89,13 @@ fn input(f: &Fixture, mode: &str) -> turborepo_run::RunBuilderInput {
     .unwrap()
 }
 
-fn execute(f: &Fixture, mode: &str, tools: Arc<ManagedTools>) -> String {
+fn execute(f: &Fixture, mode: &str, tools: Arc<ManagedRun>) -> String {
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let handler = SignalHandler::new(futures::stream::pending());
-        let (run, analytics) = RunBuilder::new(input(f, mode), None)
+        let mut input = input(f, mode);
+        input.managed_environment = Some(tools);
+        let (run, analytics) = RunBuilder::new(input, None)
             .unwrap()
-            .with_managed_environment(tools)
             .build(&handler, CommandEventBuilder::new("run"))
             .await
             .unwrap();
@@ -189,6 +190,25 @@ fn actual_task_hashes_are_location_independent_and_bind_verified_artifact_identi
 }
 
 #[test]
+fn concrete_carrier_rejects_an_environment_for_a_different_snapshot() {
+    struct Wrong;
+    impl ManagedEnvironment for Wrong {
+        fn revalidate(&self) -> Result<turborepo_run::EnvironmentVariableMap, String> {
+            panic!("mismatched carrier must not use the environment")
+        }
+        fn cache_identity(&self) -> &str {
+            "wrong"
+        }
+    }
+    let f = runnable();
+    let u = Upstream::new(&f, false, None);
+    f.run(&u, FROZEN).unwrap();
+    let tools = select(&f).unwrap().unwrap();
+    assert!(ManagedRun::new(tools.snapshot().clone(), Arc::new(Wrong)).is_err());
+    assert_eq!(u.hits(), 3);
+}
+
+#[test]
 fn declaration_drift_after_selection_fails_before_builder_work_or_task_dispatch() {
     let f = runnable();
     let u = Upstream::new(&f, false, None);
@@ -197,9 +217,10 @@ fn declaration_drift_after_selection_fails_before_builder_work_or_task_dispatch(
     fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap();
     let error = tokio::runtime::Runtime::new().unwrap().block_on(async {
         let handler = SignalHandler::new(futures::stream::pending());
-        let result = RunBuilder::new(input(&f, "strict"), None)
+        let mut input = input(&f, "strict");
+        input.managed_environment = Some(tools);
+        let result = RunBuilder::new(input, None)
             .unwrap()
-            .with_managed_environment(tools)
             .build(&handler, CommandEventBuilder::new("run"))
             .await;
         handler.close().await;
