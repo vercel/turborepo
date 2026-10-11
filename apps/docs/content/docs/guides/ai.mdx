@@ -18,7 +18,7 @@ Turborepo configuration, task behavior, and CLI commands can vary between instal
 
 The block tells agents to resolve the `turbo` package from the repository or relevant workspace instead of assuming it is at the root `node_modules/turbo`. It points them to that package's `docs/README.md` first, then to the relevant pages under `docs/`. These bundled pages match the installed version and work without network access.
 
-Turborepo creates `AGENTS.md` if needed and updates only its uniquely marked block, preserving existing project instructions and other tools' managed blocks. By default, the block is not created or refreshed. Set `"agentGuidance": true` in the root `turbo.json` or `turbo.jsonc` to opt in; this does not remove an existing block. Keep the generated block committed with your work to avoid an uncommitted change on a later agent invocation. New projects created from the default starter include it from the start.
+Turborepo creates `AGENTS.md` if needed and updates only its uniquely marked block, preserving existing project instructions and other tools' managed blocks. Set `"agentGuidance": true` in the root `turbo.json` or `turbo.jsonc` to opt in; this does not remove an existing block. Keep the generated block committed with your work to avoid an uncommitted change on a later agent invocation. New projects created from the default starter include it from the start.
 
 ## Agent Skill
 
