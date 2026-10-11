@@ -56,7 +56,7 @@ pub enum Error {
     #[error(transparent)]
     Node(#[from] turborepo_setup::node_provision::Error),
     #[error(transparent)]
-    Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
+    Registry(#[from] turborepo_setup::pnpm_provision::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]

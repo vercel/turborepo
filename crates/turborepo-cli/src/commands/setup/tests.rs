@@ -201,6 +201,8 @@ const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 mod first_lock;
 #[path = "force_tests.rs"]
 mod force;
+#[path = "npm_tests.rs"]
+mod npm;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[test]

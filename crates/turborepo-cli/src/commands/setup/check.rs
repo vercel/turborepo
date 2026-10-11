@@ -46,6 +46,16 @@ pub(super) fn run(
     for tool in plan.tools() {
         println!("{} {}: ready", tool.id, tool.version);
     }
+    if let Some(npm) = sources
+        .previous_lock()
+        .and_then(|lock| lock.tools().get("npm"))
+        && matches!(
+            npm.installation,
+            turborepo_setup::lock::Installation::Bundled { .. }
+        )
+    {
+        println!("npm {}: ready (bundled with managed Node)", npm.version);
+    }
     println!(
         "Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run."
     );
