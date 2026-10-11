@@ -119,6 +119,7 @@ impl Fixture {
                 args,
                 setup_args,
                 Some(provision::Transports {
+                    trust_base: Some(self.owned.home().to_owned()),
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
                         upstream.origin(),
@@ -201,6 +202,13 @@ mod first_lock;
 mod force;
 #[path = "publication_guards.rs"]
 mod publication_guards;
+#[cfg(target_os = "macos")]
+#[path = "trust_acl_tests.rs"]
+mod trust_acl;
+#[path = "trust_publication_test.rs"]
+mod trust_publication;
+#[path = "trust_tests.rs"]
+mod trusted_roots;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
