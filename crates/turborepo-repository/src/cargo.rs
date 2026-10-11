@@ -178,7 +178,10 @@ impl ResolutionIdentities {
             rank[idx] = position;
         }
         Self {
-            sorted: order.into_iter().map(|idx| identities[idx].clone()).collect(),
+            sorted: order
+                .into_iter()
+                .map(|idx| identities[idx].clone())
+                .collect(),
             rank,
             compiler: compiler.map(identity),
         }

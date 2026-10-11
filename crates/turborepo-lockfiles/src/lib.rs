@@ -32,8 +32,8 @@ use std::{
 pub use berry::{Error as BerryError, *};
 pub use bun::{BunLockfile, bun_global_change};
 pub use cargo::{
-    CargoExternalClosures, Error as CargoLockError, PrunedCargoLock, cargo_external_closure_indices,
-    cargo_external_closures, cargo_prune_lock,
+    CargoExternalClosures, Error as CargoLockError, PrunedCargoLock,
+    cargo_external_closure_indices, cargo_external_closures, cargo_prune_lock,
 };
 use dashmap::DashMap;
 pub use error::Error;
