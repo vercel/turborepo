@@ -9,6 +9,7 @@ use crate::cli::{Args, SetupArgs};
 
 #[cfg(target_os = "macos")]
 mod acl;
+pub(crate) mod authorization;
 mod check;
 mod lock_diagnostics;
 mod no_lock;
