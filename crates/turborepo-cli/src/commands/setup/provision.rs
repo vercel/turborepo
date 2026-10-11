@@ -6,6 +6,7 @@ use std::{fs, io, path::Path, process::Command};
 use turborepo_setup::{
     lock::{Platform, Snapshot},
     node_provision::{NodePlan, NodeTransport},
+    npm_provision::NpmPlan,
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
     source_policy::OfficialSourcePolicy,
@@ -93,6 +94,7 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
 pub(super) struct Plans {
     pub node: NodePlan,
     pub pnpm: Option<PnpmPlan>,
+    pub npm: Option<NpmPlan>,
 }
 pub(super) fn plans(
     snapshot: &Snapshot,
@@ -107,10 +109,10 @@ pub(super) fn plans(
     if lock
         .tools()
         .keys()
-        .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+        .any(|id| !matches!(id.as_str(), "node" | "npm" | "pnpm"))
     {
         return Err(Error::Unsupported(
-            "only managed Node and pnpm are supported",
+            "only managed Node, npm and pnpm are supported",
         ));
     }
     let node = NodePlan::from_lock(lock, platform)?;
@@ -124,16 +126,19 @@ pub(super) fn plans(
             "locked Node does not satisfy native declarations",
         ));
     }
-    let manager = snapshot.package_manager()?;
-    let pnpm = if let Some(manager) = manager {
-        if manager.manager != Manager::Pnpm {
-            return Err(Error::Unsupported("npm override provisioning"));
+    let (mut pnpm, mut npm) = (None, None);
+    if let Some(manager) = snapshot.package_manager()? {
+        match manager.manager {
+            Manager::Pnpm => {
+                pnpm = Some(PnpmPlan::from_declaration(lock, platform, &node, &manager)?);
+            }
+            Manager::Npm => {
+                npm = NpmPlan::from_declaration(lock, platform, &node, &manager)?;
+            }
+            _ => return Err(Error::Unsupported("package manager provisioning")),
         }
-        Some(PnpmPlan::from_declaration(lock, platform, &node, &manager)?)
-    } else {
-        None
-    };
-    Ok(Plans { node, pnpm })
+    }
+    Ok(Plans { node, pnpm, npm })
 }
 
 pub(super) fn lock_report(
@@ -182,11 +187,6 @@ pub(super) fn run(
     let write = lock_mode == super::LockMode::Write && !force;
     let root = discovery.snapshot_root()?.as_std_path();
     platform()?;
-    // Unsupported native requests must fail before ANY writer, even no-op locks.
-    let manager = snapshot.package_manager()?;
-    if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
-        return Err(Error::Unsupported("npm override provisioning"));
-    }
     if write && !snapshot.declarations().contains_key("node") {
         return Err(Error::Unsupported("a native Node declaration is required"));
     }
@@ -198,10 +198,10 @@ pub(super) fn run(
             && lock
                 .tools()
                 .keys()
-                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+                .any(|id| !matches!(id.as_str(), "node" | "npm" | "pnpm"))
         {
             return Err(Error::Unsupported(
-                "only managed Node and pnpm are supported",
+                "only managed Node, npm and pnpm are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -269,10 +269,13 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
-    let Plans { node, pnpm } = plans(&snapshot, lock)?;
+    let Plans { node, pnpm, npm } = plans(&snapshot, lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
         desired.push(pnpm.inventory_tool().clone());
+    }
+    if let Some(npm) = &npm {
+        desired.push(npm.inventory_tool().clone());
     }
     let policy = preflight()?;
     let transports = transports
@@ -299,7 +302,7 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm) = runtime.block_on(async {
+    let (prepared_node, prepared_pnpm, prepared_npm) = runtime.block_on(async {
         let node = node
             .prepare(&store, &desired, &transports.node, preparation)
             .await?;
@@ -313,7 +316,16 @@ pub(super) fn run(
             }
             None => None,
         };
-        Ok::<_, Error>((node, pnpm))
+        let npm = match &npm {
+            Some(plan) => {
+                // npm and pnpm use the same exact, integrity-verified registry
+                // transport; the plan determines package identity, never PATH.
+                plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, pnpm, npm))
     })?;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
         if tool == node.inventory_tool() {
@@ -324,6 +336,7 @@ pub(super) fn run(
         } else {
             prepared_pnpm
                 .as_ref()
+                .or(prepared_npm.as_ref())
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?
                 .stage(tool, destination)
         }
@@ -347,12 +360,21 @@ pub(super) fn run(
             tool.version,
             if (tool.id == "node" && prepared_node.is_none())
                 || (tool.id == "pnpm" && prepared_pnpm.is_none())
+                || (tool.id == "npm" && prepared_npm.is_none())
             {
                 "reused"
             } else {
                 "installed"
             }
         );
+    }
+    if let Some(npm) = lock.tools().get("npm")
+        && matches!(
+            npm.installation,
+            turborepo_setup::lock::Installation::Bundled { .. }
+        )
+    {
+        println!("npm {}: provided by managed Node (bundled)", npm.version);
     }
     println!(
         "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."

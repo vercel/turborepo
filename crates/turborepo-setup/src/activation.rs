@@ -1,4 +1,4 @@
-//! Read-only Node/pnpm environment planning, not execution authorization.
+//! Read-only Node/npm/pnpm environment planning, not execution authorization.
 //! Repo-writable inventory proves readiness only. Consumers must separately
 //! authorize setup-recorded tools with trusted-root user state, gate managed
 //! mode, and revalidate before use. No CLI support is advertised by this
@@ -16,6 +16,7 @@ use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot},
     lock::{Installation, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
+    npm_provision::NpmPlan,
     pnpm_provision::PnpmPlan,
 };
 
@@ -27,7 +28,9 @@ pub enum Error {
         "native declarations disagree with turbo.lock; run turbo setup locally and commit the lock"
     )]
     DeclarationDrift,
-    #[error("activation planning supports only managed Node/pnpm; use a supported setup adapter")]
+    #[error(
+        "activation planning supports only managed Node/npm/pnpm; use a supported setup adapter"
+    )]
     UnsupportedAdapter,
     #[error(
         "managed activation is unqualified for this platform; use a supported macOS/GNU Linux \
@@ -96,8 +99,10 @@ impl ActivationPlan {
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
-                    || !matches!(id.as_str(), "node" | "pnpm")
-                    || !matches!(tool.installation, Installation::Managed { .. })
+                    || !matches!(id.as_str(), "node" | "npm" | "pnpm")
+                    || !(matches!(tool.installation, Installation::Managed { .. })
+                        || (id == "npm"
+                            && matches!(tool.installation, Installation::Bundled { .. })))
             })
         {
             return Err(Error::UnsupportedAdapter);
@@ -129,6 +134,14 @@ impl ActivationPlan {
             let pnpm = PnpmPlan::from_declaration(lock, platform, &node, &manager)
                 .map_err(|_| Error::InvalidLock)?;
             tools.push(pnpm.inventory_tool().clone());
+        }
+        if lock.tools().contains_key("npm") {
+            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
+            if let Some(npm) = NpmPlan::from_declaration(lock, platform, &node, &manager)
+                .map_err(|_| Error::InvalidLock)?
+            {
+                tools.push(npm.inventory_tool().clone());
+            }
         }
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
