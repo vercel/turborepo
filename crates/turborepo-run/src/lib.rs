@@ -7,7 +7,9 @@ pub mod boundaries;
 pub mod builder;
 pub mod engine_loader;
 mod error;
+mod managed;
 
+pub use managed::ManagedRun;
 pub use turborepo_task_graph::ManagedEnvironment;
 pub(crate) mod scope;
 #[cfg(test)]
@@ -40,6 +42,8 @@ pub struct RunBuilderInput {
     pub opts: Opts,
     pub version: &'static str,
     pub api_auth: Option<APIAuth>,
+    /// Run-only opt-in. Other graph consumers leave this absent.
+    pub managed_environment: Option<Arc<ManagedRun>>,
 }
 
 use turborepo_ci::Vendor;
@@ -134,7 +138,7 @@ pub(crate) struct ExecutionContext {
     pub(crate) start_at: DateTime<Local>,
     pub(crate) opts: Arc<Opts>,
     pub(crate) env_at_execution_start: EnvironmentVariableMap,
-    pub(crate) managed_environment: Option<Arc<dyn ManagedEnvironment>>,
+    pub(crate) managed_environment: Option<Arc<ManagedRun>>,
     pub(crate) filtered_pkgs: HashSet<PackageName>,
     pub(crate) remote_cache_status: RemoteCacheStatus,
     pub(crate) engine: Arc<Engine<Built, TaskDefinition>>,
@@ -1222,7 +1226,7 @@ impl Run {
         let managed_cache_key = self.execution.managed_environment.as_ref().map(|tools| {
             format!(
                 "{GLOBAL_CACHE_KEY}:turborepo.setup.execution.v1:{}",
-                tools.cache_identity()
+                tools.snapshot().fingerprint()
             )
         });
         if let Some(tools) = &self.execution.managed_environment {

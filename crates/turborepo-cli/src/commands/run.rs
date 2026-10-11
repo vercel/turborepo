@@ -104,11 +104,10 @@ pub async fn run(
 
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
-        RunBuilder::new(base.run_builder_input()?, Some(http_client))?
+        let mut input = base.run_builder_input()?;
+        input.managed_environment = managed;
+        RunBuilder::new(input, Some(http_client))?
     };
-    if let Some(tools) = managed {
-        run_builder = run_builder.with_managed_environment(tools);
-    }
     if let Some(qs) = query_server {
         run_builder = run_builder.with_query_server(qs);
     }
