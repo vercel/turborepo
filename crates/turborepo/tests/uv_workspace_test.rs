@@ -545,6 +545,93 @@ fn test_uv_workspace_falls_back_with_unparsable_lockfile() {
 }
 
 #[test]
+fn test_uv_fallback_workspace_source_overrides_local_file_reference() {
+    for source_at_root in [false, true] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_uv_pure_workspace(tempdir.path());
+        fs::write(tempdir.path().join("uv.lock"), "not valid lockfile TOML").unwrap();
+        let source = "\n[tool.uv.sources]\npy-lib = { workspace = true }\n";
+        fs::write(
+            tempdir.path().join("packages/py-app/pyproject.toml"),
+            format!(
+                "[project]\nname = \"py-app\"\nversion = \"0.1.0\"\nrequires-python = \
+                 \">=3.9\"\ndependencies = [\"py-lib @ file:///nonexistent/vendor/py-lib\"]\n\n\
+                 [build-system]\nrequires = [\"uv_build>=0.8,<2\"]\nbuild-backend = \
+                 \"uv_build\"\n{}",
+                if source_at_root { "" } else { source }
+            ),
+        )
+        .unwrap();
+        if source_at_root {
+            append_manifest(tempdir.path(), "pyproject.toml", source);
+        }
+
+        let output = run_turbo(
+            tempdir.path(),
+            &["build", "--filter=py-app", "--dry-run=json"],
+        );
+        assert_command_success(&output, "fallback with a workspace source override");
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("using conservative Python task hashing")
+        );
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            find_task(&json, "py-app#build")["dependencies"],
+            serde_json::json!(["py-lib#build"])
+        );
+    }
+}
+
+/// When the manifest fallback rejects a local path source, the output must
+/// still explain why turbo left exact discovery.
+#[test]
+fn test_uv_fallback_rejection_reports_why_it_fell_back() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    fs::write(tempdir.path().join("uv.lock"), "not valid lockfile TOML").unwrap();
+    fs::write(
+        tempdir.path().join("packages/py-app/pyproject.toml"),
+        "[project]\nname = \"py-app\"\nversion = \"0.1.0\"\nrequires-python = \
+         \">=3.9\"\ndependencies = [\"py-lib\", \"helper\"]\n\n[tool.uv.sources]\npy-lib = { \
+         workspace = true }\nhelper = { path = \"../../vendor/helper\" }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("vendor/helper")).unwrap();
+    fs::write(
+        tempdir.path().join("vendor/helper/pyproject.toml"),
+        "[project]\nname = \"helper\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{combined}");
+    assert!(
+        combined.contains("using conservative Python task hashing"),
+        "{combined}"
+    );
+    // The diagnostic renderer wraps the error and prefixes continuation lines
+    // with a gutter, so match its message independently of terminal width.
+    let diagnostic = combined
+        .lines()
+        .map(|line| line.trim().trim_start_matches('|').trim())
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        diagnostic.contains("only uv workspace members are supported"),
+        "{combined}"
+    );
+}
+
+#[test]
 fn test_uv_lock_change_only_affects_dependency_closure() {
     if !uv_available() {
         return;
