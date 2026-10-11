@@ -81,7 +81,16 @@ impl RestoreManifest {
         path: String,
         disk_path: &AbsoluteSystemPath,
     ) -> Result<(), CacheError> {
-        let meta = disk_path.symlink_metadata()?;
+        self.record_file_metadata(path, &disk_path.symlink_metadata()?)
+    }
+
+    /// Record a file that was just written to disk, using metadata already
+    /// obtained for it (e.g. from the open file handle after the last write).
+    pub fn record_file_metadata(
+        &mut self,
+        path: String,
+        meta: &std::fs::Metadata,
+    ) -> Result<(), CacheError> {
         let mtime_nanos = meta
             .modified()?
             .duration_since(UNIX_EPOCH)
