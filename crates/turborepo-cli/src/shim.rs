@@ -70,15 +70,16 @@ impl TurboRunner for TurboCliRunner<'_> {
             return Ok(None);
         }
         let words: Vec<_> = std::env::args_os().collect();
-        let Ok(args) = cli::Args::parse_args(words.clone()) else {
-            // Never hand unparseable arguments to an unvalidated local CLI.
-            // Args::new reports them exactly like the normal CLI, then exits.
-            cli::Args::new(words);
-            unreachable!("Args::new exits for arguments that fail to parse");
+        let args = match managed_run_args(words.clone()) {
+            Ok(Some(args)) => args,
+            Ok(None) => return Ok(None),
+            Err(_) => {
+                // Never hand unparseable arguments to an unvalidated local CLI.
+                // Args::new reports them exactly like the normal CLI, then exits.
+                cli::Args::new(words);
+                unreachable!("Args::new exits for arguments that fail to parse");
+            }
         };
-        if !matches!(args.command, Some(cli::Command::Run { .. })) {
-            return Ok(None);
-        }
         let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
         crate::commands::run::managed::select(&base)
             .map(|tools| tools.map(|_| 0))
@@ -88,6 +89,21 @@ impl TurboRunner for TurboCliRunner<'_> {
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
         cli::run(repo_state, self.subscriber, ui, self.query_server.clone())
     }
+}
+
+/// Preserve Args::new's informational exits before inspecting managed setup.
+/// A forwarded task argument after `--` is not a CLI help request.
+fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>, String> {
+    if words.len() <= 1
+        || words
+            .iter()
+            .take_while(|word| *word != "--")
+            .any(|word| matches!(word.to_str(), Some("-h" | "--help")))
+    {
+        return Ok(None);
+    }
+    let args = cli::Args::parse_args(words)?;
+    Ok((!args.version && matches!(args.command, Some(cli::Command::Run { .. }))).then_some(args))
 }
 
 /// Implementation of `ConfigProvider` that uses `turborepo-cli`'s configuration
@@ -295,7 +311,46 @@ mod tests {
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::read_no_update_notifier_from_turbo_json;
+    use super::{managed_run_args, read_no_update_notifier_from_turbo_json};
+
+    fn words(args: &[&str]) -> Vec<std::ffi::OsString> {
+        args.iter().map(std::ffi::OsString::from).collect()
+    }
+
+    #[test]
+    fn managed_preflight_leaves_help_and_version_to_normal_cli_parsing() {
+        for args in [
+            vec!["turbo"],
+            vec!["turbo", "--help"],
+            vec!["turbo", "run", "--help"],
+            vec!["turbo", "run", "build", "-h"],
+            vec!["turbo", "--version"],
+            vec!["turbo", "run", "build", "--version"],
+        ] {
+            assert!(
+                managed_run_args(words(&args)).unwrap().is_none(),
+                "{args:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn managed_preflight_does_not_treat_forwarded_help_as_an_info_exit() {
+        let args = managed_run_args(words(&["turbo", "run", "build", "--", "--help"]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(args.execution_args().unwrap().pass_through_args, ["--help"]);
+    }
+
+    #[test]
+    fn managed_preflight_retains_errors_and_excludes_other_commands() {
+        assert!(managed_run_args(words(&["turbo", "run", "build", "--unknown-option"])).is_err());
+        assert!(
+            managed_run_args(words(&["turbo", "setup", "--tools-only"]))
+                .unwrap()
+                .is_none()
+        );
+    }
 
     #[test]
     fn fallback_reads_true_from_turbo_json() {
