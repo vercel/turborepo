@@ -121,8 +121,10 @@ impl SignalHandler {
                     .collect::<FuturesUnordered<_>>()
             };
 
-            let mut signal_source_open = shutdown_reason == ShutdownReason::Signal;
-            let mut in_process_signal_open = signal_source_open;
+            // Normal completion can still be draining owned subprocesses.
+            // Keep accepting Ctrl-C until every subscriber has finished.
+            let mut signal_source_open = true;
+            let mut in_process_signal_open = true;
             while !callbacks.is_empty() {
                 tokio::select! {
                     _ = callbacks.next() => {}
@@ -414,6 +416,34 @@ mod test {
         assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Signal));
         drop(_guard);
         handler.done().await;
+    }
+
+    #[tokio::test]
+    async fn test_signal_is_retained_while_normal_close_drains() {
+        let (deliver, received) = oneshot::channel::<()>();
+        let handler = SignalHandler::new(stream::once(async move {
+            received.await.ok();
+            Some(DEFAULT_SIGNAL)
+        }));
+        let subscriber = handler.subscribe().unwrap();
+        let close = {
+            let handler = handler.clone();
+            tokio::spawn(async move { handler.close().await })
+        };
+        let guard = subscriber.listen().await.unwrap();
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Close));
+        let mut signals = handler.subscribe_signals();
+        deliver.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while *signals.borrow_and_update() == 0 {
+                signals.changed().await.unwrap();
+            }
+        })
+        .await
+        .unwrap();
+        assert!(!close.is_finished());
+        drop(guard);
+        close.await.unwrap();
     }
 
     #[tokio::test]

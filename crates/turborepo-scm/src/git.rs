@@ -22,6 +22,24 @@ pub struct InvalidRange {
     pub to_ref: Option<String>,
 }
 
+struct DirtyHashWriter<'a> {
+    hasher: &'a mut sha2::Sha256,
+    has_content: bool,
+}
+
+impl std::io::Write for DirtyHashWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        use sha2::Digest;
+        self.hasher.update(bytes);
+        self.has_content |= !bytes.is_empty();
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 impl SCM {
     pub fn get_current_sha(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
         match self {
@@ -445,14 +463,34 @@ impl GitRepo {
 
         use sha2::Digest;
 
-        let mut child = match Command::new(self.bin.as_std_path())
+        let mut command = Command::new(self.bin.as_std_path());
+        if self.command_scope.is_some() {
+            // A split private index may reference the repository's shared
+            // index, but must not create or expire shared indexes on refresh.
+            command.args(["-c", "core.splitIndex=false"]);
+        }
+        command
             .args(args)
             .current_dir(&self.root)
             .env("GIT_OPTIONAL_LOCKS", "0")
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-        {
+            .stderr(Stdio::null());
+
+        if let Some(scope) = &self.command_scope {
+            // `git diff` may refresh the index even with OPTIONAL_LOCKS=0.
+            // Keep its normal filtering/configuration but isolate that write
+            // so cancellation cannot strand the repository's index.lock.
+            let private_index = self.private_index().ok()?;
+            command.env("GIT_INDEX_FILE", private_index.path().join("index"));
+            let mut writer = DirtyHashWriter {
+                hasher,
+                has_content: false,
+            };
+            let (success, _) = scope.run(&command, &mut writer).ok()?;
+            return success.then_some(writer.has_content);
+        }
+
+        let mut child = match command.spawn() {
             Ok(child) => child,
             Err(_) => return None,
         };
@@ -477,6 +515,34 @@ impl GitRepo {
             .wait()
             .is_ok_and(|s| s.success())
             .then_some(has_content)
+    }
+
+    fn private_index(&self) -> Result<tempfile::TempDir, Error> {
+        let path = self.execute_git_command(&["rev-parse", "--git-path", "index"], "")?;
+        let path = String::from_utf8(path)?;
+        let path = std::path::Path::new(path.trim_end_matches(['\r', '\n']));
+        let path = if path.is_absolute() {
+            path.to_owned()
+        } else {
+            self.root.as_std_path().join(path)
+        };
+        let private = tempfile::tempdir()?;
+        let mut source = match fs::File::open(path) {
+            Ok(source) => source,
+            // An unborn repository may not have an index yet. Git must see
+            // an absent index, not an empty (invalid) file.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(private),
+            Err(error) => return Err(error.into()),
+        };
+        // Git uses the index timestamp to detect racy-clean entries. A copy
+        // stamped with the current time could hide same-timestamp changes.
+        // Read bytes and metadata from one open file, even if another Git
+        // process atomically replaces the repository's index while we copy.
+        let modified = source.metadata()?.modified()?;
+        let mut target = fs::File::create(private.path().join("index"))?;
+        std::io::copy(&mut source, &mut target)?;
+        target.set_modified(modified)?;
+        Ok(private)
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
@@ -642,6 +708,18 @@ impl GitRepo {
             command.arg("--").arg(pathspec);
         }
 
+        if let Some(scope) = &self.command_scope {
+            let mut stdout = Vec::new();
+            let (success, stderr) = scope.run(&command, &mut stdout)?;
+            return if success {
+                Ok(stdout)
+            } else {
+                Err(Error::Git(
+                    String::from_utf8_lossy(&stderr).into_owned(),
+                    Backtrace::capture(),
+                ))
+            };
+        }
         let output = command.output()?;
 
         if !output.status.success() {
@@ -2560,6 +2638,80 @@ mod tests {
             attrs: std::sync::OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
+            command_scope: None,
+        }
+    }
+
+    #[test]
+    fn test_private_index_preserves_bytes_and_timestamp() {
+        let (temp, repo) = setup_repository(None).unwrap();
+        fs::write(repo.join("foo.txt"), "content").unwrap();
+        run_git(&repo, &["add", "."]);
+        let index = repo.join(".git/index");
+        let timestamp = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        fs::OpenOptions::new()
+            .write(true)
+            .open(&index)
+            .unwrap()
+            .set_modified(timestamp)
+            .unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let private = make_git_repo(&root).private_index().unwrap();
+        assert_eq!(
+            fs::read(private.path().join("index")).unwrap(),
+            fs::read(&index).unwrap()
+        );
+        assert_eq!(
+            fs::metadata(private.path().join("index"))
+                .unwrap()
+                .modified()
+                .unwrap(),
+            fs::metadata(index).unwrap().modified().unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_scoped_dirty_hash_preserves_unborn_and_split_index_state() {
+        for split in [false, true] {
+            let (temp, repo) = setup_repository(None).unwrap();
+            fs::write(repo.join("foo.txt"), "content").unwrap();
+            run_git(&repo, &["add", "."]);
+            if split {
+                run_git(&repo, &["config", "core.splitIndex", "true"]);
+                run_git(&repo, &["config", "splitIndex.maxPercentChange", "0"]);
+                run_git(&repo, &["update-index", "--split-index"]);
+            }
+            let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+            let scm = SCM::new(&root);
+            let expected = scm.get_dirty_hash();
+            assert!(expected.is_some());
+            let before = fs::read(repo.join(".git/index")).unwrap();
+            let shared_indexes = || {
+                let mut files: Vec<_> = fs::read_dir(repo.join(".git"))
+                    .unwrap()
+                    .map(Result::unwrap)
+                    .filter(|entry| {
+                        entry
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with("sharedindex.")
+                    })
+                    .map(|entry| (entry.file_name(), fs::read(entry.path()).unwrap()))
+                    .collect();
+                files.sort();
+                files
+            };
+            let shared_before = shared_indexes();
+            let scope = crate::ScmCommandScope::new();
+            let scoped = scm.with_command_scope(scope.clone());
+            let actual = tokio::task::spawn_blocking(move || scoped.get_dirty_hash())
+                .await
+                .unwrap();
+            scope.stop().await;
+            assert_eq!(actual, expected, "split={split}");
+            assert_eq!(fs::read(repo.join(".git/index")).unwrap(), before);
+            assert_eq!(shared_indexes(), shared_before);
+            assert!(!repo.join(".git/index.lock").exists());
         }
     }
 

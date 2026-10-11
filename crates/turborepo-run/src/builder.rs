@@ -29,7 +29,7 @@ use turborepo_repository::{
 use turborepo_run_context::RepoContext;
 use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
 use turborepo_run_summary::observability;
-use turborepo_scm::SCM;
+use turborepo_scm::{SCM, ScmCommandScope};
 use turborepo_scope::{
     ChangedFilesDetector, GitChangeDetector, TargetSelector, filter::ResolutionError,
 };
@@ -326,10 +326,77 @@ struct RunServicesInput<'a> {
     preflight_handle: Option<RemoteCachePreflight>,
     async_cache: AsyncCache,
     scm_state: LazyScmState,
-    scm_state_task: Option<tokio::task::JoinHandle<Option<String>>>,
     scm: &'a SCM,
-    repo_index: &'a PendingRepoIndex,
+    signal_handler: &'a SignalHandler,
     analytics_handle: Option<AnalyticsHandle>,
+}
+
+/// Subscribe before capture can start, and close the actual subprocess scope
+/// before releasing shutdown. A blocking-pool task abort does not stop Git.
+fn spawn_scm_task<F>(
+    handler: &SignalHandler,
+    scope: ScmCommandScope,
+    state: LazyScmState,
+    partial_state: Arc<std::sync::OnceLock<CacheScmState>>,
+    task: F,
+) -> Option<tokio::task::JoinHandle<()>>
+where
+    F: Future<Output = Option<CacheScmState>> + Send + 'static,
+{
+    use futures::FutureExt;
+
+    let subscriber = handler.subscribe()?;
+    let handler = handler.clone();
+    let mut signals = handler.subscribe_signals();
+    Some(tokio::spawn(async move {
+        let mut shutdown = std::pin::pin!(subscriber.listen());
+        tokio::select! {
+            biased;
+            _ = state.wait_until_requested() => {}
+            guard = &mut shutdown => {
+                let _guard = guard.ok();
+                scope.stop().await;
+                state.resolve(None);
+                return;
+            }
+        }
+        let task = std::panic::AssertUnwindSafe(task).catch_unwind();
+        tokio::pin!(task);
+        let result = tokio::select! {
+            result = &mut task => result.ok().flatten(),
+            guard = &mut shutdown => {
+                let _guard = guard.ok();
+                // Cache shutdown may still need this capture. Give normal
+                // completion a bounded drain, interruptible by Ctrl-C.
+                let (result, finished) = if handler.shutdown_reason() == Some(turborepo_signals::ShutdownReason::Close) {
+                    tokio::select! {
+                        result = &mut task => (result.ok().flatten(), true),
+                        _ = tokio::time::sleep(Duration::from_secs(5)) => (None, false),
+                        _ = async {
+                            while *signals.borrow_and_update() == 0 {
+                                if signals.changed().await.is_err() {
+                                    std::future::pending::<()>().await;
+                                }
+                            }
+                        } => (None, false),
+                    }
+                } else {
+                    (None, false)
+                };
+                scope.stop().await;
+                if !finished {
+                    // Let the blocking reader observe EOF and remove its
+                    // private index. The closed scope rejects further Git
+                    // spawns even if non-process work outlasts this drain.
+                    let _ = tokio::time::timeout(Duration::from_secs(1), &mut task).await;
+                }
+                state.resolve(result.or_else(|| partial_state.get().cloned()));
+                return;
+            }
+        };
+        scope.stop().await;
+        state.resolve(result.or_else(|| partial_state.get().cloned()));
+    }))
 }
 
 struct BuiltRunServices {
@@ -2051,9 +2118,8 @@ impl RunBuilder {
             preflight_handle,
             async_cache,
             scm_state,
-            scm_state_task,
             scm,
-            repo_index,
+            signal_handler,
             analytics_handle,
         } = input;
         let remote_cache_status =
@@ -2106,31 +2172,43 @@ impl RunBuilder {
                 });
                 observability::Handle::try_init(opts, token)
             });
-        if let Some(scm_state_task) = scm_state_task {
-            let scm_state = scm_state.clone();
-            let scm = scm.clone();
-            let repo_index = repo_index.clone();
-            tokio::spawn(
+        if !self.skip_repo_index_and_scm_state {
+            let scope = ScmCommandScope::new();
+            let scm = scm.clone().with_command_scope(scope.clone());
+            let repo_root = self.repo_root.clone();
+            let partial_state = Arc::new(std::sync::OnceLock::new());
+            let worker_partial_state = partial_state.clone();
+            let capture = spawn_scm_task(
+                signal_handler,
+                scope,
+                scm_state.clone(),
+                partial_state,
                 async move {
-                    let sha = scm_state_task.await.ok().flatten();
-                    let repo_index = repo_index.get().await;
-                    let dirty_hash =
-                        tokio::task::spawn_blocking(move || match repo_index.as_ref() {
-                            Some(repo_index) => scm.get_dirty_hash_from_repo_index(repo_index),
-                            None => scm.get_dirty_hash(),
-                        })
-                        .await
-                        .ok()
-                        .flatten();
-                    let state = if sha.is_some() || dirty_hash.is_some() {
-                        Some(CacheScmState { sha, dirty_hash })
-                    } else {
-                        None
-                    };
-                    scm_state.resolve(state);
+                    tokio::task::spawn_blocking(move || {
+                        let sha = scm.get_current_sha(&repo_root).ok();
+                        if sha.is_some() {
+                            let _ = worker_partial_state.set(CacheScmState {
+                                sha: sha.clone(),
+                                dirty_hash: None,
+                            });
+                        }
+                        // Capture current status with the deferred SHA rather
+                        // than mixing it with the startup hashing snapshot.
+                        let dirty_hash = scm.get_dirty_hash();
+                        (sha.is_some() || dirty_hash.is_some())
+                            .then_some(CacheScmState { sha, dirty_hash })
+                    })
+                    .await
+                    .ok()
+                    .flatten()
                 }
                 .instrument(tracing::info_span!("capture_scm_state")),
             );
+            if capture.is_none() {
+                // Shutdown has already started: don't launch another Git child
+                // or leave cache writers waiting for a computation we skipped.
+                scm_state.resolve(None);
+            }
         } else {
             scm_state.resolve(None);
         }
@@ -2218,14 +2296,6 @@ impl RunBuilder {
             .unzip();
 
         let scm_state = LazyScmState::new();
-        let scm_state_task = (!self.skip_repo_index_and_scm_state).then(|| {
-            let scm = scm.clone();
-            let repo_root = self.repo_root.clone();
-            tokio::task::spawn_blocking(move || {
-                let _span = tracing::info_span!("capture_scm_sha").entered();
-                scm.get_current_sha(&repo_root).ok()
-            })
-        });
 
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
@@ -2271,9 +2341,8 @@ impl RunBuilder {
                 preflight_handle,
                 async_cache,
                 scm_state,
-                scm_state_task,
                 scm: &scm,
-                repo_index: &repo_index,
+                signal_handler,
                 analytics_handle,
             })
             .await?;
@@ -4017,5 +4086,235 @@ mod remote_cache_status_tests {
             status,
             RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::UnexpectedServerError)
         ));
+    }
+}
+
+#[cfg(test)]
+mod scm_shutdown_tests {
+    use std::{sync::Arc, time::Duration};
+
+    use turborepo_cache::{CacheScmState, LazyScmState};
+    use turborepo_scm::ScmCommandScope;
+    use turborepo_signals::{ShutdownReason, SignalHandler};
+
+    use super::spawn_scm_task;
+
+    async fn check_shutdown(signal: bool, release_capture: bool) {
+        let handler = SignalHandler::new(futures::stream::pending());
+        let state = LazyScmState::new();
+        let reader = {
+            let state = state.clone();
+            tokio::spawn(async move { state.get_resolved().await.cloned() })
+        };
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (release, ready) = tokio::sync::oneshot::channel();
+        let task = spawn_scm_task(
+            &handler,
+            ScmCommandScope::new(),
+            state,
+            Default::default(),
+            async move {
+                started_tx.send(()).unwrap();
+                ready.await.ok();
+                Some(CacheScmState {
+                    sha: Some("sha".into()),
+                    dirty_hash: None,
+                })
+            },
+        )
+        .unwrap();
+        started_rx.await.unwrap();
+        if signal {
+            handler.notify_signal();
+        }
+        let shutdown = {
+            let handler = handler.clone();
+            tokio::spawn(async move { handler.close().await })
+        };
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while handler.shutdown_reason().is_none() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        if release_capture {
+            assert!(!shutdown.is_finished());
+            release.send(()).unwrap();
+        }
+        tokio::time::timeout(Duration::from_secs(8), shutdown)
+            .await
+            .unwrap()
+            .unwrap();
+        task.await.unwrap();
+        let result = reader.await.unwrap();
+        assert_eq!(result.is_some(), release_capture);
+    }
+
+    #[tokio::test]
+    async fn close_waits_for_scm_work() {
+        check_shutdown(false, true).await;
+    }
+
+    #[tokio::test]
+    async fn signal_cancels_scm_work() {
+        check_shutdown(true, false).await;
+    }
+
+    #[tokio::test]
+    async fn close_bounds_scm_drain() {
+        check_shutdown(false, false).await;
+    }
+
+    #[tokio::test]
+    async fn closed_handler_does_not_start_scm_work() {
+        let handler = SignalHandler::new(futures::stream::pending());
+        handler.close().await;
+        assert!(
+            spawn_scm_task(
+                &handler,
+                ScmCommandScope::new(),
+                LazyScmState::new(),
+                Default::default(),
+                async { panic!("must not start") }
+            )
+            .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn failed_scm_task_does_not_hold_shutdown_open() {
+        let handler = SignalHandler::new(futures::stream::pending());
+        let state = LazyScmState::new();
+        let task = spawn_scm_task(
+            &handler,
+            ScmCommandScope::new(),
+            state.clone(),
+            Default::default(),
+            async { panic!("SCM worker failed") },
+        )
+        .unwrap();
+        assert!(state.get_resolved().await.is_none());
+        task.await.unwrap();
+        tokio::time::timeout(Duration::from_secs(2), handler.close())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn unused_capture_does_not_start_on_close() {
+        let handler = SignalHandler::new(futures::stream::pending());
+        let task = spawn_scm_task(
+            &handler,
+            ScmCommandScope::new(),
+            LazyScmState::new(),
+            Default::default(),
+            async { panic!("unused capture started") },
+        )
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), handler.close())
+            .await
+            .unwrap();
+        task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn queued_write_requests_capture_before_normal_close() {
+        let handler = SignalHandler::new(futures::stream::pending());
+        let state = LazyScmState::new();
+        state.request_capture();
+        let task = spawn_scm_task(
+            &handler,
+            ScmCommandScope::new(),
+            state.clone(),
+            Default::default(),
+            async {
+                Some(CacheScmState {
+                    sha: Some("queued-write".into()),
+                    dirty_hash: None,
+                })
+            },
+        )
+        .unwrap();
+        handler.close().await;
+        task.await.unwrap();
+        assert_eq!(
+            state.get_resolved().await.unwrap().sha.as_deref(),
+            Some("queued-write")
+        );
+    }
+
+    #[tokio::test]
+    async fn signal_interrupts_normal_scm_drain() {
+        let handler = SignalHandler::new(futures::stream::pending());
+        let state = LazyScmState::new();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let task = spawn_scm_task(
+            &handler,
+            ScmCommandScope::new(),
+            state.clone(),
+            Default::default(),
+            async {
+                started_tx.send(()).unwrap();
+                std::future::pending().await
+            },
+        )
+        .unwrap();
+        let reader = tokio::spawn(async move { state.get_resolved().await.cloned() });
+        started_rx.await.unwrap();
+        let shutdown = {
+            let handler = handler.clone();
+            tokio::spawn(async move { handler.close().await })
+        };
+        while handler.shutdown_reason() != Some(ShutdownReason::Close) {
+            tokio::task::yield_now().await;
+        }
+        handler.notify_signal();
+        tokio::time::timeout(Duration::from_secs(2), shutdown)
+            .await
+            .unwrap()
+            .unwrap();
+        task.await.unwrap();
+        assert!(reader.await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn shutdown_preserves_completed_sha_when_dirty_hash_is_pending() {
+        for signal in [false, true] {
+            let handler = SignalHandler::new(futures::stream::pending());
+            let state = LazyScmState::new();
+            let partial_state = Arc::new(std::sync::OnceLock::new());
+            let worker_partial_state = partial_state.clone();
+            let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+            let task = spawn_scm_task(
+                &handler,
+                ScmCommandScope::new(),
+                state.clone(),
+                partial_state,
+                async move {
+                    worker_partial_state
+                        .set(CacheScmState {
+                            sha: Some("completed-sha".into()),
+                            dirty_hash: None,
+                        })
+                        .unwrap();
+                    started_tx.send(()).unwrap();
+                    std::future::pending().await
+                },
+            )
+            .unwrap();
+            let reader = tokio::spawn(async move { state.get_resolved().await.cloned() });
+            started_rx.await.unwrap();
+            if signal {
+                handler.notify_signal();
+            }
+            tokio::time::timeout(Duration::from_secs(8), handler.close())
+                .await
+                .unwrap();
+            task.await.unwrap();
+            let result = reader.await.unwrap().unwrap();
+            assert_eq!(result.sha.as_deref(), Some("completed-sha"));
+            assert!(result.dirty_hash.is_none());
+        }
     }
 }

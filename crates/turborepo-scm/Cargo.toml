@@ -24,12 +24,16 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha1 = "0.10.5"
 sha2 = { workspace = true }
+tempfile = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "time"] }
 tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-ci = { workspace = true }
 turborepo-hash = { path = "../turborepo-hash" }
 turborepo-log = { path = "../turborepo-log" }
+turborepo-process = { workspace = true }
+turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 wax = { workspace = true }
 which = { workspace = true }

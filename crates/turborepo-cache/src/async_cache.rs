@@ -178,6 +178,7 @@ impl AsyncCache {
         files: Vec<AnchoredSystemPathBuf>,
         duration: u64,
     ) -> Result<(), CacheError> {
+        self.real_cache.request_scm_capture();
         if self
             .writer_sender
             .send(WorkerRequest::WriteRequest {

@@ -125,6 +125,10 @@ impl CacheMultiplexer {
         self.http.as_ref().map(|http| http.requests())
     }
 
+    pub(crate) fn request_scm_capture(&self) {
+        self.scm_state.request_capture();
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn put(
         &self,

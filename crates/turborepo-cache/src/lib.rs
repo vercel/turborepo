@@ -122,7 +122,7 @@ impl From<turborepo_api_client::Error> for CacheError {
     }
 }
 
-/// Git state captured once at the beginning of a `turbo run`.
+/// Git state captured once when a `turbo run` first writes to the cache.
 /// Stored in each task's `-meta.json` sidecar so that cache entries
 /// can be traced back to the commit (and working-tree state) that
 /// produced them.
@@ -140,18 +140,16 @@ pub struct CacheScmState {
     pub dirty_hash: Option<String>,
 }
 
-/// SCM state that is computed in the background and resolved lazily.
+/// SCM state whose computation is requested by the first cache writer.
 ///
-/// Git operations (rev-parse, status, diff) are spawned at run start but
-/// the cache does not block on them synchronously. Consumers that need
-/// the SCM state should call [`get_resolved()`](Self::get_resolved) to
-/// await the background computation. This keeps git subprocesses off the
-/// critical startup path while guaranteeing that cache artifacts carry
-/// provenance metadata once the computation finishes.
+/// Nonblocking readers do not start Git operations. Consumers that need the
+/// state call [`get_resolved()`](Self::get_resolved), which requests capture
+/// and waits for it. Cache-hit-only runs therefore never capture provenance.
 #[derive(Debug, Clone)]
 pub struct LazyScmState {
     state: Arc<OnceLock<Option<CacheScmState>>>,
     notify: Arc<tokio::sync::Notify>,
+    requested: Arc<tokio::sync::Notify>,
 }
 
 impl LazyScmState {
@@ -159,6 +157,7 @@ impl LazyScmState {
         Self {
             state: Arc::new(OnceLock::new()),
             notify: Arc::new(tokio::sync::Notify::new()),
+            requested: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -169,6 +168,7 @@ impl LazyScmState {
         Self {
             state: Arc::new(lock),
             notify: Arc::new(tokio::sync::Notify::new()),
+            requested: Arc::new(tokio::sync::Notify::new()),
         }
     }
 
@@ -184,10 +184,23 @@ impl LazyScmState {
         self.state.get().and_then(|s| s.as_ref())
     }
 
+    /// Wait for the first cache writer. There is one capture producer per run.
+    /// A request made before the producer is polled is retained as a permit.
+    pub async fn wait_until_requested(&self) {
+        self.requested.notified().await;
+    }
+
+    /// Request capture before queueing a cache write, so normal shutdown cannot
+    /// overtake a write whose worker has not reached get_resolved() yet.
+    pub fn request_capture(&self) {
+        self.requested.notify_one();
+    }
+
     /// Waits for the background computation to finish, then returns the
     /// SCM state (if git was available). Returns immediately if already
     /// resolved.
     pub async fn get_resolved(&self) -> Option<&CacheScmState> {
+        self.request_capture();
         if let Some(state) = self.state.get() {
             return state.as_ref();
         }
@@ -205,6 +218,55 @@ impl LazyScmState {
 impl Default for LazyScmState {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod lazy_scm_state_tests {
+    use std::{sync::Arc, time::Duration};
+
+    use super::{CacheScmState, LazyScmState};
+
+    #[tokio::test]
+    async fn nonblocking_reads_do_not_request_capture() {
+        let state = LazyScmState::new();
+        assert!(state.get().is_none());
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), state.wait_until_requested())
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn early_request_is_retained_and_all_writers_resolve() {
+        let state = Arc::new(LazyScmState::new());
+        let first = {
+            let state = state.clone();
+            tokio::spawn(async move { state.get_resolved().await.unwrap().sha.clone() })
+        };
+        tokio::task::yield_now().await;
+        tokio::time::timeout(Duration::from_secs(1), state.wait_until_requested())
+            .await
+            .unwrap();
+        let second = {
+            let state = state.clone();
+            tokio::spawn(async move { state.get_resolved().await.unwrap().sha.clone() })
+        };
+        state.resolve(Some(CacheScmState {
+            sha: Some("sha".into()),
+            dirty_hash: None,
+        }));
+        for writer in [first, second] {
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(1), writer)
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .as_deref(),
+                Some("sha")
+            );
+        }
     }
 }
 

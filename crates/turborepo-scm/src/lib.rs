@@ -22,6 +22,7 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 
+mod command;
 pub(crate) mod crlf;
 mod env_local;
 pub mod git;
@@ -40,6 +41,7 @@ mod git_path;
 #[cfg(test)]
 mod test_utils;
 
+pub use command::ScmCommandScope;
 pub use repo_index::{RepoGitIndex, walk_candidate_files};
 pub use slowest_files::{SlowestFile, SlowestFiles};
 pub use turborepo_hash::OidHash;
@@ -256,6 +258,7 @@ pub struct GitRepo {
     /// Optional recorder for the slowest-to-hash files. Set by long-running
     /// consumers (the file watcher) so they can diagnose a stalled startup.
     slowest_files: Option<std::sync::Arc<SlowestFiles>>,
+    command_scope: Option<std::sync::Arc<ScmCommandScope>>,
 }
 
 impl GitRepo {
@@ -274,6 +277,7 @@ impl Clone for GitRepo {
             attrs: OnceLock::new(),
             github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
             slowest_files: self.slowest_files.clone(),
+            command_scope: self.command_scope.clone(),
         }
     }
 }
@@ -313,6 +317,7 @@ impl GitRepo {
             attrs: OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
+            command_scope: None,
         })
     }
 
@@ -360,6 +365,15 @@ pub enum SCM {
 }
 
 impl SCM {
+    /// Restrict provenance subprocesses to an owned, cancellable scope.
+    /// Other SCM consumers retain their existing execution behavior.
+    pub fn with_command_scope(mut self, scope: ScmCommandScope) -> Self {
+        if let Self::Git(git) = &mut self {
+            git.command_scope = Some(std::sync::Arc::new(scope));
+        }
+        self
+    }
+
     #[tracing::instrument]
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
         GitRepo::find(path_in_repo)
@@ -385,6 +399,7 @@ impl SCM {
                 attrs: OnceLock::new(),
                 github_actions_remote_base_ref_fallback: false,
                 slowest_files: None,
+                command_scope: None,
             }),
             Err(e) => {
                 debug!(
