@@ -540,6 +540,15 @@ pub trait RepositoryContributor: Send + Sync {
     /// in one observation envelope.
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_>;
 
+    /// Hint that [`RepositoryContributor::discover_packages`] will be
+    /// requested, so toolchain subprocesses may start in the background and
+    /// overlap other construction work.
+    ///
+    /// Core only issues this hint when the run will load every owner.
+    /// Prefetching MUST NOT change any observable result: errors, warnings,
+    /// and facts are still produced by `discover_packages`. Default: no-op.
+    fn prefetch_packages(&self) {}
+
     /// Cheap, subprocess-free inventory of the scopes this contributor owns.
     ///
     /// This is the lazy-loading boundary: core builds a repository graph from

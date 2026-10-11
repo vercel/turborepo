@@ -59,6 +59,9 @@ pub struct PackageGraphBuilder<'a, T> {
     /// are known. Only adapters recognizing this repository root participate.
     bootstrap_registries: Vec<Registry>,
     bootstrap_plans: Vec<ContributorPlan>,
+    /// The caller will load every contributor, so lazy construction may start
+    /// their toolchain subprocesses up front.
+    prefetch_contributors: bool,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -285,6 +288,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             extra_contributors: Vec::new(),
             bootstrap_registries: Vec::new(),
             bootstrap_plans: Vec::new(),
+            prefetch_contributors: false,
         }
     }
 
@@ -374,6 +378,15 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self.repo_root
     }
 
+    /// Declare that the caller will load every contributor of a lazy graph,
+    /// letting [`PackageGraphBuilder::build_lazy`] start their full discovery
+    /// subprocesses while it builds the inventory graph. Results, errors, and
+    /// warnings are unchanged; only scheduling differs.
+    pub fn with_contributor_prefetch(mut self, prefetch: bool) -> Self {
+        self.prefetch_contributors = prefetch;
+        self
+    }
+
     fn register_bootstrap_contributors(&mut self) -> Result<(), Error> {
         let options = ContributorOptions {
             resolve_external_dependencies: self.load_lockfile,
@@ -425,6 +438,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             extra_contributors: self.extra_contributors,
             bootstrap_registries: self.bootstrap_registries,
             bootstrap_plans: self.bootstrap_plans,
+            prefetch_contributors: self.prefetch_contributors,
         }
     }
 }
@@ -509,6 +523,11 @@ where
         mut self,
     ) -> Result<LazyPackageGraph<CachingPackageDiscovery<T::Output>>, Error> {
         self.register_bootstrap_contributors()?;
+        if self.prefetch_contributors {
+            for contributor in &self.extra_contributors {
+                contributor.prefetch_packages();
+            }
+        }
         self.is_single_package &= self.extra_contributors.is_empty();
         if self.is_single_package {
             // Only a JavaScript-only graph may skip contributor inventories.
@@ -1103,6 +1122,7 @@ where
             extra_contributors,
             bootstrap_registries: _,
             bootstrap_plans: _,
+            prefetch_contributors: _,
         } = builder;
         let assembler = PackageGraphAssembler::new(root_package_json.clone());
 
