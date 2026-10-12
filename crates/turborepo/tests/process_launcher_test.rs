@@ -173,6 +173,25 @@ fn wrapper_leaves_the_console_to_exec_commands() {
         (json!(["exec", "--", "node"]), true),
         (json!(["--cwd", "apps/web", "exec", "--", "node"]), true),
         (json!(["-vv", "--verbosity", "2", "exec", "--", "x"]), true),
+        (
+            json!(["--experimental-otel-enabled", "true", "exec", "--", "x"]),
+            true,
+        ),
+        (
+            json!([
+                "--experimental-otel-enabled",
+                "--cwd",
+                "a",
+                "exec",
+                "--",
+                "x"
+            ]),
+            true,
+        ),
+        (
+            json!(["--experimental-otel-enabled", "exec", "--", "x"]),
+            false,
+        ),
         (json!(["--token", "exec", "run", "build"]), false),
         (json!(["run", "exec"]), false),
         (json!(["build", "exec"]), false),

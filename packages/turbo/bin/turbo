@@ -434,6 +434,15 @@ const GLOBAL_VALUE_FLAGS = new Set([
   "--experimental-otel-timeout-ms",
 ]);
 
+// Global flags whose value is optional. Like turbo, take the next word as
+// the value unless it is a flag.
+const GLOBAL_OPTIONAL_VALUE_FLAGS = new Set([
+  "--experimental-otel-enabled",
+  "--experimental-otel-metrics-run-summary",
+  "--experimental-otel-metrics-task-details",
+  "--experimental-otel-use-remote-cache-token",
+]);
+
 // The command is the first word that is not a flag or a flag's value, so a
 // task or argument named `exec` does not select it.
 function selectsExec(args) {
@@ -443,7 +452,13 @@ function selectsExec(args) {
       return false;
     }
     if (arg.startsWith("-")) {
-      if (GLOBAL_VALUE_FLAGS.has(arg)) {
+      const next = args[i + 1];
+      if (
+        GLOBAL_VALUE_FLAGS.has(arg) ||
+        (GLOBAL_OPTIONAL_VALUE_FLAGS.has(arg) &&
+          next !== undefined &&
+          !next.startsWith("-"))
+      ) {
         i++;
       }
       continue;

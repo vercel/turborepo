@@ -127,3 +127,6 @@ windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_System_Threading",
 ] }
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
