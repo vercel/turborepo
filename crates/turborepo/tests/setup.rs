@@ -30,6 +30,13 @@ const QUALIFIED: bool = cfg!(all(
 #[path = "setup/recovery.rs"]
 mod recovery;
 
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+#[path = "setup/concurrency.rs"]
+mod concurrency;
+
 fn write(root: &Path, name: &str, contents: &str) {
     fs::write(root.join(name), contents).expect("write fixture");
 }

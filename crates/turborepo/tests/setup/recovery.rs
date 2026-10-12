@@ -7,10 +7,10 @@
 use std::{
     fs,
     io::{self, Write},
-    net::TcpListener,
+    net::{TcpListener, TcpStream},
     os::unix::{fs::PermissionsExt, process::ExitStatusExt},
     path::{Path, PathBuf},
-    process::{Command, ExitStatus, Stdio},
+    process::{Child, Command, ExitStatus, Output, Stdio},
     time::{Duration, Instant},
 };
 
@@ -26,7 +26,7 @@ const LARGE: usize = 8 << 20;
 /// other file setup writes.
 pub(super) const UNPACK_LIMIT: u32 = 1024;
 pub(super) const OFFLINE: &[&str] = &["setup", "--tools-only", "--offline"];
-const CHECK: &[&str] = &["setup", "--check", "--tools-only"];
+pub(super) const CHECK: &[&str] = &["setup", "--check", "--tools-only"];
 
 fn archive(root: &str, files: &[(&str, &[u8])]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
@@ -247,15 +247,45 @@ impl Repo {
             matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock),
             "unexpected network connection"
         );
-        let text = format!(
-            "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
         Run {
             status: output.status,
-            text: text.split_whitespace().collect::<Vec<_>>().join(" "),
+            text: text(&output),
         }
+    }
+
+    /// A frozen setup holding this repository's writer lock while its first
+    /// download waits on a proxy that accepts and never answers.
+    pub(super) fn stalled_writer(&self) -> (Child, TcpStream) {
+        let stalled = TcpListener::bind("127.0.0.1:0").unwrap();
+        stalled.set_nonblocking(true).unwrap();
+        let log = self.tmp.join("stalled.log");
+        let mut child = self
+            .command(None, &["setup", "--tools-only", "--frozen"], &stalled)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(fs::File::create(&log).unwrap())
+            .spawn()
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(60);
+        loop {
+            match stalled.accept() {
+                Ok((socket, _)) => return (child, socket),
+                Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
+                Err(e) => panic!("{e}"),
+            }
+            assert!(
+                child.try_wait().unwrap().is_none(),
+                "setup exited before downloading: {}",
+                fs::read_to_string(&log).unwrap()
+            );
+            assert!(Instant::now() < deadline, "setup never reached the network");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// Use `other`'s home, and so its shared download cache.
+    pub(super) fn share_cache(&mut self, other: &Repo) {
+        self.home = other.home.clone();
     }
 
     pub(super) fn expect(&self, words: &[&str], code: i32, expected: &[&str]) -> String {
@@ -313,6 +343,18 @@ impl Repo {
     }
 }
 
+/// Combined stdout and stderr with whitespace normalized.
+pub(super) fn text(output: &Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ")
+}
+
 /// An abandoned private extraction directory holding a truncated filler file.
 fn partial_scratch(tmp: &Path) -> bool {
     fn truncated(path: &Path) -> bool {
@@ -338,32 +380,7 @@ fn partial_scratch(tmp: &Path) -> bool {
 #[test]
 fn killed_download_releases_locks_and_offline_lists_every_missing_artifact() {
     let Some(repo) = Repo::new() else { return };
-    // The only route out is a proxy that accepts and never answers.
-    let stalled = TcpListener::bind("127.0.0.1:0").unwrap();
-    stalled.set_nonblocking(true).unwrap();
-    let log = repo.tmp.join("killed.log");
-    let mut child = repo
-        .command(None, &["setup", "--tools-only", "--frozen"], &stalled)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(fs::File::create(&log).unwrap())
-        .spawn()
-        .unwrap();
-    let deadline = Instant::now() + Duration::from_secs(60);
-    let held = loop {
-        match stalled.accept() {
-            Ok((socket, _)) => break socket,
-            Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
-            Err(e) => panic!("{e}"),
-        }
-        assert!(
-            child.try_wait().unwrap().is_none(),
-            "setup exited before downloading: {}",
-            fs::read_to_string(&log).unwrap()
-        );
-        assert!(Instant::now() < deadline, "setup never reached the network");
-        std::thread::sleep(Duration::from_millis(5));
-    };
+    let (mut child, held) = repo.stalled_writer();
     child.kill().unwrap();
     assert_eq!(child.wait().unwrap().signal(), Some(Signal::SIGKILL as i32));
     drop(held);
