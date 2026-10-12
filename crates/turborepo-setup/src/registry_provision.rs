@@ -3,6 +3,7 @@
 
 use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
+use semver::Version;
 use sha2::{Digest, Sha256};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
@@ -28,6 +29,8 @@ pub enum Error {
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
+    #[error("pnpm 12 and later ship native binaries, which setup cannot provision yet")]
+    NativePnpm,
     #[error(transparent)]
     Authored(#[from] crate::package_manager::Error),
     #[error(transparent)]
@@ -70,10 +73,12 @@ impl RegistryTransport {
         if exact_version.len() > 128 {
             return Err(registry_metadata::RegistryMetadataError::InvalidVersion.into());
         }
+        // Select the published layout before any traffic.
+        let (_, version) = registry_metadata::validate_selection(manager, exact_version)?;
+        let mappings = standard_mappings(manager, &version)?;
         let (release, bytes) = self
             .verified_release(manager, exact_version, authored, None)
             .await?;
-        let (_, mappings) = standard_mappings(manager)?;
         let executables = mappings
             .iter()
             .map(|(name, path)| (name.to_string(), path.to_string()))
@@ -146,19 +151,51 @@ impl RegistryTransport {
     }
 }
 
-type Mappings = &'static [(&'static str, &'static str)];
-fn standard_mappings(manager: Manager) -> Result<(&'static str, Mappings), Error> {
+fn package_name(manager: Manager) -> Result<&'static str, Error> {
     match manager {
-        Manager::Npm => Ok((
-            "npm",
-            &[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")],
-        )),
-        Manager::Pnpm => Ok((
-            "pnpm",
-            &[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")],
-        )),
+        Manager::Npm => Ok("npm"),
+        Manager::Pnpm => Ok("pnpm"),
         _ => Err(Error::InvalidLock),
     }
+}
+
+type Mappings = &'static [(&'static str, &'static str)];
+/// Published `bin` entries, primary first. pnpm 11 moved its entry points to
+/// ES modules and added the `pn`/`pnx` aliases (its `.cjs` files remain only
+/// as Corepack shims); pnpm 12's entry points are native binaries.
+fn standard_mappings(manager: Manager, version: &Version) -> Result<Mappings, Error> {
+    match (manager, version.major) {
+        (Manager::Npm, _) => Ok(&[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")]),
+        (Manager::Pnpm, ..=10) => Ok(&[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")]),
+        (Manager::Pnpm, 11) => Ok(&[
+            ("pnpm", "bin/pnpm.mjs"),
+            ("pnpx", "bin/pnpx.mjs"),
+            ("pn", "bin/pnpm.mjs"),
+            ("pnx", "bin/pnpx.mjs"),
+        ]),
+        (Manager::Pnpm, _) => Err(Error::NativePnpm),
+        _ => Err(Error::InvalidLock),
+    }
+}
+
+/// Pure check of locked executables for every platform variant: the primary
+/// entry point plus only published mappings (npm locks all of them).
+pub(crate) fn validate_executables(
+    manager: Manager,
+    version: &str,
+    executables: &BTreeMap<String, String>,
+) -> Result<(), Error> {
+    let version = Version::parse(version).map_err(|_| Error::InvalidLock)?;
+    let mappings = standard_mappings(manager, &version)?;
+    if executables.get(package_name(manager)?).map(String::as_str) != Some(mappings[0].1)
+        || (manager == Manager::Npm && executables.len() != mappings.len())
+        || executables
+            .iter()
+            .any(|(name, path)| !mappings.iter().any(|&(n, p)| n == name && p == path))
+    {
+        return Err(Error::InvalidLock);
+    }
+    Ok(())
 }
 
 fn extract_package(
@@ -168,7 +205,7 @@ fn extract_package(
     executables: &BTreeMap<String, String>,
     exact_bins: bool,
 ) -> Result<ExtractedArtifact, Error> {
-    let (name, _) = standard_mappings(manager)?;
+    let name = package_name(manager)?;
     let mut required = vec!["package.json"];
     required.extend(executables.values().map(String::as_str));
     let tree = turborepo_archive::extract(
@@ -223,7 +260,7 @@ impl RegistryPlan {
         authored: Option<&CorepackIntegrity>,
         manager: Manager,
     ) -> Result<Self, Error> {
-        let (name, mappings) = standard_mappings(manager)?;
+        let name = package_name(manager)?;
         if !cfg!(unix)
             || !matches!(
                 platform,
@@ -258,16 +295,10 @@ impl RegistryPlan {
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || artifact.executables.get(name).map(String::as_str) != Some(mappings[0].1)
-            || (manager == Manager::Npm && artifact.executables.len() != mappings.len())
-            || artifact.executables.iter().any(|(name, path)| {
-                !mappings.iter().any(|(expected_name, expected_path)| {
-                    name == expected_name && path == expected_path
-                })
-            })
         {
             return Err(Error::InvalidLock);
         }
+        validate_executables(manager, &package.version, &artifact.executables)?;
         ExpectedSha256::from_hex(&artifact.sha256)?;
         let node = node.inventory_tool().clone();
         // A changed authored constraint must re-verify, even when archive SHA-256

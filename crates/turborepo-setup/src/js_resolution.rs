@@ -71,21 +71,20 @@ fn validate_pnpm(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
     }
     for parts in artifacts.values() {
         let artifact = parts.values().next().ok_or_else(invalid)?;
-        let paths = &artifact.executables;
         if parts.len() != 1
             || artifact.url != format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz")
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || paths.get("pnpm").map(String::as_str) != Some("bin/pnpm.cjs")
-            || paths.iter().any(|(name, path)| match name.as_str() {
-                "pnpm" => path != "bin/pnpm.cjs",
-                "pnpx" => path != "bin/pnpx.cjs",
-                _ => true,
-            })
         {
             return Err(invalid());
         }
+        crate::registry_provision::validate_executables(
+            Manager::Pnpm,
+            &tool.version,
+            &artifact.executables,
+        )
+        .map_err(|_| invalid())?;
         declaration.locked_integrity(&version, &artifact.sha256)?;
     }
     Ok(())

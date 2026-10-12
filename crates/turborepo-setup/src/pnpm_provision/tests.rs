@@ -36,6 +36,13 @@ async fn serve(metadata: Value, bytes: Vec<u8>) -> Registry {
     serve_raw(serde_json::to_vec(&metadata).unwrap(), bytes).await
 }
 async fn serve_raw(metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
+    serve_version("10.0.0", metadata, bytes).await
+}
+async fn serve_version(version: &str, metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
+    let (metadata_path, tarball_path) = (
+        format!("/pnpm/{version}"),
+        format!("/pnpm/-/pnpm-{version}.tgz"),
+    );
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let transport = PnpmTransport::loopback_http_for_tests(&format!(
         "http://{}",
@@ -57,8 +64,8 @@ async fn serve_raw(metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
                 .to_owned();
             log.lock().unwrap().push(path.clone());
             let body = match path.as_str() {
-                "/pnpm/10.0.0" => &metadata,
-                "/pnpm/-/pnpm-10.0.0.tgz" => &bytes,
+                p if p == metadata_path => &metadata,
+                p if p == tarball_path => &bytes,
                 _ => panic!("unexpected registry request: {path}"),
             };
             let header = format!(
@@ -76,8 +83,11 @@ async fn serve_raw(metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
     }
 }
 fn metadata(bytes: &[u8]) -> Value {
-    json!({"name":"pnpm","version":"10.0.0","dist":{
-        "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
+    metadata_for("10.0.0", bytes)
+}
+fn metadata_for(version: &str, bytes: &[u8]) -> Value {
+    json!({"name":"pnpm","version":version,"dist":{
+        "tarball":format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"),
         "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(bytes)))
     }})
 }
@@ -85,22 +95,22 @@ fn package() -> Value {
     json!({"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"},
         "scripts":{"install":"touch should-never-run"}})
 }
+const HOOK: &str = "#!/usr/bin/env node\nthrow new Error('not a bootstrap hook');\n";
 fn archive(package: &str, entry: &str) -> Vec<u8> {
-    let mut tar = tar::Builder::new(Vec::new());
-    for (path, data, mode) in [
+    archive_files(&[
         ("package.json", package, 0o644),
-        (
-            entry,
-            "#!/usr/bin/env node\nthrow new Error('not a bootstrap hook');\n",
-            0o644,
-        ),
+        (entry, HOOK, 0o644),
         ("bin/pnpx.cjs", "#!/usr/bin/env node\n", 0o644),
         (
             "dist/templates/config.json",
             "adjacent runtime resource",
             0o640,
         ),
-    ] {
+    ])
+}
+fn archive_files(files: &[(&str, &str, u32)]) -> Vec<u8> {
+    let mut tar = tar::Builder::new(Vec::new());
+    for &(path, data, mode) in files {
         let mut header = tar::Header::new_gnu();
         header.set_size(data.len() as u64);
         header.set_mode(mode);
@@ -544,4 +554,80 @@ async fn authored_pins_and_bounded_metadata_fail_before_artifacts() {
         Err(Error::Download(DownloadError::TooLarge))
     ));
     assert_eq!(manifest(repo.path()), snapshot);
+}
+
+#[tokio::test]
+async fn pnpm_11_module_entry_points_and_aliases_run_on_managed_node() {
+    let version = "11.28.2";
+    let bins = json!({"pn":"bin/pnpm.mjs","pnpm":"bin/pnpm.mjs","pnpx":"bin/pnpx.mjs",
+        "pnx":"bin/pnpx.mjs"});
+    let package = json!({"name":"pnpm","version":version,"type":"module","bin":bins}).to_string();
+    // Mirrors the published tarball: `.cjs` Corepack shims beside the entries.
+    let shim = "#!/usr/bin/env node\nimport('./pnpm.mjs')\n";
+    let bytes = archive_files(&[
+        ("package.json", &package, 0o644),
+        ("bin/pnpm.cjs", shim, 0o755),
+        ("bin/pnpx.cjs", shim, 0o755),
+        ("bin/pnpm.mjs", HOOK, 0o755),
+        ("bin/pnpx.mjs", HOOK, 0o755),
+        ("dist/pnpm.mjs", "bundle", 0o644),
+    ]);
+    let registry = serve_version(
+        version,
+        serde_json::to_vec(&metadata_for(version, &bytes)).unwrap(),
+        bytes.clone(),
+    )
+    .await;
+    let mut value = fixture(&bytes);
+    let tool = &mut value["tools"]["pnpm"];
+    tool["version"] = json!(version);
+    tool["declarations"][0]["request"] = json!(format!("pnpm@{version}"));
+    let artifact = &mut tool["installation"]["artifacts"]["any"]["package"];
+    artifact["url"] = json!(format!(
+        "https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"
+    ));
+    artifact["executables"] = bins;
+    let (node, pnpm) = plans(&value);
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = seeded(repo.path(), &node);
+    install(&mut store, &node, &pnpm, &registry).await.unwrap();
+    let bin = store.current().unwrap().unwrap().bin;
+    for (name, entry) in [
+        ("pn", "pnpm"),
+        ("pnpm", "pnpm"),
+        ("pnpx", "pnpx"),
+        ("pnx", "pnpx"),
+    ] {
+        let output = Command::new(bin.join(name))
+            .arg("--version")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(19));
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.starts_with("managed-node\n<"), "{stdout}");
+        assert!(
+            stdout.ends_with(&format!("/pnpm/bin/{entry}.mjs>\n<--version>\n")),
+            "{stdout}"
+        );
+    }
+    // pnpm 10's entry points are not this release's layout, and pnpm 12's
+    // native layout is not provisioned from this package shape.
+    for (version, legacy) in [("11.28.2", true), ("12.11.2", false)] {
+        let mut changed = value.clone();
+        let tool = &mut changed["tools"]["pnpm"];
+        tool["version"] = json!(version);
+        let artifact = &mut tool["installation"]["artifacts"]["any"]["package"];
+        artifact["url"] = json!(format!(
+            "https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"
+        ));
+        if legacy {
+            artifact["executables"] = json!({"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"});
+        }
+        let lock = Lock::parse(&serde_json::to_vec(&changed).unwrap()).unwrap();
+        match PnpmPlan::from_lock(&lock, TARGET, &node, None) {
+            Err(Error::InvalidLock) => assert!(legacy),
+            Err(Error::NativePnpm) => assert!(!legacy),
+            _ => panic!("{version} must fail closed"),
+        }
+    }
 }
