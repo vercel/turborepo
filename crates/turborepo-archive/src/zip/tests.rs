@@ -457,6 +457,8 @@ fn failure_cleans_owned_staging_without_surrounding_writes() {
         nodes: BTreeMap::new(),
         limits: limits(),
         bytes: 0,
+        name_residue: false,
+        case_sensitive: None,
     };
     let fixture = zip(
         &[("pkg/bin/tool", 0, b"x"), ("../sentinel", 0, b"changed")],
