@@ -439,11 +439,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        // #14486 provisions plain --no-lock without writing a lock.
-        if flags == ["--no-frozen", "--tools-only"]
-            || flags == ["--frozen"]
-            || flags == ["--no-lock"]
-        {
+        if flags == ["--no-frozen", "--tools-only"] || flags == ["--frozen"] {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else if flags == ["--check"] {
@@ -454,16 +450,26 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert!(!f.owned.root().join(".turbo").exists());
         } else {
             let result = f.run(&u, &flags);
-            // `--no-lock --offline` stays a pending combination (no offline
-            // transport for --no-lock).
-            if flags.contains(&"--offline") && !flags.contains(&"--no-lock") {
-                // Nothing trusted (#14518) or cached (#14540): every artifact
-                // is listed and nothing is installed, though the cache path
-                // may create setup's lock files.
-                assert!(matches!(result, Err(Error::OfflineMissing(_))));
-                assert!(f.manifest().is_none());
-            } else {
-                assert!(matches!(result, Err(Error::NotImplemented)));
+            match flags.as_slice() {
+                // Neither can install locked dependencies (#14486, #14518).
+                ["--no-lock"] | ["--frozen", "--offline"] => {
+                    assert!(matches!(result, Err(Error::Unsupported(_))));
+                }
+                // `--no-lock --offline` stays a pending combination (no
+                // offline transport for --no-lock).
+                _ if flags.contains(&"--offline") && !flags.contains(&"--no-lock") => {
+                    // Nothing trusted (#14518) or cached (#14540): every
+                    // artifact is listed and nothing is installed, though the
+                    // cache path may create setup's lock files.
+                    assert!(matches!(result, Err(Error::OfflineMissing(_))));
+                    assert!(f.manifest().is_none());
+                }
+                _ => assert!(matches!(result, Err(Error::NotImplemented))),
+            }
+            let cache_path = flags.contains(&"--tools-only")
+                && flags.contains(&"--offline")
+                && !flags.contains(&"--no-lock");
+            if !cache_path {
                 assert!(!f.owned.root().join(".turbo").exists());
             }
             assert_eq!(u.hits(), 0);

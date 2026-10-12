@@ -1,5 +1,5 @@
-//! Native local/frozen provisioning and read-only tools-only checks/plans.
-//! No execution.
+//! Native local/frozen provisioning, then locked dependency setup with the
+//! managed tools, plus read-only checks/plans. Never runs Turborepo tasks.
 
 use std::time::Instant;
 
@@ -19,6 +19,7 @@ mod check;
 mod cleanup;
 #[cfg(windows)]
 mod dacl;
+mod dependencies;
 mod effective;
 mod lock_diagnostics;
 mod no_lock;
@@ -157,6 +158,8 @@ pub enum Error {
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
+    Dependencies(#[from] dependencies::Error),
+    #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -197,10 +200,6 @@ struct SetupRequest {
 impl SetupRequest {
     /// Lifecycle intent for a toolchain's dependency installer: CLI >
     /// repository policy > native default.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "consumed by dependency installers (TURBO-6229)")
-    )]
     fn lifecycle(
         &self,
         repository: Option<turborepo_turbo_json::LifecycleScripts>,
@@ -423,11 +422,21 @@ fn run_reporting(
         println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
         return Ok(0);
     }
+    // Decided before any download, so a missing ecosystem lockfile fails first.
+    // Plans and checks do not cover dependencies yet.
+    let dependencies = (request.mode == Mode::Provision)
+        .then(|| dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request))
+        .transpose()?;
+    let ecosystems = snapshot.ecosystems();
     let resolution = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
     } else {
         turborepo_setup::lock::reconcile::Mode::Local
     };
+    let trust_base = transports
+        .as_ref()
+        .map(provision::Transports::trust_base)
+        .transpose()?;
     let provisioned = match (&request.mode, javascript) {
         (Mode::Check, ToolPolicy::VerifySystem) => {
             return verify_system::check(&discovery, snapshot);
@@ -457,8 +466,8 @@ fn run_reporting(
         // writes (#14518). What trusted reuse cannot authorize falls through to
         // verified cached bytes (#14540), which install what is cached or list
         // every missing artifact. Offline --force always takes the cache path.
-        // Offline repeats and clone-local --no-lock report their own skipped
-        // dependencies.
+        // Offline repeats and clone-local --no-lock run only when every
+        // dependency is skipped (`validate`).
         (Mode::Provision, _) if request.offline && !request.force => {
             match offline::run(
                 &discovery,
@@ -485,17 +494,11 @@ fn run_reporting(
     report.downloaded_bytes = provisioned.downloaded_bytes;
     report.tools_installed = provisioned.installed;
     report.tools_reused = provisioned.reused;
-    // Never claim dependencies are ready: they are skipped until dependency
-    // policy and installers exist, even without --tools-only.
-    println!(
-        "Dependencies skipped ({}). No tasks run.",
-        if request.tools_only {
-            "--tools-only"
-        } else {
-            "dependency installation is not supported yet"
-        }
-    );
-    Ok(0)
+    let Some(dependencies) = dependencies else {
+        unreachable!("only provisioning reaches dependency setup");
+    };
+    let root = discovery.snapshot_root()?.as_std_path();
+    Ok(dependencies.install(root, ecosystems, trust_base)?)
 }
 
 /// `turbo setup --frozen --tools-only` against loopback fixture artifacts,
@@ -574,15 +577,28 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
-    // Write normalization. Combined force/refresh remains fail-closed. Until
-    // dependency installers exist, plain setup provisions and checks exactly
-    // the tools --tools-only does and reports dependencies as skipped.
+    // Write normalization. Combined force/refresh remains fail-closed. Plain
+    // checks cover tools (#14650); dependency plans are not implemented.
     if request.mode != Mode::Provision
         || (request.lock == LockMode::NoLock
             && (request.force || request.update_lock || request.offline))
         || (request.force && request.update_lock)
     {
         return Err(Error::NotImplemented);
+    }
+    // Installers run with the activation that turbo.lock records and contact
+    // package registries, so neither mode can install locked dependencies.
+    if !tools_only && request.offline {
+        return Err(Error::Unsupported(
+            "--offline cannot install locked dependencies yet; add --tools-only to prepare only \
+             tools offline",
+        ));
+    }
+    if !tools_only && request.lock == LockMode::NoLock {
+        return Err(Error::Unsupported(
+            "--no-lock cannot install locked dependencies, because installers run with the \
+             managed tools that turbo.lock records; add --tools-only",
+        ));
     }
     // --offline --force reinstalls only from verified local bytes; resolution
     // always needs the network.
@@ -813,6 +829,8 @@ mod tests {
                 vec!["--no-frozen"],
                 vec!["--force"],
                 vec!["--no-frozen", "--update-lock"],
+                vec!["--check"],
+                vec!["--check", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert!(!request.tools_only);
@@ -829,11 +847,16 @@ mod tests {
         let check = request(&["--check"], false).unwrap();
         assert_eq!(check.mode, Mode::Check);
         assert!(validate_request(&check).is_ok());
-        // #14518 admits --offline and #14486 admits --no-lock.
+        // Offline repeats (#14518) and --no-lock (#14486) cannot install
+        // locked dependencies; with dependencies skipped they still provision.
         for flags in [vec!["--offline"], vec!["--no-lock"]] {
             let request = request(&flags, false).unwrap();
             assert_eq!(request.mode, Mode::Provision);
-            assert!(validate_request(&request).is_ok(), "{flags:?}");
+            assert!(matches!(
+                validate_request(&request),
+                Err(Error::Unsupported(_))
+            ));
+            assert!(validate(&request, true).is_ok(), "{flags:?}");
         }
         let request =
             request(&["--force", "--offline", "--tools-only", "--no-lock"], true).unwrap();

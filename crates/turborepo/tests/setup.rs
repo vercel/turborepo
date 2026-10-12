@@ -376,12 +376,19 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     write(root, "custom.json", ENABLED);
     fs::create_dir(root.join("selected-root")).unwrap();
     write(root, "selected-root/turbo.json", ENABLED);
-    // #14518 admits --offline, which reads (and rejects) the invalid lock.
+    // #14518 admits tools-only --offline, which reads (and rejects) the
+    // invalid lock; offline setup cannot install locked dependencies.
+    failure(
+        root,
+        &["setup", "--offline", "--tools-only"],
+        false,
+        "invalid turbo.lock JSON",
+    );
     failure(
         root,
         &["setup", "--offline"],
         false,
-        "invalid turbo.lock JSON",
+        "--offline cannot install locked dependencies",
     );
     for words in [
         vec!["--root-turbo-json", "custom.json", "setup", "--plan"],
@@ -447,33 +454,34 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             );
             continue;
         }
-        let supported = !words
+        // Plans still need --tools-only.
+        let pending = words
             .iter()
-            .any(|word| matches!(*word, "--plan" | "--offline" | "--no-lock" | "--__test-run"));
-        // #14518 admits --offline, which needs a lock first, and #14486 admits
-        // --no-lock, which needs a Node declaration (#14701).
-        let offline = words.contains(&"--offline");
-        let no_lock = words.contains(&"--no-lock");
-        // A Cargo workspace without a root rust-toolchain file declares no tool.
-        // Frozen (#14492) and forced (#14540) setup need turbo.lock before
-        // they look for a Node declaration.
+            .any(|word| matches!(*word, "--plan" | "--__test-run"));
+        // Locked dependencies need a declared package manager, checked before
+        // any download; offline repeats (#14518) and --no-lock (#14486)
+        // cannot install them.
+        let locked = !words.contains(&"--tools-only");
         let text = failure(
             root,
             &words,
             false,
-            match (supported, QUALIFIED) {
-                (_, true) if offline => "offline setup requires turbo.lock",
-                (_, true) if no_lock => "--no-lock needs a Node declaration",
-                (false, _) => PENDING,
-                (true, true) if words.contains(&"--frozen") => "frozen mode requires turbo.lock",
-                (true, true) if words.contains(&"--force") => {
-                    "locked provisioning requires turbo.lock"
+            match () {
+                _ if pending => PENDING,
+                _ if locked && words.contains(&"--offline") => {
+                    "--offline cannot install locked dependencies"
                 }
-                (true, true) => "a native Node declaration is required",
-                (true, false) => UNQUALIFIED,
+                _ if locked && words.contains(&"--no-lock") => {
+                    "--no-lock cannot install locked dependencies"
+                }
+                _ if locked => "needs a package manager declared in the root package.json",
+                // A Cargo workspace without a root rust-toolchain file
+                // declares no tool.
+                _ if QUALIFIED => "a native Node declaration is required",
+                _ => UNQUALIFIED,
             },
         );
-        if !supported && !offline && !no_lock {
+        if pending {
             assert!(text.contains("no tasks were run"), "{text}");
         }
         assert!(!text.contains("test run successful"), "{text}");
@@ -494,23 +502,14 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         root,
         &["setup", "--update-lock", "--no-frozen"],
         true,
-        if QUALIFIED {
-            "a native Node declaration is required"
-        } else {
-            UNQUALIFIED
-        },
+        "needs a package manager declared in the root package.json",
     );
-    // #14486 admits CI --no-lock; #14701 names the missing Node declaration in a
-    // Rust-only repo.
+    // #14486 admits CI --no-lock, but only without locked dependencies.
     failure(
         root,
         &["setup", "--no-lock"],
         true,
-        if QUALIFIED {
-            "--no-lock needs a Node declaration"
-        } else {
-            UNQUALIFIED
-        },
+        "--no-lock cannot install locked dependencies",
     );
 }
 
@@ -1505,7 +1504,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     };
     repo.seed();
     // Plain --check checks the same tools and never claims dependency readiness.
-    let installation = "dependency installation is not supported yet";
+    let installation = "pnpm dependency installation is not supported yet";
     for (mode, outcome, skipped) in [
         (
             "--frozen",
@@ -1536,6 +1535,22 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         );
     }
     assert!(!repo.root.join("probe-ran").exists() && !repo.root.join("node_modules").exists());
+}
+
+#[test]
+fn locked_npm_dependencies_require_a_committed_lock_before_any_work() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(root, ".nvmrc", "24.0.0");
+    write(root, "package.json", r#"{"packageManager":"npm@11.6.1"}"#);
+    let expected =
+        "npm dependency setup requires a committed npm-shrinkwrap.json or package-lock.json";
+    for ci in [false, true] {
+        failure(root, &["setup"], ci, expected);
+    }
+    // A missing lockfile is never permission to create one, or to install.
+    assert!(!root.join("package-lock.json").exists() && !root.join(".turbo").exists());
 }
 
 #[test]

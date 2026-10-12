@@ -12,7 +12,7 @@ pub(super) enum Source {
 }
 
 impl Source {
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::Cli(flag) => flag,
             Self::Policy => "turbo.json setup policy",
@@ -106,6 +106,10 @@ impl Plan {
 
     pub fn toolchain(&self, id: &ToolchainId) -> Option<&Toolchain> {
         self.0.iter().find(|toolchain| toolchain.id == *id)
+    }
+
+    pub fn toolchains(&self) -> &[Toolchain] {
+        &self.0
     }
 
     /// Whether every eligible toolchain skips dependency setup.

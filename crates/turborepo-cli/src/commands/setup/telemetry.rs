@@ -121,6 +121,7 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         Error::AdditionalToolDrift(_) => SetupFailure::LockStale,
         Error::Mirror(_) => SetupFailure::Request,
         Error::Install(_) => SetupFailure::Install,
+        Error::Dependencies(_) => SetupFailure::Dependencies,
         Error::Root(_) | Error::Path(_) => SetupFailure::Discovery,
         Error::Io(_) => SetupFailure::Io,
         // #14591's Windows Ctrl+C relay failed to register (suggested bucket).
@@ -172,6 +173,10 @@ pub(super) fn record(
             event.track_setup_request(mode, lock, dependencies);
         }
         match result {
+            // A failed dependency installer's exit status passes through.
+            Ok(code) if *code != 0 => {
+                event.track_setup_failure(SetupFailure::Dependencies, elapsed)
+            }
             Ok(_) => event.track_setup_ready(&SetupReady {
                 elapsed,
                 downloaded_bytes: report.downloaded_bytes,
