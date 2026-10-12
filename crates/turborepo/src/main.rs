@@ -18,6 +18,36 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 #[global_allocator]
 static ALLOC: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+#[cfg(all(not(feature = "heap-dhat"), not(target_os = "windows")))]
+mod allocator {
+    use std::os::raw::{c_int, c_long};
+
+    unsafe extern "C" {
+        fn mi_option_set_default(option: c_int, value: c_long);
+    }
+
+    /// `mi_option_destroy_on_exit` in mimalloc's `mi_option_t`. mimalloc keeps
+    /// retired options in place as `deprecated_*` entries, so this index is the
+    /// same in mimalloc v2 and v3.
+    const MI_OPTION_DESTROY_ON_EXIT: c_int = 22;
+
+    /// mimalloc's exit handler force-collects the heap, purging every freed
+    /// page with `madvise` just before the kernel tears down the address space.
+    /// Its own comment notes this is only needed when mimalloc is linked into a
+    /// shared library that is loaded and unloaded repeatedly. A value above 1
+    /// makes mimalloc skip that handler, including the statistics that
+    /// `MIMALLOC_SHOW_STATS` prints at exit. Nothing changes while the process
+    /// runs, so the purging that keeps the daemon, `watch`, and the LSP bounded
+    /// in memory is unchanged. Setting it as a default leaves
+    /// `MIMALLOC_DESTROY_ON_EXIT` from the environment in charge when it is
+    /// set.
+    pub fn skip_collect_on_exit() {
+        // SAFETY: `mi_option_set_default` only stores the value; the option is
+        // read when the process exits.
+        unsafe { mi_option_set_default(MI_OPTION_DESTROY_ON_EXIT, 2) };
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum InternalLspCommand {
     Probe,
@@ -74,6 +104,9 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
 // This function should not expanded. Please add any logic to
 // `turborepo_cli::main` instead
 fn main() -> Result<()> {
+    #[cfg(all(not(feature = "heap-dhat"), not(target_os = "windows")))]
+    allocator::skip_collect_on_exit();
+
     #[cfg(windows)]
     if let Some(command) = internal_windows_ctrl_c_command(std::env::args_os()) {
         let exit_code = match command {
