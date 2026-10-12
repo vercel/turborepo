@@ -573,6 +573,27 @@ When enabled, Turborepo will honor the `experimentalObservability.otel` configur
 
 [Visit the Experimental observability section to learn more](#experimental-observability).
 
+#### `experimentalSetup`
+
+Default: `false`
+
+Enable the experimental [`turbo setup`](/docs/reference/setup) command and [managed toolchains](/docs/core-concepts/managed-toolchains) in `turbo run`.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalSetup": true,
+  },
+}
+```
+
+With this flag enabled, a root `turbo.lock` makes the repository managed. `turbo run` then uses the toolchains that `turbo setup` installed and fails if they're missing or out of date. Without the flag, `turbo setup` exits with an error and `turbo.lock` doesn't change how `turbo run` behaves.
+
+<Callout type="warn">
+  Managed toolchains are experimental. The `turbo.lock` format can change in any
+  release.
+</Callout>
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"

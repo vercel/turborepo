@@ -21,6 +21,8 @@ The files are the same MDX sources used by turborepo.dev. Site-absolute links su
 | Manage workspace dependencies                     | [Managing dependencies](./crafting-your-repository/managing-dependencies.mdx)                                           |
 | Configure package-specific tasks                  | [Package Configurations](./reference/package-configurations.mdx)                                                        |
 | Set up CI                                         | [Constructing CI](./crafting-your-repository/constructing-ci.mdx) and [CI vendor guides](./guides/ci-vendors/index.mdx) |
+| Install managed toolchains (experimental)         | [Managed toolchains](./core-concepts/managed-toolchains.mdx) and [`turbo setup` reference](./reference/setup.mdx)       |
+| Keep turbo.lock current with dependency bots      | [Updating turbo.lock with dependency bots](./guides/updating-turbo-lock.mdx)                                            |
 | Configure watch mode                              | [`turbo watch` reference](./reference/watch.mdx)                                                                        |
 | Enforce package boundaries                        | [Boundaries](./reference/boundaries.mdx)                                                                                |
 | Look up a command or option                       | [Reference](./reference/index.mdx) and [options overview](./reference/options-overview.mdx)                             |

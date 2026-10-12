@@ -1,0 +1,264 @@
+---
+title: Managed toolchains
+description: Learn how `turbo setup`, `turbo.lock`, and `turbo run` use the same toolchain versions on every machine.
+product: turborepo
+type: conceptual
+summary: How the experimental `turbo setup` command records exact toolchain versions in `turbo.lock` and how `turbo run` uses them for tasks.
+prerequisites:
+  - /docs/getting-started/installation
+related:
+  - /docs/reference/setup
+  - /docs/reference/run
+  - /docs/reference/configuration#experimentalsetup
+---
+
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Tasks need more than source code. They also need the right Node.js and package manager versions. With managed toolchains, your repository declares those versions in the files it already uses, [`turbo setup`](/docs/reference/setup) installs them inside the repository, and [`turbo run`](/docs/reference/run) uses them for every task.
+
+<Callout type="warn">
+  Managed toolchains are experimental and can change at any time, including the
+  format of `turbo.lock`. This release supports Node.js, the npm that ships with
+  Node.js, and pnpm on macOS and Linux with glibc. It installs toolchains only,
+  not dependencies. Read the [limitations](#limitations) before trying it.
+</Callout>
+
+## How it works
+
+1. Your repository declares versions in native files, such as `.nvmrc` and the `packageManager` field of `package.json`.
+2. `turbo setup --tools-only` resolves each declaration to an exact release, records it in `turbo.lock`, downloads and verifies that release, and installs it into `.turbo/tools`.
+3. You commit `turbo.lock`. Every contributor and CI job then gets the same versions.
+4. `turbo run` puts the installed tools first on `PATH` for every task.
+
+`turbo setup` never runs tasks. It provisions tools and exits.
+
+## Getting started
+
+<Steps>
+<Step>
+### Install `turbo` globally
+
+Install the standalone `turbo` binary. It doesn't need Node.js or a package manager. See [Global installation](/docs/getting-started/installation#global-installation).
+
+</Step>
+<Step>
+### Enable the Future Flag
+
+Set [`futureFlags.experimentalSetup`](/docs/reference/configuration#experimentalsetup) in the root `turbo.json` or `turbo.jsonc`:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "experimentalSetup": true
+  }
+}
+```
+
+</Step>
+<Step>
+### Ignore `.turbo/` in Git
+
+Installed tools live in `.turbo/tools`, which must be ignored and untracked. `turbo setup` refuses to install tools otherwise.
+
+```txt title="./.gitignore"
+/.turbo/
+```
+
+</Step>
+<Step>
+### Declare your versions
+
+Declare Node.js and, optionally, pnpm in the root of your repository. See [supported declarations](/docs/reference/setup#supported-declarations) for every file `turbo setup` reads.
+
+```txt title="./.nvmrc"
+24
+```
+
+```json title="./package.json"
+{
+  "packageManager": "pnpm@10.18.0"
+}
+```
+
+</Step>
+<Step>
+### Run `turbo setup`
+
+```bash title="Terminal"
+turbo setup --tools-only
+```
+
+The first run creates `turbo.lock`:
+
+```txt title="Terminal"
+turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
+node: locked 24.21.0
+pnpm: locked 10.18.0
+node 24.21.0: installed
+pnpm 10.18.0: installed
+Dependencies skipped (--tools-only). No tasks run.
+```
+
+</Step>
+<Step>
+### Commit `turbo.lock`
+
+Committing `turbo.lock` opts the repository into managed toolchains for everyone. From then on, `turbo run` requires `turbo setup` on every machine and in every CI job. See [what changes when a repository is managed](#how-turbo-run-uses-managed-tools).
+
+</Step>
+<Step>
+### Run tasks
+
+```bash title="Terminal"
+turbo run build
+```
+
+Tasks use the managed Node.js and pnpm, even if other versions are installed on your machine.
+
+</Step>
+</Steps>
+
+<Callout type="info">
+  This release doesn't install dependencies, and managed tools are only
+  available to tasks that `turbo run` starts. Commands you type in your shell,
+  such as `pnpm install`, still use your `PATH`. Install dependencies the way
+  your repository does today. `turbo exec`, a shell hook, and dependency
+  installation will arrive in later releases.
+</Callout>
+
+## `turbo.lock`
+
+`turbo.lock` is a small, committed JSON file that records the toolchain each declaration resolved to. For each tool, it contains:
+
+- The exact version.
+- The declarations it came from, such as `.nvmrc` or `package.json#/packageManager`.
+- The verified download for each platform: its URL, SHA-256 digest, and the executables it provides.
+
+This excerpt shows one platform:
+
+```jsonc title="./turbo.lock"
+{
+  "schemaVersion": 0,
+  "tools": {
+    "node": {
+      "adapter": "node",
+      "version": "24.21.0",
+      "declarations": [{ "file": ".nvmrc", "request": "24" }],
+      "options": { "bundled-npm": ["11.19.0"] },
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "linux-x64-gnu": {
+            "distribution": {
+              "url": "https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz",
+              "sha256": "6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff",
+              "format": "tar-gz",
+              "rootPrefix": "node-v24.21.0-linux-x64",
+              "executables": { "node": "bin/node", "npm": "bin/npm", "npx": "bin/npx" },
+            },
+          },
+          // ...other platforms
+        },
+      },
+    },
+    "pnpm": {
+      // ...
+    },
+  },
+}
+```
+
+`turbo.lock` isn't a dependency lockfile. It doesn't replace `pnpm-lock.yaml` or `package-lock.json`, and it never contains your dependency graph.
+
+Don't edit `turbo.lock` by hand. Change your declarations and run `turbo setup` instead.
+
+### Portability
+
+`turbo.lock` records downloads for every platform its tools publish, so a lock created on macOS works unchanged on Linux. The installed tools in `.turbo/tools` belong to one clone and are never committed.
+
+### When `turbo.lock` changes
+
+`turbo setup` keeps existing selections unless you change a declaration or ask for an update:
+
+| Situation                                                | Local `turbo setup`                                       | Frozen or CI `turbo setup`  |
+| -------------------------------------------------------- | --------------------------------------------------------- | --------------------------- |
+| No `turbo.lock`                                          | Creates it                                                | Fails                       |
+| A declaration changed or was removed                     | Re-resolves only that tool, updates the lock, prints diff | Fails                       |
+| A newer release matches an unchanged request, like `24`  | Keeps the locked version                                  | Keeps the locked version    |
+| [`--update-lock`](/docs/reference/setup#--update-lock)   | Re-resolves every request to the newest match             | Requires `--no-frozen`      |
+| [`--force`](/docs/reference/setup#--force)               | Reinstalls the locked versions, never changes the lock    | Same                        |
+
+When `turbo setup` updates the lock, it prints each change:
+
+```txt title="Terminal"
+turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
+node: 24.21.0 -> 22.23.3
+```
+
+### Change detection
+
+In a managed repository, a committed `turbo.lock` is a global dependency for [`--affected`](/docs/reference/run#--affected), Git range [filters](/docs/reference/run#--filter-string), and [`turbo query`](/docs/reference/query). Changing it marks every package as changed.
+
+### Pruning
+
+In a managed repository, [`turbo prune`](/docs/reference/prune) copies `turbo.lock`, the declaration files it records, and the root `turbo.json` into the output. With `--docker`, both `json/` and `full/` receive them.
+
+## How `turbo run` uses managed tools
+
+A repository is managed when its root `turbo.json` or `turbo.jsonc` enables `futureFlags.experimentalSetup` and the root contains `turbo.lock`. Without either, `turbo run` behaves exactly as before.
+
+In a managed repository, every `turbo run`:
+
+1. **Validates setup first.** Before building the graph, `turbo run` checks that the tools in `.turbo/tools` match `turbo.lock` and your declarations, are intact, and were installed by `turbo setup` for your user. If anything is wrong, it fails and tells you to run `turbo setup`. It never downloads tools, and it never falls back to tools on your `PATH`.
+2. **Activates the tools for tasks.** For each task, the managed tools come first on `PATH`. This applies after [environment mode](/docs/crafting-your-repository/using-environment-variables#environment-modes) filtering, in both strict and loose mode. `turbo` also finds the package manager it uses to run your scripts there.
+3. **Hashes the toolchain.** Task hashes include the selected toolchain.
+
+`turbo run` checks the installation again before each task starts. If the tools changed during the run, the task fails instead of starting.
+
+### Caching
+
+Managed task hashes include an identity of the selected toolchain. It combines the locked downloads for the current platform with host details: operating system, architecture, C library version on Linux, kernel release, and CPU features. Installation paths aren't included, so moving a clone doesn't cause cache misses.
+
+As a result, changing a locked tool invalidates task caches, and [Remote Cache](/docs/core-concepts/remote-caching) hits require machines with matching host details. In [run summaries](/docs/reference/run#--summarize), the identity appears in the global hash's `rootKey`.
+
+### Repository-local `turbo`
+
+When you invoke the global `turbo` in a repository that installs `turbo` as a dependency, it normally [hands off to the local version](/docs/getting-started/installation#repository-installation). In a managed repository, it first asks the local `turbo` whether it supports the repository's `turbo.lock` format. If not, the run fails with upgrade guidance. `turbo` never replaces the repository's version with the global one or downloads one.
+
+<Callout type="warn">
+  No version of `turbo` reports that support yet, so in this release managed
+  `turbo run` fails whenever the repository has `turbo` installed in
+  `node_modules`. Try managed toolchains in a repository that relies on the
+  global `turbo` binary.
+</Callout>
+
+## Using `turbo setup` in CI
+
+Install the standalone `turbo` binary in your CI job, as described in [Global `turbo` in CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci), then run setup before your tasks:
+
+```bash title="Terminal"
+turbo setup --tools-only
+turbo run build
+```
+
+When `turbo` detects CI, `turbo setup` uses [frozen mode](/docs/reference/setup#--frozen) by default. It installs exactly what `turbo.lock` records and fails, without writing, if `turbo.lock` is missing or no longer matches your declarations. Run `turbo setup` locally and commit the updated lock to fix it. To keep `turbo.lock` current when Renovate or Dependabot change a declaration, see [Updating turbo.lock with dependency bots](/docs/guides/updating-turbo-lock).
+
+To check an existing installation without changing anything, use [`turbo setup --check --tools-only`](/docs/reference/setup#--check).
+
+## Limitations
+
+This experimental release has these limitations:
+
+- **Toolchains only.** `--tools-only` is required. Install dependencies separately.
+- **Node.js and pnpm only.** npm is supported only as the version bundled with Node.js. A `packageManager` that pins npm, Yarn, or Bun isn't supported. Neither are repositories that use the experimental Rust, Python, or Go workspace support.
+- **Exact pnpm versions.** pnpm must be pinned to an exact version. Node.js can use ranges and aliases.
+- **macOS and Linux with glibc.** Windows and musl-based Linux distributions, such as Alpine, aren't supported.
+- **Official sources only.** Tools download from `nodejs.org` and the public npm registry. Mirrors and npm configuration aren't supported yet, and `turbo setup` stops if it finds any. See [troubleshooting](/docs/reference/setup#official-only-setup-rejects-npm-configuration).
+- **A Git repository is required.** `turbo setup` uses Git to confirm that `.turbo/` is ignored, so it can't install tools outside a Git repository, such as in a Docker build of `turbo prune` output.
+- **No repository-local `turbo`.** See [Repository-local `turbo`](#repository-local-turbo).
+- **No shell activation.** Managed tools are only available to tasks started by `turbo run`. [`turbo watch`](/docs/reference/watch) doesn't use them yet.
+- **Not yet implemented.** [`--plan`](/docs/reference/setup#--plan), [`--no-lock`](/docs/reference/setup#--no-lock), and [`--offline`](/docs/reference/setup#--offline) exit with an error.
+- **No cleanup.** Each clone and worktree has its own `.turbo/tools`, and earlier installations aren't removed. Delete `.turbo/tools` and run `turbo setup` again to reclaim space.
