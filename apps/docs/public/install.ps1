@@ -401,6 +401,17 @@ $architecture = $env:PROCESSOR_ARCHITECTURE
 if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
   $architecture = $env:PROCESSOR_ARCHITEW6432
 }
+# x64 PowerShell under emulation on arm64 reports AMD64 above, so also ask
+# Windows for the host processor (Win32_Processor.Architecture 12 is ARM64).
+$hostProcessor = $null
+try {
+  $hostProcessor = @(Get-CimInstance -ClassName Win32_Processor -ErrorAction Stop)[0].Architecture
+} catch {
+  # Without CIM, the process architecture above is all there is to go on.
+}
+if ($architecture -eq 'ARM64' -or $hostProcessor -eq 12) {
+  throw "Standalone turbo is not available for Windows arm64 yet, and this installer will not install the x64 build to run under emulation.`nUse turbo in WSL, or install it with your package manager (for example, npm install turbo --save-dev)."
+}
 if ($architecture -notin @('AMD64', 'x86_64')) {
   throw "Unsupported Windows architecture: $architecture. The standalone installer currently supports Windows x64 only."
 }

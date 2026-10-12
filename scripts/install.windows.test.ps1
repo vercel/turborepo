@@ -35,6 +35,19 @@ function Get-ExecutionPolicy {
   return 'Undefined'
 }
 
+# $null asks the real host; a number simulates Win32_Processor.Architecture
+# (9 is x64, 12 is ARM64).
+$script:HostProcessor = $null
+
+function Get-CimInstance {
+  [CmdletBinding()]
+  param([string]$ClassName)
+  if ($null -eq $script:HostProcessor) {
+    return CimCmdlets\Get-CimInstance -ClassName $ClassName -ErrorAction Stop
+  }
+  return [pscustomobject]@{ Architecture = $script:HostProcessor }
+}
+
 function New-FixtureExecutable {
   param([string]$Name, [string]$Body)
   $path = Join-Path $testRoot "$Name.exe"
@@ -134,13 +147,20 @@ try {
   if (-not [string]::IsNullOrWhiteSpace($env:PROCESSOR_ARCHITEW6432)) {
     $architecture = $env:PROCESSOR_ARCHITEW6432
   }
+  # Independent of the installer's probe: emulation does not rewrite the host
+  # architecture recorded in the system environment.
+  $systemEnvironment = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment'
+  if ((Get-ItemProperty -LiteralPath $systemEnvironment).PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+    $architecture = 'ARM64'
+  }
 
   if ($architecture -notin @('AMD64', 'x86_64')) {
+    $expected = if ($architecture -eq 'ARM64') { 'not available for Windows arm64' } else { 'Unsupported Windows architecture' }
     $failed = $false
     try {
       . $installerPath -Version '2.11.5' -InstallDirectory $expectedInstallDirectory -NoModifyPath
     } catch {
-      $failed = $_.Exception.Message -match 'Unsupported Windows architecture'
+      $failed = $_.Exception.Message.Contains($expected)
     }
     Assert-True $failed "Installer did not reject unsupported Windows architecture $architecture."
     Assert-True ($script:RequestCount -eq 0) 'Installer made a network request before rejecting the architecture.'
@@ -148,8 +168,29 @@ try {
     Write-Output "PASS: rejected unsupported Windows architecture $architecture before download or filesystem changes."
     $env:PROCESSOR_ARCHITECTURE = 'AMD64'
     Remove-Item Env:PROCESSOR_ARCHITEW6432 -ErrorAction SilentlyContinue
-    Write-Output 'Continuing with simulated AMD64 metadata for fixture-only installer tests; no downloaded executable is run.'
+    $script:HostProcessor = 9
+    Write-Output 'Continuing with simulated x64 host metadata for fixture-only installer tests; no downloaded executable is run.'
   }
+
+  # Native arm64 PowerShell, and x64 PowerShell under emulation on arm64.
+  $fixtureArchitecture = $env:PROCESSOR_ARCHITECTURE
+  $fixtureHostProcessor = $script:HostProcessor
+  $script:HostProcessor = 12
+  foreach ($processArchitecture in @('ARM64', 'AMD64')) {
+    $env:PROCESSOR_ARCHITECTURE = $processArchitecture
+    $failure = ''
+    try {
+      . $installerPath -Version '2.11.5' -InstallDirectory $expectedInstallDirectory -NoModifyPath
+    } catch {
+      $failure = $_.Exception.Message
+    }
+    Assert-True ($failure.Contains('not available for Windows arm64') -and $failure.Contains('WSL')) "Installer did not refuse an arm64 host from $processArchitecture PowerShell with guidance. Received: $failure"
+    Assert-True ($script:RequestCount -eq 0) 'Installer made a network request before refusing an arm64 host.'
+    Assert-True (-not (Test-Path -LiteralPath $expectedInstallDirectory)) 'Installer changed files before refusing an arm64 host.'
+  }
+  $env:PROCESSOR_ARCHITECTURE = $fixtureArchitecture
+  $script:HostProcessor = $fixtureHostProcessor
+  Write-Output 'PASS: refused arm64 hosts, including x64 PowerShell under emulation, before download or filesystem changes.'
 
   $unsafeInstallDirectory = Join-Path $testRoot 'unsafe;path'
   $failed = $false
@@ -391,8 +432,12 @@ try {
   $directoryDestination = Join-Path $testRoot 'directory destination'
   [IO.Directory]::CreateDirectory((Join-Path $directoryDestination 'turbo.exe')) | Out-Null
   $env:Path = "$otherDirectory;$systemPath"
+  # Uninstall also works on an arm64 host, which install refuses.
+  $installHostProcessor = $script:HostProcessor
+  $script:HostProcessor = 12
   $output = Invoke-Installer -Arguments @{ InstallDirectory = $keptDirectory; Uninstall = $true }
   $output += "`n" + (Invoke-Installer -Arguments @{ InstallDirectory = $directoryDestination; Uninstall = $true })
+  $script:HostProcessor = $installHostProcessor
   Assert-True (-not (Test-Path -LiteralPath (Join-Path $keptDirectory 'turbo.exe'))) 'Uninstall did not remove its own turbo.exe.'
   Assert-True ([IO.File]::ReadAllText((Join-Path $keptDirectory 'notes.txt')) -eq 'not turbo') 'Uninstall removed a file it does not own.'
   Assert-True (Test-UserPathContains -Directory $keptDirectory) 'Uninstall removed the user PATH entry of a directory that still has other files.'
