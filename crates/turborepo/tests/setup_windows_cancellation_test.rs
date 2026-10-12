@@ -501,7 +501,9 @@ fn npm_configuration_fails_closed_before_any_transaction() {
     let before = state(&root);
     let (proxy, requests) = stalled_proxy();
     let mut command = command(&launcher, Launch::Wrapper, &root, &proxy);
-    command.env("npm_config_user_agent", "npm/10.5.0 node/v22.0.0 win32 x64");
+    // #14643 lets wrapper variables such as npm_config_user_agent through;
+    // a custom registry is still rejected before any transaction.
+    command.env("npm_config_registry", "https://registry.example.invalid/");
     let output = CapturedProcess::spawn(&mut command).finish(TIMEOUT);
     let text = common::combined_output(&output);
     assert_eq!(output.status.code(), Some(1), "{text}");

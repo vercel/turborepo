@@ -132,6 +132,15 @@ fn invoke_in(
     let proxy = TcpListener::bind("127.0.0.1:0").expect("bind HTTP monitor");
     proxy.set_nonblocking(true).expect("nonblocking monitor");
     let url = format!("http://{}", proxy.local_addr().expect("monitor address"));
+    // Windows has no unprivileged symlinks, so the merged check-and-plan test
+    // (#14591 widening) exposes Git's own directory there.
+    #[cfg(windows)]
+    let git_path = which::which("git")
+        .expect("host git")
+        .parent()
+        .expect("git directory")
+        .to_path_buf();
+    #[cfg(not(windows))]
     let git_path = root.join("host-bin");
     #[cfg(unix)]
     if path.is_none() && !git_path.exists() {
