@@ -2000,7 +2000,7 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
         root,
         &["setup", "--plan", "--tools-only"],
         true,
-        "official-only setup rejects Repository configuration",
+        "official-only setup rejects line 1 of the Repository .npmrc",
     );
     assert!(!root.join(".turbo").exists());
 }
