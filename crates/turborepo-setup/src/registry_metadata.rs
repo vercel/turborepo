@@ -85,11 +85,26 @@ pub fn parse_release(
     exact_version: &str,
     authored: Option<&CorepackIntegrity>,
 ) -> Result<RegistryArtifact, RegistryMetadataError> {
+    parse_release_from(bytes, manager, exact_version, authored, None)
+}
+
+/// A mirror may point `dist.tarball` at its own canonical path. The returned
+/// tarball is always the public registry URL, so locks never record mirrors.
+pub(crate) fn parse_release_from(
+    bytes: &[u8],
+    manager: Manager,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+    mirror: Option<&str>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
     if bytes.len() > MAX_METADATA_BYTES {
         return Err(RegistryMetadataError::TooLarge);
     }
     let (name, _) = validate_selection(manager, exact_version)?;
-    parse_package(bytes, manager, name, exact_version, authored)
+    match mirror {
+        Some(base) => parse_package_from(bytes, manager, name, exact_version, authored, Some(base)),
+        None => parse_package(bytes, manager, name, exact_version, authored),
+    }
 }
 
 /// Like `parse_release`, for an adapter-owned registry package name such as
@@ -100,6 +115,19 @@ pub(crate) fn parse_package(
     name: &str,
     exact_version: &str,
     authored: Option<&CorepackIntegrity>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
+    parse_package_from(bytes, manager, name, exact_version, authored, None)
+}
+
+/// Accept only the exact public or selected mirror tarball path; retain
+/// canonical public lock provenance for scoped native packages as well.
+pub(crate) fn parse_package_from(
+    bytes: &[u8],
+    manager: Manager,
+    name: &str,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+    mirror: Option<&str>,
 ) -> Result<RegistryArtifact, RegistryMetadataError> {
     if bytes.len() > MAX_METADATA_BYTES {
         return Err(RegistryMetadataError::TooLarge);
@@ -117,11 +145,10 @@ pub(crate) fn parse_package(
         return Err(RegistryMetadataError::IdentityMismatch);
     }
     // Compare the literal decoded string, not a URL parser's normalized form.
-    let tarball = format!(
-        "{PUBLIC_NPM_REGISTRY}/{}",
-        tarball_path(name, exact_version)
-    );
-    if document.dist.tarball != tarball {
+    let path = tarball_path(name, exact_version);
+    let tarball = format!("{PUBLIC_NPM_REGISTRY}/{path}");
+    let mirrored = mirror.map(|base| format!("{base}/{path}"));
+    if document.dist.tarball != tarball && Some(&document.dist.tarball) != mirrored.as_ref() {
         return Err(RegistryMetadataError::InvalidTarball);
     }
     let integrity = sri_sha512(&document.dist.integrity)?;

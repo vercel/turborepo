@@ -336,3 +336,28 @@ fn byte_bounds_malformed_duplicate_fields_and_redaction() {
     }
     assert!(error.source().is_none());
 }
+
+#[test]
+fn mirror_tarballs_are_accepted_only_for_their_mirror_and_never_recorded() {
+    let mut value = document("pnpm", "10.0.0");
+    value["dist"]["tarball"] = json!("https://mirror.example/npm/pnpm/-/pnpm-10.0.0.tgz");
+    let bytes = serde_json::to_vec(&value).unwrap();
+    let mirrored = |base| parse_release_from(&bytes, Manager::Pnpm, "10.0.0", None, base);
+    assert_eq!(
+        mirrored(Some("https://mirror.example/npm"))
+            .unwrap()
+            .tarball,
+        "https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz"
+    );
+    for base in [
+        None,
+        Some("https://mirror.example"),
+        Some("https://other.example/npm"),
+    ] {
+        assert_eq!(mirrored(base).unwrap_err(), InvalidTarball);
+    }
+    // Canonical metadata stays valid through a mirror.
+    let canonical = serde_json::to_vec(&document("pnpm", "10.0.0")).unwrap();
+    let mirror = Some("https://mirror.example/npm");
+    assert!(parse_release_from(&canonical, Manager::Pnpm, "10.0.0", None, mirror).is_ok());
+}

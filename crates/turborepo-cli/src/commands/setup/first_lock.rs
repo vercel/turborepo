@@ -10,6 +10,8 @@ mod ci;
 mod go;
 #[path = "manager_lock_tests.rs"]
 mod managers;
+#[path = "mirror_tests.rs"]
+mod mirror;
 #[path = "no_lock_tests.rs"]
 mod no_lock;
 #[path = "refresh.rs"]

@@ -12,6 +12,7 @@ use turborepo_setup::{
     go_provision::GoPlan,
     go_resolution::GoTransport,
     lock::{Installation, Platform, Snapshot, additional},
+    mirror::Mirrors,
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -48,10 +49,26 @@ impl Transports {
         // Verified archive bytes are shared through the user's cache directory;
         // extraction and activation stay in each repository's .turbo/tools.
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
+        Self::configured(policy, &Mirrors::from_env()?, cache)
+    }
+
+    pub fn configured(
+        policy: &OfficialSourcePolicy,
+        mirrors: &Mirrors,
+        cache: Option<ArtifactCache>,
+    ) -> Result<Self, Error> {
+        let registry = || match &mirrors.registry {
+            Some(mirror) => PnpmTransport::mirrored(policy, mirror),
+            None => PnpmTransport::official(policy),
+        };
+        let node = match &mirrors.node {
+            Some(mirror) => NodeTransport::mirrored(policy, mirror)?,
+            None => NodeTransport::official(policy)?,
+        };
         Ok(Self {
-            node: NodeTransport::official(policy)?.with_cache(cache.clone()),
-            pnpm: PnpmTransport::official(policy)?.with_cache(cache),
-            registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
+            node: node.with_cache(cache.clone()),
+            pnpm: registry()?.with_cache(cache),
+            registry: registry()?,
             uv: UvTransport::official(policy)?,
             rustup: RustupTransport::official(policy)?,
             python: PythonTransport::official(policy)?,
