@@ -122,7 +122,11 @@ impl ManagedTools {
         let authorization = if clone_local {
             Authorization::inspect_clone_local(&canonical, user_base, context()?)
         } else {
-            let ecosystems = ecosystems(&canonical, config)?;
+            // The root configuration holds setup policy and additional-tool
+            // declarations; report its errors like other invalid declarations.
+            let ecosystems = ecosystems(&canonical, config).map_err(|e| {
+                format!("tool declarations are invalid; fix them, then run turbo setup: {e}")
+            })?;
             Authorization::inspect(&canonical, user_base, context()?, ecosystems)
         }
         .map_err(explain)?;
