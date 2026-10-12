@@ -99,10 +99,16 @@ pub async fn run(
         tracing::debug!("Verbose tracing redirected to {path}");
     }
 
+    let renders_graph = base.opts.run_opts.graph.is_some();
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
         RunBuilder::new(base.run_builder_input()?, Some(http_client))?
     };
+    // `--graph` only renders the task graph and never hashes tasks, so it
+    // needs external dependency resolution only when scope selection does.
+    if renders_graph && !run_builder.scope_needs_external_dependencies() {
+        run_builder = run_builder.skip_external_dependencies();
+    }
     if let Some(qs) = query_server {
         run_builder = run_builder.with_query_server(qs);
     }
