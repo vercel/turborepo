@@ -117,6 +117,8 @@ pub enum Error {
     #[error(transparent)]
     GoResolution(#[from] turborepo_setup::go_resolution::Error),
     #[error(transparent)]
+    Bun(#[from] turborepo_setup::bun_provision::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),

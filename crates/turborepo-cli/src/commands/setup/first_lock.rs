@@ -266,6 +266,7 @@ fn dispatch(
         python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(u.origin()).unwrap(),
         artifact: None,
         go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin()).unwrap(),
     }), || {
         hook();
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)

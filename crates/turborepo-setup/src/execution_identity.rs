@@ -194,6 +194,7 @@ impl ExecutionSnapshot {
                     | "npm"
                     | "pnpm"
                     | "yarn"
+                    | "bun"
                     | "rust"
                     | "rustup"
                     | "uv"

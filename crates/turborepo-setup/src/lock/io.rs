@@ -16,8 +16,8 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 9] = [
-    "node", "npm", "pnpm", "uv", "python", "rust", "rustup", "go", "yarn",
+const NATIVE: [&str; 10] = [
+    "node", "npm", "pnpm", "uv", "python", "rust", "rustup", "go", "yarn", "bun",
 ];
 /// rustup's root toolchain files. Both at once is ambiguous, not precedence.
 const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
@@ -234,6 +234,7 @@ pub(crate) fn probe_native_with(
                 package_manager::Manager::Npm => "npm",
                 package_manager::Manager::Pnpm => "pnpm",
                 package_manager::Manager::Yarn => "yarn",
+                package_manager::Manager::Bun => "bun",
                 _ => return Err(StorageError::Declarations),
             };
             let mut sources = Vec::new();
