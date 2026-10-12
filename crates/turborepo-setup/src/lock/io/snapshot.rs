@@ -9,6 +9,7 @@ use super::{
     DeclarationMap, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, NATIVE, StorageError, WriteOutcome,
     WriterStorage, probe_native_with, read_optional,
 };
+use crate::lock::{Tool, additional};
 
 const SOURCES: [(&str, usize); 3] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),
@@ -28,6 +29,7 @@ pub struct Snapshot {
     previous: Option<Lock>,
     inputs: Inputs,
     native: DeclarationMap,
+    additional: BTreeMap<String, Tool>,
 }
 
 // Raw manifests may contain unrelated secrets. Never print snapshot contents.
@@ -64,6 +66,7 @@ impl Snapshot {
                 .cloned()
                 .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
         })?;
+        let additional = project_additional(&captured)?;
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
         if same_file::Handle::from_path(&root)? != *root_identity
@@ -79,6 +82,7 @@ impl Snapshot {
             previous,
             inputs: captured,
             native,
+            additional,
         })
     }
 
@@ -87,6 +91,21 @@ impl Snapshot {
     }
     pub fn declarations(&self) -> &DeclarationMap {
         &self.native
+    }
+
+    /// Exact `setup.additionalTools` lock entries projected from the captured
+    /// root configuration. They never need resolution.
+    pub fn additional_tools(&self) -> &BTreeMap<String, Tool> {
+        &self.additional
+    }
+
+    /// Whether `lock` records exactly the declared additional tools.
+    pub fn matches_additional(&self, lock: &Lock) -> bool {
+        let locked = lock
+            .tools()
+            .iter()
+            .filter(|(_, tool)| tool.adapter == additional::ADAPTER);
+        locked.eq(self.additional.iter())
     }
 
     /// Resolver inputs come from the captured bytes, never current disk state.
@@ -168,7 +187,7 @@ impl Snapshot {
     /// fails.
     pub fn after_publication(&self, candidate: &Lock) -> Result<Self, StorageError> {
         self.check_native_coverage(Some(candidate))?;
-        if !candidate.matches_native(&self.native)? {
+        if !candidate.matches_native(&self.native)? || !self.matches_additional(candidate) {
             return Err(StorageError::Conflict);
         }
         let mut published = self.clone();
@@ -186,6 +205,9 @@ impl Snapshot {
         // Refuse to publish or silently remove aliases/extra sources.
         for lock in candidate.into_iter().chain(self.previous.as_ref()) {
             if lock.tools().iter().any(|(id, tool)| {
+                if tool.adapter == additional::ADAPTER {
+                    return !additional::covered(id, tool);
+                }
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
                     || tool
@@ -211,7 +233,7 @@ impl Snapshot {
         mut before_check: impl FnMut() -> io::Result<()>,
     ) -> Result<WriteOutcome, StorageError> {
         self.check_native_coverage(Some(candidate))?;
-        if !candidate.matches_native(&self.native)? {
+        if !candidate.matches_native(&self.native)? || !self.matches_additional(candidate) {
             return Err(
                 Error::Invalid("candidate provenance does not match captured sources").into(),
             );
@@ -244,6 +266,22 @@ impl Snapshot {
         }
         result?;
         Ok(WriteOutcome::Written)
+    }
+}
+
+/// Additional tools come from the same captured root configuration bytes as
+/// the CAS, never from a separate read of current disk state.
+fn project_additional(inputs: &Inputs) -> Result<BTreeMap<String, Tool>, StorageError> {
+    let mut configs = turborepo_types::CONFIG_FILES
+        .iter()
+        .filter_map(|file| Some((*file, inputs.get(file)?.as_deref()?)));
+    match (configs.next(), configs.next()) {
+        (None, _) => Ok(BTreeMap::new()),
+        (Some((file, bytes)), None) => {
+            additional::project(file, bytes).ok_or(StorageError::Declarations)
+        }
+        // turbo rejects ambiguous root configuration.
+        (Some(_), Some(_)) => Err(StorageError::Declarations),
     }
 }
 

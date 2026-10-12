@@ -11,6 +11,7 @@ use url::Url;
 
 use crate::node_discovery::UniqueJson;
 
+pub mod additional;
 mod io;
 pub mod reconcile;
 pub use io::{DeclarationMap, Snapshot, StorageError, WriteOutcome, probe_native, write};
