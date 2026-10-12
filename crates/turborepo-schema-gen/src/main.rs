@@ -21,7 +21,9 @@ use std::{fs, io::Write, path::PathBuf, str::FromStr};
 
 use schemars::{schema::RootSchema, schema_for};
 use ts_rs::TS;
-use turborepo_turbo_json::{DependencyPolicy, RawTurboJson, ToolPolicy};
+use turborepo_turbo_json::{
+    ArtifactFormat, ArtifactPlatform, DependencyPolicy, RawTurboJson, ToolPolicy,
+};
 use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
 use usage::{Cli as UsageCli, Subcommands};
 
@@ -161,6 +163,8 @@ fn generate_typescript() -> String {
     add_type_decl::<UIMode>(&mut output, "");
     add_type_decl::<ToolPolicy>(&mut output, "");
     add_type_decl::<DependencyPolicy>(&mut output, "");
+    add_type_decl::<ArtifactPlatform>(&mut output, "");
+    add_type_decl::<ArtifactFormat>(&mut output, "");
 
     // Simple type aliases for compatibility
     output.push_str("/**\n");
@@ -1113,6 +1117,34 @@ fn generate_setup_policy_interfaces() -> String {
 
   /** Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`. */
   go?: ToolchainSetupPolicy;
+
+  /** Tools that no built-in adapter manages, keyed by tool ID. */
+  additionalTools?: Record<string, AdditionalTool>;
+}
+
+export interface AdditionalTool {
+  /** The exact version of the tool. Ranges and channels are not allowed. */
+  version: string;
+
+  /** Artifacts keyed by platform. Platforms without an artifact are unsupported. */
+  artifacts: Partial<Record<ArtifactPlatform, AdditionalToolArtifact>>;
+}
+
+export interface AdditionalToolArtifact {
+  /** HTTPS download URL without credentials, a query, or a fragment. */
+  url: string;
+
+  /** Lowercase hex SHA-256 digest of the downloaded bytes. */
+  sha256: string;
+
+  /** `binary` for a single executable file, or the archive format. */
+  format: ArtifactFormat;
+
+  /** The single top-level archive directory. Required for archives only. */
+  rootPrefix?: string;
+
+  /** Executable names mapped to paths relative to `rootPrefix`. */
+  executables: Record<string, string>;
 }
 
 export interface ToolchainSetupPolicy {
@@ -1255,6 +1287,19 @@ mod cli_tests {
             &serde_json::json!(["managed", "verify-system", "skip"])
         );
         assert!(super::generate_typescript().contains("export interface ToolchainSetupPolicy {"));
+        let tool = &schema["definitions"]["AdditionalTool"];
+        assert_eq!(
+            tool["required"],
+            serde_json::json!(["artifacts", "version"])
+        );
+        assert_eq!(
+            schema["definitions"]["AdditionalToolArtifact"]["required"],
+            serde_json::json!(["executables", "format", "sha256", "url"])
+        );
+        assert!(
+            super::generate_typescript()
+                .contains("additionalTools?: Record<string, AdditionalTool>;")
+        );
         assert!(super::generate_root_schema_interface().contains("setup?: SetupPolicy;"));
         assert!(!super::generate_workspace_schema_interface().contains("setup?"));
     }
