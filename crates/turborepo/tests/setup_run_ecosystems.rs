@@ -14,6 +14,8 @@
 
 #[path = "setup_run_ecosystems/go.rs"]
 mod go;
+#[path = "setup_run_ecosystems/rust.rs"]
+mod rust;
 
 use std::{
     fs,
