@@ -720,3 +720,128 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
         n.untouched();
     }
 }
+
+/// Bundled npm whose CLI records its arguments and first PATH entry, then
+/// runs `body` in the repository.
+fn installing(body: &str) -> NpmFixture {
+    let mut n = NpmFixture::new(true);
+    let prefix = n.f.node_path.rsplit('/').next().unwrap();
+    let cli =
+        format!("#!/bin/sh\necho \"$*\" >> npm-args\necho \"${{PATH%%:*}}\" > npm-path\n{body}\n");
+    n.f.node = first_lock::bundled_with(prefix.trim_end_matches(".tar.gz"), &cli);
+    let artifacts = &mut n.f.lock["tools"]["node"]["installation"]["artifacts"];
+    let parts = artifacts
+        .as_object_mut()
+        .unwrap()
+        .values_mut()
+        .next()
+        .unwrap();
+    parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&n.f.node)));
+    let lock = Lock::parse(n.f.lock.to_string().as_bytes()).unwrap();
+    fs::write(
+        n.f.owned.root().join("turbo.lock"),
+        lock.canonical_bytes().unwrap(),
+    )
+    .unwrap();
+    n
+}
+
+impl NpmFixture {
+    fn args(&self) -> Vec<String> {
+        let args = fs::read_to_string(self.f.owned.root().join("npm-args"));
+        args.unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+    fn no_tasks(&self) {
+        for path in ["task-ran", "hook-ran", "probe-ran"] {
+            assert!(!self.f.owned.root().join(path).exists(), "{path}");
+        }
+        assert_eq!(
+            fs::read(self.f.owned.root().join("package-lock.json")).unwrap(),
+            b"dependency lock sentinel"
+        );
+    }
+}
+
+#[test]
+fn locked_npm_dependencies_install_with_managed_npm_and_repeat_safely() {
+    let n = installing("mkdir -p node_modules && touch node_modules/.installed");
+    let root = n.f.owned.root();
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(n.args(), ["ci"]);
+    // The managed bin directory comes first, and it is the one exporting npm.
+    let path = fs::read_to_string(root.join("npm-path")).unwrap();
+    assert!(
+        std::path::Path::new(path.trim()).join("npm").exists(),
+        "{path}"
+    );
+    assert!(path.contains(".turbo"), "{path}");
+    assert!(root.join("node_modules/.installed").exists());
+    // A repeat reruns npm ci, so removed dependencies are repaired.
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert!(root.join("node_modules/.installed").exists());
+    assert_eq!(n.args(), ["ci", "ci"]);
+    // Checks never run the installer.
+    assert_eq!(n.f.run(&u, &["--check"]).unwrap(), 0);
+    assert_eq!(n.args().len(), 2);
+    n.no_tasks();
+}
+
+#[test]
+fn npm_lifecycle_skip_controls_pass_ignore_scripts_and_tools_only_skips_npm() {
+    let n = installing("");
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
+    assert!(n.args().is_empty());
+    assert_eq!(n.f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    let skip = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"lifecycleScripts":"skip"}}"#;
+    fs::write(n.f.owned.root().join("turbo.json"), skip).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    fs::write(n.f.owned.root().join("turbo.json"), ENABLED).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(
+        n.args(),
+        ["ci --ignore-scripts", "ci --ignore-scripts", "ci"]
+    );
+    n.no_tasks();
+}
+
+#[test]
+fn missing_stale_and_rewritten_npm_locks_fail_readably_and_stay_unchanged() {
+    let n = installing("");
+    let root = n.f.owned.root();
+    fs::remove_file(root.join("package-lock.json")).unwrap();
+    let u = n.upstream();
+    let error = n.f.run(&u, &["--frozen"]).unwrap_err().to_string();
+    assert!(
+        error.contains("requires a committed npm-shrinkwrap.json or package-lock.json"),
+        "{error}"
+    );
+    // Checked before any download or storage, and never created.
+    assert_eq!(u.hits(), 0);
+    assert!(!root.join(".turbo").exists() && !root.join("package-lock.json").exists());
+
+    // npm ci's failure status passes through; the next run recovers.
+    let n = installing("[ -f stale ] && exit 3\nmkdir -p node_modules");
+    let u = n.upstream();
+    fs::write(n.f.owned.root().join("stale"), "").unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 3);
+    fs::remove_file(n.f.owned.root().join("stale")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert!(n.f.owned.root().join("node_modules").exists());
+    n.no_tasks();
+
+    // A lockfile the manager rewrites is restored, and setup fails.
+    let n = installing("echo rewritten > package-lock.json");
+    let error = n.f.run(&n.upstream(), &["--frozen"]).unwrap_err();
+    let error = error.to_string();
+    assert!(
+        error.contains("`npm ci` changed the committed package-lock.json"),
+        "{error}"
+    );
+    n.no_tasks();
+}

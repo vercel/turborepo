@@ -12,7 +12,7 @@ pub(super) enum Source {
 }
 
 impl Source {
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::Cli(flag) => flag,
             Self::Policy => "turbo.json setup policy",
@@ -116,6 +116,10 @@ impl Plan {
         self.0.iter().find(|toolchain| toolchain.id == *id)
     }
 
+    pub fn toolchains(&self) -> &[Toolchain] {
+        &self.0
+    }
+
     /// Whether every eligible toolchain skips dependency setup.
     pub fn tools_only(&self) -> bool {
         self.0
@@ -135,16 +139,6 @@ impl Plan {
         self.0
             .iter()
             .all(|toolchain| toolchain.tools.0 == ToolPolicy::Skip)
-    }
-
-    /// Until dependency installers exist, don't silently downgrade an explicit
-    /// repository request. Inferred plain setup keeps main's tools-only
-    /// behavior.
-    pub fn explicit_dependencies(&self) -> bool {
-        self.0.iter().any(|toolchain| {
-            toolchain.tools.0 != ToolPolicy::Skip
-                && toolchain.dependencies == (DependencyPolicy::Locked, Source::Policy)
-        })
     }
 
     pub fn report(&self) -> Vec<String> {
@@ -189,7 +183,6 @@ mod tests {
         // Preserve the native adapters that landed after this policy stack:
         // managed Rust remains supported, but system Rust is still fail-closed.
         assert!(plan(r#"{"rust":{"tools":"verify-system"}}"#, false).unsupported());
-        assert!(plan(r#"{"dependencies":"locked"}"#, false).explicit_dependencies());
         let javascript = inferred.toolchain(&ToolchainId::JAVASCRIPT).unwrap();
         assert_eq!(javascript.tools, (ToolPolicy::Managed, Source::Inferred));
         assert_eq!(
