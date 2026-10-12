@@ -5,8 +5,8 @@
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
-    bun_provision::{BunPlan, BunTransport},
     artifact_cache::ArtifactCache,
+    bun_provision::{BunPlan, BunTransport},
     go_provision::GoPlan,
     go_resolution::GoTransport,
     lock::{Installation, Platform, Snapshot},
@@ -21,8 +21,8 @@ use turborepo_setup::{
     rustup_provision::{RustupPlan, RustupTransport},
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
-    yarn_provision::YarnPlan,
     uv_resolution::UvTransport,
+    yarn_provision::YarnPlan,
 };
 use turborepo_tool_install::Store;
 
