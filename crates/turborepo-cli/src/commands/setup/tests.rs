@@ -503,6 +503,7 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
                 registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
+                trust_base: Some(f.owned.home().to_owned()),
             };
             run_reporting(args, setup_args, Some(transports), &mut report, || {
                 Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)

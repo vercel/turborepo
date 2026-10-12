@@ -319,7 +319,7 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
 const PROPOSE: &[&str] = &["--plan", "--tools-only", "--no-frozen"];
 const SETUP: &[&str] = &["--tools-only", "--no-frozen"];
 
-fn loopback(u: &LoopbackServer) -> provision::Transports {
+fn loopback(u: &LoopbackServer, trust_base: &std::path::Path) -> provision::Transports {
     use turborepo_setup::{
         node_provision::NodeTransport, pnpm_provision::PnpmTransport,
         registry_resolution::RegistryTransport,
@@ -328,6 +328,7 @@ fn loopback(u: &LoopbackServer) -> provision::Transports {
         node: NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        trust_base: Some(trust_base.to_owned()),
     }
 }
 
@@ -351,7 +352,7 @@ impl Fixture {
             validate_request(&request)?;
             let discovery = root::Discovery::capture(args)?;
             let sources = turborepo_setup::lock::Snapshot::capture(self.owned.root())?;
-            let transports = Some(loopback(upstream));
+            let transports = Some(loopback(upstream, self.owned.home()));
             report = Some(plan::report(
                 &discovery,
                 sources,
