@@ -16,6 +16,7 @@ use semver::Version;
 use turborepo_repository::toolchain::ToolchainId;
 use turborepo_setup::{
     activation::ActivationPlan,
+    cargo_prefetch,
     js_install::{self, Frozen},
     lifecycle::{self, Installer, Policy},
     lock::{Ecosystems, Lock, Snapshot},
@@ -48,6 +49,8 @@ pub enum Error {
     #[error(transparent)]
     Uv(#[from] uv_sync::Error),
     #[error(transparent)]
+    Cargo(#[from] cargo_prefetch::Error),
+    #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
     #[error(transparent)]
     Sources(#[from] turborepo_setup::lock::StorageError),
@@ -70,6 +73,8 @@ enum Adapter {
     },
     /// `uv sync --locked`; skipping lifecycle scripts refuses source builds.
     Uv { lifecycle: lifecycle::Request },
+    /// `cargo fetch --locked` into the clone's private Cargo home.
+    Cargo { lifecycle: lifecycle::Request },
 }
 
 /// One installer invocation for the locked versions.
@@ -101,6 +106,7 @@ impl Adapter {
         match self {
             Self::Javascript { lockfile, .. } => lockfile,
             Self::Uv { .. } => "uv.lock",
+            Self::Cargo { .. } => "Cargo.lock",
         }
     }
 
@@ -133,6 +139,11 @@ impl Adapter {
                     std::iter::once("uv").chain(sync).collect(),
                 )
             }
+            Self::Cargo { lifecycle } => (
+                Installer::Cargo,
+                *lifecycle,
+                vec!["cargo", "fetch", "--locked"],
+            ),
         };
         let policy = Policy::evaluate(root, installer.clone(), lifecycle)?;
         command.extend(policy.args().iter().copied());
@@ -160,6 +171,16 @@ impl Adapter {
                 match uv_sync(&uv, root, builds, &env.vars).run() {
                     Ok(()) => Ok(None),
                     Err(uv_sync::Error::Failed(code)) => Ok(Some(code)),
+                    Err(error) => Err(error.into()),
+                }
+            }
+            Self::Cargo { .. } => {
+                let cargo = env.program("cargo")?;
+                // Activation exposes this same home to tasks as CARGO_HOME.
+                let home = cargo_prefetch::cargo_home(root)?;
+                match cargo_prefetch::prefetch(root, &cargo, &home, false, &env.vars) {
+                    Ok(()) => Ok(None),
+                    Err(cargo_prefetch::Error::Fetch(code)) => Ok(Some(code.parse().unwrap_or(1))),
                     Err(error) => Err(error.into()),
                 }
             }
@@ -194,6 +215,7 @@ impl Dependencies {
                 ToolPolicy::Managed if *id == ToolchainId::PYTHON => {
                     python(root, snapshot, lifecycle)?
                 }
+                ToolPolicy::Managed if *id == ToolchainId::RUST => rust(root, snapshot, lifecycle)?,
                 ToolPolicy::Managed => Step::Skip(format!(
                     "{} dependency setup is not supported yet",
                     id.as_str()
@@ -391,6 +413,18 @@ fn python(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Re
         return Err(uv_sync::Error::MissingLock.into());
     }
     Ok(Step::Install(Adapter::Uv { lifecycle }))
+}
+
+fn rust(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Result<Step, Error> {
+    // Cargo fetches with the managed toolchain only, so it needs a toolchain file.
+    if !snapshot.declarations().contains_key("rust") {
+        let reason = "no managed Rust toolchain; declare one in rust-toolchain.toml";
+        return Ok(Step::Skip(reason.into()));
+    }
+    if !root.join("Cargo.lock").is_file() {
+        return Err(cargo_prefetch::Error::MissingLock.into());
+    }
+    Ok(Step::Install(Adapter::Cargo { lifecycle }))
 }
 
 /// Managed tools first on PATH plus their runtime variables, over the
