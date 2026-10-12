@@ -204,7 +204,9 @@ struct ScanResult {
 /// git uses for diffs, not for checkin conversion.
 #[derive(Default)]
 struct BinaryStats {
-    /// Byte counts indexed by [`BYTE_CLASS`].
+    /// Byte counts indexed by [`BYTE_CLASS`]. Printable bytes are not counted
+    /// directly (bumping one counter for nearly every byte serializes the
+    /// scan loop); [`BinaryStats::is_binary`] derives them from the total.
     class_counts: [u64; 5],
     last_byte: Option<u8>,
 }
@@ -237,18 +239,25 @@ const BYTE_CLASS: [u8; 256] = {
 };
 
 impl BinaryStats {
+    fn has_nul(&self) -> bool {
+        self.class_counts[CLASS_NUL as usize] > 0
+    }
+
     /// `crlf_count` is the number of CR bytes immediately followed by LF;
-    /// every other CR is a lone CR.
-    fn is_binary(&self, crlf_count: u64) -> bool {
-        let lone_cr = self.class_counts[CLASS_CR as usize] - crlf_count;
-        let nul = self.class_counts[CLASS_NUL as usize];
-        let printable = self.class_counts[CLASS_PRINTABLE as usize];
-        let mut nonprintable = self.class_counts[CLASS_NONPRINTABLE as usize] + nul;
+    /// every other CR is a lone CR. Once a NUL is seen the scan stops
+    /// classifying, so the other counts are only complete without one.
+    fn is_binary(&self, byte_count: u64, crlf_count: u64) -> bool {
+        if self.has_nul() {
+            return true;
+        }
+        let cr = self.class_counts[CLASS_CR as usize];
+        let mut nonprintable = self.class_counts[CLASS_NONPRINTABLE as usize];
+        let printable = byte_count - cr - nonprintable - self.class_counts[CLASS_LF as usize];
         // git doesn't count a trailing ^Z (DOS end-of-file marker).
         if self.last_byte == Some(0x1a) {
             nonprintable -= 1;
         }
-        lone_cr > 0 || nul > 0 || (printable >> 7) < nonprintable
+        cr > crlf_count || (printable >> 7) < nonprintable
     }
 }
 
@@ -279,13 +288,18 @@ fn scan_file_and_feed(
             break;
         }
 
-        if detect_binary {
+        // A NUL settles the classification, so skip it for the rest of the
+        // file (binary files usually have one early).
+        if detect_binary && !binary_stats.has_nul() {
             for &b in &buf[..n] {
                 if b == b'\n' && prev_was_cr {
                     crlf_count += 1;
                 }
                 prev_was_cr = b == b'\r';
-                binary_stats.class_counts[BYTE_CLASS[b as usize] as usize] += 1;
+                let class = BYTE_CLASS[b as usize];
+                if class != CLASS_PRINTABLE {
+                    binary_stats.class_counts[class as usize] += 1;
+                }
             }
             binary_stats.last_byte = Some(buf[n - 1]);
         } else {
@@ -304,7 +318,7 @@ fn scan_file_and_feed(
     Ok(ScanResult {
         byte_count,
         crlf_count,
-        is_binary: detect_binary && binary_stats.is_binary(crlf_count),
+        is_binary: detect_binary && binary_stats.is_binary(byte_count, crlf_count),
     })
 }
 
@@ -400,8 +414,8 @@ fn validate_file_type(
 /// Hash a file as a git blob, applying CRLF→LF normalization when the
 /// `text` attribute requires it.
 ///
-/// For `TextAttr::Auto`, binary detection (NUL in first 8KB) is performed
-/// during the fused scan+hash pass — no separate file open.
+/// For `TextAttr::Auto`, binary classification (see [`BinaryStats`]) is
+/// performed during the fused scan+hash pass — no separate file open.
 ///
 /// Single-pass for the common case (no normalization needed):
 /// 1. Get file length from metadata
