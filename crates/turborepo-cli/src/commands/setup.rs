@@ -471,13 +471,34 @@ pub fn frozen_tools_for_tests(
     origin: &str,
     policy: impl Fn() -> Result<OfficialSourcePolicy, turborepo_setup::source_policy::Error>,
 ) -> Result<i32, String> {
+    setup_for_tests(
+        invocation,
+        user_base,
+        origin,
+        &["--frozen", "--tools-only"],
+        policy,
+    )
+}
+
+/// `turbo setup <flags>` from `invocation`, like `frozen_tools_for_tests`, so
+/// binary tests can also create `turbo.lock` from loopback release metadata.
+#[cfg(feature = "test-support")]
+pub fn setup_for_tests(
+    invocation: &std::path::Path,
+    user_base: &std::path::Path,
+    origin: &str,
+    flags: &[&str],
+    policy: impl Fn() -> Result<OfficialSourcePolicy, turborepo_setup::source_policy::Error>,
+) -> Result<i32, String> {
     use turborepo_setup::{
         node_provision::NodeTransport, pnpm_provision::PnpmTransport,
         registry_resolution::RegistryTransport,
     };
-    let words = ["turbo", "setup", "--frozen", "--tools-only", "--cwd"]
+    let words = ["turbo", "setup"]
+        .iter()
+        .chain(flags)
+        .chain(&["--cwd"])
         .map(std::ffi::OsString::from)
-        .into_iter()
         .chain([invocation.as_os_str().to_owned()])
         .collect();
     let args = Args::parse_args(words)?;
