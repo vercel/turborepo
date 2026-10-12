@@ -174,8 +174,11 @@ impl TrustStore {
 
     fn load(&self) -> io::Result<Option<Record>> {
         // Reject links in any existing state component before opening a record.
-        // Only the record directory must be private: on macOS its parent is
-        // turbo's shared config directory, which is commonly created as 0755.
+        // Only the record directory setup creates must be private: on macOS its
+        // parent is turbo's shared config directory, and existing ancestors keep
+        // the modes the user's umask gave them (a 0775 `~/.local/share` under
+        // Ubuntu's 0002). Another user who can write an ancestor still cannot
+        // substitute the owned, private record directory or records below it.
         for path in self.directory.ancestors() {
             match fs::symlink_metadata(path) {
                 Ok(metadata) => {
@@ -187,11 +190,11 @@ impl TrustStore {
                     #[cfg(unix)]
                     {
                         use std::os::unix::fs::MetadataExt;
-                        // Root-owned sticky temp ancestors are safe; writable
-                        // user-state parents without that boundary are not.
+                        // Foreign-owned and world-writable ancestors are unsafe,
+                        // except root-owned sticky temp directories.
                         let sticky_root = metadata.uid() == 0 && metadata.mode() & 0o1000 != 0;
                         if (metadata.uid() != 0 && metadata.uid() != unsafe { libc::geteuid() })
-                            || (metadata.mode() & 0o022 != 0 && !sticky_root)
+                            || (metadata.mode() & 0o002 != 0 && !sticky_root)
                         {
                             return Err(unsafe_state());
                         }
