@@ -518,6 +518,23 @@ impl RunBuilder {
                 .is_none_or(|selectors| selectors.iter().any(|selector| selector.tag.is_some()))
     }
 
+    /// Whether resolving the package scope needs external dependency
+    /// resolution. Git ranges (`[ref]`, including `pkg...[ref]`) and
+    /// `--affected` classify lockfile changes against resolved external
+    /// dependencies; name, directory, tag, and dependency/dependent selectors
+    /// only use workspace relationships. Selectors that don't parse, and
+    /// task-based filtering, conservatively count as needing it.
+    pub fn scope_needs_external_dependencies(&self) -> bool {
+        let scope = &self.opts.scope_opts;
+        scope.affected_range.is_some()
+            || (self.opts.future_flags.filter_using_tasks && !scope.filter_patterns.is_empty())
+            || Self::parse_filter_selectors(&scope.filter_patterns).is_none_or(|selectors| {
+                selectors
+                    .iter()
+                    .any(|selector| selector.git_range.is_some())
+            })
+    }
+
     pub fn do_not_validate_engine(mut self) -> Self {
         self.should_validate_engine = false;
         self
