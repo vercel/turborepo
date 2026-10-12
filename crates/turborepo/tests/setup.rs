@@ -158,6 +158,11 @@ fn external_system_policy_blocked(code: i32, text: &str) -> bool {
     if blocked {
         assert_eq!(code, 1);
         assert!(!text.contains(": ready"), "{text}");
+        // Contributor hosts may carry npm policy; CI runner images must qualify.
+        assert!(
+            std::env::var_os("CI").is_none(),
+            "host npm configuration blocked setup in CI: {text}"
+        );
         eprintln!(
             "Native readiness qualification blocked by external System npm configuration; policy \
              was not bypassed."

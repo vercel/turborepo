@@ -6,12 +6,17 @@ use std::{
     ffi::OsString,
     fs,
     io::{self, Read},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use turborepo_types::CONFIG_FILES;
 
 use crate::registry_metadata::PUBLIC_NPM_REGISTRY;
+
+/// npm's builtin config layer, relative to an install prefix.
+const BUNDLED_NPMRC: &str = "lib/node_modules/npm/npmrc";
+/// Homebrew's file is one short line; anything this large is not that shape.
+const BUNDLED_NPMRC_LIMIT: u64 = 4096;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConfigOwner {
@@ -59,7 +64,10 @@ impl OfficialSourcePolicy {
     /// Known system prefixes plus PREFIX and the current Node install prefix
     /// are inspected. Unreported custom npm global prefixes/config locations
     /// are unsupported: do not call this for a wrapper with unknown provenance.
-    /// Bundled npmrc is also rejected: it can redirect npm's effective prefix.
+    /// Bundled npmrc is also rejected because it can redirect npm's effective
+    /// prefix, unless its only setting is an absolute `prefix` whose
+    /// `etc/npmrc` is inspected here too (Homebrew's Node formulas write
+    /// exactly `prefix = $HOMEBREW_PREFIX`).
     /// Non-Unix hosts remain explicitly unqualified.
     /// NPM_CONFIG_* variables outside the wrapper allowlist, regardless of
     /// spelling/value, are rejected before filesystem inspection. Reported
@@ -174,12 +182,10 @@ fn inspect_inputs(
     }
     let mut paths = vec![(home.join(".npmrc"), ConfigOwner::User)];
     paths.extend(system.into_iter().flat_map(|path| {
-        let bundled = path.parent().and_then(Path::parent).map(|prefix| {
-            (
-                prefix.join("lib/node_modules/npm/npmrc"),
-                ConfigOwner::System,
-            )
-        });
+        let bundled = path
+            .parent()
+            .and_then(Path::parent)
+            .map(|prefix| (prefix.join(BUNDLED_NPMRC), ConfigOwner::System));
         std::iter::once((path, ConfigOwner::System)).chain(bundled)
     }));
     let actual = fs::canonicalize(invocation).map_err(|_| Error::Locations)?;
@@ -231,13 +237,11 @@ fn inspect_inputs(
                 return Err(Error::Locations);
             };
             paths.push((prefix.join("etc/npmrc"), ConfigOwner::Prefix));
-            paths.push((
-                prefix.join("lib/node_modules/npm/npmrc"),
-                ConfigOwner::Prefix,
-            ));
+            paths.push((prefix.join(BUNDLED_NPMRC), ConfigOwner::Prefix));
         }
     }
     paths.extend(reported);
+    let inspected: Vec<PathBuf> = paths.iter().map(|(path, _)| path.clone()).collect();
     for (path, owner) in paths {
         // Only owned fixtures have a boundary. Check the closest existing
         // parent before observation so an intermediate directory symlink cannot
@@ -255,15 +259,25 @@ fn inspect_inputs(
                 }
             }
         }
-        validate(owner, observe(&path, owner))?;
+        let observation = match observe(&path, owner) {
+            // npm reads its global config from `<prefix>/etc/npmrc`, so this
+            // prefix only matters through a file this loop also validates.
+            Observation::BundledPrefix(prefix) if inspected.contains(&prefix.join("etc/npmrc")) => {
+                Observation::Missing
+            }
+            observation => observation,
+        };
+        validate(owner, observation)?;
     }
     Ok(OfficialSourcePolicy(()))
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum Observation {
     Missing,
     Readable,
+    /// Bundled npmrc whose only setting is this absolute `prefix`.
+    BundledPrefix(PathBuf),
     PolicyAbsent,
     Unsafe,
 }
@@ -287,6 +301,15 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
     let Ok(mut file) = fs::File::open(path) else {
         return Observation::Unsafe;
     };
+    if owner != ConfigOwner::RootPolicy && path.ends_with(BUNDLED_NPMRC) {
+        let mut bytes = Vec::new();
+        return match file.take(BUNDLED_NPMRC_LIMIT + 1).read_to_end(&mut bytes) {
+            Ok(_) => {
+                bundled_prefix(&bytes).map_or(Observation::Readable, Observation::BundledPrefix)
+            }
+            Err(_) => Observation::Unsafe,
+        };
+    }
     if owner != ConfigOwner::RootPolicy {
         return if file.read(&mut [0u8; 1]).is_ok() {
             Observation::Readable
@@ -316,12 +339,41 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
     }
 }
 
+/// Recognizes only the single `prefix = /absolute/path` line Homebrew writes.
+/// Anything npm's ini parser could read differently is not recognized and
+/// stays rejected: non-ASCII bytes, other keys, repeated or array keys,
+/// sections, quotes, escapes, inline comments, `${}` or `~` expansion, and
+/// relative or non-normalized paths.
+fn bundled_prefix(bytes: &[u8]) -> Option<PathBuf> {
+    if bytes.len() as u64 > BUNDLED_NPMRC_LIMIT || !bytes.is_ascii() {
+        return None;
+    }
+    let text = std::str::from_utf8(bytes).ok()?;
+    let mut settings = text
+        .split(['\r', '\n'])
+        .map(|line| line.trim_matches(|c: char| c.is_ascii_whitespace()))
+        .filter(|line| !line.is_empty() && !line.starts_with([';', '#']));
+    let (key, value) = settings.next()?.split_once('=')?;
+    let value = value.trim_matches(|c: char| c.is_ascii_whitespace());
+    if settings.next().is_some()
+        || key.trim_matches(|c: char| c.is_ascii_whitespace()) != "prefix"
+        || value.contains([';', '#', '\\', '"', '\'', '$'])
+    {
+        return None;
+    }
+    let prefix = Path::new(value);
+    let mut components = prefix.components();
+    (components.next() == Some(Component::RootDir)
+        && components.all(|part| matches!(part, Component::Normal(_))))
+    .then(|| prefix.to_path_buf())
+}
+
 // Pure policy decision: no reads, probes, URLs, environment mutation or
 // secrets.
 fn validate(owner: ConfigOwner, observation: Observation) -> Result<(), Error> {
     match observation {
         Observation::Missing | Observation::PolicyAbsent => Ok(()),
-        Observation::Readable => Err(Error::Configured(owner)),
+        Observation::Readable | Observation::BundledPrefix(_) => Err(Error::Configured(owner)),
         Observation::Unsafe => Err(Error::Inspection(owner)),
     }
 }
