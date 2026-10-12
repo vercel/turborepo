@@ -8,16 +8,15 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "eslint": "8.57.0",
-    "eslint-config-custom": "*",
-    "prettier": "^3.2.5",
-    "turbo": "2.9.6"
+    "prettier": "3.9.10",
+    "turbo": "2.11.7"
   },
-  "packageManager": "yarn@3.6.3",
+  "packageManager": "yarn@4.18.1",
   "engines": {
-    "node": ">=18"
+    "node": ">=26.11.1"
   }
 }
