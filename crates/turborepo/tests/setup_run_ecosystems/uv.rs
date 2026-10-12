@@ -46,20 +46,33 @@ fn routes() -> Vec<(String, Vec<u8>)> {
         "python",
         &[("bin/python3.12", PYTHON), ("bin/python3", PYTHON)],
     );
-    let listing = json!([{"key":format!("cpython-3.12.12-{os}-{arch}-{libc}"),
-        "version":"3.12.12","os":os,"arch":arch,"libc":libc,"implementation":"cpython",
-        "variant":"default","url":format!("https://releases.astral.sh{RELEASES}/{filename}")}]);
+    let entry = |(os, arch, libc): (&str, &str, &str), filename: &str| {
+        json!({"key":format!("cpython-3.12.12-{os}-{arch}-{libc}"),
+            "version":"3.12.12","os":os,"arch":arch,"libc":libc,"implementation":"cpython",
+            "variant":"default","url":format!("https://releases.astral.sh{RELEASES}/{filename}")})
+    };
+    let mut listing = vec![entry((os, arch, libc), &filename)];
+    let mut sums = format!(
+        "{:x}  {}\n",
+        Sha256::digest(&python),
+        filename.replace("%2B", "+")
+    );
+    // Like real `--all-arches` output (#14691), list both Linux
+    // architectures; only the host build is ever downloaded.
+    for linux in [("linux", "x86_64", "gnu"), ("linux", "aarch64", "gnu")] {
+        if linux != (os, arch, libc) {
+            let peer = format!("cpython-3.12.12%2B20260211-{}-install_only.tar.gz", linux.1);
+            sums += &format!("{:064x}  {}\n", 1, peer.replace("%2B", "+"));
+            listing.push(entry(linux, &peer));
+        }
+    }
+    let listing = serde_json::Value::Array(listing);
     let uv = tar_gz(
         &format!("uv-{target}"),
         &[
             ("uv", &UV.replace("LISTING", &listing.to_string())),
             ("uvx", "#!/bin/sh\nexit 1\n"),
         ],
-    );
-    let sums = format!(
-        "{:x}  {}\n",
-        Sha256::digest(&python),
-        filename.replace("%2B", "+")
     );
     let release = "/github/uv/releases/download/0.13.0";
     let uv_sums = format!("{:x} *uv-{target}.tar.gz\n", Sha256::digest(&uv));
