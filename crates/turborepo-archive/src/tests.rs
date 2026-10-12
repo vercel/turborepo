@@ -515,3 +515,37 @@ fn exclusions_are_exact_and_cannot_hide_lookalikes_links_or_other_roots() {
         .unwrap();
     assert!(matches!(error, UnsafePath), "{error}");
 }
+#[test]
+fn skipped_entries_keep_name_framing_strict_and_spend_the_entry_budget() {
+    let long: PaxEntry<'static> = ("././@LongLink", Kind::GNULongName, b"pkg/test/long\0", &[]);
+    let pax: PaxEntry<'static> = ("", Regular, b"", UTF8);
+    let x: PaxEntry<'static> = ("pkg/test/x", Regular, b"x", &[]);
+    // A GNU long name for an excluded path is skipped like any other name.
+    let extracted = unpack_excluding(pax_tar(&[TOOL, long, x]), &["bin/tool"], &["test"]);
+    assert!(!extracted.unwrap().root_path().join("test").exists());
+    // A PAX header must directly describe one entry: no GNU long name on either
+    // side and no second header.
+    for entries in [
+        [TOOL, pax, long, x],
+        [TOOL, long, pax, x],
+        [TOOL, pax, pax, x],
+    ] {
+        let error = unpack_excluding(pax_tar(&entries), &["bin/tool"], &["test"])
+            .err()
+            .unwrap();
+        assert!(matches!(error, InvalidArchive), "{entries:?}: {error}");
+    }
+    // Skipped raw entries still count toward the entry limit.
+    let names: Vec<_> = (0..32).map(|i| format!("pkg/test/{i}")).collect();
+    let mut entries = vec![TOOL];
+    entries.extend(
+        names
+            .iter()
+            .map(|n| (n.as_str(), Regular, &b""[..], &[][..])),
+    );
+    assert!(unpack_excluding(pax_tar(&entries[..32]), &["bin/tool"], &["test"]).is_ok());
+    let error = unpack_excluding(pax_tar(&entries), &["bin/tool"], &["test"])
+        .err()
+        .unwrap();
+    assert!(matches!(error, LimitExceeded), "{error}");
+}
