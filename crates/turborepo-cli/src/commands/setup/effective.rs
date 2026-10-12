@@ -116,14 +116,14 @@ impl Plan {
     }
 
     /// Eligible toolchains without a setup adapter yet, unless skipped.
-    /// JavaScript has managed and verify-system adapters; Rust and Python
+    /// JavaScript has managed and verify-system adapters; Rust, Python and Go
     /// only managed.
     pub fn unsupported(&self) -> bool {
         self.0.iter().any(|toolchain| match toolchain.tools.0 {
             ToolPolicy::Skip => false,
             _ if toolchain.id == ToolchainId::JAVASCRIPT => false,
             ToolPolicy::Managed => {
-                toolchain.id != ToolchainId::RUST && toolchain.id != ToolchainId::PYTHON
+                ![ToolchainId::RUST, ToolchainId::PYTHON, ToolchainId::GO].contains(&toolchain.id)
             }
             ToolPolicy::VerifySystem => true,
         })
