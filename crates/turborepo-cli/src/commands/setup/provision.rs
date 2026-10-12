@@ -270,15 +270,10 @@ pub(super) fn plans(
     if !drift.is_empty() {
         return Err(Error::AdditionalToolDrift(drift));
     }
-    if lock.tools().is_empty()
-        || lock
-            .tools()
-            .iter()
-            .any(|(id, tool)| !supported(id, tool))
-    {
+    if lock.tools().is_empty() || lock.tools().iter().any(|(id, tool)| !supported(id, tool)) {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, Go, and additional tools are \
-             supported",
+            "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, Go, and additional tools \
+             are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -507,14 +502,11 @@ pub(super) fn run(
     // the candidate callback still gates EVERY new selection before any writer.
     if write && let Some(lock) = snapshot.previous_lock() {
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
-            && lock
-                .tools()
-                .iter()
-            .any(|(id, tool)| !supported(id, tool))
+            && lock.tools().iter().any(|(id, tool)| !supported(id, tool))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, Go, and additional tools are \
-             supported",
+                "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, Go, and additional \
+                 tools are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
