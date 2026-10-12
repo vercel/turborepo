@@ -434,7 +434,10 @@ fn read_only_probe_and_symlink_directory_fifo_safety() {
 #[test]
 fn rust_toolchain_files_declare_rustup_only_when_enabled_and_unambiguous() {
     let root = tempfile::tempdir().unwrap();
-    let rust = Ecosystems { rust: true };
+    let rust = Ecosystems {
+        rust: true,
+        ..Ecosystems::default()
+    };
     assert!(probe_native_in(root.path(), rust).unwrap().is_empty());
     let channel = |file: &str, channel: &str| match file {
         "rust-toolchain" => format!("{channel}\n"),

@@ -207,7 +207,14 @@ mod lock_updates {
 
     fn update(root: &Path, server: &LoopbackServer, mode: Mode) -> Lock {
         let transport = RustupTransport::loopback_http_for_tests(server.origin()).unwrap();
-        let snapshot = Snapshot::capture_with(root, Ecosystems { rust: true }).unwrap();
+        let snapshot = Snapshot::capture_with(
+            root,
+            Ecosystems {
+                rust: true,
+                ..Ecosystems::default()
+            },
+        )
+        .unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()

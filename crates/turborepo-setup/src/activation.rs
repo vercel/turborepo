@@ -20,9 +20,9 @@ use crate::{
     node_provision::NodePlan,
     npm_provision::NpmPlan,
     pnpm_provision::PnpmPlan,
+    python_provision::PythonPlan,
     rust_provision::{self, RustPlan},
     rustup_provision::RustupPlan,
-    python_provision::PythonPlan,
     uv_provision::UvPlan,
 };
 
@@ -37,8 +37,8 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports managed Node, npm, pnpm and Rust, plus uv and Python \
-         with experimentalPythonWorkspaces; use a supported setup adapter"
+        "activation planning supports managed Node, npm, pnpm and Rust, plus uv and Python with \
+         experimentalPythonWorkspaces; use a supported setup adapter"
     )]
     UnsupportedAdapter,
     /// Intentional external tools, unlike a missing managed installation.
