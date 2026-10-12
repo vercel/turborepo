@@ -911,7 +911,7 @@ fn go_selection_contributes_its_bin_and_locked_runtime_env() {
         let (repo, value) = go_installed(js);
         fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
         let before = state(repo.path());
-        let plan = ActivationPlan::inspect_with(repo.path(), GO, context()).unwrap();
+        let plan = ActivationPlan::inspect_with(repo.path(), context(), GO).unwrap();
         assert_eq!(plan.tools(), go_desired(&value));
         assert_eq!(plan.snapshot().tools().len(), if js { 3 } else { 1 });
         let goroot = plan.path_prepend().parent().unwrap().join("tools/go");
@@ -930,11 +930,11 @@ fn go_selection_contributes_its_bin_and_locked_runtime_env() {
     }
     // GOROOT follows a compatible relocation; the selected identity does not.
     let (repo, _) = go_installed(false);
-    let before = ActivationPlan::inspect_with(repo.path(), GO, context()).unwrap();
+    let before = ActivationPlan::inspect_with(repo.path(), context(), GO).unwrap();
     let relocated = tempfile::tempdir().unwrap();
     let target = relocated.path().join("moved");
     fs::rename(repo.path(), &target).unwrap();
-    let after = ActivationPlan::inspect_with(&target, GO, context()).unwrap();
+    let after = ActivationPlan::inspect_with(&target, context(), GO).unwrap();
     let goroot = Path::new(&after.runtime_env()["GOROOT"]);
     assert!(goroot.starts_with(target.canonicalize().unwrap()));
     assert_eq!(
@@ -957,7 +957,7 @@ fn go_drift_disabled_flag_and_stale_or_damaged_trees_fail_closed() {
         let before = state(repo.path());
         assert!(
             matches!(
-                ActivationPlan::inspect_with(repo.path(), GO, context()),
+                ActivationPlan::inspect_with(repo.path(), context(), GO),
                 Err(Error::DeclarationDrift)
             ),
             "{go_work}"
@@ -979,7 +979,7 @@ fn go_drift_disabled_flag_and_stale_or_damaged_trees_fail_closed() {
             seed(repo.path(), &desired(&value, None));
         }
         let before = state(repo.path());
-        let result = ActivationPlan::inspect_with(repo.path(), GO, context());
+        let result = ActivationPlan::inspect_with(repo.path(), context(), GO);
         if damage {
             assert!(matches!(result, Err(Error::DamagedInventory(_))));
         } else {
