@@ -23,6 +23,8 @@ use crate::{
     source_policy::test_support::LoopbackServer,
 };
 
+mod npm;
+
 const PNPM_PATHS: [&str; 2] = ["/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"];
 
 fn tar(files: &[(&str, String)]) -> Vec<u8> {
@@ -377,7 +379,6 @@ fn removed_bundled_npm_keeps_node_identity_and_export_ownership() {
 fn unsupported_scope_and_offline_misses_fail_before_traffic_or_publication() {
     let sha512 = format!("{:x}", Sha512::digest(pnpm_bytes()));
     for manifest in [
-        json!({"packageManager":"npm@11.6.1"}),
         json!({"packageManager":"pnpm@10.x"}),
         json!({"devEngines":{"packageManager":{"name":"pnpm"}}}),
         json!({"devEngines":{"packageManager":[

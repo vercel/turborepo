@@ -40,7 +40,7 @@ fn snapshot(root: &Path) -> Vec<Entry> {
 
 const CHECK: &[&str] = &["--check", "--tools-only"];
 impl Fixture {
-    fn check(&self, flags: &[&str]) -> Result<i32, Error> {
+    pub(super) fn check(&self, flags: &[&str]) -> Result<i32, Error> {
         let before = snapshot(self.owned.root().parent().unwrap());
         let args = self.args(flags);
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
