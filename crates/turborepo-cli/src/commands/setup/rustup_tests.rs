@@ -1,12 +1,16 @@
 //! Repository-scoped rustup and locked Rust toolchains through the setup
 //! command, against an owned loopback origin. A stand-in rustup records every
 //! invocation and lays out the toolchain it is asked for.
-use turborepo_setup::{rust_discovery::Toolchain, rustup_provision::RustupTransport};
+use turborepo_setup::{
+    activation::Error as ActivationError, rust_discovery::Toolchain,
+    rustup_provision::RustupTransport,
+};
 
 use super::*;
 
 const FLAGS: &str =
     r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
+const CHECK: &[&str] = &["--check", "--tools-only"];
 const TOOLCHAIN: &str = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n";
 
 // Official-shaped channel manifest for this host's minimal profile, plus a
@@ -272,10 +276,42 @@ fn toolchain_files_need_the_cargo_flag() {
         .unwrap_err();
     assert!(error.to_string().contains("a native Node declaration"));
     assert_eq!(upstream.hits(), 0);
+    // Check ignores them the same way, so a Rust lock is drift there too.
+    disabled.lock();
     assert!(matches!(
-        Repo::new(FLAGS).run(&upstream, &["--check", "--tools-only"]),
-        Err(Error::Unsupported("Rust toolchain readiness checks"))
+        disabled.run(&upstream, CHECK),
+        Err(Error::Activation(ActivationError::DeclarationDrift))
     ));
+}
+
+#[test]
+fn rust_readiness_checks_are_read_only_and_detect_damage() {
+    let repo = Repo::new(FLAGS);
+    repo.lock();
+    let upstream = repo.upstream(false);
+    assert!(matches!(
+        repo.run(&upstream, CHECK),
+        Err(Error::Activation(ActivationError::MissingInventory))
+    ));
+    assert_eq!(repo.manifest(), None);
+    assert_eq!(repo.run(&upstream, FROZEN).unwrap(), 0);
+    let manifest = repo.manifest();
+    assert_eq!(repo.run(&upstream, CHECK).unwrap(), 0);
+    // No download, rustup run, Cargo home or inventory change.
+    assert_eq!((upstream.hits(), repo.calls().len()), (1, 1));
+    assert_eq!(repo.manifest(), manifest);
+    assert!(!repo.owned.root().join(".turbo/cargo-home").exists());
+
+    // A damaged toolchain file is reported, never repaired.
+    let current = turborepo_tool_install::Store::inspect(repo.owned.root())
+        .unwrap()
+        .unwrap();
+    fs::write(current.bin.join("rustdoc"), "exit 1\n").unwrap();
+    assert!(matches!(
+        repo.run(&upstream, CHECK),
+        Err(Error::Activation(ActivationError::DamagedInventory(_)))
+    ));
+    assert_eq!(repo.manifest(), manifest);
 }
 
 #[test]

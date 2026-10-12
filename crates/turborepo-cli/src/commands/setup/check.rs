@@ -2,7 +2,7 @@
 use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::{ExecutionContext, Libc},
-    lock::{Platform, Snapshot},
+    lock::{Ecosystems, Platform, Snapshot},
     source_policy::OfficialSourcePolicy,
 };
 
@@ -31,12 +31,17 @@ pub(super) fn run(
     sources: Snapshot,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
-    if sources.declarations().contains_key("rustup") {
-        return Err(Error::Unsupported("Rust toolchain readiness checks"));
-    }
     let context = context()?;
     preflight()?;
-    let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;
+    // The same workspace-flag eligibility setup used for these declarations.
+    let ecosystems = Ecosystems {
+        rust: discovery.source_eligibility().cargo(),
+    };
+    let plan = ActivationPlan::inspect_with(
+        discovery.snapshot_root()?.as_std_path(),
+        context,
+        ecosystems,
+    )?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.
     preflight()?;

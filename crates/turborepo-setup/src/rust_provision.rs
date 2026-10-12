@@ -178,6 +178,12 @@ impl RustPlan {
         &self.tool
     }
 
+    /// The installed toolchain's rustup name, `<exact>-<host>`, under the
+    /// tool tree that serves as `RUSTUP_HOME`.
+    pub fn toolchain(&self) -> String {
+        format!("{}-{}", self.tool.version, self.host)
+    }
+
     /// Install with the given verified rustup into fresh private homes beside
     /// the Store (same filesystem), then verify. Healthy identical trees are
     /// reused without running rustup. Hold the Store guard through publication.

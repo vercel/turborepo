@@ -9,7 +9,13 @@ use serde_json::{Value, json};
 use turborepo_platform::{Architecture, OperatingSystem, Platform as HostPlatform};
 
 use super::*;
-use crate::{execution_identity::Libc, lock::Lock};
+use crate::{
+    execution_identity::Libc, lock::Lock, rust_discovery::Toolchain,
+    rust_metadata::tests::fixture as manifest, rust_resolution,
+};
+
+const TOOLCHAIN: &str = "[toolchain]\nchannel = \"1.99\"\nprofile = \"minimal\"\n";
+const RUST: Ecosystems = Ecosystems { rust: true };
 
 fn context() -> ExecutionContext {
     ExecutionContext::new(
@@ -56,17 +62,44 @@ fn desired(
     authored: Option<&crate::package_manager::CorepackIntegrity>,
 ) -> Vec<Tool> {
     let lock = Lock::parse(value.to_string().as_bytes()).unwrap();
-    let node = NodePlan::from_lock(&lock, Platform::MacosArm64).unwrap();
-    let mut tools = vec![node.inventory_tool().clone()];
-    if lock.tools().contains_key("pnpm") {
-        tools.push(
-            PnpmPlan::from_lock(&lock, Platform::MacosArm64, &node, authored)
-                .unwrap()
-                .inventory_tool()
-                .clone(),
-        );
+    let platform = Platform::MacosArm64;
+    let mut tools = Vec::new();
+    if lock.tools().contains_key("node") {
+        let node = NodePlan::from_lock(&lock, platform).unwrap();
+        tools.push(node.inventory_tool().clone());
+        if lock.tools().contains_key("pnpm") {
+            let pnpm = PnpmPlan::from_lock(&lock, platform, &node, authored).unwrap();
+            tools.push(pnpm.inventory_tool().clone());
+        }
     }
+    if lock.tools().contains_key("rust") {
+        let rust = RustPlan::from_lock(&lock, platform).unwrap();
+        let rustup = RustupPlan::from_lock(&lock, platform).unwrap();
+        tools.extend([
+            rust.inventory_tool().clone(),
+            rustup.inventory_tool().clone(),
+        ]);
+    }
+    tools.sort_by(|a, b| a.id.cmp(&b.id));
     tools
+}
+
+/// Lock rustup and the exact 1.99.0 toolchain beside `value`'s tools, with
+/// the matching root toolchain file.
+fn with_rust(repo: &Path, mut value: Value) -> Value {
+    fs::write(repo.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
+    let toolchain = Toolchain::parse("rust-toolchain.toml", TOOLCHAIN).unwrap();
+    let text = manifest("1.99.0", "2026-10-01");
+    let rust = rust_resolution::resolve(&toolchain, text.as_bytes()).unwrap();
+    value["tools"]["rust"] = serde_json::to_value(rust).unwrap();
+    value["tools"]["rustup"] = json!({"adapter":"rustup","version":"1.29.1",
+    "declarations":[{"file":"rust-toolchain.toml"}],
+    "installation":{"kind":"managed","artifacts":{"macos-arm64":{"rustup-init":{
+        "url":"https://static.rust-lang.org/rustup/archive/1.29.1/aarch64-apple-darwin/rustup-init",
+        "sha256":"55".repeat(32),"format":"binary","executables":{"rustup":"bin/rustup"}
+    }}}}});
+    fs::write(repo.join("turbo.lock"), value.to_string()).unwrap();
+    value
 }
 
 // Readiness fixtures only, not executable authorization or vendor verification.
@@ -517,4 +550,95 @@ fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
         Err(Error::StaleInventory)
     ));
     assert_eq!(state(repo.path()), before);
+}
+
+#[test]
+fn rust_selection_adds_toolchain_exports_and_private_runtime_env() {
+    let repo = tempfile::tempdir().unwrap();
+    write_sources(repo.path(), &fixture());
+    let value = with_rust(repo.path(), fixture());
+    seed(repo.path(), &desired(&value, None));
+    let before = state(repo.path());
+    // Without the Cargo flag the Rust selections are drift, never ignored.
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), context()),
+        Err(Error::DeclarationDrift)
+    ));
+    let plan = ActivationPlan::inspect_with(repo.path(), context(), RUST).unwrap();
+    assert_eq!(plan.tools(), desired(&value, None));
+    let ids: Vec<_> = plan.snapshot().tools().keys().collect();
+    assert_eq!(ids, ["node", "pnpm", "rust", "rustup"]);
+    let root = repo.path().canonicalize().unwrap();
+    let home = plan.path_prepend().parent().unwrap().join("tools/rust");
+    let toolchain = "1.99.0-aarch64-apple-darwin";
+    assert_eq!(
+        plan.runtime_env(),
+        &BTreeMap::from([
+            (
+                "CARGO_HOME".into(),
+                root.join(".turbo/cargo-home").into_os_string()
+            ),
+            ("RUSTUP_HOME".into(), home.clone().into_os_string()),
+            ("RUSTUP_TOOLCHAIN".into(), toolchain.into()),
+        ])
+    );
+    for name in ["cargo", "rustc", "rustdoc"] {
+        assert_eq!(
+            fs::canonicalize(plan.path_prepend().join(name)).unwrap(),
+            home.join(format!("toolchains/{toolchain}/bin/{name}"))
+        );
+    }
+    // Cargo creates its home on first use; planning never does.
+    assert_eq!(state(repo.path()), before);
+    assert!(!root.join(".turbo/cargo-home").exists());
+}
+
+#[test]
+fn rust_only_plans_bind_the_toolchain_file_tree_and_cargo_home() {
+    let repo = tempfile::tempdir().unwrap();
+    let value = with_rust(repo.path(), json!({"schemaVersion":0,"tools":{}}));
+    seed(repo.path(), &desired(&value, None));
+    let plan = ActivationPlan::inspect_with(repo.path(), context(), RUST).unwrap();
+    let ids: Vec<_> = plan.tools().iter().map(|tool| tool.id.as_str()).collect();
+    assert_eq!(ids, ["rust", "rustup"]);
+
+    // An existing private home is used; a redirected or non-directory one is not.
+    let home = repo.path().join(".turbo/cargo-home");
+    fs::create_dir(&home).unwrap();
+    assert!(ActivationPlan::inspect_with(repo.path(), context(), RUST).is_ok());
+    fs::remove_dir(&home).unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    symlink(outside.path(), &home).unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect_with(repo.path(), context(), RUST),
+        Err(Error::UnsafeCargoHome(_))
+    ));
+    fs::remove_file(&home).unwrap();
+    fs::write(&home, "").unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect_with(repo.path(), context(), RUST),
+        Err(Error::UnsafeCargoHome(_))
+    ));
+    fs::remove_file(&home).unwrap();
+
+    // Toolchain edits are drift before inventory reads; tree damage fails closed.
+    let file = repo.path().join("rust-toolchain.toml");
+    for edit in [
+        TOOLCHAIN.replace("1.99", "1.98"),
+        TOOLCHAIN.replace("minimal\"", "minimal\"\ncomponents = [\"clippy\"]"),
+    ] {
+        fs::write(&file, edit).unwrap();
+        let before = state(repo.path());
+        assert!(matches!(
+            ActivationPlan::inspect_with(repo.path(), context(), RUST),
+            Err(Error::DeclarationDrift)
+        ));
+        assert_eq!(state(repo.path()), before);
+    }
+    fs::write(&file, TOOLCHAIN).unwrap();
+    fs::write(plan.path_prepend().join("rustdoc"), "damaged").unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect_with(repo.path(), context(), RUST),
+        Err(Error::DamagedInventory(_))
+    ));
 }
