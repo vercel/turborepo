@@ -432,13 +432,24 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--__test-run"],
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        // Plain setup provisions like --tools-only, so it reaches the same gate.
-        let supported = !words.iter().any(|word| {
-            matches!(
-                *word,
-                "--plan" | "--check" | "--offline" | "--no-lock" | "--__test-run"
-            )
-        });
+        // Plain setup and --check act like --tools-only (#14650): plain --check
+        // reaches the same lock gate as --check --tools-only below.
+        if words.contains(&"--check") {
+            check_failure(
+                root,
+                &words,
+                false,
+                if QUALIFIED {
+                    "managed activation requires turbo.lock"
+                } else {
+                    UNQUALIFIED
+                },
+            );
+            continue;
+        }
+        let supported = !words
+            .iter()
+            .any(|word| matches!(*word, "--plan" | "--offline" | "--no-lock" | "--__test-run"));
         // #14518 admits --offline, which needs a lock first, and #14486 admits
         // --no-lock, whose native baseline covers only Node and pnpm.
         let offline = words.contains(&"--offline");
@@ -520,8 +531,8 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 let text = failure(root, words, false, "failed to parse Cargo.toml");
                 assert_diagnostic_path(&text, &root.join("Cargo.toml"));
                 assert!(!text.contains(PENDING), "{text}");
-            } else if words.len() == 1 {
-                // Plain setup reaches JS provisioning without parsing Cargo.
+            } else if !words.contains(&"--plan") {
+                // Plain setup and check reach JS tools without parsing Cargo.
                 // (#14653's Node-required message names experimentalCargoWorkspaces.)
                 let (code, text) = invoke(root, words, false);
                 assert_eq!(code, 1, "{text}");
@@ -1471,8 +1482,22 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         return;
     };
     repo.seed();
-    for outcome in ["installed from the shared download cache", "reused"] {
-        let recovery::Run { status, text } = repo.run(None, &["setup", "--frozen"]);
+    // Plain --check checks the same tools and never claims dependency readiness.
+    let installation = "dependency installation is not supported yet";
+    for (mode, outcome, skipped) in [
+        (
+            "--frozen",
+            "installed from the shared download cache",
+            installation,
+        ),
+        ("--frozen", "reused", installation),
+        (
+            "--check",
+            "ready",
+            "dependency checks are not supported yet",
+        ),
+    ] {
+        let recovery::Run { status, text } = repo.run(None, &["setup", mode]);
         let code = status.code().unwrap();
         if external_system_policy_blocked(code, &text) {
             return;
@@ -1484,7 +1509,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
             "{text}"
         );
         assert!(
-            text.contains("Dependencies skipped (dependency installation is not supported yet)"),
+            text.contains(&format!("Dependencies skipped ({skipped})")),
             "{text}"
         );
     }
