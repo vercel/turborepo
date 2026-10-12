@@ -1083,3 +1083,62 @@ fn modern_yarn_bundle_pin_is_part_of_the_installed_binding() {
     seed(repo.path(), &desired(&value, Some(&authored)));
     assert!(ActivationPlan::inspect(repo.path(), context()).is_ok());
 }
+
+/// A lock selecting `id` alone, with no Node declaration in the sources.
+fn without_node(repo: &Path, id: &str, version: &str) -> Value {
+    let (mut value, request) = with_manager(id, version);
+    value["tools"].as_object_mut().unwrap().remove("node");
+    manager_sources(repo, &value, &request);
+    fs::remove_file(repo.join(".nvmrc")).unwrap();
+    value
+}
+
+#[test]
+fn bun_only_selection_activates_without_managed_node() {
+    let repo = tempfile::tempdir().unwrap();
+    let value = without_node(repo.path(), "bun", "1.2.23");
+    let tools = desired(&value, None);
+    seed(repo.path(), &tools);
+    let before = state(repo.path());
+    let plan = ActivationPlan::inspect(repo.path(), context()).unwrap();
+    assert_eq!(plan.tools(), tools);
+    assert_eq!(plan.snapshot().tools().len(), 1);
+    assert!(plan.runtime_env().is_empty());
+    for name in ["bun", "bunx"] {
+        assert!(plan.path_prepend().join(name).exists());
+    }
+    for name in ["node", "npm", "npx"] {
+        assert!(!plan.path_prepend().join(name).exists());
+    }
+    assert_eq!(state(repo.path()), before);
+    // A later Node declaration is drift until setup locks it.
+    fs::write(repo.path().join(".nvmrc"), "24.0.0\n").unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), context()),
+        Err(Error::DeclarationDrift)
+    ));
+}
+
+#[test]
+fn node_based_managers_never_activate_without_managed_node() {
+    for (id, version) in [("pnpm", "10.0.0"), ("yarn", "1.22.22"), ("yarn", "4.5.0")] {
+        let repo = tempfile::tempdir().unwrap();
+        if id == "pnpm" {
+            let mut value = fixture();
+            value["tools"].as_object_mut().unwrap().remove("node");
+            write_sources(repo.path(), &value);
+            fs::remove_file(repo.path().join(".nvmrc")).unwrap();
+        } else {
+            without_node(repo.path(), id, version);
+        }
+        let before = state(repo.path());
+        assert!(
+            matches!(
+                ActivationPlan::inspect(repo.path(), context()),
+                Err(Error::InvalidLock)
+            ),
+            "{id} {version}"
+        );
+        assert_eq!(state(repo.path()), before);
+    }
+}

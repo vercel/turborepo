@@ -341,6 +341,8 @@ pub(super) fn plans(
         && rust.is_none()
         && artifacts.is_empty()
         && go.is_none()
+        && bun.is_none()
+        && yarn.is_none()
     {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
