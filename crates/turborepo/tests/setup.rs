@@ -1018,10 +1018,17 @@ fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_t
         failure(root, &words, true, "inferred in CI");
     }
     for ci in [false, true] {
-        for control in [Some("--force"), Some("--offline"), Some("--plan"), None] {
+        // `--plan --update-lock` proposes a refresh; with --force it is denied.
+        for controls in [
+            &["--force"][..],
+            &["--offline"],
+            &["--plan", "--force"],
+            &[],
+        ] {
             let mut words = vec!["setup", "--no-frozen", "--update-lock"];
-            if let Some(control) = control {
-                words.extend(["--tools-only", control]);
+            if !controls.is_empty() {
+                words.push("--tools-only");
+                words.extend(controls);
             }
             failure(root, &words, ci, PENDING);
         }
@@ -1046,40 +1053,43 @@ fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_t
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
 fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
-    let temp = tempfile::tempdir().unwrap();
-    let root = temp.path();
+    let owned = turborepo_setup::test_support::OwnedSetupFixture::new().unwrap();
+    owned.init_git().unwrap();
+    let root = owned.root();
     write(root, "turbo.json", ENABLED);
     write(root, ".nvmrc", "24.x");
+    // Proposals that read upstream metadata are covered by loopback fixtures;
+    // this real binary only exercises their network-free failures.
+    let offline = "offline resolution metadata/artifacts are not cached";
     for ci in [false, true] {
-        for control in [None, Some("--force"), Some("--offline"), Some("--frozen")] {
+        for (extra, expected) in [
+            (&["--frozen"][..], "frozen setup requires turbo.lock"),
+            (
+                &["--force"],
+                "--plan --force reports reinstalls of locked selections",
+            ),
+            (&["--no-frozen", "--offline"], offline),
+            (&["--no-frozen", "--update-lock", "--offline"], offline),
+        ] {
             let mut words = vec!["setup", "--plan", "--tools-only"];
-            words.extend(control);
-            check_failure(
-                root,
-                &words,
-                ci,
-                "proposed first-lock resolution plans are not implemented",
-            );
+            words.extend(extra);
+            check_failure(root, &words, ci, expected);
         }
-        failure(
-            root,
-            &["setup", "--plan", "--tools-only", "--no-lock"],
-            ci,
-            PENDING,
-        );
-        failure(
-            root,
-            &[
-                "setup",
-                "--plan",
-                "--tools-only",
-                "--no-frozen",
-                "--update-lock",
-            ],
-            ci,
-            "First-lock/refresh plans",
-        );
+        for extra in [
+            &["--no-lock"][..],
+            &["--no-frozen", "--update-lock", "--force"],
+        ] {
+            let mut words = vec!["setup", "--plan", "--tools-only"];
+            words.extend(extra);
+            failure(root, &words, ci, PENDING);
+        }
     }
+    check_failure(
+        root,
+        &["setup", "--plan", "--tools-only"],
+        true,
+        "frozen setup requires turbo.lock",
+    );
     write(root, "turbo.lock", "invalid");
     failure(
         root,
