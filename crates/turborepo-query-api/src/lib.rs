@@ -178,6 +178,14 @@ pub trait QueryServer: Send + Sync {
         run: Arc<dyn QueryRun>,
         signal: turborepo_signals::SignalHandler,
     ) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send + '_>>;
+
+    /// Whether `query` selects only fields answered from the package graph,
+    /// the task graph, and turbo.json configuration. Such a query never reads
+    /// external dependency resolution or SCM state, so the caller may build
+    /// its run without them. The default keeps the complete run.
+    fn reads_only_repository_graph(&self, _query: &str) -> bool {
+        false
+    }
 }
 
 // Compile-time assertions that both traits remain object-safe.

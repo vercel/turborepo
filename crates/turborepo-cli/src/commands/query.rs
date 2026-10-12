@@ -115,6 +115,27 @@ async fn execute_query_and_write(
     Ok((0, result.result_json))
 }
 
+/// The GraphQL document a `turbo query` argument names: inline text, or the
+/// contents of a file relative to the repository root. Mirrors the resolution
+/// in [`run`]; `None` when the file can't be read.
+fn query_document<'a>(
+    repo_root: &turbopath::AbsoluteSystemPath,
+    query: &'a str,
+) -> Option<std::borrow::Cow<'a, str>> {
+    let trimmed_query = query.trim();
+    if (trimmed_query.starts_with("query")
+        || trimmed_query.starts_with("mutation")
+        || trimmed_query.starts_with('{'))
+        && trimmed_query.ends_with('}')
+    {
+        Some(std::borrow::Cow::Borrowed(query))
+    } else {
+        fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(repo_root, query))
+            .ok()
+            .map(std::borrow::Cow::Owned)
+    }
+}
+
 pub async fn run(
     base: CommandBase,
     telemetry: CommandEventBuilder,
@@ -142,9 +163,28 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
+    // A query that selects only package-graph, task-graph, and turbo.json
+    // fields never reads external dependency resolution or SCM state.
+    // Subcommands (`affected`) and the interactive server keep the complete
+    // run; so does any document that can't be read or parsed here, so its
+    // error surfaces exactly as before.
+    let reads_only_graph = subcommand.is_none()
+        && query
+            .as_deref()
+            .or(include_schema.then_some(turborepo_query_api::SCHEMA_QUERY))
+            .and_then(|query| query_document(&base.repo_root, query))
+            .is_some_and(|document| query_server.reads_only_repository_graph(&document));
+
     let run_builder = RunBuilder::new(base.run_builder_input()?, None)?
         .add_all_tasks()
         .do_not_validate_engine();
+    let run_builder = if reads_only_graph {
+        run_builder
+            .skip_repo_index_and_scm_state()
+            .skip_external_dependencies()
+    } else {
+        run_builder
+    };
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
     let run: Arc<dyn QueryRun> = Arc::new(run);
 

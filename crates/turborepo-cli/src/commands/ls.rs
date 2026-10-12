@@ -98,12 +98,12 @@ pub async fn run(
 
     let color_config = base.color_config;
 
-    // Git-aware filters use lockfile changes while resolving package scope.
-    // Plain listings and package details only query workspace relationships.
-    let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
-        || !base.opts.scope_opts.filter_patterns.is_empty();
     let run_builder =
         RunBuilder::new(base.run_builder_input()?, None)?.skip_repo_index_and_scm_state();
+    // Git-aware scope (`--affected`, git-range filters) uses lockfile changes
+    // while resolving package scope. Plain listings, package details, and
+    // name/directory/dependency filters only query workspace relationships.
+    let needs_external_dependencies = run_builder.scope_reads_git_changes();
     // Package details and task-based scope selection need the complete graph.
     // Listing has no requested tasks, so include all tasks before filtering.
     let needs_task_graph = !packages.is_empty() || run_builder.needs_task_graph_for_scope();

@@ -69,6 +69,10 @@ impl turborepo_query_api::QueryServer for TurboQueryServer {
                 .map_err(Into::into)
         })
     }
+
+    fn reads_only_repository_graph(&self, query: &str) -> bool {
+        turborepo_query::reads_only_repository_graph(query)
+    }
 }
 
 // This function should not expanded. Please add any logic to

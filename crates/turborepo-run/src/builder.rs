@@ -518,6 +518,29 @@ impl RunBuilder {
                 .is_none_or(|selectors| selectors.iter().any(|selector| selector.tag.is_some()))
     }
 
+    /// Whether scope selection consults git history: `--affected` or a
+    /// git-range filter such as `[main]` or `...[HEAD^1]`. Only such scopes
+    /// read lockfile changes; name, directory, dependency, and dependent
+    /// selectors are answered from workspace relationships. Patterns that do
+    /// not parse are treated as git-aware, so their errors surface from the
+    /// complete run.
+    pub fn scope_reads_git_changes(&self) -> bool {
+        let scope = &self.opts.scope_opts;
+        scope.affected_range.is_some()
+            || Self::parse_filter_selectors(&scope.filter_patterns).is_none_or(|selectors| {
+                selectors
+                    .iter()
+                    .any(|selector| selector.git_range.is_some())
+            })
+    }
+
+    /// Whether this run only renders the task graph (`--graph`). Such a run
+    /// hashes nothing, so external dependency resolution and the repository
+    /// index never reach its output.
+    pub fn only_renders_graph(&self) -> bool {
+        self.opts.run_opts.graph.is_some()
+    }
+
     pub fn do_not_validate_engine(mut self) -> Self {
         self.should_validate_engine = false;
         self

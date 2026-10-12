@@ -106,6 +106,15 @@ pub async fn run(
     if let Some(qs) = query_server {
         run_builder = run_builder.with_query_server(qs);
     }
+    // `--graph` only renders the task graph. Git-aware scope still reads
+    // lockfile changes; nothing else needs external dependency resolution or
+    // the repository index.
+    if run_builder.only_renders_graph() {
+        run_builder = run_builder.skip_repo_index_and_scm_state();
+        if !run_builder.scope_reads_git_changes() {
+            run_builder = run_builder.skip_external_dependencies();
+        }
+    }
 
     let result = execute_run(run_builder, &handler, telemetry, sinks, subscriber).await;
 

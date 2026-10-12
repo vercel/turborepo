@@ -1085,6 +1085,119 @@ pub struct Diagnostic {
     pub end: Option<usize>,
 }
 
+/// Root fields answered entirely from the package graph, the task graph, and
+/// turbo.json configuration. Every type reachable from them (`Package`,
+/// `RepositoryTask`, `PackageGraph`, `Environment`, ...) reads nothing else, so
+/// a query that selects only these root fields never consults external
+/// dependency resolution, SCM state, or the repository index. `file`,
+/// `boundaries`, `externalDependencies`, `affectedPackages`, and
+/// `affectedTasks` are deliberately absent.
+const REPOSITORY_GRAPH_ROOT_FIELDS: &[&str] = &[
+    "packages",
+    "package",
+    "packageGraph",
+    "version",
+    "globalEnvironment",
+    "__typename",
+    "__schema",
+    "__type",
+];
+
+/// Whether every operation in `query` is a query whose root selections are all
+/// in [`REPOSITORY_GRAPH_ROOT_FIELDS`]. Fragments are followed. Unparseable
+/// documents, unknown fragments, mutations, and subscriptions return `false`
+/// so they keep the complete run and its diagnostics.
+pub fn reads_only_repository_graph(query: &str) -> bool {
+    use async_graphql::parser::{
+        parse_query,
+        types::{ExecutableDocument, OperationType, Selection, SelectionSet},
+    };
+
+    fn root_selections_read_only_graph(
+        document: &ExecutableDocument,
+        selection_set: &SelectionSet,
+        depth: usize,
+    ) -> bool {
+        // Fragment cycles are invalid GraphQL; bound recursion defensively.
+        if depth > 32 {
+            return false;
+        }
+        selection_set
+            .items
+            .iter()
+            .all(|selection| match &selection.node {
+                Selection::Field(field) => {
+                    REPOSITORY_GRAPH_ROOT_FIELDS.contains(&field.node.name.node.as_str())
+                }
+                Selection::FragmentSpread(spread) => document
+                    .fragments
+                    .get(&spread.node.fragment_name.node)
+                    .is_some_and(|fragment| {
+                        root_selections_read_only_graph(
+                            document,
+                            &fragment.node.selection_set.node,
+                            depth + 1,
+                        )
+                    }),
+                Selection::InlineFragment(fragment) => root_selections_read_only_graph(
+                    document,
+                    &fragment.node.selection_set.node,
+                    depth + 1,
+                ),
+            })
+    }
+
+    let Ok(document) = parse_query(query) else {
+        return false;
+    };
+    document.operations.iter().all(|(_, operation)| {
+        operation.node.ty == OperationType::Query
+            && root_selections_read_only_graph(&document, &operation.node.selection_set.node, 0)
+    })
+}
+
+#[cfg(test)]
+mod repository_graph_query_tests {
+    use super::reads_only_repository_graph;
+
+    #[test]
+    fn graph_only_documents_are_recognized() {
+        for query in [
+            "query { packages { items { name directDependencies { items { name } } } } }",
+            "{ package(name: \"a\") { allDependents { items { name } } tasks { items { name \
+             fullName } } } version }",
+            "query { packages(filter: { has: { field: TASK_NAME, value: \"build\" } }) { items { \
+             name } } }",
+            "query { packageGraph { nodes { items { name } } edges { items { source target } } } \
+             globalEnvironment { env } }",
+            "query Q { ...Root } fragment Root on RepositoryQuery { packages { items { name } } }",
+            "{ ... on RepositoryQuery { version } __typename }",
+            turborepo_query_api::SCHEMA_QUERY,
+        ] {
+            assert!(reads_only_repository_graph(query), "{query}");
+        }
+    }
+
+    #[test]
+    fn documents_reading_more_than_the_graph_keep_the_complete_run() {
+        for query in [
+            "query { affectedPackages { items { name } } }",
+            "query { affectedTasks { items { name } } }",
+            "query { packages { items { name } } externalDependencies { items { name } } }",
+            "{ file(path: \"a.ts\") { path } }",
+            "{ boundaries { items { message } } }",
+            "query { ...Missing }",
+            "query Q { ...Root } fragment Root on RepositoryQuery { affectedPackages { items { \
+             name } } }",
+            "{ ... on RepositoryQuery { boundaries { items { message } } } }",
+            "mutation { packages { items { name } } }",
+            "query { packages ",
+        ] {
+            assert!(!reads_only_repository_graph(query), "{query}");
+        }
+    }
+}
+
 pub async fn execute_query(
     run: Arc<dyn QueryRun>,
     query: &str,
