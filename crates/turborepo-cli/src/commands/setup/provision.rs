@@ -659,6 +659,10 @@ pub(super) fn run(
     // Offline misses are collected, not short-circuited, so the report names
     // every missing artifact. Nothing is published unless all are present.
     let mut offline_missing = Vec::new();
+    let mut reused = Vec::new();
+    // Repository health alone is never a reinstall source. Both guards are
+    // held and the complete cohort has fresh external trust evidence.
+    let reuse_installed = offline && force && recorded;
     let (
         prepared_node,
         prepared_pnpm,
@@ -681,6 +685,27 @@ pub(super) fn run(
                 .prepare(&store, &desired, &transports.node, preparation)
                 .await
             {
+                Err(turborepo_setup::node_provision::Error::Offline) if reuse_installed => {
+                    match plan
+                        .prepare(
+                            &store,
+                            &desired,
+                            &transports.node,
+                            turborepo_setup::Preparation::IfNeeded,
+                        )
+                        .await
+                    {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(turborepo_setup::node_provision::Error::Offline) => {
+                            offline_missing.push("node");
+                            None
+                        }
+                        result => result?,
+                    }
+                }
                 Err(turborepo_setup::node_provision::Error::Offline) => {
                     offline_missing.push("node");
                     None
@@ -695,6 +720,27 @@ pub(super) fn run(
                 .prepare(&store, &desired, &transports.pnpm, preparation)
                 .await
             {
+                Err(turborepo_setup::pnpm_provision::Error::Offline) if reuse_installed => {
+                    match plan
+                        .prepare(
+                            &store,
+                            &desired,
+                            &transports.pnpm,
+                            turborepo_setup::Preparation::IfNeeded,
+                        )
+                        .await
+                    {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(turborepo_setup::pnpm_provision::Error::Offline) => {
+                            offline_missing.push("pnpm");
+                            None
+                        }
+                        result => result?,
+                    }
+                }
                 Err(turborepo_setup::pnpm_provision::Error::Offline) => {
                     offline_missing.push("pnpm");
                     None
@@ -709,6 +755,27 @@ pub(super) fn run(
                 .prepare(&store, &desired, &transports.pnpm, preparation)
                 .await
             {
+                Err(turborepo_setup::pnpm_provision::Error::Offline) if reuse_installed => {
+                    match plan
+                        .prepare(
+                            &store,
+                            &desired,
+                            &transports.pnpm,
+                            turborepo_setup::Preparation::IfNeeded,
+                        )
+                        .await
+                    {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(turborepo_setup::pnpm_provision::Error::Offline) => {
+                            offline_missing.push("npm");
+                            None
+                        }
+                        result => result?,
+                    }
+                }
                 Err(turborepo_setup::pnpm_provision::Error::Offline) => {
                     offline_missing.push("npm");
                     None
@@ -849,7 +916,7 @@ pub(super) fn run(
         Ok(())
     };
     if replace {
-        store.force_reconcile_checked(&desired, stage, before_publish)?;
+        store.force_reconcile_reusing_checked(&desired, &reused, stage, before_publish)?;
     } else {
         store.reconcile_checked(&desired, stage, before_publish)?;
     }
@@ -879,7 +946,9 @@ pub(super) fn run(
             "npm" => prepared_npm.as_ref().is_some_and(|npm| npm.from_cache()),
             _ => false,
         };
-        let status = if reused {
+        let status = if reused && force {
+            "reinstalled from the verified installation"
+        } else if reused {
             "reused"
         } else if from_cache {
             "installed from the shared download cache"
