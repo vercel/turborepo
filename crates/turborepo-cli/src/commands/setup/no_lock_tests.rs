@@ -252,7 +252,7 @@ fn no_lock_unsupported_native_shape_fails_before_writer_or_nonlock_changes() {
     for package in [
         json!({"packageManager":format!("pnpm@10.0.0+sha512.{}", "0".repeat(128))}),
         json!({"packageManager":"pnpm@10.0.0","devEngines":{"runtime":[{"name":"deno","version":"2.0.0"},{"name":"node","version":"24.x"}]}}),
-        json!({"packageManager":"npm@11.6.1"}),
+        json!({"packageManager":"yarn@4.5.0"}),
     ] {
         let f = fresh();
         fs::write(f.owned.root().join("package.json"), package.to_string()).unwrap();
@@ -270,7 +270,7 @@ fn no_lock_names_a_missing_node_declaration_or_unsupported_tool_before_any_chang
     for (package, nvmrc, unsupported) in [
         (json!({"packageManager":"pnpm@10.0.0"}), false, None),
         (json!({}), false, None),
-        (json!({"packageManager":"npm@11.6.1"}), true, Some("npm")),
+        (json!({"packageManager":"yarn@4.5.0"}), true, Some("yarn")),
     ] {
         let f = fresh();
         if !nvmrc {
