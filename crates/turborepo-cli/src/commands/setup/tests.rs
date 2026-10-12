@@ -156,6 +156,19 @@ impl Fixture {
         })
         .unwrap()
     }
+    /// The effective dependency setup that `flags` select, without running it.
+    fn dependencies(&self, flags: &[&str]) -> dependencies::Dependencies {
+        let args = self.args(flags);
+        let Some(crate::cli::Command::Setup { setup_args }) = &args.command else {
+            unreachable!("setup words");
+        };
+        let request = SetupRequest::new(setup_args, false).unwrap();
+        let discovery = root::Discovery::capture(&args).unwrap();
+        let javascript = [turborepo_repository::toolchain::ToolchainId::JAVASCRIPT];
+        let plan = effective::Plan::new(discovery.policy(), javascript, request.tools_only);
+        let snapshot = turborepo_setup::lock::Snapshot::capture(self.owned.root()).unwrap();
+        dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request).unwrap()
+    }
     fn manifest(&self) -> Option<Vec<u8>> {
         fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
     }
@@ -443,6 +456,8 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         } else {
             let result = f.run(&u, &flags);
             match flags.as_slice() {
+                // Plain plans include dependencies (none for pnpm yet).
+                ["--plan"] => assert_eq!(result.unwrap(), 0),
                 // Neither can install locked dependencies (#14486, #14518).
                 ["--no-lock"] | ["--frozen", "--offline"] => {
                     assert!(

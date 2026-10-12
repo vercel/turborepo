@@ -152,6 +152,7 @@ fn proposed(f: &Fixture, upstream: &LoopbackServer, flags: &[&str]) -> Result<St
             &discovery,
             snapshot,
             &request,
+            &dependencies::Dependencies::tools_only(),
             Some(provision::Transports {
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 trust_base: Some(f.owned.home().to_owned()),

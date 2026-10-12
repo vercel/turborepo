@@ -387,6 +387,7 @@ impl Fixture {
                 &discovery,
                 sources,
                 &request,
+                &dependencies::Dependencies::tools_only(),
                 transports,
                 || {
                     Ok(self

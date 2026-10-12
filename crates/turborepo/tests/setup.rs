@@ -392,8 +392,8 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     );
     for words in [
         vec!["setup", "--offline", "--tools-only"],
-        vec!["--root-turbo-json", "custom.json", "setup", "--plan"],
-        vec!["--cwd=selected-root", "setup", "--plan"],
+        vec!["--root-turbo-json", "custom.json", "setup", "--__test-run"],
+        vec!["--cwd=selected-root", "setup", "--__test-run"],
     ] {
         let expected = if words.contains(&"--offline") {
             "invalid turbo.lock JSON"
@@ -445,48 +445,32 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--__test-run"],
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        // Plain setup and --check act like --tools-only, so they reach the same gate.
-        let supported = !words
-            .iter()
-            .any(|word| matches!(*word, "--plan" | "--__test-run"));
+        let pending = words.contains(&"--__test-run")
+            || (words.contains(&"--force") && words.contains(&"--update-lock"));
+        // Locked dependencies need a declared package manager, checked before
+        // any download; offline repeats (#14518) and --no-lock (#14486)
+        // cannot install them.
         let locked = !words.contains(&"--tools-only");
-        // A Cargo workspace without a root rust-toolchain file declares no tool.
-        let text = if supported && words.contains(&"--check") {
-            let (code, text) = invoke(root, &words, false);
-            assert_eq!(code, 1, "{text}");
-            let expected = if QUALIFIED {
-                "managed activation requires turbo.lock"
-            } else {
-                UNQUALIFIED
-            };
-            assert!(
-                diagnostic_contains(&text, expected) || external_system_policy_blocked(code, &text),
-                "{text}"
-            );
-            text
-        } else {
-            failure(
-                root,
-                &words,
-                false,
-                // Locked dependencies need a declared package manager, checked
-                // before any download; offline repeats (#14518) and --no-lock
-                // (#14486) cannot install them.
-                match (supported, QUALIFIED) {
-                    (false, _) => PENDING,
-                    _ if locked && words.contains(&"--offline") => {
-                        "--offline cannot install locked dependencies"
-                    }
-                    _ if locked && words.contains(&"--no-lock") => {
-                        "--no-lock cannot install locked dependencies"
-                    }
-                    _ if locked => "needs a package manager declared in the root package.json",
-                    (true, true) => "a native Node declaration is required",
-                    (true, false) => UNQUALIFIED,
-                },
-            )
-        };
-        if !supported {
+        let text = failure(
+            root,
+            &words,
+            false,
+            match () {
+                _ if pending => PENDING,
+                _ if locked && words.contains(&"--offline") => {
+                    "--offline cannot install locked dependencies"
+                }
+                _ if locked && words.contains(&"--no-lock") => {
+                    "--no-lock cannot install locked dependencies"
+                }
+                _ if locked => "needs a package manager declared in the root package.json",
+                // A Cargo workspace without a root rust-toolchain file
+                // declares no tool.
+                _ if QUALIFIED => "a native Node declaration is required",
+                _ => UNQUALIFIED,
+            },
+        );
+        if pending {
             assert!(text.contains("no tasks were run"), "{text}");
         }
         assert!(!text.contains("test run successful"), "{text}");
@@ -536,13 +520,15 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 let text = failure(root, words, false, "failed to parse Cargo.toml");
                 assert_diagnostic_path(&text, &root.join("Cargo.toml"));
                 assert!(!text.contains(PENDING), "{text}");
-            } else if !words.contains(&"--plan") {
-                // Plain setup and check reach JS tools without parsing Cargo.
+            } else {
+                // Setup, plans and checks reach JS setup without parsing Cargo.
+                // (#14653's Node-required message names experimentalCargoWorkspaces.)
                 let (code, text) = invoke(root, words, false);
                 assert_eq!(code, 1, "{text}");
-                assert!(!text.contains("Cargo"), "{text}");
-            } else {
-                failure(root, words, false, PENDING);
+                assert!(
+                    !text.contains("Cargo.toml") && !text.contains(PENDING),
+                    "{text}"
+                );
             }
         }
     }
@@ -579,11 +565,11 @@ fn diagnostic_assertions_preserve_wrapped_sentences_and_filenames() {
 }
 
 fn inferred(root: &Path, words: &[&str], expected: &Path) {
-    // A pending mode stops right after root discovery is logged.
+    // A test run stops right after root discovery is logged.
     let words: Vec<_> = words
         .iter()
         .copied()
-        .chain(["--plan", "--verbosity=2"])
+        .chain(["--__test-run", "--verbosity=2"])
         .collect();
     let text = failure(root, &words, true, PENDING);
     let expected = canonical_path(expected);
@@ -1001,9 +987,9 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             assert!(text.contains(line), "{text}");
         }
     }
-    // Locked dependencies are still skipped until dependency installers exist:
-    // plain --check checks the same tools (#14650) and never claims dependency
-    // readiness.
+    // Without a root package.json, locked JavaScript dependencies have nothing
+    // to install: plain --check checks the same tools (#14650) and never
+    // claims dependency readiness.
     write(root, "turbo.json", &config("locked"));
     let (code, text) = invoke(root, &["setup", "--check"], false);
     assert_eq!(code, 1, "{text}");
@@ -1815,7 +1801,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         (
             "--check",
             "ready",
-            "dependency checks are not supported yet",
+            "pnpm dependency installation is not supported yet",
         ),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
@@ -1869,7 +1855,9 @@ fn locked_npm_dependencies_require_a_committed_lock_before_any_work() {
     let expected =
         "npm dependency setup requires a committed npm-shrinkwrap.json or package-lock.json";
     for ci in [false, true] {
-        failure(root, &["setup"], ci, expected);
+        for words in [&["setup"][..], &["setup", "--plan"], &["setup", "--check"]] {
+            failure(root, words, ci, expected);
+        }
     }
     // A missing lockfile is never permission to create one, or to install.
     assert!(!root.join("package-lock.json").exists() && !root.join(".turbo").exists());
