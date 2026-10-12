@@ -1133,7 +1133,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         eprintln!("Skipped: managed setup refuses Windows arm64 hosts, even for x64 turbo.");
         return;
     }
-    if !qualified_host() {
+    if !(qualified_host() || cfg!(all(windows, target_arch = "x86_64"))) {
         return;
     }
     let owned = turborepo_setup::test_support::OwnedSetupFixture::new().unwrap();
