@@ -235,17 +235,50 @@ fn wrapper_env(fixture: &Fixture) -> Vec<(OsString, OsString)> {
     env
 }
 
+/// `pnpm run` (pnpm 10.34) defaults; pnpm 8 to 10.0 export a subset.
+fn pnpm10_run_env(fixture: &Fixture) -> Vec<(OsString, OsString)> {
+    let at = |path: &str| fixture.directory.path().join(path).into_os_string();
+    [
+        ("npm_config__jsr_registry", "https://npm.jsr.io/".into()),
+        ("npm_config_frozen_lockfile", "".into()),
+        ("npm_config_globalconfig", at("home/.config/pnpm/rc")),
+        ("npm_config_node_gyp", at("pnpm/node-gyp/bin/node-gyp.js")),
+        ("npm_config_npm_globalconfig", at("system/npmrc")),
+        ("npm_config_registry", "https://registry.npmjs.org/".into()),
+        (
+            "npm_config_user_agent",
+            "pnpm/10.34.7 npm/? node/v24.17.0 linux x64".into(),
+        ),
+        ("npm_config_verify_deps_before_run", "false".into()),
+        ("pnpm_config_verify_deps_before_run", "false".into()),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.into(), value))
+    .collect()
+}
+
 #[test]
 fn wrapper_environments_pass_and_reported_locations_are_inspected() -> TestResult {
     let fixture = Fixture::new()?;
     let env = wrapper_env(&fixture);
     assert_eq!(fixture.check(&env)?.registry(), PUBLIC_NPM_REGISTRY);
+    assert!(fixture.check(&pnpm10_run_env(&fixture)).is_ok());
+    for registry in ["https://registry.npmjs.org", "HTTPS://Registry.NPMJS.org/"] {
+        let env = [("NPM_CONFIG_REGISTRY".into(), registry.into())];
+        assert!(fixture.check(&env).is_ok(), "{registry}");
+    }
     // Each reported location is followed to the file npm would read.
     let custom = fixture.directory.path().join("custom");
     for (key, value, config, owner) in [
         ("npm_config_userconfig", "npmrc", "npmrc", ConfigOwner::User),
         (
             "npm_config_globalconfig",
+            "npmrc",
+            "npmrc",
+            ConfigOwner::System,
+        ),
+        (
+            "npm_config_npm_globalconfig",
             "npmrc",
             "npmrc",
             ConfigOwner::System,
@@ -281,7 +314,18 @@ fn wrapper_environments_with_source_settings_fail_closed() -> TestResult {
     let fixture = Fixture::new()?;
     for (key, value) in [
         ("npm_config_registry", "https://private.invalid/"),
-        ("npm_config_registry", "https://registry.npmjs.org/"),
+        ("npm_config_registry", "http://registry.npmjs.org/"),
+        ("npm_config_registry", "https://registry.npmjs.org:443/"),
+        ("npm_config_registry", "https://private@registry.npmjs.org/"),
+        ("npm_config_registry", "https://registry.npmjs.org/private/"),
+        ("npm_config_registry", "https://registry.npmjs.org//"),
+        ("npm_config_registry", "https://registry.npmjs.org/?private"),
+        ("npm_config_registry", "https://registry.npmjs.org."),
+        ("npm_config_registry", " https://registry.npmjs.org/"),
+        ("npm_config_registry", "https://registry.yarnpkg.com/"),
+        ("npm_config__jsr_registry", "https://private.invalid/"),
+        ("npm_config__jsr_registry", "https://registry.npmjs.org/"),
+        ("npm_config_@jsr:registry", "https://npm.jsr.io/"),
         ("npm_config_@scope:registry", "https://private.invalid/"),
         ("npm_config_proxy", "http://proxy.invalid"),
         ("npm_config_https-proxy", "http://proxy.invalid"),
@@ -293,11 +337,12 @@ fn wrapper_environments_with_source_settings_fail_closed() -> TestResult {
             "npm_config_//registry.npmjs.org/:_authToken",
             "private-secret",
         ),
-        ("npm_config_frozen_lockfile", ""),
+        ("npm_config_store_dir", "/private/store"),
         ("npm_config_userconfig", "relative/.npmrc"),
         ("npm_config_prefix", ""),
     ] {
         let mut env = wrapper_env(&fixture);
+        env.extend(pnpm10_run_env(&fixture));
         env.push((key.into(), value.into()));
         let error = fixture.check(&env).err();
         assert_eq!(error, Some(Error::Environment), "{key}");
