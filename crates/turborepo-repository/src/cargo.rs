@@ -225,48 +225,6 @@ fn rustc_info(
     parse_rustc_info(&output.stdout)
 }
 
-/// The Rust compiler facts full discovery records for task contracts.
-struct CompilerProbe {
-    identity: Result<(turborepo_lockfiles::Package, String), Error>,
-    /// Empty unless the compiler was identified.
-    supported_targets: HashSet<String>,
-}
-
-/// Run `f` while probing the Rust compiler concurrently.
-///
-/// `rustc -vV` runs first and alone: rustup proxies are not safe to run
-/// concurrently while an implicit toolchain install is in progress, so the
-/// first proxy invocation must finish before any other starts. Once the
-/// compiler is identified, `rustc --print target-list` runs concurrently with
-/// `f` (typically `cargo metadata`). The same processes run as in a serial
-/// probe; only their scheduling differs.
-fn with_compiler_probe<T>(
-    repo_root: &AbsoluteSystemPath,
-    f: impl FnOnce() -> T,
-) -> (T, CompilerProbe) {
-    let identity = rustc_info(repo_root);
-    std::thread::scope(|scope| {
-        let targets = identity
-            .is_ok()
-            .then(|| scope.spawn(|| rustc_supported_targets(repo_root)));
-        let value = f();
-        let supported_targets = targets
-            .map(|handle| {
-                handle
-                    .join()
-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
-            })
-            .unwrap_or_default();
-        (
-            value,
-            CompilerProbe {
-                identity,
-                supported_targets,
-            },
-        )
-    })
-}
-
 fn rustc_supported_targets(repo_root: &AbsoluteSystemPath) -> HashSet<String> {
     std::process::Command::new("rustc")
         .args(["--print", "target-list"])
@@ -1471,24 +1429,18 @@ impl PruneDomain for CargoPruneKnowledge {
 pub(crate) struct CargoContributor {
     repo_root: AbsoluteSystemPathBuf,
     resolve_external_dependencies: bool,
-    /// Toolchain subprocess outputs started by
+    /// The locked `cargo metadata` attempt started by
     /// [`RepositoryContributor::prefetch_packages`], consumed by the next
     /// [`RepositoryContributor::discover_packages`].
-    prefetched: std::sync::Mutex<Option<std::thread::JoinHandle<ToolchainProbes>>>,
+    prefetched: std::sync::Mutex<Option<std::thread::JoinHandle<LockedProbe>>>,
 }
 
-/// The subprocess half of full discovery, separated so it can run ahead of
-/// [`RepositoryContributor::discover_packages`]. Only subprocess outputs, the
-/// lockfile read that precedes them, and pure parses live here; every error,
-/// warning, and derived fact is still produced by `discover_packages` in its
-/// original order.
-struct ToolchainProbes {
-    compiler: CompilerProbe,
-    /// `None` when external resolution is disabled.
-    locked: Option<LockedProbe>,
-}
-
-/// The locked `cargo metadata` attempt of [`discover_contributor_workspace`].
+/// The locked `cargo metadata` attempt of [`discover_contributor_workspace`],
+/// separated so it can run ahead of
+/// [`RepositoryContributor::discover_packages`]. Holds only the lockfile read
+/// that gates the subprocess and the subprocess result; every error, warning,
+/// and derived fact is still produced by `discover_packages` in its original
+/// order.
 enum LockedProbe {
     NoManifest,
     LockfileUnavailable(Error),
@@ -1496,16 +1448,6 @@ enum LockedProbe {
         lockfile: String,
         metadata: Result<Metadata, Error>,
     },
-}
-
-fn run_toolchain_probes(
-    repo_root: &AbsoluteSystemPath,
-    resolve_external_dependencies: bool,
-) -> ToolchainProbes {
-    let (locked, compiler) = with_compiler_probe(repo_root, || {
-        resolve_external_dependencies.then(|| probe_locked_metadata(repo_root))
-    });
-    ToolchainProbes { compiler, locked }
 }
 
 impl CargoContributor {
@@ -1528,7 +1470,7 @@ impl CargoContributor {
         })
     }
 
-    fn take_prefetched(&self) -> Option<std::thread::JoinHandle<ToolchainProbes>> {
+    fn take_prefetched(&self) -> Option<std::thread::JoinHandle<LockedProbe>> {
         self.prefetched
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -1623,12 +1565,6 @@ fn probe_locked_metadata(repo_root: &AbsoluteSystemPath) -> LockedProbe {
 }
 
 fn discover_contributor_workspace(
-    repo_root: &AbsoluteSystemPath,
-) -> Result<(DiscoveredWorkspace, ContributorMetadata), Error> {
-    discover_contributor_workspace_from(repo_root, probe_locked_metadata(repo_root))
-}
-
-fn discover_contributor_workspace_from(
     repo_root: &AbsoluteSystemPath,
     probe: LockedProbe,
 ) -> Result<(DiscoveredWorkspace, ContributorMetadata), Error> {
@@ -1817,11 +1753,13 @@ impl RepositoryContributor for CargoContributor {
         ToolchainId::RUST
     }
 
-    /// Core calls this only after [`Self::discover_package_scopes`] found
-    /// named workspace crates, so Cargo eligibility is already established
-    /// statically before any subprocess starts.
+    /// Starts only the locked `cargo metadata` attempt. Core calls this only
+    /// after [`Self::discover_package_scopes`] found named workspace crates,
+    /// so Cargo eligibility is established statically before any subprocess
+    /// starts. The `rustc` probes stay in `discover_packages`, after the
+    /// checks that consume this metadata, exactly as without a prefetch.
     fn prefetch_packages(&self) {
-        if !self.repo_root.join_component(CARGO_TOML).exists() {
+        if !self.resolve_external_dependencies {
             return;
         }
         let mut slot = self
@@ -1832,13 +1770,12 @@ impl RepositoryContributor for CargoContributor {
             return;
         }
         let repo_root = self.repo_root.clone();
-        let resolve_external_dependencies = self.resolve_external_dependencies;
         // Failing to spawn leaves the slot empty; discovery then runs inline.
         *slot = std::thread::Builder::new()
-            .name("cargo-discovery-prefetch".to_string())
+            .name("cargo-metadata-prefetch".to_string())
             .spawn(move || {
-                let _span = tracing::info_span!("cargo_discovery_prefetch").entered();
-                run_toolchain_probes(&repo_root, resolve_external_dependencies)
+                let _span = tracing::info_span!("cargo_metadata_prefetch").entered();
+                probe_locked_metadata(&repo_root)
             })
             .ok();
     }
@@ -1848,34 +1785,21 @@ impl RepositoryContributor for CargoContributor {
         Box::pin(async move {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
-            // Without a prefetch, the compiler is only probed after discovery
-            // establishes there are named crates to host, as before.
-            let discover = || {
+            let (workspace, metadata) = turborepo_rayon_compat::block_in_place(|| {
                 if self.resolve_external_dependencies {
-                    discover_contributor_workspace(&self.repo_root)
+                    let probe = match self.take_prefetched() {
+                        Some(prefetched) => prefetched
+                            .join()
+                            .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+                        None => probe_locked_metadata(&self.repo_root),
+                    };
+                    discover_contributor_workspace(&self.repo_root, probe)
                 } else {
                     discover_crates(&self.repo_root)
                         .map(|workspace| (workspace, ContributorMetadata::Absent))
                 }
-            };
-            let prefetched = self.take_prefetched();
-            let (discovery, compiler_probe) = turborepo_rayon_compat::block_in_place(|| {
-                if let Some(prefetched) = prefetched {
-                    let ToolchainProbes { compiler, locked } = prefetched
-                        .join()
-                        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-                    let discovery = match locked {
-                        Some(probe) => discover_contributor_workspace_from(&self.repo_root, probe),
-                        None => discover_crates(&self.repo_root)
-                            .map(|workspace| (workspace, ContributorMetadata::Absent)),
-                    };
-                    (discovery, Some(compiler))
-                } else {
-                    (discover(), None)
-                }
-            });
-            let (workspace, metadata) =
-                discovery.map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
+            })
+            .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
             let workspace_roots = self
                 .repo_root
                 .join_component(CARGO_TOML)
@@ -1947,23 +1871,8 @@ impl RepositoryContributor for CargoContributor {
                 CargoPruneKnowledge::discover(&self.repo_root, &crates, lockfile.clone())
                     .map_err(|error| toolchain::Error::Failed(Box::new(error)))?;
 
-            let CompilerProbe {
-                identity: compiler_identity,
-                mut supported_targets,
-            } = compiler_probe.unwrap_or_else(|| {
-                turborepo_rayon_compat::block_in_place(|| {
-                    let identity = rustc_info(&self.repo_root);
-                    let supported_targets = if identity.is_ok() {
-                        rustc_supported_targets(&self.repo_root)
-                    } else {
-                        HashSet::new()
-                    };
-                    CompilerProbe {
-                        identity,
-                        supported_targets,
-                    }
-                })
-            });
+            let compiler_identity =
+                turborepo_rayon_compat::block_in_place(|| rustc_info(&self.repo_root));
             if let Err(reason) = &compiler_identity {
                 tracing::warn!(
                     "Cargo task caching is disabled because Turborepo could not identify the Rust \
@@ -1976,6 +1885,11 @@ impl RepositoryContributor for CargoContributor {
             let host_target = compiler_identity
                 .as_ref()
                 .map(|(_, host_target)| host_target.clone());
+            let mut supported_targets = if compiler_identified {
+                rustc_supported_targets(&self.repo_root)
+            } else {
+                HashSet::new()
+            };
             if let Some(host_target) = &host_target {
                 supported_targets.insert(host_target.clone());
             }
