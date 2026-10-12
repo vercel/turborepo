@@ -1308,6 +1308,106 @@ fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
 }
 
 #[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn version_manager_declarations_are_reported_as_ignored_never_silently() {
+    const IGNORED: &str =
+        "Ignored version manager declarations; turbo setup reads only native declarations:";
+    // Each file alone: setup still requires a native Node declaration and says
+    // which declarations it ignored, in local and CI-inferred modes.
+    for (file, contents, expected) in [
+        (
+            ".tool-versions",
+            "nodejs 20.11.0 # asdf\npnpm 8.15.0\n",
+            ".tool-versions (asdf/mise): nodejs 20.11.0, pnpm 8.15.0",
+        ),
+        (
+            "mise.toml",
+            "[tools]\nnode = \"22\"\n",
+            "mise.toml (mise): node 22",
+        ),
+        (
+            "package.json",
+            r#"{"volta":{"node":"20.11.0"}}"#,
+            "package.json#volta (Volta): node 20.11.0",
+        ),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        write(temp.path(), "turbo.json", ENABLED);
+        write(temp.path(), "package.json", "{}");
+        write(temp.path(), file, contents);
+        for ci in [false, true] {
+            let text = failure(
+                temp.path(),
+                &["setup", "--tools-only", "--no-frozen"],
+                ci,
+                "a native Node declaration is required",
+            );
+            assert!(text.contains(IGNORED) && text.contains(expected), "{text}");
+            assert!(!text.contains("takes precedence"), "{text}");
+        }
+    }
+
+    // Alongside conflicting native declarations: native files decide, and both
+    // provisioning and the read-only check say so before their outcome.
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(root, ".nvmrc", "24.0.0");
+    write(
+        root,
+        "package.json",
+        r#"{"packageManager":"pnpm@10.0.0","volta":{"node":"18.20.0","pnpm":"9.0.0"}}"#,
+    );
+    write(root, ".tool-versions", "nodejs 20.11.0\nruby 3.3.0\n");
+    write(root, "mise.toml", "[tools]\nnode = \"22\"\n");
+    for (words, ci, expected) in [
+        (
+            &["setup", "--tools-only"][..],
+            true,
+            "frozen mode requires turbo.lock",
+        ),
+        (
+            &["setup", "--check", "--tools-only"],
+            false,
+            "managed activation requires turbo.lock",
+        ),
+    ] {
+        let (code, text) = invoke(root, words, ci);
+        assert_eq!(code, 1, "{text}");
+        assert!(
+            diagnostic_contains(&text, expected) || external_system_policy_blocked(code, &text),
+            "{text}"
+        );
+        for ignored in [
+            IGNORED,
+            ".tool-versions (asdf/mise): nodejs 20.11.0 (native node declaration takes \
+             precedence), ruby 3.3.0",
+            "mise.toml (mise): node 22 (native node declaration takes precedence)",
+            "package.json#volta (Volta): node 18.20.0 (native node declaration takes precedence), \
+             pnpm 9.0.0 (native pnpm declaration takes precedence)",
+        ] {
+            assert!(text.contains(ignored), "{text}");
+        }
+    }
+
+    // An ignored file that cannot be interpreted is reported, never fatal.
+    write(root, "mise.toml", "[tools\n");
+    let text = failure(
+        root,
+        &["setup", "--tools-only"],
+        true,
+        "frozen mode requires turbo.lock",
+    );
+    assert!(
+        text.contains("mise.toml (mise): present but not read"),
+        "{text}"
+    );
+}
+
+#[test]
 fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_traffic() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();

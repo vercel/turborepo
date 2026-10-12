@@ -111,6 +111,15 @@ impl Snapshot {
         .map_err(|_| StorageError::Declarations)
     }
 
+    /// Version-manager files at this root, with Volta read from the captured
+    /// manifest. Report-only: never resolver input or part of the CAS state.
+    pub fn ignored_declarations(&self) -> Vec<crate::version_managers::Ignored> {
+        crate::version_managers::discover(
+            |file| read_optional(&self.root, file, crate::version_managers::MAX_FILE_BYTES),
+            self.inputs.get("package.json").and_then(Option::as_deref),
+        )
+    }
+
     pub fn package_manager(
         &self,
     ) -> Result<Option<crate::package_manager::Declaration>, StorageError> {
