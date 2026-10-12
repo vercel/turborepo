@@ -13,6 +13,7 @@ use std::{
 use turborepo_tool_install::{Store, Tool};
 
 use crate::{
+    bun_provision::BunPlan,
     execution_identity::{ExecutionContext, ExecutionSnapshot},
     lock::{Installation, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
@@ -29,7 +30,8 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports only managed Node/pnpm/Yarn; use a supported setup adapter"
+        "activation planning supports only managed Node/pnpm/Yarn/Bun; use a supported setup \
+         adapter"
     )]
     UnsupportedAdapter,
     #[error(
@@ -99,7 +101,7 @@ impl ActivationPlan {
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
-                    || !matches!(id.as_str(), "node" | "pnpm" | "yarn")
+                    || !matches!(id.as_str(), "node" | "pnpm" | "yarn" | "bun")
                     || !matches!(tool.installation, Installation::Managed { .. })
             })
         {
@@ -139,6 +141,14 @@ impl ActivationPlan {
                 .map_err(|_| Error::InvalidLock)?;
             tools.push(yarn.inventory_tool().clone());
         }
+        if lock.tools().contains_key("bun") {
+            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
+            let bun = BunPlan::from_declaration(lock, platform, &manager)
+                .map_err(|_| Error::InvalidLock)?;
+            tools.push(bun.inventory_tool().clone());
+        }
+        // Inventory records tools in ID order.
+        tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
         let current = Store::inspect(repo)

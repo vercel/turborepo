@@ -188,7 +188,10 @@ impl Lock {
             }
             // Current builtins share npm exact identity. Other adapters own their
             // normalization (Rust nightlies and Go prereleases are not npm ranges).
-            if matches!(tool.adapter.as_str(), "node" | "npm" | "pnpm" | "yarn") {
+            if matches!(
+                tool.adapter.as_str(),
+                "node" | "npm" | "pnpm" | "yarn" | "bun"
+            ) {
                 let version = crate::VersionRequest::parse(&tool.version)
                     .map_err(|_| Error::Invalid("expected canonical exact builtin version"))?;
                 if version

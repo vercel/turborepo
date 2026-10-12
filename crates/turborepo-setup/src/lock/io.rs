@@ -16,7 +16,7 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 4] = ["node", "npm", "pnpm", "yarn"];
+const NATIVE: [&str; 5] = ["node", "npm", "pnpm", "yarn", "bun"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -189,6 +189,7 @@ fn probe_native_with(
                 package_manager::Manager::Npm => "npm",
                 package_manager::Manager::Pnpm => "pnpm",
                 package_manager::Manager::Yarn => "yarn",
+                package_manager::Manager::Bun => "bun",
                 _ => return Err(StorageError::Declarations),
             };
             let mut sources = Vec::new();

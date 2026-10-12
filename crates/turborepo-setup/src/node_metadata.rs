@@ -217,6 +217,11 @@ impl Checksums {
         }
         Ok(Self(checksums))
     }
+
+    /// Exact published filename lookup, shared by other SHASUMS256 vendors.
+    pub(crate) fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name).map(String::as_str)
+    }
 }
 
 fn exact_version(value: &str) -> Result<Version, Error> {

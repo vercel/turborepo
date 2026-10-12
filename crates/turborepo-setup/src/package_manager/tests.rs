@@ -419,7 +419,10 @@ fn alternative_and_request_limits_are_inclusive() -> TestResult {
 #[test]
 fn shared_families_do_not_expand_setup_capabilities() -> TestResult {
     for family in Manager::ALL {
-        let supported = matches!(family, Manager::Npm | Manager::Pnpm | Manager::Yarn);
+        let supported = matches!(
+            family,
+            Manager::Npm | Manager::Pnpm | Manager::Yarn | Manager::Bun
+        );
         let top = json!({"packageManager": format!("{}@9.0.0", family.name())});
         if supported {
             let shared: turborepo_package_manager::Family = discover(top)?.manager;

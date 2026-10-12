@@ -2,6 +2,7 @@
 //! `turborepo-platform`; vendor artifact policy lives in each adapter.
 
 pub mod activation;
+pub mod bun_provision;
 pub mod bundled_npm;
 pub mod execution_identity;
 pub mod js_resolution;

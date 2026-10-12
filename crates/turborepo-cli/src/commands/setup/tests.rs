@@ -128,6 +128,10 @@ impl Fixture {
                         upstream.origin(),
                     )
                     .unwrap(),
+                    bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    )
+                    .unwrap(),
                 }),
                 || {
                     Ok(self
@@ -195,6 +199,8 @@ fn track(root: &std::path::Path) {
 mod checks;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "bun_tests.rs"]
+mod bun;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]

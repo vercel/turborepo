@@ -4,6 +4,7 @@
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
+    bun_provision::{BunPlan, BunTransport},
     lock::{Platform, Snapshot},
     node_provision::{NodePlan, NodeTransport},
     package_manager::Manager,
@@ -19,6 +20,7 @@ pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
+    pub bun: BunTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -26,6 +28,7 @@ impl Transports {
             node: NodeTransport::official(policy)?,
             pnpm: PnpmTransport::official(policy)?,
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
+            bun: BunTransport::official(policy)?,
         })
     }
 }
@@ -95,10 +98,11 @@ pub(super) struct Plans {
     pub node: NodePlan,
     pub pnpm: Option<PnpmPlan>,
     pub yarn: Option<YarnPlan>,
+    pub bun: Option<BunPlan>,
 }
-const SUPPORTED: &str = "only managed Node, pnpm, and Yarn are supported";
+const SUPPORTED: &str = "only managed Node, pnpm, Yarn, and Bun are supported";
 fn supported(id: &str) -> bool {
-    matches!(id, "node" | "pnpm" | "yarn")
+    matches!(id, "node" | "pnpm" | "yarn" | "bun")
 }
 pub(super) fn plans(
     snapshot: &Snapshot,
@@ -124,7 +128,7 @@ pub(super) fn plans(
             "locked Node does not satisfy native declarations",
         ));
     }
-    let (mut pnpm, mut yarn) = (None, None);
+    let (mut pnpm, mut yarn, mut bun) = (None, None, None);
     match snapshot.package_manager()? {
         Some(m) if m.manager == Manager::Pnpm => {
             pnpm = Some(PnpmPlan::from_declaration(lock, platform, &node, &m)?);
@@ -132,10 +136,18 @@ pub(super) fn plans(
         Some(m) if m.manager == Manager::Yarn => {
             yarn = Some(YarnPlan::from_declaration(lock, platform, &node, &m)?);
         }
+        Some(m) if m.manager == Manager::Bun => {
+            bun = Some(BunPlan::from_declaration(lock, platform, &m)?);
+        }
         Some(_) => return Err(Error::Unsupported("npm override provisioning")),
         None => {}
     }
-    Ok(Plans { node, pnpm, yarn })
+    Ok(Plans {
+        node,
+        pnpm,
+        yarn,
+        bun,
+    })
 }
 
 pub(super) fn lock_report(
@@ -188,7 +200,7 @@ pub(super) fn run(
     let manager = snapshot.package_manager()?;
     if manager
         .as_ref()
-        .is_some_and(|m| !matches!(m.manager, Manager::Pnpm | Manager::Yarn))
+        .is_some_and(|m| !matches!(m.manager, Manager::Pnpm | Manager::Yarn | Manager::Bun))
     {
         return Err(Error::Unsupported("npm override provisioning"));
     }
@@ -269,10 +281,16 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
-    let Plans { node, pnpm, yarn } = plans(&snapshot, lock)?;
+    let Plans {
+        node,
+        pnpm,
+        yarn,
+        bun,
+    } = plans(&snapshot, lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
     desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(bun.as_ref().map(|plan| plan.inventory_tool().clone()));
     let policy = preflight()?;
     let transports = transports
         .map(Ok)
@@ -298,7 +316,7 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_manager) = runtime.block_on(async {
+    let (prepared_node, prepared_manager, prepared_bun) = runtime.block_on(async {
         let node = node
             .prepare(&store, &desired, &transports.node, preparation)
             .await?;
@@ -317,11 +335,23 @@ pub(super) fn run(
             }
             _ => None,
         };
-        Ok::<_, Error>((node, manager))
+        let bun = match &bun {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.bun, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, manager, bun))
     })?;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
         if tool == node.inventory_tool() {
             prepared_node
+                .as_ref()
+                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
+                .stage(tool, destination)
+        } else if tool.id == "bun" {
+            prepared_bun
                 .as_ref()
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?
                 .stage(tool, destination)
@@ -349,9 +379,11 @@ pub(super) fn run(
             "{} {}: {}",
             tool.id,
             tool.version,
-            if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id != "node" && prepared_manager.is_none())
-            {
+            if match tool.id.as_str() {
+                "node" => prepared_node.is_none(),
+                "bun" => prepared_bun.is_none(),
+                _ => prepared_manager.is_none(),
+            } {
                 "reused"
             } else {
                 "installed"

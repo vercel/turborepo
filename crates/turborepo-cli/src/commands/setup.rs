@@ -55,6 +55,8 @@ pub enum Error {
     #[error(transparent)]
     Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
     #[error(transparent)]
+    Bun(#[from] turborepo_setup::bun_provision::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
