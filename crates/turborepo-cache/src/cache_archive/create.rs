@@ -94,6 +94,8 @@ pub(crate) enum ArchivedEntry {
     /// A regular file, with the metadata of the opened file that was archived.
     File(fs::Metadata),
     Directory,
+    /// A symlink, with the target it was archived with, in Unix form.
+    Symlink(camino::Utf8PathBuf),
     Other,
 }
 
@@ -364,7 +366,7 @@ impl<'a> CacheWriter<'a> {
                 // Unix-style. This will get restored to a system path.
                 let target = target.into_unix();
                 self.append_link(&mut header, file_path.as_str(), &target)?;
-                Ok(ArchivedEntry::Other)
+                Ok(ArchivedEntry::Symlink(target))
             }
             ArchiveSource::Other { mut header } => {
                 let is_dir = matches!(header.entry_type(), EntryType::Directory);

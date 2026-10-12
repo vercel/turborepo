@@ -102,9 +102,9 @@ impl<'a> CacheReader<'a> {
                 }
                 Err(e) => return Err(e),
                 Ok((restored_path, regular)) => {
+                    let key = restored_path.to_unix().into_inner();
                     match regular {
                         Some(RegularRestore::Skipped) => {
-                            let key = restored_path.as_str().to_owned();
                             if let Some(existing) =
                                 previous_manifest.and_then(|m| m.files.get(&key))
                             {
@@ -113,15 +113,17 @@ impl<'a> CacheReader<'a> {
                             }
                         }
                         Some(RegularRestore::Written(Some(metadata))) => {
-                            let key = restored_path.as_str().to_owned();
                             let _ = new_manifest.record_file_metadata(key, &metadata);
                         }
                         Some(RegularRestore::Written(None)) => {
-                            let key = restored_path.as_str().to_owned();
                             let resolved = anchor.resolve(&restored_path);
                             let _ = new_manifest.record_file(key, &resolved);
                         }
-                        None => {}
+                        None => match entry.header().entry_type() {
+                            tar::EntryType::Directory => new_manifest.record_dir(key),
+                            tar::EntryType::Symlink => record_symlink(new_manifest, key, &entry)?,
+                            _ => {}
+                        },
                     }
                     restored.push(restored_path);
                 }
@@ -129,7 +131,7 @@ impl<'a> CacheReader<'a> {
         }
 
         let mut restored_symlinks =
-            Self::topologically_restore_symlinks(&mut dir_cache, anchor, &symlinks)?;
+            Self::topologically_restore_symlinks(&mut dir_cache, anchor, &symlinks, new_manifest)?;
         restored.append(&mut restored_symlinks);
         Ok(())
     }
@@ -138,6 +140,7 @@ impl<'a> CacheReader<'a> {
         dir_cache: &mut CachedDirTree,
         anchor: &AbsoluteSystemPath,
         symlinks: &[Entry<'_, T>],
+        new_manifest: &mut RestoreManifest,
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut graph = DiGraph::new();
         let mut entry_lookup = HashMap::new();
@@ -177,6 +180,7 @@ impl<'a> CacheReader<'a> {
                 continue;
             };
             let file = restore_symlink_allow_missing_target(dir_cache, anchor, entry)?;
+            record_symlink(new_manifest, file.to_unix().into_inner(), entry)?;
             restored.push(file);
         }
 
@@ -203,6 +207,26 @@ fn restore_entry<T: Read>(
             Backtrace::capture(),
         )),
     }
+}
+
+/// Records a symlink the restore just wrote, with the target it was written
+/// with, so the next fetch's fast path notices it being removed or retargeted.
+fn record_symlink<T: Read>(
+    manifest: &mut RestoreManifest,
+    key: String,
+    entry: &Entry<T>,
+) -> Result<(), CacheError> {
+    let target = entry
+        .link_name()?
+        .ok_or_else(|| CacheError::LinkTargetNotOnHeader(Backtrace::capture()))?;
+    let target = target.to_str().ok_or_else(|| {
+        CacheError::PathError(
+            turbopath::PathError::InvalidUnicode(target.to_string_lossy().to_string()),
+            Backtrace::capture(),
+        )
+    })?;
+    manifest.record_symlink(key, target);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -681,6 +705,36 @@ mod tests {
             );
         }
 
+        Ok(())
+    }
+
+    /// A manifest that disagrees with its archive about what an entry is
+    /// must not spare the archive's regular file from being written.
+    #[cfg(unix)]
+    #[test]
+    fn restore_writes_regular_file_recorded_as_symlink() -> Result<()> {
+        let repo_root = tempdir()?;
+        let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        anchor.join_component("a.txt").create_with_contents("a")?;
+        let x = anchor.join_component("x");
+        x.symlink_to_file("a.txt")?;
+        let previous = crate::cache_archive::RestoreManifest::from_disk(
+            anchor,
+            &[AnchoredSystemPathBuf::from_raw("x")?],
+        );
+        assert!(previous.file_matches("x", &x));
+
+        let tar = generate_raw_tar(&[RawTarEntry::File {
+            path: "x",
+            body: b"regular".to_vec(),
+        }]);
+        let (_, manifest) =
+            CacheReader::from_reader(&tar[..], false)?.restore(anchor, Some(&previous))?;
+
+        assert!(!x.symlink_metadata()?.is_symlink());
+        assert_eq!(fs::read(x.as_path())?, b"regular");
+        assert_eq!(fs::read(anchor.join_component("a.txt").as_path())?, b"a");
+        assert!(!manifest.files["x"].is_symlink);
         Ok(())
     }
 

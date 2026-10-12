@@ -267,28 +267,6 @@ impl FSCache {
         }))
     }
 
-    /// Records a restore manifest for `files`, which must exist under
-    /// `anchor` (they either already do during a put, or have just been
-    /// restored there during a fetch).
-    fn build_manifest(
-        anchor: &AbsoluteSystemPath,
-        files: &[AnchoredSystemPathBuf],
-    ) -> crate::cache_archive::RestoreManifest {
-        let mut manifest = crate::cache_archive::RestoreManifest::new();
-        for file in files {
-            let source_path = anchor.resolve(file);
-            let unix_path = file.to_unix();
-            if let Ok(m) = source_path.symlink_metadata() {
-                if m.is_file() {
-                    let _ = manifest.record_file(unix_path.as_str().to_owned(), &source_path);
-                } else if m.is_dir() {
-                    manifest.record_dir(unix_path.as_str().to_owned());
-                }
-            }
-        }
-        manifest
-    }
-
     /// Writes the `-manifest.json` and `-meta.json` sidecars for an installed
     /// archive.
     fn write_sidecars(
@@ -358,6 +336,9 @@ impl FSCache {
                 crate::cache_archive::ArchivedEntry::Directory => {
                     manifest.record_dir(unix_path.as_str().to_owned());
                 }
+                crate::cache_archive::ArchivedEntry::Symlink(target) => {
+                    manifest.record_symlink(unix_path.as_str().to_owned(), target.as_str());
+                }
                 crate::cache_archive::ArchivedEntry::Other => {}
             }
         }
@@ -407,7 +388,7 @@ impl FSCache {
         }
         temp_path.rename(&cache_path)?;
 
-        let manifest = Self::build_manifest(anchor, files);
+        let manifest = crate::cache_archive::RestoreManifest::from_disk(anchor, files);
         self.write_sidecars(hash, &manifest, duration)?;
 
         Ok(())
@@ -1298,6 +1279,211 @@ mod test {
         let (removed, _) = cache.evict(None, Some(10 * 1024 * 1024 * 1024));
         assert_eq!(removed, 0);
         assert!(tar.exists());
+    }
+
+    /// Lays out `dist/` with files, an empty directory, and symlinks, and
+    /// returns the paths a task caching `dist/**` would save. Restoring them
+    /// into an empty `dist/` writes `link` as soon as it is read, and defers
+    /// `dangling` and `early` (whose target comes later in the archive) until
+    /// every other entry is restored.
+    #[cfg(unix)]
+    fn symlinked_outputs(repo_root: &AbsoluteSystemPath) -> Result<Vec<AnchoredSystemPathBuf>> {
+        let dist = repo_root.join_component("dist");
+        dist.join_component("empty").create_dir_all()?;
+        dist.join_component("a.txt").create_with_contents("a")?;
+        dist.join_component("b.txt").create_with_contents("b")?;
+        dist.join_component("late.txt")
+            .create_with_contents("late")?;
+        dist.join_component("link").symlink_to_file("a.txt")?;
+        dist.join_component("dangling").symlink_to_file("missing")?;
+        dist.join_component("early").symlink_to_file("late.txt")?;
+        [
+            "dist",
+            "dist/a.txt",
+            "dist/b.txt",
+            "dist/dangling",
+            "dist/early",
+            "dist/empty",
+            "dist/late.txt",
+            "dist/link",
+        ]
+        .into_iter()
+        .map(|path| Ok(AnchoredSystemPathBuf::from_raw(path)?))
+        .collect()
+    }
+
+    /// A cache hit must leave every cached symlink in place: the manifest
+    /// fast path may only skip the restore when symlinks match too. Both ways
+    /// an archive is installed locally (saving outputs, and installing a
+    /// remote hit) write the manifest the fast path trusts.
+    #[test]
+    #[cfg(unix)]
+    fn fetch_restores_symlinks_changed_since_put() -> Result<()> {
+        for (installer, change) in ["put", "put_archive"].into_iter().flat_map(|installer| {
+            ["delete", "delete dangling", "retarget"].map(|change| (installer, change))
+        }) {
+            let repo_root = tempdir()?;
+            let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+            let files = symlinked_outputs(repo_root_path)?;
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                repo_root_path,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            if installer == "put" {
+                cache.put(repo_root_path, "symlinks", &files, 50)?;
+            } else {
+                let body = crate::artifact_body::ArtifactBody::from_files(repo_root_path, &files)?;
+                cache.put_archive(repo_root_path, "symlinks", &files, &body, 50)?;
+            }
+
+            let dist = repo_root_path.join_component("dist");
+            match change {
+                "delete" => dist.join_component("link").remove_file()?,
+                "delete dangling" => dist.join_component("dangling").remove_file()?,
+                _ => {
+                    dist.join_component("link").remove_file()?;
+                    dist.join_component("link").symlink_to_file("b.txt")?;
+                }
+            }
+
+            let (_, restored) = cache
+                .fetch(repo_root_path, "symlinks")?
+                .expect("cache should hit");
+            assert_eq!(
+                dist.join_component("link").read_link()?.as_str(),
+                "a.txt",
+                "{installer}, {change}: symlink should be restored"
+            );
+            assert_eq!(
+                dist.join_component("dangling").read_link()?.as_str(),
+                "missing",
+                "{installer}, {change}: dangling symlink should be restored"
+            );
+            assert!(restored.contains(&AnchoredSystemPathBuf::from_raw("dist/link")?));
+        }
+        Ok(())
+    }
+
+    /// The manifest written after a restore records the same entries as the
+    /// one written at save time, including directories and symlinks.
+    #[test]
+    #[cfg(unix)]
+    fn restore_manifest_records_directories_and_symlinks() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let files = symlinked_outputs(repo_root_path)?;
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache.put(repo_root_path, "restored", &files, 50)?;
+
+        let dist = repo_root_path.join_component("dist");
+        dist.remove_dir_all()?;
+        let archive = cache.cache_directory().join_component("restored.tar.zst");
+        let (restored, manifest) = CacheReader::open(&archive)?.restore(repo_root_path, None)?;
+        assert_eq!(
+            manifest.validate_all(repo_root_path),
+            Some(restored),
+            "the fast path should report what the restore did"
+        );
+
+        dist.join_component("empty").remove_dir()?;
+        assert!(
+            manifest.validate_all(repo_root_path).is_none(),
+            "a deleted directory must invalidate the manifest"
+        );
+        dist.join_component("empty").create_dir_all()?;
+        assert!(manifest.validate_all(repo_root_path).is_some());
+
+        // `link` is restored as soon as it is read; `dangling` and `early`
+        // only once every other entry is restored.
+        for link in ["link", "dangling", "early"] {
+            let link = dist.join_component(link);
+            let target = link.read_link()?;
+            link.remove_file()?;
+            assert!(
+                manifest.validate_all(repo_root_path).is_none(),
+                "deleting {link} must invalidate the manifest"
+            );
+            link.symlink_to_file("b.txt")?;
+            assert!(
+                manifest.validate_all(repo_root_path).is_none(),
+                "retargeting {link} must invalidate the manifest"
+            );
+            link.remove_file()?;
+            link.symlink_to_file(target.as_str())?;
+            assert!(manifest.validate_all(repo_root_path).is_some());
+        }
+
+        // A restore that skips unchanged files still records them.
+        dist.join_component("link").remove_file()?;
+        let (restored, manifest) =
+            CacheReader::open(&archive)?.restore(repo_root_path, Some(&manifest))?;
+        assert_eq!(manifest.validate_all(repo_root_path), Some(restored));
+        Ok(())
+    }
+
+    /// Manifests written before symlinks were recorded cannot vouch for
+    /// them, so they must not short-circuit a restore, but their regular
+    /// files still spare unchanged outputs from being rewritten.
+    #[test]
+    #[cfg(unix)]
+    fn fetch_ignores_manifest_without_version() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let files = symlinked_outputs(repo_root_path)?;
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache.put(repo_root_path, "legacy", &files, 50)?;
+
+        // Rewrite the manifest the way an older turbo wrote it: no version
+        // and no symlink entries.
+        let manifest_path = cache
+            .cache_directory()
+            .join_component("legacy-manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&manifest_path.read_to_string()?)?;
+        let manifest = manifest.as_object_mut().unwrap();
+        manifest.remove("version");
+        let links = manifest.remove("link_targets").unwrap_or_default();
+        let links = links.as_object().cloned().unwrap_or_default();
+        let entries = manifest["files"].as_object_mut().unwrap();
+        entries.retain(|path, _| !links.contains_key(path));
+        let kept = entries
+            .keys()
+            .cloned()
+            .collect::<std::collections::HashSet<_>>();
+        manifest["order"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|path| kept.contains(path.as_str().unwrap()));
+        manifest_path.create_with_contents(serde_json::to_string(&manifest)?)?;
+
+        let dist = repo_root_path.join_component("dist");
+        let unchanged = dist.join_component("a.txt");
+        let unchanged_mtime = unchanged.symlink_metadata()?.modified()?;
+        std::thread::sleep(Duration::from_millis(50));
+        let link = dist.join_component("link");
+        link.remove_file()?;
+        cache
+            .fetch(repo_root_path, "legacy")?
+            .expect("cache should hit");
+        assert_eq!(link.read_link()?.as_str(), "a.txt");
+        assert_eq!(
+            unchanged.symlink_metadata()?.modified()?,
+            unchanged_mtime,
+            "unchanged file should not be rewritten"
+        );
+        Ok(())
     }
 
     /// When the manifest fast path fails because one file changed, the slow
