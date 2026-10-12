@@ -100,6 +100,30 @@ pub async fn resolve(
     registry: &RegistryTransport,
 ) -> Result<Lock, Error> {
     let snapshot = request.snapshot();
+    let tools = resolve_tools(&request, node, registry).await?;
+    let candidate = Lock::new(Document {
+        schema_version: lock::SCHEMA_VERSION,
+        tools,
+    })?;
+    // Preserved payloads passed preflight; new payloads come from validated
+    // adapter resolutions, with native byte-specific integrity checked above.
+    if !candidate.matches_native(snapshot.declarations())? {
+        return Err(Error::Unsupported(
+            "candidate differs from captured provenance",
+        ));
+    }
+    snapshot.ensure_current()?;
+    Ok(candidate)
+}
+
+/// The JavaScript cohort only (Node and its package manager), for composition
+/// with other ecosystems' selections before final lock validation.
+pub(crate) async fn resolve_tools(
+    request: &Resolution<'_>,
+    node: &NodeTransport,
+    registry: &RegistryTransport,
+) -> Result<BTreeMap<String, Tool>, Error> {
+    let snapshot = request.snapshot();
     snapshot.ensure_current()?;
     if !snapshot.declarations().contains_key("node") {
         return Err(Error::Unsupported(
@@ -125,7 +149,10 @@ pub async fn resolve(
         .previous_lock()
         .into_iter()
         .flat_map(Lock::tools)
-        .filter(|(id, _)| snapshot.declarations().contains_key(*id))
+        .filter(|(id, _)| {
+            matches!(id.as_str(), "node" | "npm" | "pnpm")
+                && snapshot.declarations().contains_key(*id)
+        })
         .map(|(id, tool)| (id.clone(), tool.clone()))
         .collect();
     if !request.version_ids().contains("node") {
@@ -182,19 +209,8 @@ pub async fn resolve(
             },
         );
     }
-    let candidate = Lock::new(Document {
-        schema_version: lock::SCHEMA_VERSION,
-        tools,
-    })?;
-    // Preserved payloads passed preflight; new payloads come from validated
-    // adapter resolutions, with native byte-specific integrity checked above.
-    if !candidate.matches_native(snapshot.declarations())? {
-        return Err(Error::Unsupported(
-            "candidate differs from captured provenance",
-        ));
-    }
     snapshot.ensure_current()?;
-    Ok(candidate)
+    Ok(tools)
 }
 
 #[cfg(all(test, unix))]

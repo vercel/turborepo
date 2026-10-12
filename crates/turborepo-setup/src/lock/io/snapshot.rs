@@ -6,9 +6,10 @@ use std::{
 };
 
 use super::{
-    DeclarationMap, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, NATIVE, StorageError, WriteOutcome,
-    WriterStorage, probe_native_with, read_optional,
+    DeclarationMap, Ecosystems, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, NATIVE, StorageError,
+    WriteOutcome, WriterStorage, probe_native_with, read_optional,
 };
+use crate::uv_discovery::{self, UvRequirement};
 
 const SOURCES: [(&str, usize); 3] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),
@@ -28,6 +29,7 @@ pub struct Snapshot {
     previous: Option<Lock>,
     inputs: Inputs,
     native: DeclarationMap,
+    ecosystems: Ecosystems,
 }
 
 // Raw manifests may contain unrelated secrets. Never print snapshot contents.
@@ -37,7 +39,12 @@ impl fmt::Debug for Snapshot {
     }
 }
 
-fn inputs(root: &Path) -> io::Result<Inputs> {
+fn inputs(root: &Path, ecosystems: Ecosystems) -> io::Result<Inputs> {
+    let python: &[&'static str] = if ecosystems.python {
+        &uv_discovery::SOURCES
+    } else {
+        &[]
+    };
     SOURCES
         .into_iter()
         // Preserve flags/policy and inactive declarations without interpreting
@@ -46,29 +53,54 @@ fn inputs(root: &Path) -> io::Result<Inputs> {
             turborepo_types::CONFIG_FILES
                 .map(|file| (file, crate::node_discovery::MAX_MANIFEST_BYTES)),
         )
+        .chain(
+            python
+                .iter()
+                .map(|file| (*file, uv_discovery::MAX_CONFIG_BYTES)),
+        )
         .map(|(file, limit)| read_optional(root, file, limit).map(|bytes| (file, bytes)))
         .collect()
 }
 
+fn read_uv(inputs: &Inputs) -> Result<Option<UvRequirement>, StorageError> {
+    Ok(UvRequirement::read_with(|file, _| {
+        inputs
+            .get(file)
+            .cloned()
+            .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+    })?)
+}
+
 impl Snapshot {
-    /// No storage initialization, resolver, network, or binary execution.
+    /// Node and package-manager declarations only.
     pub fn capture(root: &Path) -> Result<Self, StorageError> {
+        Self::capture_with(root, Ecosystems::default())
+    }
+
+    /// No storage initialization, resolver, network, or binary execution.
+    /// Disabled ecosystems' files are neither read nor covered.
+    pub fn capture_with(root: &Path, ecosystems: Ecosystems) -> Result<Self, StorageError> {
         let root = root.canonicalize()?;
         let root_identity = Arc::new(same_file::Handle::from_path(&root)?);
         let bytes = read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?;
         let previous = bytes.as_deref().map(Lock::parse).transpose()?;
-        let captured = inputs(&root)?;
-        let native = probe_native_with(|file, _| {
+        let captured = inputs(&root, ecosystems)?;
+        let mut native = probe_native_with(|file, _| {
             captured
                 .get(file)
                 .cloned()
                 .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
         })?;
+        if ecosystems.python
+            && let Some(uv) = read_uv(&captured)?
+        {
+            native.insert("uv".into(), vec![uv.declaration()]);
+        }
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
         if same_file::Handle::from_path(&root)? != *root_identity
             || read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)? != bytes
-            || inputs(&root)? != captured
+            || inputs(&root, ecosystems)? != captured
         {
             return Err(StorageError::Conflict);
         }
@@ -79,6 +111,7 @@ impl Snapshot {
             previous,
             inputs: captured,
             native,
+            ecosystems,
         })
     }
 
@@ -87,6 +120,17 @@ impl Snapshot {
     }
     pub fn declarations(&self) -> &DeclarationMap {
         &self.native
+    }
+    pub fn ecosystems(&self) -> Ecosystems {
+        self.ecosystems
+    }
+
+    /// The root uv request from captured bytes; None when Python is disabled.
+    pub fn uv_requirement(&self) -> Result<Option<UvRequirement>, StorageError> {
+        if !self.ecosystems.python {
+            return Ok(None);
+        }
+        read_uv(&self.inputs)
     }
 
     /// Resolver inputs come from the captured bytes, never current disk state.
@@ -134,7 +178,7 @@ impl Snapshot {
         Ok(guard.matches_root(&self.root_identity)?
             && same_file::Handle::from_path(&self.root)? == *self.root_identity
             && guard.read_lock()? == self.bytes
-            && inputs(&self.root)? == self.inputs)
+            && inputs(&self.root, self.ecosystems)? == self.inputs)
     }
 
     /// Hold this writer guard through frozen preparation and inventory
@@ -156,7 +200,7 @@ impl Snapshot {
     pub fn ensure_current(&self) -> Result<(), StorageError> {
         if same_file::Handle::from_path(&self.root)? != *self.root_identity
             || read_optional(&self.root, LOCK_NAME, MAX_LOCK_BYTES)? != self.bytes
-            || inputs(&self.root)? != self.inputs
+            || inputs(&self.root, self.ecosystems)? != self.inputs
         {
             return Err(StorageError::Conflict);
         }
@@ -184,14 +228,20 @@ impl Snapshot {
     ) -> Result<(), StorageError> {
         // Only canonical native IDs and these fixed input files are covered.
         // Refuse to publish or silently remove aliases/extra sources.
+        let python = self.ecosystems.python;
+        let covered = |file: &str| {
+            SOURCES.iter().any(|(source, _)| file == *source)
+                || (python && uv_discovery::SOURCES.contains(&file))
+        };
         for lock in candidate.into_iter().chain(self.previous.as_ref()) {
             if lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
+                    || (tool.adapter == "uv" && !python)
                     || tool
                         .declarations
                         .iter()
-                        .any(|source| !SOURCES.iter().any(|(file, _)| source.file == *file))
+                        .any(|source| !covered(&source.file))
             }) {
                 return Err(Error::Invalid(
                     "snapshot CAS does not cover this tool identity or source",

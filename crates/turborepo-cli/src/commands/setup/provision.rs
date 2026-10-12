@@ -9,6 +9,8 @@ use turborepo_setup::{
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
     source_policy::OfficialSourcePolicy,
+    uv_provision::UvPlan,
+    uv_resolution::UvTransport,
 };
 use turborepo_tool_install::Store;
 
@@ -18,6 +20,7 @@ pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
+    pub uv: UvTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -25,6 +28,7 @@ impl Transports {
             node: NodeTransport::official(policy)?,
             pnpm: PnpmTransport::official(policy)?,
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
+            uv: UvTransport::official(policy)?,
         })
     }
 }
@@ -91,9 +95,12 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
 /// Read-only current-host selection, shared by frozen execution and checked
 /// publication. No storage, transports, probes or writes are initialized here.
 pub(super) struct Plans {
-    pub node: NodePlan,
+    pub node: Option<NodePlan>,
     pub pnpm: Option<PnpmPlan>,
+    pub uv: Option<UvPlan>,
 }
+
+const SUPPORTED: [&str; 3] = ["node", "pnpm", "uv"];
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -107,33 +114,58 @@ pub(super) fn plans(
     if lock
         .tools()
         .keys()
-        .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+        .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node and pnpm are supported",
+            "only managed Node, pnpm, and uv are supported",
         ));
     }
-    let node = NodePlan::from_lock(lock, platform)?;
-    let version = semver::Version::parse(&node.inventory_tool().version)
-        .map_err(|_| Error::Unsupported("invalid locked Node version"))?;
-    if !snapshot
-        .node_requirements()?
-        .matches_locked_version(&version)
-    {
-        return Err(Error::Unsupported(
-            "locked Node does not satisfy native declarations",
-        ));
-    }
+    let node = if lock.tools().contains_key("node") {
+        let node = NodePlan::from_lock(lock, platform)?;
+        let version = semver::Version::parse(&node.inventory_tool().version)
+            .map_err(|_| Error::Unsupported("invalid locked Node version"))?;
+        if !snapshot
+            .node_requirements()?
+            .matches_locked_version(&version)
+        {
+            return Err(Error::Unsupported(
+                "locked Node does not satisfy native declarations",
+            ));
+        }
+        Some(node)
+    } else {
+        None
+    };
     let manager = snapshot.package_manager()?;
     let pnpm = if let Some(manager) = manager {
         if manager.manager != Manager::Pnpm {
             return Err(Error::Unsupported("npm override provisioning"));
         }
-        Some(PnpmPlan::from_declaration(lock, platform, &node, &manager)?)
+        let node = node
+            .as_ref()
+            .ok_or(Error::Unsupported("a native Node declaration is required"))?;
+        Some(PnpmPlan::from_declaration(lock, platform, node, &manager)?)
     } else {
         None
     };
-    Ok(Plans { node, pnpm })
+    let uv = match snapshot.uv_requirement()? {
+        Some(requirement) => {
+            let plan = UvPlan::from_lock(lock, platform)?;
+            let version = semver::Version::parse(&plan.inventory_tool().version)
+                .map_err(|_| Error::Unsupported("invalid locked uv version"))?;
+            if !requirement.matches(&version) {
+                return Err(Error::Unsupported(
+                    "locked uv does not satisfy native declarations",
+                ));
+            }
+            Some(plan)
+        }
+        None => None,
+    };
+    if node.is_none() && uv.is_none() {
+        return Err(Error::Unsupported("turbo.lock selects no managed tools"));
+    }
+    Ok(Plans { node, pnpm, uv })
 }
 
 pub(super) fn lock_report(
@@ -187,8 +219,16 @@ pub(super) fn run(
     if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
         return Err(Error::Unsupported("npm override provisioning"));
     }
-    if write && !snapshot.declarations().contains_key("node") {
-        return Err(Error::Unsupported("a native Node declaration is required"));
+    let declared = snapshot.declarations();
+    let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
+    if write && !declared.contains_key("node") && (js_manager || !declared.contains_key("uv")) {
+        return Err(Error::Unsupported(
+            if snapshot.ecosystems().python && !js_manager {
+                "a native Node or uv declaration is required"
+            } else {
+                "a native Node declaration is required"
+            },
+        ));
     }
     // Ordinary setup validates matching pins before its no-op writer. Explicit
     // refresh may repair invalid native selections within this supported cohort;
@@ -198,10 +238,10 @@ pub(super) fn run(
             && lock
                 .tools()
                 .keys()
-                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+                .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node and pnpm are supported",
+                "only managed Node, pnpm, and uv are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -236,10 +276,11 @@ pub(super) fn run(
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
                 runtime
-                    .block_on(turborepo_setup::js_resolution::resolve(
+                    .block_on(turborepo_setup::native_resolution::resolve(
                         request,
                         &sources.node,
                         &sources.registry,
+                        &sources.uv,
                     ))
                     .map_err(|e| reconcile::Error::Resolution(e.to_string()))
             },
@@ -260,6 +301,15 @@ pub(super) fn run(
         transports = Some(sources);
         published
     } else {
+        // Frozen mode names stale declarations instead of a generic mismatch.
+        if lock_mode == super::LockMode::Frozen && snapshot.previous_lock().is_some() {
+            use turborepo_setup::lock::reconcile;
+            reconcile::reconcile(&snapshot, reconcile::Mode::Frozen, false, |_| {
+                Err(reconcile::Error::Resolution(
+                    "frozen setup never resolves".into(),
+                ))
+            })?;
+        }
         snapshot
     };
     let lock = snapshot
@@ -269,11 +319,16 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
-    let Plans { node, pnpm } = plans(&snapshot, lock)?;
-    let mut desired = vec![node.inventory_tool().clone()];
-    if let Some(pnpm) = &pnpm {
-        desired.push(pnpm.inventory_tool().clone());
-    }
+    let Plans { node, pnpm, uv } = plans(&snapshot, lock)?;
+    let desired: Vec<_> = [
+        node.as_ref().map(NodePlan::inventory_tool),
+        pnpm.as_ref().map(PnpmPlan::inventory_tool),
+        uv.as_ref().map(UvPlan::inventory_tool),
+    ]
+    .into_iter()
+    .flatten()
+    .cloned()
+    .collect();
     let policy = preflight()?;
     let transports = transports
         .map(Ok)
@@ -299,13 +354,21 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm) = runtime.block_on(async {
-        let node = node
-            .prepare(&store, &desired, &transports.node, preparation)
-            .await?;
-        preflight()?;
-        revalidate(discovery)?;
-        snapshot.check_guard(&guard)?;
+    let (prepared_node, prepared_pnpm, prepared_uv) = runtime.block_on(async {
+        let recheck = || {
+            preflight()?;
+            revalidate(discovery)?;
+            snapshot.check_guard(&guard)?;
+            Ok::<_, Error>(())
+        };
+        let node = match &node {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.node, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        recheck()?;
         let pnpm = match &pnpm {
             Some(plan) => {
                 plan.prepare(&store, &desired, &transports.pnpm, preparation)
@@ -313,20 +376,31 @@ pub(super) fn run(
             }
             None => None,
         };
-        Ok::<_, Error>((node, pnpm))
+        recheck()?;
+        let uv = match &uv {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.uv, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, pnpm, uv))
     })?;
-    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        if tool == node.inventory_tool() {
-            prepared_node
-                .as_ref()
-                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                .stage(tool, destination)
-        } else {
-            prepared_pnpm
-                .as_ref()
-                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                .stage(tool, destination)
-        }
+    let missing = || turborepo_tool_install::Error::InvalidInventory;
+    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| match tool.id.as_str() {
+        "node" => prepared_node
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "pnpm" => prepared_pnpm
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "uv" => prepared_uv
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        _ => Err(missing()),
     };
     let before_publish = || {
         storage(root).map_err(io::Error::other)?;
@@ -347,6 +421,7 @@ pub(super) fn run(
             tool.version,
             if (tool.id == "node" && prepared_node.is_none())
                 || (tool.id == "pnpm" && prepared_pnpm.is_none())
+                || (tool.id == "uv" && prepared_uv.is_none())
             {
                 "reused"
             } else {

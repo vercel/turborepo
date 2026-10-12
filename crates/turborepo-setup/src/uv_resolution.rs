@@ -103,6 +103,29 @@ pub fn resolve(
     Ok(tool)
 }
 
+/// Network-free checks for a preserved selection: the release still satisfies
+/// the request, and every recorded target is that release's official archive.
+pub fn validate(tool: &Tool, requirement: &UvRequirement) -> Result<(), Error> {
+    let invalid = || lock::Error::Invalid("locked uv contradicts its request or official layout");
+    let version = uv::exact_release(&tool.version).ok_or_else(invalid)?;
+    let Installation::Managed { artifacts } = &tool.installation else {
+        return Err(invalid().into());
+    };
+    if tool.adapter != "uv" || !tool.options.is_empty() || !requirement.matches(&version) {
+        return Err(invalid().into());
+    }
+    for (platform, parts) in artifacts {
+        let official = UvArtifact::for_platform(&version, *platform).ok_or_else(invalid)?;
+        match parts.get("distribution") {
+            Some(artifact)
+                if parts.len() == 1
+                    && *artifact == official.lock_artifact(artifact.sha256.clone()) => {}
+            _ => return Err(invalid().into()),
+        }
+    }
+    Ok(())
+}
+
 pub struct UvTransport {
     pub(crate) client: DownloadClient,
     // Test transport changes only the origin; lock provenance remains official.

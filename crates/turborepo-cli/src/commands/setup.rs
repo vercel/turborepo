@@ -55,6 +55,10 @@ pub enum Error {
     #[error(transparent)]
     Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
     #[error(transparent)]
+    Uv(#[from] turborepo_setup::uv_provision::Error),
+    #[error(transparent)]
+    UvResolution(#[from] turborepo_setup::uv_resolution::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -156,11 +160,17 @@ fn run_with_policy(
         return Err(Error::NotImplemented);
     }
     let eligible = discovery.source_eligibility();
-    if eligible.cargo() || eligible.python() || eligible.go() {
+    if eligible.cargo() || eligible.go() {
         return Err(Error::Unsupported("non-JavaScript workspace setup"));
     }
-    let snapshot =
-        turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
+    // Python declarations are captured only when experimentalPythonWorkspaces
+    // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
+    let snapshot = turborepo_setup::lock::Snapshot::capture_with(
+        discovery.snapshot_root()?.as_std_path(),
+        turborepo_setup::lock::Ecosystems {
+            python: eligible.python(),
+        },
+    )?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
         _ => provision::run(

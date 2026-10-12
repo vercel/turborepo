@@ -978,3 +978,42 @@ fn profiling_and_malformed_setup_tails_do_not_write() {
         }
     }
 }
+
+#[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(
+        root,
+        "turbo.json",
+        r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true}}"#,
+    );
+    write(
+        root,
+        "pyproject.toml",
+        "[tool.uv]\nrequired-version = \">=0.13\"\n[tool.uv.workspace]\nmembers = []\n",
+    );
+    let words = ["setup", "--frozen", "--tools-only"];
+    failure(root, &words, false, "frozen mode requires turbo.lock");
+    let artifact = r#"{"url":"https://releases.astral.sh/github/uv/releases/download/0.13.0/uv-x86_64-unknown-linux-gnu.tar.gz","sha256":"1468ebd5a5541121837c5a2817b9972ba6090fa6caa3d142620850a47fb75154","format":"tar-gz","rootPrefix":"uv-x86_64-unknown-linux-gnu","executables":{"uv":"uv","uvx":"uvx"}}"#;
+    write(
+        root,
+        "turbo.lock",
+        &format!(
+            r#"{{"schemaVersion":0,"tools":{{"uv":{{"adapter":"uv","version":"0.13.0","declarations":[{{"file":"pyproject.toml","field":"tool.uv.required-version","request":"==0.13.*"}}],"installation":{{"kind":"managed","artifacts":{{"linux-x64-gnu":{{"distribution":{artifact}}}}}}}}}}}}}"#
+        ),
+    );
+    // The changed declaration is named before any storage or network access.
+    for ci in [false, true] {
+        let words: &[&str] = if ci {
+            &["setup", "--tools-only"]
+        } else {
+            &words
+        };
+        failure(root, words, ci, r#"native declarations changed for {"uv"}"#);
+    }
+}

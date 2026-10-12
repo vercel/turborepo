@@ -31,6 +31,16 @@ pub(super) fn run(
     sources: Snapshot,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
+    // Activation readiness does not cover uv yet; never report it as ready.
+    if sources.uv_requirement()?.is_some()
+        || sources
+            .previous_lock()
+            .is_some_and(|lock| lock.tools().contains_key("uv"))
+    {
+        return Err(Error::Unsupported(
+            "uv readiness checks are not implemented; run turbo setup --tools-only",
+        ));
+    }
     let context = context()?;
     preflight()?;
     let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;
