@@ -98,6 +98,27 @@ pub struct RunTracker {
     user: Option<String>,
     synthesized_command: String,
     observability_handle: Option<ObservabilityHandle>,
+    scm_state: Option<ScmStatePrefetch>,
+}
+
+/// The run summary's SCM state, resolved in the background. See
+/// [`RunTracker::with_scm_state_prefetch`].
+#[derive(Debug)]
+pub struct ScmStatePrefetch(tokio::task::JoinHandle<SCMState>);
+
+impl ScmStatePrefetch {
+    /// Starts resolving [`SCMState`] (a git subprocess outside CI) on a
+    /// blocking thread. Only use this when nothing can move `HEAD` before the
+    /// summary is built, i.e. dry runs: a real run's summary reflects the
+    /// repository state after its tasks finished.
+    pub fn spawn(env_vars: &EnvironmentVariableMap, scm: &SCM, dir: &AbsoluteSystemPath) -> Self {
+        let env_vars = env_vars.clone();
+        let scm = scm.clone();
+        let dir = dir.to_owned();
+        Self(tokio::task::spawn_blocking(move || {
+            SCMState::get(&env_vars, &scm, &dir)
+        }))
+    }
 }
 
 impl RunTracker {
@@ -115,7 +136,15 @@ impl RunTracker {
             user,
             synthesized_command,
             observability_handle,
+            scm_state: None,
         }
+    }
+
+    /// Use an SCM state resolved ahead of time instead of resolving it when
+    /// the summary is built.
+    pub fn with_scm_state_prefetch(mut self, prefetch: Option<ScmStatePrefetch>) -> Self {
+        self.scm_state = prefetch;
+        self
     }
 
     #[expect(clippy::too_many_arguments)]
@@ -157,7 +186,13 @@ impl RunTracker {
 
         // Deferred to summary time so we don't pay the cost of git subprocess
         // calls (branch + sha) during the critical path of task execution.
-        let scm_state = SCMState::get(env_at_execution_start, scm, repo_root);
+        let scm_state = match self.scm_state {
+            Some(ScmStatePrefetch(handle)) => match handle.await {
+                Ok(state) => state,
+                Err(_) => SCMState::get(env_at_execution_start, scm, repo_root),
+            },
+            None => SCMState::get(env_at_execution_start, scm, repo_root),
+        };
 
         let summary_state = self.execution_tracker.finish().await?;
 
