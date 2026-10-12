@@ -88,7 +88,10 @@ fn records_are_owner_only_and_round_trip_with_the_path_spelling() {
             .to_string_lossy()
             .starts_with(r"\\?\")
     );
-    assert!(trust.path().starts_with(f.records()));
+    assert_eq!(
+        trust.path().parent(),
+        Some(&*f.records().canonicalize().unwrap())
+    );
     // Verified from the live security descriptors, not from path metadata.
     dacl::check(&dacl::open(&f.records(), true).unwrap()).unwrap();
     dacl::check(&dacl::open(&trust.path(), false).unwrap()).unwrap();
