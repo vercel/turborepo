@@ -686,8 +686,21 @@ fn npm_and_pnpm_wrapper_environments_reach_setup_but_custom_registries_do_not() 
         ("npm_config_node_gyp", at("pnpm/node-gyp.js")),
         ("npm_config_user_agent", "pnpm/11.0.0 node/v24.0.0".into()),
     ];
+    // `pnpm run` in pnpm 10 and earlier also exports default registries.
+    let pnpm10 = vec![
+        ("npm_config__jsr_registry", "https://npm.jsr.io/".into()),
+        ("npm_config_frozen_lockfile", "".into()),
+        ("npm_config_globalconfig", at("home/.config/pnpm/rc")),
+        ("npm_config_node_gyp", at("pnpm/node-gyp.js")),
+        ("npm_config_registry", "https://registry.npmjs.org/".into()),
+        (
+            "npm_config_user_agent",
+            "pnpm/10.34.7 npm/? node/v24.0.0".into(),
+        ),
+        ("npm_config_verify_deps_before_run", "false".into()),
+    ];
     let words = ["setup", "--check", "--tools-only"];
-    for env in [&npm, &pnpm] {
+    for env in [&npm, &pnpm, &pnpm10] {
         let (code, text) = invoke_with(root, &words, false, env);
         assert_eq!(code, 1, "{text}");
         assert!(

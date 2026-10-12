@@ -3,7 +3,7 @@
 //! before mutation. Recheck if discovery/environment changes before traffic.
 
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     fs,
     io::{self, Read},
     path::{Path, PathBuf},
@@ -62,7 +62,8 @@ impl OfficialSourcePolicy {
     /// Bundled npmrc is also rejected: it can redirect npm's effective prefix.
     /// Non-Unix hosts remain explicitly unqualified.
     /// NPM_CONFIG_* variables outside the wrapper allowlist, regardless of
-    /// spelling/value, are rejected before filesystem inspection. Reported
+    /// spelling/value, are rejected before filesystem inspection. Registry
+    /// keys pass only at their official defaults. Reported
     /// prefix/globalconfig/userconfig locations are inspected, never trusted.
     pub fn inspect(invocation: &Path, current_node: Option<&Path>) -> Result<Self, Error> {
         if !cfg!(unix) {
@@ -96,6 +97,7 @@ impl OfficialSourcePolicy {
 const WRAPPER_NPM_CONFIG: &[&str] = &[
     "cache",
     "call",
+    "frozen_lockfile",
     "init_module",
     "loglevel",
     "node_gyp",
@@ -103,8 +105,28 @@ const WRAPPER_NPM_CONFIG: &[&str] = &[
     "package",
     "script_shell",
     "user_agent",
+    "verify_deps_before_run",
     "yes",
 ];
+
+/// Registry keys that `pnpm run` (pnpm 10 and earlier) exports from its
+/// defaults, accepted only at exactly those official values. `_jsr_registry`
+/// is pnpm's `@jsr:registry`, which setup never uses.
+const WRAPPER_DEFAULT_REGISTRIES: &[(&str, &str)] = &[
+    ("registry", PUBLIC_NPM_REGISTRY),
+    ("_jsr_registry", "https://npm.jsr.io"),
+];
+
+/// Only scheme/host case and one trailing slash are normalized; any port,
+/// credential, path, query, or whitespace makes the value non-default.
+fn is_official_registry(value: &OsStr, official: &str) -> bool {
+    value.to_str().is_some_and(|value| {
+        value
+            .strip_suffix('/')
+            .unwrap_or(value)
+            .eq_ignore_ascii_case(official)
+    })
+}
 
 /// Rejects every source-changing environment variable and returns the npm
 /// configuration files that wrapper-reported locations point to. Callers must
@@ -124,7 +146,12 @@ fn environment_configs(env: &[(OsString, OsString)]) -> Result<Vec<(PathBuf, Con
             continue;
         };
         // npm exports an empty `noproxy` by default; any value is a proxy setting.
-        if WRAPPER_NPM_CONFIG.contains(&name.as_str()) || (name == "noproxy" && value.is_empty()) {
+        if WRAPPER_NPM_CONFIG.contains(&name.as_str())
+            || (name == "noproxy" && value.is_empty())
+            || WRAPPER_DEFAULT_REGISTRIES
+                .iter()
+                .any(|(key, official)| name == *key && is_official_registry(value, official))
+        {
             continue;
         }
         let location = Path::new(value);
@@ -133,7 +160,7 @@ fn environment_configs(env: &[(OsString, OsString)]) -> Result<Vec<(PathBuf, Con
         }
         paths.push(match name.as_str() {
             "userconfig" => (location.to_owned(), ConfigOwner::User),
-            "globalconfig" => (location.to_owned(), ConfigOwner::System),
+            "globalconfig" | "npm_globalconfig" => (location.to_owned(), ConfigOwner::System),
             "prefix" | "global_prefix" => (location.join("etc/npmrc"), ConfigOwner::Prefix),
             "local_prefix" => (location.join(".npmrc"), ConfigOwner::Repository),
             _ => return Err(Error::Environment),
