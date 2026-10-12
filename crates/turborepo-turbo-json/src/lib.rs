@@ -53,8 +53,8 @@ pub use raw::{
 };
 pub use setup::{
     ArtifactFormat, ArtifactPlatform, DependencyPolicy, LifecycleScripts, RawAdditionalTool,
-    RawAdditionalToolArtifact, RawSetupPolicy, RawToolchainSetupPolicy, SetupPolicy, ToolPolicy,
-    ToolchainSetupPolicy,
+    RawAdditionalToolArtifact, RawSetupMirrors, RawSetupPolicy, RawToolchainSetupPolicy,
+    SetupMirrors, SetupPolicy, ToolPolicy, ToolchainSetupPolicy,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 

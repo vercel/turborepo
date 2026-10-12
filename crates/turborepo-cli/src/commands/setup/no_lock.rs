@@ -60,9 +60,9 @@ pub(super) fn run(
     };
     check()?;
     let policy = preflight()?;
-    let sources = transports
-        .map(Ok)
-        .unwrap_or_else(|| provision::Transports::official(&policy))?;
+    let sources = transports.map(Ok).unwrap_or_else(|| {
+        provision::Transports::official(&policy, discovery.policy().mirrors())
+    })?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;

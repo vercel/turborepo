@@ -27,6 +27,7 @@ use turborepo_setup::{
     yarn_provision::YarnPlan,
 };
 use turborepo_tool_install::Store;
+use turborepo_turbo_json::SetupMirrors;
 
 use super::Error;
 
@@ -57,11 +58,13 @@ pub(super) struct Transports {
     pub artifact: Option<ArtifactTransport>,
 }
 impl Transports {
-    pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
+    /// Official sources, unless `TURBO_SETUP_*` variables or the root
+    /// `setup.mirrors` policy select a mirror, in that order.
+    pub fn official(policy: &OfficialSourcePolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
         // Verified archive bytes are shared through the user's cache directory;
         // extraction and activation stay in each repository's .turbo/tools.
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
-        Self::configured(policy, &Mirrors::from_env()?, cache)
+        Self::configured(policy, &Mirrors::configured(mirrors)?, cache)
     }
 
     pub fn configured(
@@ -77,6 +80,27 @@ impl Transports {
             Some(mirror) => NodeTransport::mirrored(policy, mirror)?,
             None => NodeTransport::official(policy)?,
         };
+        let bun = match &mirrors.bun {
+            Some(mirror) => BunTransport::mirrored(policy, mirror)?,
+            None => BunTransport::official(policy)?,
+        };
+        let uv = match &mirrors.uv {
+            Some(mirror) => UvTransport::mirrored(policy, mirror)?,
+            None => UvTransport::official(policy)?,
+        };
+        let python = match &mirrors.python {
+            Some(mirror) => PythonTransport::mirrored(policy, mirror)?,
+            None => PythonTransport::official(policy)?,
+        };
+        let go = match &mirrors.go {
+            Some(mirror) => GoTransport::mirrored(policy, mirror)?,
+            None => GoTransport::official(policy)?,
+        };
+        // Also the private rustup's distribution server.
+        let rustup = match &mirrors.rust {
+            Some(mirror) => RustupTransport::mirrored(policy, mirror)?,
+            None => RustupTransport::official(policy)?,
+        };
         Ok(Self {
             node: node.with_cache(cache.clone()),
             pnpm: registry()?.with_cache(cache.clone()),
@@ -84,11 +108,11 @@ impl Transports {
             #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
             cache,
-            rustup: RustupTransport::official(policy)?,
-            uv: UvTransport::official(policy)?,
-            python: PythonTransport::official(policy)?,
-            go: GoTransport::official(policy)?,
-            bun: BunTransport::official(policy)?,
+            rustup,
+            uv,
+            python,
+            go,
+            bun,
             // Otherwise built from the locked artifact origins.
             artifact: mirrors
                 .artifact
@@ -646,7 +670,7 @@ pub(super) fn run(
         let sources = transports
             .take()
             .map(Ok)
-            .unwrap_or_else(|| Transports::official(&policy))?;
+            .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -749,7 +773,7 @@ pub(super) fn run(
     let policy = preflight()?;
     let mut transports = transports
         .map(Ok)
-        .unwrap_or_else(|| Transports::official(&policy))?;
+        .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
     let artifact_transport = match transports.artifact.take() {
         Some(transport) => Some(transport),
         None if artifacts.is_empty() => None,
@@ -1016,7 +1040,7 @@ pub(super) fn run(
                 .tempdir_in(root.join(".turbo/tools"))?;
             let rustup =
                 rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
-            plan.prepare(&store, &desired, &rustup, preparation)?
+            plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?
         }
         _ => None,
     };

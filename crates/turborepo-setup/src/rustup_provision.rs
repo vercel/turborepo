@@ -52,7 +52,8 @@ pub enum Error {
 
 pub struct RustupTransport {
     client: DownloadClient,
-    // Test transport changes only the origin; lock provenance remains official.
+    // Mirror and test transports change only the origin; lock provenance
+    // remains official. The private rustup downloads from the same origin.
     origin: String,
 }
 
@@ -61,6 +62,19 @@ impl RustupTransport {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?,
             origin: ORIGIN.into(),
+        })
+    }
+
+    /// Send the official rustup and `dist` paths to a validated mirror base,
+    /// which also becomes the private rustup's `RUSTUP_DIST_SERVER`. No
+    /// redirect leaves its origin.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &crate::mirror::Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            origin: mirror.base().into(),
         })
     }
 
@@ -318,16 +332,19 @@ impl PrivateHomes {
         &self.cargo
     }
 
-    /// A rustup invocation confined to these homes and the official
-    /// distribution: caller home, toolchain and mirror overrides are replaced,
-    /// rustup never auto-installs or self-updates, and PATH is left untouched.
-    pub fn command(&self, rustup: &Path) -> Command {
+    /// A rustup invocation confined to these homes and the transport's
+    /// distribution, official or mirrored: caller home, toolchain and mirror
+    /// overrides are replaced, rustup never auto-installs or self-updates, and
+    /// PATH is left untouched. rustup checks every component against the
+    /// channel manifest; callers bind its `.tar.gz` entries to `turbo.lock`.
+    pub fn command(&self, rustup: &Path, transport: &RustupTransport) -> Command {
+        let origin = &transport.origin;
         let mut command = Command::new(rustup);
         command
             .env("RUSTUP_HOME", &self.rustup)
             .env("CARGO_HOME", &self.cargo)
-            .env("RUSTUP_DIST_SERVER", ORIGIN)
-            .env("RUSTUP_UPDATE_ROOT", format!("{ORIGIN}/rustup"))
+            .env("RUSTUP_DIST_SERVER", origin)
+            .env("RUSTUP_UPDATE_ROOT", format!("{origin}/rustup"))
             .env("RUSTUP_AUTO_INSTALL", "0")
             .env_remove("RUSTUP_TOOLCHAIN")
             .env_remove("RUSTUP_DIST_ROOT");

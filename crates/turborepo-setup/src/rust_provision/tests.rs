@@ -44,10 +44,11 @@ fn rustup(dir: &Path, components: &[&str], manifest: &str, status: i32) -> PathB
     let copy = dir.join("manifest.toml");
     fs::write(&copy, manifest).unwrap();
     let script = format!(
-        "#!/bin/sh\nprintf '%s|%s|%s\\n' \"$*\" \"$RUSTUP_HOME\" \"$CARGO_HOME\" >> '{log}'\n[ \
-         {status} = 0 ] || exit {status}\ntc=\"$RUSTUP_HOME/toolchains/$3-{HOST}\"\nmkdir -p \
-         \"$tc/bin\" \"$tc/lib/rustlib\"\nfor exe in cargo cargo-clippy clippy-driver rustc \
-         rustdoc; do\nprintf '#!/bin/sh\\necho %s\\n' \"$exe\" > \"$tc/bin/$exe\"; chmod 755 \
+        "#!/bin/sh\nprintf '%s|%s|%s|%s|%s\\n' \"$*\" \"$RUSTUP_HOME\" \"$CARGO_HOME\" \
+         \"$RUSTUP_DIST_SERVER\" \"$RUSTUP_UPDATE_ROOT\" >> '{log}'\n[ {status} = 0 ] || exit \
+         {status}\ntc=\"$RUSTUP_HOME/toolchains/$3-{HOST}\"\nmkdir -p \"$tc/bin\" \
+         \"$tc/lib/rustlib\"\nfor exe in cargo cargo-clippy clippy-driver rustc rustdoc; \
+         do\nprintf '#!/bin/sh\\necho %s\\n' \"$exe\" > \"$tc/bin/$exe\"; chmod 755 \
          \"$tc/bin/$exe\"\ndone\nprintf '{lines}\\n' > \"$tc/lib/rustlib/components\"\ncp \
          '{copy}' \"$tc/lib/rustlib/multirust-channel-manifest.toml\"\nprintf 'version = \
          \"12\"\\n' > \"$RUSTUP_HOME/settings.toml\"\n",
@@ -59,6 +60,11 @@ fn rustup(dir: &Path, components: &[&str], manifest: &str, status: i32) -> PathB
     fs::write(&path, script).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
     path
+}
+
+fn official() -> RustupTransport {
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
+    RustupTransport::official(&fixture.policy().unwrap()).unwrap()
 }
 
 fn calls(dir: &Path) -> Vec<String> {
@@ -81,16 +87,22 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         0,
     );
     let mut store = Store::open(repo.path()).unwrap();
+    let transport = official();
     let prepared = plan
-        .prepare(&store, &desired, &binary, IfNeeded)
+        .prepare(&store, &desired, &binary, &transport, IfNeeded)
         .unwrap()
         .unwrap();
     let [call] = calls(fixtures.path()).try_into().unwrap();
-    let [args, rustup_home, cargo_home] = call.split('|').collect::<Vec<_>>().try_into().unwrap();
+    let [args, rustup_home, cargo_home, dist, update] =
+        call.split('|').collect::<Vec<_>>().try_into().unwrap();
     assert_eq!(
         args,
         "toolchain install 1.99.0 --no-self-update --profile minimal --component clippy --target \
          wasm32-unknown-unknown"
+    );
+    assert_eq!(
+        (dist, update),
+        (rustup::ORIGIN, "https://static.rust-lang.org/rustup")
     );
     // Both homes are fresh and private beside the Store, never the caller's.
     let tools = repo.path().canonicalize().unwrap().join(".turbo/tools");
@@ -126,17 +138,43 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
     assert_eq!(leftovers.count(), 0);
 
     assert!(
-        plan.prepare(&store, &desired, &binary, IfNeeded)
+        plan.prepare(&store, &desired, &binary, &transport, IfNeeded)
             .unwrap()
             .is_none()
     );
     assert_eq!(calls(fixtures.path()).len(), 1);
     assert!(
-        plan.prepare(&store, &desired, &binary, Fresh)
+        plan.prepare(&store, &desired, &binary, &transport, Fresh)
             .unwrap()
             .is_some()
     );
     assert_eq!(calls(fixtures.path()).len(), 2);
+}
+
+/// A mirror changes only where the private rustup downloads from. The
+/// manifest rustup verified its components against must still carry the
+/// locked official URLs and digests.
+#[test]
+fn mirrored_installs_still_bind_rustups_manifest_to_the_lock() {
+    let repo = tempfile::tempdir().unwrap();
+    let plan = RustPlan::from_lock(&lock(locked()), TARGET).unwrap();
+    let desired = vec![plan.inventory_tool().clone()];
+    let store = Store::open(repo.path()).unwrap();
+    let owned = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
+    let mirror = crate::mirror::Mirror::loopback_for_tests("http://127.0.0.1:9/rust/").unwrap();
+    let transport = RustupTransport::mirrored(&owned.policy().unwrap(), &mirror).unwrap();
+    let manifest = fixture("1.99.0", "2026-10-01");
+    let rewritten = manifest.replace(rustup::ORIGIN, "http://127.0.0.1:9/rust");
+    for (manifest, verified) in [(manifest, true), (rewritten, false)] {
+        let fixtures = tempfile::tempdir().unwrap();
+        let binary = rustup(fixtures.path(), &COMPONENTS, &manifest, 0);
+        let result = plan.prepare(&store, &desired, &binary, &transport, IfNeeded);
+        assert_eq!(result.is_ok(), verified);
+        assert!(verified || matches!(result, Err(Error::Mismatch)));
+        let [call] = calls(fixtures.path()).try_into().unwrap();
+        let mirrored = "|http://127.0.0.1:9/rust|http://127.0.0.1:9/rust/rustup";
+        assert!(call.ends_with(mirrored), "{call}");
+    }
 }
 
 #[test]
@@ -159,7 +197,7 @@ fn failed_or_mismatched_installs_publish_nothing() {
     ] {
         let fixtures = tempfile::tempdir().unwrap();
         let binary = rustup(fixtures.path(), components, manifest, status);
-        let result = plan.prepare(&store, &desired, &binary, IfNeeded);
+        let result = plan.prepare(&store, &desired, &binary, &official(), IfNeeded);
         assert!(
             matches!(result, Err(Error::Rustup(_) | Error::Mismatch)),
             "{components:?}"

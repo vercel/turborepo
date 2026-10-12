@@ -37,7 +37,7 @@ You can run `turbo setup` from any directory in your repository. It walks up to 
 - macOS or Linux with glibc, on x64 or arm64.
 - In a Git repository, `.turbo/` must be ignored and untracked. Add `/.turbo/` to your `.gitignore`. Outside a Git repository, such as in [`turbo prune --docker` output](/docs/guides/tools/docker#managed-toolchains), `turbo setup` skips this check.
 - A Node.js declaration at the repository root.
-- No npm configuration or mirror overrides. See [troubleshooting](#official-only-setup-rejects-npm-configuration).
+- No npm configuration. Configure download mirrors with [`setup.mirrors`](/docs/reference/setup-policy#mirrors) instead. See [troubleshooting](#official-only-setup-rejects-npm-configuration).
 
 ## Supported declarations
 
@@ -230,12 +230,12 @@ Add `/.turbo/` to your root `.gitignore`. If files under `.turbo/` are tracked, 
 official-only setup rejects npm configuration environment overrides; remove them before retrying
 ```
 
-In this release, `turbo setup` only downloads from `nodejs.org` and the public npm registry. To guarantee that, it stops if anything could redirect those downloads:
+`turbo setup` only downloads from `nodejs.org` and the public npm registry, or from the [mirrors](/docs/reference/setup-policy#mirrors) you configure for it. To guarantee that, it stops if anything else could redirect those downloads:
 
 - Any `NPM_CONFIG_*` environment variable, or `COREPACK_NPM_REGISTRY`, `NODEJS_ORG_MIRROR`, `NVM_NODEJS_ORG_MIRROR`, or `DESTDIR`.
 - Any `.npmrc` file, even an empty one, in your home directory, in the current directory, or in any of its parents.
 - A system npm configuration, such as `/etc/npmrc`.
-- A `setup` key in a `turbo.json` or `turbo.jsonc` in the current directory or any of its parents.
+- A `setup` key that `turbo setup` doesn't apply, such as an empty `"setup": {}`, in a `turbo.json` or `turbo.jsonc` in the current directory or any of its parents.
 
 Remove them for the `turbo setup` invocation, then retry. `turbo run` isn't affected.
 
