@@ -50,6 +50,7 @@ console = { workspace = true }
 dhat = { workspace = true, optional = true }
 dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
 dirs-next = "2.0.0"
+dunce = { workspace = true }
 futures = { workspace = true }
 go-parse-duration = "0.1.1"
 humantime = "2.1.0"
@@ -123,5 +124,8 @@ which = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
   "Win32_System_Threading",
 ] }

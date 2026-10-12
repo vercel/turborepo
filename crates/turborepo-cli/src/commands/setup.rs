@@ -14,6 +14,8 @@ use crate::cli::{Args, SetupArgs};
 mod acl;
 pub(crate) mod authorization;
 mod check;
+#[cfg(windows)]
+mod dacl;
 mod lock_diagnostics;
 mod no_lock;
 mod offline;
