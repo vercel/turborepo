@@ -16,7 +16,14 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 3] = ["node", "npm", "pnpm"];
+const NATIVE: [&str; 4] = ["node", "npm", "pnpm", "go"];
+
+/// Non-JavaScript declarations the caller's workspace flags allow. Disabled
+/// ecosystems' files are neither read nor captured.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ecosystems {
+    pub go: bool,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -26,6 +33,8 @@ pub enum StorageError {
     Io(#[from] io::Error),
     #[error("invalid native setup declarations")]
     Declarations,
+    #[error(transparent)]
+    Go(#[from] crate::go_discovery::GoDiscoveryError),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }
@@ -142,12 +151,20 @@ fn read_optional(root: &Path, name: &str, limit: usize) -> io::Result<Option<Vec
 /// Read only. No lock sidecar, resolver, release metadata, or installation.
 /// Capture package.json once so both adapters see the same manifest snapshot.
 pub fn probe_native(root: &Path) -> Result<DeclarationMap, StorageError> {
+    probe_native_for(root, Ecosystems::default())
+}
+
+pub fn probe_native_for(
+    root: &Path,
+    ecosystems: Ecosystems,
+) -> Result<DeclarationMap, StorageError> {
     let root = root.canonicalize()?;
-    probe_native_with(|file, limit| read_optional(&root, file, limit))
+    probe_native_with(|file, limit| read_optional(&root, file, limit), ecosystems)
 }
 
 fn probe_native_with(
     mut read: impl FnMut(&'static str, usize) -> io::Result<Option<Vec<u8>>>,
+    ecosystems: Ecosystems,
 ) -> Result<DeclarationMap, StorageError> {
     let manifest = read("package.json", crate::node_discovery::MAX_MANIFEST_BYTES)?
         .map(String::from_utf8)
@@ -221,6 +238,16 @@ fn probe_native_with(
             declarations(&sources)?;
             result.insert(name.into(), sources);
         }
+    }
+    if ecosystems.go
+        && let Some(go) = crate::go_discovery::GoRequirements::read_with(&mut read)?
+    {
+        let sources = go.sources().iter().map(|source| Declaration {
+            file: source.file.into(),
+            field: Some(source.field.into()),
+            request: source.request.clone(),
+        });
+        result.insert("go".into(), sources.collect());
     }
     for values in result.values_mut() {
         declarations(values)?;

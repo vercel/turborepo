@@ -4,6 +4,8 @@ use sha2::Sha512;
 use super::*;
 
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
+#[path = "go_tests.rs"]
+mod go;
 #[path = "refresh.rs"]
 mod refresh;
 #[test]
@@ -250,6 +252,7 @@ fn dispatch(
         node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
     }), || {
         hook();
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)

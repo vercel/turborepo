@@ -278,7 +278,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             &words,
             false,
             if supported {
-                "non-JavaScript workspace setup"
+                "Cargo and Python workspace setup"
             } else {
                 PENDING
             },
@@ -292,7 +292,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         root,
         &["setup", "--check", "--tools-only"],
         false,
-        "non-JavaScript workspace setup",
+        "Cargo and Python workspace setup",
     );
     let text = failure(root, &["setup", "--update-lock"], true, "inferred in CI");
     assert!(text.contains("--no-frozen"), "{text}");

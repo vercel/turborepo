@@ -55,6 +55,10 @@ pub enum Error {
     #[error(transparent)]
     Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
     #[error(transparent)]
+    Go(#[from] turborepo_setup::go_provision::Error),
+    #[error(transparent)]
+    GoResolution(#[from] turborepo_setup::go_resolution::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -156,11 +160,13 @@ fn run_with_policy(
         return Err(Error::NotImplemented);
     }
     let eligible = discovery.source_eligibility();
-    if eligible.cargo() || eligible.python() || eligible.go() {
-        return Err(Error::Unsupported("non-JavaScript workspace setup"));
+    if eligible.cargo() || eligible.python() {
+        return Err(Error::Unsupported("Cargo and Python workspace setup"));
     }
-    let snapshot =
-        turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
+    let snapshot = turborepo_setup::lock::Snapshot::capture_with(
+        discovery.snapshot_root()?.as_std_path(),
+        turborepo_setup::lock::Ecosystems { go: eligible.go() },
+    )?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
         _ => provision::run(

@@ -128,6 +128,10 @@ impl Fixture {
                         upstream.origin(),
                     )
                     .unwrap(),
+                    go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    )
+                    .unwrap(),
                 }),
                 || {
                     Ok(self

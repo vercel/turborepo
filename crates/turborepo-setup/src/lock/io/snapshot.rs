@@ -6,15 +6,17 @@ use std::{
 };
 
 use super::{
-    DeclarationMap, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, NATIVE, StorageError, WriteOutcome,
-    WriterStorage, probe_native_with, read_optional,
+    DeclarationMap, Ecosystems, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, NATIVE, StorageError,
+    WriteOutcome, WriterStorage, probe_native_with, read_optional,
 };
+use crate::go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT};
 
 const SOURCES: [(&str, usize); 3] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),
     (".nvmrc", crate::version_request::MAX_REQUEST_BYTES),
     (".node-version", crate::version_request::MAX_REQUEST_BYTES),
 ];
+const GO_SOURCES: [(&str, usize); 2] = [(GO_WORK, GO_LIMIT), (GO_MOD, GO_LIMIT)];
 type Inputs = BTreeMap<&'static str, Option<Vec<u8>>>;
 
 /// Read-only expected state for an explicit native resolver transaction.
@@ -28,6 +30,7 @@ pub struct Snapshot {
     previous: Option<Lock>,
     inputs: Inputs,
     native: DeclarationMap,
+    ecosystems: Ecosystems,
 }
 
 // Raw manifests may contain unrelated secrets. Never print snapshot contents.
@@ -37,9 +40,10 @@ impl fmt::Debug for Snapshot {
     }
 }
 
-fn inputs(root: &Path) -> io::Result<Inputs> {
+fn inputs(root: &Path, ecosystems: Ecosystems) -> io::Result<Inputs> {
     SOURCES
         .into_iter()
+        .chain(GO_SOURCES.into_iter().filter(|_| ecosystems.go))
         // Preserve flags/policy and inactive declarations without interpreting
         // config or enabling an adapter. Presence changes also invalidate CAS.
         .chain(
@@ -53,22 +57,30 @@ fn inputs(root: &Path) -> io::Result<Inputs> {
 impl Snapshot {
     /// No storage initialization, resolver, network, or binary execution.
     pub fn capture(root: &Path) -> Result<Self, StorageError> {
+        Self::capture_with(root, Ecosystems::default())
+    }
+
+    /// Also captures declarations of the flag-enabled `ecosystems`.
+    pub fn capture_with(root: &Path, ecosystems: Ecosystems) -> Result<Self, StorageError> {
         let root = root.canonicalize()?;
         let root_identity = Arc::new(same_file::Handle::from_path(&root)?);
         let bytes = read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?;
         let previous = bytes.as_deref().map(Lock::parse).transpose()?;
-        let captured = inputs(&root)?;
-        let native = probe_native_with(|file, _| {
-            captured
-                .get(file)
-                .cloned()
-                .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
-        })?;
+        let captured = inputs(&root, ecosystems)?;
+        let native = probe_native_with(
+            |file, _| {
+                captured
+                    .get(file)
+                    .cloned()
+                    .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+            },
+            ecosystems,
+        )?;
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
         if same_file::Handle::from_path(&root)? != *root_identity
             || read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)? != bytes
-            || inputs(&root)? != captured
+            || inputs(&root, ecosystems)? != captured
         {
             return Err(StorageError::Conflict);
         }
@@ -79,6 +91,7 @@ impl Snapshot {
             previous,
             inputs: captured,
             native,
+            ecosystems,
         })
     }
 
@@ -105,6 +118,19 @@ impl Snapshot {
                 .map_err(|error| crate::NodeDiscoveryError::Read(file, error))
         })
         .map_err(|_| StorageError::Declarations)
+    }
+
+    /// Go requirements from the captured bytes; None when Go is disabled.
+    pub fn go_requirements(&self) -> Result<Option<GoRequirements>, StorageError> {
+        if !self.ecosystems.go {
+            return Ok(None);
+        }
+        Ok(GoRequirements::read_with(|file, _| {
+            self.inputs
+                .get(file)
+                .cloned()
+                .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+        })?)
     }
 
     pub fn package_manager(
@@ -134,7 +160,7 @@ impl Snapshot {
         Ok(guard.matches_root(&self.root_identity)?
             && same_file::Handle::from_path(&self.root)? == *self.root_identity
             && guard.read_lock()? == self.bytes
-            && inputs(&self.root)? == self.inputs)
+            && inputs(&self.root, self.ecosystems)? == self.inputs)
     }
 
     /// Hold this writer guard through frozen preparation and inventory
@@ -156,7 +182,7 @@ impl Snapshot {
     pub fn ensure_current(&self) -> Result<(), StorageError> {
         if same_file::Handle::from_path(&self.root)? != *self.root_identity
             || read_optional(&self.root, LOCK_NAME, MAX_LOCK_BYTES)? != self.bytes
-            || inputs(&self.root)? != self.inputs
+            || inputs(&self.root, self.ecosystems)? != self.inputs
         {
             return Err(StorageError::Conflict);
         }
@@ -188,10 +214,12 @@ impl Snapshot {
             if lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
-                    || tool
-                        .declarations
-                        .iter()
-                        .any(|source| !SOURCES.iter().any(|(file, _)| source.file == *file))
+                    || tool.declarations.iter().any(|source| {
+                        !SOURCES
+                            .iter()
+                            .chain(&GO_SOURCES)
+                            .any(|(file, _)| source.file == *file)
+                    })
             }) {
                 return Err(Error::Invalid(
                     "snapshot CAS does not cover this tool identity or source",

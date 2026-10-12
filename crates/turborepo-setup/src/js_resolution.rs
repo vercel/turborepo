@@ -11,6 +11,8 @@ use crate::{
     registry_resolution::RegistryTransport,
 };
 
+const JS: [&str; 3] = ["node", "npm", "pnpm"];
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
@@ -121,11 +123,18 @@ pub async fn resolve(
         ));
     }
     let requirements = snapshot.node_requirements()?;
+    // Other ecosystems compose their own selections onto this JS cohort.
+    let js: lock::DeclarationMap = snapshot
+        .declarations()
+        .iter()
+        .filter(|(id, _)| JS.contains(&id.as_str()))
+        .map(|(id, values)| (id.clone(), values.clone()))
+        .collect();
     let mut tools: BTreeMap<_, _> = snapshot
         .previous_lock()
         .into_iter()
         .flat_map(Lock::tools)
-        .filter(|(id, _)| snapshot.declarations().contains_key(*id))
+        .filter(|(id, _)| js.contains_key(*id))
         .map(|(id, tool)| (id.clone(), tool.clone()))
         .collect();
     if !request.version_ids().contains("node") {
@@ -188,7 +197,7 @@ pub async fn resolve(
     })?;
     // Preserved payloads passed preflight; new payloads come from validated
     // adapter resolutions, with native byte-specific integrity checked above.
-    if !candidate.matches_native(snapshot.declarations())? {
+    if !candidate.matches_native(&js)? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",
         ));
