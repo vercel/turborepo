@@ -329,7 +329,7 @@ fn run_reporting(
     } else {
         turborepo_setup::lock::reconcile::Mode::Local
     };
-    let provisioned = match (request.mode, javascript) {
+    let provisioned = match (&request.mode, javascript) {
         (Mode::Check, ToolPolicy::VerifySystem) => {
             return verify_system::check(&discovery, snapshot);
         }
