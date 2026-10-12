@@ -177,8 +177,15 @@ impl Listing {
                     url.strip_prefix(&format!("{ORIGIN}{RELEASES}"))
                         .or_else(|| url.strip_prefix(GITHUB))
                 })
-                .filter(|path| official_path(path))
                 .ok_or(Error::Listing)?;
+            if !official_path(path) {
+                // uv lists some older builds only as full `.tar.zst` archives,
+                // which setup cannot install; skip them, reject anything else.
+                if path.ends_with(".tar.zst") {
+                    continue;
+                }
+                return Err(Error::Listing);
+            }
             if field("key") != Some(key.as_str()) {
                 return Err(Error::Listing);
             }
