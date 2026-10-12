@@ -480,6 +480,8 @@ fn homebrew_bundled_prefix_is_allowed_only_while_its_global_config_is_inspected(
         check(None).err(),
         Some(Error::Configured(ConfigOwner::User))
     );
+    Ok(())
+}
 
 #[cfg(windows)]
 #[test]
