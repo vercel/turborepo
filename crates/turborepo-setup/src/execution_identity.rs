@@ -188,7 +188,16 @@ impl ExecutionSnapshot {
             let tool = lock.tools().get(id).ok_or(Error::MissingTool)?;
             if !matches!(
                 tool.adapter.as_str(),
-                "node" | "npm" | "pnpm" | "yarn" | "bun" | "rust" | "rustup" | "uv" | "python" | "go"
+                "node"
+                    | "npm"
+                    | "pnpm"
+                    | "yarn"
+                    | "bun"
+                    | "rust"
+                    | "rustup"
+                    | "uv"
+                    | "python"
+                    | "go"
             ) {
                 return Err(Error::UnsupportedAdapter);
             }
