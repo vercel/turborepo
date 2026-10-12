@@ -784,7 +784,13 @@ impl Store {
             }
             // Stamp before hashing: a change while hashing can only leave a
             // stale stamp, never one vouching for bytes that were not hashed.
-            let stat_sha256 = tree_digest(&tree, TreeDigest::Stat)?;
+            // Stat stamps (#14653) are Unix-only; other platforms (#14584,
+            // #14591) publish none, so stamped checks hash in full there.
+            let stat_sha256 = if cfg!(unix) {
+                Some(tree_digest(&tree, TreeDigest::Stat)?)
+            } else {
+                None
+            };
             let tree_sha256 = tree_hash(&tree)?;
             // A stamped health check did not re-read the reused source tree.
             if reused.is_some_and(|(_, entry)| entry.tree_sha256 != tree_sha256) {
@@ -794,13 +800,15 @@ impl Store {
             for (name, path) in &tool.executables {
                 make_shim(&tree, &bin, &tool.id, name, path)?;
             }
-            stamps.tools.insert(
-                tool.id.clone(),
-                Stamp {
-                    tree_sha256: tree_sha256.clone(),
-                    stat_sha256,
-                },
-            );
+            if let Some(stat_sha256) = stat_sha256 {
+                stamps.tools.insert(
+                    tool.id.clone(),
+                    Stamp {
+                        tree_sha256: tree_sha256.clone(),
+                        stat_sha256,
+                    },
+                );
+            }
             installed.push(Installed { tool, tree_sha256 });
         }
         if let Some((record, _)) = recorded {
