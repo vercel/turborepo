@@ -116,9 +116,13 @@ impl Plan {
     }
 
     /// Eligible toolchains without a setup adapter yet, unless skipped.
+    /// JavaScript has managed and verify-system adapters; Rust only managed.
     pub fn unsupported(&self) -> bool {
-        self.0.iter().any(|toolchain| {
-            toolchain.id != ToolchainId::JAVASCRIPT && toolchain.tools.0 != ToolPolicy::Skip
+        self.0.iter().any(|toolchain| match toolchain.tools.0 {
+            ToolPolicy::Skip => false,
+            _ if toolchain.id == ToolchainId::JAVASCRIPT => false,
+            ToolPolicy::Managed => toolchain.id != ToolchainId::RUST,
+            ToolPolicy::VerifySystem => true,
         })
     }
 
@@ -153,7 +157,8 @@ mod tests {
     #[test]
     fn cli_overrides_policy_which_overrides_inference() {
         let inferred = plan("{}", false);
-        assert!(!inferred.tools_only() && inferred.unsupported());
+        // Inferred (managed) Rust has a setup adapter.
+        assert!(!inferred.tools_only() && !inferred.unsupported());
         let javascript = inferred.toolchain(&ToolchainId::JAVASCRIPT).unwrap();
         assert_eq!(javascript.tools, (ToolPolicy::Managed, Source::Inferred));
         assert_eq!(
