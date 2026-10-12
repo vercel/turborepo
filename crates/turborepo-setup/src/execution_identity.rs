@@ -8,7 +8,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use turborepo_platform::{Architecture, OperatingSystem, Platform as HostPlatform};
 
-use crate::lock::{Artifact, Format, Installation, Lock, Platform};
+use crate::lock::{Artifact, Format, Installation, Lock, Platform, additional};
 
 pub const IDENTITY_DOMAIN: &str = "turborepo.setup.execution.v1";
 
@@ -186,7 +186,12 @@ impl ExecutionSnapshot {
         let mut tools = BTreeMap::new();
         for id in selected_ids {
             let tool = lock.tools().get(id).ok_or(Error::MissingTool)?;
-            if !matches!(tool.adapter.as_str(), "node" | "npm" | "pnpm") {
+            // Additional tools share the managed projection: artifact digest,
+            // format, layout and executables, never the source URL.
+            if !matches!(
+                tool.adapter.as_str(),
+                "node" | "npm" | "pnpm" | additional::ADAPTER
+            ) {
                 return Err(Error::UnsupportedAdapter);
             }
             let installation = match &tool.installation {
