@@ -10,7 +10,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     path::{Path, PathBuf},
-    process::ExitStatus,
 };
 
 use semver::Version;
@@ -20,6 +19,7 @@ use turborepo_setup::{
     js_install::{self, Frozen},
     lifecycle::{self, Installer, Policy},
     lock::{Ecosystems, Lock, Snapshot},
+    uv_sync::{self, Builds, UvSync},
 };
 use turborepo_turbo_json::{DependencyPolicy, ToolPolicy};
 
@@ -46,6 +46,8 @@ pub enum Error {
     #[error(transparent)]
     Lifecycle(#[from] lifecycle::Error),
     #[error(transparent)]
+    Uv(#[from] uv_sync::Error),
+    #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
     #[error(transparent)]
     Sources(#[from] turborepo_setup::lock::StorageError),
@@ -66,6 +68,8 @@ enum Adapter {
         lockfile: &'static str,
         lifecycle: lifecycle::Request,
     },
+    /// `uv sync --locked`; skipping lifecycle scripts refuses source builds.
+    Uv { lifecycle: lifecycle::Request },
 }
 
 /// One installer invocation for the locked versions.
@@ -77,31 +81,61 @@ struct Run {
     policy: Policy,
 }
 
+fn uv_sync<'a>(
+    uv: &'a Path,
+    root: &'a Path,
+    builds: Builds,
+    env: &'a BTreeMap<String, OsString>,
+) -> UvSync<'a> {
+    UvSync {
+        uv,
+        root,
+        offline: false,
+        builds,
+        env,
+    }
+}
+
 impl Adapter {
     fn lockfile(&self) -> &'static str {
         match self {
             Self::Javascript { lockfile, .. } => lockfile,
+            Self::Uv { .. } => "uv.lock",
         }
     }
 
     /// Reads committed lifecycle settings; runs nothing.
     fn run(&self, root: &Path, lock: &Lock) -> Result<Run, Error> {
-        let Self::Javascript {
-            frozen, lifecycle, ..
-        } = self;
-        let id = frozen.program();
-        let version = lock
-            .tools()
-            .get(id)
-            .and_then(|tool| Version::parse(&tool.version).ok())
-            .ok_or(Error::Unlocked(id))?;
-        let installer =
-            Installer::javascript(frozen.manager(), version.clone()).ok_or(Error::Unlocked(id))?;
-        let policy = Policy::evaluate(root, installer.clone(), *lifecycle)?;
-        let command = std::iter::once(id)
-            .chain(frozen.args(&version).iter().copied())
-            .chain(policy.args().iter().copied())
-            .collect();
+        let (installer, lifecycle, mut command): (_, _, Vec<_>) = match self {
+            Self::Javascript {
+                frozen, lifecycle, ..
+            } => {
+                let id = frozen.program();
+                let version = lock
+                    .tools()
+                    .get(id)
+                    .and_then(|tool| Version::parse(&tool.version).ok())
+                    .ok_or(Error::Unlocked(id))?;
+                let installer = Installer::javascript(frozen.manager(), version.clone())
+                    .ok_or(Error::Unlocked(id))?;
+                let args = frozen.args(&version).iter().copied();
+                (
+                    installer,
+                    *lifecycle,
+                    std::iter::once(id).chain(args).collect(),
+                )
+            }
+            Self::Uv { lifecycle } => {
+                let sync = uv_sync(Path::new("uv"), root, Builds::Native, &BTreeMap::new()).args();
+                (
+                    Installer::Uv,
+                    *lifecycle,
+                    std::iter::once("uv").chain(sync).collect(),
+                )
+            }
+        };
+        let policy = Policy::evaluate(root, installer.clone(), lifecycle)?;
+        command.extend(policy.args().iter().copied());
         Ok(Run {
             command,
             installer,
@@ -109,10 +143,27 @@ impl Adapter {
         })
     }
 
-    fn execute(&self, run: &Run, root: &Path, env: &Environment) -> Result<ExitStatus, Error> {
-        let Self::Javascript { frozen, .. } = self;
-        let program = env.program(frozen.program())?;
-        Ok(frozen.run(&program, &run.command[1..], root, &env.vars)?)
+    /// `None` when the installer succeeded, else its exit status.
+    fn execute(&self, run: &Run, root: &Path, env: &Environment) -> Result<Option<i32>, Error> {
+        match self {
+            Self::Javascript { frozen, .. } => {
+                let program = env.program(frozen.program())?;
+                let status = frozen.run(&program, &run.command[1..], root, &env.vars)?;
+                Ok((!status.success()).then(|| crate::commands::exec::exit_code(status)))
+            }
+            Self::Uv { .. } => {
+                let uv = env.program("uv")?;
+                let builds = match run.policy.args() {
+                    [] => Builds::Native,
+                    _ => Builds::Skip,
+                };
+                match uv_sync(&uv, root, builds, &env.vars).run() {
+                    Ok(()) => Ok(None),
+                    Err(uv_sync::Error::Failed(code)) => Ok(Some(code)),
+                    Err(error) => Err(error.into()),
+                }
+            }
+        }
     }
 }
 
@@ -134,11 +185,14 @@ impl Dependencies {
         for toolchain in plan.toolchains() {
             let (dependencies, source) = toolchain.dependencies;
             let id = &toolchain.id;
+            let lifecycle = request.lifecycle(discovery.policy().toolchain(id).lifecycle_scripts);
             let step = match toolchain.tools.0 {
                 _ if dependencies == DependencyPolicy::Skip => Step::Skip(source.label().into()),
                 ToolPolicy::Managed if *id == ToolchainId::JAVASCRIPT => {
-                    let scripts = discovery.policy().toolchain(id).lifecycle_scripts;
-                    javascript(root, snapshot, request.lifecycle(scripts))?
+                    javascript(root, snapshot, lifecycle)?
+                }
+                ToolPolicy::Managed if *id == ToolchainId::PYTHON => {
+                    python(root, snapshot, lifecycle)?
                 }
                 ToolPolicy::Managed => Step::Skip(format!(
                     "{} dependency setup is not supported yet",
@@ -284,9 +338,7 @@ impl Dependencies {
                 println!("{line}");
             }
             let env = Environment::recorded(root, &sources, &trust_base)?;
-            let status = adapter.execute(&run, root, &env)?;
-            if !status.success() {
-                let code = crate::commands::exec::exit_code(status);
+            if let Some(code) = adapter.execute(&run, root, &env)? {
                 eprintln!(
                     "{id} dependency setup failed: `{command}` exited with status {code}. \
                      {lockfile} is unchanged; fix the reported problem and rerun turbo setup. No \
@@ -327,6 +379,18 @@ fn javascript(
         frozen,
         lifecycle,
     }))
+}
+
+fn python(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Result<Step, Error> {
+    // uv syncs with the managed uv only, so it needs a uv declaration.
+    if !snapshot.declarations().contains_key("uv") {
+        let reason = "no managed uv; declare tool.uv.required-version or uv.toml";
+        return Ok(Step::Skip(reason.into()));
+    }
+    if !root.join("uv.lock").is_file() {
+        return Err(uv_sync::Error::MissingLock.into());
+    }
+    Ok(Step::Install(Adapter::Uv { lifecycle }))
 }
 
 /// Managed tools first on PATH plus their runtime variables, over the

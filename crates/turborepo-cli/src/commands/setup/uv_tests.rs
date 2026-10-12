@@ -328,3 +328,54 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
     assert_eq!(lock.tools()["python"].version, "3.13.1");
     assert_eq!(uv_version(&owned), "0.13.0");
 }
+
+const UV_LOCK: &[u8] = b"version = 1\n";
+
+#[test]
+fn locked_uv_workspaces_sync_with_the_managed_uv_and_its_environment() {
+    let owned = fixture(PYTHON, ">=0.12");
+    let root = owned.root();
+    fs::write(root.join("uv.lock"), UV_LOCK).unwrap();
+    // Records its arguments and an activation variable, then syncs.
+    let uv = "#!/bin/sh\necho \"$* $UV_PYTHON_DOWNLOADS\" >> uv-args\n[ -f stale ] && exit \
+              2\nmkdir -p .venv\n";
+    let u = upstream_with(&["0.12.24"], uv, Vec::new());
+    assert_eq!(run(&owned, &u, &["--no-frozen"]).unwrap(), 0);
+    assert!(root.join(".venv").exists());
+    // A repeat resyncs a removed environment; skipping scripts refuses builds.
+    fs::remove_dir_all(root.join(".venv")).unwrap();
+    assert_eq!(
+        run(&owned, &u, &["--frozen", "--ignore-scripts"]).unwrap(),
+        0
+    );
+    assert!(root.join(".venv").exists());
+    // uv's refusal of a stale lock passes its exit status through, and
+    // tools-only setup never syncs.
+    fs::write(root.join("stale"), "").unwrap();
+    assert_eq!(run(&owned, &u, &["--frozen"]).unwrap(), 2);
+    assert_eq!(run(&owned, &u, &["--frozen", "--tools-only"]).unwrap(), 0);
+    let args = fs::read_to_string(root.join("uv-args")).unwrap();
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        [
+            "sync --locked --all-packages never",
+            "sync --locked --all-packages --no-build never",
+            "sync --locked --all-packages never",
+        ]
+    );
+    assert_eq!(fs::read(root.join("uv.lock")).unwrap(), UV_LOCK);
+    assert!(!root.join("probe-ran").exists());
+}
+
+#[test]
+fn python_dependencies_need_a_committed_uv_lock_before_any_download() {
+    let owned = fixture(PYTHON, ">=0.12");
+    let u = upstream(&["0.12.24"]);
+    for flags in [&["--no-frozen"][..], &["--plan"]] {
+        let error = run(&owned, &u, flags).unwrap_err().to_string();
+        assert!(error.contains("uv.lock is missing"), "{error}");
+    }
+    assert_eq!(u.hits(), 0);
+    assert!(!owned.root().join("uv.lock").exists());
+    assert!(!owned.root().join("turbo.lock").exists());
+}
