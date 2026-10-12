@@ -337,17 +337,26 @@ pub(super) fn run(
             plans(&snapshot, lock)?;
         }
     }
+    // User state is checked before the first writer or download, but after the
+    // read-only lock/plan diagnostics above and below, which never need it.
     let trust_base = transports
         .as_ref()
         .map(Transports::trust_base)
-        .transpose()?
-        .or_else(dirs_next::data_local_dir)
-        .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))?;
-    let trust = super::trust::TrustStore::new(&trust_base, root)?;
-    trust.preflight()?;
+        .transpose()?;
+    let open_trust = || -> Result<super::trust::TrustStore, Error> {
+        let base = trust_base
+            .clone()
+            .or_else(dirs_next::data_local_dir)
+            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))?;
+        let trust = super::trust::TrustStore::new(&base, root)?;
+        trust.preflight()?;
+        Ok(trust)
+    };
+    let mut trust = None;
     let mut transports = transports;
     let snapshot = if write {
         use turborepo_setup::lock::{WriteOutcome, reconcile};
+        let trust = trust.insert(open_trust()?);
         let check = || {
             trust.preflight()?;
             preflight()?;
@@ -415,6 +424,10 @@ pub(super) fn run(
         uv,
         rustup,
     } = plans(&snapshot, lock)?;
+    let trust = match trust {
+        Some(trust) => trust,
+        None => open_trust()?,
+    };
     let desired: Vec<_> = [
         node.as_ref().map(NodePlan::inventory_tool),
         pnpm.as_ref().map(PnpmPlan::inventory_tool),
