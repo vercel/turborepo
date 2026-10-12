@@ -1,4 +1,4 @@
-//! Read-only managed environment planning (Node/npm/pnpm and Rust, plus
+//! Read-only managed environment planning (Node/npm/pnpm, Rust and Go, plus
 //! uv/Python when the caller enables Python workspaces), not execution
 //! authorization. Repo-writable inventory proves readiness only. Consumers
 //! must separately authorize setup-recorded tools with trusted-root user
@@ -16,6 +16,8 @@ use turborepo_tool_install::{Current, Store, Tool, Verification};
 
 use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot},
+    go_discovery::GoVersion,
+    go_provision::GoPlan,
     lock::{Ecosystems, Installation, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
     npm_provision::NpmPlan,
@@ -26,7 +28,7 @@ use crate::{
     uv_provision::UvPlan,
 };
 
-const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "rust", "rustup"];
+const SUPPORTED: [&str; 6] = ["node", "npm", "pnpm", "rust", "rustup", "go"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -37,8 +39,8 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports managed Node, npm, pnpm and Rust, plus uv and Python with \
-         experimentalPythonWorkspaces; use a supported setup adapter"
+        "activation planning supports managed Node, npm, pnpm, Rust and Go, plus uv and Python \
+         with experimentalPythonWorkspaces; use a supported setup adapter"
     )]
     UnsupportedAdapter,
     /// Intentional external tools, unlike a missing managed installation.
@@ -80,9 +82,10 @@ pub struct ActivationPlan {
     bin: PathBuf,
     tools: Vec<Tool>,
     // Managed Rust adds its installed private RUSTUP_HOME, exact
-    // RUSTUP_TOOLCHAIN and the clone's CARGO_HOME; uv/Python values derive only
-    // from this generation and the lock. Never inherited or host-dependent
-    // settings. Node/pnpm need no runtime variables.
+    // RUSTUP_TOOLCHAIN and the clone's CARGO_HOME; Go pins GOROOT and its
+    // fixed runtime settings; uv/Python values derive only from this
+    // generation and the lock. Never inherited or host-dependent settings.
+    // Node/pnpm need no runtime variables.
     runtime_env: BTreeMap<String, OsString>,
 }
 
@@ -97,7 +100,9 @@ impl ActivationPlan {
     /// probes, ancestor search, system-tool fallback, resolution, or
     /// storage creation. A missing lock is an error, not unconfigured-mode
     /// policy for future callers. `ecosystems` must come from the root
-    /// workspace flags, exactly as setup captured its snapshot. Both trust
+    /// workspace flags, exactly as setup captured its snapshot. A locked
+    /// selection for a disabled ecosystem is declaration drift, never
+    /// activated. Both trust
     /// installed bytes while their publication stamps match
     /// (`Verification::Stamped`), for repeated run-time validation.
     pub fn inspect_with(
@@ -273,7 +278,24 @@ impl ActivationPlan {
         } else {
             None
         };
-        // The Store records a generation's tools in id order.
+        let go = (lock.tools().contains_key("go"))
+            .then(|| GoPlan::from_lock(lock, platform))
+            .transpose()
+            .map_err(|_| Error::InvalidLock)?;
+        if let Some(go) = &go {
+            let version =
+                GoVersion::parse(&go.inventory_tool().version).ok_or(Error::InvalidLock)?;
+            // Matching provenance cannot authorize a release outside the native
+            // minimum or an exact `toolchain` preference.
+            if !sources
+                .go_requirements()?
+                .is_some_and(|requirements| requirements.matches_locked(version))
+            {
+                return Err(Error::DeclarationDrift);
+            }
+            tools.push(go.inventory_tool().clone());
+        }
+        // Store inventories are ordered by tool id.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
@@ -313,6 +335,19 @@ impl ActivationPlan {
             runtime_env.insert("RUSTUP_HOME".into(), home.into_os_string());
             runtime_env.insert("RUSTUP_TOOLCHAIN".into(), rust.toolchain().into());
             runtime_env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
+        }
+        if let Some(go) = &go {
+            // `GOTOOLCHAIN=local` stops toolchain switches and downloads. The
+            // caller's GOROOT reaches loose-mode tasks and strict-mode Go tasks,
+            // so pin it to this verified tree; otherwise the locked `go` would
+            // build with another release's standard library and tools.
+            for (key, value) in crate::go_provision::RUNTIME_ENV {
+                runtime_env.insert(key.to_owned(), OsString::from(value));
+            }
+            let root = current
+                .tool_tree(go.inventory_tool())
+                .ok_or(Error::StaleInventory)?;
+            runtime_env.insert("GOROOT".to_owned(), root.into_os_string());
         }
         sources.ensure_current()?;
         Ok(Self {

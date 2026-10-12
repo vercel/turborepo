@@ -14,6 +14,7 @@ use crate::{
     python_discovery::PythonRequirement,
     uv_discovery::{self, UvRequirement},
 };
+use crate::go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT};
 
 const SOURCES: [(&str, usize); 5] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),
@@ -22,6 +23,7 @@ const SOURCES: [(&str, usize); 5] = [
     (RUST_TOOLCHAIN_FILES[0], MAX_TOOLCHAIN_BYTES),
     (RUST_TOOLCHAIN_FILES[1], MAX_TOOLCHAIN_BYTES),
 ];
+const GO_SOURCES: [(&str, usize); 2] = [(GO_WORK, GO_LIMIT), (GO_MOD, GO_LIMIT)];
 type Inputs = BTreeMap<&'static str, Option<Vec<u8>>>;
 /// uv and CPython declarations, captured only with Python workspaces enabled.
 const PYTHON_SOURCES: [&str; 3] = ["uv.toml", "pyproject.toml", ".python-version"];
@@ -55,6 +57,7 @@ fn inputs(root: &Path, ecosystems: Ecosystems) -> io::Result<Inputs> {
     };
     SOURCES
         .into_iter()
+        .chain(GO_SOURCES.into_iter().filter(|_| ecosystems.go))
         // Preserve flags/policy and inactive declarations without interpreting
         // config or enabling an adapter. Presence changes also invalidate CAS.
         .chain(
@@ -92,8 +95,9 @@ impl Snapshot {
     }
 
     /// No storage initialization, resolver, network, or binary execution.
-    /// Disabled Rust declarations are ignored, not removed from CAS; disabled
-    /// Python files are neither read nor covered.
+    /// Also captures declarations of the flag-enabled `ecosystems`: disabled
+    /// Rust declarations are ignored, not removed from CAS; disabled Python and
+    /// Go files are neither read nor covered.
     pub fn capture_with(root: &Path, ecosystems: Ecosystems) -> Result<Self, StorageError> {
         let root = root.canonicalize()?;
         let root_identity = Arc::new(same_file::Handle::from_path(&root)?);
@@ -206,6 +210,19 @@ impl Snapshot {
         )?))
     }
 
+    /// Go requirements from the captured bytes; None when Go is disabled.
+    pub fn go_requirements(&self) -> Result<Option<GoRequirements>, StorageError> {
+        if !self.ecosystems.go {
+            return Ok(None);
+        }
+        Ok(GoRequirements::read_with(|file, _| {
+            self.inputs
+                .get(file)
+                .cloned()
+                .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+        })?)
+    }
+
     pub fn package_manager(
         &self,
     ) -> Result<Option<crate::package_manager::Declaration>, StorageError> {
@@ -285,7 +302,10 @@ impl Snapshot {
         // Refuse to publish or silently remove aliases/extra sources.
         let python = self.ecosystems.python;
         let covered = |file: &str| {
-            SOURCES.iter().any(|(source, _)| file == *source)
+            SOURCES
+                .iter()
+                .chain(&GO_SOURCES)
+                .any(|(source, _)| file == *source)
                 || (python && PYTHON_SOURCES.contains(&file))
         };
         for lock in candidate.into_iter().chain(self.previous.as_ref()) {

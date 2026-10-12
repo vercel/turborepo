@@ -6,6 +6,8 @@ use super::*;
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 #[path = "ci_tests.rs"]
 mod ci;
+#[path = "go_tests.rs"]
+mod go;
 #[path = "mirror_tests.rs"]
 mod mirror;
 #[path = "no_lock_tests.rs"]
@@ -265,6 +267,7 @@ fn dispatch(
         rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(u.origin()).unwrap(),
         uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin()).unwrap(),
         python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
     }), || {
         hook();
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)

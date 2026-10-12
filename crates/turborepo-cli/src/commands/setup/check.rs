@@ -33,7 +33,7 @@ pub(super) fn run(
 ) -> Result<i32, Error> {
     let context = context()?;
     preflight()?;
-    // Same workspace-flag gating as the captured snapshot (Rust and, with
+    // Same workspace-flag gating as the captured snapshot (Rust, Go and, with
     // experimentalPythonWorkspaces, uv/Python), re-hashing every installed
     // file rather than trusting publication stamps.
     let plan = ActivationPlan::verify_with(

@@ -479,6 +479,7 @@ fn failure_cleans_owned_staging_without_surrounding_writes() {
         nodes: BTreeMap::new(),
         limits: limits(),
         bytes: 0,
+        excluded: Vec::new(),
     };
     let fixture = zip(
         &[("pkg/bin/tool", 0, b"x"), ("../sentinel", 0, b"changed")],
@@ -490,4 +491,35 @@ fn failure_cleans_owned_staging_without_surrounding_writes() {
     assert_eq!(fs::read(&sentinel).unwrap(), b"unchanged");
     drop(tree);
     assert!(!path.exists());
+}
+#[test]
+fn excluded_subtrees_skip_nonportable_zip_names() {
+    let entries = [
+        ("pkg/bin/tool", 0o100755, b"tool".as_slice()),
+        ("pkg/test/\u{de}x.go", 0o100644, b"skipped".as_slice()),
+    ];
+    let bytes = zip(&entries, true, false);
+    let layout = Layout {
+        root: "pkg",
+        required_files: &["bin/tool"],
+    };
+    let artifact = extract_excluding(&verified(bytes.clone()), Zip, limits(), layout, &["test"]);
+    let artifact = artifact.unwrap();
+    assert!(artifact.root_path().join("bin/tool").is_file());
+    assert!(!artifact.root_path().join("test").exists());
+    rejected(bytes, Zip, limits(), UnsafePath);
+    // Skipped payloads still spend the shared decoded budget.
+    let large = [0; 20_000];
+    let mut entries = vec![entries[0], ("pkg/test/\u{de}a", 0o100644, &large[..])];
+    let unpack = |entries: &[(&str, u32, &[u8])]| {
+        let layout = Layout {
+            root: "pkg",
+            required_files: &["bin/tool"],
+        };
+        let bytes = verified(zip(entries, true, false));
+        extract_excluding(&bytes, Zip, limits(), layout, &["test"])
+    };
+    assert!(unpack(&entries).is_ok());
+    entries.push(("pkg/test/\u{de}b", 0o100644, &large[..]));
+    assert!(matches!(unpack(&entries), Err(LimitExceeded)));
 }
