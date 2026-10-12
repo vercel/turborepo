@@ -4,7 +4,8 @@
 //! from native declaration files, and a committed `turbo.lock` alone makes a
 //! repository managed. Root `tools` and `dependencies` apply to every
 //! toolchain; a key named by a canonical toolchain ID overrides them for that
-//! toolchain.
+//! toolchain. `additionalTools` declares tools that no built-in adapter
+//! manages.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -15,7 +16,12 @@ use ts_rs::TS;
 use turborepo_errors::{Spanned, WithMetadata};
 use turborepo_repository::toolchain::ToolchainId;
 
+pub use self::additional_tools::{
+    ArtifactFormat, ArtifactPlatform, RawAdditionalTool, RawAdditionalToolArtifact,
+};
 use crate::{error::Error, future_flags::FutureFlags};
+
+mod additional_tools;
 
 /// How `turbo setup` prepares a toolchain's tools. `managed` provisions the
 /// locked version for this repository. `verify-system` uses an installed tool
@@ -89,6 +95,12 @@ pub struct RawSetupPolicy {
     /// `futureFlags.experimentalGoWorkspaces`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub go: Option<Spanned<RawToolchainSetupPolicy>>,
+    /// Tools that no built-in adapter manages, keyed by tool ID. Each declares
+    /// an exact version and explicit per-platform artifacts. `turbo setup`
+    /// locks, verifies, and installs them without running tool-provided
+    /// scripts.
+    #[serde(rename = "additionalTools", skip_serializing_if = "Option::is_none")]
+    pub additional_tools: Option<BTreeMap<String, Spanned<RawAdditionalTool>>>,
 }
 
 /// Repository-configured setup values for one toolchain. `None` means the
@@ -104,6 +116,7 @@ pub struct ToolchainSetupPolicy {
 pub struct SetupPolicy {
     defaults: ToolchainSetupPolicy,
     overrides: BTreeMap<ToolchainId, ToolchainSetupPolicy>,
+    additional_tools: BTreeMap<String, RawAdditionalTool>,
 }
 
 impl SetupPolicy {
@@ -158,6 +171,7 @@ impl SetupPolicy {
         Ok(Self {
             defaults,
             overrides,
+            additional_tools: additional_tools::validate(raw.additional_tools.as_ref())?,
         })
     }
 
@@ -178,9 +192,15 @@ impl SetupPolicy {
         }
     }
 
+    /// Validated `additionalTools` declarations, keyed by tool ID.
+    pub fn additional_tools(&self) -> &BTreeMap<String, RawAdditionalTool> {
+        &self.additional_tools
+    }
+
     /// Whether the repository configured any setup value.
     pub fn is_configured(&self) -> bool {
-        self.defaults != ToolchainSetupPolicy::default()
+        !self.additional_tools.is_empty()
+            || self.defaults != ToolchainSetupPolicy::default()
             || self
                 .overrides
                 .values()
@@ -248,6 +268,14 @@ impl WithMetadata for RawSetupPolicy {
             toolchain.add_text(text.clone());
             toolchain.value.add_text(text.clone());
         }
+        for tool in self
+            .additional_tools
+            .iter_mut()
+            .flat_map(|tools| tools.values_mut())
+        {
+            tool.add_text(text.clone());
+            tool.value.add_text(text.clone());
+        }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -256,6 +284,14 @@ impl WithMetadata for RawSetupPolicy {
         for toolchain in self.toolchains_mut() {
             toolchain.add_path(path.clone());
             toolchain.value.add_path(path.clone());
+        }
+        for tool in self
+            .additional_tools
+            .iter_mut()
+            .flat_map(|tools| tools.values_mut())
+        {
+            tool.add_path(path.clone());
+            tool.value.add_path(path.clone());
         }
     }
 }
