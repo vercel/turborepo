@@ -1142,3 +1142,132 @@ fn node_based_managers_never_activate_without_managed_node() {
         assert_eq!(state(repo.path()), before);
     }
 }
+
+const GO: Ecosystems = Ecosystems {
+    python: false,
+    rust: false,
+    go: true,
+};
+
+/// An installed `go 1.22` repository locked to 1.22.3, optionally beside the
+/// Node/pnpm fixture.
+fn go_installed(js: bool) -> (tempfile::TempDir, Value) {
+    let repo = tempfile::tempdir().unwrap();
+    let mut value = if js {
+        fixture()
+    } else {
+        json!({"schemaVersion":0,"tools":{}})
+    };
+    value["tools"]["go"] = json!({"adapter":"go","version":"1.22.3",
+    "declarations":[{"file":"go.work","field":"go","request":"1.22"}],
+    "installation":{"kind":"managed","artifacts":{"macos-arm64":{"distribution":{
+        "url":"https://dl.google.com/go/go1.22.3.darwin-arm64.tar.gz",
+        "sha256":"33".repeat(32),"format":"tar-gz","rootPrefix":"go",
+        "executables":{"go":"bin/go","gofmt":"bin/gofmt"}
+    }}}}});
+    write_sources(repo.path(), &value);
+    if !js {
+        fs::remove_file(repo.path().join(".nvmrc")).unwrap();
+        fs::remove_file(repo.path().join("package.json")).unwrap();
+    }
+    fs::write(repo.path().join("go.work"), "go 1.22\n").unwrap();
+    seed(repo.path(), &go_desired(&value));
+    (repo, value)
+}
+
+fn go_desired(value: &Value) -> Vec<Tool> {
+    let lock = Lock::parse(value.to_string().as_bytes()).unwrap();
+    let mut tools = if lock.tools().contains_key("node") {
+        desired(value, None)
+    } else {
+        Vec::new()
+    };
+    let go = GoPlan::from_lock(&lock, Platform::MacosArm64).unwrap();
+    tools.push(go.inventory_tool().clone());
+    tools.sort_by(|a, b| a.id.cmp(&b.id));
+    tools
+}
+
+#[test]
+fn go_selection_contributes_its_bin_and_locked_runtime_env() {
+    for js in [false, true] {
+        let (repo, value) = go_installed(js);
+        fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
+        let before = state(repo.path());
+        let plan = ActivationPlan::inspect_with(repo.path(), context(), GO).unwrap();
+        assert_eq!(plan.tools(), go_desired(&value));
+        assert_eq!(plan.snapshot().tools().len(), if js { 3 } else { 1 });
+        let goroot = plan.path_prepend().parent().unwrap().join("tools/go");
+        assert_eq!(
+            plan.runtime_env(),
+            &BTreeMap::from([
+                ("GOROOT".to_owned(), goroot.clone().into_os_string()),
+                ("GOTOOLCHAIN".to_owned(), OsString::from("local")),
+            ])
+        );
+        for name in ["go", "gofmt"] {
+            let export = fs::canonicalize(plan.path_prepend().join(name)).unwrap();
+            assert_eq!(export, goroot.join("bin").join(name));
+        }
+        assert_eq!(state(repo.path()), before);
+    }
+    // GOROOT follows a compatible relocation; the selected identity does not.
+    let (repo, _) = go_installed(false);
+    let before = ActivationPlan::inspect_with(repo.path(), context(), GO).unwrap();
+    let relocated = tempfile::tempdir().unwrap();
+    let target = relocated.path().join("moved");
+    fs::rename(repo.path(), &target).unwrap();
+    let after = ActivationPlan::inspect_with(&target, context(), GO).unwrap();
+    let goroot = Path::new(&after.runtime_env()["GOROOT"]);
+    assert!(goroot.starts_with(target.canonicalize().unwrap()));
+    assert_eq!(
+        before.snapshot().fingerprint(),
+        after.snapshot().fingerprint()
+    );
+}
+
+#[test]
+fn go_drift_disabled_flag_and_stale_or_damaged_trees_fail_closed() {
+    // Matching provenance cannot admit 1.22.3 under a newer minimum or a
+    // different exact toolchain.
+    for go_work in ["go 1.23\n", "go 1.22\ntoolchain go1.22.4\n"] {
+        let (repo, mut value) = go_installed(false);
+        fs::write(repo.path().join("go.work"), go_work).unwrap();
+        let captured = Snapshot::capture_with(repo.path(), GO).unwrap();
+        value["tools"]["go"]["declarations"] =
+            serde_json::to_value(&captured.declarations()["go"]).unwrap();
+        fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
+        let before = state(repo.path());
+        assert!(
+            matches!(
+                ActivationPlan::inspect_with(repo.path(), context(), GO),
+                Err(Error::DeclarationDrift)
+            ),
+            "{go_work}"
+        );
+        assert_eq!(state(repo.path()), before);
+    }
+    for damage in [false, true] {
+        let (repo, value) = go_installed(true);
+        let bin = Store::inspect(repo.path()).unwrap().unwrap().bin;
+        if damage {
+            fs::write(bin.join("../tools/go/resources/template.json"), "damaged").unwrap();
+        } else {
+            // Without experimentalGoWorkspaces go.work is unread, so the
+            // locked Go selection is drift, as in setup.
+            assert!(matches!(
+                ActivationPlan::inspect(repo.path(), context()),
+                Err(Error::DeclarationDrift)
+            ));
+            seed(repo.path(), &desired(&value, None));
+        }
+        let before = state(repo.path());
+        let result = ActivationPlan::inspect_with(repo.path(), context(), GO);
+        if damage {
+            assert!(matches!(result, Err(Error::DamagedInventory(_))));
+        } else {
+            assert!(matches!(result, Err(Error::StaleInventory)));
+        }
+        assert_eq!(state(repo.path()), before);
+    }
+}

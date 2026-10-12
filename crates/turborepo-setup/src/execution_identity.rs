@@ -197,6 +197,7 @@ impl ExecutionSnapshot {
                     | "bun"
                     | "rust"
                     | "rustup"
+                    | "go"
                     | "uv"
                     | "python"
                     | additional::ADAPTER
