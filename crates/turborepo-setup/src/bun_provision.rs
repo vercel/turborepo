@@ -169,7 +169,7 @@ impl BunTransport {
         let mut artifacts = BTreeMap::new();
         for platform in PLATFORMS {
             let target = target(platform).ok_or(Error::UnsupportedTarget)?;
-            if let Some(sha256) = checksums.get(&format!("bun-{target}.zip")) {
+            if let Some(sha256) = checksums.sha256(&format!("bun-{target}.zip")) {
                 let artifact = official(platform, version, sha256)?;
                 artifacts.insert(
                     platform,

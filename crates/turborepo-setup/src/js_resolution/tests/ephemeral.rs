@@ -22,7 +22,7 @@ fn staged(
         |request| {
             assert!(request.snapshot().previous_lock().is_none());
             runtime
-                .block_on(resolve(request, &world.node, &world.registry))
+                .block_on(resolve(request, &world.node, &world.registry, &world.bun))
                 .map_err(|e| reconcile::Error::Resolution(e.to_string()))
         },
         || Ok(()),

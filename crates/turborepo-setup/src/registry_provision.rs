@@ -148,7 +148,7 @@ impl RegistryTransport {
         let tree = extract_package(&bytes, manager, exact_version, &executables, true)?;
         let bundle = bundled.then(|| bundle_digests(&tree)).transpose()?;
         if let (Some((sha256, sha512)), Some(pin)) = (&bundle, authored) {
-            crate::registry_resolution::check_pin(pin, sha256, sha512)?;
+            crate::registry_resolution::check_pin(pin, None, sha256, sha512)?;
         }
         drop(tree);
         let artifact = lock::Artifact {
@@ -511,7 +511,7 @@ impl RegistryPlan {
         )?;
         if let Some(pin) = self.authored.as_ref().filter(|_| self.bundled) {
             let (sha256, sha512) = bundle_digests(&tree)?;
-            crate::registry_resolution::check_pin(pin, &sha256, &sha512)?;
+            crate::registry_resolution::check_pin(pin, None, &sha256, &sha512)?;
         }
         if tree.root_path().join(&self.launch_directory).try_exists()? {
             return Err(Error::InvalidPackage);

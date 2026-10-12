@@ -37,6 +37,7 @@ pub enum Error {
 pub struct Transports<'a> {
     pub node: &'a NodeTransport,
     pub registry: &'a RegistryTransport,
+    pub bun: &'a crate::bun_provision::BunTransport,
     pub uv: &'a UvTransport,
     pub python: &'a PythonTransport,
     /// Host target used only to run the locked uv's offline listing.
@@ -46,11 +47,11 @@ pub struct Transports<'a> {
 pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result<Lock, Error> {
     let snapshot = request.snapshot();
     let declared = snapshot.declarations();
-    let mut tools = if ["node", "npm", "pnpm"]
+    let mut tools = if ["node", "npm", "pnpm", "yarn", "bun"]
         .iter()
         .any(|id| declared.contains_key(*id))
     {
-        js_resolution::resolve_tools(&request, sources.node, sources.registry).await?
+        js_resolution::resolve_tools(&request, sources.node, sources.registry, sources.bun).await?
     } else {
         BTreeMap::new()
     };
@@ -110,7 +111,12 @@ pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result
     // Only this cohort: Rust and Go compose their own selections, and
     // reconcile checks the complete candidate.
     let mut cohort = declared.clone();
-    cohort.retain(|id, _| matches!(id.as_str(), "node" | "npm" | "pnpm" | "uv" | "python"));
+    cohort.retain(|id, _| {
+        matches!(
+            id.as_str(),
+            "node" | "npm" | "pnpm" | "yarn" | "bun" | "uv" | "python"
+        )
+    });
     if !candidate.matches_native(&cohort)? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",
