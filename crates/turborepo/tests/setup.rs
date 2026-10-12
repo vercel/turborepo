@@ -1769,7 +1769,12 @@ fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_t
         for controls in [&["--force"][..], &["--offline"], &["--plan", "--force"]] {
             let mut words = vec!["setup", "--no-frozen", "--update-lock", "--tools-only"];
             words.extend(controls);
-            failure(root, &words, ci, PENDING);
+            let expected = if controls.contains(&"--offline") {
+                "--offline cannot verify fresh artifacts for --force or resolve --update-lock"
+            } else {
+                PENDING
+            };
+            failure(root, &words, ci, expected);
         }
         for conflict in ["--frozen", "--no-lock", "--check"] {
             let (code, text) = invoke(
