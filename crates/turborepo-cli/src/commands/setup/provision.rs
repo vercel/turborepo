@@ -19,6 +19,8 @@ pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
+    /// The shared download cache the transports use, cleaned up after setup.
+    pub cache: Option<ArtifactCache>,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -27,8 +29,9 @@ impl Transports {
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
         Ok(Self {
             node: NodeTransport::official(policy)?.with_cache(cache.clone()),
-            pnpm: PnpmTransport::official(policy)?.with_cache(cache),
+            pnpm: PnpmTransport::official(policy)?.with_cache(cache.clone()),
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
+            cache,
         })
     }
 }
@@ -185,7 +188,7 @@ pub(super) fn run(
     // Force never enters resolution or lock publication, even in local Write.
     let write = lock_mode == super::LockMode::Write && !force;
     let root = discovery.snapshot_root()?.as_std_path();
-    platform()?;
+    let host = platform()?;
     // Unsupported native requests must fail before ANY writer, even no-op locks.
     let manager = snapshot.package_manager()?;
     if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
@@ -360,6 +363,11 @@ pub(super) fn run(
                 Some(true) => "installed from the shared download cache",
             }
         );
+    }
+    for line in
+        super::cleanup::after_provisioning(&mut store, transports.cache.as_ref(), lock, host)
+    {
+        println!("{line}");
     }
     println!(
         "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."

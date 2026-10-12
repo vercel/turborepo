@@ -743,6 +743,8 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
             text.contains("node 24.0.0: ready") && text.contains("pnpm 10.0.0: ready"),
             "{text}"
         );
+        // Disk use is reported without any write (checked by `invoke`).
+        assert!(text.contains("in this clone's .turbo/tools."), "{text}");
         assert!(
             text.contains("Dependencies skipped")
                 && text.contains("dependency readiness was not checked"),

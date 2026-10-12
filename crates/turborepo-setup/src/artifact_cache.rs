@@ -4,8 +4,9 @@
 //! repository-scoped. Entries are keyed by the lock's artifact identity
 //! (platform key plus trusted SHA-256), and every read re-verifies that digest.
 //! Writers publish complete verified files by atomic rename, so concurrent
-//! writers and interrupted downloads never expose partial bytes. Hits record
-//! their last use for age-based pruning. No network or cross-process locking.
+//! writers and interrupted downloads never expose partial bytes. Hits and lock
+//! references record their last use for age-based pruning. No network or
+//! cross-process locking.
 
 use std::{
     fs::{self, File},
@@ -69,6 +70,21 @@ impl ArtifactCache {
         // Last use, from any repository, is the pruning signal. Best effort.
         let _ = file.set_modified(SystemTime::now());
         Some(artifact)
+    }
+
+    /// Refresh the last use of an entry the caller's lock references without
+    /// reading it, so a clone that reuses its installs still keeps the bytes
+    /// it would need to reinstall. Best effort.
+    pub fn mark_used(&self, platform: Platform, sha256: &str) {
+        let Some(directory) = self.directory(platform, sha256) else {
+            return;
+        };
+        if self.check(&directory).is_ok()
+            && let Ok(file) = open_entry(&directory.join(sha256))
+            && file.metadata().is_ok_and(|metadata| metadata.is_file())
+        {
+            let _ = file.set_modified(SystemTime::now());
+        }
     }
 
     /// Remove entries no repository has used within `unused_for`, plus stale

@@ -8,6 +8,7 @@ use turborepo_setup::source_policy::OfficialSourcePolicy;
 use crate::cli::{Args, SetupArgs};
 
 mod check;
+mod cleanup;
 mod provision;
 mod root;
 

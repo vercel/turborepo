@@ -46,6 +46,10 @@ pub(super) fn run(
     for tool in plan.tools() {
         println!("{} {}: ready", tool.id, tool.version);
     }
+    // Reports what setup would clean up; checks never remove anything.
+    for line in super::cleanup::inspect(discovery.snapshot_root()?.as_std_path()) {
+        println!("{line}");
+    }
     println!(
         "Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run."
     );
