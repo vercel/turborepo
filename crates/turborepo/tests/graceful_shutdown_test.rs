@@ -231,31 +231,47 @@ mod unix {
             normalize_output(String::from_utf8_lossy(&self.output.lock().unwrap()).as_ref())
         }
 
-        fn finish(mut self, timeout: Duration) -> String {
+        fn finish(self, timeout: Duration) -> String {
+            self.finish_with_status(timeout).1
+        }
+
+        fn finish_with_status(mut self, timeout: Duration) -> (portable_pty::ExitStatus, String) {
             let start = Instant::now();
-            loop {
+            let status = loop {
                 let status = self
                     .child
                     .as_mut()
                     .expect("pty child guard consumed")
                     .try_wait()
                     .expect("failed waiting for pty child");
-                if status.is_some() {
-                    break;
+                if let Some(status) = status {
+                    break status;
                 }
                 if start.elapsed() > timeout {
-                    panic!("timed out waiting for pty child exit");
+                    panic!(
+                        "timed out waiting for pty child exit\n{}",
+                        self.transcript()
+                    );
                 }
                 thread::sleep(Duration::from_millis(100));
-            }
+            };
 
             let _ = self.child.take();
             drop(self.writer.take());
             if let Some(reader_thread) = self.reader_thread.take() {
+                // An orphan holding the terminal open would block EOF forever.
+                while !reader_thread.is_finished() {
+                    assert!(
+                        start.elapsed() < timeout,
+                        "pty output did not close\n{}",
+                        self.transcript()
+                    );
+                    thread::sleep(Duration::from_millis(10));
+                }
                 reader_thread.join().expect("pty reader thread panicked");
             }
 
-            self.transcript()
+            (status, self.transcript())
         }
     }
 
@@ -266,7 +282,10 @@ mod unix {
                 let _ = child.kill();
                 let _ = child.wait();
             }
-            if let Some(reader_thread) = self.reader_thread.take() {
+            // Do not hang a failing test behind a descendant that kept the pty.
+            if let Some(reader_thread) = self.reader_thread.take()
+                && reader_thread.is_finished()
+            {
                 let _ = reader_thread.join();
             }
         }
@@ -443,6 +462,36 @@ done
 
     fn spawn_interactive_turbo_command(test_dir: &Path, via_node_wrapper: bool) -> PtyTurbo {
         let corepack_dir = setup::corepack_dir_for_test_dir(test_dir);
+        let mut command = if via_node_wrapper {
+            let mut command = CommandBuilder::new("node");
+            command.arg(turbo_node_wrapper());
+            command.env("TURBO_BINARY_PATH", turbo_bin());
+            command
+        } else {
+            CommandBuilder::new(turbo_bin())
+        };
+        command.arg("run");
+        command.arg("dev");
+        command.arg("--filter=app-a");
+        command.cwd(test_dir);
+        for key in common::ambient_turbo_env_keys() {
+            command.env_remove(&key);
+        }
+        command.env("PATH", setup::prepend_to_path(&corepack_dir));
+        command.env("COREPACK_HOME", setup::corepack_home());
+        command.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1");
+        command.env("TURBO_GLOBAL_WARNING_DISABLED", "1");
+        command.env("TURBO_PRINT_VERSION_DISABLED", "1");
+        command.env("DO_NOT_TRACK", "1");
+        command.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
+        command.env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0");
+        command.env_remove("CI");
+        command.env_remove("GITHUB_ACTIONS");
+
+        spawn_pty_command(command)
+    }
+
+    fn spawn_pty_command(command: CommandBuilder) -> PtyTurbo {
         let pty_system = native_pty_system();
         let pair = pty_system
             .openpty(PtySize {
@@ -475,32 +524,6 @@ done
             .master
             .take_writer()
             .expect("failed to take pty writer");
-
-        let mut command = if via_node_wrapper {
-            let mut command = CommandBuilder::new("node");
-            command.arg(turbo_node_wrapper());
-            command.env("TURBO_BINARY_PATH", turbo_bin());
-            command
-        } else {
-            CommandBuilder::new(turbo_bin())
-        };
-        command.arg("run");
-        command.arg("dev");
-        command.arg("--filter=app-a");
-        command.cwd(test_dir);
-        for key in common::ambient_turbo_env_keys() {
-            command.env_remove(&key);
-        }
-        command.env("PATH", setup::prepend_to_path(&corepack_dir));
-        command.env("COREPACK_HOME", setup::corepack_home());
-        command.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1");
-        command.env("TURBO_GLOBAL_WARNING_DISABLED", "1");
-        command.env("TURBO_PRINT_VERSION_DISABLED", "1");
-        command.env("DO_NOT_TRACK", "1");
-        command.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
-        command.env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0");
-        command.env_remove("CI");
-        command.env_remove("GITHUB_ACTIONS");
 
         let child = pair
             .slave
@@ -1251,5 +1274,453 @@ done
 
         wait_for_process_gone(task_child_pid, Duration::from_secs(5));
         task_guard.disarm();
+    }
+
+    /// Direct native `turbo run` versus the installed npm package, whose
+    /// launcher resolves its platform binary like a real install rather than
+    /// the source wrapper plus `TURBO_BINARY_PATH` used above.
+    mod packaged_parity {
+        use std::os::unix::process::ExitStatusExt;
+
+        use super::*;
+        use crate::common::{
+            combined_output,
+            process_launcher::{CapturedProcess, Entrypoint, ProcessLauncher},
+        };
+
+        const ENTRIES: [Entrypoint; 2] = [Entrypoint::Standalone, Entrypoint::NpmWrapper];
+
+        #[derive(Clone, Copy, Debug, PartialEq)]
+        enum Terminal {
+            Pipes,
+            Pty,
+        }
+
+        #[derive(Clone, Copy, Debug)]
+        enum Stop {
+            /// A Ctrl+C keypress, or without a terminal SIGINT to the
+            /// foreground process group: both reach the wrapper and native
+            /// turbo.
+            CtrlC,
+            /// SIGTERM to the entrypoint PID only, as a process manager sends
+            /// it.
+            Term,
+        }
+
+        enum Run {
+            Pipes(Option<CapturedProcess>),
+            Pty {
+                // Declared first so a failure kills the group before the pty.
+                group: TaskTreeGuard,
+                child: PtyTurbo,
+            },
+        }
+
+        struct Outcome {
+            code: i32,
+            output: String,
+            /// stdout and stderr. A pty merges both streams by design.
+            streams: [Vec<String>; 2],
+        }
+
+        fn pty_pid(child: &PtyTurbo) -> i32 {
+            child.child.as_ref().unwrap().process_id().unwrap() as i32
+        }
+
+        impl Run {
+            fn spawn(mut command: Command, terminal: Terminal) -> Self {
+                if terminal == Terminal::Pipes {
+                    return Self::Pipes(Some(CapturedProcess::spawn(&mut command)));
+                }
+                let mut builder = CommandBuilder::new(command.get_program());
+                builder.args(command.get_args());
+                builder.cwd(command.get_current_dir().unwrap());
+                for (key, value) in command.get_envs() {
+                    match value {
+                        Some(value) => builder.env(key, value),
+                        None => builder.env_remove(key),
+                    }
+                }
+                let child = spawn_pty_command(builder);
+                Self::Pty {
+                    group: TaskTreeGuard::new(pty_pid(&child)),
+                    child,
+                }
+            }
+
+            fn pid(&self) -> i32 {
+                match self {
+                    Self::Pipes(process) => process.as_ref().unwrap().child.id() as i32,
+                    Self::Pty { child, .. } => pty_pid(child),
+                }
+            }
+
+            fn fail(&mut self, message: &str) -> ! {
+                let output = match self {
+                    Self::Pipes(process) => {
+                        let process = process.take().unwrap();
+                        let _ = signal::kill(
+                            Pid::from_raw(-(process.child.id() as i32)),
+                            Signal::SIGKILL,
+                        );
+                        combined_output(&process.finish(EXIT_TIMEOUT))
+                    }
+                    Self::Pty { child, .. } => child.transcript(),
+                };
+                panic!("{message}\n{output}");
+            }
+
+            fn exited(&mut self) -> bool {
+                match self {
+                    Self::Pipes(process) => process
+                        .as_mut()
+                        .unwrap()
+                        .child
+                        .try_wait()
+                        .unwrap()
+                        .is_some(),
+                    Self::Pty { child, .. } => {
+                        child.child.as_mut().unwrap().try_wait().unwrap().is_some()
+                    }
+                }
+            }
+
+            fn assert_running(&mut self, context: &str) {
+                if self.exited() {
+                    self.fail(&format!("entrypoint exited {context}"));
+                }
+            }
+
+            fn wait_for(&mut self, marker: &Path) {
+                let start = Instant::now();
+                while !marker.exists() {
+                    self.assert_running(&format!("before {}", marker.display()));
+                    if start.elapsed() > START_TIMEOUT {
+                        self.fail(&format!("timed out waiting for {}", marker.display()));
+                    }
+                    thread::sleep(Duration::from_millis(20));
+                }
+            }
+
+            fn stop(&mut self, stop: Stop) {
+                match (stop, self) {
+                    (Stop::Term, run) => send_signal(run.pid(), Signal::SIGTERM),
+                    (Stop::CtrlC, Self::Pty { child, .. }) => child.send_ctrl_c(),
+                    (Stop::CtrlC, run) => send_signal_to_process_group(run.pid(), Signal::SIGINT),
+                }
+            }
+
+            fn finish(mut self, timeout: Duration) -> Outcome {
+                let start = Instant::now();
+                // The pty path reports its own timeout with the transcript.
+                while matches!(self, Self::Pipes(_)) && !self.exited() {
+                    if start.elapsed() > timeout {
+                        self.fail(&format!("entrypoint did not exit within {timeout:?}"));
+                    }
+                    thread::sleep(Duration::from_millis(50));
+                }
+                let parity_lines = |text: &str| {
+                    let mut lines: Vec<_> = text
+                        .lines()
+                        .filter_map(|line| line.find("PARITY_").map(|at| line[at..].to_owned()))
+                        .collect();
+                    lines.sort();
+                    lines
+                };
+                match self {
+                    Self::Pipes(process) => {
+                        let output = process.unwrap().finish(timeout);
+                        let code = output
+                            .status
+                            .code()
+                            .unwrap_or_else(|| panic!("killed by {:?}", output.status.signal()));
+                        let streams = [&output.stdout, &output.stderr]
+                            .map(|stream| parity_lines(&String::from_utf8_lossy(stream)));
+                        let output = normalize_output(&combined_output(&output));
+                        Outcome {
+                            code,
+                            output,
+                            streams,
+                        }
+                    }
+                    Self::Pty { mut group, child } => {
+                        let (status, output) = child.finish_with_status(timeout);
+                        group.disarm();
+                        assert_eq!(status.signal(), None, "{output}");
+                        Outcome {
+                            code: status.exit_code() as i32,
+                            streams: [parity_lines(&output), Vec::new()],
+                            output,
+                        }
+                    }
+                }
+            }
+        }
+
+        /// Every process below the entrypoint once the task is ready: the
+        /// wrapper's native child, the package manager, the task, and its
+        /// descendant. Guards kill the task groups if an assertion fails.
+        struct Tree {
+            pids: Vec<i32>,
+            guards: Vec<TaskTreeGuard>,
+        }
+
+        impl Tree {
+            fn capture(root: i32, leaf: i32) -> Self {
+                let mut pids = Vec::new();
+                let mut parents = vec![root];
+                while let Some(parent) = parents.pop() {
+                    let output = Command::new("pgrep")
+                        .arg("-P")
+                        .arg(parent.to_string())
+                        .output()
+                        .expect("failed to run pgrep");
+                    for pid in String::from_utf8_lossy(&output.stdout).split_whitespace() {
+                        let pid = pid.parse().unwrap();
+                        pids.push(pid);
+                        parents.push(pid);
+                    }
+                }
+                let guards = pids.iter().map(|pid| TaskTreeGuard::new(*pid)).collect();
+                let tree = Self { pids, guards };
+                assert!(tree.pids.contains(&leaf), "task descendant not found");
+                tree
+            }
+
+            fn assert_gone(mut self, entrypoint: i32) {
+                for pid in std::iter::once(entrypoint).chain(self.pids.iter().copied()) {
+                    wait_for_process_gone(pid, EXIT_TIMEOUT);
+                }
+                for guard in &mut self.guards {
+                    guard.disarm();
+                }
+            }
+        }
+
+        fn command(launcher: &ProcessLauncher, entry: Entrypoint, root: &Path) -> Command {
+            let mut command = launcher.command(entry, root);
+            command
+                .args(["run", "dev", "--filter=app-a"])
+                .env(
+                    "PATH",
+                    setup::prepend_to_path(&setup::corepack_dir_for_test_dir(root)),
+                )
+                .env("COREPACK_HOME", setup::corepack_home())
+                .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0");
+            command
+        }
+
+        /// Starts the blocked-cleanup task and returns once its descendant
+        /// runs.
+        fn start_blocked(
+            launcher: &ProcessLauncher,
+            entry: Entrypoint,
+            terminal: Terminal,
+        ) -> (TempDir, PathBuf, Run, Tree) {
+            let (tempdir, root) =
+                setup_shutdown_fixture("parity.sh", &blocked_cleanup_script("parity"));
+            let app = root.join("apps/app-a");
+            let mut run = Run::spawn(command(launcher, entry, &root), terminal);
+            run.wait_for(&app.join("ready"));
+            let leaf = wait_for_pid_file(&app.join("child.pid"), START_TIMEOUT);
+            let tree = Tree::capture(run.pid(), leaf);
+            (tempdir, root, run, tree)
+        }
+
+        #[test]
+        fn argv_cwd_env_streams_and_exit_status_match() {
+            let launcher = ProcessLauncher::new();
+            let argv = [
+                "argument with spaces",
+                "--literal",
+                "$(touch injected)",
+                "quote'\"",
+                "snowman ☃",
+            ];
+            for terminal in [Terminal::Pipes, Terminal::Pty] {
+                for exit in [0, 3] {
+                    let mut results = Vec::new();
+                    for entry in ENTRIES {
+                        eprintln!("case: {entry:?} {terminal:?} exit {exit}");
+                        let (_tempdir, root) =
+                            setup_shutdown_fixture("observe.sh", "exec node ./observe.js \"$@\"\n");
+                        let app = root.join("apps/app-a");
+                        fs::write(
+                            app.join("observe.js"),
+                            r#"
+const observation = {
+  argv: process.argv.slice(2), cwd: process.cwd(), value: process.env.PARITY_VALUE,
+  empty: process.env.PARITY_EMPTY, absent: process.env.PARITY_ABSENT ?? null,
+};
+require('fs').writeFileSync('observation.json', JSON.stringify(observation));
+console.log('PARITY_STDOUT ' + JSON.stringify(observation.argv));
+console.error('PARITY_STDERR ' + observation.value);
+process.exit(Number(process.env.PARITY_EXIT));
+"#,
+                        )
+                        .unwrap();
+                        // Invoke below the root so discovery, not cwd, finds it.
+                        let mut cmd = command(&launcher, entry, &root);
+                        cmd.current_dir(&app)
+                            .args(["--env-mode=loose", "--"])
+                            .args(argv)
+                            .env("PARITY_VALUE", "spaces = and ☃")
+                            .env("PARITY_EMPTY", "")
+                            .env("PARITY_EXIT", exit.to_string())
+                            .env_remove("PARITY_ABSENT");
+                        let outcome = Run::spawn(cmd, terminal).finish(EXIT_TIMEOUT);
+                        let context = format!("{entry:?} {terminal:?}\n{}", outcome.output);
+                        assert_eq!(outcome.code, exit, "{context}");
+                        let observation: Value = serde_json::from_slice(
+                            &fs::read(app.join("observation.json")).unwrap(),
+                        )
+                        .unwrap();
+                        assert_eq!(observation["argv"], json!(argv), "{context}");
+                        assert_eq!(
+                            Path::new(observation["cwd"].as_str().unwrap())
+                                .canonicalize()
+                                .unwrap(),
+                            app.canonicalize().unwrap()
+                        );
+                        assert_eq!(observation["value"], "spaces = and ☃", "{context}");
+                        assert_eq!(observation["empty"], "", "{context}");
+                        assert_eq!(observation["absent"], Value::Null, "{context}");
+                        assert!(!app.join("injected").exists(), "{context}");
+                        let mut visible = outcome.streams.concat();
+                        visible.sort();
+                        assert_eq!(
+                            visible,
+                            [
+                                "PARITY_STDERR spaces = and ☃".to_owned(),
+                                format!("PARITY_STDOUT {}", observation["argv"]),
+                            ],
+                            "{context}"
+                        );
+                        results.push((outcome.code, outcome.streams));
+                    }
+                    assert_eq!(results[0], results[1], "{terminal:?} exit {exit}");
+                }
+            }
+        }
+
+        #[test]
+        fn first_stop_request_waits_for_one_graceful_cleanup() {
+            let launcher = ProcessLauncher::new();
+            for terminal in [Terminal::Pipes, Terminal::Pty] {
+                for stop in [Stop::CtrlC, Stop::Term] {
+                    for entry in ENTRIES {
+                        eprintln!("case: {entry:?} {terminal:?} {stop:?}");
+                        let (_tempdir, root, mut run, tree) =
+                            start_blocked(&launcher, entry, terminal);
+                        let app = root.join("apps/app-a");
+                        let release = ReleaseGuard::new(&root);
+                        let entrypoint = run.pid();
+                        run.stop(stop);
+                        run.wait_for(&app.join("cleanup.started"));
+                        // A duplicated request would force kill the blocked task.
+                        thread::sleep(Duration::from_millis(500));
+                        run.assert_running("while cleanup was blocked");
+                        drop(release);
+                        let outcome = run.finish(EXIT_TIMEOUT);
+                        let output = &outcome.output;
+                        let context = format!("{entry:?} {terminal:?} {stop:?}\n{output}");
+                        assert_eq!(outcome.code, 0, "{context}");
+                        assert_eq!(
+                            output.matches("parity cleanup start").count(),
+                            1,
+                            "{context}"
+                        );
+                        assert!(
+                            output.find("parity cleanup start")
+                                < output.find("parity cleanup done"),
+                            "{context}"
+                        );
+                        assert_eq!(
+                            output.matches("Shutting down Turborepo tasks...").count(),
+                            1,
+                            "{context}"
+                        );
+                        assert_eq!(
+                            output.contains("Press CTRL+C again to exit forcefully."),
+                            terminal == Terminal::Pty,
+                            "{context}"
+                        );
+                        assert!(
+                            !output.contains("Force killed") && !output.contains("timed out"),
+                            "{context}"
+                        );
+                        tree.assert_gone(entrypoint);
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn second_stop_request_force_kills_without_orphans() {
+            let launcher = ProcessLauncher::new();
+            for terminal in [Terminal::Pipes, Terminal::Pty] {
+                for (first, second) in [
+                    (Stop::CtrlC, Stop::CtrlC),
+                    (Stop::Term, Stop::Term),
+                    (Stop::CtrlC, Stop::Term),
+                ] {
+                    for entry in ENTRIES {
+                        eprintln!("case: {entry:?} {terminal:?} {first:?}+{second:?}");
+                        // Never released: the second request, not the timeout,
+                        // must end the run.
+                        let (_tempdir, root, mut run, tree) =
+                            start_blocked(&launcher, entry, terminal);
+                        let app = root.join("apps/app-a");
+                        let _release = ReleaseGuard::new(&root);
+                        let entrypoint = run.pid();
+                        run.stop(first);
+                        run.wait_for(&app.join("cleanup.started"));
+                        run.assert_running("before the second request");
+                        run.stop(second);
+                        let outcome = run.finish(Duration::from_secs(5));
+                        let output = &outcome.output;
+                        let context =
+                            format!("{entry:?} {terminal:?} {first:?}+{second:?}\n{output}");
+                        assert_eq!(outcome.code, 0, "{context}");
+                        assert!(
+                            output.contains("Force killed Turborepo tasks: app-a#dev"),
+                            "{context}"
+                        );
+                        assert!(!output.contains("Graceful shutdown timed out"), "{context}");
+                        assert!(!output.contains("parity cleanup done"), "{context}");
+                        assert!(!app.join("descendant.release").exists(), "{context}");
+                        tree.assert_gone(entrypoint);
+                    }
+                }
+            }
+        }
+
+        #[test]
+        fn noninteractive_shutdown_timeout_force_kills_without_orphans() {
+            let launcher = ProcessLauncher::new();
+            for entry in ENTRIES {
+                eprintln!("case: {entry:?}");
+                let (_tempdir, root, mut run, tree) =
+                    start_blocked(&launcher, entry, Terminal::Pipes);
+                let app = root.join("apps/app-a");
+                let _release = ReleaseGuard::new(&root);
+                let entrypoint = run.pid();
+                let started = Instant::now();
+                run.stop(Stop::CtrlC);
+                run.wait_for(&app.join("cleanup.started"));
+                let outcome = run.finish(EXIT_TIMEOUT);
+                let context = format!("{entry:?}\n{}", outcome.output);
+                assert!(started.elapsed() >= Duration::from_secs(9), "{context}");
+                assert_eq!(outcome.code, 0, "{context}");
+                assert!(
+                    outcome.output.contains(
+                        "Graceful shutdown timed out. Force killed Turborepo tasks: app-a#dev"
+                    ),
+                    "{context}"
+                );
+                assert!(!app.join("descendant.release").exists(), "{context}");
+                tree.assert_gone(entrypoint);
+            }
+        }
     }
 }
