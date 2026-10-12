@@ -1,10 +1,12 @@
 //! Local reconciliation followed by locked tool provisioning.
 //! Force reinstalls committed selections without resolution or lock writes.
-//! No probes, dependency execution or activation.
+//! No probes, dependency execution or activation. Declared additional tools
+//! install through the generic artifact adapter.
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
-    lock::{Platform, Snapshot},
+    artifact_provision::{ArtifactPlan, ArtifactTransport},
+    lock::{Platform, Snapshot, additional},
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -30,6 +32,8 @@ pub(super) struct Transports {
     pub python: PythonTransport,
     #[cfg(test)]
     pub trust_base: Option<std::path::PathBuf>,
+    /// Fixture override; otherwise built from the locked artifact origins.
+    pub artifact: Option<ArtifactTransport>,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -42,6 +46,7 @@ impl Transports {
             python: PythonTransport::official(policy)?,
             #[cfg(test)]
             trust_base: None,
+            artifact: None,
         })
     }
 
@@ -53,6 +58,10 @@ impl Transports {
         dirs_next::data_local_dir()
             .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
     }
+}
+
+fn supported(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
+    SUPPORTED.contains(&id) || tool.adapter == additional::ADAPTER
 }
 
 pub(super) fn platform() -> Result<Platform, Error> {
@@ -149,6 +158,7 @@ pub(super) struct Plans {
     pub python: Option<PythonPlan>,
     pub rustup: Option<RustupPlan>,
     pub rust: Option<RustPlan>,
+    pub artifacts: Vec<ArtifactPlan>,
 }
 
 const SUPPORTED: [&str; 7] = ["node", "npm", "pnpm", "uv", "python", "rust", "rustup"];
@@ -158,13 +168,13 @@ pub(super) fn plans(
 ) -> Result<Plans, Error> {
     let platform = platform()?;
     super::lock_diagnostics::matching(snapshot, lock)?;
-    if lock
-        .tools()
-        .keys()
-        .any(|id| !SUPPORTED.contains(&id.as_str()))
-    {
+    let drift = snapshot.additional_drift(lock);
+    if !drift.is_empty() {
+        return Err(Error::AdditionalToolDrift(drift));
+    }
+    if lock.tools().iter().any(|(id, tool)| !supported(id, tool)) {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, uv, Python and Rust are supported",
+            "only managed Node, npm, pnpm, uv, Python, Rust, and additional tools are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -246,7 +256,14 @@ pub(super) fn plans(
             Some(RustPlan::from_lock(lock, platform)?)
         }
     };
-    if node.is_none() && uv.is_none() && python.is_none() && rustup.is_none() && rust.is_none() {
+    let artifacts = ArtifactPlan::from_lock(lock, platform)?;
+    if node.is_none()
+        && uv.is_none()
+        && python.is_none()
+        && rustup.is_none()
+        && rust.is_none()
+        && artifacts.is_empty()
+    {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
     Ok(Plans {
@@ -257,6 +274,7 @@ pub(super) fn plans(
         rustup,
         python,
         rust,
+        artifacts,
     })
 }
 
@@ -361,17 +379,16 @@ pub(super) fn run(
     // the candidate callback still gates EVERY new selection before any writer.
     if write && let Some(lock) = snapshot.previous_lock() {
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
-            && lock
-                .tools()
-                .keys()
-                .any(|id| !SUPPORTED.contains(&id.as_str()))
+            && lock.tools().iter().any(|(id, tool)| !supported(id, tool))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, uv, Python and Rust are supported",
+                "only managed Node, npm, pnpm, uv, Python, Rust, and additional tools are \
+                 supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
             && lock.matches_native(snapshot.declarations())?
+            && snapshot.matches_additional(lock)
         {
             plans(&snapshot, lock)?;
         }
@@ -469,12 +486,13 @@ pub(super) fn run(
         rustup,
         python,
         rust,
+        artifacts,
     } = plans(&snapshot, lock)?;
     let trust = match trust {
         Some(trust) => trust,
         None => open_trust()?,
     };
-    let desired: Vec<_> = [
+    let mut desired: Vec<_> = [
         node.as_ref().map(NodePlan::inventory_tool),
         pnpm.as_ref().map(PnpmPlan::inventory_tool),
         npm.as_ref().map(NpmPlan::inventory_tool),
@@ -487,10 +505,16 @@ pub(super) fn run(
     .flatten()
     .cloned()
     .collect();
+    desired.extend(artifacts.iter().map(|plan| plan.inventory_tool().clone()));
     let policy = preflight()?;
-    let transports = transports
+    let mut transports = transports
         .map(Ok)
         .unwrap_or_else(|| Transports::official(&policy))?;
+    let artifact_transport = match transports.artifact.take() {
+        Some(transport) => Some(transport),
+        None if artifacts.is_empty() => None,
+        None => Some(ArtifactTransport::new(&policy, &artifacts)?),
+    };
     revalidate(discovery)?;
     storage(root)?;
     snapshot.ensure_current()?;
@@ -516,64 +540,81 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm, prepared_npm, prepared_uv, prepared_python, prepared_rustup) =
-        runtime.block_on(async {
-            let recheck = || {
-                preflight()?;
-                revalidate(discovery)?;
-                snapshot.check_guard(&guard)?;
-                Ok::<_, Error>(())
-            };
-            let node = match &node {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.node, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            recheck()?;
-            let pnpm = match &pnpm {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            recheck()?;
-            let npm = match &npm {
-                Some(plan) => {
-                    // npm and pnpm share the exact integrity-verified registry transport.
-                    plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            recheck()?;
-            let uv = match &uv {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.uv, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            recheck()?;
-            let python = match &python {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.python, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            recheck()?;
-            let rustup = match &rustup {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.rustup, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            Ok::<_, Error>((node, pnpm, npm, uv, python, rustup))
-        })?;
+    let (
+        prepared_node,
+        prepared_pnpm,
+        prepared_npm,
+        prepared_uv,
+        prepared_python,
+        prepared_rustup,
+        prepared_artifacts,
+    ) = runtime.block_on(async {
+        let recheck = || {
+            preflight()?;
+            revalidate(discovery)?;
+            snapshot.check_guard(&guard)?;
+            Ok::<_, Error>(())
+        };
+        let node = match &node {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.node, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        recheck()?;
+        let pnpm = match &pnpm {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        recheck()?;
+        let npm = match &npm {
+            Some(plan) => {
+                // npm and pnpm share the exact integrity-verified registry transport.
+                plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        recheck()?;
+        let uv = match &uv {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.uv, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        recheck()?;
+        let python = match &python {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.python, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        recheck()?;
+        let rustup = match &rustup {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.rustup, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        let mut prepared = Vec::new();
+        if let Some(transport) = &artifact_transport {
+            for plan in &artifacts {
+                recheck()?;
+                prepared.push(
+                    plan.prepare(&store, &desired, transport, preparation)
+                        .await?,
+                );
+            }
+        }
+        Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared))
+    })?;
     preflight()?;
     revalidate(discovery)?;
     snapshot.check_guard(&guard)?;
@@ -589,37 +630,46 @@ pub(super) fn run(
         }
         _ => None,
     };
+    let additional = |tool: &turborepo_tool_install::Tool| {
+        let index = artifacts.iter().position(|p| p.inventory_tool() == tool)?;
+        Some((&artifacts[index], prepared_artifacts[index].as_ref()))
+    };
     let missing = || turborepo_tool_install::Error::InvalidInventory;
-    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| match tool.id.as_str() {
-        "node" => prepared_node
-            .as_ref()
-            .ok_or_else(missing)?
-            .stage(tool, destination),
-        "pnpm" => prepared_pnpm
-            .as_ref()
-            .ok_or_else(missing)?
-            .stage(tool, destination),
-        "npm" => prepared_npm
-            .as_ref()
-            .ok_or_else(missing)?
-            .stage(tool, destination),
-        "uv" => prepared_uv
-            .as_ref()
-            .ok_or_else(missing)?
-            .stage(tool, destination),
-        "python" => prepared_python
-            .as_ref()
-            .ok_or_else(missing)?
-            .stage(tool, destination),
-        "rustup" => prepared_rustup
-            .as_ref()
-            .ok_or_else(missing)?
-            .stage(tool, destination),
-        "rust" => prepared_rust
-            .as_ref()
-            .ok_or_else(missing)?
-            .stage(tool, destination),
-        _ => Err(missing()),
+    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
+        if let Some((_, prepared)) = additional(tool) {
+            return prepared.ok_or_else(missing)?.stage(tool, destination);
+        }
+        match tool.id.as_str() {
+            "node" => prepared_node
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
+            "pnpm" => prepared_pnpm
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
+            "npm" => prepared_npm
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
+            "uv" => prepared_uv
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
+            "python" => prepared_python
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
+            "rustup" => prepared_rustup
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
+            "rust" => prepared_rust
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
+            _ => Err(missing()),
+        }
     };
     let before_publish = || {
         trust.preflight()?;
@@ -639,23 +689,21 @@ pub(super) fn run(
     before_publish()?;
     trust.publish(&store)?;
     for tool in &desired {
-        println!(
-            "{} {}: {}",
-            tool.id,
-            tool.version,
-            if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id == "pnpm" && prepared_pnpm.is_none())
-                || (tool.id == "npm" && prepared_npm.is_none())
-                || (tool.id == "uv" && prepared_uv.is_none())
-                || (tool.id == "rustup" && prepared_rustup.is_none())
-                || (tool.id == "python" && prepared_python.is_none())
-                || (tool.id == "rust" && prepared_rust.is_none())
-            {
-                "reused"
-            } else {
-                "installed"
-            }
-        );
+        let (reused, source) = match additional(tool) {
+            Some((plan, prepared)) => (prepared.is_none(), format!(" ({})", plan.source())),
+            None => (
+                (tool.id == "node" && prepared_node.is_none())
+                    || (tool.id == "pnpm" && prepared_pnpm.is_none())
+                    || (tool.id == "npm" && prepared_npm.is_none())
+                    || (tool.id == "uv" && prepared_uv.is_none())
+                    || (tool.id == "rustup" && prepared_rustup.is_none())
+                    || (tool.id == "python" && prepared_python.is_none())
+                    || (tool.id == "rust" && prepared_rust.is_none()),
+                String::new(),
+            ),
+        };
+        let status = if reused { "reused" } else { "installed" };
+        println!("{} {}: {status}{source}", tool.id, tool.version);
     }
     if let Some(npm) = lock.tools().get("npm")
         && matches!(

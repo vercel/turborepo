@@ -343,6 +343,7 @@ fn loopback(f: &Fixture, u: &LoopbackServer) -> provision::Transports {
             u.origin(),
         )
         .unwrap(),
+        artifact: None,
     }
 }
 
