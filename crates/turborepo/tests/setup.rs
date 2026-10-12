@@ -14,13 +14,16 @@ mod no_lock;
 const PENDING: &str = "this setup mode is not implemented";
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
 const DISABLED: &str = "requires root futureFlags.experimentalSetup";
-const UNQUALIFIED: &str = "managed promotion requires macOS or GNU Linux";
-const QUALIFIED: bool = cfg!(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(
-        target_os = "macos",
-        all(target_os = "linux", target_env = "gnu")
-    )
+const UNQUALIFIED: &str = "managed promotion requires macOS, GNU Linux or Windows x64";
+const QUALIFIED: bool = cfg!(any(
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    ),
+    all(windows, target_arch = "x86_64")
 ));
 
 #[cfg(all(
@@ -1611,16 +1614,10 @@ fn setup_telemetry_is_standard_opt_out_redacted_and_never_changes_the_result() {
     write(&root, "package.json", "{}");
     let cwd = format!("--cwd={}", root.display());
     let words = ["setup", "--frozen", "--tools-only", cwd.as_str()];
-    let (diagnostic, category) = if cfg!(all(
-        any(target_arch = "x86_64", target_arch = "aarch64"),
-        any(
-            target_os = "macos",
-            all(target_os = "linux", target_env = "gnu")
-        )
-    )) {
+    let (diagnostic, category) = if QUALIFIED {
         ("frozen mode requires turbo.lock", "lock_missing")
     } else {
-        ("managed promotion requires macOS or GNU Linux", "platform")
+        (UNQUALIFIED, "platform")
     };
     let unchanged = |code: i32, stderr: &str| {
         assert_eq!(code, 1, "{stderr}");

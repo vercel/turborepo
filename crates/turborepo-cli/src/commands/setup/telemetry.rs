@@ -71,6 +71,8 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         Error::NotImplemented => SetupFailure::Unsupported,
         Error::Unsupported(message) => match *message {
             "managed promotion requires macOS or GNU Linux"
+            | "managed promotion requires macOS, GNU Linux or Windows x64"
+            | "managed setup is not qualified for Windows arm64; use Windows x64"
             | "cannot select setup check host platform" => SetupFailure::Platform,
             "frozen mode requires turbo.lock" | "locked provisioning requires turbo.lock" => {
                 SetupFailure::LockMissing
@@ -185,10 +187,13 @@ mod tests {
         let unsupported = |message| failure(&Error::Unsupported(message));
         assert_eq!(failure(&Error::FrozenUpdateLock), SetupFailure::Request);
         assert_eq!(failure(&Error::NotImplemented), SetupFailure::Unsupported);
-        assert_eq!(
-            unsupported("managed promotion requires macOS or GNU Linux"),
-            SetupFailure::Platform
-        );
+        for message in [
+            "managed promotion requires macOS or GNU Linux",
+            "managed promotion requires macOS, GNU Linux or Windows x64",
+            "managed setup is not qualified for Windows arm64; use Windows x64",
+        ] {
+            assert_eq!(unsupported(message), SetupFailure::Platform);
+        }
         assert_eq!(
             unsupported("frozen mode requires turbo.lock"),
             SetupFailure::LockMissing
