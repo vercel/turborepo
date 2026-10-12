@@ -91,10 +91,12 @@ Pass [`--no-frozen`](#--no-frozen) to use local mode in CI.
 
 After installing tools, `turbo setup` installs each toolchain's dependencies when its [dependency policy](/docs/reference/setup-policy#dependencies) is `locked`, the default. It runs only the package manager's frozen install, using the managed package manager rather than one from your `PATH`, with the managed tools first on `PATH`. A dependency install isn't a Turborepo task.
 
-| Package manager | Command                          | Lockfile                                     |
-| --------------- | -------------------------------- | -------------------------------------------- |
-| npm             | `npm ci`                         | `npm-shrinkwrap.json` or `package-lock.json` |
-| pnpm            | `pnpm install --frozen-lockfile` | `pnpm-lock.yaml`                             |
+| Package manager  | Command                          | Lockfile                                     |
+| ---------------- | -------------------------------- | -------------------------------------------- |
+| npm              | `npm ci`                         | `npm-shrinkwrap.json` or `package-lock.json` |
+| pnpm             | `pnpm install --frozen-lockfile` | `pnpm-lock.yaml`                             |
+| Yarn 1           | `yarn install --frozen-lockfile` | `yarn.lock`                                  |
+| Yarn 2 and later | `yarn install --immutable`       | `yarn.lock`                                  |
 
 - The package manager must be declared with `packageManager` or `devEngines.packageManager` in the root `package.json`.
 - A missing lockfile is an error, reported before anything is downloaded. `turbo setup` never creates or updates a lockfile. If a package manager changes one anyway, `turbo setup` restores it and fails.
