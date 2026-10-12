@@ -59,7 +59,7 @@ pub enum TraceError {
         #[label("import here")]
         span: SourceSpan,
         #[source_code]
-        text: String,
+        text: Arc<str>,
         #[help]
         reason: String,
     },
@@ -373,6 +373,10 @@ impl Tracer {
                 }
             };
 
+        // Every unresolved import in this file reports the file's source. Share
+        // one copy across those errors instead of copying the whole file into
+        // each of them.
+        let mut shared_text: Option<Arc<str>> = None;
         let mut files = Vec::new();
         for ImportResult {
             specifier: import,
@@ -439,7 +443,9 @@ impl Tracer {
                         import: import.to_string(),
                         file_path: file_path.to_string(),
                         span: SourceSpan::new(start.into(), end - start),
-                        text: file_content.clone(),
+                        text: shared_text
+                            .get_or_insert_with(|| file_content.as_str().into())
+                            .clone(),
                         reason: err.to_string(),
                     });
                 }
