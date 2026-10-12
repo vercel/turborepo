@@ -1,4 +1,4 @@
-//! Local reconciliation followed by locked tools-only provisioning.
+//! Local reconciliation followed by locked tool provisioning.
 //! Force reinstalls committed selections without resolution or lock writes.
 //! No probes, dependency execution or activation.
 use std::{fs, io, path::Path, process::Command};
@@ -375,8 +375,5 @@ pub(super) fn run(
     {
         println!("npm {}: provided by managed Node (bundled)", npm.version);
     }
-    println!(
-        "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."
-    );
     Ok(0)
 }

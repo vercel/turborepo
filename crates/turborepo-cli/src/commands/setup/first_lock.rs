@@ -317,6 +317,30 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     untouched(&f);
 }
 #[test]
+fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
+    let mut outcomes = vec![];
+    for flags in [LOCAL, &["--no-frozen"]] {
+        let f = fresh();
+        fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+        let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+        assert_eq!(f.run(&u, flags).unwrap(), 0);
+        assert_eq!(u.hits(), 7);
+        // Repeats, including frozen plain setup, are traffic-free no-ops.
+        let manifest = f.manifest().unwrap();
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        for flags in [flags, &["--frozen"]] {
+            assert_eq!(f.run(&empty, flags).unwrap(), 0);
+        }
+        assert_eq!(empty.hits(), 0);
+        assert_eq!(f.manifest().unwrap(), manifest);
+        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let tools = store.current().unwrap().unwrap().tools;
+        outcomes.push((fs::read(f.owned.root().join("turbo.lock")).unwrap(), tools));
+        untouched(&f);
+    }
+    assert_eq!(outcomes[0], outcomes[1]);
+}
+#[test]
 fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
     for case in 0..7 {
         let f = fresh();
