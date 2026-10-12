@@ -174,6 +174,8 @@ impl TrustStore {
 
     fn load(&self) -> io::Result<Option<Record>> {
         // Reject links in any existing state component before opening a record.
+        // Only the record directory must be private: on macOS its parent is
+        // turbo's shared config directory, which is commonly created as 0755.
         for path in self.directory.ancestors() {
             match fs::symlink_metadata(path) {
                 Ok(metadata) => {
@@ -181,10 +183,7 @@ impl TrustStore {
                         return Err(unsafe_state());
                     }
                     #[cfg(target_os = "macos")]
-                    super::acl::check(
-                        &File::open(path)?,
-                        path == self.directory || Some(path) == self.directory.parent(),
-                    )?;
+                    super::acl::check(&File::open(path)?, path == self.directory)?;
                     #[cfg(unix)]
                     {
                         use std::os::unix::fs::MetadataExt;
@@ -202,28 +201,22 @@ impl TrustStore {
                 Err(error) => return Err(error),
             }
         }
-        for path in [
-            &self.directory,
-            self.directory.parent().ok_or_else(unsafe_state)?,
-        ] {
-            match fs::symlink_metadata(path) {
-                Ok(metadata) => {
-                    if !metadata.is_dir() {
+        match fs::symlink_metadata(&self.directory) {
+            Ok(metadata) => {
+                if !metadata.is_dir() {
+                    return Err(unsafe_state());
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o077 != 0
+                    {
                         return Err(unsafe_state());
                     }
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::MetadataExt;
-                        if metadata.uid() != unsafe { libc::geteuid() }
-                            || metadata.mode() & 0o077 != 0
-                        {
-                            return Err(unsafe_state());
-                        }
-                    }
                 }
-                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-                Err(error) => return Err(error),
             }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
         }
         let Some(bytes) = read(&self.path(), true)? else {
             return Ok(None);
@@ -317,7 +310,6 @@ impl TrustStore {
         for path in missing.into_iter().rev() {
             private_directory(&path)?;
         }
-        private_directory(self.directory.parent().ok_or_else(unsafe_state)?)?;
         private_directory(&self.directory)?;
         let mut staged = tempfile::NamedTempFile::new_in(&self.directory)?;
         #[cfg(target_os = "macos")]
