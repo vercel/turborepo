@@ -1,5 +1,6 @@
 //! Local reconciliation followed by locked tool provisioning.
 //! Force reinstalls committed selections without resolution or lock writes.
+//! Offline uses only trusted healthy installs and verified cached artifacts.
 //! No probes, dependency execution or activation. Declared additional tools
 //! install through the generic artifact adapter.
 use std::{fs, io, path::Path, process::Command};
@@ -9,7 +10,7 @@ use turborepo_setup::{
     artifact_provision::{ArtifactPlan, ArtifactTransport},
     go_provision::GoPlan,
     go_resolution::GoTransport,
-    lock::{Platform, Snapshot, additional},
+    lock::{Installation, Platform, Snapshot, additional},
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -67,10 +68,49 @@ impl Transports {
         dirs_next::data_local_dir()
             .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
     }
+
+    // Only Node/registry adapters enter cached offline provisioning. Other
+    // adapters retain the read-only trusted-repeat path in offline::run.
+    fn offline(self) -> Self {
+        Self {
+            node: self.node.offline(),
+            pnpm: self.pnpm.offline(),
+            registry: self.registry.offline(),
+            ..self
+        }
+    }
 }
 
 fn supported(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
     SUPPORTED.contains(&id) || tool.adapter == additional::ADAPTER
+}
+
+// Lock-derived, credential-free provenance for each missing host artifact.
+pub(super) fn missing_artifacts(
+    lock: &turborepo_setup::lock::Lock,
+    platform: Platform,
+    ids: &[&str],
+) -> String {
+    let mut lines = Vec::new();
+    for (id, tool) in lock
+        .tools()
+        .iter()
+        .filter(|(id, _)| ids.contains(&id.as_str()))
+    {
+        let Installation::Managed { artifacts } = &tool.installation else {
+            continue;
+        };
+        let parts = artifacts
+            .get(&platform)
+            .or_else(|| artifacts.get(&Platform::Any));
+        for (part, artifact) in parts.into_iter().flatten() {
+            lines.push(format!(
+                "  {id} {} [{part}]: {} (SHA-256 {})",
+                tool.version, artifact.url, artifact.sha256
+            ));
+        }
+    }
+    lines.join("\n")
 }
 
 pub(super) fn platform() -> Result<Platform, Error> {
@@ -397,17 +437,41 @@ pub(super) fn resolve(
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
-    lock_mode: super::LockMode,
-    resolution_mode: turborepo_setup::lock::reconcile::Mode,
-    force: bool,
+    request: &super::SetupRequest,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
-    // Force never enters resolution or lock publication, even in local Write.
-    let write = lock_mode == super::LockMode::Write && !force;
+    let (force, offline) = (request.force, request.offline);
+    let resolution_mode = if request.update_lock {
+        turborepo_setup::lock::reconcile::Mode::Refresh
+    } else {
+        turborepo_setup::lock::reconcile::Mode::Local
+    };
+    // Force and offline never enter resolution or lock publication.
+    let write = request.lock == super::LockMode::Write && !force && !offline;
     let root = discovery.snapshot_root()?.as_std_path();
-    platform()?;
-    if lock_mode == super::LockMode::Frozen {
+    let host = platform()?;
+    if offline {
+        let lock = snapshot.previous_lock().ok_or(Error::Unsupported(
+            "offline setup requires turbo.lock; run turbo setup --tools-only without --offline",
+        ))?;
+        if !lock.matches_native(snapshot.declarations())? || !snapshot.matches_additional(lock) {
+            return Err(Error::Unsupported(
+                "offline setup cannot resolve changed tool declarations; run turbo setup \
+                 --tools-only without --offline",
+            ));
+        }
+        // Do not let a non-cache adapter enter a network preparation path.
+        if lock
+            .tools()
+            .keys()
+            .any(|id| !matches!(id.as_str(), "node" | "pnpm" | "npm"))
+        {
+            return Err(Error::Unsupported(
+                "offline cache repair supports Node, npm, and pnpm only",
+            ));
+        }
+    } else if request.lock == super::LockMode::Frozen {
         super::lock_diagnostics::frozen(&snapshot)?;
     }
     if write {
@@ -500,7 +564,7 @@ pub(super) fn run(
         published
     } else {
         // Frozen mode names stale declarations instead of a generic mismatch.
-        if lock_mode == super::LockMode::Frozen
+        if request.lock == super::LockMode::Frozen
             && let Some(lock) = snapshot.previous_lock()
         {
             let drift = snapshot.additional_drift(lock);
@@ -559,6 +623,9 @@ pub(super) fn run(
     let mut transports = transports
         .map(Ok)
         .unwrap_or_else(|| Transports::official(&policy))?;
+    if offline {
+        transports = transports.offline();
+    }
     let artifact_transport = match transports.artifact.take() {
         Some(transport) => Some(transport),
         None if artifacts.is_empty() => None,
@@ -589,6 +656,9 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
+    // Offline misses are collected, not short-circuited, so the report names
+    // every missing artifact. Nothing is published unless all are present.
+    let mut offline_missing = Vec::new();
     let (
         prepared_node,
         prepared_pnpm,
@@ -607,27 +677,44 @@ pub(super) fn run(
             Ok::<_, Error>(())
         };
         let node = match &node {
-            Some(plan) => {
-                plan.prepare(&store, &desired, &transports.node, preparation)
-                    .await?
-            }
+            Some(plan) => match plan
+                .prepare(&store, &desired, &transports.node, preparation)
+                .await
+            {
+                Err(turborepo_setup::node_provision::Error::Offline) => {
+                    offline_missing.push("node");
+                    None
+                }
+                result => result?,
+            },
             None => None,
         };
         recheck()?;
         let pnpm = match &pnpm {
-            Some(plan) => {
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
+            Some(plan) => match plan
+                .prepare(&store, &desired, &transports.pnpm, preparation)
+                .await
+            {
+                Err(turborepo_setup::pnpm_provision::Error::Offline) => {
+                    offline_missing.push("pnpm");
+                    None
+                }
+                result => result?,
+            },
             None => None,
         };
         recheck()?;
         let npm = match &npm {
-            Some(plan) => {
-                // npm and pnpm share the exact integrity-verified registry transport.
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
+            Some(plan) => match plan
+                .prepare(&store, &desired, &transports.pnpm, preparation)
+                .await
+            {
+                Err(turborepo_setup::pnpm_provision::Error::Offline) => {
+                    offline_missing.push("npm");
+                    None
+                }
+                result => result?,
+            },
             None => None,
         };
         recheck()?;
@@ -682,6 +769,13 @@ pub(super) fn run(
         };
         Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared, go, yarn))
     })?;
+    if !offline_missing.is_empty() {
+        return Err(Error::OfflineMissing(missing_artifacts(
+            lock,
+            host,
+            &offline_missing,
+        )));
+    }
     preflight()?;
     revalidate(discovery)?;
     snapshot.check_guard(&guard)?;
@@ -801,6 +895,9 @@ pub(super) fn run(
         )
     {
         println!("npm {}: provided by managed Node (bundled)", npm.version);
+    }
+    if offline {
+        println!("Offline: used only trusted installed tools and verified cached artifacts.");
     }
     Ok(0)
 }

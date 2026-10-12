@@ -34,6 +34,8 @@ pub enum Error {
     InventoryMismatch,
     #[error("bundled npm package identity or entrypoints do not match the selected resolution")]
     InvalidBundledNpm,
+    #[error("offline setup has no verified cached Node artifact and never contacts upstream")]
+    Offline,
     #[error(transparent)]
     Resolution(#[from] crate::node_resolution::Error),
     #[error(transparent)]
@@ -53,6 +55,7 @@ pub struct NodeTransport {
     // Test transport changes only the origin; lock provenance remains official.
     origin: String,
     cache: Option<ArtifactCache>,
+    offline: bool,
 }
 impl NodeTransport {
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
@@ -60,6 +63,7 @@ impl NodeTransport {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             origin: "https://nodejs.org".into(),
             cache: None,
+            offline: false,
         })
     }
 
@@ -67,6 +71,13 @@ impl NodeTransport {
     /// re-verified against the lock digest; extraction stays per repository.
     pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
         self.cache = cache;
+        self
+    }
+
+    /// Serve only verified cache hits; every request path fails before
+    /// traffic with [`Error::Offline`].
+    pub fn offline(mut self) -> Self {
+        self.offline = true;
         self
     }
 
@@ -81,6 +92,9 @@ impl NodeTransport {
             node_metadata::{MAX_CHECKSUM_BYTES, MAX_INDEX_BYTES, ReleaseIndex},
             node_resolution,
         };
+        if self.offline {
+            return Err(Error::Offline);
+        }
         let read = async |path: &str, limit| {
             self.client
                 .read_metadata(
@@ -119,6 +133,7 @@ impl NodeTransport {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
             cache: None,
+            offline: false,
         })
     }
 }
@@ -254,6 +269,16 @@ impl NodePlan {
         self.download(transport).await.map(Some)
     }
 
+    /// Read-only cache preflight. Preparation re-verifies again under the
+    /// writer guard; this is never installation or authorization evidence.
+    pub fn cache_available(&self, transport: &NodeTransport) -> bool {
+        transport
+            .cache
+            .as_ref()
+            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, ARCHIVE_LIMIT))
+            .is_some()
+    }
+
     /// Download/verify/extract only, with no installation or executable
     /// probing.
     pub async fn download(&self, transport: &NodeTransport) -> Result<PreparedNode, Error> {
@@ -264,6 +289,7 @@ impl NodePlan {
         let from_cache = cached.is_some();
         let bytes = match cached {
             Some(bytes) => bytes,
+            None if transport.offline => return Err(Error::Offline),
             None => {
                 let url = format!(
                     "{}{}",

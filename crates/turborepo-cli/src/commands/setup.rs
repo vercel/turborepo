@@ -73,6 +73,11 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LockDiagnostics(#[from] lock_diagnostics::Error),
+    #[error(
+        "offline setup is missing verified cached artifacts; nothing was installed:\n{0}\nRun \
+         turbo setup --tools-only without --offline to download and verify them."
+    )]
+    OfflineMissing(String),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
@@ -343,32 +348,12 @@ fn run_with_policy(
         return Ok(0);
     }
     let code = if request.offline {
-        offline::run(
-            &discovery,
-            snapshot,
-            transports.as_ref(),
-            preflight,
-            request.force,
-        )
+        offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
-        provision::run(
-            &discovery,
-            snapshot,
-            request.lock,
-            if request.update_lock {
-                turborepo_setup::lock::reconcile::Mode::Refresh
-            } else {
-                turborepo_setup::lock::reconcile::Mode::Local
-            },
-            request.force,
-            transports,
-            preflight,
-        )
+        provision::run(&discovery, snapshot, &request, transports, preflight)
     }?;
-    // Never claim dependencies are ready: they are skipped until dependency
-    // policy and installers exist, even without --tools-only.
     println!(
         "Dependencies skipped ({}). No tasks run.",
         if request.tools_only {
@@ -407,8 +392,7 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     {
         return Err(Error::NotImplemented);
     }
-    // --offline --force reinstalls only from verified local bytes; resolution
-    // always needs the network.
+    // Offline reinstalls only verified local bytes; resolution needs the network.
     if request.offline && request.update_lock {
         return Err(Error::Unsupported(
             "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \
@@ -552,6 +536,16 @@ mod tests {
                 )
                 .is_ok()
             );
+            assert!(matches!(
+                validate_request(
+                    &request(
+                        &["--tools-only", "--no-frozen", "--update-lock", "--offline"],
+                        ci
+                    )
+                    .unwrap()
+                ),
+                Err(Error::Unsupported(_))
+            ));
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
                 if matches!(control, "--force" | "--no-lock" | "--plan" | "--offline") {

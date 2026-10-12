@@ -1,7 +1,6 @@
-//! Healthy locked offline repeat, not download-cache repair or activation.
-//! Repository inventory alone can never authorize reuse. No writer, Store
-//! guard, resolver, transport construction or executable probe is permitted
-//! here.
+//! Trusted read-only offline repeats, with verified-cache repair for Node and
+//! registry adapters. Repository inventory alone never authorizes reuse.
+//! Cache misses are diagnosed before writers; no resolver or executable probe.
 use turborepo_setup::{
     lock::{Installation, Platform, Snapshot},
     source_policy::OfficialSourcePolicy,
@@ -14,7 +13,8 @@ pub enum Error {
     #[error(
         "offline setup cannot reuse the locked installation: {reason}\nRequired artifacts not \
          verified for offline reuse/repair:\n{artifacts}\nRun turbo setup --tools-only without \
-         --offline to verify or repair them. Offline download-cache repair is not implemented."
+         --offline to verify or repair them. No complete verified download-cache source is \
+         available."
     )]
     Unavailable {
         #[source]
@@ -30,13 +30,13 @@ fn unavailable(reason: impl std::error::Error + Send + Sync + 'static, artifacts
     }
 }
 
-pub(super) fn run(
+fn inspect(
     discovery: &Discovery,
-    sources: Snapshot,
+    sources: &Snapshot,
     transports: Option<&provision::Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
     force: bool,
-) -> Result<i32, SetupError> {
+) -> Result<Vec<String>, SetupError> {
     let context = check::context()?;
     let platform = context.artifact_platform();
     let root = discovery.snapshot_root()?.as_std_path();
@@ -57,7 +57,7 @@ pub(super) fn run(
     ))?;
     // Reuse exactly the same native constraints, authored integrity and host
     // mappings as locked provisioning, before looking at any local inventory.
-    provision::plans(&sources, lock)?;
+    provision::plans(sources, lock)?;
     let artifacts = lock
         .tools()
         .iter()
@@ -116,7 +116,89 @@ pub(super) fn run(
                 .collect::<Vec<_>>()
         })
         .map_err(|error| unavailable(error, &artifacts))?;
+    Ok(lines)
+}
+
+fn report(lines: Vec<String>) -> i32 {
     println!("{}", lines.join("\n"));
     println!("No resolution, downloads, writes, probes, or tasks run.");
-    Ok(0)
+    0
+}
+
+pub(super) fn run(
+    discovery: &Discovery,
+    sources: Snapshot,
+    request: &super::SetupRequest,
+    transports: Option<provision::Transports>,
+    preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
+) -> Result<i32, SetupError> {
+    let checked = inspect(
+        discovery,
+        &sources,
+        transports.as_ref(),
+        &preflight,
+        request.force,
+    );
+    if checked.is_ok() && !request.force {
+        return checked.map(report);
+    }
+    // Source, declaration, and policy errors must never become a repair attempt.
+    if checked
+        .as_ref()
+        .err()
+        .is_some_and(|error| !matches!(error, SetupError::Offline(_)))
+    {
+        return checked.map(report);
+    }
+    let lock = sources
+        .previous_lock()
+        .ok_or(SetupError::Unsupported("offline setup requires turbo.lock"))?;
+    if lock
+        .tools()
+        .keys()
+        .any(|id| !matches!(id.as_str(), "node" | "npm" | "pnpm"))
+    {
+        // Other adapters still support only the original trusted read-only repeat.
+        return checked.map(report);
+    }
+    let plans = provision::plans(&sources, lock)?;
+    let transports = transports
+        .map(Ok)
+        .unwrap_or_else(|| provision::Transports::official(&preflight()?))?;
+    let available: Vec<_> = [
+        plans
+            .node
+            .as_ref()
+            .map(|plan| ("node", plan.cache_available(&transports.node))),
+        plans
+            .pnpm
+            .as_ref()
+            .map(|plan| ("pnpm", plan.cache_available(&transports.pnpm))),
+        plans
+            .npm
+            .as_ref()
+            .map(|plan| ("npm", plan.cache_available(&transports.pnpm))),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if checked.is_err() && available.iter().any(|(_, cached)| !cached) {
+        // Retain the original storage/provenance cause when no verified repair
+        // source exists; neither miss path opens a writer or user-state store.
+        if !available.iter().any(|(_, cached)| *cached) {
+            return checked.map(report);
+        }
+        let missing: Vec<_> = available
+            .iter()
+            .filter_map(|(id, cached)| (!cached).then_some(*id))
+            .collect();
+        return Err(SetupError::OfflineMissing(provision::missing_artifacts(
+            lock,
+            provision::platform()?,
+            &missing,
+        )));
+    }
+    // Cache reads above are preflight only. Locked preparation verifies every
+    // byte again, and publishes fresh external provenance under both guards.
+    provision::run(discovery, sources, request, Some(transports), preflight)
 }

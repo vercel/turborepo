@@ -200,8 +200,6 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
 #[test]
 fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
     for flags in [
-        vec!["--force", "--offline"],
-        vec!["--force", "--tools-only", "--offline"],
         vec!["--force", "--tools-only", "--plan", "--no-lock"],
         vec!["--force", "--tools-only", "--no-lock"],
         vec!["--force", "--tools-only", "--no-frozen", "--update-lock"],
