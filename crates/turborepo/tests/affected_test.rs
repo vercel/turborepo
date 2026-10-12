@@ -872,6 +872,139 @@ fn setup_task_level_affected(dir: &Path) {
     git(dir, &["checkout", "-b", "my-branch"]);
 }
 
+/// Returns `None` for a deferred task, whose hash a dry run cannot compute.
+fn typecheck_hash(dir: &Path) -> Option<String> {
+    let output = run_turbo(dir, &["run", "typecheck", "--filter=lib-a", "--dry=json"]);
+    assert!(
+        output.status.success(),
+        "turbo run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .find(|task| task["taskId"] == "lib-a#typecheck")
+        .expect("lib-a#typecheck")["hash"]
+        .as_str()
+        .map(str::to_string)
+}
+
+fn typecheck_affected(dir: &Path) -> (bool, bool) {
+    let output = run_turbo(dir, &["run", "typecheck", "--affected", "--dry=json"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let run = json["tasks"]
+        .as_array()
+        .expect("tasks array")
+        .iter()
+        .any(|task| task["taskId"] == "lib-a#typecheck");
+
+    let output = run_turbo(dir, &["query", "affected", "--tasks", "typecheck"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let query = json["data"]["affectedTasks"]["items"]
+        .as_array()
+        .expect("affected task items")
+        .iter()
+        .any(|task| task["fullName"] == "lib-a#typecheck");
+    (run, query)
+}
+
+/// A task is affected exactly when a change to its inputs changes its hash.
+/// The hashers always include a package's configuration files in explicit
+/// inputs, expand directory inputs to the files inside them, and walk explicit
+/// inputs excluding everything under an excluded directory.
+#[test]
+fn test_task_level_affected_iff_task_hash_changes() {
+    let cases: &[(&str, &str, bool)] = &[
+        (r#"["src/**"]"#, "packages/lib-a/package.json", true),
+        (
+            r#"["src/**", "!package.json"]"#,
+            "packages/lib-a/package.json",
+            true,
+        ),
+        (r#"["src/**"]"#, "packages/lib-a/turbo.json", true),
+        (r#"["src"]"#, "packages/lib-a/src/index.ts", true),
+        (
+            r#"["src", "!src/gen"]"#,
+            "packages/lib-a/src/gen/a.ts",
+            false,
+        ),
+        (
+            r#"["src", "!src/gen"]"#,
+            "packages/lib-a/src/index.ts",
+            true,
+        ),
+        (
+            r#"["src/index.ts", "!src"]"#,
+            "packages/lib-a/src/index.ts",
+            true,
+        ),
+        (
+            r#"[{"mode": "jit", "globs": ["src/**"]}]"#,
+            "packages/lib-a/package.json",
+            true,
+        ),
+        (r#"["src/**"]"#, "packages/lib-a/README.md", false),
+        (
+            r#"["$TURBO_DEFAULT$", "!package.json"]"#,
+            "packages/lib-a/package.json",
+            false,
+        ),
+    ];
+
+    for (inputs, changed_file, expected) in cases {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
+        fs::write(
+            dir.join("turbo.json"),
+            format!(
+                r#"{{"futureFlags": {{"affectedUsingTaskInputs": true}},
+                  "tasks": {{"typecheck": {{"inputs": {inputs}}}}}}}"#
+            ),
+        )
+        .unwrap();
+        fs::create_dir_all(dir.join("packages/lib-a/src/gen")).unwrap();
+        fs::write(dir.join("packages/lib-a/src/index.ts"), "export {};").unwrap();
+        fs::write(dir.join("packages/lib-a/src/gen/a.ts"), "export {};").unwrap();
+        git(dir, &["add", "."]);
+        git(dir, &["commit", "-m", "inputs", "--quiet"]);
+        git(dir, &["checkout", "-b", "my-branch"]);
+
+        let before = typecheck_hash(dir);
+        let path = dir.join(changed_file);
+        let mut contents = fs::read_to_string(&path).unwrap_or_default();
+        if changed_file.ends_with("turbo.json") {
+            contents = r#"{"extends": ["//"], "tasks": {}}"#.to_string();
+        } else if changed_file.ends_with(".json") {
+            let mut json: serde_json::Value =
+                serde_json::from_str(&contents).unwrap_or_else(|_| serde_json::json!({}));
+            json["description"] = serde_json::json!("changed");
+            contents = json.to_string();
+        } else {
+            contents.push_str("\n// changed\n");
+        }
+        fs::write(&path, contents).unwrap();
+        // A JIT hash is computed during execution, so a dry run cannot
+        // observe it.
+        if let Some(before) = before {
+            assert_eq!(
+                typecheck_hash(dir).expect("hash") != before,
+                *expected,
+                "hash change for inputs {inputs} and {changed_file}"
+            );
+        }
+        assert_eq!(
+            typecheck_affected(dir),
+            (*expected, *expected),
+            "(run, query) affectedness for inputs {inputs} and {changed_file}"
+        );
+    }
+}
+
 #[test]
 fn test_task_level_affected_root_package_json_not_global() {
     let tempdir = tempfile::tempdir().unwrap();
