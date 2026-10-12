@@ -454,6 +454,10 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
 #[path = "setup/tests.rs"]
 mod provisioning_tests;
 
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+#[path = "setup/windows_tests.rs"]
+mod windows_provisioning_tests;
+
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
@@ -476,10 +480,16 @@ mod tests {
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
         let libc = turborepo_platform::host_libc();
         let host = cfg!(target_os = "macos") || matches!(libc, Ok(Some(Libc::Glibc { .. })));
+        let windows = cfg!(all(windows, target_arch = "x86_64"));
         let platform = provision::platform();
-        assert_eq!(platform.is_ok(), arch && host);
+        assert_eq!(platform.is_ok(), (arch && host) || windows);
         if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl))) {
             assert!(matches!(platform, Err(Error::MuslHost)));
+        }
+        if cfg!(all(windows, target_arch = "aarch64")) {
+            assert!(
+                platform.is_err_and(|e| e.to_string().contains("not qualified for Windows arm64"))
+            );
         }
     }
 
