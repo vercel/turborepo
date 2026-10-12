@@ -27,6 +27,7 @@ use turborepo_setup::{
     yarn_provision::YarnPlan,
 };
 use turborepo_tool_install::Store;
+use turborepo_turbo_json::SetupMirrors;
 
 use super::Error;
 
@@ -45,11 +46,13 @@ pub(super) struct Transports {
     pub bun: BunTransport,
 }
 impl Transports {
-    pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
+    /// Official sources, unless `TURBO_SETUP_*` variables or the root
+    /// `setup.mirrors` policy select a mirror, in that order.
+    pub fn official(policy: &OfficialSourcePolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
         // Verified archive bytes are shared through the user's cache directory;
         // extraction and activation stay in each repository's .turbo/tools.
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
-        Self::configured(policy, &Mirrors::from_env()?, cache)
+        Self::configured(policy, &Mirrors::configured(mirrors)?, cache)
     }
 
     pub fn configured(
@@ -617,7 +620,7 @@ pub(super) fn run(
         let sources = transports
             .take()
             .map(Ok)
-            .unwrap_or_else(|| Transports::official(&policy))?;
+            .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -714,7 +717,7 @@ pub(super) fn run(
     let policy = preflight()?;
     let mut transports = transports
         .map(Ok)
-        .unwrap_or_else(|| Transports::official(&policy))?;
+        .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
     if offline {
         transports = transports.offline();
     }

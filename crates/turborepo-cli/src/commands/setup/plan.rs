@@ -86,9 +86,9 @@ fn propose(
     };
     check()?;
     let policy = preflight()?;
-    let upstream = transports
-        .map(Ok)
-        .unwrap_or_else(|| provision::Transports::official(&policy))?;
+    let upstream = transports.map(Ok).unwrap_or_else(|| {
+        provision::Transports::official(&policy, discovery.policy().mirrors())
+    })?;
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
