@@ -158,7 +158,10 @@ pub(super) fn extract_zip(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         {
             return Err(Error::InvalidArchive);
         }
-        portable_path(name, directory, tree.limits)?;
+        let skipped = tree.excluded(name);
+        if !skipped {
+            portable_path(name, directory, tree.limits)?;
+        }
         extras(extra, true)?;
         // Local records must be contiguous, unique, and in central-directory
         // order: this rejects overlaps, hidden unindexed entries and polyglots.
@@ -227,7 +230,12 @@ pub(super) fn extract_zip(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         if crc32fast::hash(data) != entry.u32(16) {
             return Err(Error::InvalidArchive);
         }
-        tree.entry(name, directory, mode, size as u64, None, data)?;
+        if skipped {
+            // Skipped payloads still count toward the shared decoded budget.
+            tree.bytes += size;
+        } else {
+            tree.entry(name, directory, mode, size as u64, None, data)?;
+        }
     }
     if index != central.len() || position != local.len() {
         return Err(Error::InvalidArchive);

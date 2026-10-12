@@ -20,7 +20,7 @@ pub(super) fn fixture_permissions(path: &std::path::Path, mode: u32) {
     let _ = (path, mode);
 }
 
-fn verified(bytes: Vec<u8>) -> VerifiedArtifact {
+pub(super) fn verified(bytes: Vec<u8>) -> VerifiedArtifact {
     let digest = ExpectedSha256::from_hex(&hex::encode(Sha256::digest(&bytes))).unwrap();
     VerifiedArtifact::verify_bytes(bytes, digest).unwrap()
 }
@@ -361,6 +361,7 @@ fn failure_cleanup_and_no_surrounding_writes() {
         nodes: BTreeMap::new(),
         limits: limits(),
         bytes: 0,
+        excluded: Vec::new(),
     };
     let fixture = tar(&[
         ("pkg/bin/tool", Regular, b"x"),
@@ -371,4 +372,74 @@ fn failure_cleanup_and_no_surrounding_writes() {
     assert!(path.join("pkg/bin/tool").exists());
     drop(tree);
     assert!(!path.exists());
+}
+#[test]
+fn excluded_subtrees_skip_pax_named_entries_without_writing() {
+    type Entry<'a> = (&'a str, &'a [u8], &'a [(&'a str, &'a [u8])]);
+    let build = |entries: &[Entry<'_>]| {
+        let mut builder = tar::Builder::new(Vec::new());
+        for &(name, data, pax) in entries {
+            if !pax.is_empty() {
+                builder.append_pax_extensions(pax.iter().copied()).unwrap();
+            }
+            if name.is_empty() {
+                continue;
+            }
+            let mut header = tar::Header::new_ustar();
+            header.set_mode(0o644);
+            header.set_size(data.len() as u64);
+            header.set_path(name).unwrap();
+            header.set_cksum();
+            builder.append(&header, data).unwrap();
+        }
+        builder.into_inner().unwrap()
+    };
+    let unpack = |bytes: Vec<u8>, required: &[&str], excluded: &[&str]| {
+        extract_excluding(&verified(bytes), Tar, limits(), layout(required), excluded)
+    };
+    // Go distributions name compiler test fixtures with UTF-8 PAX paths.
+    let utf8: &[(&str, &[u8])] = &[("path", "pkg/test/\u{de}x.go".as_bytes())];
+    let archive = build(&[
+        ("pkg/bin/tool", b"tool", &[]),
+        ("pkg/test/a.txt", b"skipped", &[]),
+        ("pkg/test/x.go", b"skipped", utf8),
+        ("pkg/testdata/kept", b"kept", &[]),
+    ]);
+    let extracted = unpack(archive.clone(), &["bin/tool"], &["test"]).unwrap();
+    assert_eq!(
+        fs::read(extracted.root_path().join("bin/tool")).unwrap(),
+        b"tool"
+    );
+    assert!(!extracted.root_path().join("test").exists());
+    assert!(extracted.root_path().join("testdata/kept").is_file());
+    // Without the exclusion PAX stays unsupported.
+    assert!(matches!(
+        unpack(archive, &["bin/tool"], &[]),
+        Err(UnsupportedEntry)
+    ));
+    let records: [&[(&str, &[u8])]; 4] = [
+        &[("path", "pkg/bin/\u{de}x".as_bytes())],
+        &[("path", b"pkg/test/../bin/tool".as_slice())],
+        &[
+            ("path", b"pkg/test/x".as_slice()),
+            ("size", b"1".as_slice()),
+        ],
+        &[("linkpath", b"pkg/test/x".as_slice())],
+    ];
+    for pax in records {
+        let bytes = build(&[("pkg/bin/tool", b"tool", &[]), ("pkg/test/x", b"x", pax)]);
+        let error = unpack(bytes, &["bin/tool"], &["test"]).err().unwrap();
+        assert!(matches!(error, UnsupportedEntry), "{pax:?}: {error}");
+    }
+    let dangling = build(&[("pkg/bin/tool", b"tool", &[]), ("", b"", utf8)]);
+    assert!(matches!(
+        unpack(dangling, &["bin/tool"], &["test"]),
+        Err(InvalidArchive)
+    ));
+    let required = unpack(valid_tar(), &["bin/tool"], &["bin"]);
+    assert!(matches!(required, Err(LayoutMismatch)));
+    assert!(matches!(
+        unpack(valid_tar(), &["bin/tool"], &[".."]),
+        Err(UnsafePath)
+    ));
 }

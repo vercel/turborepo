@@ -23,6 +23,10 @@
 //! ZIP input, total decoded payload, entry count and path work are bounded;
 //! metadata is borrowed from the bounded input, never allocated from ZIP
 //! counts. Native platform qualification is required before claiming support.
+//!
+//! Callers may name root-relative subtrees to exclude. Their entries are
+//! parsed and bounded but never written. A PAX `path` record is accepted only
+//! to identify such a skipped entry; PAX is otherwise unsupported.
 
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -134,6 +138,18 @@ pub fn extract(
     limits: Limits,
     layout: Layout<'_>,
 ) -> Result<ExtractedArtifact, Error> {
+    extract_excluding(artifact, format, limits, layout, &[])
+}
+
+/// Like [`extract`], but never writes entries inside `excluded` root-relative
+/// directories. Required files cannot be excluded.
+pub fn extract_excluding(
+    artifact: &VerifiedArtifact,
+    format: Format,
+    limits: Limits,
+    layout: Layout<'_>,
+    excluded: &[&str],
+) -> Result<ExtractedArtifact, Error> {
     if artifact.as_bytes().len() > limits.bytes {
         return Err(Error::LimitExceeded);
     }
@@ -143,6 +159,18 @@ pub fn extract(
     }
     if layout.required_files.len() > limits.entries {
         return Err(Error::LimitExceeded);
+    }
+    let excluded = excluded
+        .iter()
+        .map(|dir| portable_path(format!("{root}/{dir}").as_bytes(), false, limits))
+        .collect::<Result<Vec<_>, _>>()?;
+    if layout.required_files.iter().any(|file| {
+        let path = format!("{root}/{file}");
+        excluded
+            .iter()
+            .any(|dir| path == *dir || path.starts_with(&format!("{dir}/")))
+    }) {
+        return Err(Error::LayoutMismatch);
     }
     let mut builder = tempfile::Builder::new();
     builder.prefix("turborepo-archive-");
@@ -158,6 +186,7 @@ pub fn extract(
         nodes: BTreeMap::new(),
         limits,
         bytes: 0,
+        excluded,
     };
     match format {
         Format::Tar => extract_tar(artifact, &mut tree)?,
@@ -251,8 +280,23 @@ struct Tree {
     nodes: BTreeMap<String, Node>,
     limits: Limits,
     bytes: usize,
+    excluded: Vec<String>,
 }
 impl Tree {
+    /// Whether a raw entry name lies inside an excluded subtree. Excluded
+    /// entries are skipped, so only traversal-free containment matters here.
+    fn excluded(&self, raw: &[u8]) -> bool {
+        let Ok(path) = std::str::from_utf8(raw) else {
+            return false;
+        };
+        let path = path.strip_suffix('/').unwrap_or(path);
+        path.split('/').all(|c| !matches!(c, "" | "." | ".."))
+            && self.excluded.iter().any(|dir| {
+                path.strip_prefix(dir.as_str())
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+            })
+    }
+
     fn entry(
         &mut self,
         raw: &[u8],
@@ -466,6 +510,7 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
     }
     let mut archive = tar::Archive::new(Cursor::new(bytes));
     let mut pending = None;
+    let mut pax = false;
     for (i, entry) in archive
         .entries()
         .map_err(|_| Error::InvalidArchive)?
@@ -488,8 +533,37 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         if kind.is_symlink() {
             return Err(Error::UnsupportedSymlinkPlatform);
         }
+        if kind.is_pax_local_extensions() {
+            if pending.is_some() || pax {
+                return Err(Error::InvalidArchive);
+            }
+            if size > tree.limits.path_bytes as u64 + 32 {
+                return Err(Error::LimitExceeded);
+            }
+            // Raw iteration never applies PAX sizes or links, so only a lone
+            // `path` naming an excluded (never written) entry is safe.
+            let mut path = None;
+            for record in entry
+                .pax_extensions()
+                .map_err(|_| Error::InvalidArchive)?
+                .into_iter()
+                .flatten()
+            {
+                let record = record.map_err(|_| Error::InvalidArchive)?;
+                if record.key_bytes() != b"path"
+                    || path.replace(record.value_bytes().to_vec()).is_some()
+                {
+                    return Err(Error::UnsupportedEntry);
+                }
+            }
+            if !path.is_some_and(|path| tree.excluded(&path)) {
+                return Err(Error::UnsupportedEntry);
+            }
+            pax = true;
+            continue;
+        }
         if kind.is_gnu_longname() {
-            if pending.is_some() {
+            if pending.is_some() || pax {
                 return Err(Error::InvalidArchive);
             }
             if size > tree.limits.path_bytes as u64 + 1 {
@@ -516,6 +590,10 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         let name = pending
             .take()
             .unwrap_or_else(|| entry.path_bytes().into_owned());
+        // A PAX-described entry is skipped without trusting its header name.
+        if std::mem::take(&mut pax) || tree.excluded(&name) {
+            continue;
+        }
         let mode = entry.header().mode().map_err(|_| Error::InvalidArchive)?;
         let link = if kind.is_symlink() {
             check_tar_field(&entry.header().as_old().linkname)?;
@@ -539,6 +617,7 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
     }
     let position = archive.into_inner().position() as usize;
     if pending.is_some()
+        || pax
         || bytes.len().saturating_sub(position) < 512
         || bytes[position..].iter().any(|b| *b != 0)
     {
