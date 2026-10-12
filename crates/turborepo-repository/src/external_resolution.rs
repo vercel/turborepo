@@ -143,16 +143,37 @@ impl<'a> PackageExternalDeclarations<'a> {
 /// Equality, ordering, and hashing are defined by `(key, version)` only.
 /// `human_name` is display metadata captured at observation time so query
 /// consumers do not re-read native lockfiles.
-#[derive(Debug, Clone)]
+///
+/// The fields live behind one shared allocation: resolution assembly clones
+/// an identity into every closure that contains it (workspaces x closure
+/// size on large monorepos), so a clone or drop is one reference-count
+/// update instead of one per string.
+#[derive(Clone)]
 pub struct ExternalPackageIdentity {
+    inner: Arc<IdentityFields>,
+}
+
+#[derive(Clone)]
+struct IdentityFields {
     key: Arc<str>,
     version: Arc<str>,
     human_name: Option<Arc<str>>,
 }
 
+impl fmt::Debug for ExternalPackageIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExternalPackageIdentity")
+            .field("key", &self.inner.key)
+            .field("version", &self.inner.version)
+            .field("human_name", &self.inner.human_name)
+            .finish()
+    }
+}
+
 impl PartialEq for ExternalPackageIdentity {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.version == other.version
+        Arc::ptr_eq(&self.inner, &other.inner)
+            || (self.inner.key == other.inner.key && self.inner.version == other.inner.version)
     }
 }
 
@@ -166,42 +187,47 @@ impl PartialOrd for ExternalPackageIdentity {
 
 impl Ord for ExternalPackageIdentity {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (&self.key, &self.version).cmp(&(&other.key, &other.version))
+        if Arc::ptr_eq(&self.inner, &other.inner) {
+            return std::cmp::Ordering::Equal;
+        }
+        (&self.inner.key, &self.inner.version).cmp(&(&other.inner.key, &other.inner.version))
     }
 }
 
 impl std::hash::Hash for ExternalPackageIdentity {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.key.hash(state);
-        self.version.hash(state);
+        self.inner.key.hash(state);
+        self.inner.version.hash(state);
     }
 }
 
 impl ExternalPackageIdentity {
     pub fn new(key: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
         Self {
-            key: key.into(),
-            version: version.into(),
-            human_name: None,
+            inner: Arc::new(IdentityFields {
+                key: key.into(),
+                version: version.into(),
+                human_name: None,
+            }),
         }
     }
 
     pub fn with_human_name(mut self, human_name: impl Into<Arc<str>>) -> Self {
-        self.human_name = Some(human_name.into());
+        Arc::make_mut(&mut self.inner).human_name = Some(human_name.into());
         self
     }
 
     pub fn key(&self) -> &str {
-        &self.key
+        &self.inner.key
     }
 
     pub fn version(&self) -> &str {
-        &self.version
+        &self.inner.version
     }
 
     /// Prefer the producer-supplied display name; otherwise the opaque key.
     pub fn display_name(&self) -> &str {
-        self.human_name.as_deref().unwrap_or(&self.key)
+        self.inner.human_name.as_deref().unwrap_or(&self.inner.key)
     }
 }
 
