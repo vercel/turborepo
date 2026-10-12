@@ -217,6 +217,12 @@ impl Checksums {
         }
         Ok(Self(checksums))
     }
+
+    /// Lowercase SHA-256 for an exact published filename. The sha256sum format
+    /// is shared by other official release manifests (for example uv's).
+    pub(crate) fn sha256(&self, filename: &str) -> Option<&str> {
+        self.0.get(filename).map(String::as_str)
+    }
 }
 
 fn exact_version(value: &str) -> Result<Version, Error> {

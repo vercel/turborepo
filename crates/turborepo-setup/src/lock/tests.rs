@@ -263,6 +263,12 @@ fn current_builtin_versions_are_exact_and_constructor_is_not_a_bypass() {
             v["tools"]["fixture"]["version"] = json!(version);
         });
     }
+    for version in ["0.13", ">=0.5", "0.13.0-rc.1", "0.13.0+1", "v0.13.0"] {
+        reject(|v| {
+            v["tools"]["fixture"]["adapter"] = json!("uv");
+            v["tools"]["fixture"]["version"] = json!(version);
+        });
+    }
     let mut document: Document = serde_json::from_value(fixture()).unwrap();
     document.tools.values_mut().next().unwrap().declarations[0].file = "../outside".into();
     assert!(Lock::new(document).is_err());
