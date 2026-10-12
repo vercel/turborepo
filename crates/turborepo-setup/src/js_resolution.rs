@@ -11,8 +11,6 @@ use crate::{
     registry_resolution::RegistryTransport,
 };
 
-const JS: [&str; 3] = ["node", "npm", "pnpm"];
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]

@@ -16,7 +16,9 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 8] = ["node", "npm", "pnpm", "rust", "rustup", "uv", "python", "go"];
+const NATIVE: [&str; 8] = [
+    "node", "npm", "pnpm", "rust", "rustup", "uv", "python", "go",
+];
 /// rustup's root toolchain files. Both at once is ambiguous, not precedence.
 const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
 const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
@@ -179,7 +181,6 @@ pub fn probe_native_in(
 pub(crate) fn probe_native_with(
     ecosystems: Ecosystems,
     mut read: impl FnMut(&'static str, usize) -> io::Result<Option<Vec<u8>>>,
-    ecosystems: Ecosystems,
 ) -> Result<DeclarationMap, StorageError> {
     let manifest = read("package.json", crate::node_discovery::MAX_MANIFEST_BYTES)?
         .map(String::from_utf8)
