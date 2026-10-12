@@ -24,6 +24,8 @@ pub(super) struct Transports {
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
     #[cfg(test)]
     pub trust_base: Option<std::path::PathBuf>,
+    /// The shared download cache the transports use, cleaned up after setup.
+    pub cache: Option<ArtifactCache>,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -48,10 +50,11 @@ impl Transports {
         };
         Ok(Self {
             node: node.with_cache(cache.clone()),
-            pnpm: registry()?.with_cache(cache),
+            pnpm: registry()?.with_cache(cache.clone()),
             registry: registry()?,
             #[cfg(test)]
             trust_base: None,
+            cache,
         })
     }
 
@@ -72,6 +75,7 @@ impl Transports {
             registry: self.registry.offline(),
             #[cfg(test)]
             trust_base: self.trust_base,
+            cache: self.cache,
         }
     }
 }
@@ -627,6 +631,11 @@ pub(super) fn run(
         )
     {
         println!("npm {}: provided by managed Node (bundled)", npm.version);
+    }
+    for line in
+        super::cleanup::after_provisioning(&mut store, transports.cache.as_ref(), lock, host)
+    {
+        println!("{line}");
     }
     if turborepo_setup::writer_storage::outside_git_repository(root)? {
         println!("No Git repository found; skipped checking that .turbo/ is Git-ignored.");

@@ -16,6 +16,7 @@ use crate::cli::{Args, SetupArgs};
 mod acl;
 pub(crate) mod authorization;
 mod check;
+mod cleanup;
 #[cfg(windows)]
 mod dacl;
 mod effective;

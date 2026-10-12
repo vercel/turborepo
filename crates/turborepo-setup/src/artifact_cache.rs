@@ -4,16 +4,19 @@
 //! repository-scoped. Entries are keyed by the lock's artifact identity
 //! (platform key plus trusted SHA-256), and every read re-verifies that digest.
 //! Writers publish complete verified files by atomic rename, so concurrent
-//! writers and interrupted downloads never expose partial bytes. No network,
-//! eviction, or cross-process locking.
+//! writers and interrupted downloads never expose partial bytes. Hits and lock
+//! references record their last use for age-based pruning. No network or
+//! cross-process locking.
 
 use std::{
     fs::{self, File},
     io::{self, Read, Write},
     path::{Component, Path, PathBuf},
+    time::{Duration, SystemTime},
 };
 
 use turborepo_download::{ExpectedSha256, VerifiedArtifact};
+pub use turborepo_tool_install::DiskUse;
 
 use crate::lock::Platform;
 
@@ -50,19 +53,96 @@ impl ArtifactCache {
         let digest = ExpectedSha256::from_hex(sha256).ok()?;
         let directory = self.directory(platform, sha256)?;
         self.check(&directory).ok()?;
-        let file = open_entry(&directory.join(sha256)).ok()?;
+        let mut file = open_entry(&directory.join(sha256)).ok()?;
         let metadata = file.metadata().ok()?;
         if !metadata.is_file() || metadata.len() > max_bytes as u64 {
             return None;
         }
         let mut bytes = Vec::new();
-        file.take(max_bytes as u64 + 1)
+        Read::by_ref(&mut file)
+            .take(max_bytes as u64 + 1)
             .read_to_end(&mut bytes)
             .ok()?;
         if bytes.len() > max_bytes {
             return None;
         }
-        VerifiedArtifact::verify_bytes(bytes, digest).ok()
+        let artifact = VerifiedArtifact::verify_bytes(bytes, digest).ok()?;
+        // Last use, from any repository, is the pruning signal. Best effort.
+        let _ = file.set_modified(SystemTime::now());
+        Some(artifact)
+    }
+
+    /// Refresh the last use of an entry the caller's lock references without
+    /// reading it, so a clone that reuses its installs still keeps the bytes
+    /// it would need to reinstall. Best effort.
+    pub fn mark_used(&self, platform: Platform, sha256: &str) {
+        let Some(directory) = self.directory(platform, sha256) else {
+            return;
+        };
+        if self.check(&directory).is_ok()
+            && let Ok(file) = open_entry(&directory.join(sha256))
+            && file.metadata().is_ok_and(|metadata| metadata.is_file())
+        {
+            let _ = file.set_modified(SystemTime::now());
+        }
+    }
+
+    /// Remove entries no repository has used within `unused_for`, plus stale
+    /// partial writes. Extracted installs never depend on cache entries, so a
+    /// pruned entry only costs a later verified download. Unrecognized names
+    /// and links are never touched.
+    pub fn prune_unused(&self, unused_for: Duration) -> io::Result<DiskUse> {
+        let cutoff = SystemTime::now()
+            .checked_sub(unused_for)
+            .ok_or_else(|| io::Error::other("invalid setup download cache age"))?;
+        let mut removed = DiskUse::default();
+        for path in self.entries()? {
+            let metadata = fs::symlink_metadata(&path)?;
+            if metadata.is_file() && metadata.modified()? < cutoff {
+                fs::remove_file(&path)?;
+                removed.entries += 1;
+                removed.bytes += metadata.len();
+            }
+        }
+        Ok(removed)
+    }
+
+    /// Apparent size of cached entries and partials, shared by every clone.
+    pub fn disk_use(&self) -> io::Result<DiskUse> {
+        let mut usage = DiskUse::default();
+        for path in self.entries()? {
+            usage.entries += 1;
+            usage.bytes += fs::symlink_metadata(path)?.len();
+        }
+        Ok(usage)
+    }
+
+    // Digest entries and partials in real platform directories only.
+    fn entries(&self) -> io::Result<Vec<PathBuf>> {
+        let platforms = match fs::read_dir(&self.root) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            result => result?,
+        };
+        let mut entries = Vec::new();
+        for platform in platforms {
+            let platform = platform?.path();
+            if self.check(&platform).is_err() {
+                continue;
+            }
+            for entry in fs::read_dir(platform)? {
+                let entry = entry?;
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                let digest = name.len() == 64
+                    && name
+                        .bytes()
+                        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
+                if entry.file_type()?.is_file() && (digest || name.starts_with(".partial-")) {
+                    entries.push(entry.path());
+                }
+            }
+        }
+        Ok(entries)
     }
 
     /// Publish verified bytes under their own SHA-256. Concurrent writers of

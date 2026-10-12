@@ -150,3 +150,66 @@ fn only_absolute_caller_selected_bases_are_accepted() {
     );
     assert!(cache.get(Platform::Any, "../escape", LIMIT).is_none());
 }
+
+fn age(path: &Path, days: u64) {
+    let at = SystemTime::now() - Duration::from_secs(days * 86_400);
+    File::open(path).unwrap().set_modified(at).unwrap();
+}
+
+#[test]
+fn pruning_keeps_entries_another_repository_used_recently() {
+    let base = tempfile::tempdir().unwrap();
+    let cache = ArtifactCache::new(base.path()).unwrap();
+    let (old, old_sha256) = verified(b"replaced version archive");
+    let (shared, shared_sha256) = verified(b"archive another clone still uses");
+    cache.put(Platform::Any, &old).unwrap();
+    cache.put(Platform::Any, &shared).unwrap();
+    let directory = base.path().join("turborepo/setup-artifacts/v1/any");
+    fs::write(directory.join(".partial-stale"), b"torn").unwrap();
+    fs::write(directory.join(".partial-live"), b"in progress").unwrap();
+    fs::write(directory.join("notes"), b"not a cache entry").unwrap();
+    let aged = [old_sha256.as_str(), shared_sha256.as_str()];
+    for name in aged.into_iter().chain([".partial-stale", "notes"]) {
+        age(&directory.join(name), 40);
+    }
+    // Another repository's setup reuses one entry, refreshing its last use.
+    let other = ArtifactCache::new(base.path()).unwrap();
+    assert!(other.get(Platform::Any, &shared_sha256, LIMIT).is_some());
+    assert_eq!(cache.disk_use().unwrap().entries, 4);
+    let removed = cache
+        .prune_unused(Duration::from_secs(30 * 86_400))
+        .unwrap();
+    assert_eq!(removed.entries, 2);
+    assert_eq!(removed.bytes, old.as_bytes().len() as u64 + 4);
+    assert!(cache.get(Platform::Any, &old_sha256, LIMIT).is_none());
+    assert!(cache.get(Platform::Any, &shared_sha256, LIMIT).is_some());
+    let mut expected = vec![".partial-live".to_owned(), "notes".into(), shared_sha256];
+    expected.sort();
+    assert_eq!(files(&directory), expected);
+}
+
+#[test]
+fn lock_references_keep_entries_whose_installs_were_reused() {
+    let base = tempfile::tempdir().unwrap();
+    let cache = ArtifactCache::new(base.path()).unwrap();
+    let (referenced, sha256) = verified(b"archive a reused install came from");
+    cache.put(Platform::MacosArm64, &referenced).unwrap();
+    let entry = base
+        .path()
+        .join("turborepo/setup-artifacts/v1/macos-arm64")
+        .join(&sha256);
+    age(&entry, 40);
+    // Only the exact lock key is refreshed; misses create nothing.
+    cache.mark_used(Platform::Any, &sha256);
+    cache.mark_used(Platform::LinuxX64Gnu, &sha256);
+    cache.mark_used(Platform::MacosArm64, &"0".repeat(64));
+    assert_eq!(
+        files(&base.path().join("turborepo/setup-artifacts/v1")),
+        ["macos-arm64"]
+    );
+    let month = Duration::from_secs(30 * 86_400);
+    assert!(fs::metadata(&entry).unwrap().modified().unwrap() < SystemTime::now() - month);
+    cache.mark_used(Platform::MacosArm64, &sha256);
+    assert_eq!(cache.prune_unused(month).unwrap(), DiskUse::default());
+    assert!(cache.get(Platform::MacosArm64, &sha256, LIMIT).is_some());
+}

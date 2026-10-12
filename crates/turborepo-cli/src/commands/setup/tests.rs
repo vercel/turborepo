@@ -140,6 +140,7 @@ impl Fixture {
                     )
                     .unwrap()
                     .with_cache(cache.clone()),
+                    cache: cache.clone(),
                 }),
                 || {
                     Ok(self
@@ -207,6 +208,8 @@ fn track(root: &std::path::Path) {
 mod cache;
 #[path = "check_tests.rs"]
 mod checks;
+#[path = "cleanup_tests.rs"]
+mod cleanups;
 #[path = "plan_tests.rs"]
 mod plans;
 
