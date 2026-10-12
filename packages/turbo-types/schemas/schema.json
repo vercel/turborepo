@@ -923,6 +923,17 @@
             }
           ]
         },
+        "go": {
+          "description": "Replaces both the `https://go.dev` and `https://dl.google.com` origins for Go's release index and archives. The mirror serves both official paths, `/dl/?mode=json&include=all` and `/go/<archive>`, beneath its base.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "node": {
           "description": "Replaces `https://nodejs.org/dist` for Node.js release metadata and archives.",
           "anyOf": [
@@ -947,6 +958,17 @@
         },
         "python": {
           "description": "Replaces the `https://releases.astral.sh` origin for CPython build checksums and archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rust": {
+          "description": "Replaces the `https://static.rust-lang.org` origin for rustup and Rust toolchain downloads, keeping their official paths, like `RUSTUP_DIST_SERVER`.",
           "anyOf": [
             {
               "$ref": "#/definitions/String"

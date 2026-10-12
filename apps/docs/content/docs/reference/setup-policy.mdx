@@ -284,15 +284,35 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
 
 `mirrors` sets where `turbo setup` downloads from. Each value is a base URL that serves the same paths as the official source it replaces:
 
-| Key           | Replaces                     | Downloads                                         |
-| ------------- | ---------------------------- | ------------------------------------------------- |
-| `node`        | `https://nodejs.org/dist`    | Node.js release metadata and archives             |
-| `npmRegistry` | `https://registry.npmjs.org` | npm, pnpm, and Yarn package metadata and tarballs |
-| `bun`         | `https://github.com`         | Bun release checksums and archives                |
-| `uv`          | `https://releases.astral.sh` | uv's version index and release archives           |
-| `python`      | `https://releases.astral.sh` | CPython build checksums and archives              |
+| Key           | Replaces                                     | Downloads                                           |
+| ------------- | -------------------------------------------- | --------------------------------------------------- |
+| `node`        | `https://nodejs.org/dist`                    | Node.js release metadata and archives               |
+| `npmRegistry` | `https://registry.npmjs.org`                 | npm, pnpm, and Yarn package metadata and tarballs   |
+| `bun`         | `https://github.com`                         | Bun release checksums and archives                  |
+| `uv`          | `https://releases.astral.sh`                 | uv's version index and release archives             |
+| `python`      | `https://releases.astral.sh`                 | CPython build checksums and archives                |
+| `go`          | `https://go.dev` and `https://dl.google.com` | Go's release index and archives                     |
+| `rust`        | `https://static.rust-lang.org`               | rustup, Rust channel manifests, and Rust components |
 
-`bun`, `uv`, and `python` replace only the official host, so the mirror serves the official paths beneath its base. For example, with `"bun": "https://mirror.example.com/github"`, `turbo setup` downloads Bun 1.2.23's checksums from `https://mirror.example.com/github/oven-sh/bun/releases/download/bun-v1.2.23/SHASUMS256.txt`. Mirrors must serve these files themselves rather than redirect to another host.
+`bun`, `uv`, `python`, `go`, and `rust` replace only the official host, so the mirror serves the official paths beneath its base. For example, with `"bun": "https://mirror.example.com/github"`, `turbo setup` downloads Bun 1.2.23's checksums from `https://mirror.example.com/github/oven-sh/bun/releases/download/bun-v1.2.23/SHASUMS256.txt`. Mirrors must serve these files themselves rather than redirect to another host.
+
+Go publishes from two hosts, so one `go` mirror serves both of their paths. With `"go": "https://mirror.example.com/golang"`:
+
+| Official URL                                           | Mirror URL                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------ |
+| `https://go.dev/dl/?mode=json&include=all`             | `https://mirror.example.com/golang/dl/?mode=json&include=all`      |
+| `https://dl.google.com/go/go1.24.2.linux-amd64.tar.gz` | `https://mirror.example.com/golang/go/go1.24.2.linux-amd64.tar.gz` |
+
+Some public Go mirrors serve the release index but redirect archive downloads back to `dl.google.com`. They don't work as a `go` mirror.
+
+`rust` works like rustup's `RUSTUP_DIST_SERVER`. `turbo setup` downloads rustup itself from the mirror and runs its private rustup with `RUSTUP_DIST_SERVER` set to the mirror and `RUSTUP_UPDATE_ROOT` set to its `/rustup` path, so Rust components download from the mirror too. Serve the official channel manifests unchanged. rustup checks each component against the channel manifest, and `turbo setup` checks that manifest's `.tar.gz` URLs and digests against `turbo.lock` before installing the toolchain.
+
+<Callout type="warn">
+  rustup downloads the `.tar.xz` copies of Rust components, and `turbo.lock`
+  records only the `.tar.gz` digests. Through a `rust` mirror, those copies are
+  verified against the channel manifest the mirror serves, not directly against
+  `turbo.lock`. Use a Rust mirror you trust.
+</Callout>
 
 ```jsonc title="./turbo.json"
 {
@@ -311,8 +331,8 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
 
 - Each value must be an absolute `https://` URL without credentials, a query, or a fragment. `turbo.json` is committed, so it must never contain a secret. Errors name the key and mask the value.
 - `turbo setup` sends no credentials to mirrors. Use a mirror that serves these downloads without authentication.
-- `turbo.lock` keeps the official URLs, and every download is verified against the digest in `turbo.lock`. A lock created through a mirror that serves the official bytes is identical to one created without it, so other machines can use the official sources or another mirror.
-- Rust, Go, and [additional tools](/docs/reference/additional-tools) still download from their official or declared URLs.
+- `turbo.lock` keeps the official URLs, and every download is verified against the digest in `turbo.lock`, except Rust components, as described above. A lock created through a mirror that serves the official bytes is identical to one created without it, so other machines can use the official sources or another mirror.
+- [Additional tools](/docs/reference/additional-tools) still download from their declared URLs.
 - `--check`, `--offline`, and `turbo run` never download, so they never contact a mirror.
 
 <Callout type="warn">
@@ -326,7 +346,7 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
 
 ### Environment overrides
 
-`TURBO_SETUP_NODE_MIRROR`, `TURBO_SETUP_NPM_REGISTRY`, `TURBO_SETUP_BUN_MIRROR`, `TURBO_SETUP_UV_MIRROR`, and `TURBO_SETUP_PYTHON_MIRROR` override `node`, `npmRegistry`, `bun`, `uv`, and `python` for one invocation without changing `turbo.json`. They follow the same rules. For each mirror, `turbo setup` uses the first value it finds:
+`TURBO_SETUP_NODE_MIRROR`, `TURBO_SETUP_NPM_REGISTRY`, `TURBO_SETUP_BUN_MIRROR`, `TURBO_SETUP_UV_MIRROR`, `TURBO_SETUP_PYTHON_MIRROR`, `TURBO_SETUP_GO_MIRROR`, and `TURBO_SETUP_RUST_MIRROR` override `node`, `npmRegistry`, `bun`, `uv`, `python`, `go`, and `rust` for one invocation without changing `turbo.json`. They follow the same rules. For each mirror, `turbo setup` uses the first value it finds:
 
 1. The environment variable. Empty variables are ignored.
 2. The key in `setup.mirrors`.

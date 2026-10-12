@@ -91,6 +91,15 @@ impl Transports {
             Some(mirror) => PythonTransport::mirrored(policy, mirror)?,
             None => PythonTransport::official(policy)?,
         };
+        let go = match &mirrors.go {
+            Some(mirror) => GoTransport::mirrored(policy, mirror)?,
+            None => GoTransport::official(policy)?,
+        };
+        // Also the private rustup's distribution server.
+        let rustup = match &mirrors.rust {
+            Some(mirror) => RustupTransport::mirrored(policy, mirror)?,
+            None => RustupTransport::official(policy)?,
+        };
         Ok(Self {
             node: node.with_cache(cache.clone()),
             pnpm: registry()?.with_cache(cache.clone()),
@@ -98,10 +107,10 @@ impl Transports {
             #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
             cache,
-            rustup: RustupTransport::official(policy)?,
+            rustup,
             uv,
             python,
-            go: GoTransport::official(policy)?,
+            go,
             bun,
             artifact: None,
         })
@@ -969,7 +978,7 @@ pub(super) fn run(
                 .tempdir_in(root.join(".turbo/tools"))?;
             let rustup =
                 rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
-            plan.prepare(&store, &desired, &rustup, preparation)?
+            plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?
         }
         _ => None,
     };

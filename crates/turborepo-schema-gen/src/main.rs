@@ -1153,6 +1153,12 @@ export interface SetupMirrors {
 
   /** Replaces the `https://releases.astral.sh` origin for CPython, keeping official paths. */
   python?: string;
+
+  /** Replaces `https://go.dev` and `https://dl.google.com` for Go, keeping official paths. */
+  go?: string;
+
+  /** Replaces the `https://static.rust-lang.org` origin for rustup and Rust, keeping official paths. */
+  rust?: string;
 }
 
 export interface AdditionalTool {

@@ -40,6 +40,17 @@ pub struct RawSetupMirrors {
     /// checksums and archives, keeping their official paths.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub python: Option<Spanned<String>>,
+    /// Replaces both the `https://go.dev` and `https://dl.google.com` origins
+    /// for Go's release index and archives. The mirror serves both official
+    /// paths, `/dl/?mode=json&include=all` and `/go/<archive>`, beneath its
+    /// base.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub go: Option<Spanned<String>>,
+    /// Replaces the `https://static.rust-lang.org` origin for rustup and Rust
+    /// toolchain downloads, keeping their official paths, like
+    /// `RUSTUP_DIST_SERVER`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rust: Option<Spanned<String>>,
 }
 
 /// Validated `setup.mirrors` bases. `None` keeps the official source.
@@ -50,16 +61,20 @@ pub struct SetupMirrors {
     pub bun: Option<String>,
     pub uv: Option<String>,
     pub python: Option<String>,
+    pub go: Option<String>,
+    pub rust: Option<String>,
 }
 
 impl RawSetupMirrors {
-    fn values(&self) -> [(&'static str, &Option<Spanned<String>>); 5] {
+    fn values(&self) -> [(&'static str, &Option<Spanned<String>>); 7] {
         [
             ("node", &self.node),
             ("npmRegistry", &self.npm_registry),
             ("bun", &self.bun),
             ("uv", &self.uv),
             ("python", &self.python),
+            ("go", &self.go),
+            ("rust", &self.rust),
         ]
     }
 }
@@ -99,6 +114,8 @@ pub(super) fn validate(raw: Option<&Spanned<RawSetupMirrors>>) -> Result<SetupMi
         bun: base(&raw.bun),
         uv: base(&raw.uv),
         python: base(&raw.python),
+        go: base(&raw.go),
+        rust: base(&raw.rust),
     })
 }
 
@@ -127,13 +144,15 @@ fn masked<'a>(
 }
 
 impl RawSetupMirrors {
-    fn values_mut(&mut self) -> [&mut Option<Spanned<String>>; 5] {
+    fn values_mut(&mut self) -> [&mut Option<Spanned<String>>; 7] {
         [
             &mut self.node,
             &mut self.npm_registry,
             &mut self.bun,
             &mut self.uv,
             &mut self.python,
+            &mut self.go,
+            &mut self.rust,
         ]
     }
 }
