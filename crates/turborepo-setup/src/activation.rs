@@ -1,8 +1,11 @@
-//! Read-only managed environment planning (Node/npm/pnpm, Rust and Go, plus
-//! uv/Python when the caller enables Python workspaces), not execution
-//! authorization. Repo-writable inventory proves readiness only. Consumers
-//! must separately authorize setup-recorded tools with trusted-root user
-//! state, gate managed mode, and revalidate before use. No CLI support is
+//! Read-only managed environment planning (Node and its package managers
+//! npm/pnpm/Yarn/Bun, Rust and Go, plus uv/Python when the caller enables
+//! Python workspaces), not execution authorization. Every adapter contributes
+//! the same shape: validated inventory tools whose exports share one managed
+//! bin directory, plus runtime variables, so consumers need no
+//! adapter-specific code. Repo-writable inventory proves readiness only.
+//! Consumers must separately authorize setup-recorded tools with trusted-root
+//! user state, gate managed mode, and revalidate before use. No CLI support is
 //! advertised by this module.
 
 use std::{
@@ -15,20 +18,23 @@ use std::{
 use turborepo_tool_install::{Current, Store, Tool, Verification};
 
 use crate::{
+    bun_provision::BunPlan,
     execution_identity::{ExecutionContext, ExecutionSnapshot},
     go_discovery::GoVersion,
     go_provision::GoPlan,
-    lock::{Ecosystems, Installation, Platform, Snapshot, StorageError},
+    lock::{Ecosystems, Installation, Lock, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
     npm_provision::NpmPlan,
+    package_manager::{Declaration, Manager},
     pnpm_provision::PnpmPlan,
     python_provision::PythonPlan,
     rust_provision::{self, RustPlan},
     rustup_provision::RustupPlan,
     uv_provision::UvPlan,
+    yarn_provision::YarnPlan,
 };
 
-const SUPPORTED: [&str; 6] = ["node", "npm", "pnpm", "rust", "rustup", "go"];
+const SUPPORTED: [&str; 8] = ["node", "npm", "pnpm", "yarn", "bun", "rust", "rustup", "go"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -39,8 +45,8 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports managed Node, npm, pnpm, Rust and Go, plus uv and Python \
-         with experimentalPythonWorkspaces; use a supported setup adapter"
+        "activation planning supports managed Node, npm, pnpm, Yarn, Bun, Rust and Go, plus uv \
+         and Python with experimentalPythonWorkspaces; use a supported setup adapter"
     )]
     UnsupportedAdapter,
     /// Intentional external tools, unlike a missing managed installation.
@@ -85,7 +91,8 @@ pub struct ActivationPlan {
     // RUSTUP_TOOLCHAIN and the clone's CARGO_HOME; Go pins GOROOT and its
     // fixed runtime settings; uv/Python values derive only from this
     // generation and the lock. Never inherited or host-dependent settings.
-    // Node/pnpm need no runtime variables.
+    // Node and Bun are self-contained, and pnpm/Yarn shims launch the selected
+    // managed Node by path, so they need no runtime variables.
     runtime_env: BTreeMap<String, OsString>,
 }
 
@@ -204,7 +211,8 @@ impl ActivationPlan {
         let version =
             |tool: &Tool| semver::Version::parse(&tool.version).map_err(|_| Error::InvalidLock);
         let mut tools = Vec::new();
-        // Python-only repositories lock no Node; pnpm still requires it.
+        // Python-, Go- and Bun-only repositories lock no Node; npm, pnpm and Yarn
+        // still require it.
         let node = if lock.tools().contains_key("node") {
             let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             if !sources
@@ -218,14 +226,12 @@ impl ActivationPlan {
         } else {
             None
         };
-        if lock.tools().contains_key("pnpm") {
-            let node = node.as_ref().ok_or(Error::InvalidLock)?;
+        if ["pnpm", "yarn", "bun"]
+            .iter()
+            .any(|id| lock.tools().contains_key(*id))
+        {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            // Share setup's full authored-pin validation and reuse identity;
-            // an authoritative version does not erase devEngines integrity.
-            let pnpm = PnpmPlan::from_declaration(lock, platform, node, &manager)
-                .map_err(|_| Error::InvalidLock)?;
-            tools.push(pnpm.inventory_tool().clone());
+            tools.push(manager_tool(lock, platform, node.as_ref(), &manager)?);
         }
         if lock.tools().contains_key("npm") {
             // npm is bound to the locked Node it runs on.
@@ -412,6 +418,42 @@ fn uv_env(
         env.insert("UV_PYTHON".into(), python.key().into());
     }
     Ok(env)
+}
+
+/// The installed identity setup provisions for the declared manager. Each plan
+/// shares setup's full authored-pin validation and reuse identity, so an
+/// authoritative version never erases devEngines integrity.
+fn manager_tool(
+    lock: &Lock,
+    platform: Platform,
+    node: Option<&NodePlan>,
+    manager: &Declaration,
+) -> Result<Tool, Error> {
+    // pnpm and Yarn run on the selected managed Node; only Bun stands alone.
+    let node = || node.ok_or(Error::InvalidLock);
+    let id = match manager.manager {
+        Manager::Pnpm => "pnpm",
+        Manager::Yarn => "yarn",
+        Manager::Bun => "bun",
+        _ => return Err(Error::UnsupportedAdapter),
+    };
+    if !lock.tools().contains_key(id) {
+        return Err(Error::DeclarationDrift);
+    }
+    Ok(match manager.manager {
+        Manager::Pnpm => PnpmPlan::from_declaration(lock, platform, node()?, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+        Manager::Yarn => YarnPlan::from_declaration(lock, platform, node()?, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+        _ => BunPlan::from_declaration(lock, platform, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+    })
 }
 
 #[cfg(all(test, unix))]

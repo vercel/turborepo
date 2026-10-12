@@ -5,6 +5,7 @@
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
+    bun_provision::{BunPlan, BunTransport},
     artifact_cache::ArtifactCache,
     go_provision::GoPlan,
     go_resolution::GoTransport,
@@ -20,14 +21,15 @@ use turborepo_setup::{
     rustup_provision::{RustupPlan, RustupTransport},
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
+    yarn_provision::YarnPlan,
     uv_resolution::UvTransport,
 };
 use turborepo_tool_install::Store;
 
 use super::Error;
 
-const SUPPORTED: [&str; 8] = [
-    "node", "npm", "pnpm", "rust", "rustup", "uv", "python", "go",
+const SUPPORTED: [&str; 10] = [
+    "node", "npm", "pnpm", "yarn", "bun", "rust", "rustup", "uv", "python", "go",
 ];
 
 pub(super) struct Transports {
@@ -42,6 +44,7 @@ pub(super) struct Transports {
     pub uv: UvTransport,
     pub python: PythonTransport,
     pub go: GoTransport,
+    pub bun: BunTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -75,6 +78,7 @@ impl Transports {
             uv: UvTransport::official(policy)?,
             python: PythonTransport::official(policy)?,
             go: GoTransport::official(policy)?,
+            bun: BunTransport::official(policy)?,
         })
     }
 
@@ -100,6 +104,7 @@ impl Transports {
             uv: self.uv,
             python: self.python,
             go: self.go,
+            bun: self.bun,
         }
     }
 }
@@ -232,6 +237,9 @@ pub(super) struct Plans {
     pub uv: Option<UvPlan>,
     pub python: Option<PythonPlan>,
     pub go: Option<GoPlan>,
+    pub yarn: Option<YarnPlan>,
+    /// Bun runs the repository's scripts itself; it needs no Node.
+    pub bun: Option<BunPlan>,
 }
 
 pub(super) fn plans(
@@ -247,7 +255,7 @@ pub(super) fn plans(
             .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, Rust, uv, Python, and Go are supported",
+            "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, and Go are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -266,7 +274,7 @@ pub(super) fn plans(
     } else {
         None
     };
-    let (mut pnpm, mut npm) = (None, None);
+    let (mut pnpm, mut npm, mut yarn, mut bun) = (None, None, None, None);
     if let Some(manager) = snapshot.package_manager()? {
         match (manager.manager, &node) {
             (Manager::Pnpm, Some(node)) => {
@@ -275,7 +283,14 @@ pub(super) fn plans(
             (Manager::Npm, Some(node)) => {
                 npm = NpmPlan::from_declaration(lock, platform, node, &manager)?;
             }
-            (Manager::Pnpm | Manager::Npm, None) => {
+            (Manager::Yarn, Some(node)) => {
+                yarn = Some(YarnPlan::from_declaration(lock, platform, node, &manager)?);
+            }
+            // Bun runs the repository's scripts itself; it needs no Node.
+            (Manager::Bun, _) => {
+                bun = Some(BunPlan::from_declaration(lock, platform, &manager)?);
+            }
+            (Manager::Pnpm | Manager::Npm | Manager::Yarn, None) => {
                 return Err(Error::Unsupported(
                     "a managed package manager requires a native Node declaration",
                 ));
@@ -350,6 +365,7 @@ pub(super) fn plans(
         && rustup.is_none()
         && rust.is_none()
         && go.is_none()
+        && bun.is_none()
     {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
@@ -362,6 +378,8 @@ pub(super) fn plans(
         uv,
         python,
         go,
+        yarn,
+        bun,
     })
 }
 
@@ -438,11 +456,14 @@ pub(super) fn run(
         }
     }
     let declared = snapshot.declarations();
-    let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
+    // Package managers other than Bun run on the managed Node.
+    let js_manager = ["npm", "pnpm", "yarn"]
+        .iter()
+        .any(|id| declared.contains_key(*id));
     if write
         && !declared.contains_key("node")
         && (js_manager
-            || !["rustup", "uv", "go"]
+            || !["rustup", "uv", "go", "bun"]
                 .iter()
                 .any(|id| declared.contains_key(*id)))
     {
@@ -466,7 +487,7 @@ pub(super) fn run(
                 .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, Rust, uv, Python, and Go are supported",
+                "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, and Go are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -528,7 +549,7 @@ pub(super) fn run(
                 let mut tools = runtime.block_on(rust).map_err(|e| failed(&e))?;
                 // JavaScript plus, with Python workspaces, uv and CPython.
                 let declared = request.snapshot().declarations();
-                if ["node", "npm", "pnpm", "uv", "python"]
+                if ["node", "npm", "pnpm", "yarn", "bun", "uv", "python"]
                     .iter()
                     .any(|id| declared.contains_key(*id))
                 {
@@ -538,6 +559,7 @@ pub(super) fn run(
                             turborepo_setup::native_resolution::Transports {
                                 node: &sources.node,
                                 registry: &sources.registry,
+                                bun: &sources.bun,
                                 uv: &sources.uv,
                                 python: &sources.python,
                                 platform: platform().map_err(|e| failed(&e))?,
@@ -604,14 +626,21 @@ pub(super) fn run(
         uv,
         python,
         go,
+        yarn,
+        bun,
     } = plans(&snapshot, lock)?;
     // Offline transports exist for Node and the npm registry only; rustup, uv,
-    // CPython and Go downloads have no offline mode yet.
+    // CPython, Go and Bun downloads have no offline mode yet.
     if offline
-        && (rustup.is_some() || rust.is_some() || uv.is_some() || python.is_some() || go.is_some())
+        && (rustup.is_some()
+            || rust.is_some()
+            || uv.is_some()
+            || python.is_some()
+            || go.is_some()
+            || bun.is_some())
     {
         return Err(Error::Unsupported(
-            "offline setup for managed Rust, uv, Python or Go",
+            "offline setup for managed Bun, Rust, uv, Python or Go",
         ));
     }
     let trust = match trust {
@@ -628,6 +657,8 @@ pub(super) fn run(
         .chain(uv.iter().map(UvPlan::inventory_tool))
         .chain(python.iter().map(PythonPlan::inventory_tool))
         .chain(go.iter().map(GoPlan::inventory_tool))
+        .chain(yarn.iter().map(YarnPlan::inventory_tool))
+        .chain(bun.iter().map(BunPlan::inventory_tool))
         .cloned()
         .collect();
     let policy = preflight()?;
@@ -679,6 +710,8 @@ pub(super) fn run(
         prepared_uv,
         prepared_python,
         prepared_go,
+        prepared_yarn,
+        prepared_bun,
     ) = runtime.block_on(async {
         use turborepo_setup::{Preparation::IfNeeded, node_provision::Error::Offline};
         let transport = &transports.node;
@@ -758,6 +791,30 @@ pub(super) fn run(
             },
             None => None,
         };
+        // Yarn shares the registry transport and preparation type with pnpm.
+        let yarn = match &yarn {
+            Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
+                Err(PnpmOffline) if force && recorded => {
+                    match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(PnpmOffline) => {
+                            missing.push("yarn");
+                            None
+                        }
+                        result => result?,
+                    }
+                }
+                Err(PnpmOffline) => {
+                    missing.push("yarn");
+                    None
+                }
+                result => result?,
+            },
+            None => None,
+        };
         preflight()?;
         revalidate(discovery)?;
         snapshot.check_guard(&guard)?;
@@ -798,7 +855,17 @@ pub(super) fn run(
             }
             None => None,
         };
-        Ok::<_, Error>((node, pnpm, npm, rustup, uv, python, go))
+        preflight()?;
+        revalidate(discovery)?;
+        snapshot.check_guard(&guard)?;
+        let bun = match &bun {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.bun, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, pnpm, npm, rustup, uv, python, go, yarn, bun))
     })?;
     if !missing.is_empty() {
         return Err(Error::OfflineMissing(missing_artifacts(
@@ -855,6 +922,14 @@ pub(super) fn run(
                 .as_ref()
                 .ok_or(missing)?
                 .stage(tool, destination),
+            "yarn" => prepared_yarn
+                .as_ref()
+                .ok_or(missing)?
+                .stage(tool, destination),
+            "bun" => prepared_bun
+                .as_ref()
+                .ok_or(missing)?
+                .stage(tool, destination),
             _ => Err(missing),
         }
     };
@@ -884,7 +959,10 @@ pub(super) fn run(
                 .map_or(0, |pnpm| pnpm.downloaded_bytes())
             + prepared_npm
                 .as_ref()
-                .map_or(0, |npm| npm.downloaded_bytes()),
+                .map_or(0, |npm| npm.downloaded_bytes())
+            + prepared_yarn
+                .as_ref()
+                .map_or(0, |yarn| yarn.downloaded_bytes()),
         ..Provisioned::default()
     };
     for tool in &desired {
@@ -896,6 +974,8 @@ pub(super) fn run(
             "uv" => prepared_uv.as_ref().map(|_| false),
             "python" => prepared_python.as_ref().map(|_| false),
             "go" => prepared_go.as_ref().map(|_| false),
+            "yarn" => prepared_yarn.as_ref().map(|yarn| yarn.from_cache()),
+            "bun" => prepared_bun.as_ref().map(|_| false),
             _ => prepared_rustup.as_ref().map(|_| false),
         };
         if from_cache.is_none() {

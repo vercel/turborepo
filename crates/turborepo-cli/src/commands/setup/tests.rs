@@ -154,6 +154,10 @@ impl Fixture {
                         origin,
                     )
                     .unwrap(),
+                    bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    )
+                    .unwrap(),
                 }),
                 || {
                     Ok(self
@@ -229,6 +233,8 @@ mod plans;
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 #[path = "authorization_tests.rs"]
 mod authorization;
+#[path = "bun_tests.rs"]
+mod bun;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]
@@ -258,6 +264,8 @@ mod trusted_roots;
 mod unlocked_trust;
 #[path = "uv_tests.rs"]
 mod uv;
+#[path = "yarn_tests.rs"]
+mod yarn;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {

@@ -19,7 +19,7 @@ const MAX_VERSION_BYTES: usize = 256;
 pub enum RegistryMetadataError {
     #[error("registry metadata byte limit exceeded")]
     TooLarge,
-    #[error("registry metadata supports only npm and pnpm")]
+    #[error("registry metadata supports only npm, pnpm, and Yarn")]
     UnsupportedManager,
     #[error("an exact canonical published version is required")]
     InvalidVersion,
@@ -113,8 +113,9 @@ pub(crate) fn parse_release_from(
         return Err(RegistryMetadataError::IdentityMismatch);
     }
     // Compare the literal decoded string, not a URL parser's normalized form.
-    let tarball = format!("{PUBLIC_NPM_REGISTRY}/{name}/-/{name}-{exact_version}.tgz");
-    let mirrored = mirror.map(|base| format!("{base}/{name}/-/{name}-{exact_version}.tgz"));
+    let path = tarball_path(name, exact_version);
+    let tarball = format!("{PUBLIC_NPM_REGISTRY}/{path}");
+    let mirrored = mirror.map(|base| format!("{base}/{path}"));
     if document.dist.tarball != tarball && Some(&document.dist.tarball) != mirrored.as_ref() {
         return Err(RegistryMetadataError::InvalidTarball);
     }
@@ -156,15 +157,15 @@ pub(crate) fn parse_release_from(
     })
 }
 
+/// Registry package name for an exact selection, validated before traffic.
+/// Like Corepack, Yarn 2+ is the single-file `@yarnpkg/cli-dist` bundle.
 pub(crate) fn validate_selection(
     manager: Manager,
     exact_version: &str,
 ) -> Result<(&'static str, Version), RegistryMetadataError> {
-    let name = match manager {
-        Manager::Npm => "npm",
-        Manager::Pnpm => "pnpm",
-        _ => return Err(RegistryMetadataError::UnsupportedManager),
-    };
+    if !matches!(manager, Manager::Npm | Manager::Pnpm | Manager::Yarn) {
+        return Err(RegistryMetadataError::UnsupportedManager);
+    }
     if exact_version.len() > MAX_VERSION_BYTES {
         return Err(RegistryMetadataError::InvalidVersion);
     }
@@ -173,7 +174,24 @@ pub(crate) fn validate_selection(
     if !is_valid_release(&version) || version.to_string() != exact_version {
         return Err(RegistryMetadataError::InvalidVersion);
     }
+    let name = match manager {
+        Manager::Npm => "npm",
+        Manager::Pnpm => "pnpm",
+        _ if is_modern_yarn(manager, &version) => "@yarnpkg/cli-dist",
+        _ => "yarn",
+    };
     Ok((name, version))
+}
+
+/// Modern Yarn authored integrity covers `bin/yarn.js`, not the tarball.
+pub(crate) fn is_modern_yarn(manager: Manager, version: &Version) -> bool {
+    manager == Manager::Yarn && version.major >= 2
+}
+
+/// `{name}/-/{basename}-{version}.tgz`; scoped packages drop the scope.
+pub(crate) fn tarball_path(name: &str, version: &str) -> String {
+    let base = name.rsplit_once('/').map_or(name, |(_, base)| base);
+    format!("{name}/-/{base}-{version}.tgz")
 }
 
 fn sri_sha512(value: &str) -> Result<CorepackIntegrity, RegistryMetadataError> {

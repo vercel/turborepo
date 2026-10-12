@@ -3,6 +3,7 @@
 
 pub mod activation;
 pub mod artifact_cache;
+pub mod bun_provision;
 pub mod bundled_npm;
 pub mod cargo_prefetch;
 pub mod ephemeral_reconcile;
@@ -53,6 +54,7 @@ pub mod uv_sync;
 pub mod version_managers;
 pub mod version_request;
 pub mod writer_storage;
+pub mod yarn_provision;
 
 /// Locked artifact preparation policy; never changes resolution or health
 /// evidence.

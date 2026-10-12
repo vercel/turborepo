@@ -16,8 +16,8 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 8] = [
-    "node", "npm", "pnpm", "rust", "rustup", "uv", "python", "go",
+const NATIVE: [&str; 10] = [
+    "node", "npm", "pnpm", "yarn", "bun", "rust", "rustup", "uv", "python", "go",
 ];
 /// rustup's root toolchain files. Both at once is ambiguous, not precedence.
 const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
@@ -43,6 +43,8 @@ pub enum StorageError {
     Io(#[from] io::Error),
     #[error("invalid native setup declarations")]
     Declarations,
+    #[error("invalid native setup declarations: {0}")]
+    Manager(#[from] package_manager::Error),
     #[error(transparent)]
     Rust(#[from] crate::rust_discovery::Error),
     #[error(transparent)]
@@ -215,12 +217,12 @@ pub(crate) fn probe_native_with(
     if let Some(manifest) = manifest {
         let UniqueJson(value) =
             serde_json::from_str(&manifest).map_err(|_| StorageError::Declarations)?;
-        if let Some(manager) = package_manager::discover_package_manager(&value)
-            .map_err(|_| StorageError::Declarations)?
-        {
+        if let Some(manager) = package_manager::discover_package_manager(&value)? {
             let name = match manager.manager {
                 package_manager::Manager::Npm => "npm",
                 package_manager::Manager::Pnpm => "pnpm",
+                package_manager::Manager::Yarn => "yarn",
+                package_manager::Manager::Bun => "bun",
                 _ => return Err(StorageError::Declarations),
             };
             let mut sources = Vec::new();

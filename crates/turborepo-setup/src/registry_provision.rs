@@ -1,9 +1,9 @@
-//! Shared exact registry verification and locked preparation for npm/pnpm.
-//! No hooks, probes, dependency installation or activation.
+//! Shared exact registry verification and locked preparation for npm, pnpm and
+//! Yarn. No hooks, probes, Corepack, dependency installation or activation.
 
 use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
-use sha2::{Digest, Sha224, Sha256};
+use sha2::{Digest, Sha224, Sha256, Sha512};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
@@ -135,8 +135,10 @@ impl RegistryTransport {
         if exact_version.len() > 128 {
             return Err(registry_metadata::RegistryMetadataError::InvalidVersion.into());
         }
+        let (_, version) = registry_metadata::validate_selection(manager, exact_version)?;
+        let bundled = registry_metadata::is_modern_yarn(manager, &version);
         let (release, bytes) = self
-            .verified_release(manager, exact_version, authored, None)
+            .verified_release(manager, exact_version, authored.filter(|_| !bundled), None)
             .await?;
         let (_, mappings) = standard_mappings(manager)?;
         let executables = mappings
@@ -144,6 +146,10 @@ impl RegistryTransport {
             .map(|(name, path)| (name.to_string(), path.to_string()))
             .collect();
         let tree = extract_package(&bytes, manager, exact_version, &executables, true)?;
+        let bundle = bundled.then(|| bundle_digests(&tree)).transpose()?;
+        if let (Some((sha256, sha512)), Some(pin)) = (&bundle, authored) {
+            crate::registry_resolution::check_pin(pin, sha256, sha512)?;
+        }
         drop(tree);
         let artifact = lock::Artifact {
             url: release.tarball.clone(),
@@ -157,6 +163,7 @@ impl RegistryTransport {
             release,
             artifact,
             sha224_hex(&bytes),
+            bundle,
         ))
     }
 
@@ -204,7 +211,11 @@ impl RegistryTransport {
         let bytes = self
             .client
             .download_verified_sha512(
-                &format!("{}/{name}/-/{name}-{version}.tgz", self.origin),
+                &format!(
+                    "{}/{}",
+                    self.origin,
+                    registry_metadata::tarball_path(name, version)
+                ),
                 ExpectedSha512::from_hex(&release.integrity.digest)?,
                 sha256,
                 Limits::new(PACKAGE_LIMIT, Duration::from_secs(120))?,
@@ -248,8 +259,21 @@ fn standard_mappings(manager: Manager) -> Result<(&'static str, Mappings), Error
             "pnpm",
             &[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")],
         )),
+        Manager::Yarn => Ok((
+            "yarn",
+            &[("yarn", "bin/yarn.js"), ("yarnpkg", "bin/yarn.js")],
+        )),
         _ => Err(Error::InvalidLock),
     }
+}
+
+/// SHA-256/SHA-512 of modern Yarn's verified single-file bundle.
+fn bundle_digests(tree: &ExtractedArtifact) -> Result<(String, String), Error> {
+    let bundle = fs::read(tree.root_path().join("bin/yarn.js"))?;
+    Ok((
+        hex::encode(Sha256::digest(&bundle)),
+        hex::encode(Sha512::digest(&bundle)),
+    ))
 }
 
 fn extract_package(
@@ -259,7 +283,7 @@ fn extract_package(
     executables: &BTreeMap<String, String>,
     exact_bins: bool,
 ) -> Result<ExtractedArtifact, Error> {
-    let (name, _) = standard_mappings(manager)?;
+    let (name, _) = registry_metadata::validate_selection(manager, version)?;
     let mut required = vec!["package.json"];
     required.extend(executables.values().map(String::as_str));
     let tree = turborepo_archive::extract(
@@ -285,10 +309,12 @@ fn extract_package(
                 .and_then(|v| v.as_object())
                 .is_none_or(|bin| bin.len() != executables.len()))
         || executables.iter().any(|(name, path)| {
+            // Yarn classic spells its published bins as `./bin/yarn.js`.
             package
                 .get("bin")
                 .and_then(|v| v.get(name))
                 .and_then(|v| v.as_str())
+                .map(|bin| bin.strip_prefix("./").unwrap_or(bin))
                 != Some(path)
         })
     {
@@ -306,8 +332,33 @@ pub(crate) struct RegistryPlan {
     authored: Option<CorepackIntegrity>,
     launch_directory: String,
     manager: Manager,
+    /// Authored pins cover modern Yarn's `bin/yarn.js`, not the archive.
+    bundled: bool,
 }
 impl RegistryPlan {
+    /// Validate every applicable authored pin before storage or transport, and
+    /// bind the effective strong pin into the inventory's reuse identity.
+    /// The lock cannot prove bundle pins, so preparation checks verified bytes.
+    pub(crate) fn from_declaration(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        declaration: &crate::package_manager::Declaration,
+        manager: Manager,
+    ) -> Result<Self, Error> {
+        if declaration.manager != manager {
+            return Err(Error::InvalidLock);
+        }
+        let plan = Self::from_lock(lock, platform, node, None, manager)?;
+        let version = semver::Version::parse(&plan.tool.version).map_err(|_| Error::InvalidLock)?;
+        let authored = if plan.bundled {
+            declaration.preflight_integrity(&version)?
+        } else {
+            declaration.locked_integrity(&version, &plan.tool.artifact_sha256)?
+        };
+        Self::from_lock(lock, platform, node, authored.as_ref(), manager)
+    }
+
     /// Bind Node and authored integrity; retain locked archive SHA-256.
     pub(crate) fn from_lock(
         lock: &Lock,
@@ -316,7 +367,7 @@ impl RegistryPlan {
         authored: Option<&CorepackIntegrity>,
         manager: Manager,
     ) -> Result<Self, Error> {
-        let (name, mappings) = standard_mappings(manager)?;
+        let (id, mappings) = standard_mappings(manager)?;
         if !cfg!(unix)
             || !matches!(
                 platform,
@@ -332,10 +383,11 @@ impl RegistryPlan {
         if node.inventory_tool() != selected_node.inventory_tool() {
             return Err(Error::NodeBinding);
         }
-        let package = lock.tools().get(name).ok_or(Error::InvalidLock)?;
-        if package.adapter != name || !package.options.is_empty() {
+        let package = lock.tools().get(id).ok_or(Error::InvalidLock)?;
+        if package.adapter != id || !package.options.is_empty() {
             return Err(Error::InvalidLock);
         }
+        let (name, version) = registry_metadata::validate_selection(manager, &package.version)?;
         let Installation::Managed { artifacts } = &package.installation else {
             return Err(Error::InvalidLock);
         };
@@ -347,11 +399,15 @@ impl RegistryPlan {
             return Err(Error::InvalidLock);
         }
         let artifact = parts.values().next().ok_or(Error::InvalidLock)?.clone();
-        if artifact.url != format!("{REGISTRY}/{name}/-/{name}-{}.tgz", package.version)
+        if artifact.url
+            != format!(
+                "{REGISTRY}/{}",
+                registry_metadata::tarball_path(name, &package.version)
+            )
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || artifact.executables.get(name).map(String::as_str) != Some(mappings[0].1)
+            || artifact.executables.get(id).map(String::as_str) != Some(mappings[0].1)
             || (manager == Manager::Npm && artifact.executables.len() != mappings.len())
             || artifact.executables.iter().any(|(name, path)| {
                 !mappings.iter().any(|(expected_name, expected_path)| {
@@ -376,7 +432,7 @@ impl RegistryPlan {
             .collect();
         Ok(Self {
             tool: Tool {
-                id: name.into(),
+                id: id.into(),
                 version: package.version.clone(),
                 platform: node.platform.clone(),
                 artifact_sha256: artifact.sha256.clone(),
@@ -388,6 +444,7 @@ impl RegistryPlan {
             authored: authored.cloned(),
             launch_directory,
             manager,
+            bundled: registry_metadata::is_modern_yarn(manager, &version),
         })
     }
 
@@ -422,7 +479,10 @@ impl RegistryPlan {
         {
             return Ok(None);
         }
-        let cached = transport.cached(self.platform, &self.artifact.sha256, self.authored.as_ref());
+        // Corepack pins modern Yarn's bundle, checked after extraction, never the
+        // archive bytes a cache hit or download verifies.
+        let archive_pin = self.authored.as_ref().filter(|_| !self.bundled);
+        let cached = transport.cached(self.platform, &self.artifact.sha256, archive_pin);
         let from_cache = cached.is_some();
         let bytes = match cached {
             Some(bytes) => bytes,
@@ -431,7 +491,7 @@ impl RegistryPlan {
                     .verified_release(
                         self.manager,
                         &self.tool.version,
-                        self.authored.as_ref(),
+                        archive_pin,
                         Some(&self.artifact.sha256),
                     )
                     .await?;
@@ -449,6 +509,10 @@ impl RegistryPlan {
             &self.artifact.executables,
             self.manager == Manager::Npm,
         )?;
+        if let Some(pin) = self.authored.as_ref().filter(|_| self.bundled) {
+            let (sha256, sha512) = bundle_digests(&tree)?;
+            crate::registry_resolution::check_pin(pin, &sha256, &sha512)?;
+        }
         if tree.root_path().join(&self.launch_directory).try_exists()? {
             return Err(Error::InvalidPackage);
         }
@@ -534,15 +598,7 @@ impl PnpmPlan {
         node: &NodePlan,
         declaration: &crate::package_manager::Declaration,
     ) -> Result<Self, Error> {
-        if declaration.manager != Manager::Pnpm {
-            return Err(Error::InvalidLock);
-        }
-        let plan = Self::from_lock(lock, platform, node, None)?;
-        let version = semver::Version::parse(&plan.inventory_tool().version)
-            .map_err(|_| Error::InvalidLock)?;
-        let authored =
-            declaration.locked_integrity(&version, &plan.inventory_tool().artifact_sha256)?;
-        Self::from_lock(lock, platform, node, authored.as_ref())
+        RegistryPlan::from_declaration(lock, platform, node, declaration, Manager::Pnpm).map(Self)
     }
 
     pub fn from_lock(

@@ -231,8 +231,7 @@ impl Snapshot {
         };
         let crate::node_discovery::UniqueJson(value) =
             serde_json::from_slice(bytes).map_err(|_| StorageError::Declarations)?;
-        crate::package_manager::discover_package_manager(&value)
-            .map_err(|_| StorageError::Declarations)
+        Ok(crate::package_manager::discover_package_manager(&value)?)
     }
 
     /// Commit a complete validated native candidate only if exact prior lock
