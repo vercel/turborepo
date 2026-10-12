@@ -333,3 +333,71 @@ mod tests {
         assert_eq!(cwd(&[]), AbsoluteSystemPathBuf::cwd().unwrap());
     }
 }
+
+#[cfg(all(test, windows))]
+#[allow(clippy::unwrap_used)]
+mod windows_tests {
+    use std::fs;
+
+    use turborepo_run::EnvironmentVariableMap;
+
+    use super::*;
+
+    struct Tools(String);
+
+    impl ManagedEnvironment for Tools {
+        fn revalidate(&self) -> Result<EnvironmentVariableMap, String> {
+            let mut map = EnvironmentVariableMap::default();
+            map.insert("PATH".into(), self.0.clone());
+            map.insert("MANAGED_RUNTIME".into(), "1".into());
+            Ok(map)
+        }
+
+        fn cache_identity(&self) -> &str {
+            "fixture"
+        }
+    }
+
+    fn plain(mut command: std::process::Command) -> io::Result<Arc<SharedChild>> {
+        SharedChild::spawn(&mut command).map(Arc::new)
+    }
+
+    #[test]
+    fn managed_cmd_shims_resolve_through_pathext_with_arguments_and_status() {
+        let temp = tempfile::tempdir().unwrap();
+        let [managed, host, work] = ["managed", "host", "work"].map(|dir| temp.path().join(dir));
+        for dir in [&managed, &host, &work] {
+            fs::create_dir(dir).unwrap();
+        }
+        // Package managers install `.cmd` shims like this one on Windows.
+        let shim = "@echo off\r\ncd > record.txt\r\n>>record.txt echo [%~1]\r\n>>record.txt echo \
+                    [%~2]\r\n>>record.txt echo [%MANAGED_RUNTIME%]\r\nexit /b 7\r\n";
+        fs::write(managed.join("pnpm.cmd"), shim).unwrap();
+        fs::write(
+            host.join("pnpm.cmd"),
+            "@echo off\r\ntype nul > host-ran.txt\r\nexit /b 97\r\n",
+        )
+        .unwrap();
+        let path = env::join_paths([&managed, &host])
+            .unwrap()
+            .into_string()
+            .unwrap();
+        let cwd = AbsoluteSystemPathBuf::try_from(work.as_path()).unwrap();
+        for program in ["pnpm", "pnpm.cmd"] {
+            let command = [program, "a b", "c"].map(OsString::from);
+            assert_eq!(
+                spawn(&Tools(path.clone()), &command, &cwd, plain).unwrap(),
+                7
+            );
+            let record = fs::read_to_string(work.join("record.txt")).unwrap();
+            let lines: Vec<_> = record.lines().map(str::trim_end).collect();
+            assert!(lines[0].eq_ignore_ascii_case(cwd.as_str()), "{record}");
+            assert_eq!(&lines[1..], ["[a b]", "[c]", "[1]"]);
+        }
+        assert!(!work.join("host-ran.txt").exists());
+        assert!(matches!(
+            spawn(&Tools(path), &[OsString::from("missing")], &cwd, plain),
+            Err(Error::NotFound { program }) if program == "missing"
+        ));
+    }
+}

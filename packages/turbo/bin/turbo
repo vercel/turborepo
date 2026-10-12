@@ -386,7 +386,9 @@ function shouldOwnWindowsCtrlC() {
     return false;
   }
 
-  if (usesTui(process.argv.slice(2))) {
+  const args = process.argv.slice(2);
+  // Exec's command reads the console directly, like the TUI does.
+  if (usesTui(args) || selectsExec(args)) {
     return false;
   }
 
@@ -406,6 +408,47 @@ function usesTui(args) {
     if (arg === "--ui" && args[i + 1] === "tui") {
       return true;
     }
+  }
+  return false;
+}
+
+// Global flags that take the next word as their value. Keep in step with the
+// global options in crates/turborepo-cli/src/cli/args.rs.
+const GLOBAL_VALUE_FLAGS = new Set([
+  "--api",
+  "--cwd",
+  "--heap",
+  "--login",
+  "--remote-cache-timeout",
+  "--root-turbo-json",
+  "--team",
+  "--token",
+  "--trace",
+  "--ui",
+  "--verbosity",
+  "--experimental-otel-endpoint",
+  "--experimental-otel-header",
+  "--experimental-otel-interval-ms",
+  "--experimental-otel-protocol",
+  "--experimental-otel-resource",
+  "--experimental-otel-timeout-ms",
+]);
+
+// The command is the first word that is not a flag or a flag's value, so a
+// task or argument named `exec` does not select it.
+function selectsExec(args) {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--") {
+      return false;
+    }
+    if (arg.startsWith("-")) {
+      if (GLOBAL_VALUE_FLAGS.has(arg)) {
+        i++;
+      }
+      continue;
+    }
+    return arg === "exec";
   }
   return false;
 }
