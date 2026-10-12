@@ -21,6 +21,8 @@ pub mod pnpm_provision {
 }
 pub mod registry_metadata;
 pub mod registry_resolution;
+pub mod rustup;
+pub mod rustup_provision;
 pub mod source_policy;
 pub mod version_request;
 pub mod writer_storage;
