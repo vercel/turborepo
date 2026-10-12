@@ -334,6 +334,10 @@ fn loopback(u: &LoopbackServer) -> provision::Transports {
         registry: RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
         uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin())
             .unwrap(),
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+            u.origin(),
+        )
+        .unwrap(),
     }
 }
 

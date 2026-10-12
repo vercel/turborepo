@@ -41,6 +41,9 @@ pub(super) fn run(
             "uv readiness checks are not implemented; run turbo setup --tools-only",
         ));
     }
+    if sources.declarations().contains_key("rustup") {
+        return Err(Error::Unsupported("Rust toolchain readiness checks"));
+    }
     let context = context()?;
     preflight()?;
     let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;

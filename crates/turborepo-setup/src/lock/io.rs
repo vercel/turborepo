@@ -16,14 +16,16 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 4] = ["node", "npm", "pnpm", "uv"];
+const NATIVE: [&str; 5] = ["node", "npm", "pnpm", "uv", "rustup"];
+const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
+const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
 
-/// Non-JavaScript declarations a snapshot may capture. Callers derive these
-/// from root workspace flags; disabled ecosystems' files and declarations are
-/// ignored entirely. The default captures only Node and its package managers.
+/// Enabled declaration ecosystems. Rust files remain in CAS even when disabled;
+/// Python files are read and covered only when enabled.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Ecosystems {
     pub python: bool,
+    pub rust: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -167,11 +169,19 @@ fn read_optional(root: &Path, name: &str, limit: usize) -> io::Result<Option<Vec
 /// Read only. No lock sidecar, resolver, release metadata, or installation.
 /// Capture package.json once so both adapters see the same manifest snapshot.
 pub fn probe_native(root: &Path) -> Result<DeclarationMap, StorageError> {
+    probe_native_in(root, Ecosystems::default())
+}
+
+pub fn probe_native_in(
+    root: &Path,
+    ecosystems: Ecosystems,
+) -> Result<DeclarationMap, StorageError> {
     let root = root.canonicalize()?;
-    probe_native_with(|file, limit| read_optional(&root, file, limit))
+    probe_native_with(ecosystems, |file, limit| read_optional(&root, file, limit))
 }
 
 pub(crate) fn probe_native_with(
+    ecosystems: Ecosystems,
     mut read: impl FnMut(&'static str, usize) -> io::Result<Option<Vec<u8>>>,
 ) -> Result<DeclarationMap, StorageError> {
     let manifest = read("package.json", crate::node_discovery::MAX_MANIFEST_BYTES)?
@@ -245,6 +255,29 @@ pub(crate) fn probe_native_with(
             // The lock schema bounds provenance to 64 locations per tool.
             declarations(&sources)?;
             result.insert(name.into(), sources);
+        }
+    }
+    if ecosystems.rust {
+        let mut present = Vec::new();
+        for file in RUST_TOOLCHAIN_FILES {
+            if read(file, MAX_TOOLCHAIN_BYTES)?.is_some() {
+                present.push(file);
+            }
+        }
+        match present.as_slice() {
+            [] => {}
+            // The private installer serves whichever channel the file names.
+            [file] => {
+                result.insert(
+                    "rustup".into(),
+                    vec![Declaration {
+                        file: (*file).into(),
+                        field: None,
+                        request: None,
+                    }],
+                );
+            }
+            _ => return Err(StorageError::Declarations),
         }
     }
     for values in result.values_mut() {
