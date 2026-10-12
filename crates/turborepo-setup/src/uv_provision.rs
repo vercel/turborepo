@@ -19,8 +19,9 @@ use crate::{
 
 /// Launchers pin uv's interpreter directory to the `python` tool tree of the
 /// SAME generation, so managed interpreters stay repo-scoped and never land in
-/// the user's global uv data. Until setup provisions that tree, uv must not
-/// download interpreters into an immutable generation either.
+/// the user's global uv data. uv must not download interpreters into an
+/// immutable generation, and when setup provisions that tree uv uses only it,
+/// never a system Python.
 const LAUNCHER: &str = "#!/bin/sh
 case \"$0\" in */*) ;; *) exit 126;; esac
 here=${0%/*}
@@ -29,6 +30,8 @@ tools=$(CDPATH= cd -- \"$tools\" && pwd -P) || exit 126
 UV_PYTHON_INSTALL_DIR=\"$tools/python\"
 UV_PYTHON_DOWNLOADS=never
 export UV_PYTHON_INSTALL_DIR UV_PYTHON_DOWNLOADS
+if [ -d \"$tools/python\" ]; then UV_PYTHON_PREFERENCE=only-managed; export UV_PYTHON_PREFERENCE; \
+                        fi
 exec \"$tools/uv/@ENTRYPOINT@\" \"$@\"
 ";
 
@@ -201,6 +204,14 @@ impl UvPlan {
             launch_directory: self.launch_directory.clone(),
             entrypoints: self.artifact.executables.clone(),
         })
+    }
+}
+
+impl PreparedUv {
+    /// The verified extracted uv binary, for offline queries during
+    /// resolution only. Its private scratch tree is removed on drop.
+    pub fn binary(&self) -> std::path::PathBuf {
+        self.tree.root_path().join(&self.entrypoints["uv"])
     }
 }
 

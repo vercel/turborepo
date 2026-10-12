@@ -16,7 +16,7 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 4] = ["node", "npm", "pnpm", "uv"];
+const NATIVE: [&str; 5] = ["node", "npm", "pnpm", "uv", "python"];
 
 /// Non-JavaScript declarations a snapshot may capture. Callers derive these
 /// from root workspace flags; disabled ecosystems' files and declarations are
@@ -36,6 +36,8 @@ pub enum StorageError {
     Declarations,
     #[error(transparent)]
     Uv(#[from] crate::uv_discovery::UvDiscoveryError),
+    #[error(transparent)]
+    Python(#[from] crate::python_discovery::PythonDiscoveryError),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }

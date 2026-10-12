@@ -16,6 +16,7 @@ pub mod npm_provision;
 pub mod package_manager;
 pub mod pep440;
 pub mod python_discovery;
+pub mod python_provision;
 pub mod python_resolution;
 mod registry_provision;
 pub mod pnpm_provision {
