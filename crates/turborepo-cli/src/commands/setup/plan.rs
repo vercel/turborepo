@@ -77,9 +77,7 @@ fn propose(
 ) -> Result<String, Error> {
     let platform = provision::platform()?;
     let root = discovery.snapshot_root()?.as_std_path();
-    if !sources.declarations().contains_key("node") {
-        return Err(Error::Unsupported("a native Node declaration is required"));
-    }
+    provision::resolvable(&sources)?;
     // The same gates as setup's resolution, minus the writer it would take.
     let check = || {
         preflight()?;
@@ -106,14 +104,8 @@ fn propose(
         request.offline,
         |resolution| {
             resolved.set(true);
-            runtime
-                .block_on(turborepo_setup::js_resolution::resolve(
-                    resolution,
-                    &upstream.node,
-                    &upstream.registry,
-                    &upstream.bun,
-                ))
-                .map_err(|e| reconcile::Error::Resolution(e.to_string()))
+            // Setup's own resolver, so the proposal is the candidate it would write.
+            provision::resolve(&runtime, &sources, resolution, &upstream)
         },
         |candidate| {
             provision::plans(&sources, candidate)
