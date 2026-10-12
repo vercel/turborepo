@@ -25,8 +25,8 @@ use std::sync::Arc;
 pub use local_turbo_state::turbo_version_has_shim;
 pub use parser::ShimArgs;
 pub use run::{
-    Error, GLOBAL_WARNING_ENV_VAR, INVOCATION_DIR_ENV_VAR, ShimResult, ShimRuntime, run,
-    run_with_args,
+    Error, GLOBAL_WARNING_ENV_VAR, INVOCATION_CWD_ENV_VAR, INVOCATION_DIR_ENV_VAR, ShimResult,
+    ShimRuntime, run, run_with_args,
 };
 use shared_child::SharedChild;
 pub use turbo_state::TurboState;

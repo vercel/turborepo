@@ -132,6 +132,15 @@ fn exec_is_gated_and_never_runs_the_program_without_activation() {
         failure(root, "enabled", words, expected);
     }
 
+    // A lock alone is not prepared setup: validation fails before any spawn.
+    fs::write(root.join("enabled/turbo.lock"), "{}").expect("turbo.lock");
+    failure(
+        root,
+        "enabled",
+        &["exec", "--", "probe"],
+        "managed setup validation failed",
+    );
+
     let (code, stdout, _) = invoke(root, "disabled", &["exec", "--help"]);
     assert_eq!(code, 0);
     assert!(stdout.contains("Usage: turbo exec"), "{stdout}");

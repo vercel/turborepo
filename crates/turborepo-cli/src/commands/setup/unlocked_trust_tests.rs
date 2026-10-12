@@ -1,7 +1,7 @@
 //! Bridge between ephemeral CI setup and committed-lock authorization. No
 //! synthetic lock or ephemeral execution record is created by publication.
 use super::*;
-use crate::commands::run::managed::{self, ManagedTools};
+use crate::commands::managed::{self, ManagedTools};
 
 #[test]
 fn missing_lock_publication_succeeds_and_revokes_previous_locked_authority() {
