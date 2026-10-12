@@ -18,7 +18,7 @@ pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub trust_base: Option<std::path::PathBuf>,
 }
 impl Transports {
@@ -27,13 +27,13 @@ impl Transports {
             node: NodeTransport::official(policy)?,
             pnpm: PnpmTransport::official(policy)?,
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
         })
     }
 
     fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(base) = &self.trust_base {
             return Ok(base.clone());
         }
