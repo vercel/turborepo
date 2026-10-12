@@ -8,6 +8,11 @@ use turbopath::AbsoluteSystemPath;
 
 use crate::Error;
 
+/// Log-file writes are coalesced up to this size. Task output arrives in
+/// chunks of up to 8 KiB, so the default 8 KiB buffer meant about one
+/// `write(2)` per chunk.
+const LOG_FILE_BUFFER_BYTES: usize = 64 * 1024;
+
 /// Receives logs and multiplexes them to a log file and/or a prefixed
 /// writer
 pub struct LogWriter<W> {
@@ -46,7 +51,7 @@ impl<W: Write> LogWriter<W> {
             Error::CannotWriteLogs(err)
         })?;
 
-        self.log_file = Some(BufWriter::new(log_file));
+        self.log_file = Some(BufWriter::with_capacity(LOG_FILE_BUFFER_BYTES, log_file));
 
         Ok(())
     }
