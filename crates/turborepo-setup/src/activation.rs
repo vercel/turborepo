@@ -1,8 +1,11 @@
-//! Read-only Node/pnpm environment planning, not execution authorization.
-//! Repo-writable inventory proves readiness only. Consumers must separately
-//! authorize setup-recorded tools with trusted-root user state, gate managed
-//! mode, and revalidate before use. No CLI support is advertised by this
-//! module.
+//! Read-only Node and JavaScript package-manager (pnpm, Yarn, Bun) environment
+//! planning, not execution authorization. Every adapter contributes the same
+//! shape: validated inventory tools whose exports share one managed bin
+//! directory, plus runtime variables, so consumers need no adapter-specific
+//! code. Repo-writable inventory proves readiness only. Consumers must
+//! separately authorize setup-recorded tools with trusted-root user state, gate
+//! managed mode, and revalidate before use. No CLI support is advertised by
+//! this module.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,8 +18,9 @@ use turborepo_tool_install::{Store, Tool};
 use crate::{
     bun_provision::BunPlan,
     execution_identity::{ExecutionContext, ExecutionSnapshot},
-    lock::{Installation, Platform, Snapshot, StorageError},
+    lock::{Installation, Lock, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
+    package_manager::{Declaration, Manager},
     pnpm_provision::PnpmPlan,
     yarn_provision::YarnPlan,
 };
@@ -64,8 +68,9 @@ pub struct ActivationPlan {
     snapshot: ExecutionSnapshot,
     bin: PathBuf,
     tools: Vec<Tool>,
-    // These adapters require no additional runtime variables. Keep that explicit
-    // rather than inheriting or inventing host-dependent runtime settings.
+    // No adapter requires runtime variables: Node and Bun are self-contained,
+    // and pnpm/Yarn shims launch the selected managed Node by path. Keep that
+    // explicit rather than inheriting or inventing host-dependent settings.
     runtime_env: BTreeMap<String, OsString>,
 }
 
@@ -127,25 +132,9 @@ impl ActivationPlan {
             return Err(Error::DeclarationDrift);
         }
         let mut tools = vec![node.inventory_tool().clone()];
-        if lock.tools().contains_key("pnpm") {
+        if lock.tools().keys().any(|id| id != "node") {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            // Share setup's full authored-pin validation and reuse identity;
-            // an authoritative version does not erase devEngines integrity.
-            let pnpm = PnpmPlan::from_declaration(lock, platform, &node, &manager)
-                .map_err(|_| Error::InvalidLock)?;
-            tools.push(pnpm.inventory_tool().clone());
-        }
-        if lock.tools().contains_key("yarn") {
-            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            let yarn = YarnPlan::from_declaration(lock, platform, &node, &manager)
-                .map_err(|_| Error::InvalidLock)?;
-            tools.push(yarn.inventory_tool().clone());
-        }
-        if lock.tools().contains_key("bun") {
-            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            let bun = BunPlan::from_declaration(lock, platform, &manager)
-                .map_err(|_| Error::InvalidLock)?;
-            tools.push(bun.inventory_tool().clone());
+            tools.push(manager_tool(lock, platform, &node, &manager)?);
         }
         // Inventory records tools in ID order.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
@@ -198,6 +187,40 @@ impl ActivationPlan {
         }
         Ok(std::env::join_paths(paths)?)
     }
+}
+
+/// The installed identity setup provisions for the declared manager. Each plan
+/// shares setup's full authored-pin validation and reuse identity, so an
+/// authoritative version never erases devEngines integrity.
+fn manager_tool(
+    lock: &Lock,
+    platform: Platform,
+    node: &NodePlan,
+    manager: &Declaration,
+) -> Result<Tool, Error> {
+    let id = match manager.manager {
+        Manager::Pnpm => "pnpm",
+        Manager::Yarn => "yarn",
+        Manager::Bun => "bun",
+        _ => return Err(Error::UnsupportedAdapter),
+    };
+    if !lock.tools().contains_key(id) {
+        return Err(Error::DeclarationDrift);
+    }
+    Ok(match manager.manager {
+        Manager::Pnpm => PnpmPlan::from_declaration(lock, platform, node, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+        Manager::Yarn => YarnPlan::from_declaration(lock, platform, node, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+        _ => BunPlan::from_declaration(lock, platform, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+    })
 }
 
 #[cfg(all(test, unix))]

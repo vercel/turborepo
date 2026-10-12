@@ -108,3 +108,20 @@ fn locked_yarn_classic_provisions_checks_repeats_and_rejects_frozen_drift() {
 fn locked_modern_yarn_provisions_checks_repeats_and_rejects_frozen_drift() {
     provisions_checks_repeats_and_rejects_drift("4.5.0", "@yarnpkg/cli-dist", "yarn@4.6.0");
 }
+
+#[test]
+fn yarn_check_failures_are_readonly_and_actionable() {
+    for (version, package) in [("1.22.22", "yarn"), ("4.5.0", "@yarnpkg/cli-dist")] {
+        let installed = || {
+            let (f, u) = yarn(version, package);
+            assert!(matches!(
+                f.check(super::checks::CHECK),
+                Err(Error::Activation(
+                    turborepo_setup::activation::Error::MissingInventory
+                ))
+            ));
+            (f, u)
+        };
+        super::checks::assert_manager_check_failures(installed, "yarn", "bun@1.2.23");
+    }
+}
