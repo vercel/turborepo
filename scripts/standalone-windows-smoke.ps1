@@ -37,15 +37,15 @@ function Invoke-WebRequest {
   param([string]$Uri, [string]$OutFile, [switch]$UseBasicParsing, [hashtable]$Headers)
   $script:Requests++
   $name = $Uri.Substring($Uri.LastIndexOf('/') + 1)
-  $source = Join-Path $script:Assets $name
+  $source = Join-Path $script:Served $name
   if ($Uri -ne "https://github.com/vercel/turborepo/releases/download/v$Version/$name" -or -not $OutFile -or -not (Test-Path -LiteralPath $source)) {
     throw "unexpected download: $Uri"
   }
   Copy-Item -LiteralPath $source -Destination $OutFile
 }
 
-function Install-Turbo([string]$Assets) {
-  $script:Assets = $Assets
+function Install-Turbo([string]$Directory) {
+  $script:Served = $Directory
   return (. $installerPath -Version $Version -InstallDirectory $install -NoModifyPath 6>&1 | ForEach-Object { [string]$_ }) -join "`n"
 }
 
