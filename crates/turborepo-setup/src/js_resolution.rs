@@ -88,27 +88,22 @@ pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Resul
     if tool.adapter != id || !tool.options.is_empty() {
         return Err(invalid());
     }
-    let mappings = if declaration.manager == Manager::Npm {
-        [("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")]
-    } else {
-        [("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")]
-    };
     for parts in artifacts.values() {
         let artifact = parts.values().next().ok_or_else(invalid)?;
-        let paths = &artifact.executables;
         if parts.len() != 1
             || artifact.url != format!("https://registry.npmjs.org/{id}/-/{id}-{version}.tgz")
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || paths.get(id).map(String::as_str) != Some(mappings[0].1)
-            || (declaration.manager == Manager::Npm && paths.len() != 2)
-            || paths
-                .iter()
-                .any(|(name, path)| !mappings.iter().any(|(n, p)| name == n && path == p))
         {
             return Err(invalid());
         }
+        crate::registry_provision::validate_executables(
+            declaration.manager,
+            &tool.version,
+            &artifact.executables,
+        )
+        .map_err(|_| invalid())?;
         declaration.locked_integrity(&version, &artifact.sha256)?;
     }
     Ok(())
