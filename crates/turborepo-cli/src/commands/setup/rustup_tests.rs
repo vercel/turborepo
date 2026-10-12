@@ -166,6 +166,7 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
                     bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
+                    artifact: None,
                     trust_base: Some(self.owned.home().to_owned()),
                     cache: None,
                 }),

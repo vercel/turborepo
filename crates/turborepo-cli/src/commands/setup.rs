@@ -502,6 +502,7 @@ pub fn frozen_tools_for_tests(
             .map_err(|e| e.to_string())?,
         bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
             .map_err(|e| e.to_string())?,
+        artifact: None,
     };
     // Like run_with_policy (test-only since #14546), never telemetry.
     run_reporting(

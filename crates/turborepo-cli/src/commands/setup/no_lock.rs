@@ -92,6 +92,7 @@ pub(super) fn run(
         go,
         yarn,
         bun,
+        artifacts,
     } = provision::plans(&snapshot, selection)?;
     if npm.is_some() {
         return Err(Error::Unsupported("npm provisioning with --no-lock"));
@@ -99,6 +100,11 @@ pub(super) fn run(
     if yarn.is_some() || bun.is_some() {
         return Err(Error::Unsupported(
             "Yarn or Bun provisioning with --no-lock",
+        ));
+    }
+    if !artifacts.is_empty() {
+        return Err(Error::Unsupported(
+            "additional tool provisioning with --no-lock",
         ));
     }
     // The native baseline covers Node and pnpm only.

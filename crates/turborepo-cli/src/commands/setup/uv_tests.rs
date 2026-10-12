@@ -90,6 +90,7 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
+                artifact: None,
             }),
             || Ok(owned.policy_at(&cwd)?),
         )

@@ -344,6 +344,7 @@ fn loopback(u: &LoopbackServer, trust_base: &std::path::Path) -> provision::Tran
             .unwrap(),
         bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin())
             .unwrap(),
+        artifact: None,
     }
 }
 

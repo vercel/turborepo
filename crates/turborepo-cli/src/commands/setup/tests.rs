@@ -160,7 +160,7 @@ impl Fixture {
                     .unwrap(),
                     artifact: Some(
                         turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(
-                            upstream.origin(),
+                            origin,
                         )
                         .unwrap(),
                     ),
@@ -616,6 +616,7 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(u.origin()).unwrap(),
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin()).unwrap(),
+                artifact: None,
             };
             run_reporting(args, setup_args, Some(transports), &mut report, || {
                 Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)

@@ -270,6 +270,7 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
+                artifact: None,
             }), || {
                 called.set(called.get() + 1);
                 if called.get() == 2 {
