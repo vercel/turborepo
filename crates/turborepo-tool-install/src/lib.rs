@@ -174,6 +174,33 @@ pub enum Outcome {
     Replaced,
 }
 
+/// Entry count and apparent bytes, for reporting disk use.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DiskUse {
+    pub entries: usize,
+    pub bytes: u64,
+}
+
+impl DiskUse {
+    fn add(&mut self, path: &Path) -> io::Result<()> {
+        self.entries += 1;
+        self.bytes += apparent_bytes(path)?;
+        Ok(())
+    }
+}
+
+// Sizes without following links, so a planted link cannot inflate reports.
+fn apparent_bytes(path: &Path) -> io::Result<u64> {
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.is_dir() {
+        return Ok(metadata.len());
+    }
+    fs::read_dir(path)?.try_fold(
+        0,
+        |total, entry| Ok(total + apparent_bytes(&entry?.path())?),
+    )
+}
+
 impl Store {
     /// Locks this clone's ignored .turbo/tools, without touching global state.
     pub fn open(repo: &Path) -> Result<Self, Error> {
@@ -699,6 +726,80 @@ impl Store {
             .map_err(|e| Error::Io(e.error))?;
         sync_directory(&self.root).map_err(|e| Error::Published(Box::new(e)))?;
         Ok(Outcome::Replaced)
+    }
+
+    /// Disk use of the selected generation, which stays per clone/worktree.
+    pub fn selected_use(&self) -> Result<DiskUse, Error> {
+        let mut usage = DiskUse::default();
+        if let Some(generation) = self.selected_generation()?
+            && real_directory(&self.root.join(&generation)).is_ok()
+        {
+            usage.add(&self.root.join(generation))?;
+        }
+        Ok(usage)
+    }
+
+    /// Generations the manifest no longer selects, plus orphaned staging and
+    /// manifest temporaries from interrupted transactions. Read-only.
+    pub fn inactive_use(&self) -> Result<DiskUse, Error> {
+        let mut usage = DiskUse::default();
+        for path in self.inactive()? {
+            usage.add(&path)?;
+        }
+        Ok(usage)
+    }
+
+    /// Remove inactive turbo-owned entries under this guard, never the
+    /// selection, manifest, lock, links or unrecognized entries. `turbo run`
+    /// reads the selection without this guard, so the caller chooses when no
+    /// process can still be using a replaced generation. An interruption
+    /// leaves only inactive remnants, which the next call removes.
+    pub fn remove_inactive(&mut self) -> Result<DiskUse, Error> {
+        let mut removed = DiskUse::default();
+        for path in self.inactive()? {
+            removed.add(&path)?;
+            if fs::symlink_metadata(&path)?.is_dir() {
+                fs::remove_dir_all(&path)?;
+            } else {
+                fs::remove_file(&path)?;
+            }
+        }
+        sync_directory(&self.root)?;
+        Ok(removed)
+    }
+
+    // A present but invalid manifest fails closed instead of making every
+    // generation look inactive.
+    fn selected_generation(&self) -> Result<Option<String>, Error> {
+        self.check_root()?;
+        let Some(bytes) = Self::manifest_bytes(&self.root)? else {
+            return Ok(None);
+        };
+        let inventory: Inventory = serde_json::from_slice(&bytes)?;
+        if inventory.schema != 1 || !inventory.generation.starts_with("generation-") {
+            return Err(Error::InvalidInventory);
+        }
+        component(&inventory.generation.to_ascii_lowercase())?;
+        Ok(Some(inventory.generation))
+    }
+
+    fn inactive(&self) -> Result<Vec<PathBuf>, Error> {
+        let selected = self.selected_generation()?;
+        let mut inactive = Vec::new();
+        for entry in fs::read_dir(&self.root)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let kind = entry.file_type()?;
+            let generation = name.starts_with("generation-") && kind.is_dir();
+            // NamedTempFile's default prefix, only ever a manifest candidate.
+            let temporary = name.starts_with(".tmp") && kind.is_file();
+            if (generation && Some(name.as_ref()) != selected.as_deref()) || temporary {
+                inactive.push(entry.path());
+            }
+        }
+        inactive.sort();
+        Ok(inactive)
     }
 }
 
