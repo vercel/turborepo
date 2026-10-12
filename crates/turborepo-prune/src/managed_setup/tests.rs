@@ -199,9 +199,12 @@ async fn native_and_additional_provenance_is_copied_without_adapter_allowlists()
         ];
         for (id, file, contents) in files {
             write(temp.path(), file, contents)?;
-            document
-                .tools
-                .insert(id.into(), tool(id, vec![declaration(file)]));
+            let mut tool = tool(id, vec![declaration(file)]);
+            if id == "go" {
+                // The lock requires canonical Go toolchain identities.
+                tool.version = "1.25.0".into();
+            }
+            document.tools.insert(id.into(), tool);
         }
         // A real managed artifact also remains byte-identical: no resolution or
         // integrity metadata is synthesized by prune.
