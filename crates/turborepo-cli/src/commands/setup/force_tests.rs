@@ -21,7 +21,11 @@ fn assert_locked_traffic(f: &Fixture, u: &Upstream, rounds: usize) {
 
 #[test]
 fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
-    for flags in [FORCE, &["--force", "--tools-only", "--frozen"][..]] {
+    for flags in [
+        FORCE,
+        &["--force", "--tools-only", "--frozen"][..],
+        &["--force", "--no-frozen"][..],
+    ] {
         let mut f = Fixture::new();
         fs::write(f.owned.root().join(".nvmrc"), "24.x\n").unwrap();
         f.declare(json!({"packageManager":"pnpm@10.0.0"}));
@@ -196,7 +200,7 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
 #[test]
 fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
     for flags in [
-        vec!["--force"],
+        vec!["--force", "--offline"],
         vec!["--force", "--tools-only", "--offline"],
         vec!["--force", "--tools-only", "--plan"],
         vec!["--force", "--tools-only", "--no-lock"],

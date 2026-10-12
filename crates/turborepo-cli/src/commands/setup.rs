@@ -26,8 +26,8 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use local or frozen --tools-only provisioning or \
-         --check --tools-only readiness checks"
+        "this setup mode is not implemented; use local or frozen provisioning or --check \
+         --tools-only readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
@@ -161,22 +161,33 @@ fn run_with_policy(
     }
     let snapshot =
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
-    match request.mode {
-        Mode::Check => check::run(&discovery, snapshot, preflight),
-        _ => provision::run(
-            &discovery,
-            snapshot,
-            request.lock,
-            if request.update_lock {
-                turborepo_setup::lock::reconcile::Mode::Refresh
-            } else {
-                turborepo_setup::lock::reconcile::Mode::Local
-            },
-            request.force,
-            transports,
-            preflight,
-        ),
+    if request.mode == Mode::Check {
+        return check::run(&discovery, snapshot, preflight);
     }
+    let code = provision::run(
+        &discovery,
+        snapshot,
+        request.lock,
+        if request.update_lock {
+            turborepo_setup::lock::reconcile::Mode::Refresh
+        } else {
+            turborepo_setup::lock::reconcile::Mode::Local
+        },
+        request.force,
+        transports,
+        preflight,
+    )?;
+    // Never claim dependencies are ready: they are skipped until dependency
+    // policy and installers exist, even without --tools-only.
+    println!(
+        "Dependencies skipped ({}). No tasks run; managed activation is not enabled.",
+        if request.tools_only {
+            "--tools-only"
+        } else {
+            "dependency installation is not supported yet"
+        }
+    );
+    Ok(code)
 }
 
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
@@ -190,10 +201,11 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
-    // Write normalization. Combined force/refresh remains fail-closed.
+    // Write normalization. Combined force/refresh remains fail-closed. Until
+    // dependency installers exist, plain setup provisions exactly the tools
+    // --tools-only does and reports dependencies as skipped.
     if request.mode != Mode::Provision
         || request.lock == LockMode::NoLock
-        || !request.tools_only
         || request.offline
         || (request.force && request.update_lock)
     {
@@ -313,11 +325,25 @@ mod tests {
     }
 
     #[test]
-    fn modes_and_controls_reach_the_empty_executor() {
+    fn plain_setup_provisions_like_tools_only_but_plan_and_dependency_checks_do_not() {
+        for ci in [false, true] {
+            for flags in [
+                vec![],
+                vec!["--frozen"],
+                vec!["--no-frozen"],
+                vec!["--force"],
+                vec!["--no-frozen", "--update-lock"],
+            ] {
+                let request = request(&flags, ci).unwrap();
+                assert!(!request.tools_only);
+                assert!(validate_request(&request).is_ok(), "{flags:?}");
+            }
+        }
         for (flags, mode) in [
-            (vec![], Mode::Provision),
             (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
             (vec!["--check"], Mode::Check),
+            (vec!["--offline"], Mode::Provision),
+            (vec!["--no-lock"], Mode::Provision),
         ] {
             let request = request(&flags, false).unwrap();
             assert_eq!(request.mode, mode);

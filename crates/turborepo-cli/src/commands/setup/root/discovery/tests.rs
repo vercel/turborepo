@@ -394,7 +394,7 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
     let custom = f.root.join_component("custom.json");
     custom.create_with_contents(ENABLED).unwrap();
     assert!(matches!(
-        dispatch(&["--root-turbo-json", custom.as_str()]),
+        dispatch(&["--plan", "--root-turbo-json", custom.as_str()]),
         Err(setup::Error::NotImplemented)
     ));
     f.root
