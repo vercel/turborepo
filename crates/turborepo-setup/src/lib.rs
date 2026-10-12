@@ -5,6 +5,7 @@ pub mod activation;
 pub mod bundled_npm;
 pub mod ephemeral_reconcile;
 pub mod execution_identity;
+pub mod go_discovery;
 pub mod js_resolution;
 pub mod lock;
 pub mod native_baseline;
