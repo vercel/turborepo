@@ -922,8 +922,11 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         assert!(text.contains(expected), "{expected}: {text}");
     }
     let lock = fs::read_to_string(root.join("turbo.lock")).unwrap();
-    assert!(
-        lock.contains(r#""installation":{"kind":"verify-system","executables":["node"]}"#),
+    // turbo.lock is indented JSON (#14738), so compare the parsed installation.
+    let parsed: serde_json::Value = serde_json::from_str(&lock).unwrap();
+    assert_eq!(
+        parsed["tools"]["node"]["installation"],
+        serde_json::json!({"kind": "verify-system", "executables": ["node"]}),
         "{lock}"
     );
     assert!(!root.join(".turbo/tools").exists());
