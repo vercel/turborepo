@@ -109,3 +109,19 @@ fn rewritten_or_created_lockfiles_are_restored_and_fail() {
         assert!(!f.root().join("npm-shrinkwrap.json").exists());
     }
 }
+
+#[test]
+fn yarn_classic_and_modern_refuse_lock_updates_their_own_way() {
+    let f = Fixture::new();
+    let yarn = Frozen::new(Manager::Yarn).unwrap();
+    let error = yarn.lockfile(&f.root()).unwrap_err().to_string();
+    assert!(error.contains("committed yarn.lock"), "{error}");
+    fs::write(f.root().join("yarn.lock"), "# yarn lockfile v1\n").unwrap();
+    assert_eq!(yarn.lockfile(&f.root()).unwrap(), "yarn.lock");
+    let classic = yarn.args(&Version::new(1, 22, 22));
+    assert_eq!(classic, ["install", "--frozen-lockfile"]);
+    assert_eq!(
+        yarn.args(&Version::new(4, 5, 0)),
+        ["install", "--immutable"]
+    );
+}
