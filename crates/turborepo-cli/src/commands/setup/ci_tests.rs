@@ -56,10 +56,6 @@ fn ci_no_frozen_creates_and_updates_lock() {
     process("no-frozen", Some("CI"));
 }
 #[test]
-fn ci_no_lock_provisions_without_creating_or_updating_lock() {
-    process("no-lock", Some("CI"));
-}
-#[test]
 fn ci_refresh_requires_explicit_no_frozen() {
     process("refresh", Some("CI"));
 }
@@ -193,33 +189,6 @@ fn fixture_process() {
                 assert_eq!(selected(&f).tools()["pnpm"].version, "10.1.0");
                 untouched(&f);
             }
-        }
-        "no-lock" => {
-            let flags = &["--tools-only", "--no-lock"];
-            let f = fresh();
-            let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
-            assert_eq!(f.run(&u, flags).unwrap(), 0);
-            assert!(!f.owned.root().join("turbo.lock").exists());
-            assert!(f.manifest().is_some());
-            untouched(&f);
-            // An existing valid lock remains authoritative and byte-identical.
-            let f = Fixture::new();
-            let u = Upstream::new(&f, false, None);
-            let lock = f.owned.root().join("turbo.lock");
-            let bytes = fs::read(&lock).unwrap();
-            let modified = fs::metadata(&lock).unwrap().modified().unwrap();
-            assert_eq!(f.run(&u, flags).unwrap(), 0);
-            assert_eq!(u.hits(), 3);
-            assert_eq!(fs::read(&lock).unwrap(), bytes);
-            assert_eq!(fs::metadata(&lock).unwrap().modified().unwrap(), modified);
-            fs::write(f.owned.root().join(".nvmrc"), "24.x\n").unwrap();
-            let before = state(f.owned.root());
-            let message = text(f.run(&u, flags).unwrap_err());
-            assert!(message.contains(".nvmrc"), "{message}");
-            guidance(&message);
-            assert_eq!(u.hits(), 3);
-            assert_eq!(state(f.owned.root()), before);
-            f.no_execution();
         }
         "refresh" => {
             let f = fresh();

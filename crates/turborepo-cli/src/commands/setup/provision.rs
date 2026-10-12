@@ -180,10 +180,6 @@ pub(super) fn run(
     platform()?;
     if lock_mode == super::LockMode::Frozen {
         super::lock_diagnostics::frozen(&snapshot)?;
-    } else if lock_mode == super::LockMode::NoLock
-        && let Some(lock) = snapshot.previous_lock()
-    {
-        super::lock_diagnostics::matching(&snapshot, lock)?;
     }
     // Unsupported native requests must fail before ANY writer, even no-op locks.
     let manager = snapshot.package_manager()?;
@@ -214,8 +210,7 @@ pub(super) fn run(
         }
     }
     let mut transports = transports;
-    let mut ephemeral = None;
-    let snapshot = if write || lock_mode == super::LockMode::NoLock {
+    let snapshot = if write {
         use turborepo_setup::lock::{WriteOutcome, reconcile};
         let check = || {
             preflight()?;
@@ -235,11 +230,7 @@ pub(super) fn run(
             .build()?;
         let outcome = reconcile::reconcile_checked(
             &snapshot,
-            if write {
-                resolution_mode
-            } else {
-                reconcile::Mode::NoLock
-            },
+            resolution_mode,
             false,
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
@@ -261,26 +252,17 @@ pub(super) fn run(
         // Preserve the original root/sources; accepting a freshly captured lock
         // here would hide a competing candidate or concurrent declaration edit.
         check()?;
-        transports = Some(sources);
-        if write {
-            let published = snapshot.after_publication(&outcome.lock)?;
-            if outcome.publication == Some(WriteOutcome::Written) {
-                println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
-            }
-            published
-        } else {
-            // Keep the original missing/existing lock snapshot for every CAS.
-            // Ephemeral resolution is never presented as a committed lock.
-            ephemeral = Some(outcome.lock);
-            println!("turbo.lock not written (--no-lock); selections are local to this clone.");
-            snapshot
+        let published = snapshot.after_publication(&outcome.lock)?;
+        if outcome.publication == Some(WriteOutcome::Written) {
+            println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
         }
+        transports = Some(sources);
+        published
     } else {
         snapshot
     };
-    let lock = ephemeral
-        .as_ref()
-        .or_else(|| snapshot.previous_lock())
+    let lock = snapshot
+        .previous_lock()
         .ok_or(Error::Unsupported(if force {
             "locked provisioning requires turbo.lock"
         } else {

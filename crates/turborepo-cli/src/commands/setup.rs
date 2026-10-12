@@ -196,7 +196,7 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // Force reinstalls existing locked selections, independently of local
     // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
-        || (request.lock == LockMode::NoLock && request.force)
+        || request.lock == LockMode::NoLock
         || !request.tools_only
         || request.offline
         || (request.force && request.update_lock)
@@ -304,7 +304,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if matches!(control, "--force" | "--no-lock") {
+                if control == "--force" {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(
