@@ -348,6 +348,7 @@ impl RegistryPlan {
         }
         Ok(Some(PreparedRegistry {
             tree,
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             tool: self.tool.clone(),
             launch_directory: self.launch_directory.clone(),
             entrypoints: self.artifact.executables.clone(),
@@ -357,11 +358,17 @@ impl RegistryPlan {
 
 pub struct PreparedRegistry {
     tree: ExtractedArtifact,
+    downloaded_bytes: u64,
     tool: Tool,
     launch_directory: String,
     entrypoints: std::collections::BTreeMap<String, String>,
 }
 impl PreparedRegistry {
+    /// Verified package bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Copy verified resources; launch this generation's managed Node.
     pub fn stage(
         &self,

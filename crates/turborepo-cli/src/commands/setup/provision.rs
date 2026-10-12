@@ -136,6 +136,14 @@ pub(super) fn plans(
     Ok(Plans { node, pnpm })
 }
 
+/// Aggregate results for the caller's report; no paths or versions.
+#[derive(Debug, Default)]
+pub(super) struct Provisioned {
+    pub downloaded_bytes: u64,
+    pub installed: usize,
+    pub reused: usize,
+}
+
 pub(super) fn lock_report(
     previous: Option<&turborepo_setup::lock::Lock>,
     current: &turborepo_setup::lock::Lock,
@@ -177,7 +185,7 @@ pub(super) fn run(
     force: bool,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
-) -> Result<i32, Error> {
+) -> Result<Provisioned, Error> {
     // Force never enters resolution or lock publication, even in local Write.
     let write = lock_mode == super::LockMode::Write && !force;
     let root = discovery.snapshot_root()?.as_std_path();
@@ -340,22 +348,32 @@ pub(super) fn run(
     } else {
         store.reconcile_checked(&desired, stage, before_publish)?;
     }
+    let mut provisioned = Provisioned {
+        downloaded_bytes: prepared_node
+            .as_ref()
+            .map_or(0, |node| node.downloaded_bytes())
+            + prepared_pnpm
+                .as_ref()
+                .map_or(0, |pnpm| pnpm.downloaded_bytes()),
+        ..Provisioned::default()
+    };
     for tool in &desired {
+        let reused = (tool.id == "node" && prepared_node.is_none())
+            || (tool.id == "pnpm" && prepared_pnpm.is_none());
+        if reused {
+            provisioned.reused += 1;
+        } else {
+            provisioned.installed += 1;
+        }
         println!(
             "{} {}: {}",
             tool.id,
             tool.version,
-            if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id == "pnpm" && prepared_pnpm.is_none())
-            {
-                "reused"
-            } else {
-                "installed"
-            }
+            if reused { "reused" } else { "installed" }
         );
     }
     println!(
         "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."
     );
-    Ok(0)
+    Ok(provisioned)
 }
