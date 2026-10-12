@@ -31,6 +31,9 @@ pub(super) fn run(
     sources: Snapshot,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
+    if sources.declarations().contains_key("rustup") {
+        return Err(Error::Unsupported("Rust toolchain readiness checks"));
+    }
     let context = context()?;
     preflight()?;
     let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;

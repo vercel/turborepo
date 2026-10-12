@@ -6,14 +6,17 @@ use std::{
 };
 
 use super::{
-    DeclarationMap, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, NATIVE, StorageError, WriteOutcome,
-    WriterStorage, probe_native_with, read_optional,
+    DeclarationMap, Ecosystems, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, MAX_TOOLCHAIN_BYTES,
+    NATIVE, RUST_TOOLCHAIN_FILES, StorageError, WriteOutcome, WriterStorage, probe_native_with,
+    read_optional,
 };
 
-const SOURCES: [(&str, usize); 3] = [
+const SOURCES: [(&str, usize); 5] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),
     (".nvmrc", crate::version_request::MAX_REQUEST_BYTES),
     (".node-version", crate::version_request::MAX_REQUEST_BYTES),
+    (RUST_TOOLCHAIN_FILES[0], MAX_TOOLCHAIN_BYTES),
+    (RUST_TOOLCHAIN_FILES[1], MAX_TOOLCHAIN_BYTES),
 ];
 type Inputs = BTreeMap<&'static str, Option<Vec<u8>>>;
 
@@ -53,12 +56,17 @@ fn inputs(root: &Path) -> io::Result<Inputs> {
 impl Snapshot {
     /// No storage initialization, resolver, network, or binary execution.
     pub fn capture(root: &Path) -> Result<Self, StorageError> {
+        Self::capture_with(root, Ecosystems::default())
+    }
+
+    /// Declarations of disabled ecosystems are ignored, not removed from CAS.
+    pub fn capture_with(root: &Path, ecosystems: Ecosystems) -> Result<Self, StorageError> {
         let root = root.canonicalize()?;
         let root_identity = Arc::new(same_file::Handle::from_path(&root)?);
         let bytes = read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?;
         let previous = bytes.as_deref().map(Lock::parse).transpose()?;
         let captured = inputs(&root)?;
-        let native = probe_native_with(|file, _| {
+        let native = probe_native_with(ecosystems, |file, _| {
             captured
                 .get(file)
                 .cloned()

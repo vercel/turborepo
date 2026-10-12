@@ -128,6 +128,10 @@ impl Fixture {
                         upstream.origin(),
                     )
                     .unwrap(),
+                    rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    )
+                    .unwrap(),
                 }),
                 || {
                     Ok(self
@@ -201,6 +205,8 @@ mod first_lock;
 mod force;
 #[path = "publication_guards.rs"]
 mod publication_guards;
+#[path = "rustup_tests.rs"]
+mod rustup;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
