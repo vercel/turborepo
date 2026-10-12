@@ -2173,8 +2173,8 @@ impl UvTaskContract {
                                     path_to_root,
                                     dependency.directory().to_unix().as_str(),
                                 );
-                                std::iter::once(format!("{directory}/**"))
-                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                toolchain::directory_source_globs(&directory)
+                                    .into_iter()
                                     .chain(
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
@@ -2223,8 +2223,8 @@ impl UvTaskContract {
                                     .map(|glob| join_prefix(path_to_root, &glob))
                                     .collect();
                                 let directory = join_prefix(path_to_root, directory);
-                                std::iter::once(format!("{directory}/**"))
-                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                toolchain::directory_source_globs(&directory)
+                                    .into_iter()
                                     .chain(
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
@@ -5604,6 +5604,10 @@ version = "0.1.0"
             io.input_globs
                 .contains(&"!../../packages/lib/**/.mypy_cache/**".to_string())
         );
+        assert!(
+            io.input_globs
+                .contains(&"!../../packages/lib/**/node_modules/**".to_string())
+        );
         assert!(io.input_globs.contains(&"!**/__pycache__/**".to_string()));
         assert!(io.input_globs.contains(&"!**/.pytest_cache/**".to_string()));
         assert!(io.input_globs.contains(&"!**/.ruff_cache/**".to_string()));
@@ -5887,6 +5891,11 @@ version = "0.1.0"
             workspace_lint
                 .input_globs
                 .contains(&"packages/lib/**".to_string())
+        );
+        assert!(
+            workspace_lint
+                .input_globs
+                .contains(&"!packages/lib/**/node_modules/**".to_string())
         );
     }
 
