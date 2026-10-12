@@ -524,3 +524,149 @@ test("prints the fish hook line instead of editing fish config", (t) =>
     const optedOut = runInstaller(fish, ["--no-shell-hook"]);
     assert.doesNotMatch(optedOut.stdout, /hook fish/);
   }));
+
+const PROFILES = [
+  ".profile",
+  ".bash_profile",
+  ".bash_login",
+  ".bashrc",
+  ".zprofile",
+  ".zshrc",
+  ".config/fish/config.fish"
+];
+
+async function snapshotProfiles(home) {
+  const files = {};
+  for (const name of PROFILES) {
+    files[name] = await readFile(join(home, name)).catch(() => null);
+  }
+  return files;
+}
+
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+for (const scenario of [
+  {
+    name: "zsh profiles through a symlinked dotfile",
+    shell: "/bin/zsh",
+    profiles: { ".zshrc": "# mine\nexport EDITOR=vi\n" },
+    symlink: ".zshrc",
+    uninstall: { args: ["--uninstall"] }
+  },
+  {
+    name: "bash profiles without a final newline or with a trailing blank line",
+    shell: "/bin/bash",
+    profiles: {
+      ".bash_profile": "# login without a final newline",
+      ".bashrc": "alias ll='ls -l'\n\n"
+    },
+    uninstall: { env: { TURBO_UNINSTALL: "1" } }
+  },
+  {
+    name: "bash profiles in a fresh home",
+    shell: "/bin/bash",
+    profiles: {},
+    uninstall: { args: ["--uninstall"] }
+  },
+  {
+    name: "fish config",
+    shell: "/usr/bin/fish",
+    profiles: { ".config/fish/config.fish": "set -g fish_greeting\n" },
+    uninstall: { args: ["--uninstall"] }
+  }
+]) {
+  test(`uninstall restores ${scenario.name} byte for byte`, (t) =>
+    withHarness(t, {}, async (root, env) => {
+      const shellEnv = { ...env, SHELL: scenario.shell };
+      for (const [name, contents] of Object.entries(scenario.profiles)) {
+        const path = join(env.HOME, name);
+        await mkdir(join(path, ".."), { recursive: true });
+        if (name === scenario.symlink) {
+          await writeFile(join(root, "dotfile"), contents);
+          await symlink(join(root, "dotfile"), path);
+        } else {
+          await writeFile(path, contents);
+        }
+      }
+      const before = await snapshotProfiles(env.HOME);
+      const installed = runInstaller(shellEnv);
+      assert.equal(installed.status, 0, installed.stderr);
+      const afterInstall = await snapshotProfiles(env.HOME);
+      if (scenario.shell.endsWith("fish")) {
+        assert.deepEqual(afterInstall, before);
+      } else {
+        assert.notDeepEqual(afterInstall, before);
+      }
+      const requests = await readFile(env.TURBO_CURL_LOG, "utf8");
+
+      const result = runInstaller(
+        { ...shellEnv, ...scenario.uninstall.env },
+        scenario.uninstall.args
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(await snapshotProfiles(env.HOME), before);
+      if (scenario.symlink) {
+        assert.ok((await lstat(join(env.HOME, scenario.symlink))).isSymbolicLink());
+      }
+      const binary = join(env.TURBO_INSTALL_DIR, "turbo");
+      await assert.rejects(lstat(binary));
+      assert.ok(result.stdout.includes(`Removed ${binary}\n`), result.stdout);
+      if (!scenario.shell.endsWith("fish")) {
+        assert.match(result.stdout, /Removed the turbo PATH entry from /);
+        assert.match(result.stdout, /Removed the turbo shell hook from /);
+      }
+      assert.doesNotMatch(result.stdout, /Left /);
+      assert.equal(await readFile(env.TURBO_CURL_LOG, "utf8"), requests);
+    }));
+}
+
+test("uninstall leaves binaries and profile lines the installer does not own", (t) =>
+  withHarness(t, {}, async (root, env) => {
+    const destination = join(env.TURBO_INSTALL_DIR, "turbo");
+    const linkTarget = join(root, "linked-turbo");
+    await writeFile(linkTarget, "keep me");
+    await mkdir(env.TURBO_INSTALL_DIR, { recursive: true });
+    await symlink(linkTarget, destination);
+    const otherDirectory = join(root, "other-bin");
+    const otherTurbo = join(otherDirectory, "turbo");
+    const ran = join(root, "other-turbo-ran");
+    await mkdir(otherDirectory);
+    await writeFile(otherTurbo, `#!/bin/sh\nprintf ran > '${ran}'\n`);
+    await chmod(otherTurbo, 0o755);
+
+    const zshrc = [
+      `eval "$(${shellQuote(destination)} hook zsh)"`,
+      `eval "$('/elsewhere/turbo' hook zsh)" ${HOOK_MARKER}`,
+      `# Turborepo standalone installer PATH: ${env.TURBO_INSTALL_DIR}`,
+      'export PATH="/edited:$PATH"',
+      ""
+    ].join("\n");
+    await writeFile(join(env.HOME, ".zshrc"), zshrc);
+    const fishConfig = join(env.HOME, ".config", "fish", "config.fish");
+    const fishLine = `${shellQuote(destination)} hook fish | source\n`;
+    await mkdir(join(env.HOME, ".config", "fish"), { recursive: true });
+    await writeFile(fishConfig, fishLine);
+
+    const result = runInstaller(
+      { ...env, PATH: `${otherDirectory}:${env.PATH}` },
+      ["--uninstall"]
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok((await lstat(destination)).isSymbolicLink());
+    assert.equal(await readFile(linkTarget, "utf8"), "keep me");
+    await assert.rejects(readFile(ran));
+    assert.equal(await readFile(join(env.HOME, ".zshrc"), "utf8"), zshrc);
+    assert.equal(await readFile(fishConfig, "utf8"), fishLine);
+    for (const message of [
+      `Left ${destination} because it is not a regular file.`,
+      `Left ${otherTurbo} because the installer did not install it.`,
+      `Left lines in ${join(env.HOME, ".zshrc")} that are marked by the installer`,
+      `Left the turbo hook line in ${fishConfig} because the installer did not add it`
+    ]) {
+      assert.ok(result.stdout.includes(message), result.stdout);
+    }
+    assert.doesNotMatch(result.stdout, /Removed/);
+    await assert.rejects(readFile(env.TURBO_CURL_LOG));
+  }));
