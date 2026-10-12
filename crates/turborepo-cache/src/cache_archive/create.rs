@@ -12,6 +12,33 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, I
 
 use crate::CacheError;
 
+/// Most worker threads zstd uses to compress one cache archive.
+const MAX_ZSTD_WORKERS: usize = 4;
+
+/// Creates the zstd encoder for cache archives: level 3, multithreaded.
+///
+/// zstd splits its input into jobs of several MiB and compresses them on
+/// worker threads. Archives smaller than one job come out byte-identical to
+/// single-threaded compression, and the compressed bytes don't depend on the
+/// number of workers, so machines with different core counts write identical
+/// archives. The worker count must never be 0: zstd treats 0 as
+/// single-threaded mode, whose output differs for large archives.
+fn archive_encoder<W: Write>(writer: W) -> Result<zstd::Encoder<'static, W>, CacheError> {
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |cores| cores.get())
+        .min(MAX_ZSTD_WORKERS);
+    archive_encoder_with_workers(writer, workers)
+}
+
+fn archive_encoder_with_workers<W: Write>(
+    writer: W,
+    workers: usize,
+) -> Result<zstd::Encoder<'static, W>, CacheError> {
+    let mut encoder = zstd::Encoder::new(writer, 0)?;
+    encoder.multithread(u32::try_from(workers).unwrap_or(1))?;
+    Ok(encoder)
+}
+
 /// Atomic counter to ensure unique temp filenames within a single process.
 /// Combined with PID, this guarantees uniqueness across concurrent tasks.
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -168,7 +195,7 @@ impl<'a> CacheWriter<'a> {
 
     pub fn from_writer(writer: impl Write + 'a, use_compression: bool) -> Result<Self, CacheError> {
         if use_compression {
-            let zw = zstd::Encoder::new(writer, 0)?.auto_finish();
+            let zw = archive_encoder(writer)?.auto_finish();
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(zw)),
                 temp_path: None,
@@ -212,7 +239,7 @@ impl<'a> CacheWriter<'a> {
         let is_compressed = path.extension() == Some("zst");
 
         if is_compressed {
-            let zw = zstd::Encoder::new(file_buffer, 0)?.auto_finish();
+            let zw = archive_encoder(file_buffer)?.auto_finish();
 
             Ok(CacheWriter {
                 builder: tar::Builder::new(Box::new(zw)),
@@ -1258,6 +1285,32 @@ mod tests {
         decoder.read_to_string(&mut out)?;
 
         assert_eq!(out, "hello world");
+
+        Ok(())
+    }
+
+    /// Machines with different core counts must write identical artifacts, so
+    /// the compressed bytes can't depend on the zstd worker count.
+    #[test]
+    fn test_archive_compression_independent_of_worker_count() -> Result<()> {
+        // Compressible but non-repeating input that spans several zstd jobs, so
+        // the multithreaded encoder really splits it.
+        let mut state: u32 = 1;
+        let mut input = Vec::with_capacity(20 << 20);
+        while input.len() < 20 << 20 {
+            state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            write!(input, "token{} ", state >> 20)?;
+        }
+
+        let compress = |workers| -> Result<Vec<u8>> {
+            let mut encoder = archive_encoder_with_workers(Vec::new(), workers)?;
+            encoder.write_all(&input)?;
+            Ok(encoder.finish()?)
+        };
+        let one_worker = compress(1)?;
+        assert_eq!(one_worker, compress(2)?);
+        assert_eq!(one_worker, compress(4)?);
+        assert_eq!(zstd::decode_all(&one_worker[..])?, input);
 
         Ok(())
     }
