@@ -37,6 +37,10 @@ pub const GLOBAL_WARNING_ENV_VAR: &str = "__TURBO_GLOBAL_WARNING";
 /// to the CLI when spawning local turbo or running the global turbo.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
+/// The `--cwd` the shim consumed before starting a local CLI at the
+/// repository root. Unset when no `--cwd` was given.
+pub const INVOCATION_CWD_ENV_VAR: &str = "TURBO_INVOCATION_CWD";
+
 /// Runtime container for injected shim dependencies.
 ///
 /// This struct holds all the trait implementations needed by the shim to
@@ -476,6 +480,11 @@ where
         .current_dir(cwd)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
+    // Never let an outer invocation's value leak into this handoff.
+    command.env_remove(INVOCATION_CWD_ENV_VAR);
+    if shim_args.cwd != shim_args.invocation_dir {
+        command.env(INVOCATION_CWD_ENV_VAR, shim_args.cwd.as_path());
+    }
 
     spawn_child_turbo(runtime, command, Error::LocalTurboProcess)
 }
@@ -817,6 +826,74 @@ mod tests {
                 _ => assert!(matches!(result, ShimResult::Ok(17))),
             }
             assert_eq!(marker.exists(), case == 3);
+        }
+    }
+
+    #[test]
+    fn local_handoff_carries_only_this_invocations_cwd() {
+        struct Unmanaged;
+        impl TurboRunner for Unmanaged {
+            type Error = std::io::Error;
+            fn run(&self, _: Option<RepoState>, _: ColorConfig) -> Result<i32, Self::Error> {
+                panic!("an installed local CLI must receive the handoff")
+            }
+        }
+        type Envs = Vec<(std::ffi::OsString, Option<std::ffi::OsString>)>;
+        struct Recording(std::sync::Mutex<Envs>);
+        impl ChildSpawner for Recording {
+            fn spawn(&self, command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+                *self.0.lock().unwrap() = command
+                    .get_envs()
+                    .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
+                    .collect();
+                Err(std::io::Error::other("recorded"))
+            }
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(br#"{"packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        let package = root.join_components(&[
+            "node_modules",
+            crate::TurboState::scoped_platform_package_scope(),
+            crate::TurboState::scoped_platform_package_dir(),
+        ]);
+        let binary = package.join_components(&["bin", crate::TurboState::binary_name()]);
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        binary.create_with_contents(b"").unwrap();
+        package
+            .join_component("package.json")
+            .create_with_contents(br#"{"version":"2.9.0"}"#)
+            .unwrap();
+        for (extra, expected) in [
+            (&[][..], None),
+            (&["--cwd", "apps"][..], Some(root.join_component("apps"))),
+        ] {
+            let runtime = ShimRuntime::new(
+                Unmanaged,
+                MockConfigProvider,
+                Recording(Default::default()),
+                MockVersionProvider,
+            );
+            let words = ["turbo", "exec", "--no-update-notifier"]
+                .iter()
+                .chain(extra)
+                .chain(&["--", "node", "--cwd", "elsewhere"])
+                .map(|word| word.to_string());
+            let args = ShimArgs::parse_from_iter(root.clone(), words).unwrap();
+            let state = RepoState::infer_with_config(&root, None).unwrap();
+            let result = run_correct_turbo(&runtime, state, args, ColorConfig::new(true));
+            assert!(matches!(
+                result,
+                ShimResult::ShimError(Error::LocalTurboProcess(_))
+            ));
+            let envs = runtime.child_spawner.0.lock().unwrap().clone();
+            let expected = expected.map(|path| path.as_std_path().as_os_str().to_owned());
+            assert!(
+                envs.contains(&(INVOCATION_CWD_ENV_VAR.into(), expected)),
+                "{envs:?}"
+            );
         }
     }
 

@@ -1,4 +1,4 @@
-//! Exact-root strict activation for the Node/pnpm setup-to-run journey.
+//! Exact-root strict activation shared by `turbo run` and `turbo exec`.
 //! No provisioning, HTTP, ancestor inventory search or process-global mutation.
 
 use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};

@@ -27,6 +27,7 @@ pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
 pub(crate) mod ls;
+pub(crate) mod managed;
 pub(crate) mod prune;
 pub(crate) mod query;
 pub(crate) mod run;
