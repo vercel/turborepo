@@ -294,3 +294,46 @@ fn offline_never_creates_refreshes_or_re_resolves_a_lock() {
         assert_eq!(f.owned.root().join("turbo.lock").exists(), case != 0);
     }
 }
+
+#[test]
+fn offline_force_reinstalls_from_cached_or_verified_installed_bytes() {
+    const FORCE: &[&str] = &["--frozen", "--tools-only", "--offline", "--force"];
+    let cache = tempfile::tempdir().unwrap();
+    let (seed, f) = (Fixture::new(), Fixture::new());
+    let u = Upstream::new(&f, false, None);
+    // Another clone seeds the cache; this one installs without it.
+    assert_eq!(
+        seed.run_with(u.origin(), Some(cache.path()), FROZEN)
+            .unwrap(),
+        0
+    );
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    let hits = u.hits();
+    let pnpm = format!(
+        "turborepo/setup-artifacts/v1/any/{:x}",
+        Sha256::digest(&f.pnpm)
+    );
+    fs::remove_file(cache.path().join(pnpm)).unwrap();
+    // Cached Node with installed-only pnpm, then installed-only for both.
+    for cache in [Some(cache.path()), None] {
+        let before = f.manifest().unwrap();
+        assert_eq!(f.run_with(&unreachable_origin(), cache, FORCE).unwrap(), 0);
+        assert_ne!(f.manifest().unwrap(), before);
+        let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+        assert_eq!(current.tools.len(), 2);
+    }
+    // Neither cached nor healthy: every artifact is listed, nothing published.
+    let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+    fs::write(current.bin.join("../tools/pnpm/dist/resource"), "damage").unwrap();
+    let before = f.manifest().unwrap();
+    let text = f
+        .run_with(&unreachable_origin(), None, FORCE)
+        .unwrap_err()
+        .to_string();
+    let both =
+        text.contains("node 24.0.0 [distribution]") && text.contains("pnpm 10.0.0 [package]");
+    assert!(both, "{text}");
+    assert_eq!(f.manifest().unwrap(), before);
+    assert_eq!(u.hits(), hits);
+    f.no_execution();
+}

@@ -363,13 +363,28 @@ pub(super) fn run(
     };
     // Offline misses are collected, not short-circuited, so the report names
     // every missing artifact. Nothing is published unless all are present.
+    // Offline --force reinstalls from verified cached bytes, or else from the
+    // healthy installed tree the adapter would reuse.
     let mut missing = Vec::new();
+    let mut reused = Vec::new();
     let (prepared_node, prepared_pnpm) = runtime.block_on(async {
-        let node = match node
-            .prepare(&store, &desired, &transports.node, preparation)
-            .await
-        {
-            Err(turborepo_setup::node_provision::Error::Offline) => {
+        use turborepo_setup::{Preparation::IfNeeded, node_provision::Error::Offline};
+        let transport = &transports.node;
+        let node = match node.prepare(&store, &desired, transport, preparation).await {
+            Err(Offline) if force => {
+                match node.prepare(&store, &desired, transport, IfNeeded).await {
+                    Ok(None) => {
+                        reused.push(node.inventory_tool().clone());
+                        None
+                    }
+                    Err(Offline) => {
+                        missing.push("node");
+                        None
+                    }
+                    result => result?,
+                }
+            }
+            Err(Offline) => {
                 missing.push("node");
                 None
             }
@@ -378,12 +393,24 @@ pub(super) fn run(
         preflight()?;
         revalidate(discovery)?;
         snapshot.check_guard(&guard)?;
+        use turborepo_setup::pnpm_provision::Error::Offline as PnpmOffline;
+        let transport = &transports.pnpm;
         let pnpm = match &pnpm {
-            Some(plan) => match plan
-                .prepare(&store, &desired, &transports.pnpm, preparation)
-                .await
-            {
-                Err(turborepo_setup::pnpm_provision::Error::Offline) => {
+            Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
+                Err(PnpmOffline) if force => {
+                    match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(PnpmOffline) => {
+                            missing.push("pnpm");
+                            None
+                        }
+                        result => result?,
+                    }
+                }
+                Err(PnpmOffline) => {
                     missing.push("pnpm");
                     None
                 }
@@ -419,7 +446,7 @@ pub(super) fn run(
         Ok(())
     };
     if force {
-        store.force_reconcile_checked(&desired, stage, before_publish)?;
+        store.force_reconcile_reusing_checked(&desired, &reused, stage, before_publish)?;
     } else {
         store.reconcile_checked(&desired, stage, before_publish)?;
     }
@@ -434,6 +461,7 @@ pub(super) fn run(
             tool.id,
             tool.version,
             match from_cache {
+                None if force => "reinstalled from the verified installation",
                 None => "reused",
                 Some(false) => "installed",
                 Some(true) => "installed from the shared download cache",
