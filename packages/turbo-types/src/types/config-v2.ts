@@ -6,6 +6,9 @@ export type OutputLogs =
   | "errors-only";
 export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
+export type ToolPolicy = "managed" | "verify-system" | "skip";
+export type DependencyPolicy = "locked" | "skip";
+export type LifecycleScripts = "native" | "skip";
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
@@ -241,6 +244,12 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `{}`
    */
   futureFlags?: FutureFlags;
+
+  /**
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
+   * and requires `futureFlags.experimentalSetup`.
+   */
+  setup?: SetupPolicy;
 }
 
 export interface FutureFlags {
@@ -525,6 +534,61 @@ export interface GlobalConfig {
    * @defaultValue `false`
    */
   noUpdateNotifier?: boolean;
+}
+
+export interface SetupPolicy {
+  /**
+   * How `turbo setup` prepares tools for every toolchain.
+   *
+   * - `"managed"`: Provision the locked version for this repository.
+   * - `"verify-system"`: Use an installed tool after verifying that it matches the locked version.
+   * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
+   *
+   * Without `setup`, `turbo setup` infers what to prepare from native
+   * declaration files, and detected tools are managed. Toolchain keys
+   * override root values.
+   */
+  tools?: ToolPolicy;
+
+  /**
+   * How `turbo setup` prepares dependencies for every toolchain.
+   *
+   * - `"locked"`: Install from the committed ecosystem lockfile without changing it.
+   * - `"skip"`: Do not install dependencies.
+   */
+  dependencies?: DependencyPolicy;
+
+  /**
+   * Whether dependency setup runs package-manager lifecycle scripts for every
+   * toolchain.
+   *
+   * - `"native"`: Keep each package manager's defaults and committed allowlists or trust settings.
+   * - `"skip"`: Skip them with the package manager's own flag, or fail where it has none.
+   */
+  lifecycleScripts?: LifecycleScripts;
+
+  /** Setup policy for the JavaScript toolchain. */
+  javascript?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`. */
+  rust?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Python toolchain. Requires `futureFlags.experimentalPythonWorkspaces`. */
+  python?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`. */
+  go?: ToolchainSetupPolicy;
+}
+
+export interface ToolchainSetupPolicy {
+  /** How `turbo setup` prepares this toolchain's tools. */
+  tools?: ToolPolicy;
+
+  /** How `turbo setup` prepares this toolchain's dependencies. */
+  dependencies?: DependencyPolicy;
+
+  /** Whether this toolchain's dependency setup runs lifecycle scripts. */
+  lifecycleScripts?: LifecycleScripts;
 }
 
 export interface StartupInput {

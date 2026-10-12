@@ -190,6 +190,17 @@
         }
       ]
     },
+    "setup": {
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SetupPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "tags": {
       "description": "Arbitrary string labels for this package. In the root configuration, these labels apply to the root package.",
       "anyOf": [
@@ -281,6 +292,11 @@
           ]
         }
       }
+    },
+    "DependencyPolicy": {
+      "description": "How `turbo setup` prepares a toolchain's dependencies. `locked` installs them from the committed ecosystem lockfile without changing it. `skip` does not install them.",
+      "type": "string",
+      "enum": ["locked", "skip"]
     },
     "EnvMode": {
       "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.\n\n- `strict`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`. - `loose`: Allow all environment variables for the process to be available.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#envmode",
@@ -509,6 +525,11 @@
           ]
         }
       }
+    },
+    "LifecycleScripts": {
+      "description": "Whether dependency setup lets package managers run lifecycle scripts. `native` keeps each package manager's defaults and committed allowlists or trust settings. `skip` passes the package manager's own flag for skipping them, and fails where the package manager has none.",
+      "type": "string",
+      "enum": ["native", "skip"]
     },
     "Map_of_TagRules": {
       "type": "object",
@@ -804,6 +825,89 @@
         }
       }
     },
+    "SetupPolicy": {
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
+      "type": "object",
+      "properties": {
+        "dependencies": {
+          "description": "How `turbo setup` prepares dependencies for every toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DependencyPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "go": {
+          "description": "Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "javascript": {
+          "description": "Setup policy for the JavaScript toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lifecycleScripts": {
+          "description": "Whether dependency setup runs lifecycle scripts for every toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LifecycleScripts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "python": {
+          "description": "Setup policy for the Python toolchain. Requires `futureFlags.experimentalPythonWorkspaces`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rust": {
+          "description": "Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "description": "How `turbo setup` prepares tools for every toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "String": {
       "type": "string"
     },
@@ -881,6 +985,50 @@
           "$ref": "#/definitions/StructuredInput"
         }
       ]
+    },
+    "ToolPolicy": {
+      "description": "How `turbo setup` prepares a toolchain's tools. `managed` provisions the locked version for this repository. `verify-system` uses an installed tool after verifying that it matches the locked version. `skip` neither provisions nor verifies the tool, which also skips the toolchain's dependencies.",
+      "type": "string",
+      "enum": ["managed", "verify-system", "skip"]
+    },
+    "ToolchainSetupPolicy": {
+      "description": "Setup policy for one toolchain. Omitted values use the root `setup` values, then the inferred default.",
+      "type": "object",
+      "properties": {
+        "dependencies": {
+          "description": "How `turbo setup` prepares this toolchain's dependencies.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DependencyPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lifecycleScripts": {
+          "description": "Whether this toolchain's dependency setup runs lifecycle scripts.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LifecycleScripts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "description": "How `turbo setup` prepares this toolchain's tools.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     },
     "UI": {
       "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#ui",

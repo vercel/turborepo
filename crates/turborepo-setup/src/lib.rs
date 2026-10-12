@@ -6,6 +6,7 @@ pub mod bundled_npm;
 pub mod ephemeral_reconcile;
 pub mod execution_identity;
 pub mod js_resolution;
+pub mod lifecycle;
 pub mod lock;
 pub mod native_baseline;
 pub mod node;
@@ -24,6 +25,7 @@ pub mod pnpm_provision {
 pub mod registry_metadata;
 pub mod registry_resolution;
 pub mod source_policy;
+pub mod system_tool;
 pub mod version_managers;
 pub mod version_request;
 pub mod writer_storage;

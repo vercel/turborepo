@@ -480,6 +480,21 @@ fn unsupported_adapters_platforms_and_invalid_lock_metadata_are_distinct() {
             assert!(matches!(result, Err(Error::UnsupportedAdapter)));
         }
     }
+    // Only verify-system tools: intentional external tools, not missing ones.
+    let mut value = fixture();
+    for (id, executable) in [("node", "node"), ("pnpm", "pnpm")] {
+        value["tools"][id]["installation"] =
+            json!({"kind":"verify-system","executables":[executable]});
+    }
+    value["tools"]["node"]
+        .as_object_mut()
+        .unwrap()
+        .remove("options");
+    fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), context()),
+        Err(Error::VerifySystem)
+    ));
 }
 
 #[test]

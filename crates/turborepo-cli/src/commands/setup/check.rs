@@ -56,9 +56,7 @@ pub(super) fn run(
     {
         println!("npm {}: ready (bundled with managed Node)", npm.version);
     }
-    println!(
-        "Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run."
-    );
+    println!("Dependencies skipped; dependency readiness was not checked. No tasks run.");
     Ok(0)
 }
 

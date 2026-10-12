@@ -5,7 +5,9 @@ use std::time::Instant;
 
 use miette::Diagnostic;
 use thiserror::Error;
+use turborepo_repository::toolchain::ToolchainId;
 use turborepo_setup::source_policy::OfficialSourcePolicy;
+use turborepo_turbo_json::ToolPolicy;
 use turborepo_ui::ColorConfig;
 
 use crate::cli::{Args, SetupArgs};
@@ -16,6 +18,7 @@ pub(crate) mod authorization;
 mod check;
 #[cfg(windows)]
 mod dacl;
+mod effective;
 mod lock_diagnostics;
 mod no_lock;
 mod offline;
@@ -24,6 +27,7 @@ mod provision;
 mod root;
 mod telemetry;
 mod trust;
+mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -97,6 +101,8 @@ pub enum Error {
     #[error(transparent)]
     Ephemeral(#[from] turborepo_setup::ephemeral_reconcile::Error),
     #[error(transparent)]
+    SystemTool(#[from] turborepo_setup::system_tool::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -129,10 +135,32 @@ struct SetupRequest {
     force: bool,
     offline: bool,
     tools_only: bool,
+    ignore_scripts: bool,
     update_lock: bool,
 }
 
 impl SetupRequest {
+    /// Lifecycle intent for a toolchain's dependency installer: CLI >
+    /// repository policy > native default.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "consumed by dependency installers (TURBO-6229)")
+    )]
+    fn lifecycle(
+        &self,
+        repository: Option<turborepo_turbo_json::LifecycleScripts>,
+    ) -> turborepo_setup::lifecycle::Request {
+        use turborepo_setup::lifecycle::{Intent, Request};
+        use turborepo_turbo_json::LifecycleScripts;
+        Request::new(
+            self.ignore_scripts,
+            repository.map(|scripts| match scripts {
+                LifecycleScripts::Native => Intent::Native,
+                LifecycleScripts::Skip => Intent::Skip,
+            }),
+        )
+    }
+
     fn new(args: &SetupArgs, is_ci: bool) -> Result<Self, Error> {
         // Explicit conflicts are enforced by the argument parser. --no-lock
         // overrides only the inferred CI default, not explicit --frozen.
@@ -158,6 +186,7 @@ impl SetupRequest {
             force: args.force,
             offline: args.offline,
             tools_only: args.tools_only,
+            ignore_scripts: args.ignore_scripts,
             update_lock: args.update_lock,
         })
     }
@@ -240,14 +269,29 @@ fn run_reporting(
 
     let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
     report.request(&request);
-    validate_request(&request)?;
+    let eligible = discovery.source_eligibility();
+    let plan = effective::Plan::new(
+        discovery.policy(),
+        [
+            (eligible.node(), ToolchainId::JAVASCRIPT),
+            (eligible.cargo(), ToolchainId::RUST),
+            (eligible.python(), ToolchainId::PYTHON),
+            (eligible.go(), ToolchainId::GO),
+        ]
+        .into_iter()
+        .filter_map(|(eligible, id)| eligible.then_some(id)),
+        request.tools_only,
+    );
+    validate(&request, plan.tools_only())?;
     if args.test_run {
         return Err(Error::NotImplemented);
     }
-    let eligible = discovery.source_eligibility();
-    if eligible.cargo() || eligible.python() || eligible.go() {
+    if plan.unsupported() {
         return Err(Error::Unsupported("non-JavaScript workspace setup"));
     }
+    let javascript = plan
+        .toolchain(&ToolchainId::JAVASCRIPT)
+        .map_or(ToolPolicy::Skip, |toolchain| toolchain.tools.0);
     let snapshot =
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     // Never silently: version-manager files are reported, not read as requests.
@@ -257,9 +301,46 @@ fn run_reporting(
     ) {
         eprintln!("{report}");
     }
-    let provisioned = match request.mode {
-        Mode::Check => return check::run(&discovery, snapshot, preflight),
-        Mode::Plan => {
+    // Report the effective decisions before any traffic or installation.
+    for line in plan.report() {
+        println!("{line}");
+    }
+    if javascript == ToolPolicy::Skip {
+        // Never silently ignore committed selections for a skipped toolchain.
+        if snapshot
+            .previous_lock()
+            .is_some_and(|lock| !lock.tools().is_empty())
+        {
+            return Err(Error::Unsupported(
+                "turbo.lock selects tools that the setup policy skips; remove the skip or the \
+                 locked tools",
+            ));
+        }
+        println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
+        return Ok(0);
+    }
+    let resolution = if request.update_lock {
+        turborepo_setup::lock::reconcile::Mode::Refresh
+    } else {
+        turborepo_setup::lock::reconcile::Mode::Local
+    };
+    let provisioned = match (request.mode, javascript) {
+        (Mode::Check, ToolPolicy::VerifySystem) => {
+            return verify_system::check(&discovery, snapshot);
+        }
+        // verify-system provisioning writes turbo.lock; plans never write.
+        (Mode::Plan, ToolPolicy::VerifySystem) => return Err(Error::NotImplemented),
+        (_, ToolPolicy::VerifySystem) => {
+            return verify_system::provision(
+                &discovery,
+                snapshot,
+                request.lock,
+                resolution,
+                request.force,
+            );
+        }
+        (Mode::Check, _) => return check::run(&discovery, snapshot, preflight),
+        (Mode::Plan, _) => {
             println!(
                 "{}",
                 plan::report(&discovery, snapshot, &request, transports, preflight)?
@@ -268,7 +349,7 @@ fn run_reporting(
         }
         // Offline repeats and clone-local --no-lock report their own skipped
         // dependencies.
-        Mode::Provision if request.offline => {
+        (Mode::Provision, _) if request.offline => {
             return offline::run(
                 &discovery,
                 snapshot,
@@ -277,18 +358,14 @@ fn run_reporting(
                 request.force,
             );
         }
-        Mode::Provision if request.lock == LockMode::NoLock => {
+        (Mode::Provision, _) if request.lock == LockMode::NoLock => {
             return no_lock::run(&discovery, snapshot, transports, preflight);
         }
-        Mode::Provision => provision::run(
+        (Mode::Provision, _) => provision::run(
             &discovery,
             snapshot,
             request.lock,
-            if request.update_lock {
-                turborepo_setup::lock::reconcile::Mode::Refresh
-            } else {
-                turborepo_setup::lock::reconcile::Mode::Local
-            },
+            resolution,
             request.force,
             transports,
             preflight,
@@ -310,14 +387,21 @@ fn run_reporting(
     Ok(0)
 }
 
+#[cfg(test)]
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
+    validate(request, request.tools_only)
+}
+
+/// `tools_only` is the effective decision: `--tools-only` or a root policy
+/// that skips every eligible toolchain's dependencies.
+fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     // Plans report locked reinstalls or proposed resolution, never both.
     let read_only = match request.mode {
         Mode::Check => !request.force && !request.update_lock,
         Mode::Plan => !(request.force && request.update_lock),
         Mode::Provision => false,
     };
-    if read_only && request.tools_only && request.lock != LockMode::NoLock {
+    if read_only && tools_only && request.lock != LockMode::NoLock {
         // CI/frozen/offline never change read-only modes into resolution or repair.
         return Ok(());
     }
@@ -485,6 +569,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn ignore_scripts_overrides_repository_lifecycle_policy() {
+        use turborepo_setup::lifecycle::{Intent, Origin};
+        use turborepo_turbo_json::LifecycleScripts;
+        let native = Some(LifecycleScripts::Native);
+        let cli = request(&["--tools-only", "--ignore-scripts"], false).unwrap();
+        assert!(validate_request(&cli).is_ok());
+        let resolved = cli.lifecycle(native);
+        assert_eq!(
+            (resolved.intent, resolved.origin),
+            (Intent::Skip, Origin::Cli)
+        );
+        let plain = request(&[], false).unwrap();
+        let resolved = plain.lifecycle(Some(LifecycleScripts::Skip));
+        assert_eq!(
+            (resolved.intent, resolved.origin),
+            (Intent::Skip, Origin::Repository)
+        );
+        assert_eq!(plain.lifecycle(None).origin, Origin::Default);
     }
 
     #[test]

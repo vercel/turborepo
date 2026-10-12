@@ -75,12 +75,39 @@ fn invoke_raw_with(
     ci: bool,
     env: &[(&str, std::ffi::OsString)],
 ) -> (i32, String, String) {
+    invoke_in(root, words, ci, env, None, true)
+}
+
+/// A run with an explicit PATH that may write when `read_only` is false.
+fn invoke_on_path(
+    root: &Path,
+    words: &[&str],
+    ci: bool,
+    path: &std::ffi::OsStr,
+    read_only: bool,
+) -> (i32, String) {
+    let (code, stdout, stderr) = invoke_in(root, words, ci, &[], Some(path), read_only);
+    let text = format!("{stdout}{stderr}")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    (code, text)
+}
+
+fn invoke_in(
+    root: &Path,
+    words: &[&str],
+    ci: bool,
+    env: &[(&str, std::ffi::OsString)],
+    path: Option<&std::ffi::OsStr>,
+    read_only: bool,
+) -> (i32, String, String) {
     let proxy = TcpListener::bind("127.0.0.1:0").expect("bind HTTP monitor");
     proxy.set_nonblocking(true).expect("nonblocking monitor");
     let url = format!("http://{}", proxy.local_addr().expect("monitor address"));
     let git_path = root.join("host-bin");
     #[cfg(unix)]
-    if !git_path.exists() {
+    if path.is_none() && !git_path.exists() {
         fs::create_dir(&git_path).expect("create git-only fixture PATH");
         std::os::unix::fs::symlink(which::which("git").expect("host git"), git_path.join("git"))
             .expect("bind fixture git");
@@ -91,7 +118,7 @@ fn invoke_raw_with(
         .env_clear()
         .current_dir(root)
         .args(words)
-        .env("PATH", &git_path)
+        .env("PATH", path.unwrap_or(git_path.as_os_str()))
         .env("HOME", root.join("home"))
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
@@ -114,11 +141,13 @@ fn invoke_raw_with(
             .env("TURBO_BINARY_PATH", root.join("unbuilt-local-turbo"));
     }
     let output = command.output().expect("run standalone turbo");
-    assert_eq!(
-        snapshot(root),
-        before,
-        "setup must not write files or directories"
-    );
+    if read_only {
+        assert_eq!(
+            snapshot(root),
+            before,
+            "setup must not write files or directories"
+        );
+    }
     assert!(
         matches!(proxy.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock),
         "unexpected HTTP connection"
@@ -750,6 +779,128 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
             assert!(!text.contains("ready"), "{text}");
         }
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn verify_system_locks_and_verifies_installed_tools_without_installing() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = tempfile::tempdir().unwrap();
+    let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(&bin).unwrap();
+    let tool = |name: &str, version: &str| {
+        let path = bin.join(name);
+        fs::write(&path, format!("#!/bin/sh\necho {version}\n")).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    tool("node", "v24.0.0");
+    tool("pnpm", "10.0.0");
+    let git = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(&root)
+        .status();
+    assert!(git.unwrap().success());
+    write(&root, ".gitignore", "/.turbo/\n");
+    write(&root, ".nvmrc", "24.x\n");
+    write(&root, "package.json", r#"{"packageManager":"pnpm@10.0.0"}"#);
+    write(
+        &root,
+        "turbo.json",
+        r#"{"futureFlags":{"experimentalSetup":true},
+            "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#,
+    );
+    // Fake tools come first; the host PATH only supplies git.
+    let host = std::env::var_os("PATH").unwrap_or_default();
+    let path =
+        std::env::join_paths(std::iter::once(bin.clone()).chain(std::env::split_paths(&host)))
+            .unwrap();
+
+    // Local setup locks the installed versions; nothing is downloaded or installed.
+    let (code, text) = invoke_on_path(&root, &["setup"], false, &path, false);
+    assert_eq!(code, 0, "{text}");
+    for expected in [
+        "javascript: tools verify-system (turbo.json setup policy)",
+        "turbo.lock created",
+        "node: locked 24.0.0",
+        "node 24.0.0: verified at",
+        "pnpm 10.0.0: verified at",
+    ] {
+        assert!(text.contains(expected), "{expected}: {text}");
+    }
+    let lock = fs::read_to_string(root.join("turbo.lock")).unwrap();
+    assert!(
+        lock.contains(r#""installation":{"kind":"verify-system","executables":["node"]}"#),
+        "{lock}"
+    );
+    assert!(!root.join(".turbo/tools").exists());
+
+    // Frozen repeats and checks are read-only and verify the locked versions.
+    for words in [["setup", "--frozen"], ["setup", "--check"]] {
+        let (code, text) = invoke_on_path(&root, &words, false, &path, true);
+        assert_eq!(code, 0, "{text}");
+        assert!(text.contains("node 24.0.0:"), "{text}");
+    }
+    tool("node", "v24.1.0");
+    for words in [
+        ["setup", "--frozen"],
+        ["setup", "--check"],
+        ["setup", "--force"],
+    ] {
+        let (code, text) = invoke_on_path(&root, &words, false, &path, true);
+        assert_eq!(code, 1, "{text}");
+        assert!(diagnostic_contains(&text, "requires 24.0.0"), "{text}");
+    }
+    // A managed lock is never silently trusted as an external tool.
+    write(&root, "turbo.json", ENABLED);
+    let (code, text) = invoke_on_path(
+        &root,
+        &["setup", "--frozen", "--tools-only"],
+        false,
+        &path,
+        true,
+    );
+    assert_eq!(code, 1, "{text}");
+}
+
+#[test]
+fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "Cargo.toml", "[workspace]\nmembers = []\n");
+    let config = |dependencies: &str| {
+        format!(
+            r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":true}},
+                "setup":{{"dependencies":"{dependencies}","rust":{{"tools":"skip"}}}}}}"#
+        )
+    };
+    write(root, "turbo.json", &config("skip"));
+    // The source preflight accepts the policy, which makes this a tools-only
+    // check without --tools-only and lifts the unsupported Rust ecosystem.
+    let (code, text) = invoke(root, &["setup", "--check"], false);
+    assert_eq!(code, 1, "{text}");
+    if cfg!(all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    )) && !external_system_policy_blocked(code, &text)
+    {
+        assert!(
+            diagnostic_contains(&text, "managed activation requires turbo.lock"),
+            "{text}"
+        );
+        for line in [
+            "javascript: tools managed (inferred); dependencies skipped (turbo.json setup policy)",
+            "rust: skipped (turbo.json setup policy)",
+        ] {
+            assert!(text.contains(line), "{text}");
+        }
+    }
+    // Locked dependencies still need dependency setup, unless the CLI skips it.
+    write(root, "turbo.json", &config("locked"));
+    failure(root, &["setup", "--check"], false, PENDING);
 }
 
 #[test]
