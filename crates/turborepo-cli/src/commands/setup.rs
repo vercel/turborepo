@@ -22,6 +22,7 @@ mod plan;
 mod provision;
 mod root;
 pub(crate) mod trust;
+mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -145,6 +146,8 @@ pub enum Error {
     GoResolution(#[from] turborepo_setup::go_resolution::Error),
     #[error(transparent)]
     Bun(#[from] turborepo_setup::bun_provision::Error),
+    #[error(transparent)]
+    SystemTool(#[from] turborepo_setup::system_tool::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
@@ -295,9 +298,6 @@ fn run_with_policy(
     let javascript = plan
         .toolchain(&ToolchainId::JAVASCRIPT)
         .map_or(ToolPolicy::Skip, |t| t.tools.0);
-    if javascript == ToolPolicy::VerifySystem {
-        return Err(Error::Unsupported("verify-system JavaScript tools"));
-    }
     // Preserve current workspace gating, with explicit policy skips disabling
     // interpretation of that ecosystem's declarations.
     let snapshot = turborepo_setup::lock::Snapshot::capture_with(
@@ -360,6 +360,24 @@ fn run_with_policy(
         snapshot.declarations(),
     ) {
         eprintln!("{report}");
+    }
+    let resolution = if request.update_lock {
+        turborepo_setup::lock::reconcile::Mode::Refresh
+    } else {
+        turborepo_setup::lock::reconcile::Mode::Local
+    };
+    if javascript == ToolPolicy::VerifySystem {
+        return match request.mode {
+            Mode::Check => verify_system::check(&discovery, snapshot),
+            Mode::Plan => Err(Error::Unsupported("verify-system setup plans")),
+            Mode::Provision => verify_system::provision(
+                &discovery,
+                snapshot,
+                request.lock,
+                resolution,
+                request.force,
+            ),
+        };
     }
     if request.mode == Mode::Check {
         return check::run(&discovery, snapshot, request.tools_only, preflight);
