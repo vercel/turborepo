@@ -19,6 +19,7 @@ The files are the same MDX sources used by turborepo.dev. Site-absolute links su
 | Structure a repository                            | [Structuring a repository](./crafting-your-repository/structuring-a-repository.mdx)                                     |
 | Create an internal package                        | [Creating an internal package](./crafting-your-repository/creating-an-internal-package.mdx)                             |
 | Manage workspace dependencies                     | [Managing dependencies](./crafting-your-repository/managing-dependencies.mdx)                                           |
+| Install custom CLIs with setup (experimental)     | [Additional tools](./reference/additional-tools.mdx)                                                                    |
 | Configure package-specific tasks                  | [Package Configurations](./reference/package-configurations.mdx)                                                        |
 | Set up CI                                         | [Constructing CI](./crafting-your-repository/constructing-ci.mdx) and [CI vendor guides](./guides/ci-vendors/index.mdx) |
 | Configure watch mode                              | [`turbo watch` reference](./reference/watch.mdx)                                                                        |
