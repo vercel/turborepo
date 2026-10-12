@@ -315,7 +315,8 @@ pub(super) mod tests {
         create_directory(&child).unwrap();
         let record = child.join("record");
         drop(create_file(&record).unwrap());
-        assert!(icacls(&record, &["/deny", "*S-1-1-0:(W)"]));
+        // Not `(W)`, which includes READ_CONTROL and SYNCHRONIZE.
+        assert!(icacls(&record, &["/deny", "*S-1-1-0:(WD)"]));
         assert!(private(&record, false));
         assert!(icacls(&record, &["/grant", "*S-1-1-0:(R)"]));
         assert!(!private(&record, false));
