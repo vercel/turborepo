@@ -110,10 +110,12 @@ fn remove_node_npm_exports(node: &mut Tool) {
         }
     }
 }
+const JS: [&str; 3] = ["node", "npm", "pnpm"];
 
 /// Concrete async resolver for the existing synchronous reconcile callback.
 /// Callers can block_on OUTSIDE async; reconcile owns checked publication.
 /// Offline resolution has no metadata cache and fails before any traffic.
+/// Returns only the JS cohort; callers compose other ecosystems' tools.
 pub async fn resolve(
     request: Resolution<'_>,
     node: &NodeTransport,
@@ -127,7 +129,9 @@ pub async fn resolve(
     })?;
     // Preserved payloads passed preflight; new payloads come from validated
     // adapter resolutions, with native byte-specific integrity checked above.
-    if !candidate.matches_native(snapshot.declarations())? {
+    let mut js = snapshot.declarations().clone();
+    js.retain(|id, _| JS.contains(&id.as_str()));
+    if !candidate.matches_native(&js)? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",
         ));
@@ -170,10 +174,7 @@ pub(crate) async fn resolve_tools(
         .previous_selection()
         .into_iter()
         .flat_map(Lock::tools)
-        .filter(|(id, _)| {
-            matches!(id.as_str(), "node" | "npm" | "pnpm")
-                && snapshot.declarations().contains_key(*id)
-        })
+        .filter(|(id, _)| snapshot.declarations().contains_key(*id) && JS.contains(&id.as_str()))
         .map(|(id, tool)| (id.clone(), tool.clone()))
         .collect();
     if !request.version_ids().contains("node") {

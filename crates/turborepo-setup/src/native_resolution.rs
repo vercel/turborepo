@@ -27,6 +27,8 @@ pub enum Error {
     #[error(transparent)]
     Python(#[from] python_resolution::Error),
     #[error(transparent)]
+    Rust(#[from] crate::rust_resolution::Error),
+    #[error(transparent)]
     Storage(#[from] lock::StorageError),
     #[error(transparent)]
     Lock(#[from] lock::Error),
@@ -44,13 +46,35 @@ pub struct Transports<'a> {
 }
 
 pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result<Lock, Error> {
+    let tools = resolve_tools(&request, sources).await?;
+    candidate(request.snapshot(), tools)
+}
+
+/// Compose the Rust cohort with JavaScript, uv and CPython resolution while
+/// preserving each unaffected selection and the existing offline uv listing.
+pub async fn resolve_with_rust(
+    request: Resolution<'_>,
+    sources: Transports<'_>,
+    rustup: &crate::rustup_provision::RustupTransport,
+) -> Result<Lock, Error> {
+    let mut tools = resolve_tools(&request, sources).await?;
+    tools.extend(crate::rust_resolution::resolve_request(&request, rustup).await?);
+    candidate(request.snapshot(), tools)
+}
+
+async fn resolve_tools(
+    request: &Resolution<'_>,
+    sources: Transports<'_>,
+) -> Result<BTreeMap<String, lock::Tool>, Error> {
+    let node = sources.node;
+    let registry = sources.registry;
     let snapshot = request.snapshot();
     let declared = snapshot.declarations();
     let mut tools = if ["node", "npm", "pnpm"]
         .iter()
         .any(|id| declared.contains_key(*id))
     {
-        js_resolution::resolve_tools(&request, sources.node, sources.registry).await?
+        js_resolution::resolve_tools(&request, node, registry).await?
     } else {
         BTreeMap::new()
     };
@@ -102,11 +126,18 @@ pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result
         };
         tools.insert("python".into(), tool);
     }
+    Ok(tools)
+}
+
+fn candidate(
+    snapshot: &lock::Snapshot,
+    tools: BTreeMap<String, lock::Tool>,
+) -> Result<Lock, Error> {
     let candidate = Lock::new(Document {
         schema_version: lock::SCHEMA_VERSION,
         tools,
     })?;
-    if !candidate.matches_native(declared)? {
+    if !candidate.matches_native(snapshot.declarations())? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",
         ));
