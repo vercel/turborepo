@@ -26,6 +26,7 @@ pub mod source_policy;
 pub mod uv;
 pub mod uv_discovery;
 pub mod uv_metadata;
+pub mod uv_provision;
 pub mod uv_resolution;
 pub mod version_request;
 pub mod writer_storage;
