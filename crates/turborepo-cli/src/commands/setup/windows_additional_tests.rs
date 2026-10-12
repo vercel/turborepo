@@ -6,7 +6,8 @@ use super::*;
 const TOOL_ZIP: &str = "/fixture-1.2.3-windows-x64.zip";
 const OFFLINE: &[&str] = &["--frozen", "--tools-only", "--offline"];
 // Exits 5 only when it finds its resource beside its installed location.
-const LAUNCHER: &[u8] = b"@findstr /x /c:\"fixture resource\" \"%~dp0..\\share\\data.txt\" >nul \
+// (`findstr /x` would miss the unterminated last line, so match a substring.)
+const LAUNCHER: &[u8] = b"@findstr /c:\"fixture resource\" \"%~dp0..\\share\\data.txt\" >nul \
                           && exit /b 5\r\n@exit /b 1\r\n";
 
 fn tool(resource: &str) -> Vec<u8> {
