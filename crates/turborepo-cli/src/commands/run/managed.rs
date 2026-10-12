@@ -50,6 +50,7 @@ pub(crate) struct ManagedTools {
     authorization: Authorization,
     inherited_path: Option<OsString>,
     identity: String,
+    ci: bool,
 }
 
 impl ManagedTools {
@@ -84,16 +85,18 @@ impl ManagedTools {
                 "managed run requires a root turbo.json or turbo.jsonc; run turbo setup".into(),
             );
         }
-        let authorization =
-            Authorization::inspect(&canonical, user_base, context()?).map_err(|e| e.to_string())?;
+        let ci = turborepo_ci::is_ci();
+        let authorization = Authorization::inspect(&canonical, user_base, context()?)
+            .map_err(|e| e.guidance(ci))?;
         let snapshot = authorization
             .with_current(|p| p.snapshot().clone())
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.guidance(ci))?;
         let identity = snapshot.fingerprint().to_owned();
         let tools = Arc::new(Self {
             authorization,
             inherited_path: std::env::var_os("PATH"),
             identity,
+            ci,
         });
         tools.revalidate()?;
         Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
@@ -125,7 +128,7 @@ impl ManagedEnvironment for ManagedTools {
                 }
                 Ok(overrides)
             })
-            .map_err(|e| e.to_string())?
+            .map_err(|e| e.guidance(self.ci))?
     }
 
     fn cache_identity(&self) -> &str {
