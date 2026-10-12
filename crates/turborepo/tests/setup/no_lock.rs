@@ -133,8 +133,11 @@ fn production_no_lock_without_node_names_the_missing_declaration() {
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
     write(root, "package.json", r#"{"packageManager":"pnpm@10.0.0"}"#);
-    let before = snapshot(root);
     let words = ["setup", "--no-lock", "--tools-only"];
+    // The shared `invoke` helper adds a git-only `host-bin` PATH to the root on
+    // first use (#14639 composition), so snapshot after it exists.
+    failure(root, &words, true, "--no-lock needs a Node declaration");
+    let before = snapshot(root);
     let text = failure(root, &words, true, "--no-lock needs a Node declaration");
     assert!(
         diagnostic_contains(&text, "Declare Node in .nvmrc"),

@@ -451,7 +451,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             .iter()
             .any(|word| matches!(*word, "--plan" | "--offline" | "--no-lock" | "--__test-run"));
         // #14518 admits --offline, which needs a lock first, and #14486 admits
-        // --no-lock, whose native baseline covers only Node and pnpm.
+        // --no-lock, which needs a Node declaration (#14701).
         let offline = words.contains(&"--offline");
         let no_lock = words.contains(&"--no-lock");
         // A Cargo workspace without a root rust-toolchain file declares no tool.
@@ -463,7 +463,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             false,
             match (supported, QUALIFIED) {
                 (_, true) if offline => "offline setup requires turbo.lock",
-                (_, true) if no_lock => "invalid or unsupported native resolution record",
+                (_, true) if no_lock => "--no-lock needs a Node declaration",
                 (false, _) => PENDING,
                 (true, true) if words.contains(&"--frozen") => "frozen mode requires turbo.lock",
                 (true, true) if words.contains(&"--force") => {
@@ -500,13 +500,14 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             UNQUALIFIED
         },
     );
-    // #14486 admits CI --no-lock; its native baseline rejects a Rust-only repo.
+    // #14486 admits CI --no-lock; #14701 names the missing Node declaration in a
+    // Rust-only repo.
     failure(
         root,
         &["setup", "--no-lock"],
         true,
         if QUALIFIED {
-            "invalid or unsupported native resolution record"
+            "--no-lock needs a Node declaration"
         } else {
             UNQUALIFIED
         },
