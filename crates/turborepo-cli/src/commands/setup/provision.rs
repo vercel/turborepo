@@ -5,6 +5,7 @@
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
+    artifact_cache::ArtifactCache,
     artifact_provision::{ArtifactPlan, ArtifactTransport},
     go_provision::GoPlan,
     go_resolution::GoTransport,
@@ -40,9 +41,12 @@ pub(super) struct Transports {
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
+        // Verified archive bytes are shared through the user's cache directory;
+        // extraction and activation stay in each repository's .turbo/tools.
+        let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
         Ok(Self {
-            node: NodeTransport::official(policy)?,
-            pnpm: PnpmTransport::official(policy)?,
+            node: NodeTransport::official(policy)?.with_cache(cache.clone()),
+            pnpm: PnpmTransport::official(policy)?.with_cache(cache),
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
             uv: UvTransport::official(policy)?,
             rustup: RustupTransport::official(policy)?,
@@ -751,7 +755,19 @@ pub(super) fn run(
                 String::new(),
             ),
         };
-        let status = if reused { "reused" } else { "installed" };
+        let from_cache = match tool.id.as_str() {
+            "node" => prepared_node.as_ref().is_some_and(|node| node.from_cache()),
+            "pnpm" => prepared_pnpm.as_ref().is_some_and(|pnpm| pnpm.from_cache()),
+            "npm" => prepared_npm.as_ref().is_some_and(|npm| npm.from_cache()),
+            _ => false,
+        };
+        let status = if reused {
+            "reused"
+        } else if from_cache {
+            "installed from the shared download cache"
+        } else {
+            "installed"
+        };
         println!("{} {}: {status}{source}", tool.id, tool.version);
     }
     if let Some(npm) = lock.tools().get("npm")

@@ -12,6 +12,7 @@ use turborepo_tool_install::{Store, Tool};
 
 use crate::{
     NodeArtifact,
+    artifact_cache::ArtifactCache,
     lock::{self, Format, Installation, Lock, Platform},
 };
 
@@ -45,17 +46,28 @@ pub enum Error {
     Io(#[from] io::Error),
 }
 
+const ARCHIVE_LIMIT: usize = 128 * 1024 * 1024;
+
 pub struct NodeTransport {
     client: DownloadClient,
     // Test transport changes only the origin; lock provenance remains official.
     origin: String,
+    cache: Option<ArtifactCache>,
 }
 impl NodeTransport {
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             origin: "https://nodejs.org".into(),
+            cache: None,
         })
+    }
+
+    /// Reuse locked archive bytes from a caller-selected user cache. Hits are
+    /// re-verified against the lock digest; extraction stays per repository.
+    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
+        self.cache = cache;
+        self
     }
 
     /// Read only bounded official metadata for a native portable selection.
@@ -106,12 +118,14 @@ impl NodeTransport {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
+            cache: None,
         })
     }
 }
 
 pub struct NodePlan {
     tool: Tool,
+    platform: Platform,
     artifact: lock::Artifact,
     windows: bool,
     bundled_npm: Option<String>,
@@ -182,6 +196,7 @@ impl NodePlan {
                 artifact_sha256: artifact.sha256.clone(),
                 executables: artifact.executables.clone(),
             },
+            platform,
             artifact,
             windows,
             bundled_npm: node
@@ -241,22 +256,37 @@ impl NodePlan {
     /// Download/verify/extract only, with no installation or executable
     /// probing.
     pub async fn download(&self, transport: &NodeTransport) -> Result<PreparedNode, Error> {
-        let url = format!(
-            "{}{}",
-            transport.origin,
-            self.artifact
-                .url
-                .strip_prefix("https://nodejs.org")
-                .ok_or(Error::InvalidLock)?
-        );
-        let bytes = transport
-            .client
-            .download_verified(
-                &url,
-                ExpectedSha256::from_hex(&self.artifact.sha256)?,
-                turborepo_download::Limits::new(128 * 1024 * 1024, Duration::from_secs(120))?,
-            )
-            .await?;
+        let cached = transport
+            .cache
+            .as_ref()
+            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, ARCHIVE_LIMIT));
+        let from_cache = cached.is_some();
+        let bytes = match cached {
+            Some(bytes) => bytes,
+            None => {
+                let url = format!(
+                    "{}{}",
+                    transport.origin,
+                    self.artifact
+                        .url
+                        .strip_prefix("https://nodejs.org")
+                        .ok_or(Error::InvalidLock)?
+                );
+                let bytes = transport
+                    .client
+                    .download_verified(
+                        &url,
+                        ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                        turborepo_download::Limits::new(ARCHIVE_LIMIT, Duration::from_secs(120))?,
+                    )
+                    .await?;
+                // Best effort: a cache write failure never fails verified setup.
+                if let Some(cache) = &transport.cache {
+                    let _ = cache.put(self.platform, &bytes);
+                }
+                bytes
+            }
+        };
         let mut required = vec![self.tool.executables["node"].clone()];
         let base = if self.windows { "" } else { "lib/" };
         for name in ["npm", "npx"] {
@@ -300,6 +330,7 @@ impl NodePlan {
         Ok(PreparedNode {
             tree,
             tool: self.tool.clone(),
+            from_cache,
         })
     }
 
@@ -352,8 +383,14 @@ impl NodePlan {
 pub struct PreparedNode {
     tree: ExtractedArtifact,
     tool: Tool,
+    from_cache: bool,
 }
 impl PreparedNode {
+    /// Whether verified bytes came from the shared download cache.
+    pub fn from_cache(&self) -> bool {
+        self.from_cache
+    }
+
     /// Callback for Store::reconcile. Copy the FULL verified resource tree,
     /// preserving executable modes and safe relative links; never run hooks.
     pub fn stage(
