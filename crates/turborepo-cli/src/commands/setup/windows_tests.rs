@@ -247,8 +247,20 @@ fn exit_code(path: &std::ffi::OsStr, line: &str) -> Option<i32> {
     output.status.code()
 }
 
+/// Setup refuses Windows arm64 hosts even for this x64 build.
+fn unqualified_host() -> bool {
+    let unqualified = provision::windows_host_machine() != Some(0x8664);
+    if unqualified {
+        eprintln!("Skipped: managed setup requires a Windows x64 host.");
+    }
+    unqualified
+}
+
 #[test]
 fn frozen_setup_installs_pathext_exports_that_activate_and_repeat_reuses() {
+    if unqualified_host() {
+        return;
+    }
     let f = Fixture::new(true);
     let u = f.upstream();
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
@@ -301,6 +313,9 @@ fn frozen_setup_installs_pathext_exports_that_activate_and_repeat_reuses() {
 
 #[test]
 fn local_setup_creates_portable_lock_then_frozen_and_check_reuse() {
+    if unqualified_host() {
+        return;
+    }
     let f = Fixture::new(false);
     let u = f.upstream();
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
@@ -322,6 +337,9 @@ fn local_setup_creates_portable_lock_then_frozen_and_check_reuse() {
 
 #[test]
 fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
+    if unqualified_host() {
+        return;
+    }
     let f = Fixture::new(true);
     let u = f.upstream();
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
