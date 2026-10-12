@@ -1643,6 +1643,92 @@ mod tests {
         );
     }
 
+    /// Under `text=auto`, git stores content it classifies as binary (here: a
+    /// lone CR) without eol conversion. Hashing must agree, through the
+    /// repo-index path that verifies stat-stale entries:
+    /// - an edit that only adds CRs before LFs is a different blob to git, so
+    ///   it must not reuse the committed hash (that would be a stale cache
+    ///   hit);
+    /// - rewriting committed bytes without changing them must keep the index
+    ///   hash.
+    #[test]
+    fn test_text_auto_binary_content_hashes_like_git() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "* text=auto\n",
+        )
+        .unwrap();
+        std::fs::write(
+            pkg_dir.as_std_path().join("package.json"),
+            "{\"name\": \"my-pkg\"}\n",
+        )
+        .unwrap();
+        let data_path = pkg_dir.join_component("data.txt");
+        std::fs::write(data_path.as_std_path(), b"a\nb\rc\n").unwrap();
+
+        setup_repository(&repo_root);
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "false"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let key = RelativeUnixPathBuf::new("data.txt").unwrap();
+        let scm = SCM::new(&repo_root);
+        let SCM::Git(git) = &scm else {
+            panic!("expected a git SCM");
+        };
+        let turbo_hash = || {
+            let repo_index = RepoGitIndex::new(git).unwrap();
+            scm.get_package_file_hashes::<&str>(
+                &repo_root,
+                &pkg_path,
+                &[],
+                false,
+                None,
+                Some(&repo_index),
+            )
+            .unwrap()
+            .remove(&key)
+            .expect("data.txt hashed")
+        };
+        let git_blob = || {
+            let output = Command::new("git")
+                .args([
+                    "hash-object",
+                    "--path",
+                    "my-pkg/data.txt",
+                    "my-pkg/data.txt",
+                ])
+                .current_dir(&repo_root)
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+
+        let committed = turbo_hash();
+        assert_eq!(&*committed, git_blob());
+
+        std::fs::write(data_path.as_std_path(), b"a\r\nb\rc\r\n").unwrap();
+        let edited = turbo_hash();
+        assert_eq!(&*edited, git_blob(), "edited hash must match git's blob");
+        assert_ne!(
+            edited, committed,
+            "a CRLF edit of binary-classified content must not reuse the committed hash"
+        );
+
+        commit_all(&repo_root);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(data_path.as_std_path(), b"a\r\nb\rc\r\n").unwrap();
+        assert_eq!(
+            turbo_hash(),
+            edited,
+            "rewriting committed bytes must keep the index hash"
+        );
+    }
+
     /// Verify that package-scoped .gitattributes patterns resolve correctly
     /// through both git and manual hashing paths.
     ///
