@@ -38,6 +38,50 @@ pub enum Error {
     Lock(#[from] lock::Error),
     #[error(transparent)]
     Download(#[from] turborepo_download::Error),
+    #[error(transparent)]
+    Storage(#[from] lock::StorageError),
+    #[error(
+        "locked Go no longer satisfies the root Go declarations or official layout; run `turbo \
+         setup --update-lock`"
+    )]
+    Stale,
+}
+
+/// Complete a reconcile candidate with Go. Changed or refreshed declarations
+/// resolve; otherwise the exact previous selection is kept after checking that
+/// it still satisfies them and the official per-platform layout.
+pub async fn complete(
+    snapshot: &lock::Snapshot,
+    resolve: bool,
+    cohort: Lock,
+    transport: &GoTransport,
+) -> Result<Lock, Error> {
+    let mut tools = cohort.tools().clone();
+    if let Some(requirements) = snapshot.go_requirements()? {
+        let tool = if resolve {
+            transport.resolve(&requirements).await?
+        } else {
+            let previous = snapshot.previous_lock().ok_or(Error::Stale)?;
+            let tool = previous.tools().get("go").ok_or(Error::Stale)?;
+            let Installation::Managed { artifacts } = &tool.installation else {
+                return Err(Error::Stale);
+            };
+            for platform in artifacts.keys() {
+                crate::go_provision::GoPlan::from_lock(previous, *platform)
+                    .map_err(|_| Error::Stale)?;
+            }
+            if !GoVersion::parse(&tool.version).is_some_and(|v| requirements.matches_locked(v)) {
+                return Err(Error::Stale);
+            }
+            tool.clone()
+        };
+        tools.insert("go".into(), tool);
+    }
+    snapshot.ensure_current()?;
+    Ok(Lock::new(Document {
+        schema_version: lock::SCHEMA_VERSION,
+        tools,
+    })?)
 }
 
 /// Official archive name for a qualified lock platform.

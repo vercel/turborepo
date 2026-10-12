@@ -344,6 +344,8 @@ fn loopback(f: &Fixture, u: &LoopbackServer) -> provision::Transports {
         )
         .unwrap(),
         artifact: None,
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin())
+            .unwrap(),
     }
 }
 

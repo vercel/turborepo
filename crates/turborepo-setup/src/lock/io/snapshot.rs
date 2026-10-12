@@ -11,6 +11,7 @@ use super::{
     read_optional, records, rust_toolchain,
 };
 use crate::{
+    go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT},
     lock::{Tool, additional},
     python_discovery::PythonRequirement,
     uv_discovery::{self, UvRequirement},
@@ -23,6 +24,7 @@ const SOURCES: [(&str, usize); 5] = [
     (RUST_TOOLCHAIN_FILES[0], MAX_TOOLCHAIN_BYTES),
     (RUST_TOOLCHAIN_FILES[1], MAX_TOOLCHAIN_BYTES),
 ];
+const GO_SOURCES: [(&str, usize); 2] = [(GO_WORK, GO_LIMIT), (GO_MOD, GO_LIMIT)];
 type Inputs = BTreeMap<&'static str, Option<Vec<u8>>>;
 /// uv and CPython declarations, captured only with Python workspaces enabled.
 const PYTHON_SOURCES: [&str; 3] = ["uv.toml", "pyproject.toml", ".python-version"];
@@ -57,6 +59,7 @@ fn inputs(root: &Path, ecosystems: Ecosystems) -> io::Result<Inputs> {
     };
     SOURCES
         .into_iter()
+        .chain(GO_SOURCES.into_iter().filter(|_| ecosystems.go))
         // Preserve flags/policy and inactive declarations without interpreting
         // config or enabling an adapter. Presence changes also invalidate CAS.
         .chain(
@@ -234,6 +237,19 @@ impl Snapshot {
         )?))
     }
 
+    /// Go requirements from the captured bytes; None when Go is disabled.
+    pub fn go_requirements(&self) -> Result<Option<GoRequirements>, StorageError> {
+        if !self.ecosystems.go {
+            return Ok(None);
+        }
+        Ok(GoRequirements::read_with(|file, _| {
+            self.inputs
+                .get(file)
+                .cloned()
+                .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+        })?)
+    }
+
     pub fn package_manager(
         &self,
     ) -> Result<Option<crate::package_manager::Declaration>, StorageError> {
@@ -319,6 +335,7 @@ impl Snapshot {
         let covered = |file: &str| {
             SOURCES.iter().any(|(source, _)| file == *source)
                 || (python && PYTHON_SOURCES.contains(&file))
+                || (self.ecosystems.go && GO_SOURCES.iter().any(|(source, _)| file == *source))
         };
         for lock in candidate.into_iter().chain(self.previous.as_ref()) {
             if lock.tools().iter().any(|(id, tool)| {
@@ -328,6 +345,7 @@ impl Snapshot {
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
                     || (matches!(tool.adapter.as_str(), "uv" | "python") && !python)
+                    || (tool.adapter == "go" && !self.ecosystems.go)
                     || tool
                         .declarations
                         .iter()

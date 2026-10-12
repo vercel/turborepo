@@ -7,6 +7,8 @@ use std::{fs, io, path::Path, process::Command};
 use turborepo_setup::{
     artifact_provision::{ArtifactPlan, ArtifactTransport},
     lock::{Platform, Snapshot, additional},
+    go_provision::GoPlan,
+    go_resolution::GoTransport,
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -34,6 +36,7 @@ pub(super) struct Transports {
     pub trust_base: Option<std::path::PathBuf>,
     /// Fixture override; otherwise built from the locked artifact origins.
     pub artifact: Option<ArtifactTransport>,
+    pub go: GoTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -47,6 +50,7 @@ impl Transports {
             #[cfg(test)]
             trust_base: None,
             artifact: None,
+            go: GoTransport::official(policy)?,
         })
     }
 
@@ -159,9 +163,12 @@ pub(super) struct Plans {
     pub rustup: Option<RustupPlan>,
     pub rust: Option<RustPlan>,
     pub artifacts: Vec<ArtifactPlan>,
+    pub go: Option<GoPlan>,
 }
 
-const SUPPORTED: [&str; 7] = ["node", "npm", "pnpm", "uv", "python", "rust", "rustup"];
+const SUPPORTED: [&str; 8] = [
+    "node", "npm", "pnpm", "uv", "python", "rust", "rustup", "go",
+];
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -174,7 +181,7 @@ pub(super) fn plans(
     }
     if lock.tools().iter().any(|(id, tool)| !supported(id, tool)) {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, uv, Python, Rust, and additional tools are supported",
+            "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -257,12 +264,26 @@ pub(super) fn plans(
         }
     };
     let artifacts = ArtifactPlan::from_lock(lock, platform)?;
+    let go = match (snapshot.go_requirements()?, lock.tools().get("go")) {
+        (Some(requirements), Some(tool)) => {
+            let version = turborepo_setup::go_discovery::GoVersion::parse(&tool.version);
+            if !version.is_some_and(|v| requirements.matches_locked(v)) {
+                return Err(Error::Unsupported(
+                    "locked Go does not satisfy native declarations",
+                ));
+            }
+            Some(GoPlan::from_lock(lock, platform)?)
+        }
+        (None, None) => None,
+        _ => return Err(Error::Unsupported("turbo.lock Go selection is undeclared")),
+    };
     if node.is_none()
         && uv.is_none()
         && python.is_none()
         && rustup.is_none()
         && rust.is_none()
         && artifacts.is_empty()
+        && go.is_none()
     {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
@@ -275,6 +296,7 @@ pub(super) fn plans(
         python,
         rust,
         artifacts,
+        go,
     })
 }
 
@@ -318,7 +340,10 @@ pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
     let declared = snapshot.declarations();
     let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
     if !declared.contains_key("node")
-        && (js_manager || (!declared.contains_key("uv") && !declared.contains_key("rustup")))
+        && (js_manager
+            || (!declared.contains_key("uv")
+                && !declared.contains_key("rustup")
+                && !declared.contains_key("go")))
     {
         return Err(Error::Unsupported(
             if snapshot.ecosystems().python && !js_manager {
@@ -346,6 +371,7 @@ pub(super) fn resolve(
                 registry: &sources.registry,
                 uv: &sources.uv,
                 python: &sources.python,
+                go: &sources.go,
                 platform: platform().map_err(|e| {
                     turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
                 })?,
@@ -382,8 +408,7 @@ pub(super) fn run(
             && lock.tools().iter().any(|(id, tool)| !supported(id, tool))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, uv, Python, Rust, and additional tools are \
-                 supported",
+            "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -493,6 +518,7 @@ pub(super) fn run(
         python,
         rust,
         artifacts,
+        go,
     } = plans(&snapshot, lock)?;
     let trust = match trust {
         Some(trust) => trust,
@@ -506,6 +532,7 @@ pub(super) fn run(
         rustup.as_ref().map(RustupPlan::inventory_tool),
         python.as_ref().map(PythonPlan::inventory_tool),
         rust.as_ref().map(RustPlan::inventory_tool),
+        go.as_ref().map(GoPlan::inventory_tool),
     ]
     .into_iter()
     .flatten()
@@ -554,6 +581,7 @@ pub(super) fn run(
         prepared_python,
         prepared_rustup,
         prepared_artifacts,
+        prepared_go,
     ) = runtime.block_on(async {
         let recheck = || {
             preflight()?;
@@ -619,7 +647,15 @@ pub(super) fn run(
                 );
             }
         }
-        Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared))
+        recheck()?;
+        let go = match &go {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.go, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared, go))
     })?;
     preflight()?;
     revalidate(discovery)?;
@@ -674,6 +710,10 @@ pub(super) fn run(
                 .as_ref()
                 .ok_or_else(missing)?
                 .stage(tool, destination),
+            "go" => prepared_go
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
             _ => Err(missing()),
         }
     };
@@ -704,7 +744,8 @@ pub(super) fn run(
                     || (tool.id == "uv" && prepared_uv.is_none())
                     || (tool.id == "rustup" && prepared_rustup.is_none())
                     || (tool.id == "python" && prepared_python.is_none())
-                    || (tool.id == "rust" && prepared_rust.is_none()),
+                    || (tool.id == "rust" && prepared_rust.is_none())
+                    || (tool.id == "go" && prepared_go.is_none()),
                 String::new(),
             ),
         };

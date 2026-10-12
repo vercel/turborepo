@@ -1,12 +1,13 @@
 //! Complete native candidate for the reconcile callback: the JavaScript cohort
-//! when declared, plus root uv and CPython selections when the snapshot
-//! captured the Python ecosystem. Only `version_ids` resolve; every preserved
-//! selection is revalidated without network. Resolving CPython runs the
-//! verified locked uv offline to list downloads; nothing is installed.
+//! when declared, plus root uv, CPython and Go selections captured by enabled
+//! ecosystems. Only `version_ids` resolve; every preserved selection is
+//! revalidated without network. Resolving CPython runs the verified locked uv
+//! offline to list downloads; nothing is installed.
 
 use std::collections::BTreeMap;
 
 use crate::{
+    go_resolution::{self, GoTransport},
     js_resolution,
     lock::{self, Document, Lock, Platform, reconcile::Resolution},
     node_provision::NodeTransport,
@@ -29,6 +30,8 @@ pub enum Error {
     #[error(transparent)]
     Rust(#[from] crate::rust_resolution::Error),
     #[error(transparent)]
+    Go(#[from] go_resolution::Error),
+    #[error(transparent)]
     Storage(#[from] lock::StorageError),
     #[error(transparent)]
     Lock(#[from] lock::Error),
@@ -41,13 +44,15 @@ pub struct Transports<'a> {
     pub registry: &'a RegistryTransport,
     pub uv: &'a UvTransport,
     pub python: &'a PythonTransport,
+    pub go: &'a GoTransport,
     /// Host target used only to run the locked uv's offline listing.
     pub platform: Platform,
 }
 
 pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result<Lock, Error> {
+    let go = sources.go;
     let tools = resolve_tools(&request, sources).await?;
-    candidate(request.snapshot(), tools)
+    candidate(&request, tools, go).await
 }
 
 /// Compose the Rust cohort with JavaScript, uv and CPython resolution while
@@ -57,9 +62,10 @@ pub async fn resolve_with_rust(
     sources: Transports<'_>,
     rustup: &crate::rustup_provision::RustupTransport,
 ) -> Result<Lock, Error> {
+    let go = sources.go;
     let mut tools = resolve_tools(&request, sources).await?;
     tools.extend(crate::rust_resolution::resolve_request(&request, rustup).await?);
-    candidate(request.snapshot(), tools)
+    candidate(&request, tools, go).await
 }
 
 async fn resolve_tools(
@@ -70,6 +76,11 @@ async fn resolve_tools(
     let registry = sources.registry;
     let snapshot = request.snapshot();
     let declared = snapshot.declarations();
+    if request.offline() && request.version_ids().contains("go") {
+        return Err(Error::Unsupported(
+            "offline resolution metadata is not cached",
+        ));
+    }
     let mut tools = if ["node", "npm", "pnpm"]
         .iter()
         .any(|id| declared.contains_key(*id))
@@ -130,14 +141,23 @@ async fn resolve_tools(
     Ok(tools)
 }
 
-fn candidate(
-    snapshot: &lock::Snapshot,
+async fn candidate(
+    request: &Resolution<'_>,
     tools: BTreeMap<String, lock::Tool>,
+    go: &GoTransport,
 ) -> Result<Lock, Error> {
+    let snapshot = request.snapshot();
     let candidate = Lock::new(Document {
         schema_version: lock::SCHEMA_VERSION,
         tools,
     })?;
+    let candidate = go_resolution::complete(
+        snapshot,
+        request.version_ids().contains("go"),
+        candidate,
+        go,
+    )
+    .await?;
     if !candidate.matches_native(snapshot.declarations())? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",
