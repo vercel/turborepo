@@ -55,7 +55,7 @@ pub(crate) fn exact_manager(declaration: &Declaration) -> Result<String, Error> 
             "missing manager pin",
             "manager identity exceeds lock limit",
         ),
-        Manager::Pnpm => (
+        _ => (
             "floating pnpm request",
             "ambiguous exact pnpm alternatives",
             "missing pnpm pin",
@@ -201,9 +201,9 @@ pub(crate) async fn resolve_tools(
     }
     let manager_id = manager.as_ref().map(|m| match m.manager {
         Manager::Npm => "npm",
-        Manager::Pnpm => "pnpm",
         Manager::Yarn => "yarn",
         Manager::Bun => "bun",
+        _ => "pnpm", // Native discovery admits only npm, pnpm, Yarn and Bun.
     });
     let manager_version = manager
         .as_ref()
