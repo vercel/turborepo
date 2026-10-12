@@ -199,6 +199,9 @@ impl Lock {
                     return Err(Error::Invalid("expected canonical exact builtin version"));
                 }
             }
+            if tool.adapter == "uv" && crate::uv::exact_release(&tool.version).is_none() {
+                return Err(Error::Invalid("expected canonical exact uv release"));
+            }
             declarations(&tool.declarations)?;
             if tool.options.len() > 32 {
                 return Err(Error::Invalid("too many semantic options"));
