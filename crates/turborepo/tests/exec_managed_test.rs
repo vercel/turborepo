@@ -7,6 +7,8 @@
 ))]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
+mod common;
+
 use std::{
     fs,
     io::Write,
@@ -47,8 +49,13 @@ struct Repo {
 }
 
 impl Repo {
-    /// `turbo setup --frozen --tools-only` from a nested directory.
     fn provisioned() -> Self {
+        Self::provisioned_with(NODE)
+    }
+
+    /// `turbo setup --frozen --tools-only` from a nested directory, with
+    /// `node_script` as the managed Node executable.
+    fn provisioned_with(node_script: &str) -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
         owned.init_git().unwrap();
@@ -66,7 +73,7 @@ impl Repo {
         };
         let prefix = format!("node-v24.0.0-{spelling}");
         let node_path = format!("/dist/v24.0.0/{prefix}.tar.gz");
-        let node = archive(&prefix, &[("bin/node", NODE)]);
+        let node = archive(&prefix, &[("bin/node", node_script)]);
         let pnpm = archive(
             "package",
             &[
@@ -225,4 +232,243 @@ fn exec_fails_after_drift_or_damage_and_runs_nothing() {
     );
     assert!(record.is_empty());
     assert!(!repo.owned.home().join("host-ran").exists());
+}
+
+/// TURBO-6260: the standalone binary and the installed npm wrapper must give
+/// `turbo exec` the same user-visible result.
+mod parity {
+    use std::{
+        io::Read,
+        process::Stdio,
+        thread,
+        time::{Duration, Instant},
+    };
+
+    use nix::{
+        sys::signal::{Signal, kill, killpg},
+        unistd::Pid,
+    };
+    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+
+    use super::{
+        common::process_launcher::{CapturedProcess, Entrypoint, ProcessLauncher},
+        *,
+    };
+
+    const ENTRIES: [Entrypoint; 2] = [Entrypoint::Standalone, Entrypoint::NpmWrapper];
+    const TIMEOUT: Duration = Duration::from_secs(60);
+    const NODE: &str = r#"#!/bin/sh
+case "$1" in
+wait)
+  trap 'printf "TERM\n" >> "$HOME/signals"; exit 5' TERM
+  trap 'printf "INT\n" >> "$HOME/signals"; exit 6' INT
+  printf '%s\n' "$$" > "$HOME/ready"
+  while :; do :; done
+  ;;
+*)
+  if [ -t 1 ]; then out=tty; else out=pipe; fi
+  {
+    pwd
+    for arg in "$@"; do printf '[%s]\n' "$arg"; done
+    printf 'env=%s unset=%s\n' "$EXEC_PARITY" "${EXEC_UNSET-unset}"
+    if [ -t 0 ]; then echo stdin=tty; else IFS= read -r line; printf 'stdin=%s\n' "$line"; fi
+    echo "stdout=$out"
+  } > "$HOME/report"
+  printf 'to stdout\n'
+  printf 'to stderr\n' >&2
+  exit "$2"
+  ;;
+esac
+"#;
+
+    fn command(
+        repo: &Repo,
+        launcher: &ProcessLauncher,
+        entry: Entrypoint,
+        words: &[&str],
+    ) -> Command {
+        let home = repo.owned.home();
+        let mut command = launcher.command(entry, &repo.owned.root().join("apps/web/src"));
+        command
+            .args(words)
+            .env("HOME", home)
+            .env("XDG_DATA_HOME", home.join("data"))
+            .env("XDG_CONFIG_HOME", home.join("config"))
+            .env("HTTP_PROXY", "http://127.0.0.1:9")
+            .env("HTTPS_PROXY", "http://127.0.0.1:9");
+        command
+    }
+
+    fn take(path: &Path) -> String {
+        let text = fs::read_to_string(path).unwrap_or_default();
+        let _ = fs::remove_file(path);
+        text
+    }
+
+    /// The managed command's PID, once it is running.
+    fn wait_for(ready: &Path) -> i32 {
+        let started = Instant::now();
+        loop {
+            if let Some(pid) = fs::read_to_string(ready)
+                .ok()
+                .and_then(|text| text.trim().parse().ok())
+            {
+                let _ = fs::remove_file(ready);
+                return pid;
+            }
+            assert!(started.elapsed() < TIMEOUT, "command never started");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn pipes_preserve_arguments_cwd_environment_streams_and_exit() {
+        let repo = Repo::provisioned_with(NODE);
+        let launcher = ProcessLauncher::new();
+        let home = repo.owned.home().to_owned();
+        let cwd = repo.owned.root().join("apps/web/src");
+        for code in ["0", "3"] {
+            let args = ["a b", "quote\"d", "$(echo no)", "ünïcode", ""];
+            let mut results = vec![];
+            for entry in ENTRIES {
+                let words = ["exec", "--", "node", "report", code];
+                let words: Vec<_> = words.iter().chain(&args).copied().collect();
+                let mut command = command(&repo, &launcher, entry, &words);
+                command
+                    .env("EXEC_PARITY", "")
+                    .env_remove("EXEC_UNSET")
+                    .stdin(Stdio::piped());
+                let mut process = CapturedProcess::spawn(&mut command);
+                let mut stdin = process.child.stdin.take().unwrap();
+                stdin.write_all(b"hello\n").unwrap();
+                drop(stdin);
+                let output = process.finish(TIMEOUT);
+                results.push((
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stdout).into_owned(),
+                    String::from_utf8_lossy(&output.stderr).into_owned(),
+                    take(&home.join("report")),
+                ));
+            }
+            assert_eq!(results[0], results[1], "standalone vs npm wrapper");
+            let (status, stdout, stderr, report) = &results[0];
+            assert_eq!(*status, Some(code.parse().unwrap()), "{stderr}");
+            assert_eq!(stdout, "to stdout\n");
+            assert_eq!(stderr, "to stderr\n");
+            let mut expected = format!("{}\n[report]\n[{code}]\n", cwd.display());
+            for arg in args {
+                expected.push_str(&format!("[{arg}]\n"));
+            }
+            expected.push_str("env= unset=unset\nstdin=hello\nstdout=pipe\n");
+            assert_eq!(report, &expected);
+        }
+    }
+
+    #[test]
+    fn sigterm_and_group_sigint_reach_the_command_once() {
+        let repo = Repo::provisioned_with(NODE);
+        let launcher = ProcessLauncher::new();
+        let home = repo.owned.home().to_owned();
+        for (group, signal, code, record) in [
+            (false, Signal::SIGTERM, 5, "TERM\n"),
+            (true, Signal::SIGINT, 6, "INT\n"),
+        ] {
+            for entry in ENTRIES {
+                let words = ["exec", "--", "node", "wait"];
+                let mut process =
+                    CapturedProcess::spawn(&mut command(&repo, &launcher, entry, &words));
+                process.track_task(wait_for(&home.join("ready")));
+                // Exec ignores SIGINT only once its child is running.
+                thread::sleep(Duration::from_millis(200));
+                let target = Pid::from_raw(process.child.id() as i32);
+                if group {
+                    killpg(target, signal).unwrap();
+                } else {
+                    kill(target, signal).unwrap();
+                }
+                // finish() also waits until the managed command itself is gone.
+                let output = process.finish(TIMEOUT);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert_eq!(
+                    output.status.code(),
+                    Some(code),
+                    "{entry:?} {signal}: {stderr}"
+                );
+                assert_eq!(take(&home.join("signals")), record, "{entry:?} {signal}");
+            }
+        }
+    }
+
+    /// Runs `command` on a new terminal, optionally typing `keys` once the
+    /// managed command is ready.
+    fn on_terminal(command: &Command, keys: Option<(&Path, &[u8])>) -> Option<u32> {
+        let mut builder = CommandBuilder::new(command.get_program());
+        builder.args(command.get_args());
+        builder.cwd(command.get_current_dir().unwrap());
+        for (key, value) in command.get_envs() {
+            match value {
+                Some(value) => builder.env(key, value),
+                None => builder.env_remove(key),
+            }
+        }
+        let size = PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        let pair = native_pty_system().openpty(size).unwrap();
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        thread::spawn(move || {
+            let mut sink = [0; 1024];
+            while matches!(reader.read(&mut sink), Ok(n) if n > 0) {}
+        });
+        let mut child = pair.slave.spawn_command(builder).unwrap();
+        drop(pair.slave);
+        if let Some((ready, keys)) = keys {
+            wait_for(ready);
+            thread::sleep(Duration::from_millis(200));
+            pair.master.take_writer().unwrap().write_all(keys).unwrap();
+        }
+        let started = Instant::now();
+        loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                return Some(status.exit_code());
+            }
+            if started.elapsed() > TIMEOUT {
+                let _ = child.kill();
+                return None;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[test]
+    fn terminals_and_ctrl_c_match() {
+        let repo = Repo::provisioned_with(NODE);
+        let launcher = ProcessLauncher::new();
+        let home = repo.owned.home().to_owned();
+        for entry in ENTRIES {
+            let report = command(
+                &repo,
+                &launcher,
+                entry,
+                &["exec", "--", "node", "report", "0"],
+            );
+            assert_eq!(on_terminal(&report, None), Some(0), "{entry:?}");
+            let report = take(&home.join("report"));
+            assert!(
+                report.ends_with("stdin=tty\nstdout=tty\n"),
+                "{entry:?}: {report}"
+            );
+            let wait = command(&repo, &launcher, entry, &["exec", "--", "node", "wait"]);
+            let ready = home.join("ready");
+            assert_eq!(
+                on_terminal(&wait, Some((&ready, b"\x03"))),
+                Some(6),
+                "{entry:?}"
+            );
+            assert_eq!(take(&home.join("signals")), "INT\n", "{entry:?}");
+        }
+    }
 }
