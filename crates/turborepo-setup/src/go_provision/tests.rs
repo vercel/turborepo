@@ -125,6 +125,43 @@ async fn verified_archive_installs_go_and_gofmt_then_reuses_healthy_trees() {
     assert!(matches!(partial.await, Err(Error::InventoryMismatch)));
 }
 
+/// One mirror base serves both official paths: go.dev's index and
+/// dl.google.com's archives. The lock keeps the official URLs.
+#[tokio::test]
+async fn one_mirror_base_serves_the_official_index_and_archive_paths() {
+    use crate::go_discovery::{GO_WORK, GoRequirements};
+    let bytes = archive(true);
+    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    let file = serde_json::json!({"filename": "go1.22.3.linux-amd64.tar.gz", "os": "linux",
+        "arch": "amd64", "version": "go1.22.3", "sha256": sha256, "kind": "archive"});
+    let index = serde_json::json!([{"version": "go1.22.3", "files": [file]}]).to_string();
+    let paths = [
+        format!("/mirror{}", go_resolution::INDEX_PATH),
+        format!("/mirror{ROUTE}"),
+    ];
+    let routes = paths.clone().into_iter().zip([index.into_bytes(), bytes]);
+    let server = LoopbackServer::new(routes, |_| {}).unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
+    let base = format!("{}/mirror/", server.origin());
+    let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
+    let transport = GoTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
+    let requirements =
+        GoRequirements::read_with(|name, _| Ok((name == GO_WORK).then(|| b"go 1.22\n".to_vec())));
+    let tool = transport.resolve(&requirements.unwrap().unwrap()).await;
+    let lock = Lock::new(Document {
+        schema_version: lock::SCHEMA_VERSION,
+        tools: BTreeMap::from([("go".into(), tool.unwrap())]),
+    });
+    // Planning accepts only the official dl.google.com URL.
+    let plan = GoPlan::from_lock(&lock.unwrap(), Platform::LinuxX64Gnu).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let store = Store::open(repo.path()).unwrap();
+    let desired = [plan.inventory_tool().clone()];
+    let prepared = plan.prepare(&store, &desired, &transport, Preparation::IfNeeded);
+    assert!(prepared.await.unwrap().is_some());
+    assert_eq!(server.requests(), paths);
+}
+
 #[tokio::test]
 async fn invalid_complete_cohorts_fail_before_traffic_including_fresh_preparation() {
     let bytes = archive(true);

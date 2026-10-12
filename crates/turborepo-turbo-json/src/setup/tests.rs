@@ -129,7 +129,8 @@ fn policy_loads_deterministically_and_round_trips() {
 fn mirrors_keep_their_bases_and_count_as_policy() {
     let policy = parse(
         r#"{"mirrors":{"node":"https://mirror.example/nodejs/dist/","npmRegistry":"https://mirror.example:8443/npm",
-            "bun":"https://mirror.example/github","uv":"https://mirror.example/astral","python":"https://mirror.example/astral"}}"#,
+            "bun":"https://mirror.example/github","uv":"https://mirror.example/astral","python":"https://mirror.example/astral",
+            "go":"https://mirror.example/golang","rust":"https://mirror.example/rust"}}"#,
     )
     .unwrap();
     assert!(policy.is_configured());
@@ -141,6 +142,8 @@ fn mirrors_keep_their_bases_and_count_as_policy() {
             bun: Some("https://mirror.example/github".into()),
             uv: Some("https://mirror.example/astral".into()),
             python: Some("https://mirror.example/astral".into()),
+            go: Some("https://mirror.example/golang".into()),
+            rust: Some("https://mirror.example/rust".into()),
         }
     );
     let empty = parse(r#"{"mirrors":{}}"#).unwrap();
@@ -158,6 +161,8 @@ fn mirrors_keep_their_bases_and_count_as_policy() {
 #[test_case("node", ""; "empty")]
 #[test_case("bun", "http://mirror.example/s3cret"; "plain http bun")]
 #[test_case("python", "https://s3cret@mirror.example/astral"; "python userinfo")]
+#[test_case("go", "https://mirror.example/golang?s3cret"; "go query")]
+#[test_case("rust", "http://mirror.example/s3cret"; "plain http rust")]
 fn invalid_mirrors_point_at_masked_values(key: &str, value: &str) {
     // The other mirror is valid but still never rendered.
     let other = if key == "node" { "npmRegistry" } else { "node" };

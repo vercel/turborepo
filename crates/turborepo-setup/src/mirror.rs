@@ -20,6 +20,12 @@ pub const BUN_MIRROR_ENV: &str = "TURBO_SETUP_BUN_MIRROR";
 pub const UV_MIRROR_ENV: &str = "TURBO_SETUP_UV_MIRROR";
 /// Replaces the `https://releases.astral.sh` origin for CPython paths.
 pub const PYTHON_MIRROR_ENV: &str = "TURBO_SETUP_PYTHON_MIRROR";
+/// Replaces both `https://go.dev` (index) and `https://dl.google.com`
+/// (archives) for Go paths.
+pub const GO_MIRROR_ENV: &str = "TURBO_SETUP_GO_MIRROR";
+/// Replaces the `https://static.rust-lang.org` origin for rustup and Rust
+/// toolchain paths, including the private rustup's `RUSTUP_DIST_SERVER`.
+pub const RUST_MIRROR_ENV: &str = "TURBO_SETUP_RUST_MIRROR";
 const NODE_POLICY: &str = "setup.mirrors.node";
 const NPM_REGISTRY_POLICY: &str = "setup.mirrors.npmRegistry";
 
@@ -46,6 +52,8 @@ pub struct Mirrors {
     pub bun: Option<Mirror>,
     pub uv: Option<Mirror>,
     pub python: Option<Mirror>,
+    pub go: Option<Mirror>,
+    pub rust: Option<Mirror>,
 }
 
 impl Mirrors {
@@ -77,6 +85,8 @@ impl Mirrors {
             bun: select(BUN_MIRROR_ENV, "setup.mirrors.bun", &policy.bun)?,
             uv: select(UV_MIRROR_ENV, "setup.mirrors.uv", &policy.uv)?,
             python: select(PYTHON_MIRROR_ENV, "setup.mirrors.python", &policy.python)?,
+            go: select(GO_MIRROR_ENV, "setup.mirrors.go", &policy.go)?,
+            rust: select(RUST_MIRROR_ENV, "setup.mirrors.rust", &policy.rust)?,
         })
     }
 }
@@ -136,6 +146,7 @@ mod tests {
             node: Some(node.into()),
             npm_registry: Some(registry.into()),
             python: Some("https://policy.example/astral".into()),
+            rust: Some("https://policy.example/rust".into()),
             ..Default::default()
         }
     }
@@ -178,6 +189,20 @@ mod tests {
             Some("https://policy.example/astral")
         );
         assert!(mirrors.bun.is_none());
+        // Go and Rust each have one base, also overridable separately.
+        let var = |name: &str| (name == GO_MIRROR_ENV).then(|| "https://env.example/go/".into());
+        let mirrors = Mirrors::resolve(var, &committed).unwrap();
+        assert_eq!(base(mirrors.go).as_deref(), Some("https://env.example/go"));
+        assert_eq!(
+            base(mirrors.rust).as_deref(),
+            Some("https://policy.example/rust")
+        );
+        let var = |name: &str| (name == RUST_MIRROR_ENV).then(|| "https://env.example/rs".into());
+        let mirrors = Mirrors::resolve(var, &committed).unwrap();
+        assert_eq!(
+            base(mirrors.rust).as_deref(),
+            Some("https://env.example/rs")
+        );
         // An empty variable is unset, so the policy still applies.
         let mirrors = Mirrors::resolve(env(""), &committed).unwrap();
         assert_eq!(

@@ -20,7 +20,7 @@ use crate::{
     rust_metadata::{MAX_MANIFEST_BYTES, Manifest},
     rust_resolution::{executables, toolchain_name},
     rustup,
-    rustup_provision::PrivateHomes,
+    rustup_provision::{PrivateHomes, RustupTransport},
 };
 
 const DIST: &str = "https://static.rust-lang.org/dist/";
@@ -194,13 +194,15 @@ impl RustPlan {
     }
 
     /// Install with the given verified rustup into fresh private homes beside
-    /// the Store (same filesystem), then verify. Healthy identical trees are
-    /// reused without running rustup. Hold the Store guard through publication.
+    /// the Store (same filesystem), downloading from the transport's origin,
+    /// then verify. Healthy identical trees are reused without running rustup.
+    /// Hold the Store guard through publication.
     pub fn prepare(
         &self,
         store: &Store,
         desired: &[Tool],
         rustup: &Path,
+        transport: &RustupTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedRust>, Error> {
         if self.tool.platform.starts_with("windows-")
@@ -221,7 +223,7 @@ impl RustPlan {
             .prefix(".rust-")
             .tempdir_in(store.repository_root()?.join(".turbo/tools"))?;
         let homes = PrivateHomes::create(scratch.path())?;
-        let mut command = homes.command(rustup);
+        let mut command = homes.command(rustup, transport);
         command
             .args([
                 "toolchain",
