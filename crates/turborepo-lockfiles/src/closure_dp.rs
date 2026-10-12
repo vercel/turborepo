@@ -41,7 +41,8 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, Lockfile, Package, SortedClosures, TransitiveEdgeResolution, TransitiveEdgeResolver,
+    Error, IndexedClosures, Lockfile, Package, SortedClosures, TransitiveEdgeResolution,
+    TransitiveEdgeResolver,
 };
 
 /// Upper bound for one chunk's closure bitsets. 64MiB of transient memory
@@ -82,6 +83,26 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
     workspaces: &HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<Option<SortedClosures>, Error> {
+    Ok(
+        all_transitive_closures_dp_indexed(
+            lockfile,
+            resolver,
+            workspaces,
+            ignore_missing_packages,
+        )?
+        .map(IndexedClosures::into_sorted),
+    )
+}
+
+/// [`all_transitive_closures_dp`] in index form: one package table sorted by
+/// `(key, version)` and each workspace's closure as ascending indices into
+/// it, so consumers that only need membership never touch per-member `Arc`s.
+pub(crate) fn all_transitive_closures_dp_indexed<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    resolver: &dyn TransitiveEdgeResolver,
+    workspaces: &HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<Option<IndexedClosures>, Error> {
     // Interned package table. Ids index `packages` and bitset positions.
     let mut ids: FxHashMap<Package, u32> = FxHashMap::default();
     let mut packages: Vec<Arc<Package>> = Vec::new();
@@ -240,19 +261,21 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
 
     let node_count = packages.len();
     if node_count == 0 {
-        return Ok(Some(
-            roots
+        return Ok(Some(IndexedClosures {
+            packages: Vec::new(),
+            closures: roots
                 .into_iter()
                 .map(|(ws, _)| (ws.clone(), Vec::new()))
                 .collect(),
-        ));
+        }));
     }
 
     // Rank permutation: position of each package id under (key, version)
     // ordering (`Package`'s derived `Ord`). Bitset positions are ranks, not
     // ids, so enumerating a closure's set bits (chunks ascend, bits ascend
     // within a chunk) yields its members already in canonical sorted order:
-    // no per-workspace sort, and no string comparisons per element.
+    // no per-workspace sort, and no string comparisons per element. Ranks are
+    // also the indices into the returned (sorted) package table.
     let (order, rank): (Vec<u32>, Vec<u32>) = {
         let mut order: Vec<u32> = (0..node_count as u32).collect();
         order.sort_unstable_by(|&a, &b| packages[a as usize].cmp(&packages[b as usize]));
@@ -311,7 +334,7 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
         return Ok(None);
     }
 
-    let mut result: SortedClosures = workspace_root_sccs
+    let mut result: HashMap<String, Vec<u32>> = workspace_root_sccs
         .iter()
         .map(|(ws, _)| ((*ws).clone(), Vec::new()))
         .collect();
@@ -371,15 +394,21 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
                 while word != 0 {
                     let bit = word.trailing_zeros() as usize;
                     word &= word - 1;
-                    let position = chunk_start + word_idx * 64 + bit;
-                    let id = order[position];
-                    closure.push(Arc::clone(&packages[id as usize]));
+                    closure.push((chunk_start + word_idx * 64 + bit) as u32);
                 }
             }
         }
     }
 
-    Ok(Some(result))
+    // The package table in rank order, so indices are ranks.
+    let sorted_packages = order
+        .iter()
+        .map(|&id| Arc::clone(&packages[id as usize]))
+        .collect();
+    Ok(Some(IndexedClosures {
+        packages: sorted_packages,
+        closures: result,
+    }))
 }
 
 pub(crate) struct SccResult {
