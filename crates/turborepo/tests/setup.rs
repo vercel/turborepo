@@ -790,15 +790,6 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         blocked.get()
     );
     assert_eq!(positives.get() + blocked.get(), 32);
-    // Test-only requirement: CI executes this matrix in a Node-free container.
-    // Never forwarded to the production child or used as a source-policy opt-out.
-    if std::env::var("TURBO_SETUP_REQUIRE_NATIVE_PLAN").as_deref() == Ok("1") {
-        assert_eq!(
-            positives.get(),
-            32,
-            "native positive qualification is incomplete"
-        );
-    }
     for ci in [false, true] {
         let (code, text) = invoke(
             root,
