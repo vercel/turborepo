@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -32,7 +33,10 @@ function currentTarget() {
   return targets[process.platform]?.[process.arch] ?? null;
 }
 
-async function createHarness(root, { corruptArchive = false } = {}) {
+async function createHarness(
+  root,
+  { corruptArchive = false, hookSupport = true } = {}
+) {
   const target = currentTarget();
   assert.ok(
     target,
@@ -46,7 +50,10 @@ async function createHarness(root, { corruptArchive = false } = {}) {
   await mkdir(home);
 
   const executable = join(artifactDir, "turbo");
-  const binaryContents = "standalone turbo fixture\n";
+  // Releases before the shell hook reject `turbo hook <shell>`.
+  const binaryContents = hookSupport
+    ? `#!/bin/sh\n[ "$1" = hook ] || exit 1\nprintf 'TURBO_HOOKED=%s\\n' "$2"\n`
+    : "#!/bin/sh\nexit 1\n";
   await writeFile(executable, binaryContents);
   await chmod(executable, 0o755);
 
@@ -121,8 +128,11 @@ esac
   };
 }
 
-function runInstaller(env) {
-  return spawnSync("/bin/sh", [installerPath], { encoding: "utf8", env });
+function runInstaller(env, args = []) {
+  return spawnSync("/bin/sh", [installerPath, ...args], {
+    encoding: "utf8",
+    env
+  });
 }
 
 test("installs the latest stable standalone archive after verifying its manifest digest", async (t) => {
@@ -395,3 +405,122 @@ test("rejects unsafe version input before making a request", async (t) => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+const HOOK_MARKER = "# Turborepo standalone installer shell hook";
+
+async function readIfExists(path) {
+  try {
+    return await readFile(path, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function hookLines(text) {
+  return (text ?? "").split("\n").filter((line) => line.includes(HOOK_MARKER));
+}
+
+async function withHarness(t, options, body) {
+  if (process.platform === "win32") {
+    t.skip("POSIX installer tests run on macOS and Linux");
+    return;
+  }
+  const root = await mkdtemp(join(tmpdir(), "turbo-install-test-"));
+  try {
+    const harness = await createHarness(root, options);
+    await body(root, { ...harness.env, TURBO_VERSION: VERSION });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test("adds the shell hook to zsh once and updates only its own line", (t) =>
+  withHarness(t, {}, async (root, env) => {
+    // Upgrades must write through a dotfile manager's symlink.
+    const dotfile = join(root, "dotfiles-zshrc");
+    const stale = `eval "$('/old/turbo' hook zsh)" ${HOOK_MARKER}`;
+    await writeFile(dotfile, `# mine\n${stale}\n# also mine\n${stale}\n`);
+    await symlink(dotfile, join(env.HOME, ".zshrc"));
+    for (let run = 0; run < 2; run++) {
+      const result = runInstaller(env);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Added the turbo shell hook/);
+    }
+    assert.ok((await lstat(join(env.HOME, ".zshrc"))).isSymbolicLink());
+    const lines = (await readFile(dotfile, "utf8")).split("\n");
+    assert.equal(lines[0], "# mine");
+    assert.equal(lines[2], "# also mine");
+    assert.deepEqual(hookLines(lines.join("\n")), [lines[1]]);
+    assert.deepEqual(
+      hookLines(await readIfExists(join(env.HOME, ".zprofile"))),
+      []
+    );
+    const hooked = spawnSync(
+      "/bin/sh",
+      ["-c", '. "$1"; printf %s "$TURBO_HOOKED"', "sh", dotfile],
+      { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: env.HOME } }
+    );
+    assert.equal(hooked.stdout, "zsh", hooked.stderr);
+  }));
+
+for (const loginProfile of [".bash_profile", null]) {
+  test(`adds the shell hook to bash profiles (${loginProfile ?? "no login profile"}) but never ~/.profile`, (t) =>
+    withHarness(t, {}, async (_root, env) => {
+      if (loginProfile) {
+        await writeFile(join(env.HOME, loginProfile), "# login\n");
+      }
+      const result = runInstaller({ ...env, SHELL: "/bin/bash" });
+      assert.equal(result.status, 0, result.stderr);
+      const read = (name) => readIfExists(join(env.HOME, name));
+      assert.equal(hookLines(await read(".bashrc")).length, 1);
+      assert.match(hookLines(await read(".bashrc"))[0], / hook bash\)"/);
+      if (loginProfile) {
+        assert.equal(hookLines(await read(loginProfile)).length, 1);
+      }
+      assert.deepEqual(hookLines(await read(".profile")), []);
+    }));
+}
+
+for (const scenario of [
+  { name: "--no-shell-hook", args: ["--no-shell-hook"], path: true },
+  { name: "TURBO_NO_SHELL_HOOK=1", env: { TURBO_NO_SHELL_HOOK: "1" }, path: true },
+  { name: "an older release", hookSupport: false, path: true },
+  { name: "--no-modify-path", args: ["--no-modify-path"], path: false },
+  { name: "TURBO_NO_MODIFY_PATH=1", env: { TURBO_NO_MODIFY_PATH: "1" }, path: false },
+  { name: "GitHub Actions", github: true, path: false }
+]) {
+  test(`does not add the shell hook for ${scenario.name}`, (t) =>
+    withHarness(t, { hookSupport: scenario.hookSupport ?? true }, async (root, env) => {
+      const githubPath = join(root, "github-path");
+      if (scenario.github) {
+        await writeFile(githubPath, "");
+      }
+      const result = runInstaller(
+        {
+          ...env,
+          ...scenario.env,
+          GITHUB_PATH: scenario.github ? githubPath : ""
+        },
+        scenario.args
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.doesNotMatch(result.stdout, /shell hook/);
+      const zshrc = await readIfExists(join(env.HOME, ".zshrc"));
+      assert.deepEqual(hookLines(zshrc), []);
+      assert.equal(
+        (zshrc ?? "").includes("Turborepo standalone installer PATH"),
+        scenario.path
+      );
+    }));
+}
+
+test("prints the fish hook line instead of editing fish config", (t) =>
+  withHarness(t, {}, async (_root, env) => {
+    const fish = { ...env, SHELL: "/usr/bin/fish" };
+    const result = runInstaller(fish);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /config\.fish:\n {2}'.+\/turbo' hook fish \| source\n/);
+    await assert.rejects(lstat(join(env.HOME, ".config")));
+    const optedOut = runInstaller(fish, ["--no-shell-hook"]);
+    assert.doesNotMatch(optedOut.stdout, /hook fish/);
+  }));
