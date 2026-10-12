@@ -18,7 +18,7 @@ use turborepo_download::Error as DownloadError;
 use turborepo_tool_install::Outcome;
 
 use super::*;
-use crate::pnpm_provision::PnpmTransport;
+use crate::{pnpm_provision::PnpmTransport, source_policy::test_support::LoopbackServer};
 
 const TARGET: Platform = Platform::MacosArm64;
 
@@ -653,8 +653,8 @@ async fn pnpm_11_module_entry_points_and_aliases_run_on_managed_node() {
             "{stdout}"
         );
     }
-    // pnpm 10's entry points are not this release's layout, and pnpm 12's
-    // native layout is not provisioned from this package shape.
+    // pnpm 10's entry points are not this release's layout, and pnpm 12 is
+    // never provisioned from a JS package shape.
     for (version, legacy) in [("11.28.2", true), ("12.11.2", false)] {
         let mut changed = value.clone();
         let tool = &mut changed["tools"]["pnpm"];
@@ -667,10 +667,147 @@ async fn pnpm_11_module_entry_points_and_aliases_run_on_managed_node() {
             artifact["executables"] = json!({"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"});
         }
         let lock = Lock::parse(&serde_json::to_vec(&changed).unwrap()).unwrap();
-        match PnpmPlan::from_lock(&lock, TARGET, &node, None) {
-            Err(Error::InvalidLock) => assert!(legacy),
-            Err(Error::NativePnpm) => assert!(!legacy),
-            _ => panic!("{version} must fail closed"),
-        }
+        let result = PnpmPlan::from_lock(&lock, TARGET, &node, None);
+        assert!(matches!(result, Err(Error::InvalidLock)), "{version}");
+    }
+}
+
+#[tokio::test]
+async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
+    use crate::{
+        package_manager::discover_package_manager, registry_provision::native_fixture as fx,
+    };
+    let (wrapper, natives) = (fx::wrapper(&[]), fx::natives());
+    let server = LoopbackServer::new(fx::routes(&wrapper, &natives), |_| {}).unwrap();
+    let transport = PnpmTransport::loopback_http_for_tests(server.origin()).unwrap();
+    let selected = transport
+        .resolve_exact(Manager::Pnpm, fx::VERSION, None)
+        .await
+        .unwrap();
+    let mut value = fixture(&wrapper);
+    value["tools"]["pnpm"]["version"] = json!(fx::VERSION);
+    value["tools"]["pnpm"]["installation"]["artifacts"] =
+        serde_json::to_value(selected.into_artifacts()).unwrap();
+    let (node, pnpm) = plans(&value);
+    let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+    // Authored pins describe the wrapper, never the platform package.
+    let parts = value["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"].clone();
+    let wrapper_sha256 = format!("{:x}", Sha256::digest(&wrapper));
+    for (digest, valid) in [
+        (wrapper_sha256.as_str(), true),
+        (parts["native"]["sha256"].as_str().unwrap(), false),
+    ] {
+        let manager = discover_package_manager(
+            &json!({"packageManager":format!("pnpm@{}+sha256.{digest}", fx::VERSION)}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            PnpmPlan::from_declaration(&lock, TARGET, &node, &manager).is_ok(),
+            valid
+        );
+    }
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = seeded(repo.path(), &node);
+    let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    let prepared = pnpm
+        .prepare_if_needed(&store, &desired, &transport)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .reconcile(&desired, |tool, path| {
+            if tool == node.inventory_tool() {
+                node_stage(tool, path)
+            } else {
+                prepared.stage(tool, path)
+            }
+        })
+        .unwrap();
+    let current = store.current().unwrap().unwrap();
+    for (name, dlx) in [
+        ("pn", ""),
+        ("pnpm", ""),
+        ("pnpx", "<dlx>\n"),
+        ("pnx", "<dlx>\n"),
+    ] {
+        let output = Command::new(current.bin.join(name))
+            .arg("--version")
+            .env("PATH", "/nonexistent")
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            format!("native:pnpm-native\n{dlx}<--version>\n")
+        );
+        assert_eq!(output.status.code(), Some(0));
+    }
+    // The wrapper's placeholders stay as published; its hooks never run.
+    let root = current.bin.parent().unwrap().join("tools/pnpm");
+    assert_eq!(
+        fs::read_to_string(root.join("pnpm")).unwrap(),
+        fx::PLACEHOLDER
+    );
+    let hits = server.hits();
+    assert!(
+        pnpm.prepare_if_needed(&store, &desired, &transport)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(server.hits(), hits);
+    // Each part is verified against its own locked SHA-256 before staging, and
+    // only qualified hosts provision.
+    let mut tampered = value.clone();
+    tampered["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"]["native"]["sha256"] =
+        json!("00".repeat(32));
+    let (_, tampered) = plans(&tampered);
+    let repo = tempfile::tempdir().unwrap();
+    let store = seeded(repo.path(), &node);
+    let desired = [
+        node.inventory_tool().clone(),
+        tampered.inventory_tool().clone(),
+    ];
+    let result = tampered
+        .prepare_if_needed(&store, &desired, &transport)
+        .await;
+    assert!(matches!(
+        result,
+        Err(Error::Download(DownloadError::DigestMismatch))
+    ));
+    for platform in [Platform::WindowsX64, Platform::LinuxX64Musl] {
+        assert!(matches!(
+            PnpmPlan::from_lock(&lock, platform, &node, None),
+            Err(Error::UnsupportedTarget)
+        ));
+    }
+    for (part, field, bad) in [
+        (
+            "native",
+            "url",
+            json!("https://registry.npmjs.org/@pnpm/exe.linux-x64/-/exe.linux-x64-12.11.2.tgz"),
+        ),
+        (
+            "native",
+            "destination",
+            json!("node_modules/@pnpm/exe.darwin-arm64"),
+        ),
+        (
+            "package",
+            "executables",
+            parts["native"]["executables"].clone(),
+        ),
+    ] {
+        let mut changed = value.clone();
+        changed["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"][part][field] = bad;
+        let lock = Lock::parse(&serde_json::to_vec(&changed).unwrap());
+        assert!(
+            lock.is_err()
+                || matches!(
+                    PnpmPlan::from_lock(&lock.unwrap(), TARGET, &node, None),
+                    Err(Error::InvalidLock)
+                ),
+            "{part}.{field}"
+        );
     }
 }
