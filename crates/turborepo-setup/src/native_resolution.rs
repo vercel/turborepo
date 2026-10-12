@@ -87,8 +87,9 @@ pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result
                 tools: BTreeMap::from([("uv".into(), uv.clone())]),
             })?;
             // Verified scratch copy, dropped after listing; never activated.
+            // Its archive is retained so provisioning does not download it again.
             let prepared = UvPlan::from_lock(&uv, sources.platform)?
-                .download(sources.uv)
+                .download_retained(sources.uv)
                 .await?;
             let listing = python_resolution::list(&prepared.binary())?;
             sources.python.resolve(&requirement, &listing).await?

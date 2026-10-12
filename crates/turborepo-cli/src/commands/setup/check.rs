@@ -31,20 +31,15 @@ pub(super) fn run(
     sources: Snapshot,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
-    // Activation readiness does not cover uv/Python yet; never report ready.
-    if sources.uv_requirement()?.is_some()
-        || sources.python_requirement()?.is_some()
-        || sources.previous_lock().is_some_and(|lock| {
-            lock.tools().contains_key("uv") || lock.tools().contains_key("python")
-        })
-    {
-        return Err(Error::Unsupported(
-            "uv and Python readiness checks are not implemented; run turbo setup --tools-only",
-        ));
-    }
     let context = context()?;
     preflight()?;
-    let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;
+    // Same workspace-flag gating as the captured snapshot: uv/Python
+    // selections are checked only with experimentalPythonWorkspaces.
+    let plan = ActivationPlan::inspect_with(
+        discovery.snapshot_root()?.as_std_path(),
+        context,
+        sources.ecosystems(),
+    )?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.
     preflight()?;
