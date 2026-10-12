@@ -6,8 +6,10 @@ use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 
 use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
 use turborepo_setup::{
+    activation::External,
     execution_identity::{ExecutionContext, Libc},
     lock::Ecosystems,
+    system_tool,
 };
 use turborepo_turbo_json::{RawTurboJson, SetupPolicy};
 
@@ -16,18 +18,32 @@ use crate::commands::setup::{authorization::Authorization, effective};
 pub(crate) fn select(
     base: &crate::commands::CommandBase,
 ) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
+    select_with(base, true)
+}
+
+/// Validates managed state like `select`, before local CLI handoff or
+/// telemetry, but leaves the verify-system probes to the run itself.
+pub(crate) fn validate(base: &crate::commands::CommandBase) -> Result<bool, turborepo_run::Error> {
+    Ok(select_with(base, false)?.is_some())
+}
+
+fn select_with(
+    base: &crate::commands::CommandBase,
+    external: bool,
+) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
     if !base.opts.future_flags.experimental_setup {
         return Ok(None);
     }
     let user_base = dirs_next::data_local_dir().ok_or_else(|| {
         turborepo_run::Error::ManagedTools("cannot locate setup user state directory".into())
     })?;
-    ManagedTools::inspect(
+    ManagedTools::inspect_with(
         base.repo_root.as_std_path(),
         base.opts.repo_opts.root_turbo_json_path.as_std_path(),
         true,
         &user_base,
         context,
+        external,
     )
     .map_err(turborepo_run::Error::ManagedTools)
 }
@@ -40,12 +56,24 @@ pub(crate) struct ManagedTools {
 }
 
 impl ManagedTools {
+    #[cfg(test)]
     pub(crate) fn inspect(
         root: &Path,
         config: &Path,
         enabled: bool,
         user_base: &Path,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
+    ) -> Result<Option<Arc<ManagedRun>>, String> {
+        Self::inspect_with(root, config, enabled, user_base, context, true)
+    }
+
+    fn inspect_with(
+        root: &Path,
+        config: &Path,
+        enabled: bool,
+        user_base: &Path,
+        context: impl FnOnce() -> Result<ExecutionContext, String>,
+        external: bool,
     ) -> Result<Option<Arc<ManagedRun>>, String> {
         // A lock alone must never change unconfigured-repository behavior.
         if !enabled {
@@ -75,19 +103,52 @@ impl ManagedTools {
         let ecosystems = ecosystems(&canonical, config)?;
         let authorization = Authorization::inspect(&canonical, user_base, context()?, ecosystems)
             .map_err(|e| e.guidance(ci))?;
-        let snapshot = authorization
-            .with_current(|p| p.snapshot().clone())
+        let (snapshot, tools) = authorization
+            .with_current(|p| (p.snapshot().clone(), p.external().to_vec()))
             .map_err(|e| e.guidance(ci))?;
         let identity = snapshot.fingerprint().to_owned();
+        let inherited_path = std::env::var_os("PATH");
+        // Once per run: a changed system tool fails here rather than running
+        // under the locked identity. Tasks then find it on the same PATH.
+        let notices = if external {
+            verify_external(&tools, inherited_path.as_deref(), &canonical)?
+        } else {
+            Vec::new()
+        };
         let tools = Arc::new(Self {
             authorization,
-            inherited_path: std::env::var_os("PATH"),
+            inherited_path,
             identity,
             ci,
         });
         tools.revalidate()?;
-        Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
+        Ok(Some(Arc::new(
+            ManagedRun::new(snapshot, tools)?.with_notices(notices),
+        )))
     }
+}
+
+/// Verifies each locked verify-system tool at its exact version on `path`,
+/// exactly as `turbo setup --check` does, and reports where it was found.
+fn verify_external(
+    tools: &[External],
+    path: Option<&std::ffi::OsStr>,
+    root: &Path,
+) -> Result<Vec<String>, String> {
+    let mut notices = Vec::new();
+    for tool in tools {
+        let verified =
+            system_tool::verify_tool(&tool.id, &tool.version, &tool.executables, path, root)
+                .map_err(|e| format!("verify-system {}: {e}", tool.id))?;
+        notices.extend(verified.into_iter().map(|tool| {
+            let path = tool.path.display();
+            format!(
+                "{} {} from PATH ({path}, verify-system)",
+                tool.id, tool.version
+            )
+        }));
+    }
+    Ok(notices)
 }
 
 /// Setup's ecosystems from the root configuration's flags and `setup` policy.
@@ -131,15 +192,18 @@ impl ManagedEnvironment for ManagedTools {
         self.authorization
             .with_current(|plan| {
                 let mut overrides = EnvironmentVariableMap::default();
-                let path = plan
-                    .path(self.inherited_path.as_deref())
-                    .map_err(|e| e.to_string())?;
-                overrides.insert(
-                    "PATH".into(),
-                    path.into_string().map_err(|_| {
-                        "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
-                    })?,
-                );
+                // verify-system tools alone keep the caller's PATH unchanged.
+                if plan.path_prepend().is_some() {
+                    let path = plan
+                        .path(self.inherited_path.as_deref())
+                        .map_err(|e| e.to_string())?;
+                    overrides.insert(
+                        "PATH".into(),
+                        path.into_string().map_err(|_| {
+                            "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
+                        })?,
+                    );
+                }
                 for (key, value) in plan.runtime_env() {
                     overrides.insert(
                         key.clone(),

@@ -3,7 +3,9 @@
 //! Python workspaces), not execution authorization. Every adapter contributes
 //! the same shape: validated inventory tools whose exports share one managed
 //! bin directory, plus runtime variables, so consumers need no
-//! adapter-specific code. Repo-writable inventory proves readiness only.
+//! adapter-specific code. verify-system selections are listed as external
+//! tools for the consumer to verify on PATH. Repo-writable inventory proves
+//! readiness only.
 //! Consumers must separately authorize setup-recorded tools with trusted-root
 //! user state, gate managed mode, and revalidate before use. No CLI support is
 //! advertised by this module.
@@ -46,15 +48,10 @@ pub enum Error {
     DeclarationDrift,
     #[error(
         "activation planning supports managed Node, npm, pnpm, Yarn, Bun, Rust and Go, plus uv \
-         and Python with experimentalPythonWorkspaces; use a supported setup adapter"
+         and Python with experimentalPythonWorkspaces, and verify-system Node.js and pnpm; use a \
+         supported setup adapter"
     )]
     UnsupportedAdapter,
-    /// Intentional external tools, unlike a missing managed installation.
-    #[error(
-        "turbo.lock selects verify-system tools, which come from PATH rather than a managed \
-         installation; run turbo setup --check to verify them"
-    )]
-    VerifySystem,
     #[error(
         "managed activation is unqualified for this platform; use a supported macOS, GNU Linux or \
          Windows x64 target"
@@ -80,13 +77,25 @@ pub enum Error {
     Path(#[from] std::env::JoinPathsError),
 }
 
+/// A locked `verify-system` tool. It is never installed, exported or trusted
+/// from repository state: consumers verify the exact version on the caller's
+/// PATH outside the repository and use it from there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct External {
+    pub id: String,
+    pub version: String,
+    pub executables: Vec<String>,
+}
+
 /// An owned selection bound to a checked repo-local generation. This is NOT a
 /// ready-to-execute capability: trust/authorization and actual process wiring
 /// belong to the consumer. Planning never reads or mutates process environment.
 pub struct ActivationPlan {
     snapshot: ExecutionSnapshot,
-    bin: PathBuf,
+    // None when every selection is verify-system: nothing joins PATH.
+    bin: Option<PathBuf>,
     tools: Vec<Tool>,
+    external: Vec<External>,
     // Managed Rust adds its installed private RUSTUP_HOME, exact
     // RUSTUP_TOOLCHAIN and the clone's CARGO_HOME; Go pins GOROOT and its
     // fixed runtime settings; uv/Python values derive only from this
@@ -177,22 +186,31 @@ impl ActivationPlan {
     ) -> Result<Self, Error> {
         let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
         let python = sources.ecosystems().python;
-        if !lock.tools().is_empty()
-            && lock
-                .tools()
-                .values()
-                .all(|tool| matches!(tool.installation, Installation::VerifySystem { .. }))
-        {
-            return Err(Error::VerifySystem);
-        }
+        let external: Vec<_> = lock
+            .tools()
+            .iter()
+            .filter_map(|(id, tool)| match &tool.installation {
+                Installation::VerifySystem { executables } => Some(External {
+                    id: id.clone(),
+                    version: tool.version.clone(),
+                    executables: executables.clone(),
+                }),
+                _ => None,
+            })
+            .collect();
+        let is_external = |id: &str| external.iter().any(|tool| tool.id == id);
+        // Managed npm, pnpm and Yarn launch the managed Node, never a system one.
+        let installation = |id: &str, installation: &Installation| match installation {
+            Installation::Managed { .. } => !(is_external("node") && matches!(id, "pnpm" | "yarn")),
+            Installation::Bundled { .. } => id == "npm" && !is_external("node"),
+            Installation::VerifySystem { .. } => matches!(id, "node" | "pnpm"),
+        };
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
                     || !(SUPPORTED.contains(&id.as_str())
                         || (python && matches!(id.as_str(), "uv" | "python")))
-                    || !(matches!(tool.installation, Installation::Managed { .. })
-                        || (id == "npm"
-                            && matches!(tool.installation, Installation::Bundled { .. })))
+                    || !installation(id, &tool.installation)
             })
         {
             return Err(Error::UnsupportedAdapter);
@@ -212,7 +230,17 @@ impl ActivationPlan {
         let mut tools = Vec::new();
         // Python-, Go- and Bun-only repositories lock no Node; npm, pnpm and Yarn
         // still require it.
-        let node = if lock.tools().contains_key("node") {
+        let locked = |id: &str| {
+            semver::Version::parse(&lock.tools()[id].version).map_err(|_| Error::InvalidLock)
+        };
+        if is_external("node")
+            && !sources
+                .node_requirements()?
+                .matches_locked_version(&locked("node")?)
+        {
+            return Err(Error::DeclarationDrift);
+        }
+        let node = if lock.tools().contains_key("node") && !is_external("node") {
             let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             if !sources
                 .node_requirements()?
@@ -230,7 +258,11 @@ impl ActivationPlan {
             .any(|id| lock.tools().contains_key(*id))
         {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            tools.push(manager_tool(lock, platform, node.as_ref(), &manager)?);
+            if !is_external("pnpm") {
+                tools.push(manager_tool(lock, platform, node.as_ref(), &manager)?);
+            } else if manager.manager != Manager::Pnpm || !manager.matches(&locked("pnpm")?) {
+                return Err(Error::DeclarationDrift);
+            }
         }
         if lock.tools().contains_key("npm") {
             // npm is bound to the locked Node it runs on.
@@ -304,6 +336,17 @@ impl ActivationPlan {
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
+        if tools.is_empty() {
+            // Only verify-system tools: no inventory to read, nothing on PATH.
+            sources.ensure_current()?;
+            return Ok(Self {
+                snapshot,
+                bin: None,
+                tools,
+                external,
+                runtime_env: BTreeMap::new(),
+            });
+        }
         let current = Store::inspect_with(repo, verification)
             .map_err(Error::DamagedInventory)?
             .ok_or(Error::MissingInventory)?;
@@ -360,10 +403,11 @@ impl ActivationPlan {
             // PATH consumers such as cmd.exe do not resolve `%~dp0..` under a
             // verbatim `\\?\` prefix; use the ordinary spelling when exact.
             #[cfg(windows)]
-            bin: dunce::simplified(&current.bin).to_path_buf(),
+            bin: Some(dunce::simplified(&current.bin).to_path_buf()),
             #[cfg(not(windows))]
-            bin: current.bin,
+            bin: Some(current.bin),
             tools,
+            external,
             runtime_env,
         })
     }
@@ -373,12 +417,19 @@ impl ActivationPlan {
     }
 
     /// Validated installation bookkeeping only, never trusted-root evidence.
+    /// Empty when every selection is verify-system.
     pub fn tools(&self) -> &[Tool] {
         &self.tools
     }
 
-    pub fn path_prepend(&self) -> &Path {
-        &self.bin
+    /// Locked verify-system tools, which the consumer must verify on PATH.
+    pub fn external(&self) -> &[External] {
+        &self.external
+    }
+
+    /// The managed bin, or None when no managed tool is selected.
+    pub fn path_prepend(&self) -> Option<&Path> {
+        self.bin.as_deref()
     }
 
     /// Absolute values to set for tasks and turbo's own tool probes, after
@@ -390,7 +441,7 @@ impl ActivationPlan {
     /// Pure composition; the caller supplies PATH and decides whether/how to
     /// apply it after separate authorization. Preserve the original suffix.
     pub fn path(&self, inherited: Option<&OsStr>) -> Result<OsString, Error> {
-        let mut paths = vec![self.bin.clone()];
+        let mut paths: Vec<_> = self.bin.iter().cloned().collect();
         if let Some(inherited) = inherited {
             paths.extend(std::env::split_paths(inherited));
         }
