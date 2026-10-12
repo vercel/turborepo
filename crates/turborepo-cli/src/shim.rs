@@ -81,7 +81,7 @@ impl TurboRunner for TurboCliRunner<'_> {
             }
         };
         let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
-        crate::commands::run::managed::select(&base)
+        crate::commands::managed::select(&base)
             .map(|tools| tools.map(|_| 0))
             .map_err(Into::into)
     }
@@ -103,7 +103,13 @@ fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>,
         return Ok(None);
     }
     let args = cli::Args::parse_args(words)?;
-    Ok((!args.version && matches!(args.command, Some(cli::Command::Run { .. }))).then_some(args))
+    // Exec follows run's local CLI policy: validate before any handoff.
+    Ok((!args.version
+        && matches!(
+            args.command,
+            Some(cli::Command::Run { .. } | cli::Command::Exec { .. })
+        ))
+    .then_some(args))
 }
 
 /// Implementation of `ConfigProvider` that uses `turborepo-cli`'s configuration

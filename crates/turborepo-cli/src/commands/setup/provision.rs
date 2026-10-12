@@ -36,7 +36,7 @@ pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub trust_base: Option<std::path::PathBuf>,
     /// The shared download cache the transports use, cleaned up after setup.
     pub cache: Option<ArtifactCache>,
@@ -71,7 +71,7 @@ impl Transports {
             node: node.with_cache(cache.clone()),
             pnpm: registry()?.with_cache(cache.clone()),
             registry: registry()?,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
             cache,
             rustup: RustupTransport::official(policy)?,
@@ -83,7 +83,7 @@ impl Transports {
     }
 
     pub(super) fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(base) = &self.trust_base {
             return Ok(base.clone());
         }
@@ -97,7 +97,7 @@ impl Transports {
             node: self.node.offline(),
             pnpm: self.pnpm.offline(),
             registry: self.registry.offline(),
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             trust_base: self.trust_base,
             cache: self.cache,
             rustup: self.rustup,

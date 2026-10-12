@@ -157,6 +157,72 @@ fn captures_output_and_exit_from_both_entrypoints() {
 }
 
 #[test]
+fn wrapper_leaves_the_console_to_exec_commands() {
+    use std::{io::Write, process::Stdio};
+
+    // On Windows, a wrapper that owns Ctrl+C also reads stdin in raw mode, so
+    // the exec'd command would lose its console. Evaluate the shipped predicate.
+    let source = fs::read_to_string(common::manifest_dir().join("../../packages/turbo/bin/turbo"))
+        .unwrap()
+        .replace("\r\n", "\n");
+    let body = source
+        .strip_suffix("runTurbo();\n")
+        .expect("the wrapper starts turbo last");
+    let body = body.strip_prefix("#!/usr/bin/env node\n").unwrap_or(body);
+    let cases = [
+        (json!(["exec", "--", "node"]), true),
+        (json!(["--cwd", "apps/web", "exec", "--", "node"]), true),
+        (json!(["-vv", "--verbosity", "2", "exec", "--", "x"]), true),
+        (
+            json!(["--experimental-otel-enabled", "true", "exec", "--", "x"]),
+            true,
+        ),
+        (
+            json!([
+                "--experimental-otel-enabled",
+                "--cwd",
+                "a",
+                "exec",
+                "--",
+                "x"
+            ]),
+            true,
+        ),
+        (
+            json!(["--experimental-otel-enabled", "exec", "--", "x"]),
+            false,
+        ),
+        (json!(["--token", "exec", "run", "build"]), false),
+        (json!(["run", "exec"]), false),
+        (json!(["build", "exec"]), false),
+        (json!(["run", "build", "--", "exec"]), false),
+        (json!(["--", "exec"]), false),
+    ];
+    let inputs: Vec<_> = cases.iter().map(|(args, _)| args).collect();
+    let script = format!(
+        "{body}\nprocess.stdout.write(JSON.stringify({}.map(selectsExec)));",
+        json!(inputs)
+    );
+    let mut node = std::process::Command::new(which::which("node").unwrap())
+        .arg("-")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    node.stdin
+        .take()
+        .unwrap()
+        .write_all(script.as_bytes())
+        .unwrap();
+    let output = node.wait_with_output().unwrap();
+    assert!(output.status.success(), "{}", combined_output(&output));
+    let selected: Vec<bool> = serde_json::from_slice(&output.stdout).unwrap();
+    let expected: Vec<bool> = cases.iter().map(|(_, exec)| *exec).collect();
+    assert_eq!(selected, expected);
+}
+
+#[test]
 fn drains_verbose_output_without_deadlocking_or_unbounded_capture() {
     let launcher = ProcessLauncher::new();
     let cwd = tempfile::tempdir().unwrap();

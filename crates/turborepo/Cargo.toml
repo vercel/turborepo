@@ -27,6 +27,9 @@ tar = { version = "0.4.45", default-features = false }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 turbopath = { workspace = true }
+turborepo-cli = { workspace = true, default-features = false, features = [
+  "test-support",
+] }
 turborepo-platform = { workspace = true }
 turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-shim = { workspace = true }

@@ -21,6 +21,8 @@ rustls-tls = [
   "turborepo-watch/rustls-tls",
 ]
 heap-dhat = ["dep:dhat"]
+# Cross-crate fixtures only. Consumers must enable this via dev-dependencies.
+test-support = ["turborepo-setup/test-support"]
 pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -129,3 +131,6 @@ windows-sys = { version = "0.59", features = [
   "Win32_Storage_FileSystem",
   "Win32_System_Threading",
 ] }
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Console"] }
