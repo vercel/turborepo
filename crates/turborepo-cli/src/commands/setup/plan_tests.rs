@@ -340,6 +340,8 @@ fn loopback(u: &LoopbackServer, trust_base: &std::path::Path) -> provision::Tran
             u.origin(),
         )
         .unwrap(),
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin())
+            .unwrap(),
     }
 }
 

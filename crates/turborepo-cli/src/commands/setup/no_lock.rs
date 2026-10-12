@@ -88,14 +88,15 @@ pub(super) fn run(
         rust,
         uv,
         python,
+        go,
     } = provision::plans(&snapshot, selection)?;
     if npm.is_some() {
         return Err(Error::Unsupported("npm provisioning with --no-lock"));
     }
     // The native baseline covers Node and pnpm only.
-    if rustup.is_some() || rust.is_some() || uv.is_some() || python.is_some() {
+    if rustup.is_some() || rust.is_some() || uv.is_some() || python.is_some() || go.is_some() {
         return Err(Error::Unsupported(
-            "Rust, uv or Python provisioning with --no-lock",
+            "Rust, uv, Python or Go provisioning with --no-lock",
         ));
     }
     let node = node.ok_or(Error::Unsupported("a native Node declaration is required"))?;
