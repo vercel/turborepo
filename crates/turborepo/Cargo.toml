@@ -31,7 +31,15 @@ turborepo-tool-install = { path = "../turborepo-tool-install" }
 which = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
+base64 = "0.22.1"
+flate2 = "1.1.9"
 libghostty-vt = { workspace = true }
+rustls = { version = "0.23.36", default-features = false, features = [
+  "ring",
+  "std",
+] }
+sha2 = { workspace = true }
+tar = { version = "0.4.45", default-features = false }
 
 [lints]
 workspace = true

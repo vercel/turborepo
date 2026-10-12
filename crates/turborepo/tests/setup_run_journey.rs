@@ -1,0 +1,564 @@
+//! Milestone 2 exit journey through the real binary: global
+//! `turbo setup --tools-only` in a Node/pnpm repository, then plain
+//! `turbo run`. The host PATH only holds refusing node/npm/pnpm/corepack
+//! sentinels plus Git. The mock upstream is a TLS-terminating CONNECT proxy
+//! reached through the binary's standard `HTTPS_PROXY`/`SSL_CERT_FILE`
+//! support. It serves fixture bytes for the two official origins and refuses
+//! anything else, so every network attempt is observable.
+#![cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    all(target_os = "linux", target_env = "gnu", target_arch = "x86_64")
+))]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
+mod common;
+
+use std::{
+    ffi::OsString,
+    fs,
+    io::{self, Read, Write},
+    net::{TcpListener, TcpStream},
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::{Arc, Mutex},
+    thread,
+};
+
+use base64::{Engine, engine::general_purpose::STANDARD};
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
+use serde_json::json;
+use sha2::{Digest, Sha256, Sha512};
+use turborepo_setup::test_support::LoopbackServer;
+use turborepo_shim::TurboState;
+
+const CA: &[u8] = include_bytes!("fixtures/setup_upstream/ca.pem");
+const CERT: &[u8] = include_bytes!("fixtures/setup_upstream/server.pem");
+const KEY: &[u8] = include_bytes!("fixtures/setup_upstream/server-key.pem");
+const ORIGINS: [&str; 2] = ["nodejs.org:443", "registry.npmjs.org:443"];
+const TOOLS_ONLY: &[&str] = &["setup", "--tools-only"];
+// Managed pnpm reports how turbo dispatched it, then runs `node` from PATH.
+const PNPM: &str =
+    "#!/bin/sh\necho \"fixture-pnpm 10.0.0 secret=${JOURNEY_SECRET:-filtered}\"\nexec node\n";
+
+fn executable(path: &Path, contents: &str) {
+    fs::write(path, contents).unwrap();
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+fn tar_gz(prefix: &str, files: &[(&str, &str)], links: &[(&str, &str)]) -> Vec<u8> {
+    let mut tar = tar::Builder::new(Vec::new());
+    for (path, body) in files {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(body.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        tar.append_data(&mut header, format!("{prefix}/{path}"), body.as_bytes())
+            .unwrap();
+    }
+    for (path, target) in links {
+        let mut header = tar::Header::new_gnu();
+        header.set_entry_type(tar::EntryType::Symlink);
+        header.set_size(0);
+        header.set_mode(0o777);
+        header.set_link_name(target).unwrap();
+        header.set_cksum();
+        tar.append_data(&mut header, format!("{prefix}/{path}"), &b""[..])
+            .unwrap();
+    }
+    let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gzip.write_all(&tar.into_inner().unwrap()).unwrap();
+    gzip.finish().unwrap()
+}
+
+fn node(prefix: &str, version: &str) -> Vec<u8> {
+    let cli = "#!/bin/sh\nexit 97\n";
+    // Setup's pnpm launcher runs `node pnpm.cjs`; emulate a JS entrypoint.
+    let node = format!(
+        "#!/bin/sh\ncase \"$1\" in *.cjs) entry=$1; shift; exec /bin/sh \"$entry\" \"$@\";; \
+         esac\necho \"fixture-node {version}\"\n"
+    );
+    tar_gz(
+        prefix,
+        &[
+            ("bin/node", &node),
+            (
+                "lib/node_modules/npm/package.json",
+                r#"{"name":"npm","version":"11.6.1","bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}"#,
+            ),
+            ("lib/node_modules/npm/bin/npm-cli.js", cli),
+            ("lib/node_modules/npm/bin/npx-cli.js", cli),
+        ],
+        &[
+            ("bin/npm", "../lib/node_modules/npm/bin/npm-cli.js"),
+            ("bin/npx", "../lib/node_modules/npm/bin/npx-cli.js"),
+        ],
+    )
+}
+
+/// Official-origin routes for Node 24.0.0/24.1.0 and pnpm 10.0.0. Only this
+/// host's Node archive is served; the lock still records every platform.
+fn routes() -> Vec<(String, Vec<u8>)> {
+    let host = if cfg!(target_os = "macos") {
+        "darwin-arm64"
+    } else {
+        "linux-x64"
+    };
+    let versions = ["24.1.0", "24.0.0"];
+    let mut routes = Vec::new();
+    for version in versions {
+        let mut sums = String::new();
+        for target in [
+            "darwin-x64",
+            "darwin-arm64",
+            "linux-x64",
+            "linux-arm64",
+            "win-x64",
+            "win-arm64",
+        ] {
+            let prefix = format!("node-v{version}-{target}");
+            let extension = if target.starts_with("win-") {
+                "zip"
+            } else {
+                "tar.gz"
+            };
+            let file = format!("{prefix}.{extension}");
+            let bytes = if target == host {
+                node(&prefix, version)
+            } else {
+                file.clone().into_bytes()
+            };
+            sums.push_str(&format!("{:x}  {file}\n", Sha256::digest(&bytes)));
+            if target == host {
+                routes.push((format!("/dist/v{version}/{file}"), bytes));
+            }
+        }
+        routes.push((
+            format!("/dist/v{version}/SHASUMS256.txt"),
+            sums.into_bytes(),
+        ));
+    }
+    let index = versions.map(|version| {
+        json!({"version":format!("v{version}"),"npm":"11.6.1","lts":"Krypton",
+            "files":["osx-x64-tar","osx-arm64-tar","linux-x64","linux-arm64","win-x64-zip","win-arm64-zip"]})
+    });
+    routes.push((
+        "/dist/index.json".into(),
+        serde_json::to_vec(&index).unwrap(),
+    ));
+    let pnpm = tar_gz(
+        "package",
+        &[
+            (
+                "package.json",
+                r#"{"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}"#,
+            ),
+            ("bin/pnpm.cjs", PNPM),
+            ("bin/pnpx.cjs", "#!/bin/sh\nexit 97\n"),
+        ],
+        &[],
+    );
+    let metadata = json!({"name":"pnpm","version":"10.0.0","dist":{
+        "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
+        "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(&pnpm)))}});
+    routes.push(("/pnpm/10.0.0".into(), metadata.to_string().into_bytes()));
+    routes.push(("/pnpm/-/pnpm-10.0.0.tgz".into(), pnpm));
+    routes
+}
+
+/// TLS-terminating CONNECT proxy in front of the owned loopback fixture. It
+/// records every CONNECT target and never resolves or contacts the request's
+/// authority.
+struct Upstream {
+    _origin: LoopbackServer,
+    proxy: String,
+    connects: Arc<Mutex<Vec<String>>>,
+}
+
+impl Upstream {
+    fn new() -> Self {
+        let origin = LoopbackServer::new(routes(), |_| {}).unwrap();
+        let address = origin.origin().trim_start_matches("http://").to_owned();
+        let tls = Arc::new(
+            rustls::ServerConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .unwrap()
+            .with_no_client_auth()
+            .with_single_cert(
+                vec![CertificateDer::from_pem_slice(CERT).unwrap()],
+                PrivateKeyDer::from_pem_slice(KEY).unwrap(),
+            )
+            .unwrap(),
+        );
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let proxy = format!("http://{}", listener.local_addr().unwrap());
+        let connects = Arc::new(Mutex::new(Vec::new()));
+        let log = connects.clone();
+        // Detached: the accept loop ends with the test process.
+        thread::spawn(move || {
+            for client in listener.incoming().flatten() {
+                let (tls, log, address) = (tls.clone(), log.clone(), address.clone());
+                thread::spawn(move || {
+                    let _ = tunnel(client, tls, &log, &address);
+                });
+            }
+        });
+        Self {
+            _origin: origin,
+            proxy,
+            connects,
+        }
+    }
+
+    fn connects(&self) -> Vec<String> {
+        self.connects.lock().unwrap().clone()
+    }
+}
+
+fn tunnel(
+    mut client: TcpStream,
+    tls: Arc<rustls::ServerConfig>,
+    log: &Mutex<Vec<String>>,
+    origin: &str,
+) -> io::Result<()> {
+    let head = String::from_utf8_lossy(&read_head(&mut client)?).into_owned();
+    let target = head
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or_default()
+        .to_owned();
+    // Logged before replying, so it is visible once the CLI sees a response.
+    log.lock().unwrap().push(target.clone());
+    if !head.starts_with("CONNECT ") || !ORIGINS.contains(&target.as_str()) {
+        return client.write_all(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+    }
+    client.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")?;
+    let session = rustls::ServerConnection::new(tls).map_err(io::Error::other)?;
+    let mut stream = rustls::StreamOwned::new(session, client);
+    let request = read_head(&mut stream)?;
+    let mut upstream = TcpStream::connect(origin)?;
+    upstream.write_all(&request)?;
+    let mut response = Vec::new();
+    upstream.read_to_end(&mut response)?;
+    stream.write_all(&response)?;
+    stream.conn.send_close_notify();
+    stream.flush()
+}
+
+/// Bounded HTTP head read, byte by byte so nothing past the head is consumed.
+fn read_head(stream: &mut impl Read) -> io::Result<Vec<u8>> {
+    let mut head = Vec::new();
+    let mut byte = [0];
+    while !head.ends_with(b"\r\n\r\n") {
+        if head.len() > 16 * 1024 || stream.read(&mut byte)? == 0 {
+            return Err(io::ErrorKind::InvalidData.into());
+        }
+        head.push(byte[0]);
+    }
+    Ok(head)
+}
+
+fn contains(text: &str, expected: &str) -> bool {
+    // Diagnostics may wrap sentences across lines with gutters.
+    let squash = |s: &str| s.to_lowercase().replace([' ', '\n', '|', '│'], "");
+    squash(text).contains(&squash(expected))
+}
+
+struct Outcome {
+    code: i32,
+    text: String,
+    connects: Vec<String>,
+}
+
+impl Outcome {
+    fn succeeds(&self) -> &Self {
+        assert_eq!(self.code, 0, "{}", self.text);
+        self
+    }
+
+    /// Fails before any task runs, with the expected guidance.
+    fn fails(&self, expected: &str) -> &Self {
+        assert_ne!(self.code, 0, "{}", self.text);
+        assert!(
+            contains(&self.text, expected),
+            "{expected:?}: {}",
+            self.text
+        );
+        assert!(!self.text.contains("fixture-"), "{}", self.text);
+        self
+    }
+
+    fn offline(&self) -> &Self {
+        assert!(
+            self.connects.is_empty(),
+            "{:?}: {}",
+            self.connects,
+            self.text
+        );
+        self
+    }
+}
+
+struct Journey {
+    temp: tempfile::TempDir,
+    root: PathBuf,
+    web: PathBuf,
+    home: PathBuf,
+    path: OsString,
+    sentinel: PathBuf,
+    ca: PathBuf,
+    upstream: Upstream,
+}
+
+impl Journey {
+    fn new() -> Self {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        let web = root.join("apps/web");
+        let home = temp.path().join("home");
+        let poisoned = temp.path().join("host-bin");
+        let host = temp.path().join("host-tools");
+        let sentinel = temp.path().join("host-tool-ran");
+        for dir in [&web, &home, &poisoned, &host] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        for tool in ["node", "npm", "npx", "pnpm", "pnpx", "corepack", "yarn"] {
+            let script = format!(
+                "#!/bin/sh\necho {tool} >> '{}'\nexit 97\n",
+                sentinel.display()
+            );
+            executable(&poisoned.join(tool), &script);
+        }
+        std::os::unix::fs::symlink(which::which("git").unwrap(), host.join("git")).unwrap();
+        let ca = temp.path().join("ca.pem");
+        fs::write(&ca, CA).unwrap();
+        for (name, contents) in [
+            (
+                "turbo.json",
+                r#"{"futureFlags":{"experimentalSetup":true},"agentGuidance":false,"tasks":{"build":{"cache":false}}}"#,
+            ),
+            (".nvmrc", "24.0.0\n"),
+            (".gitignore", "/.turbo/\nnode_modules/\n"),
+            (
+                "package.json",
+                r#"{"name":"journey","private":true,"packageManager":"pnpm@10.0.0"}"#,
+            ),
+            ("pnpm-workspace.yaml", "packages: ['apps/*']\n"),
+            (
+                "pnpm-lock.yaml",
+                "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
+            ),
+            (
+                "apps/web/package.json",
+                r#"{"name":"web","scripts":{"build":"node"}}"#,
+            ),
+        ] {
+            fs::write(root.join(name), contents).unwrap();
+        }
+        common::git(&root, &["init", "--quiet"]);
+        Self {
+            path: std::env::join_paths([poisoned, host]).unwrap(),
+            upstream: Upstream::new(),
+            temp,
+            root,
+            web,
+            home,
+            sentinel,
+            ca,
+        }
+    }
+
+    fn turbo(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Outcome {
+        let seen = self.upstream.connects().len();
+        let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
+            .env_clear()
+            .current_dir(cwd)
+            .args(args)
+            .env("PATH", &self.path)
+            .env("HOME", &self.home)
+            .env("TURBO_CONFIG_DIR_PATH", self.home.join("turbo-config"))
+            .env("TURBO_TELEMETRY_DISABLED", "1")
+            .env("DO_NOT_TRACK", "1")
+            .env("TURBO_NO_UPDATE_NOTIFIER", "1")
+            .env("HTTPS_PROXY", &self.upstream.proxy)
+            .env("HTTP_PROXY", &self.upstream.proxy)
+            .env("ALL_PROXY", &self.upstream.proxy)
+            .env("NO_PROXY", "")
+            .env("SSL_CERT_FILE", &self.ca)
+            .env("JOURNEY_SECRET", "present")
+            .envs(env.iter().copied())
+            .output()
+            .unwrap();
+        assert!(
+            !self.sentinel.exists(),
+            "host tool ran: {}",
+            fs::read_to_string(&self.sentinel).unwrap_or_default()
+        );
+        Outcome {
+            code: output.status.code().unwrap(),
+            text: common::combined_output(&output),
+            connects: self.upstream.connects()[seen..].to_vec(),
+        }
+    }
+
+    fn read(&self, path: &str) -> Vec<u8> {
+        fs::read(self.root.join(path)).unwrap()
+    }
+
+    /// Plain `turbo run build`: managed pnpm dispatch with managed Node first
+    /// on the task PATH, env-mode filtering, no network and no setup writes.
+    fn build(&self, cwd: &Path, mode: &str, node: &str, extra: &[&str]) -> Outcome {
+        let lock = self.read("turbo.lock");
+        let manifest = self.read(".turbo/tools/manifest.json");
+        let env_mode = format!("--env-mode={mode}");
+        let mut args = vec!["run", "build", env_mode.as_str()];
+        args.extend(extra);
+        let outcome = self.turbo(cwd, &args, &[]);
+        outcome.succeeds().offline();
+        let secret = if mode == "loose" {
+            "present"
+        } else {
+            "filtered"
+        };
+        for expected in [
+            format!("fixture-pnpm 10.0.0 secret={secret}"),
+            format!("fixture-node {node}"),
+        ] {
+            assert!(outcome.text.contains(&expected), "{}", outcome.text);
+        }
+        assert_eq!(self.read("turbo.lock"), lock);
+        assert_eq!(self.read(".turbo/tools/manifest.json"), manifest);
+        outcome
+    }
+}
+
+#[test]
+fn global_setup_then_plain_run_repeat_repair_and_drift() {
+    let j = Journey::new();
+    let ci = [("CI", "1")];
+    j.turbo(&j.root, TOOLS_ONLY, &ci)
+        .fails("frozen mode requires turbo.lock")
+        .offline();
+    assert!(!j.root.join("turbo.lock").exists());
+
+    // First setup from a subdirectory creates the lock and asks for a commit.
+    let first = j.turbo(&j.web, TOOLS_ONLY, &[]);
+    first.succeeds();
+    assert!(contains(&first.text, "Commit turbo.lock"), "{}", first.text);
+    assert!(!first.connects.is_empty() && !first.text.contains("fixture-"));
+    let lock = j.read("turbo.lock");
+    for cwd in [&j.root, &j.web] {
+        j.build(cwd, "strict", "24.0.0", &[]);
+        j.build(cwd, "loose", "24.0.0", &[]);
+    }
+
+    // Repeat setup is a no-op without network.
+    let manifest = j.read(".turbo/tools/manifest.json");
+    j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds().offline();
+    assert_eq!(j.read("turbo.lock"), lock);
+    assert_eq!(j.read(".turbo/tools/manifest.json"), manifest);
+
+    // A deleted shim fails before tasks without network; setup repairs it.
+    let current = turborepo_tool_install::Store::inspect(&j.root).unwrap();
+    fs::remove_file(current.unwrap().bin.join("pnpm")).unwrap();
+    for env in [&[][..], &ci[..]] {
+        j.turbo(&j.web, &["run", "build"], env)
+            .fails("run turbo setup")
+            .offline();
+    }
+    j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
+    assert_eq!(j.read("turbo.lock"), lock);
+    j.build(&j.web, "strict", "24.0.0", &[]);
+
+    // Declaration drift: run points at setup, frozen setup rejects the stale
+    // lock, and local setup updates it before the next run.
+    fs::write(j.root.join(".nvmrc"), "24.1.0\n").unwrap();
+    for env in [&[][..], &ci[..]] {
+        j.turbo(&j.web, &["run", "build"], env)
+            .fails("turbo setup")
+            .offline();
+        j.turbo(&j.root, TOOLS_ONLY, &ci)
+            .fails("locally and commit the updated lock")
+            .offline();
+    }
+    assert_eq!(j.read("turbo.lock"), lock);
+    let update = j.turbo(&j.root, TOOLS_ONLY, &[]);
+    update.succeeds();
+    assert!(
+        contains(&update.text, "node: 24.0.0 -> 24.1.0"),
+        "{}",
+        update.text
+    );
+    j.build(&j.root, "strict", "24.1.0", &[]);
+    j.build(&j.web, "loose", "24.1.0", &[]);
+}
+
+#[test]
+fn repository_local_cli_pins_after_global_setup() {
+    let j = Journey::new();
+    j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
+    // No pin: the global CLI runs the guarded managed pipeline itself.
+    j.build(&j.web, "strict", "24.0.0", &[]);
+
+    // An incompatible pin appearing after setup stops before tasks with
+    // upgrade guidance; nothing is substituted or fetched.
+    let pin = j
+        .root
+        .join("node_modules")
+        .join(TurboState::scoped_platform_package_scope())
+        .join(TurboState::scoped_platform_package_dir());
+    fs::create_dir_all(pin.join("bin")).unwrap();
+    let binary = pin.join("bin").join(TurboState::binary_name());
+    let calls = j.temp.path().join("pin-calls");
+    let old = format!(
+        "#!/bin/sh\necho \"$@\" >> '{}'\necho \"error: unexpected argument '$1' found\" >&2\nexit \
+         2\n",
+        calls.display()
+    );
+    executable(&binary, &old);
+    fs::write(pin.join("package.json"), r#"{"version":"2.5.0"}"#).unwrap();
+    for cwd in [&j.root, &j.web] {
+        let outcome = j.turbo(cwd, &["run", "build"], &[]);
+        outcome
+            .fails("repository-local CLI")
+            .fails("upgrade")
+            .offline();
+    }
+    let queried = fs::read_to_string(&calls).unwrap();
+    assert!(
+        queried
+            .lines()
+            .all(|line| line == "--__internal-managed-run-capabilities"),
+        "{queried}"
+    );
+    // Setup stays global: it neither defers to nor runs the pin.
+    j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds().offline();
+    assert_eq!(fs::read_to_string(&calls).unwrap(), queried);
+
+    // A compatible copied pin is preserved, and the managed contract holds
+    // through the handoff.
+    fs::remove_file(&binary).unwrap();
+    fs::copy(env!("CARGO_BIN_EXE_turbo"), &binary).unwrap();
+    let version = include_str!("../../../version.txt").lines().next().unwrap();
+    fs::write(
+        pin.join("package.json"),
+        json!({"version": version}).to_string(),
+    )
+    .unwrap();
+    let handoff = format!(
+        "Running local turbo binary in {}",
+        fs::canonicalize(&binary).unwrap().display()
+    );
+    for cwd in [&j.root, &j.web] {
+        for mode in ["strict", "loose"] {
+            let outcome = j.build(cwd, mode, "24.0.0", &["--verbosity=2"]);
+            assert!(outcome.text.contains(&handoff), "{}", outcome.text);
+        }
+    }
+    fs::write(j.root.join(".nvmrc"), "24.1.0\n").unwrap();
+    j.turbo(&j.web, &["run", "build"], &[])
+        .fails("turbo setup")
+        .offline();
+}
