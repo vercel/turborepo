@@ -37,7 +37,8 @@ pub(super) fn run(
     let ecosystems = Ecosystems {
         rust: discovery.source_eligibility().cargo(),
     };
-    let plan = ActivationPlan::inspect_with(
+    // Re-hash every installed file rather than trusting publication stamps.
+    let plan = ActivationPlan::verify_with(
         discovery.snapshot_root()?.as_std_path(),
         context,
         ecosystems,

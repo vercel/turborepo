@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Store, Tool, Verification};
 
 use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot},
@@ -86,11 +86,32 @@ impl ActivationPlan {
     }
 
     /// Same, with the caller's workspace-flag eligibility, exactly as setup
-    /// captured declarations for this repository.
+    /// captured declarations for this repository. Both trust installed bytes
+    /// while their publication stamps match (`Verification::Stamped`), for
+    /// repeated run-time validation.
     pub fn inspect_with(
         repo: &Path,
         context: ExecutionContext,
         ecosystems: Ecosystems,
+    ) -> Result<Self, Error> {
+        Self::plan(repo, context, ecosystems, Verification::Stamped)
+    }
+
+    /// `inspect_with`, re-hashing every installed file, as `turbo setup
+    /// --check` does.
+    pub fn verify_with(
+        repo: &Path,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+    ) -> Result<Self, Error> {
+        Self::plan(repo, context, ecosystems, Verification::Full)
+    }
+
+    fn plan(
+        repo: &Path,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+        verification: Verification,
     ) -> Result<Self, Error> {
         let platform = context.artifact_platform();
         if !cfg!(unix)
@@ -106,13 +127,14 @@ impl ActivationPlan {
         }
         let repo = repo.canonicalize().map_err(StorageError::from)?;
         let sources = Snapshot::capture_with(&repo, ecosystems)?;
-        Self::from_sources(&repo, &sources, context)
+        Self::from_sources(&repo, &sources, context, verification)
     }
 
     fn from_sources(
         repo: &Path,
         sources: &Snapshot,
         context: ExecutionContext,
+        verification: Verification,
     ) -> Result<Self, Error> {
         let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
         if lock.tools().is_empty()
@@ -183,7 +205,7 @@ impl ActivationPlan {
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
-        let current = Store::inspect(repo)
+        let current = Store::inspect_with(repo, verification)
             .map_err(Error::DamagedInventory)?
             .ok_or(Error::MissingInventory)?;
         // Complete set equality prevents unrelated exports sharing our PATH.
