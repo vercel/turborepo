@@ -631,6 +631,7 @@ impl Managed {
         let files = [
             ("turbo.json", r#"{"futureFlags":{"experimentalSetup":true}}"#.to_owned()),
             (".nvmrc", format!("{version}\n")),
+            (".gitignore", "/.turbo/\n".to_owned()),
             (
                 "package.json",
                 r#"{"name":"exec-parity","private":true,"packageManager":"pnpm@10.0.0"}"#.to_owned(),
