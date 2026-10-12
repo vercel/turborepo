@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
+mod allowances;
 mod links;
 
 use std::{io::Write, mem::discriminant};
@@ -362,6 +363,8 @@ fn failure_cleanup_and_no_surrounding_writes() {
         limits: limits(),
         bytes: 0,
         excluded: Vec::new(),
+        name_residue: false,
+        case_sensitive: None,
     };
     let fixture = tar(&[
         ("pkg/bin/tool", Regular, b"x"),

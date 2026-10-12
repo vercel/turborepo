@@ -308,6 +308,8 @@ fn validation_failure_creates_no_links_and_cleans_owned_staging() {
             limits: limits(),
             bytes: 0,
             excluded: Vec::new(),
+            name_residue: false,
+            case_sensitive: None,
         };
         let bytes = tar_with_links(&[
             ("pkg/bin/tool", Regular, b"tool", ""),
@@ -336,6 +338,8 @@ fn materialization_is_deferred_and_io_failure_cleans_partial_links() {
         limits: limits(),
         bytes: 0,
         excluded: Vec::new(),
+        name_residue: false,
+        case_sensitive: None,
     };
     extract_tar(
         &tar_with_links(&[
