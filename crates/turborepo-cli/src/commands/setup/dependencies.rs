@@ -465,7 +465,8 @@ fn go(snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Step {
 /// Managed tools first on PATH plus their runtime variables, over the
 /// caller's environment so native credentials and settings still apply.
 struct Environment {
-    bin: PathBuf,
+    /// None when only verify-system tools are locked: nothing is managed.
+    bin: Option<PathBuf>,
     vars: BTreeMap<String, OsString>,
 }
 
@@ -483,13 +484,14 @@ impl Environment {
         let path = plan.path(std::env::var_os("PATH").as_deref())?;
         vars.insert("PATH".into(), path);
         Ok(Self {
-            bin: plan.path_prepend().to_owned(),
+            bin: plan.path_prepend().map(Path::to_owned),
             vars,
         })
     }
 
     /// The managed executable only, never a lookup on the caller's PATH.
     fn program(&self, name: &'static str) -> Result<PathBuf, Error> {
-        which::which_in(name, Some(&self.bin), &self.bin).map_err(|_| Error::NotInstalled(name))
+        let bin = self.bin.as_deref().ok_or(Error::NotInstalled(name))?;
+        which::which_in(name, Some(bin), bin).map_err(|_| Error::NotInstalled(name))
     }
 }
