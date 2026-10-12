@@ -38,11 +38,16 @@ pub enum Error {
     Io(#[from] io::Error),
 }
 
+/// Where the clone's private Cargo home lives, without creating or checking
+/// it. Activation exposes this same directory to tasks as `CARGO_HOME`.
+pub fn cargo_home_path(root: &Path) -> PathBuf {
+    root.join(".turbo/cargo-home")
+}
+
 /// The repository's private Cargo home, beside managed tools rather than in
-/// the user's `~/.cargo`. Activation must expose this same directory to tasks
-/// so prefetched sources are the ones builds use.
+/// the user's `~/.cargo`, created if missing.
 pub fn cargo_home(root: &Path) -> Result<PathBuf, Error> {
-    let home = root.join(".turbo/cargo-home");
+    let home = cargo_home_path(root);
     let mut builder = fs::DirBuilder::new();
     builder.recursive(false);
     #[cfg(unix)]

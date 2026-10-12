@@ -32,9 +32,6 @@ pub(super) fn run(
     tools_only: bool,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
-    if sources.declarations().contains_key("rustup") {
-        return Err(Error::Unsupported("Rust toolchain readiness checks"));
-    }
     let context = context()?;
     preflight()?;
     // Keep the original captured sources and their workspace-flag gating.
