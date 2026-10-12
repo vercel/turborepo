@@ -97,6 +97,7 @@ After installing tools, `turbo setup` installs each toolchain's dependencies whe
 | pnpm             | `pnpm install --frozen-lockfile` | `pnpm-lock.yaml`                             |
 | Yarn 1           | `yarn install --frozen-lockfile` | `yarn.lock`                                  |
 | Yarn 2 and later | `yarn install --immutable`       | `yarn.lock`                                  |
+| Bun              | `bun install --frozen-lockfile`  | `bun.lock` or `bun.lockb`                    |
 
 - The package manager must be declared with `packageManager` or `devEngines.packageManager` in the root `package.json`.
 - A missing lockfile is an error, reported before anything is downloaded. `turbo setup` never creates or updates a lockfile. If a package manager changes one anyway, `turbo setup` restores it and fails.
