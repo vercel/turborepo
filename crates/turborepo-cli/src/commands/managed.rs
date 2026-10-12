@@ -136,16 +136,8 @@ impl ManagedEnvironment for ManagedTools {
     }
 }
 
-fn qualified_libc(host: Option<turborepo_platform::Libc>) -> Result<Libc, String> {
-    match host {
-        Some(turborepo_platform::Libc::Glibc { version }) => Ok(Libc::Gnu { abi: version }),
-        None if cfg!(any(target_os = "macos", windows)) => Ok(Libc::None),
-        _ => Err("managed Node/pnpm run is unsupported on this host".into()),
-    }
-}
-
 /// Conservative native execution identity. No readiness-only/unprobed labels.
-/// These initial adapters are supported only on native macOS, GNU Linux and
+/// These initial adapters are supported only on native macOS, glibc Linux and
 /// Windows x64. Windows arm64 is unqualified and never borrows x64 artifacts.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
     if !cfg!(any(
@@ -153,11 +145,9 @@ pub(crate) fn context() -> Result<ExecutionContext, String> {
         target_os = "linux",
         all(windows, target_arch = "x86_64")
     )) {
-        return Err("managed Node/pnpm run is unsupported on this host".into());
+        return Err("managed run is unsupported on this host".into());
     }
-    // Released Linux binaries are musl-static; their target is not the host's
-    // execution ABI. Use the same bounded, non-executing detection as setup.
-    let libc = qualified_libc(turborepo_platform::host_libc().map_err(|e| e.to_string())?)?;
+    let libc = host_libc(turborepo_platform::host_libc())?;
     let mut cpu = BTreeSet::from(["baseline".into()]);
     #[cfg(target_arch = "x86_64")]
     for (name, detected) in [
@@ -198,24 +188,53 @@ pub(crate) fn context() -> Result<ExecutionContext, String> {
     .map_err(|e| e.to_string())
 }
 
+/// The host's C library, not the one turbo was built against: released Linux
+/// binaries are static musl builds, and they select glibc artifacts on glibc
+/// hosts exactly like setup does. The glibc release is the ABI label.
+fn host_libc(
+    host: Result<Option<turborepo_platform::Libc>, turborepo_platform::LibcError>,
+) -> Result<Libc, String> {
+    match host {
+        Ok(None) => Ok(Libc::None),
+        Ok(Some(turborepo_platform::Libc::Glibc { version })) => Ok(Libc::Gnu { abi: version }),
+        Ok(Some(turborepo_platform::Libc::Musl)) => Err("managed tools are not supported on musl \
+                                                         Linux hosts such as Alpine; install the \
+                                                         repository's tools in the image and use \
+                                                         verify-system for them"
+            .into()),
+        Err(error) => Err(format!(
+            "cannot classify this Linux host's C library ({error}); managed run requires a glibc \
+             host, otherwise install the tools yourself and use verify-system"
+        )),
+    }
+}
+
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod libc_tests {
+    use turborepo_platform::Libc as Host;
+
+    use super::{Libc, host_libc};
 
     #[test]
-    fn managed_abi_uses_host_glibc_version_and_rejects_musl() {
-        assert_eq!(
-            qualified_libc(Some(turborepo_platform::Libc::Glibc {
-                version: "2.39".into(),
-            }))
-            .unwrap(),
-            Libc::Gnu { abi: "2.39".into() }
+    fn glibc_hosts_select_gnu_and_musl_or_unclassified_hosts_fail_closed() {
+        let gnu = host_libc(Ok(Some(Host::Glibc {
+            version: "2.39".into(),
+        })));
+        assert_eq!(gnu, Ok(Libc::Gnu { abi: "2.39".into() }));
+        assert_eq!(host_libc(Ok(None)), Ok(Libc::None));
+        let musl = host_libc(Ok(Some(Host::Musl))).unwrap_err();
+        assert!(
+            musl.contains("musl") && musl.contains("verify-system"),
+            "{musl}"
         );
-        assert!(qualified_libc(Some(turborepo_platform::Libc::Musl)).is_err());
-        assert_eq!(
-            qualified_libc(None).is_ok(),
-            cfg!(any(target_os = "macos", windows))
-        );
+        // The real host classification agrees with what setup qualifies.
+        if cfg!(target_os = "linux") {
+            let context = super::context();
+            match turborepo_platform::host_libc() {
+                Ok(Some(Host::Glibc { .. })) => assert!(context.is_ok(), "{context:?}"),
+                _ => assert!(context.is_err()),
+            }
+        }
     }
 }
 
