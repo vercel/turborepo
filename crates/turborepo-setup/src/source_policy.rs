@@ -38,6 +38,11 @@ pub enum Error {
     )]
     Configured(ConfigOwner),
     #[error(
+        "official-only setup rejects line {1} of the {0:?} .npmrc: only known install-layout \
+         settings are allowed there; remove it or wait for mirror/policy support"
+    )]
+    Setting(ConfigOwner, usize),
+    #[error(
         "cannot safely inspect {0:?} configuration (unreadable, non-file, link/reparse point or \
          invalid policy); no public traffic is allowed"
     )]
@@ -60,6 +65,9 @@ impl OfficialSourcePolicy {
     /// are inspected. Unreported custom npm global prefixes/config locations
     /// are unsupported: do not call this for a wrapper with unknown provenance.
     /// Bundled npmrc is also rejected: it can redirect npm's effective prefix.
+    /// Project `.npmrc` files (the invocation directory and its ancestors)
+    /// pass only when every setting is on the non-fetching allowlist in
+    /// `npmrc`; user, system, and prefix npmrc files are rejected outright.
     /// Non-Unix hosts remain explicitly unqualified.
     /// Every NPM_CONFIG_* override (including prefix/globalconfig/userconfig),
     /// regardless of spelling/value, is rejected before filesystem inspection.
@@ -224,6 +232,10 @@ fn inspect_inputs(
 enum Observation {
     Missing,
     Readable,
+    /// Project npmrc whose every setting is on the non-fetching allowlist.
+    NonFetching,
+    /// Project npmrc with a rejected setting on this 1-based line.
+    Setting(usize),
     PolicyAbsent,
     Unsafe,
 }
@@ -247,6 +259,15 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
     let Ok(mut file) = fs::File::open(path) else {
         return Observation::Unsafe;
     };
+    if matches!(owner, ConfigOwner::Repository | ConfigOwner::Ancestor) {
+        let mut bytes = Vec::new();
+        if file.take(npmrc::LIMIT + 1).read_to_end(&mut bytes).is_err()
+            || bytes.len() as u64 > npmrc::LIMIT
+        {
+            return Observation::Unsafe;
+        }
+        return npmrc::rejected_line(&bytes).map_or(Observation::NonFetching, Observation::Setting);
+    }
     if owner != ConfigOwner::RootPolicy {
         return if file.read(&mut [0u8; 1]).is_ok() {
             Observation::Readable
@@ -280,11 +301,14 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
 // secrets.
 fn validate(owner: ConfigOwner, observation: Observation) -> Result<(), Error> {
     match observation {
-        Observation::Missing | Observation::PolicyAbsent => Ok(()),
+        Observation::Missing | Observation::PolicyAbsent | Observation::NonFetching => Ok(()),
         Observation::Readable => Err(Error::Configured(owner)),
+        Observation::Setting(line) => Err(Error::Setting(owner, line)),
         Observation::Unsafe => Err(Error::Inspection(owner)),
     }
 }
+
+mod npmrc;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
