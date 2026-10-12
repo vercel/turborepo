@@ -60,6 +60,8 @@ impl Frozen {
             Manager::Npm => (&["npm-shrinkwrap.json", "package-lock.json"], "npm install"),
             Manager::Pnpm => (&["pnpm-lock.yaml"], "pnpm install"),
             Manager::Yarn => (&["yarn.lock"], "yarn install"),
+            // Bun reads its text lock first and can migrate the binary one.
+            Manager::Bun => (&["bun.lock", "bun.lockb"], "bun install"),
             _ => return None,
         };
         Some(Self {
@@ -88,6 +90,7 @@ impl Frozen {
             // Yarn classic and modern Yarn spell the same refusal differently.
             Manager::Yarn if version.major < 2 => &["install", "--frozen-lockfile"],
             Manager::Yarn => &["install", "--immutable"],
+            Manager::Bun => &["install", "--frozen-lockfile"],
             _ => unreachable!("Frozen::new admits only adapted managers"),
         }
     }

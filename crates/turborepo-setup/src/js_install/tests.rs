@@ -125,3 +125,21 @@ fn yarn_classic_and_modern_refuse_lock_updates_their_own_way() {
         ["install", "--immutable"]
     );
 }
+
+#[test]
+fn bun_installs_frozen_from_either_lock_and_never_migrates_it() {
+    let f = Fixture::new();
+    let bun = Frozen::new(Manager::Bun).unwrap();
+    let error = bun.lockfile(&f.root()).unwrap_err().to_string();
+    assert!(error.contains("committed bun.lock or bun.lockb"), "{error}");
+    fs::write(f.root().join("bun.lockb"), "binary").unwrap();
+    assert_eq!(bun.lockfile(&f.root()).unwrap(), "bun.lockb");
+    let args = bun.args(&Version::new(1, 2, 23));
+    assert_eq!(args, ["install", "--frozen-lockfile"]);
+    // A text lock written beside the committed binary one is removed.
+    let migrate = f.npm("echo text > bun.lock");
+    let error = bun.run(&migrate, args, &f.root(), &BTreeMap::new());
+    assert!(matches!(error, Err(Error::LockChanged { .. })));
+    assert!(!f.root().join("bun.lock").exists());
+    assert_eq!(fs::read(f.root().join("bun.lockb")).unwrap(), b"binary");
+}
