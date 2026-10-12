@@ -219,6 +219,11 @@ impl AsyncCache {
         self.real_cache.fetch(anchor, key).await
     }
 
+    /// See [`CacheMultiplexer::prefetch_remote`].
+    pub fn prefetch_remote(&self, keys: impl FnOnce() -> Vec<String>, concurrency: usize) {
+        self.real_cache.prefetch_remote(keys, concurrency);
+    }
+
     // Used for testing to ensure that the workers resolve
     // before checking the cache.
     #[tracing::instrument(skip_all)]
