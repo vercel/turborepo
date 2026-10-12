@@ -563,6 +563,65 @@ jobs:
             standalone-artifacts/SHA256SUMS
           if-no-files-found: error
 
+  # Installs each packaged archive as users get it (signed and notarized on
+  # macOS) on a native host with no Node.js or JS package manager on turbo's
+  # PATH, then runs managed setup, plain turbo run, and turbo exec against a
+  # loopback fixture mirror. Nothing is downloaded from a vendor.
+  standalone-smoke:
+    name: "Smoke-test Standalone Archives (${{ matrix.settings.name }})"
+    needs: [stage, standalone-archives]
+    if: ${{ always() && needs.stage.result == 'success' && needs.standalone-archives.result == 'success' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - name: Linux x64
+            host: ubuntu-24.04
+          - name: Linux arm64
+            host: ubuntu-24.04-arm
+          - name: macOS arm64
+            host: macos-15
+            signing-identifier: com.vercel.turbo
+          - name: macOS x64
+            host: macos-15-intel
+            signing-identifier: com.vercel.turbo
+          - name: Windows x64
+            host: windows-2022
+          # Unsupported: the installer and the emulated x64 setup must refuse.
+          - name: Windows arm64
+            host: windows-11-arm
+    runs-on: ${{ matrix.settings.host }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
+          persist-credentials: false
+
+      # Node.js runs only the loopback fixture mirror; turbo's PATH has none.
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          package-install: false
+
+      - name: Download standalone archives
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: standalone-turbo-${{ needs.stage.outputs.version }}
+          path: standalone-artifacts
+
+      - name: Smoke-test the standalone install, managed setup, run, and exec
+        if: runner.os != 'Windows'
+        env:
+          TURBO_SMOKE_SIGNING_IDENTIFIER: ${{ matrix.settings.signing-identifier }}
+        run: sh scripts/standalone-posix-smoke.sh "${{ needs.stage.outputs.version }}" standalone-artifacts
+
+      - name: Smoke-test the standalone install, managed setup, run, and exec
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/standalone-windows-smoke.ps1 -Version "${{ needs.stage.outputs.version }}" -Assets standalone-artifacts
+
   npm-publish:
     name: "Publish To NPM"
     runs-on: ubuntu-24.04
@@ -573,8 +632,9 @@ jobs:
     env:
       NPM_CONFIG_PROVENANCE: "true"
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
-    needs: [stage, build-rust, js-smoke-test, standalone-archives]
-    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' && needs.standalone-archives.result == 'success' }}
+    needs:
+      [stage, build-rust, js-smoke-test, standalone-archives, standalone-smoke]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' && needs.standalone-archives.result == 'success' && needs.standalone-smoke.result == 'success' }}
     outputs:
       publish-started: ${{ steps.publish-state.outputs.started }}
     steps:
