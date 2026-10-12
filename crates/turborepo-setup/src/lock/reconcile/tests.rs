@@ -195,6 +195,64 @@ fn no_lock_first_selection_is_ephemeral_and_resolution_failure_preserves_state()
 }
 
 #[test]
+fn proposals_select_like_local_and_refresh_but_never_write() {
+    let root = root(Some("pnpm@24.0.0"));
+    let source = snapshot(root.path());
+    let created = propose(
+        &source,
+        Mode::Local,
+        false,
+        |input| {
+            assert_eq!(input.version_ids().len(), 2);
+            Ok(selection(input.snapshot(), "24.0.0"))
+        },
+        |_| Ok(()),
+        || Ok(()),
+    )
+    .unwrap();
+    assert_eq!(created.publication, None);
+    assert!(!root.path().join("turbo.lock").exists());
+    assert!(!root.path().join(".turbo").exists());
+
+    let old = first(root.path());
+    let before = bytes(root.path());
+    let newer = edit(&old, |doc| {
+        doc.tools.get_mut("node").unwrap().version = "24.1.0".into()
+    });
+    let refreshed = propose(
+        &snapshot(root.path()),
+        Mode::Refresh,
+        false,
+        |input| {
+            assert_eq!(input.version_ids().len(), 2);
+            Ok(newer.clone())
+        },
+        |_| Ok(()),
+        || Ok(()),
+    )
+    .unwrap();
+    assert_eq!((refreshed.lock, refreshed.publication), (newer, None));
+    // Targeted drift keeps unaffected bytes, and validation still gates.
+    fs::write(root.path().join(".nvmrc"), "25.x").unwrap();
+    let source = snapshot(root.path());
+    let mut candidate = selection(&source, "25.0.0").document().clone();
+    candidate
+        .tools
+        .insert("pnpm".into(), old.tools()["pnpm"].clone());
+    let candidate = Lock::new(candidate).unwrap();
+    let resolve = |input: Resolution<'_>| {
+        assert_eq!(input.version_ids(), &BTreeSet::from(["node".into()]));
+        Ok(candidate.clone())
+    };
+    let drifted = propose(&source, Mode::Local, false, resolve, |_| Ok(()), || Ok(())).unwrap();
+    assert_eq!(drifted.lock.tools()["pnpm"], old.tools()["pnpm"]);
+    let invalid = |_: &Lock| Err(std::io::Error::other("host plan rejected"));
+    assert!(propose(&source, Mode::Local, false, resolve, invalid, || Ok(())).is_err());
+    assert_eq!(bytes(root.path()), before);
+    assert!(!root.path().join(".turbo/setup-lock/staged").exists());
+}
+
+#[test]
 fn changed_node_preserves_unaffected_manager_selection_bytes_and_rejects_tampering() {
     let root = root(Some("pnpm@24.0.0"));
     let old = first(root.path());

@@ -183,6 +183,34 @@ fn complete_plan_is_read_only_and_preserves_caller_path() {
 }
 
 #[test]
+fn captured_inspection_preserves_original_root_and_source_bytes() {
+    for case in 0..3 {
+        let repo = installed();
+        let sources = Snapshot::capture(repo.path()).unwrap();
+        let before = state(repo.path());
+        let plan = ActivationPlan::inspect_captured(&sources, context()).unwrap();
+        assert_eq!(plan.tools(), desired(&fixture(), None));
+        assert_eq!(state(repo.path()), before);
+        match case {
+            0 => fs::write(repo.path().join("turbo.lock"), format!("{} ", fixture())).unwrap(),
+            1 => fs::write(repo.path().join(".nvmrc"), "24.0.0 ").unwrap(),
+            _ => {
+                let moved = tempfile::tempdir().unwrap();
+                fs::rename(repo.path(), moved.path().join("original")).unwrap();
+                fs::create_dir(repo.path()).unwrap();
+                write_sources(repo.path(), &fixture());
+            }
+        }
+        let after_edit = state(repo.path());
+        assert!(matches!(
+            ActivationPlan::inspect_captured(&sources, context()),
+            Err(Error::Sources(StorageError::Conflict))
+        ));
+        assert_eq!(state(repo.path()), after_edit);
+    }
+}
+
+#[test]
 fn compatible_relocation_keeps_snapshot_not_absolute_install_paths() {
     let repo = installed();
     let before = ActivationPlan::inspect(repo.path(), context()).unwrap();

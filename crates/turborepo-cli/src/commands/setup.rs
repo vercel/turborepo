@@ -1,5 +1,5 @@
-//! Native local/frozen provisioning and read-only tools-only checks. No
-//! execution.
+//! Native local/frozen provisioning and read-only tools-only checks/plans.
+//! No execution.
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -9,6 +9,7 @@ use crate::cli::{Args, SetupArgs};
 
 mod check;
 mod no_lock;
+mod plan;
 mod provision;
 mod root;
 
@@ -27,15 +28,15 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use local or frozen --tools-only provisioning or \
-         --check --tools-only readiness checks"
+        "this setup mode is not implemented; use local or frozen --tools-only provisioning, \
+         --plan --tools-only reports or --check --tools-only readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run. Plan and \
-             dependency checks are not implemented."
+             No tools, dependencies, or locks were changed and no tasks were run. Dependency \
+             plans and checks are not implemented."
         )
     )]
     NotImplemented,
@@ -168,10 +169,17 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
-        _ if request.lock == LockMode::NoLock => {
+        Mode::Plan => {
+            println!(
+                "{}",
+                plan::report(&discovery, snapshot, &request, transports, preflight)?
+            );
+            Ok(0)
+        }
+        Mode::Provision if request.lock == LockMode::NoLock => {
             no_lock::run(&discovery, snapshot, transports, preflight)
         }
-        _ => provision::run(
+        Mode::Provision => provision::run(
             &discovery,
             snapshot,
             request.lock,
@@ -188,13 +196,14 @@ fn run_with_policy(
 }
 
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
-    if request.mode == Mode::Check
-        && request.tools_only
-        && request.lock != LockMode::NoLock
-        && !request.force
-        && !request.update_lock
-    {
-        // CI/frozen/offline never change a check into resolution or repair.
+    // Plans report locked reinstalls or proposed resolution, never both.
+    let read_only = match request.mode {
+        Mode::Check => !request.force && !request.update_lock,
+        Mode::Plan => !(request.force && request.update_lock),
+        Mode::Provision => false,
+    };
+    if read_only && request.tools_only && request.lock != LockMode::NoLock {
+        // CI/frozen/offline never change read-only modes into resolution or repair.
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
@@ -286,6 +295,34 @@ mod tests {
     }
 
     #[test]
+    fn locked_plan_controls_remain_readonly_with_ci_frozen_offline_and_force() {
+        for ci in [false, true] {
+            for control in [None, Some("--frozen"), Some("--no-frozen")] {
+                let mut flags = vec!["--plan", "--tools-only", "--offline", "--force"];
+                flags.extend(control);
+                let request = request(&flags, ci).unwrap();
+                assert_eq!(request.mode, Mode::Plan);
+                assert!(request.force && request.offline);
+                assert!(!request.update_lock);
+                assert!(validate_request(&request).is_ok());
+            }
+        }
+    }
+
+    #[test]
+    fn plans_admit_refresh_proposals_but_never_with_force() {
+        for ci in [false, true] {
+            let mut flags = vec!["--plan", "--tools-only", "--no-frozen", "--update-lock"];
+            assert!(validate_request(&request(&flags, ci).unwrap()).is_ok());
+            flags.push("--force");
+            assert!(matches!(
+                validate_request(&request(&flags, ci).unwrap()),
+                Err(Error::NotImplemented)
+            ));
+        }
+    }
+
+    #[test]
     fn local_tools_only_requires_explicit_no_frozen_in_ci_and_rejects_future_controls() {
         for ci in [false, true] {
             for flags in [vec!["--tools-only"], vec!["--tools-only", "--no-frozen"]] {
@@ -308,7 +345,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if matches!(control, "--force" | "--no-lock") {
+                if matches!(control, "--force" | "--no-lock" | "--plan") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(

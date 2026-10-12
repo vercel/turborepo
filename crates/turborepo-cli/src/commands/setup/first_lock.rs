@@ -141,7 +141,11 @@ pub(super) fn base64(bytes: &[u8]) -> String {
     }
     encoded
 }
-fn routes(f: &Fixture, node_version: &str, manager_version: &str) -> Vec<(String, Vec<u8>)> {
+pub(super) fn routes(
+    f: &Fixture,
+    node_version: &str,
+    manager_version: &str,
+) -> Vec<(String, Vec<u8>)> {
     let index = json!([{"version":format!("v{node_version}"),"npm":"11.6.1","lts":"Krypton",
         "files":["osx-x64-tar","osx-arm64-tar","linux-x64","linux-arm64","win-x64-zip","win-arm64-zip"]}]);
     let mut result = vec![(
@@ -206,7 +210,7 @@ fn routes(f: &Fixture, node_version: &str, manager_version: &str) -> Vec<(String
     result.push((format!("/pnpm/-/pnpm-{manager_version}.tgz"), pnpm));
     result
 }
-fn fresh() -> Fixture {
+pub(super) fn fresh() -> Fixture {
     let f = Fixture::new();
     fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
     for name in [

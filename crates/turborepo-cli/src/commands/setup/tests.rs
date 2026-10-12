@@ -193,6 +193,8 @@ fn track(root: &std::path::Path) {
 }
 #[path = "check_tests.rs"]
 mod checks;
+#[path = "plan_tests.rs"]
+mod plans;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 #[path = "first_lock.rs"]
@@ -308,7 +310,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         vec!["--no-lock", "--tools-only", "--plan"],
         vec!["--no-lock", "--tools-only", "--offline"],
         vec!["--frozen"],
-        vec!["--plan", "--tools-only", "--force"],
+        vec!["--plan", "--tools-only", "--no-lock"],
         vec!["--frozen", "--tools-only", "--offline"],
         vec!["--no-frozen", "--update-lock"],
     ] {
