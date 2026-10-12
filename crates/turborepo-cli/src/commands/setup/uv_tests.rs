@@ -200,13 +200,19 @@ fn disabled_python_flag_ignores_uv_declarations() {
 
 /// Host CPython builds served by the fixture; the fixture uv lists them.
 fn python_upstream() -> LoopbackServer {
-    let (os, arch, libc) = match provision::platform().unwrap() {
+    let host = match provision::platform().unwrap() {
         turborepo_setup::lock::Platform::MacosArm64 => ("macos", "aarch64", "none"),
         turborepo_setup::lock::Platform::MacosX64 => ("macos", "x86_64", "none"),
         turborepo_setup::lock::Platform::LinuxX64Gnu => ("linux", "x86_64", "gnu"),
         _ => ("linux", "aarch64", "gnu"),
     };
     let releases = "/github/python-build-standalone/releases/download/20260211";
+    let entry = |version: &str, (os, arch, libc): (&str, &str, &str), filename: &str| {
+        json!({"key":format!("cpython-{version}-{os}-{arch}-{libc}"),
+            "version":version,"os":os,"arch":arch,"libc":libc,"implementation":"cpython",
+            "variant":"default","url":format!("https://releases.astral.sh{releases}/{}",
+                filename.replace('+', "%2B"))})
+    };
     let (mut listing, mut sums, mut routes) = (Vec::new(), String::new(), Vec::new());
     for (version, minor) in [("3.12.12", "3.12"), ("3.13.1", "3.13")] {
         let filename = format!("cpython-{version}+20260211-host-install_only_stripped.tar.gz");
@@ -219,12 +225,16 @@ fn python_upstream() -> LoopbackServer {
             ],
         );
         sums += &format!("{:x}  {filename}\n", Sha256::digest(&bytes));
-        listing.push(
-            json!({"key":format!("cpython-{version}-{os}-{arch}-{libc}"),
-            "version":version,"os":os,"arch":arch,"libc":libc,"implementation":"cpython",
-            "variant":"default","url":format!("https://releases.astral.sh{releases}/{}",
-                filename.replace('+', "%2B"))}),
-        );
+        listing.push(entry(version, host, &filename));
+        // Like real `--all-arches` output, list both Linux architectures;
+        // only the host build is ever downloaded.
+        for linux in [("linux", "x86_64", "gnu"), ("linux", "aarch64", "gnu")] {
+            if linux != host {
+                let peer = format!("cpython-{version}+20260211-{}-install_only.tar.gz", linux.1);
+                sums += &format!("{:064x}  {peer}\n", 1);
+                listing.push(entry(version, linux, &peer));
+            }
+        }
         routes.push((
             format!("{releases}/{}", filename.replace('+', "%2B")),
             bytes,
