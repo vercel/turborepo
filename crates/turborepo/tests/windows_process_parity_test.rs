@@ -28,6 +28,7 @@ use serde_json::json;
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT},
     System::{
+        Console::SetConsoleCtrlHandler,
         Diagnostics::ToolHelp::{
             CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
             TH32CS_SNAPPROCESS,
@@ -440,6 +441,11 @@ fn start(
     terminal: Terminal,
     args: &[&str],
 ) -> (tempfile::TempDir, Run, Tree) {
+    // CI runners can start tests with Ctrl+C ignored, a state every child
+    // inherits that hides console Ctrl+C from turbo and its tasks. Restore the
+    // interactive default. Nothing here signals this process's own console.
+    // SAFETY: Changes only this process's inheritable Ctrl+C disposition.
+    unsafe { SetConsoleCtrlHandler(None, 0) };
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path());
     let mut run = Run::spawn(launcher, launch, terminal, dir.path(), args);
