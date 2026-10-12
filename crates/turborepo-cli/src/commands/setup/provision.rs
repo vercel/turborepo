@@ -8,6 +8,8 @@ use turborepo_setup::{
     node_provision::{NodePlan, NodeTransport},
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
+    python_provision::PythonPlan,
+    python_resolution::PythonTransport,
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
     uv_resolution::UvTransport,
@@ -21,6 +23,7 @@ pub(super) struct Transports {
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
     pub uv: UvTransport,
+    pub python: PythonTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -29,6 +32,7 @@ impl Transports {
             pnpm: PnpmTransport::official(policy)?,
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
             uv: UvTransport::official(policy)?,
+            python: PythonTransport::official(policy)?,
         })
     }
 }
@@ -98,9 +102,10 @@ pub(super) struct Plans {
     pub node: Option<NodePlan>,
     pub pnpm: Option<PnpmPlan>,
     pub uv: Option<UvPlan>,
+    pub python: Option<PythonPlan>,
 }
 
-const SUPPORTED: [&str; 3] = ["node", "pnpm", "uv"];
+const SUPPORTED: [&str; 4] = ["node", "pnpm", "uv", "python"];
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -117,7 +122,7 @@ pub(super) fn plans(
         .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node, pnpm, and uv are supported",
+            "only managed Node, pnpm, uv, and Python are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -162,10 +167,29 @@ pub(super) fn plans(
         }
         None => None,
     };
-    if node.is_none() && uv.is_none() {
+    let python = match snapshot.python_requirement()? {
+        Some(requirement) => {
+            let plan = PythonPlan::from_lock(lock, platform)?;
+            let version = semver::Version::parse(&plan.inventory_tool().version)
+                .map_err(|_| Error::Unsupported("invalid locked Python version"))?;
+            if !requirement.matches(&version) {
+                return Err(Error::Unsupported(
+                    "locked Python does not satisfy native declarations",
+                ));
+            }
+            Some(plan)
+        }
+        None => None,
+    };
+    if node.is_none() && uv.is_none() && python.is_none() {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
-    Ok(Plans { node, pnpm, uv })
+    Ok(Plans {
+        node,
+        pnpm,
+        uv,
+        python,
+    })
 }
 
 pub(super) fn lock_report(
@@ -241,7 +265,7 @@ pub(super) fn run(
                 .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node, pnpm, and uv are supported",
+                "only managed Node, pnpm, uv, and Python are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -278,9 +302,14 @@ pub(super) fn run(
                 runtime
                     .block_on(turborepo_setup::native_resolution::resolve(
                         request,
-                        &sources.node,
-                        &sources.registry,
-                        &sources.uv,
+                        turborepo_setup::native_resolution::Transports {
+                            node: &sources.node,
+                            registry: &sources.registry,
+                            uv: &sources.uv,
+                            python: &sources.python,
+                            platform: platform()
+                                .map_err(|e| reconcile::Error::Resolution(e.to_string()))?,
+                        },
                     ))
                     .map_err(|e| reconcile::Error::Resolution(e.to_string()))
             },
@@ -319,11 +348,17 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
-    let Plans { node, pnpm, uv } = plans(&snapshot, lock)?;
+    let Plans {
+        node,
+        pnpm,
+        uv,
+        python,
+    } = plans(&snapshot, lock)?;
     let desired: Vec<_> = [
         node.as_ref().map(NodePlan::inventory_tool),
         pnpm.as_ref().map(PnpmPlan::inventory_tool),
         uv.as_ref().map(UvPlan::inventory_tool),
+        python.as_ref().map(PythonPlan::inventory_tool),
     ]
     .into_iter()
     .flatten()
@@ -354,7 +389,7 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm, prepared_uv) = runtime.block_on(async {
+    let (prepared_node, prepared_pnpm, prepared_uv, prepared_python) = runtime.block_on(async {
         let recheck = || {
             preflight()?;
             revalidate(discovery)?;
@@ -384,7 +419,15 @@ pub(super) fn run(
             }
             None => None,
         };
-        Ok::<_, Error>((node, pnpm, uv))
+        recheck()?;
+        let python = match &python {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.python, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, pnpm, uv, python))
     })?;
     let missing = || turborepo_tool_install::Error::InvalidInventory;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| match tool.id.as_str() {
@@ -397,6 +440,10 @@ pub(super) fn run(
             .ok_or_else(missing)?
             .stage(tool, destination),
         "uv" => prepared_uv
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "python" => prepared_python
             .as_ref()
             .ok_or_else(missing)?
             .stage(tool, destination),
@@ -422,6 +469,7 @@ pub(super) fn run(
             if (tool.id == "node" && prepared_node.is_none())
                 || (tool.id == "pnpm" && prepared_pnpm.is_none())
                 || (tool.id == "uv" && prepared_uv.is_none())
+                || (tool.id == "python" && prepared_python.is_none())
             {
                 "reused"
             } else {
