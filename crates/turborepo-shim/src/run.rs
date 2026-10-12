@@ -3,7 +3,7 @@
 //! This module contains the main entry point for the shim, refactored to use
 //! injected traits instead of direct `crate::` imports from `turborepo-cli`.
 
-use std::{env, process, process::Stdio, sync::Arc, time::Duration};
+use std::{env, ffi::OsString, process, process::Stdio, sync::Arc, time::Duration};
 
 use camino::Utf8PathBuf;
 use dunce::canonicalize as fs_canonicalize;
@@ -527,7 +527,7 @@ fn modify_args_for_local(
     shim_args: &mut ShimArgs,
     repo_state: &RepoState,
     local_version: &str,
-) -> Vec<String> {
+) -> Vec<OsString> {
     let supports_skip_infer_and_single_package = turbo_version_has_shim(local_version);
     let already_has_single_package_flag = shim_args
         .remaining_turbo_args
@@ -541,21 +541,21 @@ fn modify_args_for_local(
         supports_skip_infer_and_single_package
     );
 
-    let mut raw_args: Vec<_> = if supports_skip_infer_and_single_package {
-        vec!["--skip-infer".to_string()]
+    let mut raw_args: Vec<OsString> = if supports_skip_infer_and_single_package {
+        vec!["--skip-infer".into()]
     } else {
         Vec::new()
     };
 
-    raw_args.append(&mut shim_args.remaining_turbo_args);
+    raw_args.extend(shim_args.remaining_turbo_args.drain(..).map(OsString::from));
 
     // We add this flag after the raw args to avoid accidentally passing it
     // as a global flag instead of as a run flag.
     if should_add_single_package_flag {
-        raw_args.push("--single-package".to_string());
+        raw_args.push("--single-package".into());
     }
 
-    raw_args.push("--".to_string());
+    raw_args.push("--".into());
     raw_args.append(&mut shim_args.forwarded_args);
 
     raw_args
