@@ -27,7 +27,7 @@ pub enum Error {
     FrozenUpdateLock,
     #[error(
         "this setup mode is not implemented; use local or frozen provisioning or --check \
-         --tools-only readiness checks"
+         readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
@@ -162,7 +162,7 @@ fn run_with_policy(
     let snapshot =
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     if request.mode == Mode::Check {
-        return check::run(&discovery, snapshot, preflight);
+        return check::run(&discovery, snapshot, request.tools_only, preflight);
     }
     let code = provision::run(
         &discovery,
@@ -192,7 +192,6 @@ fn run_with_policy(
 
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     if request.mode == Mode::Check
-        && request.tools_only
         && request.lock != LockMode::NoLock
         && !request.force
         && !request.update_lock
@@ -202,8 +201,8 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     }
     // Force reinstalls existing locked selections, independently of local
     // Write normalization. Combined force/refresh remains fail-closed. Until
-    // dependency installers exist, plain setup provisions exactly the tools
-    // --tools-only does and reports dependencies as skipped.
+    // dependency installers exist, plain setup provisions and checks exactly
+    // the tools --tools-only does and reports dependencies as skipped.
     if request.mode != Mode::Provision
         || request.lock == LockMode::NoLock
         || request.offline
@@ -274,13 +273,17 @@ mod tests {
     }
 
     #[test]
-    fn tools_only_check_accepts_ci_frozen_and_offline_without_resolution() {
+    fn checks_accept_ci_frozen_and_offline_without_resolution() {
         for ci in [false, true] {
             for flags in [
                 vec!["--check", "--tools-only"],
                 vec!["--check", "--tools-only", "--offline"],
                 vec!["--check", "--tools-only", "--frozen"],
                 vec!["--check", "--tools-only", "--no-frozen", "--offline"],
+                vec!["--check"],
+                vec!["--check", "--offline"],
+                vec!["--check", "--frozen"],
+                vec!["--check", "--no-frozen", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert_eq!(request.mode, Mode::Check);
@@ -325,7 +328,7 @@ mod tests {
     }
 
     #[test]
-    fn plain_setup_provisions_like_tools_only_but_plan_and_dependency_checks_do_not() {
+    fn plain_setup_provisions_and_checks_like_tools_only_but_plan_does_not() {
         for ci in [false, true] {
             for flags in [
                 vec![],
@@ -341,7 +344,6 @@ mod tests {
         }
         for (flags, mode) in [
             (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
-            (vec!["--check"], Mode::Check),
             (vec!["--offline"], Mode::Provision),
             (vec!["--no-lock"], Mode::Provision),
         ] {

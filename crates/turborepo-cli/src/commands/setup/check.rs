@@ -29,6 +29,7 @@ fn context() -> Result<ExecutionContext, Error> {
 pub(super) fn run(
     discovery: &Discovery,
     sources: Snapshot,
+    tools_only: bool,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     let context = context()?;
@@ -46,8 +47,14 @@ pub(super) fn run(
     for tool in plan.tools() {
         println!("{} {}: ready", tool.id, tool.version);
     }
+    // Plain checks cover the same tools; dependency readiness is never claimed.
     println!(
-        "Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run."
+        "Dependencies skipped ({}); dependency readiness was not checked. No tasks run.",
+        if tools_only {
+            "--tools-only"
+        } else {
+            "dependency checks are not supported yet"
+        }
     );
     Ok(0)
 }
