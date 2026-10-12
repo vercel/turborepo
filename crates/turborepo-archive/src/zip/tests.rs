@@ -360,14 +360,36 @@ fn record_coverage_and_decoder_end_are_exact() {
 }
 
 #[test]
+fn unix_host_entries_ignore_dos_bit_0x4000_as_official_bun_archives_set_it() {
+    let mut bytes = valid(true, true);
+    let at = central(&bytes);
+    put(&mut bytes, at + 38, (0o100755 << 16) | 0x4000, 4);
+    assert!(unpack(bytes.clone(), Zip, limits()).is_ok());
+    // A DOS-host entry has no Unix mode, so the bit stays unsupported there.
+    put(&mut bytes, at + 4, 0x0014, 2);
+    put(&mut bytes, at + 38, 0x4000, 4);
+    rejected(bytes, Zip, limits(), UnsupportedEntry);
+}
+
+#[test]
 fn extras_are_bounded_validated_and_never_link_metadata() {
     assert!(matches!(
         super::extras(&[0x55, 0x54, 1, 0, 0, 0x55, 0x54, 1, 0, 0], false),
         Err(InvalidArchive)
     ));
+    // Old Info-ZIP Unix UID/GID appear only in local headers, at most once.
+    let ux = |len: u8| [vec![0x55, 0x58, len, 0], vec![0; usize::from(len)]].concat();
+    assert!(super::extras(&ux(12), false).is_ok());
+    assert!(matches!(super::extras(&ux(12), true), Err(InvalidArchive)));
+    assert!(matches!(
+        super::extras(&[ux(8), ux(8)].concat(), false),
+        Err(InvalidArchive)
+    ));
     for (id, payload, expected) in [
         (0x5455u16, vec![1, 0, 0, 0, 0], None),
         (0x7875, vec![1, 1, 0, 1, 0], None),
+        (0x5855, vec![0; 8], None),
+        (0x5855, vec![0; 10], Some(InvalidArchive)),
         (
             0x000a,
             [vec![0, 0, 0, 0, 1, 0, 24, 0], vec![0; 24]].concat(),
