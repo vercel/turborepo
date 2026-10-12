@@ -69,7 +69,12 @@ impl TraceResult {
     #[allow(dead_code)]
     pub fn emit_errors(&self) {
         for error in &self.errors {
-            eprintln!("{:?}", Report::new(error.clone()));
+            // Stderr is unbuffered and miette renders a report as many small
+            // fragments (often single characters), so formatting directly into
+            // stderr costs one write syscall per fragment. Render each report
+            // first and write it with a single call instead.
+            let rendered = format!("{:?}\n", Report::new(error.clone()));
+            eprint!("{rendered}");
         }
     }
 }
