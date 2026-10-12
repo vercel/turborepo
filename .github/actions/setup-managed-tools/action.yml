@@ -1,0 +1,42 @@
+name: "Set up managed tools"
+description: "Runs turbo setup so turbo run uses the toolchains pinned in turbo.lock"
+
+inputs:
+  node-version:
+    description: >-
+      Optional Node.js request for a job that tests a Node.js version other than
+      the one turbo.lock pins, such as a matrix leg. Leave empty to use turbo.lock.
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: turbo setup
+      shell: bash
+      env:
+        NODE_REQUEST: ${{ inputs.node-version }}
+      run: |
+        set -euo pipefail
+        if [[ -z "$NODE_REQUEST" ]]; then
+          # Frozen setup provisions turbo.lock's pins and fails on a missing or
+          # stale lock instead of writing one.
+          turbo setup --frozen
+          exit 0
+        fi
+        if [[ ! "$NODE_REQUEST" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+          echo "::error::Invalid Node.js request '${NODE_REQUEST}'. Use a version such as 22 or 18.20.2."
+          exit 1
+        fi
+        declared=$(node -p 'require("./package.json").engines.node')
+        if [[ "$NODE_REQUEST" == "$declared" || "$NODE_REQUEST.x" == "$declared" ]]; then
+          turbo setup --frozen
+          exit 0
+        fi
+        # Managed tasks always use the locked Node.js, so a job that tests
+        # another version changes the declaration in this checkout only. Setup
+        # then re-resolves Node.js alone and keeps every other turbo.lock pin.
+        # Nothing is committed; the changed turbo.lock makes --affected select
+        # every package in this job.
+        npm pkg set "engines.node=$NODE_REQUEST"
+        turbo setup --no-frozen

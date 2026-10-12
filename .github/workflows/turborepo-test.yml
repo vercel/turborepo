@@ -156,6 +156,9 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
+      - name: Set up managed tools
+        uses: ./.github/actions/setup-managed-tools
+
       - name: Verify schemas from Rust
         run: turbo run verify-schema --filter=@turbo/types --env-mode=strict
 
@@ -298,6 +301,12 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
+      # Keeps the corepack behavior the Node.js pin above exists for.
+      - name: Set up managed tools
+        uses: ./.github/actions/setup-managed-tools
+        with:
+          node-version: "18.20.2"
+
       # The nextest invocation (and its excludes) lives in turbo.json as
       # the turborepo-crates#test command; dogfooding the task command
       # override keeps CI and local runs identical.
@@ -354,6 +363,11 @@ jobs:
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+
+      - name: Set up managed tools
+        uses: ./.github/actions/setup-managed-tools
+        with:
+          node-version: "20"
 
       - name: Setup Vercel credentials
         run: |
@@ -424,6 +438,9 @@ jobs:
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+
+      - name: Set up managed tools
+        uses: ./.github/actions/setup-managed-tools
 
       - name: Run lockfile tests
         run: turbo run check-lockfiles --filter=lockfile-tests --env-mode=strict --log-order=stream
@@ -501,6 +518,11 @@ jobs:
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+
+      - name: Set up managed tools
+        uses: ./.github/actions/setup-managed-tools
+        with:
+          node-version: ${{ matrix.node-version }}
 
       - name: Run tests
         run: |

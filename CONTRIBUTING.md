@@ -2,6 +2,7 @@ Thank you for your interest in contributing to Turborepo!
 
 - [General dependencies](#general-dependencies)
 - [Optional dependencies](#optional-dependencies)
+- [Managed toolchains](#managed-toolchains)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
   - [TLS Implementation](#tls-implementation)
@@ -25,9 +26,7 @@ Thank you for your interest in contributing to Turborepo!
 
 You will need to have these dependencies installed on your machine to work on this repository:
 
-- [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
-- [Node.js](https://nodejs.org/en) v24
-- [pnpm](https://pnpm.io/) v12
+- The standalone `turbo` binary, in a release that supports `turbo setup`. It installs the repository's Node.js, pnpm, and Rust toolchains for you. See [Managed toolchains](#managed-toolchains).
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
 - [Zig](https://ziglang.org/download/) 0.17.x — required to build `libghostty-vt` for the TUI (`libghostty-vt-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
@@ -42,6 +41,41 @@ You will need to have these dependencies installed on your machine to work on th
   - Windows: `choco install jq zstandard`
 - On Linux, ensure LLD (LLVM Linker) is installed, as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
 
+## Managed toolchains
+
+This repository dogfoods the experimental [`turbo setup`](./apps/docs/content/docs/reference/setup.mdx) command. `turbo.lock` pins the exact Node.js (`engines.node`), pnpm (`packageManager`), and Rust (`rust-toolchain.toml`) versions, and every `turbo run` uses them.
+
+1. Install the standalone `turbo`:
+
+   ```bash
+   curl -fsSL https://turborepo.dev/install | sh
+   ```
+
+   On Windows, run `irm https://turborepo.dev/install.ps1 | iex` in PowerShell. The installer stops if another `turbo` is on your `PATH`, so uninstall a global npm `turbo` first. A `turbo` that predates `futureFlags.experimentalSetup` can't read this repository's `turbo.json`.
+
+2. From the repository root or any subdirectory, run:
+
+   ```bash
+   turbo setup
+   ```
+
+   This installs the locked toolchains into `.turbo/tools` for this clone. It doesn't install dependencies or run tasks.
+
+3. Install dependencies with the managed pnpm:
+
+   ```bash
+   turbo exec -- pnpm install
+   ```
+
+Until you run `turbo setup` in a clone, `turbo run` fails and tells you to run it. That includes the pre-push hook. For commands outside the task graph, such as `cargo build -p turbo`, use `turbo exec -- <command>`, or add the [shell hook](./apps/docs/content/docs/reference/hook.mdx) (for example `eval "$(turbo hook zsh)"`) to put the managed tools on your `PATH` inside this repository. Editors don't use the managed toolchains, so keep rustup and Node.js installed if your editor needs them.
+
+Things to know:
+
+- Each clone and worktree gets its own toolchains, about 900 MB with the Rust nightly. `turbo setup` reports the space it uses.
+- Managed Cargo uses a per-clone `CARGO_HOME` at `.turbo/cargo-home`. The first build in a clone downloads crates again, and Cargo doesn't read `~/.cargo/config.toml` or its credentials.
+- To change a toolchain, edit its declaration, run `turbo setup`, and commit the updated `turbo.lock` with the declaration. CI runs `turbo setup --frozen`, which fails when `turbo.lock` is missing or out of date. See [Updating `turbo.lock`](./apps/docs/content/docs/guides/updating-turbo-lock.mdx).
+- `turbo setup` refuses a root `.npmrc` because it doesn't support registry configuration yet. Put pnpm settings in `pnpm-workspace.yaml`.
+
 ## Structure of the repository
 
 In general, there are two major areas in the repository:
@@ -53,8 +87,11 @@ In general, there are two major areas in the repository:
 
 ## Building Turborepo
 
-1. Run `pnpm install` at the root of the repository
-2. Run `cargo build -p turbo`
+1. Run `turbo setup` at the root of the repository (see [Managed toolchains](#managed-toolchains))
+2. Run `turbo exec -- pnpm install`
+3. Run `turbo exec -- cargo build -p turbo`
+
+With the shell hook, you can drop the `turbo exec --` prefix.
 
 The focused `cargo build -p turbo` builds just the `turbo` CLI and its
 dependencies, skipping the workspace's other top-level targets (such as the
@@ -91,9 +128,9 @@ cargo build -p turbo --no-default-features --features rustls-tls
 > [!IMPORTANT]
 > You will need to have `jq` and `zstd` installed on your system in order to run tests. See [General dependencies](#general-dependencies) for instructions on how to install these tools.
 
-First, install Turborepo globally with your package manager of choice. For instance, with npm, `npm install -g turbo`. This will install the `turbo` binary in your system's `PATH`, making it globally available.
+First, install the standalone `turbo` and run `turbo setup` as described in [Managed toolchains](#managed-toolchains). This puts the `turbo` binary on your system's `PATH`, making it globally available.
 
-Now, from the root directory, you can run:
+Now, from the root directory, you can run the commands below, prefixed with `turbo exec --` unless you use the shell hook:
 
 - Unit tests
 

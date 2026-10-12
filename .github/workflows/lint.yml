@@ -63,6 +63,11 @@ jobs:
           echo "$RUNNER_TEMP/cargo-deny" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/cargo-deny/cargo-deny" --version
 
+      # This job enters through the npm-wrapped turbo; the others use the
+      # standalone binary.
+      - name: Set up managed tools
+        run: pnpm dlx turbo setup --frozen
+
       - name: Check quality
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |

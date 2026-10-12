@@ -349,6 +349,9 @@ jobs:
         with:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
 
+      - name: Set up managed tools
+        uses: ./.github/actions/setup-managed-tools
+
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --filter="!@turbo/repository" --color
 
@@ -673,6 +676,9 @@ jobs:
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
+
+      - name: Set up managed tools
+        uses: ./.github/actions/setup-managed-tools
 
       - name: Build release tool
         run: turbo run build --filter=@turbo/releaser
