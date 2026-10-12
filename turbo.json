@@ -4,6 +4,9 @@
   "noUpdateNotifier": true,
   "futureFlags": {
     "experimentalCargoWorkspaces": true,
+    // Dogfoods `turbo setup`: with the committed turbo.lock, `turbo run` uses
+    // the managed Node.js, pnpm, and Rust toolchains. See CONTRIBUTING.md.
+    "experimentalSetup": true,
     "experimentalTaskCommand": true
   },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
