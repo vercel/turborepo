@@ -4,7 +4,8 @@
 //! needs an npm Tool even when its version matches Node's bundled npm. This
 //! coordinator validates provenance and preserves unaffected exact selections;
 //! it does not fetch metadata, install, or infer bundled npm release
-//! identities.
+//! identities. Declared additional tools are exact, so they are always the
+//! snapshot's projection and never reach the resolver.
 
 use std::collections::BTreeSet;
 
@@ -30,7 +31,7 @@ pub enum Error {
     Lock(#[from] super::Error),
     #[error("frozen setup requires turbo.lock; run setup locally and commit it")]
     Missing,
-    #[error("native declarations changed for {0:?}; run setup locally and commit turbo.lock")]
+    #[error("tool declarations changed for {0:?}; run `turbo setup` locally and commit turbo.lock")]
     Drift(BTreeSet<String>),
     #[error("resolver changed unaffected locked selection {0}")]
     Unaffected(String),
@@ -192,15 +193,20 @@ fn coordinate(
     snapshot.check_native_coverage(None)?;
     snapshot.ensure_current()?;
     let current = snapshot.declarations();
+    let additional = snapshot.additional_tools();
     let mut changed = BTreeSet::new();
     for id in current
         .keys()
+        .chain(additional.keys())
         .chain(previous.into_iter().flat_map(|lock| lock.tools().keys()))
     {
         let old = previous.and_then(|lock| lock.tools().get(id));
         // Provenance is a set, not declaration precedence. A noncanonical
         // existing lock must not cause a floating version to refresh.
+        // Additional tools record their whole declaration, so any edit to a
+        // source, digest, layout, or platform list is drift.
         let same = match (old, current.get(id)) {
+            _ if additional.contains_key(id) => old == additional.get(id),
             (Some(tool), Some(values)) => {
                 tool.declarations.len() == values.len()
                     && tool.declarations.iter().all(|value| values.contains(value))
@@ -234,17 +240,13 @@ fn coordinate(
     } else {
         BTreeSet::new()
     };
-    let candidate = if version_ids.is_empty() && ownership_ids.is_empty() {
-        let tools = previous
+    let mut tools = if version_ids.is_empty() && ownership_ids.is_empty() {
+        previous
             .into_iter()
             .flat_map(|lock| lock.tools())
             .filter(|(id, _)| current.contains_key(*id))
             .map(|(id, tool)| (id.clone(), tool.clone()))
-            .collect();
-        Lock::new(Document {
-            schema_version: SCHEMA_VERSION,
-            tools,
-        })?
+            .collect()
     } else {
         resolve(Resolution {
             snapshot,
@@ -254,16 +256,25 @@ fn coordinate(
             offline,
             refresh: mode == Mode::Refresh,
         })?
+        .document()
+        .tools
+        .clone()
     };
+    tools.extend(additional.clone());
+    // Revalidates the merged cohort, including executable collisions.
+    let candidate = Lock::new(Document {
+        schema_version: SCHEMA_VERSION,
+        tools,
+    })?;
     snapshot.check_native_coverage(Some(&candidate))?;
-    if !candidate.matches_native(current)? {
+    if !candidate.matches_native(current)? || !snapshot.matches_additional(&candidate) {
         return Err(
             super::Error::Invalid("candidate provenance does not match captured sources").into(),
         );
     }
     if let Some(previous) = previous {
         for (id, tool) in candidate.tools() {
-            if version_ids.contains(id) {
+            if version_ids.contains(id) || additional.contains_key(id) {
                 continue;
             }
             let old = &previous.tools()[id];

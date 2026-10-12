@@ -2,14 +2,16 @@
 //! Force reinstalls committed selections without resolution or lock writes.
 //! Offline uses only healthy installs and verified cached artifacts.
 //! No probes, dependency execution or activation.
+//! Declared additional tools install through the generic artifact adapter.
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
     artifact_cache::ArtifactCache,
+    artifact_provision::{ArtifactPlan, ArtifactTransport},
     bun_provision::{BunPlan, BunTransport},
     go_provision::GoPlan,
     go_resolution::GoTransport,
-    lock::{Installation, Platform, Snapshot},
+    lock::{Installation, Platform, Snapshot, additional},
     mirror::Mirrors,
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
@@ -32,6 +34,11 @@ const SUPPORTED: [&str; 10] = [
     "node", "npm", "pnpm", "yarn", "bun", "rust", "rustup", "uv", "python", "go",
 ];
 
+/// Built-in adapters by canonical ID, plus declared additional tools.
+fn supported(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
+    SUPPORTED.contains(&id) || tool.adapter == additional::ADAPTER
+}
+
 pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
@@ -45,6 +52,8 @@ pub(super) struct Transports {
     pub python: PythonTransport,
     pub go: GoTransport,
     pub bun: BunTransport,
+    /// Fixture override; otherwise built from the locked artifact origins.
+    pub artifact: Option<ArtifactTransport>,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -79,6 +88,7 @@ impl Transports {
             python: PythonTransport::official(policy)?,
             go: GoTransport::official(policy)?,
             bun: BunTransport::official(policy)?,
+            artifact: None,
         })
     }
 
@@ -105,6 +115,7 @@ impl Transports {
             python: self.python,
             go: self.go,
             bun: self.bun,
+            artifact: self.artifact,
         }
     }
 }
@@ -246,6 +257,7 @@ pub(super) struct Plans {
     pub yarn: Option<YarnPlan>,
     /// Bun runs the repository's scripts itself; it needs no Node.
     pub bun: Option<BunPlan>,
+    pub artifacts: Vec<ArtifactPlan>,
 }
 
 pub(super) fn plans(
@@ -254,14 +266,19 @@ pub(super) fn plans(
 ) -> Result<Plans, Error> {
     let platform = platform()?;
     super::lock_diagnostics::matching(snapshot, lock)?;
+    let drift = snapshot.additional_drift(lock);
+    if !drift.is_empty() {
+        return Err(Error::AdditionalToolDrift(drift));
+    }
     if lock.tools().is_empty()
         || lock
             .tools()
-            .keys()
-            .any(|id| !SUPPORTED.contains(&id.as_str()))
+            .iter()
+            .any(|(id, tool)| !supported(id, tool))
     {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, and Go are supported",
+            "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, Go, and additional tools are \
+             supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -365,6 +382,7 @@ pub(super) fn plans(
         (None, None) => None,
         _ => return Err(Error::Unsupported("turbo.lock Go selection is undeclared")),
     };
+    let artifacts = ArtifactPlan::from_lock(lock, platform)?;
     if node.is_none()
         && uv.is_none()
         && python.is_none()
@@ -372,6 +390,7 @@ pub(super) fn plans(
         && rust.is_none()
         && go.is_none()
         && bun.is_none()
+        && artifacts.is_empty()
     {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
@@ -386,6 +405,7 @@ pub(super) fn plans(
         go,
         yarn,
         bun,
+        artifacts,
     })
 }
 
@@ -489,15 +509,17 @@ pub(super) fn run(
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
             && lock
                 .tools()
-                .keys()
-                .any(|id| !SUPPORTED.contains(&id.as_str()))
+                .iter()
+            .any(|(id, tool)| !supported(id, tool))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, and Go are supported",
+                "only managed Node, npm, pnpm, Yarn, Bun, Rust, uv, Python, Go, and additional tools are \
+             supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
             && lock.matches_native(snapshot.declarations())?
+            && snapshot.matches_additional(lock)
         {
             plans(&snapshot, lock)?;
         }
@@ -634,11 +656,13 @@ pub(super) fn run(
         go,
         yarn,
         bun,
+        artifacts,
     } = plans(&snapshot, lock)?;
     // Offline transports exist for Node and the npm registry only; rustup, uv,
-    // CPython, Go and Bun downloads have no offline mode yet.
+    // CPython, Go, Bun and additional tool downloads have no offline mode yet.
     if offline
-        && (rustup.is_some()
+        && (!artifacts.is_empty()
+            || rustup.is_some()
             || rust.is_some()
             || uv.is_some()
             || python.is_some()
@@ -646,7 +670,7 @@ pub(super) fn run(
             || bun.is_some())
     {
         return Err(Error::Unsupported(
-            "offline setup for managed Bun, Rust, uv, Python or Go",
+            "offline setup for managed Bun, Rust, uv, Python, Go or additional tools",
         ));
     }
     let trust = match trust {
@@ -665,12 +689,18 @@ pub(super) fn run(
         .chain(go.iter().map(GoPlan::inventory_tool))
         .chain(yarn.iter().map(YarnPlan::inventory_tool))
         .chain(bun.iter().map(BunPlan::inventory_tool))
+        .chain(artifacts.iter().map(ArtifactPlan::inventory_tool))
         .cloned()
         .collect();
     let policy = preflight()?;
-    let transports = transports
+    let mut transports = transports
         .map(Ok)
         .unwrap_or_else(|| Transports::official(&policy))?;
+    let artifact_transport = match transports.artifact.take() {
+        Some(transport) => Some(transport),
+        None if artifacts.is_empty() => None,
+        None => Some(ArtifactTransport::new(&policy, &artifacts)?),
+    };
     let transports = if offline {
         transports.offline()
     } else {
@@ -718,6 +748,7 @@ pub(super) fn run(
         prepared_go,
         prepared_yarn,
         prepared_bun,
+        prepared_artifacts,
     ) = runtime.block_on(async {
         use turborepo_setup::{Preparation::IfNeeded, node_provision::Error::Offline};
         let transport = &transports.node;
@@ -871,7 +902,19 @@ pub(super) fn run(
             }
             None => None,
         };
-        Ok::<_, Error>((node, pnpm, npm, rustup, uv, python, go, yarn, bun))
+        let mut prepared = Vec::new();
+        if let Some(transport) = &artifact_transport {
+            for plan in &artifacts {
+                preflight()?;
+                revalidate(discovery)?;
+                snapshot.check_guard(&guard)?;
+                prepared.push(
+                    plan.prepare(&store, &desired, transport, preparation)
+                        .await?,
+                );
+            }
+        }
+        Ok::<_, Error>((node, pnpm, npm, rustup, uv, python, go, yarn, bun, prepared))
     })?;
     if !missing.is_empty() {
         return Err(Error::OfflineMissing(missing_artifacts(
@@ -893,8 +936,15 @@ pub(super) fn run(
         }
         _ => None,
     };
+    let additional = |tool: &turborepo_tool_install::Tool| {
+        let index = artifacts.iter().position(|p| p.inventory_tool() == tool)?;
+        Some((&artifacts[index], prepared_artifacts[index].as_ref()))
+    };
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
         let missing = turborepo_tool_install::Error::InvalidInventory;
+        if let Some((_, prepared)) = additional(tool) {
+            return prepared.ok_or(missing)?.stage(tool, destination);
+        }
         match tool.id.as_str() {
             "node" => prepared_node
                 .as_ref()
@@ -972,7 +1022,13 @@ pub(super) fn run(
         ..Provisioned::default()
     };
     for tool in &desired {
+        let source = additional(tool)
+            .map(|(plan, _)| format!(" ({})", plan.source()))
+            .unwrap_or_default();
         let from_cache = match tool.id.as_str() {
+            _ if additional(tool).is_some() => {
+                additional(tool).and_then(|(_, prepared)| prepared.map(|_| false))
+            }
             "node" => prepared_node.as_ref().map(|node| node.from_cache()),
             "pnpm" => prepared_pnpm.as_ref().map(|pnpm| pnpm.from_cache()),
             "npm" => prepared_npm.as_ref().map(|npm| npm.from_cache()),
@@ -990,7 +1046,7 @@ pub(super) fn run(
             provisioned.installed += 1;
         }
         println!(
-            "{} {}: {}",
+            "{} {}: {}{source}",
             tool.id,
             tool.version,
             match from_cache {

@@ -52,8 +52,9 @@ pub use raw::{
     RawTaskDefinition, RawTurboJson,
 };
 pub use setup::{
-    DependencyPolicy, LifecycleScripts, RawSetupPolicy, RawToolchainSetupPolicy, SetupPolicy,
-    ToolPolicy, ToolchainSetupPolicy,
+    ArtifactFormat, ArtifactPlatform, DependencyPolicy, LifecycleScripts, RawAdditionalTool,
+    RawAdditionalToolArtifact, RawSetupPolicy, RawToolchainSetupPolicy, SetupPolicy, ToolPolicy,
+    ToolchainSetupPolicy,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 

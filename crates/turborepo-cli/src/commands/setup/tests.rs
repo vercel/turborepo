@@ -158,6 +158,12 @@ impl Fixture {
                         origin,
                     )
                     .unwrap(),
+                    artifact: Some(
+                        turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(
+                            upstream.origin(),
+                        )
+                        .unwrap(),
+                    ),
                 }),
                 || {
                     Ok(self
@@ -231,6 +237,8 @@ mod cleanups;
 mod plans;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "additional_tools_tests.rs"]
+mod additional_tools;
 #[path = "authorization_tests.rs"]
 mod authorization;
 #[path = "bun_tests.rs"]

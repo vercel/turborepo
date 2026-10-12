@@ -395,7 +395,8 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
     matches!(setup, Value::Object(object) if !object.properties.is_empty()
     && object.properties.iter().all(|p| {
         let name = p.name.as_str();
-        value(name, &p.value) || toolchain(name, &p.value)
+        // `additionalTools` declares tools no built-in adapter manages.
+        value(name, &p.value) || toolchain(name, &p.value) || name == "additionalTools"
     }))
 }
 

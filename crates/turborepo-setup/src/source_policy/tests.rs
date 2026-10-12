@@ -287,6 +287,14 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
              skip\",\"rust\":{},\"javascript\":{\"tools\":\"verify-system\"}}}",
         )?;
         assert!(fixture.check(&[]).is_ok());
+        // Setup applies additional tools too, alone or with other policy.
+        fs::write(
+            &path,
+            "{\"setup\":{\"additionalTools\":{},\"tools\":\"skip\"}}",
+        )?;
+        assert!(fixture.check(&[]).is_ok());
+        fs::write(&path, "{\"setup\":{\"additionalTools\":{}}}")?;
+        assert!(fixture.check(&[]).is_ok());
         fs::write(path, "invalid private-secret")?;
         assert_eq!(
             fixture.check(&[]).err(),

@@ -234,11 +234,88 @@
   "allowComments": true,
   "allowTrailingCommas": true,
   "definitions": {
+    "AdditionalTool": {
+      "description": "A tool that `turbo setup` downloads, verifies, and installs from explicit artifacts. The full installation tree is kept; no tool-provided scripts run.",
+      "type": "object",
+      "required": ["artifacts", "version"],
+      "properties": {
+        "artifacts": {
+          "description": "Artifacts keyed by platform, such as `linux-x64-gnu` or `macos-arm64`. Platforms without an artifact are unsupported for this tool.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Map_of_AdditionalToolArtifact"
+            }
+          ]
+        },
+        "version": {
+          "description": "The exact version of the tool. Ranges and channels are not allowed.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        }
+      }
+    },
+    "AdditionalToolArtifact": {
+      "description": "One platform's artifact for an additional tool.",
+      "type": "object",
+      "required": ["executables", "format", "sha256", "url"],
+      "properties": {
+        "executables": {
+          "description": "Executable names mapped to paths relative to `rootPrefix`. A binary has exactly one entry, which names where the file is installed.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/String"
+          }
+        },
+        "format": {
+          "description": "`binary` for a single executable file, or the archive format.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ArtifactFormat"
+            }
+          ]
+        },
+        "rootPrefix": {
+          "description": "The single top-level directory that contains every archive entry. Required for archives and not allowed for binaries.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "description": "Lowercase hex SHA-256 digest of the downloaded bytes. A digest pins the expected bytes; it does not establish that the publisher is trustworthy.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        },
+        "url": {
+          "description": "HTTPS download URL without credentials, a query, or a fragment.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        }
+      }
+    },
     "Array_of_String": {
       "type": "array",
       "items": {
         "$ref": "#/definitions/String"
       }
+    },
+    "ArtifactFormat": {
+      "description": "How an artifact is packaged. `binary` is a single executable file.",
+      "type": "string",
+      "enum": ["binary", "tar", "tar-gz", "zip"]
     },
     "Boolean": {
       "type": "boolean"
@@ -530,6 +607,12 @@
       "description": "Whether dependency setup lets package managers run lifecycle scripts. `native` keeps each package manager's defaults and committed allowlists or trust settings. `skip` passes the package manager's own flag for skipping them, and fails where the package manager has none.",
       "type": "string",
       "enum": ["native", "skip"]
+    },
+    "Map_of_AdditionalToolArtifact": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/AdditionalToolArtifact"
+      }
     },
     "Map_of_TagRules": {
       "type": "object",
@@ -829,6 +912,13 @@
       "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
       "type": "object",
       "properties": {
+        "additionalTools": {
+          "description": "Tools that no built-in adapter manages, keyed by tool ID. Each declares an exact version and explicit per-platform artifacts. `turbo setup` locks, verifies, and installs them without running tool-provided scripts.",
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "$ref": "#/definitions/AdditionalTool"
+          }
+        },
         "dependencies": {
           "description": "How `turbo setup` prepares dependencies for every toolchain.",
           "anyOf": [
