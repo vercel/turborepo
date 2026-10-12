@@ -664,6 +664,8 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
     };
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
+    // Ubuntu's default 0002 umask leaves fresh clones group-writable.
+    fs::set_permissions(root, fs::Permissions::from_mode(0o775)).unwrap();
     write(root, "turbo.json", ENABLED);
     write(root, ".nvmrc", "24.0.0");
     write(root, ".gitignore", "/.turbo/\n");
