@@ -20,6 +20,8 @@ fn archive(files: &[(&str, &str)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in files {
         let mut header = tar::Header::new_gnu();
+        // Like the official builds, rename in place: the old tail follows the NUL.
+        header.set_path(format!("python/install/{path}")).unwrap();
         header.set_size(body.len() as u64);
         header.set_mode(0o755);
         header.set_cksum();
@@ -128,6 +130,34 @@ async fn verified_build_is_staged_at_the_uv_key_with_python_shims() {
         Outcome::Unchanged
     );
     assert_eq!(upstream.hits(), 1);
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "current_thread")]
+async fn linux_terminfo_case_siblings_install_as_distinct_terminals() {
+    let platform = Platform::LinuxX64Gnu;
+    let bytes = archive(&[
+        ("bin/python3.12", "#!/bin/sh\n"),
+        ("share/terminfo/E/Eterm", "Eterm"),
+        ("share/terminfo/e/eterm", "eterm"),
+    ]);
+    let upstream =
+        LoopbackServer::new([(format!("{RELEASES}{PATH}"), bytes.clone())], |_| {}).unwrap();
+    let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    install(&mut store, &plan, &transport).await.unwrap();
+    let terminfo = store
+        .current()
+        .unwrap()
+        .unwrap()
+        .bin
+        .join("../tools/python/cpython-3.12.12-linux-x86_64-gnu/share/terminfo");
+    for name in ["E/Eterm", "e/eterm"] {
+        let body = fs::read_to_string(terminfo.join(name)).unwrap();
+        assert_eq!(body, name[2..]);
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
