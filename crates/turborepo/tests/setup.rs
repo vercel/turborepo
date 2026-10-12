@@ -927,7 +927,12 @@ fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_t
             if let Some(control) = control {
                 words.extend(["--tools-only", control]);
             }
-            failure(root, &words, ci, PENDING);
+            let expected = if control == Some("--offline") {
+                "--offline cannot verify fresh artifacts for --force or resolve --update-lock"
+            } else {
+                PENDING
+            };
+            failure(root, &words, ci, expected);
         }
         for conflict in ["--frozen", "--no-lock", "--check"] {
             let (code, text) = invoke(
