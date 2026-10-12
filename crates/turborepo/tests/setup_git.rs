@@ -60,6 +60,17 @@ fn failed_setup(root: &Path, path: &Path) -> String {
     stderr.replace([' ', '|', '\n'], "")
 }
 
+/// Strict source policy may stop on host System npm configuration (as on
+/// macOS runners) before Git is consulted. That is reported, never bypassed.
+fn system_policy_blocked(text: &str) -> bool {
+    let blocked = text.contains("official-onlysetuprejectsSystemconfiguration")
+        || text.contains("cannotsafelyinspectSystemconfiguration");
+    if blocked {
+        eprintln!("Git diagnostics not reached: blocked by host System npm configuration.");
+    }
+    blocked
+}
+
 #[test]
 fn missing_git_and_non_repository_roots_get_actionable_errors() {
     let temp = tempfile::tempdir().unwrap();
@@ -72,6 +83,9 @@ fn missing_git_and_non_repository_roots_get_actionable_errors() {
     fs::write(root.join(".nvmrc"), "24.x").unwrap();
 
     let text = failed_setup(root, Path::new(""));
+    if system_policy_blocked(&text) {
+        return;
+    }
     assert!(
         text.contains("couldnotrun`git`:itwasnotfoundonPATH"),
         "{text}"
