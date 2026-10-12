@@ -544,7 +544,7 @@ pub(super) fn run(
         published
     } else {
         // Frozen mode names stale declarations instead of a generic mismatch.
-        if lock_mode == super::LockMode::Frozen && snapshot.previous_lock().is_some() {
+        if request.lock == super::LockMode::Frozen && snapshot.previous_lock().is_some() {
             use turborepo_setup::lock::reconcile;
             reconcile::reconcile(&snapshot, reconcile::Mode::Frozen, false, |_| {
                 Err(reconcile::Error::Resolution(

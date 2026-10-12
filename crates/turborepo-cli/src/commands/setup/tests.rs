@@ -590,6 +590,8 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
                 trust_base: Some(f.owned.home().to_owned()),
                 cache: None,
                 rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(u.origin()).unwrap(),
+                uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin()).unwrap(),
+                python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(u.origin()).unwrap(),
             };
             run_reporting(args, setup_args, Some(transports), &mut report, || {
                 Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)

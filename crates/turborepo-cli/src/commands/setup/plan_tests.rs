@@ -331,6 +331,8 @@ fn loopback(u: &LoopbackServer, trust_base: &std::path::Path) -> provision::Tran
         trust_base: Some(trust_base.to_owned()),
         cache: None,
         rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(u.origin()).unwrap(),
             u.origin(),
         )
         .unwrap(),

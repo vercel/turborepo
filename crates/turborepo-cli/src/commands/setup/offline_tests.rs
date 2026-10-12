@@ -266,6 +266,8 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
                 registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 cache: None,
                 rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
+                uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
+                python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
             }), || {
                 called.set(called.get() + 1);
                 if called.get() == 2 {

@@ -84,6 +84,9 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
                     )
                     .unwrap(),
                 uv: UvTransport::loopback_http_for_tests(origin).unwrap(),
+                trust_base: Some(owned.home().to_owned()),
+                cache: None,
+                rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(origin).unwrap(),
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
             }),
             || Ok(owned.policy_at(&cwd)?),

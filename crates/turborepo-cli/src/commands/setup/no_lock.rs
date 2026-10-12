@@ -86,13 +86,17 @@ pub(super) fn run(
         npm,
         rustup,
         rust,
+        uv,
+        python,
     } = provision::plans(&snapshot, selection)?;
     if npm.is_some() {
         return Err(Error::Unsupported("npm provisioning with --no-lock"));
     }
     // The native baseline covers Node and pnpm only.
-    if rustup.is_some() || rust.is_some() {
-        return Err(Error::Unsupported("Rust provisioning with --no-lock"));
+    if rustup.is_some() || rust.is_some() || uv.is_some() || python.is_some() {
+        return Err(Error::Unsupported(
+            "Rust, uv or Python provisioning with --no-lock",
+        ));
     }
     let node = node.ok_or(Error::Unsupported("a native Node declaration is required"))?;
     let mut desired = vec![node.inventory_tool().clone()];

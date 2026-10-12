@@ -98,7 +98,13 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         },
         Error::Storage(_) | Error::Lock(_) => SetupFailure::LockInvalid,
         Error::Reconcile(_) => SetupFailure::Resolution,
-        Error::Node(_) | Error::Registry(_) | Error::Rustup(_) | Error::Rust(_) => {
+        Error::UvResolution(_) | Error::PythonResolution(_) => SetupFailure::Resolution,
+        Error::Node(_)
+        | Error::Registry(_)
+        | Error::Rustup(_)
+        | Error::Rust(_)
+        | Error::Uv(_)
+        | Error::Python(_) => {
             SetupFailure::Download
         }
         Error::Mirror(_) => SetupFailure::Request,
