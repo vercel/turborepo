@@ -1144,6 +1144,48 @@ fn test_dependency_crate_change_invalidates_entrypoint() {
     );
 }
 
+/// Dependency crate sources are hashed with explicit globs, which walk the
+/// filesystem. A crate-local `node_modules` (ignored by the fixture's
+/// `.gitignore`) must not change the dependent's hash, while a source edit
+/// still must.
+#[test]
+fn test_dependency_crate_node_modules_does_not_change_entrypoint_hash() {
+    let tempdir = cargo_tempdir();
+    setup_cargo_monorepo(tempdir.path());
+    let app_build_hash = || {
+        let output = run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
+        assert_command_success(&output, "app build dry run");
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        json["tasks"]
+            .as_array()
+            .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
+            .map(|task| task["hash"].as_str().unwrap().to_string())
+            .expect("app#build task")
+    };
+    let lib = tempdir.path().join("crates/lib-a");
+    let baseline = app_build_hash();
+
+    let installed = lib.join("node_modules/pkg/index.js");
+    fs::create_dir_all(installed.parent().unwrap()).unwrap();
+    fs::write(&installed, "module.exports = 1;\n").unwrap();
+    assert_eq!(
+        app_build_hash(),
+        baseline,
+        "node_modules in a dependency crate must not change the entrypoint hash"
+    );
+
+    fs::write(
+        lib.join("src/lib.rs"),
+        "pub fn greeting() -> &'static str {\n    \"changed\"\n}\n",
+    )
+    .unwrap();
+    assert_ne!(
+        app_build_hash(),
+        baseline,
+        "a source edit in a dependency crate must change the entrypoint hash"
+    );
+}
+
 /// Prune produces a self-contained Cargo workspace: kept crate dirs, a
 /// lockfile subset, and a rewritten root manifest — proven by building the
 /// pruned output with `cargo build --locked`.
