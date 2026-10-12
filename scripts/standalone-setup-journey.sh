@@ -39,7 +39,8 @@ mirror=$work/mirror
 mkdir "$mirror" "$work/home" "$work/clone-home" "$work/tmp" "$work/empty-path"
 "$2" "$scripts/setup-fixture-mirror.mjs" "$mirror" &
 pid=$!
-trap 'kill "$pid" 2>/dev/null || true; rm -rf "$work"' 0
+# Waiting reaps the mirror, so shells do not report it as terminated.
+trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true; rm -rf "$work"' 0
 tries=0
 until [ -s "$mirror/ready" ]; do
   kill -0 "$pid" 2>/dev/null || fail 'the fixture mirror exited'
