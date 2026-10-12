@@ -1,9 +1,12 @@
 //! Native local/frozen provisioning and read-only tools-only checks/plans.
 //! No execution.
 
+use std::time::Instant;
+
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_setup::source_policy::OfficialSourcePolicy;
+use turborepo_ui::ColorConfig;
 
 use crate::cli::{Args, SetupArgs};
 
@@ -13,6 +16,7 @@ mod no_lock;
 mod plan;
 mod provision;
 mod root;
+mod telemetry;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -131,12 +135,36 @@ impl SetupRequest {
     }
 }
 
+/// The CLI entry point: setup, then standard telemetry about its outcome. Only
+/// after the outcome is final, so telemetry cannot affect it.
+pub fn run_with_telemetry(
+    args: &Args,
+    setup_args: &SetupArgs,
+    color_config: ColorConfig,
+) -> Result<i32, Error> {
+    let started = Instant::now();
+    let mut report = telemetry::Report::default();
+    let result = run_observed(args, setup_args, &mut report);
+    telemetry::record(&report, &result, started.elapsed(), color_config);
+    result
+}
+
+/// Production setup without telemetry, so tests never initialize it.
+#[cfg(test)]
 pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
+    run_observed(args, setup_args, &mut telemetry::Report::default())
+}
+
+fn run_observed(
+    args: &Args,
+    setup_args: &SetupArgs,
+    report: &mut telemetry::Report,
+) -> Result<i32, Error> {
     let invocation = match args.cwd.as_deref() {
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
     };
-    run_with_policy(args, setup_args, None, || {
+    run_reporting(args, setup_args, None, report, || {
         Ok(OfficialSourcePolicy::inspect(
             invocation.as_std_path(),
             None,
@@ -146,10 +174,31 @@ pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
 
 // Trusted internal fixture injection only: never a CLI flag, repo URL or env
 // override.
+#[cfg(all(
+    test,
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
 fn run_with_policy(
     args: &Args,
     setup_args: &SetupArgs,
     transports: Option<provision::Transports>,
+    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+) -> Result<i32, Error> {
+    run_reporting(
+        args,
+        setup_args,
+        transports,
+        &mut telemetry::Report::default(),
+        preflight,
+    )
+}
+
+fn run_reporting(
+    args: &Args,
+    setup_args: &SetupArgs,
+    transports: Option<provision::Transports>,
+    report: &mut telemetry::Report,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     // Discovery reads files/Git metadata: no language-tool probes, environment
@@ -159,8 +208,10 @@ fn run_with_policy(
     if !discovery.flags().experimental_setup {
         return Err(Error::Disabled);
     }
+    report.gate_passed();
 
     let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
+    report.request(&request);
     validate_request(&request)?;
     if args.test_run {
         return Err(Error::NotImplemented);
@@ -178,7 +229,7 @@ fn run_with_policy(
     ) {
         eprintln!("{report}");
     }
-    let code = match request.mode {
+    let provisioned = match request.mode {
         Mode::Check => return check::run(&discovery, snapshot, preflight),
         Mode::Plan => {
             println!(
@@ -205,6 +256,9 @@ fn run_with_policy(
             preflight,
         )?,
     };
+    report.downloaded_bytes = provisioned.downloaded_bytes;
+    report.tools_installed = provisioned.installed;
+    report.tools_reused = provisioned.reused;
     // Never claim dependencies are ready: they are skipped until dependency
     // policy and installers exist, even without --tools-only.
     println!(
@@ -215,7 +269,7 @@ fn run_with_policy(
             "dependency installation is not supported yet"
         }
     );
-    Ok(code)
+    Ok(0)
 }
 
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {

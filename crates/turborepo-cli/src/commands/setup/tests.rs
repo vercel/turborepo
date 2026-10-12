@@ -469,3 +469,74 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
                 .starts_with("generation-"))
     );
 }
+
+#[test]
+fn telemetry_report_counts_artifact_bytes_and_reuse() {
+    use turborepo_telemetry::events::setup::{
+        SetupDependencies, SetupFailure, SetupLock, SetupMode,
+    };
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    let run = |flags: &[&str]| {
+        let mut report = telemetry::Report::default();
+        let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
+            let transports = provision::Transports {
+                registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+                node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
+                pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
+            };
+            run_reporting(args, setup_args, Some(transports), &mut report, || {
+                Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
+            })
+        })
+        .unwrap();
+        (result.map_err(|error| telemetry::failure(&error)), report)
+    };
+    let provision = Some((
+        SetupMode::Provision,
+        SetupLock::Frozen,
+        SetupDependencies::Skip,
+    ));
+    let ready = |downloaded_bytes, tools_installed, tools_reused| telemetry::Report {
+        gated: true,
+        request: provision,
+        downloaded_bytes,
+        tools_installed,
+        tools_reused,
+    };
+    // First ready state downloads both verified artifacts; a repeat reuses them.
+    let artifacts = (f.node.len() + f.pnpm.len()) as u64;
+    assert_eq!(run(FROZEN), (Ok(0), ready(artifacts, 2, 0)));
+    assert_eq!(run(FROZEN), (Ok(0), ready(0, 0, 2)));
+    assert_eq!(
+        run(&["--check", "--tools-only", "--frozen"]),
+        (
+            Ok(0),
+            telemetry::Report {
+                gated: true,
+                request: Some((SetupMode::Check, SetupLock::Frozen, SetupDependencies::Skip)),
+                ..Default::default()
+            }
+        )
+    );
+    assert_eq!(
+        run(&["--frozen"]).1.request,
+        Some((
+            SetupMode::Provision,
+            SetupLock::Frozen,
+            SetupDependencies::Locked
+        ))
+    );
+    fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+    assert_eq!(
+        run(FROZEN),
+        (Err(SetupFailure::LockMissing), ready(0, 0, 0))
+    );
+    // The gate decides whether anything is recorded at all.
+    fs::write(f.owned.root().join("turbo.json"), "{}").unwrap();
+    assert_eq!(
+        run(FROZEN),
+        (Err(SetupFailure::Request), telemetry::Report::default())
+    );
+    f.no_execution();
+}

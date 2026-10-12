@@ -300,6 +300,7 @@ impl NodePlan {
         Ok(PreparedNode {
             tree,
             tool: self.tool.clone(),
+            downloaded_bytes: bytes.as_bytes().len() as u64,
         })
     }
 
@@ -352,8 +353,14 @@ impl NodePlan {
 pub struct PreparedNode {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
 }
 impl PreparedNode {
+    /// Verified artifact bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Callback for Store::reconcile. Copy the FULL verified resource tree,
     /// preserving executable modes and safe relative links; never run hooks.
     pub fn stage(
