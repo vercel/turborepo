@@ -115,6 +115,14 @@ pub enum Error {
     #[error(transparent)]
     Rust(#[from] turborepo_setup::rust_provision::Error),
     #[error(transparent)]
+    Uv(#[from] turborepo_setup::uv_provision::Error),
+    #[error(transparent)]
+    UvResolution(#[from] turborepo_setup::uv_resolution::Error),
+    #[error(transparent)]
+    Python(#[from] turborepo_setup::python_provision::Error),
+    #[error(transparent)]
+    PythonResolution(#[from] turborepo_setup::python_resolution::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -298,30 +306,35 @@ fn run_reporting(
     if args.test_run {
         return Err(Error::NotImplemented);
     }
-    // Rust has a setup adapter; Rust skip ignores its declarations.
-    let rust = eligible.cargo()
-        && plan
-            .toolchain(&ToolchainId::RUST)
-            .is_some_and(|toolchain| toolchain.tools.0 == ToolPolicy::Managed);
+    // Rust and Python have setup adapters; a skip policy ignores their
+    // declarations.
+    let managed = |id: &ToolchainId| {
+        plan.toolchain(id)
+            .is_some_and(|toolchain| toolchain.tools.0 == ToolPolicy::Managed)
+    };
+    let rust = eligible.cargo() && managed(&ToolchainId::RUST);
+    let python = eligible.python() && managed(&ToolchainId::PYTHON);
     if plan.unsupported() {
-        return Err(Error::Unsupported("Python or Go workspace setup"));
+        return Err(Error::Unsupported("Go workspace setup"));
     }
     let javascript = plan
         .toolchain(&ToolchainId::JAVASCRIPT)
         .map_or(ToolPolicy::Skip, |toolchain| toolchain.tools.0);
-    // Only JavaScript has skip and verify-system paths; managed Rust composes
-    // only with managed JavaScript tools or a repository without JavaScript.
-    if rust
+    // Only JavaScript has skip and verify-system paths; managed Rust or Python
+    // composes only with managed JavaScript tools or no JavaScript.
+    if (rust || python)
         && javascript != ToolPolicy::Managed
         && plan.toolchain(&ToolchainId::JAVASCRIPT).is_some()
     {
         return Err(Error::Unsupported(
-            "managed Rust tools with a skip or verify-system JavaScript tools policy",
+            "managed Rust or Python tools with a skip or verify-system JavaScript tools policy",
         ));
     }
     let snapshot = turborepo_setup::lock::Snapshot::capture_with(
         discovery.snapshot_root()?.as_std_path(),
-        turborepo_setup::lock::Ecosystems { rust },
+        // Python declarations are captured only when experimentalPythonWorkspaces
+        // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
+        turborepo_setup::lock::Ecosystems { rust, python },
     )?;
     // Never silently: version-manager files are reported, not read as requests.
     if let Some(report) = turborepo_setup::version_managers::report(
@@ -334,7 +347,7 @@ fn run_reporting(
     for line in plan.report() {
         println!("{line}");
     }
-    if javascript == ToolPolicy::Skip && !rust {
+    if javascript == ToolPolicy::Skip && !rust && !python {
         // Never silently ignore committed selections for a skipped toolchain.
         if snapshot
             .previous_lock()

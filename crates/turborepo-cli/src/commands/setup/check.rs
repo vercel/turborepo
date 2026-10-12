@@ -2,7 +2,7 @@
 use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::{ExecutionContext, Libc},
-    lock::{Ecosystems, Platform, Snapshot},
+    lock::{Platform, Snapshot},
     source_policy::OfficialSourcePolicy,
 };
 
@@ -33,15 +33,13 @@ pub(super) fn run(
 ) -> Result<i32, Error> {
     let context = context()?;
     preflight()?;
-    // The same workspace-flag eligibility setup used for these declarations.
-    let ecosystems = Ecosystems {
-        rust: discovery.source_eligibility().cargo(),
-    };
-    // Re-hash every installed file rather than trusting publication stamps.
+    // Same workspace-flag gating as the captured snapshot (Rust and, with
+    // experimentalPythonWorkspaces, uv/Python), re-hashing every installed
+    // file rather than trusting publication stamps.
     let plan = ActivationPlan::verify_with(
         discovery.snapshot_root()?.as_std_path(),
         context,
-        ecosystems,
+        sources.ecosystems(),
     )?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.

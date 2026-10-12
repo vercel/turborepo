@@ -202,6 +202,12 @@ impl Lock {
                     return Err(Error::Invalid("expected canonical exact builtin version"));
                 }
             }
+            // uv and CPython releases share canonical `X.Y.Z` identities.
+            if matches!(tool.adapter.as_str(), "uv" | "python")
+                && crate::uv::exact_release(&tool.version).is_none()
+            {
+                return Err(Error::Invalid("expected canonical exact release"));
+            }
             declarations(&tool.declarations)?;
             if tool.options.len() > 32 {
                 return Err(Error::Invalid("too many semantic options"));

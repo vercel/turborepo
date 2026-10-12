@@ -10,6 +10,10 @@ use super::{
     NATIVE, RUST_TOOLCHAIN_FILES, StorageError, WriteOutcome, WriterStorage, probe_native_with,
     read_optional, rust_toolchain,
 };
+use crate::{
+    python_discovery::PythonRequirement,
+    uv_discovery::{self, UvRequirement},
+};
 
 const SOURCES: [(&str, usize); 5] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),
@@ -19,6 +23,8 @@ const SOURCES: [(&str, usize); 5] = [
     (RUST_TOOLCHAIN_FILES[1], MAX_TOOLCHAIN_BYTES),
 ];
 type Inputs = BTreeMap<&'static str, Option<Vec<u8>>>;
+/// uv and CPython declarations, captured only with Python workspaces enabled.
+const PYTHON_SOURCES: [&str; 3] = ["uv.toml", "pyproject.toml", ".python-version"];
 
 /// Read-only expected state for an explicit native resolver transaction.
 /// Bound to a caller-selected stable canonical root. No public constructor or
@@ -31,6 +37,7 @@ pub struct Snapshot {
     previous: Option<Lock>,
     inputs: Inputs,
     native: DeclarationMap,
+    ecosystems: Ecosystems,
 }
 
 // Raw manifests may contain unrelated secrets. Never print snapshot contents.
@@ -40,7 +47,12 @@ impl fmt::Debug for Snapshot {
     }
 }
 
-fn inputs(root: &Path) -> io::Result<Inputs> {
+fn inputs(root: &Path, ecosystems: Ecosystems) -> io::Result<Inputs> {
+    let python: &[&'static str] = if ecosystems.python {
+        &PYTHON_SOURCES
+    } else {
+        &[]
+    };
     SOURCES
         .into_iter()
         // Preserve flags/policy and inactive declarations without interpreting
@@ -49,34 +61,64 @@ fn inputs(root: &Path) -> io::Result<Inputs> {
             turborepo_types::CONFIG_FILES
                 .map(|file| (file, crate::node_discovery::MAX_MANIFEST_BYTES)),
         )
+        .chain(
+            python
+                .iter()
+                .map(|file| (*file, uv_discovery::MAX_CONFIG_BYTES)),
+        )
         .map(|(file, limit)| read_optional(root, file, limit).map(|bytes| (file, bytes)))
         .collect()
 }
 
+fn captured(inputs: &Inputs, file: &str) -> io::Result<Option<Vec<u8>>> {
+    inputs
+        .get(file)
+        .cloned()
+        .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+}
+fn read_uv(inputs: &Inputs) -> Result<Option<UvRequirement>, StorageError> {
+    Ok(UvRequirement::read_with(|file, _| captured(inputs, file))?)
+}
+fn read_python(inputs: &Inputs) -> Result<Option<PythonRequirement>, StorageError> {
+    Ok(PythonRequirement::read_with(|file, _| {
+        captured(inputs, file)
+    })?)
+}
+
 impl Snapshot {
-    /// No storage initialization, resolver, network, or binary execution.
+    /// Node and package-manager declarations only.
     pub fn capture(root: &Path) -> Result<Self, StorageError> {
         Self::capture_with(root, Ecosystems::default())
     }
 
-    /// Declarations of disabled ecosystems are ignored, not removed from CAS.
+    /// No storage initialization, resolver, network, or binary execution.
+    /// Disabled Rust declarations are ignored, not removed from CAS; disabled
+    /// Python files are neither read nor covered.
     pub fn capture_with(root: &Path, ecosystems: Ecosystems) -> Result<Self, StorageError> {
         let root = root.canonicalize()?;
         let root_identity = Arc::new(same_file::Handle::from_path(&root)?);
         let bytes = read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?;
         let previous = bytes.as_deref().map(Lock::parse).transpose()?;
-        let captured = inputs(&root)?;
-        let native = probe_native_with(ecosystems, |file, _| {
+        let captured = inputs(&root, ecosystems)?;
+        let mut native = probe_native_with(ecosystems, |file, _| {
             captured
                 .get(file)
                 .cloned()
                 .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
         })?;
+        if ecosystems.python {
+            if let Some(uv) = read_uv(&captured)? {
+                native.insert("uv".into(), vec![uv.declaration()]);
+            }
+            if let Some(python) = read_python(&captured)? {
+                native.insert("python".into(), vec![python.declaration()]);
+            }
+        }
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
         if same_file::Handle::from_path(&root)? != *root_identity
             || read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)? != bytes
-            || inputs(&root)? != captured
+            || inputs(&root, ecosystems)? != captured
         {
             return Err(StorageError::Conflict);
         }
@@ -87,6 +129,7 @@ impl Snapshot {
             previous,
             inputs: captured,
             native,
+            ecosystems,
         })
     }
 
@@ -99,6 +142,25 @@ impl Snapshot {
     }
     pub fn declarations(&self) -> &DeclarationMap {
         &self.native
+    }
+    pub fn ecosystems(&self) -> Ecosystems {
+        self.ecosystems
+    }
+
+    /// The root uv request from captured bytes; None when Python is disabled.
+    pub fn uv_requirement(&self) -> Result<Option<UvRequirement>, StorageError> {
+        if !self.ecosystems.python {
+            return Ok(None);
+        }
+        read_uv(&self.inputs)
+    }
+
+    /// The root CPython request from captured bytes; None when disabled.
+    pub fn python_requirement(&self) -> Result<Option<PythonRequirement>, StorageError> {
+        if !self.ecosystems.python {
+            return Ok(None);
+        }
+        read_python(&self.inputs)
     }
 
     /// Resolver inputs come from the captured bytes, never current disk state.
@@ -171,7 +233,7 @@ impl Snapshot {
         Ok(guard.matches_root(&self.root_identity)?
             && same_file::Handle::from_path(&self.root)? == *self.root_identity
             && guard.read_lock()? == self.bytes
-            && inputs(&self.root)? == self.inputs)
+            && inputs(&self.root, self.ecosystems)? == self.inputs)
     }
 
     /// Hold this writer guard through frozen preparation and inventory
@@ -193,7 +255,7 @@ impl Snapshot {
     pub fn ensure_current(&self) -> Result<(), StorageError> {
         if same_file::Handle::from_path(&self.root)? != *self.root_identity
             || read_optional(&self.root, LOCK_NAME, MAX_LOCK_BYTES)? != self.bytes
-            || inputs(&self.root)? != self.inputs
+            || inputs(&self.root, self.ecosystems)? != self.inputs
         {
             return Err(StorageError::Conflict);
         }
@@ -221,14 +283,20 @@ impl Snapshot {
     ) -> Result<(), StorageError> {
         // Only canonical native IDs and these fixed input files are covered.
         // Refuse to publish or silently remove aliases/extra sources.
+        let python = self.ecosystems.python;
+        let covered = |file: &str| {
+            SOURCES.iter().any(|(source, _)| file == *source)
+                || (python && PYTHON_SOURCES.contains(&file))
+        };
         for lock in candidate.into_iter().chain(self.previous.as_ref()) {
             if lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
+                    || (matches!(tool.adapter.as_str(), "uv" | "python") && !python)
                     || tool
                         .declarations
                         .iter()
-                        .any(|source| !SOURCES.iter().any(|(file, _)| source.file == *file))
+                        .any(|source| !covered(&source.file))
             }) {
                 return Err(Error::Invalid(
                     "snapshot CAS does not cover this tool identity or source",

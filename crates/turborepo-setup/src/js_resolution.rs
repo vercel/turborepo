@@ -136,6 +136,34 @@ pub async fn resolve(
     registry: &RegistryTransport,
 ) -> Result<Lock, Error> {
     let snapshot = request.snapshot();
+    let tools = resolve_tools(&request, node, registry).await?;
+    let candidate = Lock::new(Document {
+        schema_version: lock::SCHEMA_VERSION,
+        tools,
+    })?;
+    // Preserved payloads passed preflight; new payloads come from validated
+    // adapter resolutions, with native byte-specific integrity checked above.
+    // Only the JS cohort: callers compose other ecosystems' selections, and
+    // reconcile checks the complete candidate.
+    let mut js = snapshot.declarations().clone();
+    js.retain(|id, _| JS.contains(&id.as_str()));
+    if !candidate.matches_native(&js)? {
+        return Err(Error::Unsupported(
+            "candidate differs from captured provenance",
+        ));
+    }
+    snapshot.ensure_current()?;
+    Ok(candidate)
+}
+
+/// The JavaScript cohort only (Node and its package manager), for composition
+/// with other ecosystems' selections before final lock validation.
+pub(crate) async fn resolve_tools(
+    request: &Resolution<'_>,
+    node: &NodeTransport,
+    registry: &RegistryTransport,
+) -> Result<BTreeMap<String, Tool>, Error> {
+    let snapshot = request.snapshot();
     snapshot.ensure_current()?;
     if !snapshot.declarations().contains_key("node") {
         return Err(Error::Unsupported(
@@ -255,21 +283,8 @@ pub async fn resolve(
             );
         }
     }
-    let candidate = Lock::new(Document {
-        schema_version: lock::SCHEMA_VERSION,
-        tools,
-    })?;
-    // Preserved payloads passed preflight; new payloads come from validated
-    // adapter resolutions, with native byte-specific integrity checked above.
-    let mut js = snapshot.declarations().clone();
-    js.retain(|id, _| JS.contains(&id.as_str()));
-    if !candidate.matches_native(&js)? {
-        return Err(Error::Unsupported(
-            "candidate differs from captured provenance",
-        ));
-    }
     snapshot.ensure_current()?;
-    Ok(candidate)
+    Ok(tools)
 }
 
 #[cfg(all(test, unix))]

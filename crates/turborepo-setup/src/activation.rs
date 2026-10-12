@@ -1,4 +1,5 @@
-//! Read-only managed Node/npm/pnpm/Rust environment planning, not execution
+//! Read-only managed environment planning (Node/npm/pnpm and Rust, plus
+//! uv/Python when the caller enables Python workspaces), not execution
 //! authorization. Repo-writable inventory proves readiness only. Consumers
 //! must separately authorize setup-recorded tools with trusted-root user
 //! state, gate managed mode, and revalidate before use. No CLI support is
@@ -11,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use turborepo_tool_install::{Store, Tool, Verification};
+use turborepo_tool_install::{Current, Store, Tool, Verification};
 
 use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot},
@@ -21,6 +22,8 @@ use crate::{
     pnpm_provision::PnpmPlan,
     rust_provision::{self, RustPlan},
     rustup_provision::RustupPlan,
+    python_provision::PythonPlan,
+    uv_provision::UvPlan,
 };
 
 const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "rust", "rustup"];
@@ -34,8 +37,8 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports only managed Node, npm, pnpm and Rust; use a supported \
-         setup adapter"
+        "activation planning supports managed Node, npm, pnpm and Rust, plus uv and Python \
+         with experimentalPythonWorkspaces; use a supported setup adapter"
     )]
     UnsupportedAdapter,
     /// Intentional external tools, unlike a missing managed installation.
@@ -76,26 +79,27 @@ pub struct ActivationPlan {
     snapshot: ExecutionSnapshot,
     bin: PathBuf,
     tools: Vec<Tool>,
-    // Only managed Rust adds variables: its installed private RUSTUP_HOME,
-    // exact RUSTUP_TOOLCHAIN and the clone's CARGO_HOME. Never inherited or
-    // host-dependent settings.
+    // Managed Rust adds its installed private RUSTUP_HOME, exact
+    // RUSTUP_TOOLCHAIN and the clone's CARGO_HOME; uv/Python values derive only
+    // from this generation and the lock. Never inherited or host-dependent
+    // settings. Node/pnpm need no runtime variables.
     runtime_env: BTreeMap<String, OsString>,
 }
 
 impl ActivationPlan {
-    /// Caller selects the exact root and execution context; no root/host
-    /// probes, ancestor search, system-tool fallback, resolution, or
-    /// storage creation. A missing lock is an error, not unconfigured-mode
-    /// policy for future callers. Rust declarations are ignored, so a lock
-    /// with Rust selections is drift; see `inspect_with`.
+    /// Default ecosystems: Node/npm/pnpm only, so Rust or uv/Python
+    /// selections are drift or rejected; see `inspect_with`.
     pub fn inspect(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
         Self::inspect_with(repo, context, Ecosystems::default())
     }
 
-    /// Same, with the caller's workspace-flag eligibility, exactly as setup
-    /// captured declarations for this repository. Both trust installed bytes
-    /// while their publication stamps match (`Verification::Stamped`), for
-    /// repeated run-time validation.
+    /// Caller selects the exact root and execution context; no root/host
+    /// probes, ancestor search, system-tool fallback, resolution, or
+    /// storage creation. A missing lock is an error, not unconfigured-mode
+    /// policy for future callers. `ecosystems` must come from the root
+    /// workspace flags, exactly as setup captured its snapshot. Both trust
+    /// installed bytes while their publication stamps match
+    /// (`Verification::Stamped`), for repeated run-time validation.
     pub fn inspect_with(
         repo: &Path,
         context: ExecutionContext,
@@ -161,6 +165,7 @@ impl ActivationPlan {
         verification: Verification,
     ) -> Result<Self, Error> {
         let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
+        let python = sources.ecosystems().python;
         if !lock.tools().is_empty()
             && lock
                 .tools()
@@ -172,7 +177,8 @@ impl ActivationPlan {
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
-                    || !SUPPORTED.contains(&id.as_str())
+                    || !(SUPPORTED.contains(&id.as_str())
+                        || (python && matches!(id.as_str(), "uv" | "python")))
                     || !(matches!(tool.installation, Installation::Managed { .. })
                         || (id == "npm"
                             && matches!(tool.installation, Installation::Bundled { .. })))
@@ -190,14 +196,15 @@ impl ActivationPlan {
             return Err(Error::DeclarationDrift);
         }
         let platform = context.artifact_platform();
+        let version =
+            |tool: &Tool| semver::Version::parse(&tool.version).map_err(|_| Error::InvalidLock);
         let mut tools = Vec::new();
-        let node = if lock.tools().contains_key("node") || lock.tools().contains_key("pnpm") {
+        // Python-only repositories lock no Node; pnpm still requires it.
+        let node = if lock.tools().contains_key("node") {
             let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
-            let version = semver::Version::parse(&node.inventory_tool().version)
-                .map_err(|_| Error::InvalidLock)?;
             if !sources
                 .node_requirements()?
-                .matches_locked_version(&version)
+                .matches_locked_version(&version(node.inventory_tool())?)
             {
                 return Err(Error::DeclarationDrift);
             }
@@ -206,9 +213,8 @@ impl ActivationPlan {
         } else {
             None
         };
-        if let Some(node) = &node
-            && lock.tools().contains_key("pnpm")
-        {
+        if lock.tools().contains_key("pnpm") {
+            let node = node.as_ref().ok_or(Error::InvalidLock)?;
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
             // Share setup's full authored-pin validation and reuse identity;
             // an authoritative version does not erase devEngines integrity.
@@ -245,7 +251,29 @@ impl ActivationPlan {
             let rustup = RustupPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             tools.push(rustup.inventory_tool().clone());
         }
-        // Inventory records its cohort in ID order.
+        let uv = lock.tools().contains_key("uv");
+        if uv {
+            let plan = UvPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+            let requirement = sources.uv_requirement()?.ok_or(Error::DeclarationDrift)?;
+            if !requirement.matches(&version(plan.inventory_tool())?) {
+                return Err(Error::DeclarationDrift);
+            }
+            tools.push(plan.inventory_tool().clone());
+        }
+        let python = if lock.tools().contains_key("python") {
+            let plan = PythonPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+            let requirement = sources
+                .python_requirement()?
+                .ok_or(Error::DeclarationDrift)?;
+            if !requirement.matches(&version(plan.inventory_tool())?) {
+                return Err(Error::DeclarationDrift);
+            }
+            tools.push(plan.inventory_tool().clone());
+            Some(plan)
+        } else {
+            None
+        };
+        // The Store records a generation's tools in id order.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
@@ -263,7 +291,7 @@ impl ActivationPlan {
             node.verify_bundled_npm(&tree)
                 .map_err(|_| Error::StaleInventory)?;
         }
-        let mut runtime_env = BTreeMap::new();
+        let mut runtime_env = uv_env(&current, uv, python.as_ref())?;
         if let Some(rust) = &rust {
             // Shims run the toolchain binaries directly. These variables keep
             // a task's rustup and Cargo on this private, installed toolchain
@@ -323,6 +351,32 @@ impl ActivationPlan {
         }
         Ok(std::env::join_paths(paths)?)
     }
+}
+
+/// The uv launchers' settings, for uv processes that do not start through
+/// them, plus the locked interpreter as uv's request. Uses uv's download key
+/// rather than a path: a path request makes `uv pip` install into the managed
+/// interpreter itself instead of the project's virtual environment.
+fn uv_env(
+    current: &Current,
+    uv: bool,
+    python: Option<&PythonPlan>,
+) -> Result<BTreeMap<String, OsString>, Error> {
+    let mut env = BTreeMap::new();
+    if !uv && python.is_none() {
+        return Ok(env);
+    }
+    let generation = current.bin.parent().ok_or(Error::StaleInventory)?;
+    env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
+    env.insert(
+        "UV_PYTHON_INSTALL_DIR".into(),
+        generation.join("tools").join("python").into_os_string(),
+    );
+    if let Some(python) = python {
+        env.insert("UV_PYTHON_PREFERENCE".into(), "only-managed".into());
+        env.insert("UV_PYTHON".into(), python.key().into());
+    }
+    Ok(env)
 }
 
 #[cfg(all(test, unix))]

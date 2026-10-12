@@ -16,16 +16,20 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 5] = ["node", "npm", "pnpm", "rust", "rustup"];
+const NATIVE: [&str; 7] = ["node", "npm", "pnpm", "rust", "rustup", "uv", "python"];
 /// rustup's root toolchain files. Both at once is ambiguous, not precedence.
 const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
 const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
 
-/// Ecosystems whose declarations the caller's workspace flags enable. Their
-/// files stay in the CAS either way; disabled declarations are ignored.
+/// Non-JavaScript ecosystems whose declarations the caller's root workspace
+/// flags enable. The default captures only Node and its package managers.
+/// Rust toolchain files stay in the CAS either way and only their
+/// declarations are ignored; disabled Python files are neither read nor
+/// covered.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Ecosystems {
     pub rust: bool,
+    pub python: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -38,6 +42,10 @@ pub enum StorageError {
     Declarations,
     #[error(transparent)]
     Rust(#[from] crate::rust_discovery::Error),
+    #[error(transparent)]
+    Uv(#[from] crate::uv_discovery::UvDiscoveryError),
+    #[error(transparent)]
+    Python(#[from] crate::python_discovery::PythonDiscoveryError),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }

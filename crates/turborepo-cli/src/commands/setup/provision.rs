@@ -14,13 +14,17 @@ use turborepo_setup::{
     pnpm_provision::{PnpmPlan, PnpmTransport},
     rust_provision::RustPlan,
     rustup_provision::{RustupPlan, RustupTransport},
+    python_provision::PythonPlan,
+    python_resolution::PythonTransport,
     source_policy::OfficialSourcePolicy,
+    uv_provision::UvPlan,
+    uv_resolution::UvTransport,
 };
 use turborepo_tool_install::Store;
 
 use super::Error;
 
-const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "rust", "rustup"];
+const SUPPORTED: [&str; 7] = ["node", "npm", "pnpm", "rust", "rustup", "uv", "python"];
 
 pub(super) struct Transports {
     pub node: NodeTransport,
@@ -31,6 +35,8 @@ pub(super) struct Transports {
     /// The shared download cache the transports use, cleaned up after setup.
     pub cache: Option<ArtifactCache>,
     pub rustup: RustupTransport,
+    pub uv: UvTransport,
+    pub python: PythonTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -61,6 +67,8 @@ impl Transports {
             trust_base: None,
             cache,
             rustup: RustupTransport::official(policy)?,
+            uv: UvTransport::official(policy)?,
+            python: PythonTransport::official(policy)?,
         })
     }
 
@@ -83,6 +91,8 @@ impl Transports {
             trust_base: self.trust_base,
             cache: self.cache,
             rustup: self.rustup,
+            uv: self.uv,
+            python: self.python,
         }
     }
 }
@@ -212,7 +222,10 @@ pub(super) struct Plans {
     pub npm: Option<NpmPlan>,
     pub rustup: Option<RustupPlan>,
     pub rust: Option<RustPlan>,
+    pub uv: Option<UvPlan>,
+    pub python: Option<PythonPlan>,
 }
+
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -226,7 +239,7 @@ pub(super) fn plans(
             .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm and Rust are supported",
+            "only managed Node, npm, pnpm, Rust, uv, and Python are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -282,12 +295,50 @@ pub(super) fn plans(
             Some(RustPlan::from_lock(lock, platform)?)
         }
     };
+    let uv = match snapshot.uv_requirement()? {
+        Some(requirement) => {
+            let plan = UvPlan::from_lock(lock, platform)?;
+            let version = semver::Version::parse(&plan.inventory_tool().version)
+                .map_err(|_| Error::Unsupported("invalid locked uv version"))?;
+            if !requirement.matches(&version) {
+                return Err(Error::Unsupported(
+                    "locked uv does not satisfy native declarations",
+                ));
+            }
+            Some(plan)
+        }
+        None => None,
+    };
+    let python = match snapshot.python_requirement()? {
+        Some(requirement) => {
+            let plan = PythonPlan::from_lock(lock, platform)?;
+            let version = semver::Version::parse(&plan.inventory_tool().version)
+                .map_err(|_| Error::Unsupported("invalid locked Python version"))?;
+            if !requirement.matches(&version) {
+                return Err(Error::Unsupported(
+                    "locked Python does not satisfy native declarations",
+                ));
+            }
+            Some(plan)
+        }
+        None => None,
+    };
+    if node.is_none()
+        && uv.is_none()
+        && python.is_none()
+        && rustup.is_none()
+        && rust.is_none()
+    {
+        return Err(Error::Unsupported("turbo.lock selects no managed tools"));
+    }
     Ok(Plans {
         node,
         pnpm,
         npm,
         rustup,
         rust,
+        uv,
+        python,
     })
 }
 
@@ -363,14 +414,19 @@ pub(super) fn run(
             ));
         }
     }
+    let declared = snapshot.declarations();
+    let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
     if write
-        && !["node", "rustup"]
-            .iter()
-            .any(|id| snapshot.declarations().contains_key(*id))
+        && !declared.contains_key("node")
+        && (js_manager || !["rustup", "uv"].iter().any(|id| declared.contains_key(*id)))
     {
         return Err(Error::Unsupported(
-            "a native Node declaration is required (or a root rust-toolchain file with \
-             experimentalCargoWorkspaces)",
+            if snapshot.ecosystems().python && !js_manager {
+                "a native Node or uv declaration is required"
+            } else {
+                "a native Node declaration is required (or a root rust-toolchain file with \
+                 experimentalCargoWorkspaces)"
+            },
         ));
     }
     // Ordinary setup validates matching pins before its no-op writer. Explicit
@@ -384,7 +440,7 @@ pub(super) fn run(
                 .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm and Rust are supported",
+                "only managed Node, npm, pnpm, Rust, uv, and Python are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -443,15 +499,25 @@ pub(super) fn run(
                 let rust =
                     turborepo_setup::rust_resolution::resolve_request(&request, &sources.rustup);
                 let mut tools = runtime.block_on(rust).map_err(|e| failed(&e))?;
-                if request.snapshot().declarations().contains_key("node") {
-                    let js = runtime
-                        .block_on(turborepo_setup::js_resolution::resolve(
+                // JavaScript plus, with Python workspaces, uv and CPython.
+                let declared = request.snapshot().declarations();
+                if ["node", "npm", "pnpm", "uv", "python"]
+                    .iter()
+                    .any(|id| declared.contains_key(*id))
+                {
+                    let native = runtime
+                        .block_on(turborepo_setup::native_resolution::resolve(
                             request,
-                            &sources.node,
-                            &sources.registry,
+                            turborepo_setup::native_resolution::Transports {
+                                node: &sources.node,
+                                registry: &sources.registry,
+                                uv: &sources.uv,
+                                python: &sources.python,
+                                platform: platform().map_err(|e| failed(&e))?,
+                            },
                         ))
                         .map_err(|e| failed(&e))?;
-                    tools.extend(js.tools().clone());
+                    tools.extend(native.tools().clone());
                 }
                 Ok(turborepo_setup::lock::Lock::new(
                     turborepo_setup::lock::Document {
@@ -477,6 +543,15 @@ pub(super) fn run(
         transports = Some(sources);
         published
     } else {
+        // Frozen mode names stale declarations instead of a generic mismatch.
+        if lock_mode == super::LockMode::Frozen && snapshot.previous_lock().is_some() {
+            use turborepo_setup::lock::reconcile;
+            reconcile::reconcile(&snapshot, reconcile::Mode::Frozen, false, |_| {
+                Err(reconcile::Error::Resolution(
+                    "frozen setup never resolves".into(),
+                ))
+            })?;
+        }
         snapshot
     };
     let lock = snapshot
@@ -492,11 +567,15 @@ pub(super) fn run(
         npm,
         rustup,
         rust,
+        uv,
+        python,
     } = plans(&snapshot, lock)?;
-    // Offline transports exist for Node and the npm registry only; rustup and
-    // its channel downloads have no offline mode yet.
-    if offline && (rustup.is_some() || rust.is_some()) {
-        return Err(Error::Unsupported("offline setup for managed Rust"));
+    // Offline transports exist for Node and the npm registry only; rustup, uv
+    // and CPython downloads have no offline mode yet.
+    if offline && (rustup.is_some() || rust.is_some() || uv.is_some() || python.is_some()) {
+        return Err(Error::Unsupported(
+            "offline setup for managed Rust, uv or Python",
+        ));
     }
     let trust = match trust {
         Some(trust) => trust,
@@ -509,6 +588,8 @@ pub(super) fn run(
         .chain(npm.iter().map(NpmPlan::inventory_tool))
         .chain(rustup.iter().map(RustupPlan::inventory_tool))
         .chain(rust.iter().map(RustPlan::inventory_tool))
+        .chain(uv.iter().map(UvPlan::inventory_tool))
+        .chain(python.iter().map(PythonPlan::inventory_tool))
         .cloned()
         .collect();
     let policy = preflight()?;
@@ -552,7 +633,7 @@ pub(super) fn run(
     // external trust record proves that tree's provenance.
     let mut missing = Vec::new();
     let mut reused = Vec::new();
-    let (prepared_node, prepared_pnpm, prepared_npm, prepared_rustup) =
+    let (prepared_node, prepared_pnpm, prepared_npm, prepared_rustup, prepared_uv, prepared_python) =
         runtime.block_on(async {
             use turborepo_setup::{Preparation::IfNeeded, node_provision::Error::Offline};
             let transport = &transports.node;
@@ -642,7 +723,27 @@ pub(super) fn run(
                 }
                 None => None,
             };
-            Ok::<_, Error>((node, pnpm, npm, rustup))
+            preflight()?;
+            revalidate(discovery)?;
+            snapshot.check_guard(&guard)?;
+            let uv = match &uv {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.uv, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            preflight()?;
+            revalidate(discovery)?;
+            snapshot.check_guard(&guard)?;
+            let python = match &python {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.python, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            Ok::<_, Error>((node, pnpm, npm, rustup, uv, python))
         })?;
     if !missing.is_empty() {
         return Err(Error::OfflineMissing(missing_artifacts(
@@ -687,6 +788,14 @@ pub(super) fn run(
                 .as_ref()
                 .ok_or(missing)?
                 .stage(tool, destination),
+            "uv" => prepared_uv
+                .as_ref()
+                .ok_or(missing)?
+                .stage(tool, destination),
+            "python" => prepared_python
+                .as_ref()
+                .ok_or(missing)?
+                .stage(tool, destination),
             _ => Err(missing),
         }
     };
@@ -725,6 +834,8 @@ pub(super) fn run(
             "pnpm" => prepared_pnpm.as_ref().map(|pnpm| pnpm.from_cache()),
             "npm" => prepared_npm.as_ref().map(|npm| npm.from_cache()),
             "rust" => prepared_rust.as_ref().map(|_| false),
+            "uv" => prepared_uv.as_ref().map(|_| false),
+            "python" => prepared_python.as_ref().map(|_| false),
             _ => prepared_rustup.as_ref().map(|_| false),
         };
         if from_cache.is_none() {

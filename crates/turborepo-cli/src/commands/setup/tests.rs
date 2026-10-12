@@ -145,6 +145,11 @@ impl Fixture {
                         origin,
                     )
                     .unwrap(),
+                    uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
+                    python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                 }),
                 || {
                     Ok(self
@@ -247,6 +252,8 @@ mod trust_publication;
 mod trusted_roots;
 #[path = "unlocked_trust_tests.rs"]
 mod unlocked_trust;
+#[path = "uv_tests.rs"]
+mod uv;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
