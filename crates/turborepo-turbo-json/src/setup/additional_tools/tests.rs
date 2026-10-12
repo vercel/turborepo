@@ -86,6 +86,19 @@ fn repositories_without_additional_tools_are_unchanged() {
     assert!(parse(json!({})).unwrap().additional_tools().is_empty());
 }
 
+#[test]
+fn archives_without_a_top_level_directory_omit_the_root_prefix() {
+    let policy = with(|t| {
+        let macos = t["fixture"]["artifacts"]["macos-arm64"]
+            .as_object_mut()
+            .unwrap();
+        macos.remove("rootPrefix");
+    })
+    .unwrap();
+    let macos = &policy.additional_tools()["fixture"].artifacts[&ArtifactPlatform::MacosArm64];
+    assert_eq!(macos.root_prefix, None);
+}
+
 #[test_case(|t| t["Fixture"] = tool(); "uppercase id")]
 #[test_case(|t| t["fixture"]["version"] = json!("^1.2.3"); "range")]
 #[test_case(|t| t["fixture"]["version"] = json!("1.x"); "wildcard")]
@@ -99,7 +112,6 @@ fn repositories_without_additional_tools_are_unchanged() {
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["sha256"] = json!("abc"); "short digest")]
 #[test_case(|t| t["fixture"]["artifacts"]["windows-x64"]["rootPrefix"] = json!("bin"); "binary prefix")]
 #[test_case(|t| t["fixture"]["artifacts"]["windows-x64"]["executables"]["other"] = json!("other"); "binary executables")]
-#[test_case(|t| { t["fixture"]["artifacts"]["macos-arm64"].as_object_mut().unwrap().remove("rootPrefix"); }; "archive without prefix")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["rootPrefix"] = json!("a/b"); "nested prefix")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["executables"]["fixture"] = json!("../fixture"); "escaping path")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["executables"]["fixture"] = json!("bin\\fixture"); "backslash path")]

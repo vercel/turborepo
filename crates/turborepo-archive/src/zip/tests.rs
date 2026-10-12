@@ -476,6 +476,7 @@ fn failure_cleans_owned_staging_without_surrounding_writes() {
     let mut tree = Tree {
         staging,
         root: "pkg".into(),
+        rootless: false,
         nodes: BTreeMap::new(),
         limits: limits(),
         bytes: 0,
