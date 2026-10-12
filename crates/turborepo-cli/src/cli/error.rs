@@ -19,6 +19,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Setup(#[from] crate::commands::setup::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Exec(#[from] crate::commands::exec::Error),
     #[error("Query server not available. The turbo query command requires the full turbo binary.")]
     QueryNotAvailable,
     #[error("{0}")]

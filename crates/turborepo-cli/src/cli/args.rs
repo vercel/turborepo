@@ -641,13 +641,18 @@ pub(super) fn unwrap_flag_help(help: &str) -> String {
 
 impl Args {
     /// Route setup before validating its tail or inferring a repository.
-    /// The command grammar consumes global values and distinguishes task names.
     pub(crate) fn is_setup_command(words: &[OsString]) -> bool {
+        Self::selects_command(words, "setup")
+    }
+
+    /// The command grammar, not a word scan, consumes global values and
+    /// distinguishes commands from task names and `--` tails.
+    fn selects_command(words: &[OsString], name: &str) -> bool {
         let argv: Vec<_> = words.iter().skip(1).map(OsString::as_os_str).collect();
         let mut parser = usage::Parser::new(Self::command(), &argv);
         while let Some(Ok(event)) = parser.next_event() {
             if let usage::Event::Command(command) = event {
-                return command.name == "setup";
+                return command.name == name;
             }
         }
         false
@@ -774,6 +779,7 @@ impl Args {
     pub(crate) fn parse_args(os_args: Vec<OsString>) -> Result<Self, String> {
         let (is_single_package, single_package_free) = Self::remove_single_package(os_args);
         let mut words: Vec<OsString> = single_package_free.collect();
+        let is_exec = Self::selects_command(&words, "exec");
         let config_flags = [
             "--cache",
             "--cache-dir",
@@ -787,7 +793,8 @@ impl Args {
             "--remote-only",
             "--summarize",
         ];
-        let trailing_config = words.last().is_some_and(|word| word == "config")
+        let trailing_config = !is_exec
+            && words.last().is_some_and(|word| word == "config")
             && !Self::is_setup_command(&words)
             && words[1..words.len() - 1].iter().any(|word| {
                 word.to_str().is_some_and(|word| {
@@ -801,7 +808,13 @@ impl Args {
         }
         Self::normalize_leading_run_flags(&mut words);
         Self::reject_duplicate_scalar_flags(&words)?;
-        for word in &words {
+        // Arguments after `turbo exec --` belong to the program, even when
+        // they look like turbo switches.
+        let turbo_words = words
+            .iter()
+            .position(|word| is_exec && word == "--")
+            .unwrap_or(words.len());
+        for word in &words[..turbo_words] {
             if matches!(
                 word.to_str(),
                 Some(
@@ -841,6 +854,15 @@ impl Args {
                     return Err(format!("error: unexpected value for switch '{flag}'"));
                 }
             }
+        }
+        if let Some(Command::Exec { command }) = &args.command
+            && command.first().is_none_or(|program| program.is_empty())
+        {
+            return Err(
+                "error: `turbo exec` requires a command after `--`, for example `turbo exec -- \
+                 node --version`"
+                    .to_string(),
+            );
         }
         if trailing_config {
             let Some(Command::Run {
@@ -1291,6 +1313,18 @@ pub enum Command {
     Setup {
         #[usage(flatten)]
         setup_args: SetupArgs,
+    },
+
+    /// EXPERIMENTAL: Run a command with the repository's managed tools (not
+    /// yet implemented)
+    ///
+    /// Requires root futureFlags.experimentalSetup. Pass the command after
+    /// '--'; turbo does not interpret its arguments. Never installs tools,
+    /// updates turbo.lock, or runs tasks.
+    Exec {
+        /// The program to run and its arguments
+        #[usage(value_name = "COMMAND", double_dash = "required", required = true)]
+        command: Vec<OsString>,
     },
 
     /// Run tasks across projects in your monorepo
