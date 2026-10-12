@@ -35,8 +35,14 @@ pub(super) fn platform() -> Result<Platform, Error> {
         ("macos", "aarch64") => Ok(Platform::MacosArm64),
         ("linux", "x86_64") if cfg!(target_env = "gnu") => Ok(Platform::LinuxX64Gnu),
         ("linux", "aarch64") if cfg!(target_env = "gnu") => Ok(Platform::LinuxArm64Gnu),
+        // Compile-time architecture: an x64 build under arm64 emulation is
+        // x64. Native arm64 is unqualified and never borrows x64 artifacts.
+        ("windows", "x86_64") => Ok(Platform::WindowsX64),
+        ("windows", "aarch64") => Err(Error::Unsupported(
+            "managed setup is not qualified for Windows arm64; use Windows x64",
+        )),
         _ => Err(Error::Unsupported(
-            "managed promotion requires macOS or GNU Linux",
+            "managed promotion requires macOS, GNU Linux or Windows x64",
         )),
     }
 }

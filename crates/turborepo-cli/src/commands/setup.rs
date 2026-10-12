@@ -210,6 +210,10 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
 #[path = "setup/tests.rs"]
 mod provisioning_tests;
 
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+#[path = "setup/windows_tests.rs"]
+mod windows_provisioning_tests;
+
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
@@ -230,7 +234,14 @@ mod tests {
     fn platform_qualification_rejects_unsupported_hosts_including_musl() {
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
         let host = cfg!(target_os = "macos") || cfg!(all(target_os = "linux", target_env = "gnu"));
-        assert_eq!(provision::platform().is_ok(), arch && host);
+        let windows = cfg!(all(windows, target_arch = "x86_64"));
+        assert_eq!(provision::platform().is_ok(), (arch && host) || windows);
+        if cfg!(all(windows, target_arch = "aarch64")) {
+            assert!(
+                provision::platform()
+                    .is_err_and(|e| e.to_string().contains("not qualified for Windows arm64"))
+            );
+        }
     }
 
     #[test]

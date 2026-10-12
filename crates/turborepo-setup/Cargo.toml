@@ -35,6 +35,9 @@ url = { workspace = true }
 libc = "0.2"
 rustix = { version = "1.1", features = ["fs"] }
 
+[target.'cfg(windows)'.dependencies]
+dunce = { workspace = true }
+
 [dev-dependencies]
 flate2 = "1.1.9"
 reqwest = { workspace = true }

@@ -133,7 +133,7 @@ fn environment_prefix_and_known_system_locations() -> TestResult {
     );
     #[cfg(unix)]
     assert_eq!(
-        system_configs(),
+        system_configs(&[])?,
         [
             "/etc/npmrc",
             "/usr/etc/npmrc",
@@ -270,5 +270,36 @@ fn nonfile_unreadable_and_unknown_node_layout_fail_closed() -> TestResult {
         .err(),
         Some(Error::Locations)
     );
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_global_npm_prefix_is_inspected_and_required() -> TestResult {
+    let fixture = Fixture::new()?;
+    let app_data = fixture.directory.path().join("AppData/Roaming");
+    let env = [(OsString::from("AppData"), app_data.clone().into_os_string())];
+    let system = system_configs(&env)?;
+    assert_eq!(system, [app_data.join("npm").join("etc").join("npmrc")]);
+    assert_eq!(system_configs(&[]).err(), Some(Error::Locations));
+    let relative = [(OsString::from("APPDATA"), OsString::from("Roaming"))];
+    assert_eq!(system_configs(&relative).err(), Some(Error::Locations));
+    for path in [
+        system[0].clone(),
+        app_data.join("npm/node_modules/npm/npmrc"),
+    ] {
+        fs::create_dir_all(path.parent().ok_or("parent")?)?;
+        fs::write(&path, "registry=https://mirror.invalid")?;
+        let result = inspect_inputs(
+            &fixture.root,
+            &fixture.home,
+            None,
+            &[],
+            system.clone(),
+            Some(fixture.directory.path()),
+        );
+        assert_eq!(result.err(), Some(Error::Configured(ConfigOwner::System)));
+        fs::remove_file(path)?;
+    }
     Ok(())
 }

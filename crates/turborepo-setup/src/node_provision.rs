@@ -25,8 +25,8 @@ pub enum Error {
     )]
     MissingTarget,
     #[error(
-        "managed Node promotion is not qualified for Windows or musl; use a supported GNU \
-         Linux/macOS target or configure verify-system"
+        "managed Node promotion is not qualified for this host, Windows arm64 or musl; use a \
+         supported macOS, GNU Linux or Windows x64 target or configure verify-system"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this Node plan unchanged")]
@@ -199,9 +199,9 @@ impl NodePlan {
     /// holding this Store lock throughout preparation and reconciliation.
     /// Reuse requires a healthy entire selected
     /// generation with an identical Node tool, not complete desired-set
-    /// equality. Unrelated tool changes need no Node download. Windows
-    /// trees may be inspected via download, but promotion remains
-    /// explicitly unqualified.
+    /// equality. Unrelated tool changes need no Node download. Only a
+    /// native Windows x64 host promotes Windows trees; arm64 stays
+    /// unqualified and never borrows the x64 artifact.
     pub async fn prepare_if_needed(
         &self,
         store: &Store,
@@ -222,7 +222,7 @@ impl NodePlan {
         transport: &NodeTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedNode>, Error> {
-        if self.windows || !cfg!(unix) {
+        if !promotable(&self.tool) {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.iter().any(|tool| tool == &self.tool) {
@@ -361,7 +361,7 @@ impl PreparedNode {
         tool: &Tool,
         destination: &Path,
     ) -> Result<(), turborepo_tool_install::Error> {
-        if tool.platform.starts_with("windows-") {
+        if !promotable(tool) {
             return Err(turborepo_tool_install::Error::UnsupportedPlatform);
         }
         if tool != &self.tool
@@ -374,6 +374,15 @@ impl PreparedNode {
         Ok(())
     }
 }
+/// Hosts promote only their own artifact family: Unix trees on Unix and
+/// Windows x64 trees on native Windows.
+fn promotable(tool: &Tool) -> bool {
+    match tool.platform.strip_prefix("windows-") {
+        Some(arch) => cfg!(windows) && arch == "x64",
+        None => cfg!(unix),
+    }
+}
+
 pub(crate) fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
     for entry in fs::read_dir(source)? {
         let entry = entry?;

@@ -30,8 +30,8 @@ pub enum Error {
     #[error("activation planning supports only managed Node/pnpm; use a supported setup adapter")]
     UnsupportedAdapter,
     #[error(
-        "managed activation is unqualified for this platform; use a supported macOS/GNU Linux \
-         target"
+        "managed activation is unqualified for this platform; use a supported macOS, GNU Linux or \
+         Windows x64 target"
     )]
     UnsupportedPlatform,
     #[error(
@@ -70,16 +70,15 @@ impl ActivationPlan {
     /// storage creation. A missing lock is an error, not unconfigured-mode
     /// policy for future callers.
     pub fn inspect(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
-        let platform = context.artifact_platform();
-        if !cfg!(unix)
-            || !matches!(
-                platform,
-                Platform::MacosX64
-                    | Platform::MacosArm64
-                    | Platform::LinuxX64Gnu
-                    | Platform::LinuxArm64Gnu
-            )
-        {
+        let qualified = match context.artifact_platform() {
+            Platform::MacosX64
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu => cfg!(unix),
+            Platform::WindowsX64 => cfg!(windows),
+            _ => false,
+        };
+        if !qualified {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = repo.canonicalize().map_err(StorageError::from)?;
@@ -147,6 +146,11 @@ impl ActivationPlan {
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
+            // PATH consumers such as cmd.exe do not resolve `%~dp0..` under a
+            // verbatim `\\?\` prefix; use the ordinary spelling when exact.
+            #[cfg(windows)]
+            bin: dunce::simplified(&current.bin).to_path_buf(),
+            #[cfg(not(windows))]
             bin: current.bin,
             tools,
             runtime_env: BTreeMap::new(),

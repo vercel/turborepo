@@ -69,6 +69,8 @@ fn invoke(root: &Path, words: &[&str], ci: bool) -> (i32, String) {
         .args(words)
         .env("PATH", "")
         .env("HOME", root.join("home"))
+        .env("USERPROFILE", root.join("home"))
+        .env("APPDATA", root.join("appdata"))
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
         .env("VERCEL_CONFIG_DIR_PATH", root.join("config"))
@@ -611,12 +613,15 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
-    let qualified = cfg!(all(
-        any(target_arch = "x86_64", target_arch = "aarch64"),
-        any(
-            target_os = "macos",
-            all(target_os = "linux", target_env = "gnu")
-        )
+    let qualified = cfg!(any(
+        all(
+            any(target_arch = "x86_64", target_arch = "aarch64"),
+            any(
+                target_os = "macos",
+                all(target_os = "linux", target_env = "gnu")
+            )
+        ),
+        all(windows, target_arch = "x86_64")
     ));
     for ci in [false, true] {
         for extra in [
@@ -633,8 +638,10 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
                 ci,
                 if qualified {
                     "managed activation requires turbo.lock"
+                } else if cfg!(all(windows, target_arch = "aarch64")) {
+                    "managed setup is not qualified for Windows arm64"
                 } else {
-                    "managed promotion requires macOS or GNU Linux"
+                    "managed promotion requires macOS, GNU Linux or Windows x64"
                 },
             );
         }
@@ -646,12 +653,16 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     }
 }
 
-#[cfg(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+#[cfg(any(
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    ),
+    all(windows, target_arch = "x86_64")
 ))]
 #[test]
 fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
     use turborepo_setup::{
@@ -684,14 +695,20 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
         ("macos", "aarch64") => (Platform::MacosArm64, "macos-arm64", "darwin-arm64"),
         ("macos", _) => (Platform::MacosX64, "macos-x64", "darwin-x64"),
         ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64-gnu", "linux-arm64"),
+        ("windows", _) => (Platform::WindowsX64, "windows-x64", "win-x64"),
         _ => (Platform::LinuxX64Gnu, "linux-x64-gnu", "linux-x64"),
     };
     let prefix = format!("node-v24.0.0-{spelling}");
+    let (extension, format, executable) = if cfg!(windows) {
+        ("zip", "zip", "node.exe")
+    } else {
+        ("tar.gz", "tar-gz", "bin/node")
+    };
     let lock = serde_json::json!({"schemaVersion":0,"tools":{
         "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
             "installation":{"kind":"managed","artifacts":{selector:{"distribution":{
-                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz"),"sha256":"0".repeat(64),
-                "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}}}}}},
+                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.{extension}"),"sha256":"0".repeat(64),
+                "format":format,"rootPrefix":prefix,"executables":{"node":executable}}}}}},
         "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
             "installation":{"kind":"managed","artifacts":{"any":{"package":{
                 "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"1".repeat(64),
@@ -714,6 +731,7 @@ fn standalone_check_reports_only_node_pnpm_readiness_and_rejects_damage() {
             let file = destination.join(relative);
             fs::create_dir_all(file.parent().unwrap())?;
             fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
+            #[cfg(unix)]
             fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
         }
         fs::write(destination.join("resource"), "adjacent resource")?;

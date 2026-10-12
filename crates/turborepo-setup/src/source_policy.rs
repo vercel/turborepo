@@ -30,7 +30,7 @@ pub enum Error {
          retrying"
     )]
     Environment,
-    #[error("official-only source preflight is not qualified on non-Unix hosts")]
+    #[error("official-only source preflight is not qualified on this host")]
     UnsupportedHost,
     #[error(
         "official-only setup rejects {0:?} configuration, including empty npmrc files; remove it \
@@ -60,11 +60,11 @@ impl OfficialSourcePolicy {
     /// are inspected. Unreported custom npm global prefixes/config locations
     /// are unsupported: do not call this for a wrapper with unknown provenance.
     /// Bundled npmrc is also rejected: it can redirect npm's effective prefix.
-    /// Non-Unix hosts remain explicitly unqualified.
+    /// Windows inspects npm's default global prefix, `%APPDATA%\npm`.
     /// Every NPM_CONFIG_* override (including prefix/globalconfig/userconfig),
     /// regardless of spelling/value, is rejected before filesystem inspection.
     pub fn inspect(invocation: &Path, current_node: Option<&Path>) -> Result<Self, Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedHost);
         }
         let env: Vec<_> = std::env::vars_os().collect();
@@ -80,7 +80,7 @@ impl OfficialSourcePolicy {
             &home,
             current_node,
             &env,
-            system_configs(),
+            system_configs(&env)?,
             None,
         )
     }
@@ -103,20 +103,26 @@ fn reject_environment(env: &[(OsString, OsString)]) -> Result<(), Error> {
     Ok(())
 }
 
-fn system_configs() -> Vec<PathBuf> {
-    if cfg!(unix) {
-        [
-            "/etc/npmrc",
-            "/usr/etc/npmrc",
-            "/usr/local/etc/npmrc",
-            "/opt/homebrew/etc/npmrc",
-        ]
-        .into_iter()
-        .map(PathBuf::from)
-        .collect()
-    } else {
-        Vec::new()
+fn system_configs(env: &[(OsString, OsString)]) -> Result<Vec<PathBuf>, Error> {
+    if cfg!(windows) {
+        // Node's Windows installers set npm's global prefix to %APPDATA%\npm.
+        let app_data = env
+            .iter()
+            .find(|(key, _)| key.eq_ignore_ascii_case("APPDATA"))
+            .map(|(_, value)| PathBuf::from(value))
+            .filter(|path| path.is_absolute())
+            .ok_or(Error::Locations)?;
+        return Ok(vec![app_data.join("npm").join("etc").join("npmrc")]);
     }
+    Ok([
+        "/etc/npmrc",
+        "/usr/etc/npmrc",
+        "/usr/local/etc/npmrc",
+        "/opt/homebrew/etc/npmrc",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .collect())
 }
 
 // Owned inputs are the fixture seam. Only tests/test-support can substitute
@@ -137,7 +143,12 @@ fn inspect_inputs(
     paths.extend(system.into_iter().flat_map(|path| {
         let bundled = path.parent().and_then(Path::parent).map(|prefix| {
             (
-                prefix.join("lib/node_modules/npm/npmrc"),
+                // Windows global prefixes have no lib/ level.
+                prefix.join(if cfg!(windows) {
+                    "node_modules/npm/npmrc"
+                } else {
+                    "lib/node_modules/npm/npmrc"
+                }),
                 ConfigOwner::System,
             )
         });
