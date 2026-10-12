@@ -855,11 +855,13 @@ impl Store {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = fs::canonicalize(repo)?;
-        real_directory(&repo)?;
+        shared_directory(&repo)?;
         let turbo = repo.join(".turbo");
         let root = turbo.join("tools");
-        for path in [&turbo, &root] {
-            match real_directory(path) {
+        let checks: [(&Path, DirectoryCheck); 2] =
+            [(&turbo, shared_directory), (&root, real_directory)];
+        for (path, check) in checks {
+            match check(path) {
                 Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
                 result => result?,
             }
