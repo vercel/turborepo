@@ -3,7 +3,7 @@
 //! release's own `sha256.sum` is bound to that SAME release. No installation,
 //! repository I/O, Python provisioning or dependency sync.
 
-use std::{collections::BTreeMap, time::Duration};
+use std::{collections::BTreeMap, sync::Mutex, time::Duration};
 
 use semver::Version;
 use turborepo_download::{ApprovedOrigin, DownloadClient, Limits};
@@ -130,6 +130,10 @@ pub struct UvTransport {
     pub(crate) client: DownloadClient,
     // Test transport changes only the origin; lock provenance remains official.
     pub(crate) origin: String,
+    // Archive bytes kept by Python resolution's listing download so the same
+    // setup run provisions that uv without downloading it again. Taken once
+    // and re-verified against the locked digest before use.
+    pub(crate) retained: Mutex<Option<Vec<u8>>>,
 }
 
 impl UvTransport {
@@ -137,6 +141,7 @@ impl UvTransport {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(uv::ORIGIN)?])?,
             origin: uv::ORIGIN.into(),
+            retained: Mutex::default(),
         })
     }
 
@@ -164,6 +169,7 @@ impl UvTransport {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
+            retained: Mutex::default(),
         })
     }
 }
