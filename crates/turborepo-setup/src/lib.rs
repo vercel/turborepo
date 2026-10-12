@@ -15,6 +15,7 @@ pub mod node_provision;
 pub mod node_resolution;
 pub mod npm_provision;
 pub mod package_manager;
+pub mod pep440;
 mod registry_provision;
 pub mod pnpm_provision {
     pub use crate::registry_provision::{
@@ -24,6 +25,7 @@ pub mod pnpm_provision {
 pub mod registry_metadata;
 pub mod registry_resolution;
 pub mod source_policy;
+pub mod uv_discovery;
 pub mod version_managers;
 pub mod version_request;
 pub mod writer_storage;
