@@ -20,6 +20,8 @@ fn archive(files: &[(&str, &str)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in files {
         let mut header = tar::Header::new_gnu();
+        // Like the official builds, rename in place: the old tail follows the NUL.
+        header.set_path(format!("python/install/{path}")).unwrap();
         header.set_size(body.len() as u64);
         header.set_mode(0o755);
         header.set_cksum();
@@ -38,9 +40,15 @@ fn archive(files: &[(&str, &str)]) -> Vec<u8> {
     gzip.write_all(&tar.into_inner().unwrap()).unwrap();
     gzip.finish().unwrap()
 }
+/// Records how staging compiles bytecode, where real CPython would write it.
+const INTERPRETER: &str = "#!/bin/sh\nif [ \"$3 $4\" = \"-m compileall\" ]; then\n  mkdir \
+                           lib/python3.12/__pycache__ && echo \"${PWD##*/} ${HOME-unset} $*\" > \
+                           lib/python3.12/__pycache__/os.pyc\n  exit\nfi\necho \"cpython $0 $*\"\n";
+const PYC: &str = "lib/python3.12/__pycache__/os.pyc";
+
 fn good() -> Vec<u8> {
     archive(&[
-        ("bin/python3.12", "#!/bin/sh\necho \"cpython $0 $*\"\n"),
+        ("bin/python3.12", INTERPRETER),
         ("lib/python3.12/os.py", "# stdlib resource"),
     ])
 }
@@ -114,6 +122,11 @@ async fn verified_build_is_staged_at_the_uv_key_with_python_shims() {
         .bin
         .join("../tools/python/cpython-3.12.12-linux-x86_64-gnu");
     assert!(tree.join("lib/python3.12/os.py").is_file());
+    assert_eq!(
+        fs::read_to_string(tree.join(PYC)).unwrap(),
+        "cpython-3.12.12-linux-x86_64-gnu unset -I -B -m compileall -q -f -j 0 \
+         --invalidation-mode unchecked-hash lib/python3.12\n"
+    );
     for name in ["python", "python3"] {
         let output = Command::new(current.bin.join(name))
             .arg("-V")
@@ -128,6 +141,58 @@ async fn verified_build_is_staged_at_the_uv_key_with_python_shims() {
         Outcome::Unchanged
     );
     assert_eq!(upstream.hits(), 1);
+    // Bytecode is hashed like every other managed byte.
+    fs::write(tree.join(PYC), b"stale").unwrap();
+    assert_eq!(
+        install(&mut store, &plan, &transport).await.unwrap(),
+        Outcome::Replaced
+    );
+    assert_eq!(upstream.hits(), 2);
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn failed_bytecode_compilation_publishes_nothing() {
+    let platform = Platform::LinuxX64Gnu;
+    let bytes = archive(&[("bin/python3.12", "#!/bin/sh\nexit 3\n")]);
+    let upstream =
+        LoopbackServer::new([(format!("{RELEASES}{PATH}"), bytes.clone())], |_| {}).unwrap();
+    let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    assert!(matches!(
+        install(&mut store, &plan, &transport).await,
+        Err(Error::Install(turborepo_tool_install::Error::Io(_)))
+    ));
+    assert!(store.current().unwrap().is_none());
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "current_thread")]
+async fn linux_terminfo_case_siblings_install_as_distinct_terminals() {
+    let platform = Platform::LinuxX64Gnu;
+    let bytes = archive(&[
+        ("bin/python3.12", "#!/bin/sh\n"),
+        ("share/terminfo/E/Eterm", "Eterm"),
+        ("share/terminfo/e/eterm", "eterm"),
+    ]);
+    let upstream =
+        LoopbackServer::new([(format!("{RELEASES}{PATH}"), bytes.clone())], |_| {}).unwrap();
+    let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    install(&mut store, &plan, &transport).await.unwrap();
+    let terminfo = store
+        .current()
+        .unwrap()
+        .unwrap()
+        .bin
+        .join("../tools/python/cpython-3.12.12-linux-x86_64-gnu/share/terminfo");
+    for name in ["E/Eterm", "e/eterm"] {
+        let body = fs::read_to_string(terminfo.join(name)).unwrap();
+        assert_eq!(body, name[2..]);
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
