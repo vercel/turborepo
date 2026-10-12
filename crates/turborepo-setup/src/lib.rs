@@ -9,6 +9,7 @@ pub mod execution_identity;
 pub mod js_resolution;
 pub mod lifecycle;
 pub mod lock;
+pub mod mirror;
 pub mod native_baseline;
 pub mod node;
 pub mod node_discovery;

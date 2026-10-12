@@ -6,6 +6,8 @@ use super::*;
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 #[path = "ci_tests.rs"]
 mod ci;
+#[path = "mirror_tests.rs"]
+mod mirror;
 #[path = "no_lock_tests.rs"]
 mod no_lock;
 #[path = "refresh.rs"]

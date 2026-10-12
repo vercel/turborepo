@@ -14,6 +14,7 @@ use crate::{
     NodeArtifact,
     artifact_cache::ArtifactCache,
     lock::{self, Format, Installation, Lock, Platform},
+    mirror::Mirror,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -52,8 +53,9 @@ const ARCHIVE_LIMIT: usize = 128 * 1024 * 1024;
 
 pub struct NodeTransport {
     client: DownloadClient,
-    // Test transport changes only the origin; lock provenance remains official.
-    origin: String,
+    // Mirrors and fixtures change only this `/dist` base; lock provenance
+    // remains official.
+    dist: String,
     cache: Option<ArtifactCache>,
     offline: bool,
 }
@@ -61,7 +63,20 @@ impl NodeTransport {
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
-            origin: "https://nodejs.org".into(),
+            dist: "https://nodejs.org/dist".into(),
+            cache: None,
+            offline: false,
+        })
+    }
+
+    /// Send the same official requests to a validated `/dist` mirror.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            dist: mirror.base().into(),
             cache: None,
             offline: false,
         })
@@ -98,22 +113,18 @@ impl NodeTransport {
         let read = async |path: &str, limit| {
             self.client
                 .read_metadata(
-                    &format!("{}{path}", self.origin),
+                    &format!("{}{path}", self.dist),
                     turborepo_download::Limits::new(limit, Duration::from_secs(30))?,
                 )
                 .await
         };
-        let index = read("/dist/index.json", MAX_INDEX_BYTES).await?;
+        let index = read("/index.json", MAX_INDEX_BYTES).await?;
         let releases = ReleaseIndex::parse(&index).map_err(node_resolution::Error::from)?;
         let selected = requirements
             .resolve(&releases.releases())
             .map_err(node_resolution::Error::from)?;
         let version = selected.version.to_string();
-        let checksums = read(
-            &format!("/dist/v{version}/SHASUMS256.txt"),
-            MAX_CHECKSUM_BYTES,
-        )
-        .await?;
+        let checksums = read(&format!("/v{version}/SHASUMS256.txt"), MAX_CHECKSUM_BYTES).await?;
         Ok(node_resolution::resolve(
             requirements,
             &index,
@@ -131,7 +142,7 @@ impl NodeTransport {
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
-            origin: origin.trim_end_matches('/').into(),
+            dist: format!("{}/dist", origin.trim_end_matches('/')),
             cache: None,
             offline: false,
         })
@@ -282,10 +293,10 @@ impl NodePlan {
             None => {
                 let url = format!(
                     "{}{}",
-                    transport.origin,
+                    transport.dist,
                     self.artifact
                         .url
-                        .strip_prefix("https://nodejs.org")
+                        .strip_prefix("https://nodejs.org/dist")
                         .ok_or(Error::InvalidLock)?
                 );
                 let bytes = transport
