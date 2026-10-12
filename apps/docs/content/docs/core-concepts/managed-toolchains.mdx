@@ -244,7 +244,7 @@ turbo setup --tools-only
 turbo run build
 ```
 
-When `turbo` detects CI, `turbo setup` uses [frozen mode](/docs/reference/setup#--frozen) by default. It installs exactly what `turbo.lock` records and fails, without writing, if `turbo.lock` is missing or no longer matches your declarations. Run `turbo setup` locally and commit the updated lock to fix it.
+When `turbo` detects CI, `turbo setup` uses [frozen mode](/docs/reference/setup#--frozen) by default. It installs exactly what `turbo.lock` records and fails, without writing, if `turbo.lock` is missing or no longer matches your declarations. Run `turbo setup` locally and commit the updated lock to fix it. To keep `turbo.lock` current when Renovate or Dependabot change a declaration, see [Updating turbo.lock with dependency bots](/docs/guides/updating-turbo-lock).
 
 To check an existing installation without changing anything, use [`turbo setup --check --tools-only`](/docs/reference/setup#--check).
 

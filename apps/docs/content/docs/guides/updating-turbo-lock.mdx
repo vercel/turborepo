@@ -1,0 +1,121 @@
+---
+title: Updating turbo.lock with dependency bots
+description: Keep turbo.lock current when Renovate or Dependabot update your Node.js and pnpm versions.
+product: turborepo
+type: guide
+summary: Run turbo setup from Renovate's postUpgradeTasks, or update turbo.lock on the branch when a bot can't run commands.
+prerequisites:
+  - /docs/core-concepts/managed-toolchains
+related:
+  - /docs/reference/setup
+  - /docs/crafting-your-repository/constructing-ci
+---
+
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+[`turbo.lock`](/docs/core-concepts/managed-toolchains#turbolock) records the exact toolchain that your declarations resolve to. When a dependency bot changes one of those declarations, the same pull request must update `turbo.lock`. Otherwise, [frozen mode](/docs/reference/setup#frozen-mode) stops `turbo setup` in CI:
+
+```txt title="Terminal"
+turbo.lock declarations changed; run setup locally and commit the updated lock
+```
+
+<Callout type="warn">
+  [Managed toolchains](/docs/core-concepts/managed-toolchains) are experimental.
+  This guide covers the Node.js and pnpm declarations that this release
+  supports.
+</Callout>
+
+## Updates that change `turbo.lock`
+
+Only changes to the [declarations](/docs/reference/setup#supported-declarations) that `turbo.lock` records require a lock update:
+
+| Declaration                                   | Renovate manager |
+| --------------------------------------------- | ---------------- |
+| `.nvmrc`                                      | `nvm`            |
+| `.node-version`                               | `nodenv`         |
+| `engines.node` in `package.json`              | `npm`            |
+| `devEngines.runtime` in `package.json`        | `npm`            |
+| `packageManager` in `package.json`            | `npm`            |
+| `devEngines.packageManager` in `package.json` | `npm`            |
+
+Updates to your dependencies and your package manager's lockfile don't affect `turbo.lock`, so frozen `turbo setup` still passes on those pull requests.
+
+## Renovate
+
+Renovate can run `turbo setup` after it updates a declaration, using [`postUpgradeTasks`](https://docs.renovatebot.com/configuration-options/#postupgradetasks). Renovate only runs commands that match its [`allowedCommands`](https://docs.renovatebot.com/self-hosted-configuration/#allowedcommands) setting, and `turbo` must be installed where Renovate runs, so this requires self-hosted Renovate. With the Mend-hosted Renovate app, [update `turbo.lock` on the branch](#dependabot-and-other-tools) instead.
+
+<Steps>
+<Step>
+### Install `turbo` where Renovate runs
+
+Install the [standalone `turbo` binary](/docs/getting-started/installation#global-installation) in the environment that runs Renovate, so that `turbo` is on its `PATH`. The global binary always runs `turbo setup` itself, so Renovate doesn't need to install your dependencies first.
+
+The environment must also meet the [requirements for `turbo setup`](/docs/reference/setup#requirements), including the [official-only source policy](/docs/reference/setup#official-only-setup-rejects-npm-configuration).
+
+</Step>
+<Step>
+### Allow the command
+
+Add the command to `allowedCommands` in your self-hosted Renovate configuration:
+
+```js title="config.js"
+module.exports = {
+  allowedCommands: ["^turbo setup --tools-only --no-frozen$"],
+};
+```
+
+</Step>
+<Step>
+### Run `turbo setup` after toolchain updates
+
+Add a package rule to your repository's Renovate configuration:
+
+```json title="./renovate.json"
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      "matchManagers": ["npm", "nvm", "nodenv"],
+      "matchDepNames": ["node", "pnpm"],
+      "postUpgradeTasks": {
+        "commands": ["turbo setup --tools-only --no-frozen"],
+        "fileFilters": ["turbo.lock"]
+      }
+    }
+  ]
+}
+```
+
+</Step>
+</Steps>
+
+When Renovate updates a declaration, it runs `turbo setup` in its checkout. `turbo setup` re-resolves only the changed tool and installs the toolchain, and Renovate commits the updated `turbo.lock` with the declaration change. When a branch groups several updates, later runs find `turbo.lock` already current and leave it unchanged.
+
+This configuration relies on these settings:
+
+- **`--no-frozen`**: Renovate sets `CI=true` for every command that it runs, so `turbo setup` would otherwise use frozen mode and fail on the changed declaration. `--no-frozen` uses local mode, which updates `turbo.lock`.
+- **`fileFilters`**: Limits the files that Renovate commits to `turbo.lock`. The installed tools in `.turbo/tools` are Git-ignored, so they're never committed.
+- **`matchManagers` and `matchDepNames`**: Limit the task to Node.js and pnpm updates. Other updates don't change `turbo.lock`, so running `turbo setup` for them only adds time.
+
+## Dependabot and other tools
+
+Dependabot can't run commands, so it can't update `turbo.lock`. The same applies to any tool or edit that changes a declaration without running `turbo setup`, such as editing `.nvmrc` in your Git provider's web interface.
+
+When one of these pull requests changes a declaration, update `turbo.lock` on its branch from a machine that can run `turbo setup`:
+
+```bash title="Terminal"
+gh pr checkout <number>
+turbo setup --tools-only
+git add turbo.lock
+git commit -m "chore: Update turbo.lock"
+git push
+```
+
+Outside of CI, `turbo setup` uses local mode, so it updates `turbo.lock` and prints each change:
+
+```txt title="Terminal"
+turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
+pnpm: 10.17.1 -> 10.18.0
+```

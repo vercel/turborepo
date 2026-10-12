@@ -218,6 +218,8 @@ turbo.lock declarations changed; run setup locally and commit the updated lock
 
 A declaration, such as `.nvmrc` or `packageManager`, no longer matches `turbo.lock`. Run `turbo setup --tools-only` locally and commit the updated `turbo.lock`. `turbo run` and `turbo setup --check` report the same problem as `native declarations disagree with turbo.lock`.
 
+If a dependency bot changed the declaration, see [Updating turbo.lock with dependency bots](/docs/guides/updating-turbo-lock) to update `turbo.lock` in the same pull request.
+
 ### `--update-lock` in CI
 
 ```txt title="Terminal"
