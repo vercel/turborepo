@@ -1,0 +1,66 @@
+# TEMPORARY: verifies scripts/standalone-windows-smoke.ps1 on a hosted Windows
+# x64 runner for this draft PR. Removed before review.
+name: Temporary Windows standalone smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/qual2-windows-smoke-tmp.yml"
+      - "scripts/standalone-windows-smoke.ps1"
+      - "scripts/setup-fixture-mirror.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: windows-latest-8-core-oss
+    timeout-minutes: 60
+    steps:
+      - name: Install git (Windows larger runners)
+        shell: cmd
+        run: |
+          where git >nul 2>nul
+          if not errorlevel 1 exit /b 0
+          if exist "%ProgramFiles%\Git\cmd\git.exe" (
+            echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+            exit /b 0
+          )
+          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
+          if not exist "%ProgramFiles%\Git" mkdir "%ProgramFiles%\Git"
+          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          if exist "%ProgramFiles%\Git\etc\gitconfig" del "%ProgramFiles%\Git\etc\gitconfig"
+          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+
+      - run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-node
+        with:
+          package-install: "false"
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          shared-cache-key: turborepo-debug-build
+          cache: "false"
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - uses: ./.github/actions/setup-capnproto
+
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: target
+          key: cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-${{ hashFiles('Cargo.toml', 'crates/**', 'packages/turbo-repository/rust/**', 'version.txt') }}
+          restore-keys: |
+            cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-
+
+      - run: cargo build -p turbo
+
+      - name: Smoke
+        shell: powershell
+        run: ./scripts/standalone-windows-smoke.ps1 -Version (& target\debug\turbo.exe --version) -Binary target\debug\turbo.exe
