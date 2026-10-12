@@ -429,9 +429,10 @@ fn npmrc_matching_the_policy_registry_mirror_is_still_rejected() -> TestResult {
     )?;
     assert!(fixture.check(&[]).is_ok());
     fs::write(fixture.root.join(".npmrc"), format!("registry={mirror}/\n"))?;
+    // Still rejected; #14740 names the project npmrc's rejected line.
     assert_eq!(
         fixture.check(&[]).err(),
-        Some(Error::Configured(ConfigOwner::Repository))
+        Some(Error::Setting(ConfigOwner::Repository, 1))
     );
     Ok(())
 }
