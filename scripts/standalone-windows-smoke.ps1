@@ -85,8 +85,8 @@ function Invoke-Turbo([string]$Directory, [string[]]$Arguments, [hashtable]$Extr
   }
 }
 
-function Assert-Succeeds([string]$Directory, [string[]]$Arguments, [hashtable]$Extra = @{}, [switch]$Offline) {
-  $result = Invoke-Turbo $Directory $Arguments $Extra
+function Assert-Succeeds([string]$Directory, [string[]]$Arguments, [hashtable]$Extra = @{}, [string]$Stdin = $null, [switch]$Offline) {
+  $result = Invoke-Turbo $Directory $Arguments $Extra $Stdin
   if ($result.Code -ne 0) { Fail "turbo $Arguments exited $($result.Code): $($result.Text)" }
   if ($Offline -and $result.Requests -ne 0) { Fail "turbo $Arguments made $($result.Requests) mirror requests: $($result.Text)" }
   return $result
