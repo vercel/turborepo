@@ -353,7 +353,7 @@ async fn plans_require_the_exact_locked_platform_and_shape() {
         ));
     }
 
-    // Windows promotion is unqualified.
+    // Windows artifacts install only on Windows hosts.
     let mut windows_lock = entry("1.2.3", "fixture.exe", SCRIPT.as_bytes(), "binary");
     let artifacts = windows_lock["installation"]["artifacts"]
         .as_object_mut()

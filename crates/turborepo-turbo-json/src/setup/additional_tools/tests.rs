@@ -117,6 +117,10 @@ fn archives_without_a_top_level_directory_omit_the_root_prefix() {
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["executables"]["fixture"] = json!("bin\\fixture"); "backslash path")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["executables"]["fixture"] = json!("bin/NUL"); "device path")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["executables"]["bin/fixture"] = json!("bin/fixture"); "nested name")]
+#[test_case(|t| t["fixture"]["artifacts"]["windows-x64"]["executables"]["fixture"] = json!("bin/fixture"); "windows path without pathext")]
+#[test_case(|t| t["fixture"]["artifacts"]["windows-x64"]["executables"]["fixture"] = json!("bin/fixture.bat"); "windows batch file")]
+#[test_case(|t| t["fixture"]["artifacts"]["windows-x64"]["executables"]["fixture"] = json!("bin/fixture+1.cmd"); "windows launcher spelling")]
+#[test_case(|t| t["fixture"]["artifacts"]["windows-x64"] = binary("tool.exe"); "windows name with suffix")]
 fn malformed_declarations_point_at_their_source(mutate: fn(&mut Value)) {
     let error = with(mutate).unwrap_err();
     assert!(
