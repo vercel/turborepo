@@ -17,6 +17,7 @@ use turborepo_repository::toolchain::ToolchainId;
 use turborepo_setup::{
     activation::ActivationPlan,
     cargo_prefetch,
+    go_prefetch::{self, Prefetch},
     js_install::{self, Frozen},
     lifecycle::{self, Installer, Policy},
     lock::{Ecosystems, Lock, Snapshot},
@@ -51,6 +52,8 @@ pub enum Error {
     #[error(transparent)]
     Cargo(#[from] cargo_prefetch::Error),
     #[error(transparent)]
+    Go(#[from] go_prefetch::Error),
+    #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
     #[error(transparent)]
     Sources(#[from] turborepo_setup::lock::StorageError),
@@ -75,6 +78,8 @@ enum Adapter {
     Uv { lifecycle: lifecycle::Request },
     /// `cargo fetch --locked` into the clone's private Cargo home.
     Cargo { lifecycle: lifecycle::Request },
+    /// `go mod download` with read-only module files.
+    Go { lifecycle: lifecycle::Request },
 }
 
 /// One installer invocation for the locked versions.
@@ -107,6 +112,7 @@ impl Adapter {
             Self::Javascript { lockfile, .. } => lockfile,
             Self::Uv { .. } => "uv.lock",
             Self::Cargo { .. } => "Cargo.lock",
+            Self::Go { .. } => "go.sum",
         }
     }
 
@@ -144,6 +150,7 @@ impl Adapter {
                 *lifecycle,
                 vec!["cargo", "fetch", "--locked"],
             ),
+            Self::Go { lifecycle } => (Installer::Go, *lifecycle, vec!["go", "mod", "download"]),
         };
         let policy = Policy::evaluate(root, installer.clone(), lifecycle)?;
         command.extend(policy.args().iter().copied());
@@ -184,6 +191,24 @@ impl Adapter {
                     Err(error) => Err(error.into()),
                 }
             }
+            Self::Go { .. } => {
+                let go = env.program("go")?;
+                let prefetch = Prefetch {
+                    go: &go,
+                    root,
+                    offline: false,
+                    env: &env.vars,
+                };
+                match prefetch.run() {
+                    Ok(()) => Ok(None),
+                    // go's output is captured; show its diagnostic tail.
+                    Err(error @ go_prefetch::Error::Failed { code, .. }) => {
+                        eprintln!("{error}");
+                        Ok(Some(code))
+                    }
+                    Err(error) => Err(error.into()),
+                }
+            }
         }
     }
 }
@@ -216,6 +241,7 @@ impl Dependencies {
                     python(root, snapshot, lifecycle)?
                 }
                 ToolPolicy::Managed if *id == ToolchainId::RUST => rust(root, snapshot, lifecycle)?,
+                ToolPolicy::Managed if *id == ToolchainId::GO => go(snapshot, lifecycle),
                 ToolPolicy::Managed => Step::Skip(format!(
                     "{} dependency setup is not supported yet",
                     id.as_str()
@@ -425,6 +451,15 @@ fn rust(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Resu
         return Err(cargo_prefetch::Error::MissingLock.into());
     }
     Ok(Step::Install(Adapter::Cargo { lifecycle }))
+}
+
+/// Modules without dependencies have no go.sum, so go itself reports missing
+/// checksums rather than setup requiring the file.
+fn go(snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Step {
+    if !snapshot.declarations().contains_key("go") {
+        return Step::Skip("no managed Go toolchain; declare go in go.mod or go.work".into());
+    }
+    Step::Install(Adapter::Go { lifecycle })
 }
 
 /// Managed tools first on PATH plus their runtime variables, over the
