@@ -91,6 +91,14 @@ struct RepoContextInput {
     root_turbo_json: TurboJson,
 }
 
+/// Preserve requested/inferred mode intent, but let graph construction veto
+/// single-package execution when contributors provide other scopes. A root-only
+/// graph must not promote an empty workspace into single-package mode. The
+/// structural graph sentinel is not an execution scope.
+fn resolved_single_package(requested: bool, graph: &PackageGraph) -> bool {
+    graph.resolved_single_package(requested)
+}
+
 fn build_repo_context(input: RepoContextInput) -> Arc<RepoContext> {
     Arc::new(RepoContext {
         repo_root: input.repo_root,
@@ -991,7 +999,12 @@ impl RunBuilder {
         // tolerated in those modes; a malformed one always fails, and a missing
         // one without native support keeps the original hard error.
         let graph_features = RepositoryGraphFeatures::new(&self.opts.future_flags);
-        let root_package_json = graph_features.load_root_package_json(&self.repo_root)?;
+        // Revalidate at the CLI/config boundary; shim inference is a separate
+        // process-scoped observation. Reuse this decision for graph construction.
+        let (root_package_json, contributor_plan) = graph_features
+            .observe_root(&self.repo_root)?
+            .into_graph_parts()
+            .map_err(turborepo_repository::package_graph::Error::from)?;
         let run_telemetry = GenericEventBuilder::new().with_parent(telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(telemetry);
@@ -1008,13 +1021,6 @@ impl RunBuilder {
         if is_linked {
             run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
-        let is_single_package = self.opts.run_opts.single_package;
-        repo_telemetry.track_type(if is_single_package {
-            RepoType::SinglePackage
-        } else {
-            RepoType::Monorepo
-        });
-
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
         run_telemetry.track_ai_agent(turborepo_ai_agents::get_agent());
 
@@ -1066,7 +1072,7 @@ impl RunBuilder {
                 } else {
                     builder
                 };
-                let builder = graph_features.configure(builder);
+                let builder = graph_features.configure_with_plan(builder, &contributor_plan);
 
                 let graph = builder
                     .build_lazy()
@@ -1099,6 +1105,13 @@ impl RunBuilder {
             }
         };
 
+        let is_single_package =
+            resolved_single_package(self.opts.run_opts.single_package, &pkg_dep_graph);
+        repo_telemetry.track_type(if is_single_package {
+            RepoType::SinglePackage
+        } else {
+            RepoType::Monorepo
+        });
         if let Some(package_manager) = pkg_dep_graph.package_manager() {
             repo_telemetry.track_package_manager(package_manager.name().to_string());
         }
@@ -1485,7 +1498,13 @@ impl RunBuilder {
             // has unknown outgoing edges: loading its owner can grow the
             // closure (and the hashed directory set) further, so each pass
             // re-checks until the closure reaches no unloaded scope.
-            if let Some(plan) = lazy_plan.as_mut() {
+            // Identity-only consumers (plain `ls`) have no task metadata or
+            // hashing demands. Selecting an inventory scope is not itself a
+            // reason to load its owner. Task/edge queries still load through
+            // whole-graph requirements above or their requested tasks here.
+            if (!self.opts.run_opts.tasks.is_empty() || needs_all_packages)
+                && let Some(plan) = lazy_plan.as_mut()
+            {
                 let mut owners_to_load: HashSet<ToolchainId> = filtered_pkgs
                     .keys()
                     .filter_map(|package| pkg_dep_graph.unloaded_scope_owner(package))
@@ -2126,7 +2145,7 @@ impl RunBuilder {
 
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
-        self,
+        mut self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
     ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
@@ -2151,6 +2170,12 @@ impl RunBuilder {
             repo_index,
             untracked_scan_scope_tx,
         } = self.discover_repo(&telemetry).await?;
+
+        // Graph construction may override stale inference or --single-package
+        // when contributors supply additional execution scopes. Keep loader,
+        // scope/engine construction, and the final run/summary options aligned
+        // with that authoritative shape. Lazy loading preserves scope identities.
+        self.opts.run_opts.single_package = is_single_package;
 
         // SCM-independent work runs while the background scm_task continues.
         // The await is deferred until just before the first SCM consumer,
@@ -2588,7 +2613,7 @@ impl RunBuilder {
             &self.repo_root,
             pkg_dep_graph,
             turbo_json_loader,
-            self.opts.run_opts.single_package,
+            resolved_single_package(self.opts.run_opts.single_package, pkg_dep_graph),
         )
         .with_root_tasks(root_turbo_json.tasks.keys().cloned())
         .with_tasks_only(self.opts.run_opts.only)
@@ -3035,6 +3060,52 @@ mod origins_match_tests {
                 .build(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn empty_javascript_workspace_preserves_multi_package_mode() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        // An unnamed JavaScript root with no discovered packages still has a
+        // root execution scope, but does not imply single-package mode.
+        let graph = package_graph_with_dependencies(&repo_root, &[]);
+        assert_eq!(
+            graph
+                .package_scope_directories()
+                .map(|(package, _)| package)
+                .collect::<Vec<_>>(),
+            vec![PackageName::Root]
+        );
+        let builder = run_builder(&repo_root, &[]);
+        assert!(!builder.opts.run_opts.single_package);
+        let single_package = resolved_single_package(builder.opts.run_opts.single_package, &graph);
+        assert!(!single_package);
+        assert!(resolved_single_package(true, &graph));
+
+        // A qualified root task is valid workspace configuration but rejected
+        // by the single-package loader. Assert the actual loader semantics.
+        std::fs::write(
+            repo_root.join_component("turbo.json"),
+            r#"{"tasks":{"//#build":{}}}"#,
+        )
+        .unwrap();
+        let (loader, _) = builder
+            .build_turbo_json_loader(&graph, true, single_package, &None)
+            .unwrap();
+        assert!(loader.load(&PackageName::Root).is_ok());
+        let (single_loader, _) = builder
+            .build_turbo_json_loader(&graph, true, true, &None)
+            .unwrap();
+        assert!(single_loader.load(&PackageName::Root).is_err());
+    }
+
+    #[test]
+    fn additional_execution_scopes_veto_single_package_mode() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp_dir.path()).unwrap();
+        let graph = package_graph_with_dependencies(&repo_root, &[("app", "lib")]);
+        assert!(!resolved_single_package(false, &graph));
+        assert!(!resolved_single_package(true, &graph));
     }
 
     fn injected_repo_context(

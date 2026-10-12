@@ -134,6 +134,16 @@ pub enum Error {
          source."
     )]
     UnsupportedLocalMetadataNode(String),
+    #[error(
+        "{manifest} declares local path source {path:?} for {dependency:?}, but only uv workspace \
+         members are supported. Add it to [tool.uv.workspace] or replace it with a non-local \
+         source."
+    )]
+    UnsupportedLocalPathSource {
+        manifest: String,
+        dependency: String,
+        path: String,
+    },
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::UvLockError),
     #[error("uv workspace member manifest has no parent directory: {0}")]
@@ -259,6 +269,15 @@ struct TurboToolTable {
     name: Option<toml::Value>,
 }
 
+/// Recognize a uv workspace using the native root-manifest parser only.
+/// Member expansion, workspace naming, and toolchain discovery stay lazy.
+pub(crate) fn is_workspace_root(dir: &AbsoluteSystemPath) -> Result<bool, Error> {
+    Ok(
+        PyProjectManifest::load(&dir.join_component(PYPROJECT_TOML))?
+            .is_some_and(|manifest| manifest.has_workspace()),
+    )
+}
+
 impl PyProjectManifest {
     fn load(path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
         let contents = match path.read_to_string() {
@@ -308,11 +327,7 @@ impl PyProjectManifest {
     /// `lib = { index = "pypi" }` must not fall through to a root
     /// `lib = { workspace = true }` and be misread as an internal edge.
     fn source_override(&self, package: &str) -> Option<bool> {
-        let source = self.uv().and_then(|uv| {
-            uv.sources
-                .iter()
-                .find_map(|(name, source)| (normalize_name(name) == package).then_some(source))
-        })?;
+        let source = self.source(package)?;
         Some(
             source
                 .as_table()
@@ -320,6 +335,14 @@ impl PyProjectManifest {
                 .and_then(toml::Value::as_bool)
                 .unwrap_or(false),
         )
+    }
+
+    /// The raw `[tool.uv.sources]` entry for a normalized package name.
+    fn source(&self, package: &str) -> Option<&toml::Value> {
+        self.uv()?
+            .sources
+            .iter()
+            .find_map(|(name, source)| (normalize_name(name) == package).then_some(source))
     }
 
     fn is_buildable(&self) -> bool {
@@ -799,6 +822,9 @@ pub struct DiscoveredWorkspace {
 /// Discover package membership and internal relationships without consulting
 /// uv.lock. Exact metadata remains authoritative when available, but this
 /// snapshot keeps graph construction usable when lockfile resolution fails.
+/// It does not validate dependency sources: full discovery's fallback pairs it
+/// with [`reject_unsupported_local_sources`], while the lazy callers only need
+/// scope identity.
 ///
 /// `emit_warnings` follows the caller: the lazy scope inventory passes `false`
 /// because it only reports names and full discovery owns every user-facing
@@ -896,6 +922,116 @@ fn discover_workspace_from_manifests(
         quality_plan,
         pytest,
     })
+}
+
+/// Reject local `path` sources that full discovery's manifest fallback cannot
+/// hash or prune, failing closed like exact discovery does for the same
+/// dependencies (see [`Error::UnsupportedLocalMetadataNode`]).
+///
+/// A local path dependency outside the workspace belongs to no package, so
+/// edits to its files would never invalidate dependent tasks. Every declared
+/// dependency of each member and of the root project is checked against its
+/// effective source: the declaring manifest's own `[tool.uv.sources]` entry,
+/// else the root's, with paths resolved relative to the manifest that declares
+/// the source. Paths resolving to a member directory (or to the root project)
+/// are allowed, as are `workspace`, `git`, `url`, and `index` sources.
+fn reject_unsupported_local_sources(
+    repo_root: &AbsoluteSystemPath,
+    workspace: &DiscoveredWorkspace,
+) -> Result<(), Error> {
+    let root_manifest_path = repo_root.join_component(PYPROJECT_TOML);
+    let Some(root_manifest) = PyProjectManifest::load(&root_manifest_path)? else {
+        return Ok(());
+    };
+    let mut member_dirs = workspace
+        .packages
+        .iter()
+        .filter_map(|package| package.manifest_path.parent())
+        .collect::<Vec<_>>();
+    if workspace.root_project_name.is_some() {
+        member_dirs.push(repo_root);
+    }
+    let mut manifests = Vec::new();
+    for package in &workspace.packages {
+        let Some(manifest) = PyProjectManifest::load(&package.manifest_path)? else {
+            continue;
+        };
+        manifests.push((package.manifest_path.clone(), manifest));
+    }
+    let root_project = workspace
+        .root_project_name
+        .is_some()
+        .then_some((root_manifest_path.clone(), &root_manifest));
+    for (manifest_path, manifest) in manifests
+        .iter()
+        .map(|(path, manifest)| (path.clone(), manifest))
+        .chain(root_project)
+    {
+        for (requirement, _) in manifest.dependencies_with_kind() {
+            let Some(name) = pep508_name(requirement) else {
+                continue;
+            };
+            let dependency = normalize_name(name);
+            // uv sources override even direct references. Resolve the member's
+            // override before the root's, and validate only the effective source.
+            let source = manifest
+                .source(&dependency)
+                .map(|source| (source, &manifest_path))
+                .or_else(|| {
+                    root_manifest
+                        .source(&dependency)
+                        .map(|source| (source, &root_manifest_path))
+                });
+            if let Some((source, declared_in)) = source {
+                let base = declared_in
+                    .parent()
+                    .ok_or_else(|| Error::InvalidMemberManifestPath(declared_in.to_string()))?;
+                if let Some(path) = non_member_path_source(source, base, &member_dirs) {
+                    return Err(Error::UnsupportedLocalPathSource {
+                        manifest: declared_in.to_string(),
+                        dependency,
+                        path: path.to_string(),
+                    });
+                }
+                continue;
+            }
+            // Without a source override, a direct reference to a local file
+            // (`name @ file:///...`) is just as unhashable as a path source.
+            if let Some((_, reference)) = requirement.split_once('@')
+                && let Some(url) = reference.split(';').next().map(str::trim)
+                && url
+                    .get(..5)
+                    .is_some_and(|scheme| scheme.eq_ignore_ascii_case("file:"))
+            {
+                return Err(Error::UnsupportedLocalPathSource {
+                    manifest: manifest_path.to_string(),
+                    dependency,
+                    path: url.to_string(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The first `path` in a `[tool.uv.sources]` entry (or list of
+/// marker-scoped entries) that does not resolve to a workspace member.
+fn non_member_path_source<'a>(
+    source: &'a toml::Value,
+    base: &AbsoluteSystemPath,
+    member_dirs: &[&AbsoluteSystemPath],
+) -> Option<&'a str> {
+    if let Some(sources) = source.as_array() {
+        return sources
+            .iter()
+            .find_map(|source| non_member_path_source(source, base, member_dirs));
+    }
+    let path = source.get("path")?.as_str()?;
+    let resolved = AbsoluteSystemPathBuf::from_unknown(base, path);
+    (!member_dirs
+        .iter()
+        .any(|dir| dir.as_std_path() == resolved.as_std_path()))
+    .then_some(path)
 }
 
 /// Discover the uv workspace from uv's authoritative metadata, parsing member
@@ -1833,41 +1969,95 @@ fn untracked_uv_configuration_reason(
         .then(|| "user or system uv configuration contains untracked semantic inputs".to_string())
 }
 
+/// Configuration files read by uv and the Python tools it runs, hashed at
+/// the repository root.
+const CONFIG_FILES: [&str; 17] = [
+    PYPROJECT_TOML,
+    "uv.toml",
+    ".python-version",
+    "ruff.toml",
+    ".ruff.toml",
+    "mypy.ini",
+    ".mypy.ini",
+    "pyrightconfig.json",
+    ".pytest.ini",
+    ".pytest.toml",
+    "pytest.ini",
+    "pytest.toml",
+    "setup.py",
+    "setup.cfg",
+    "tox.ini",
+    "ty.toml",
+    "conftest.py",
+];
+
+/// Configuration files that also apply from directories between the
+/// repository root and a package. uv tasks run from the repository root, so
+/// configuration discovered from the working directory (`uv.toml`,
+/// `.python-version`, mypy, pyright, ty) only matters at the root. Ruff and
+/// pytest instead resolve configuration per file or path: ruff uses the
+/// closest `ruff.toml`, `.ruff.toml`, or `pyproject.toml` above each file,
+/// pytest searches for its ini file upward from the common ancestor of its
+/// arguments, and pytest loads `conftest.py` files from its rootdir down.
+const INTERMEDIATE_CONFIG_FILES: [&str; 10] = [
+    PYPROJECT_TOML,
+    "ruff.toml",
+    ".ruff.toml",
+    ".pytest.ini",
+    ".pytest.toml",
+    "pytest.ini",
+    "pytest.toml",
+    "setup.cfg",
+    "tox.ini",
+    "conftest.py",
+];
+
+/// Paths of the directories strictly between a directory and the one
+/// `path` is relative to, ordered by length: `../../..` yields `..` then
+/// `../..`, and `packages/group/app` yields `packages` then
+/// `packages/group`. Empty when `path` has fewer than two components.
+fn intermediate_prefixes(path: &str) -> Vec<String> {
+    let components: Vec<&str> = path
+        .split('/')
+        .filter(|component| !component.is_empty() && *component != ".")
+        .collect();
+    (1..components.len())
+        .map(|depth| components[..depth].join("/"))
+        .collect()
+}
+
+/// [`INTERMEDIATE_CONFIG_FILES`] globs for every directory strictly between
+/// the two ends of `path` (see [`intermediate_prefixes`]).
+fn intermediate_config_globs(path: &str) -> impl Iterator<Item = String> {
+    intermediate_prefixes(path)
+        .into_iter()
+        .flat_map(|directory| INTERMEDIATE_CONFIG_FILES.map(|rel| format!("{directory}/{rel}")))
+}
+
 /// Input globs whose changes should invalidate a Python task's cache: the
 /// workspace root manifest (workspace membership, sources, and
-/// requires-python live there), uv's optional configuration file, and the
-/// pinned interpreter version — expressed relative to the task's package
-/// directory via `prefix` (the path from the package to the repo root;
-/// empty for the workspace package). Globs that don't match anything (e.g.
-/// a missing `.python-version`) simply contribute nothing.
+/// requires-python live there), uv's optional configuration file, the
+/// pinned interpreter version, and tool configuration — expressed relative
+/// to the task's package directory via `prefix` (the path from the package
+/// to the repo root, e.g. `../..`; empty for the workspace package). Globs
+/// that don't match anything (e.g. a missing `.python-version`) simply
+/// contribute nothing.
+///
+/// Root entries come first, followed by the ruff and pytest configuration
+/// of each directory strictly between the package and the root (nearest the
+/// package first; see [`INTERMEDIATE_CONFIG_FILES`]). The package's own
+/// directory is covered by its default inputs.
 ///
 /// uv.lock is deliberately absent: uv workspace metadata supplies each package
 /// task's external-dependency hash, scoped to that package's transitive closure
 /// (see [`external_closures`]), so a dependency bump only invalidates packages
 /// that actually depend on it.
 pub fn hash_input_globs(prefix: &str) -> Vec<String> {
-    [
-        PYPROJECT_TOML,
-        "uv.toml",
-        ".python-version",
-        "ruff.toml",
-        ".ruff.toml",
-        "mypy.ini",
-        ".mypy.ini",
-        "pyrightconfig.json",
-        ".pytest.ini",
-        ".pytest.toml",
-        "pytest.ini",
-        "pytest.toml",
-        "setup.py",
-        "setup.cfg",
-        "tox.ini",
-        "ty.toml",
-        "conftest.py",
-    ]
-    .iter()
-    .map(|rel| join_prefix(prefix, rel))
-    .collect()
+    CONFIG_FILES
+        .iter()
+        .map(|rel| join_prefix(prefix, rel))
+        .chain(intermediate_config_globs(prefix))
+        .collect()
 }
 
 const PYTHON_CACHE_GLOBS: [&str; 7] = [
@@ -2026,6 +2216,12 @@ impl UvTaskContract {
                             .workspace_directories
                             .iter()
                             .flat_map(|directory| {
+                                // Tools resolve configuration per file, so
+                                // config between the root and each member
+                                // applies as well.
+                                let ancestors: Vec<String> = intermediate_config_globs(directory)
+                                    .map(|glob| join_prefix(path_to_root, &glob))
+                                    .collect();
                                 let directory = join_prefix(path_to_root, directory);
                                 std::iter::once(format!("{directory}/**"))
                                     .chain(std::iter::once(format!("!{directory}/.turbo/**")))
@@ -2033,6 +2229,7 @@ impl UvTaskContract {
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
                                     )
+                                    .chain(ancestors)
                             })
                             .collect();
                         globs.sort();
@@ -2674,13 +2871,33 @@ impl PruneDomain for UvPruneKnowledge {
                 (UV_LOCK.to_string(), pruned_lock.lockfile),
                 (PYPROJECT_TOML.to_string(), pruned_manifest),
             ],
-            copy_paths: [".python-version", "uv.toml"]
-                .into_iter()
-                .map(str::to_string)
-                .collect(),
+            copy_paths: PRUNE_COPY_PATHS.into_iter().map(str::to_string).collect(),
         }))
     }
 }
+
+/// Root files carried into a pruned uv workspace: uv's own configuration and
+/// the tool configuration [`hash_input_globs`] treats as task inputs, so tasks
+/// in the pruned output see the same configuration they were hashed with.
+/// `pyproject.toml` is rewritten separately. `setup.py` and `setup.cfg` are
+/// left out: they can configure a root setuptools package whose sources are
+/// not carried over, which would break installing the pruned workspace.
+const PRUNE_COPY_PATHS: [&str; 14] = [
+    ".python-version",
+    "uv.toml",
+    "ruff.toml",
+    ".ruff.toml",
+    "mypy.ini",
+    ".mypy.ini",
+    "pyrightconfig.json",
+    ".pytest.ini",
+    ".pytest.toml",
+    "pytest.ini",
+    "pytest.toml",
+    "tox.ini",
+    "ty.toml",
+    "conftest.py",
+];
 
 fn uv_change_observation(
     repo_root: &AbsoluteSystemPath,
@@ -3011,17 +3228,24 @@ impl RepositoryContributor for UvContributor {
                     (Some(metadata), workspace, Ok(lockfile), None)
                 }
                 Err(error) => {
-                    let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
-                        discover_workspace_from_manifests(&self.repo_root, true)
-                    })
-                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                     let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
                     let message = error.to_string();
+                    // Warn before manifest discovery so that, if the fallback
+                    // fails too, the user still learns why exact discovery
+                    // was skipped.
                     tracing::warn!(
                         "Unable to resolve uv.lock; using conservative Python task hashing. Run \
                          `uv lock` and commit uv.lock to restore dependency-aware caching: {}",
                         message
                     );
+                    // The fallback fails closed on local path sources it
+                    // cannot hash, exactly as exact discovery would.
+                    let manifest_workspace = turborepo_rayon_compat::block_in_place(|| {
+                        let workspace = discover_workspace_from_manifests(&self.repo_root, true)?;
+                        reject_unsupported_local_sources(&self.repo_root, &workspace)?;
+                        Ok::<_, Error>(workspace)
+                    })
+                    .map_err(|err| toolchain::Error::Failed(Box::new(err)))?;
                     let raw_lockfile = if can_prune_without_metadata {
                         read_lockfile(&self.repo_root).map_err(|error| error.to_string())
                     } else {
@@ -4245,6 +4469,228 @@ version = "0.1.0"
         );
     }
 
+    /// Writes a two-member workspace (`core`, `util`) with no uv.lock, where
+    /// `core` depends on `helper` through the given member and root
+    /// `[tool.uv.sources]` tables.
+    fn manifest_fallback_sources(member_sources: &str, root_sources: &str) -> Result<(), Error> {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(format!(
+                "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = \
+                 [\"packages/*\"]\n\n[tool.uv.sources]\n{root_sources}\n"
+            ))
+            .unwrap();
+        for (dir, contents) in [
+            (
+                "core",
+                format!(
+                    "[project]\nname = \"core\"\nversion = \"0.1.0\"\ndependencies = \
+                     [\"helper>=1\"]\n\n[tool.uv.sources]\n{member_sources}\n"
+                ),
+            ),
+            (
+                "util",
+                "[project]\nname = \"util\"\nversion = \"0.1.0\"\n".to_string(),
+            ),
+        ] {
+            let manifest = root.join_components(&["packages", dir, PYPROJECT_TOML]);
+            manifest.ensure_dir().unwrap();
+            manifest.create_with_contents(contents).unwrap();
+        }
+        let vendored = root.join_components(&["vendor", "helper", PYPROJECT_TOML]);
+        vendored.ensure_dir().unwrap();
+        vendored
+            .create_with_contents("[project]\nname = \"helper\"\nversion = \"0.1.0\"\n")
+            .unwrap();
+        let workspace = discover_workspace_from_manifests(&root, true).unwrap();
+        reject_unsupported_local_sources(&root, &workspace)
+    }
+
+    #[test]
+    fn test_manifest_fallback_rejects_non_member_path_sources() {
+        for (member_sources, root_sources, declared_in) in [
+            (
+                "helper = { path = \"../../vendor/helper\", editable = true }",
+                "",
+                "packages/core",
+            ),
+            ("", "helper = { path = \"vendor/helper\" }", ""),
+            (
+                "helper = [{ path = \"../../vendor/helper\", marker = \"sys_platform == 'linux'\" \
+                 }, { index = \"pypi\" }]",
+                "",
+                "packages/core",
+            ),
+        ] {
+            let result = manifest_fallback_sources(member_sources, root_sources);
+            let Err(Error::UnsupportedLocalPathSource {
+                manifest,
+                dependency,
+                ..
+            }) = result
+            else {
+                panic!(
+                    "expected a local path source error for {member_sources}{root_sources}, got \
+                     {result:?}"
+                );
+            };
+            assert_eq!(dependency, "helper");
+            let manifest = std::path::PathBuf::from(manifest);
+            assert!(
+                manifest.parent().unwrap().ends_with(declared_in),
+                "{manifest:?} must declare the source"
+            );
+        }
+    }
+
+    #[test]
+    fn test_manifest_fallback_rejects_local_file_direct_references() {
+        for (requirement, rejected) in [
+            ("helper @ file:///opt/vendor/helper", true),
+            (
+                "helper[cli] @ file:///opt/vendor/helper ; python_version >= '3.11'",
+                true,
+            ),
+            ("helper @ FILE:///opt/vendor/helper", true),
+            ("helper @ git+https://example.com/helper@v1", false),
+            ("helper>=1", false),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            root.join_component(PYPROJECT_TOML)
+                .create_with_contents(
+                    "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = \
+                     [\"packages/*\"]\n",
+                )
+                .unwrap();
+            let manifest = root.join_components(&["packages", "core", PYPROJECT_TOML]);
+            manifest.ensure_dir().unwrap();
+            manifest
+                .create_with_contents(format!(
+                    "[project]\nname = \"core\"\nversion = \"0.1.0\"\ndependencies = \
+                     [\"{requirement}\"]\n"
+                ))
+                .unwrap();
+            let workspace = discover_workspace_from_manifests(&root, true).unwrap();
+            let result = reject_unsupported_local_sources(&root, &workspace);
+            assert_eq!(
+                matches!(result, Err(Error::UnsupportedLocalPathSource { .. })),
+                rejected,
+                "{requirement}: {result:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_manifest_fallback_source_overrides_local_file_reference() {
+        for (member_sources, root_sources, rejected) in [
+            ("util = { workspace = true }", "", false),
+            ("", "util = { workspace = true }", false),
+            (
+                "util = { workspace = true }",
+                "util = { path = \"vendor/util\" }",
+                false,
+            ),
+            (
+                "util = { index = \"pypi\" }",
+                "util = { path = \"vendor/util\" }",
+                false,
+            ),
+            (
+                "util = { git = \"https://example.com/util.git\" }",
+                "",
+                false,
+            ),
+            (
+                "",
+                "util = { url = \"https://example.com/util-1.0.tar.gz\" }",
+                false,
+            ),
+            (
+                "util = { path = \"../../vendor/util\" }",
+                "util = { workspace = true }",
+                true,
+            ),
+            ("", "util = { path = \"vendor/util\" }", true),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            root.join_component(PYPROJECT_TOML)
+                .create_with_contents(format!(
+                    "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = \
+                     [\"packages/*\"]\n\n[tool.uv.sources]\n{root_sources}\n"
+                ))
+                .unwrap();
+            for (name, dependencies) in [
+                (
+                    "core",
+                    format!(
+                        "dependencies = [\"util @ file:///nonexistent/vendor/util\"]\n\n\
+                         [tool.uv.sources]\n{member_sources}\n"
+                    ),
+                ),
+                ("util", String::new()),
+            ] {
+                let manifest = root.join_components(&["packages", name, PYPROJECT_TOML]);
+                manifest.ensure_dir().unwrap();
+                manifest
+                    .create_with_contents(format!(
+                        "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\n{dependencies}"
+                    ))
+                    .unwrap();
+            }
+            let workspace = discover_workspace_from_manifests(&root, true).unwrap();
+            let result = reject_unsupported_local_sources(&root, &workspace);
+            if rejected {
+                let Err(Error::UnsupportedLocalPathSource { path, .. }) = result else {
+                    panic!("expected a local path source error, got {result:?}");
+                };
+                assert!(path.ends_with("vendor/util"), "{path}");
+                assert!(!path.starts_with("file:"), "{path}");
+            } else {
+                assert!(result.is_ok(), "{member_sources}{root_sources}: {result:?}");
+            }
+            if member_sources.contains("workspace = true")
+                || (member_sources.is_empty() && root_sources.contains("workspace = true"))
+            {
+                let core = &workspace.packages[0];
+                assert_eq!(core.name, "core");
+                assert!(
+                    core.relationships.iter().any(|relationship| {
+                        relationship.declaration_name() == "util" && relationship.orders_tasks()
+                    }),
+                    "workspace override must retain the internal dependency edge"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_manifest_fallback_allows_member_and_non_local_sources() {
+        for (member_sources, root_sources) in [
+            ("helper = { path = \"../util\" }", ""),
+            ("", "helper = { path = \"packages/util\", editable = true }"),
+            ("helper = { workspace = true }", ""),
+            ("helper = { git = \"https://example.com/helper.git\" }", ""),
+            (
+                "helper = { url = \"https://example.com/helper-1.0.tar.gz\" }",
+                "",
+            ),
+            (
+                "helper = { index = \"pypi\" }",
+                "helper = { path = \"vendor/helper\" }",
+            ),
+            ("", "other = { path = \"vendor/helper\" }"),
+        ] {
+            let result = manifest_fallback_sources(member_sources, root_sources);
+            assert!(
+                result.is_ok(),
+                "{member_sources}{root_sources} must be accepted: {result:?}"
+            );
+        }
+    }
+
     #[test]
     fn test_package_scope_inventory_reports_members_and_aggregate() {
         let tempdir = tempfile::tempdir().unwrap();
@@ -5044,6 +5490,69 @@ version = "0.1.0"
                 "conftest.py",
             ]
             .map(|path| format!("../../{path}"))
+            .into_iter()
+            .chain(
+                [
+                    "pyproject.toml",
+                    "ruff.toml",
+                    ".ruff.toml",
+                    ".pytest.ini",
+                    ".pytest.toml",
+                    "pytest.ini",
+                    "pytest.toml",
+                    "setup.cfg",
+                    "tox.ini",
+                    "conftest.py",
+                ]
+                .map(|path| format!("../{path}"))
+            )
+            .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_hash_input_globs_cover_directories_between_package_and_root() {
+        let root_only = hash_input_globs("");
+        assert_eq!(root_only, CONFIG_FILES.map(str::to_string));
+        assert_eq!(
+            hash_input_globs(".."),
+            CONFIG_FILES.map(|path| format!("../{path}"))
+        );
+
+        let depth_two = hash_input_globs("../..");
+        assert!(depth_two.contains(&"../ruff.toml".to_string()));
+        assert!(depth_two.contains(&"../conftest.py".to_string()));
+        assert!(depth_two.contains(&"../pyproject.toml".to_string()));
+        assert!(depth_two.contains(&"../pytest.ini".to_string()));
+        for root_only in [
+            "uv.toml",
+            ".python-version",
+            "mypy.ini",
+            ".mypy.ini",
+            "pyrightconfig.json",
+            "ty.toml",
+            "setup.py",
+        ] {
+            assert!(!depth_two.contains(&format!("../{root_only}")));
+        }
+        assert!(!depth_two.iter().any(|glob| glob.starts_with("../../../")));
+
+        let depth_three = hash_input_globs("../../..");
+        assert_eq!(
+            depth_three[..CONFIG_FILES.len()],
+            CONFIG_FILES.map(|path| format!("../../../{path}"))
+        );
+        let intermediate: Vec<_> = depth_three[CONFIG_FILES.len()..].to_vec();
+        assert_eq!(intermediate.len(), 2 * INTERMEDIATE_CONFIG_FILES.len());
+        assert_eq!(intermediate[0], "../pyproject.toml");
+        assert!(intermediate.contains(&"../conftest.py".to_string()));
+        assert!(intermediate.contains(&"../../ruff.toml".to_string()));
+        assert!(intermediate.contains(&"../../conftest.py".to_string()));
+
+        assert_eq!(intermediate_prefixes("../../"), [".."]);
+        assert_eq!(
+            intermediate_prefixes("packages/group/app"),
+            ["packages", "packages/group"]
         );
     }
 
@@ -5108,6 +5617,100 @@ version = "0.1.0"
             .derived_task_io(&package, "check", "../..", &[], true, &context)
             .unwrap();
         assert_eq!(io.input_safety, toolchain::DerivedInputSafety::Untracked);
+    }
+
+    #[test]
+    fn member_inputs_include_config_between_package_and_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let package_directory = turbopath::AnchoredSystemPath::new("packages/core").unwrap();
+        let package = PackageTaskContext::new_for_test(
+            PackageName::from("core"),
+            &root,
+            package_directory,
+            PackageTaskContextKind::Package,
+            None,
+        );
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+        let write = |name: &str, contents: &str| {
+            let file = root.join_components(&name.split('/').collect::<Vec<_>>());
+            file.parent().unwrap().create_dir_all().unwrap();
+            file.create_with_contents(contents).unwrap();
+        };
+        for path in ["pyproject.toml", "packages/core/pyproject.toml"] {
+            write(path, "before\n");
+        }
+        let package_root = root.resolve(package_directory);
+        for task in ["lint:ruff", "test", "check:mypy"] {
+            let io = UvTaskContract::new(UvPackageKind::Package, "core")
+                .derived_task_io(&package, task, "../..", &[], true, &context)
+                .unwrap();
+            let snapshot = || {
+                let mut includes = Vec::<globwalk::ValidatedGlob>::new();
+                let mut excludes = Vec::new();
+                for glob in &io.input_globs {
+                    if let Some(exclude) = glob.strip_prefix('!') {
+                        excludes.push(exclude.parse().unwrap());
+                    } else {
+                        includes.push(glob.parse().unwrap());
+                    }
+                }
+                globwalk::globwalk(
+                    &package_root,
+                    &includes,
+                    &excludes,
+                    globwalk::WalkType::Files,
+                )
+                .unwrap()
+                .into_iter()
+                .map(|path| {
+                    let bytes = std::fs::read(path.as_std_path()).unwrap();
+                    (
+                        turbopath::AnchoredSystemPathBuf::new(&root, &path)
+                            .unwrap()
+                            .to_unix()
+                            .to_string(),
+                        bytes,
+                    )
+                })
+                .collect::<std::collections::BTreeMap<_, _>>()
+            };
+            let baseline = snapshot();
+            assert!(baseline.contains_key("pyproject.toml"));
+            for path in INTERMEDIATE_CONFIG_FILES.map(|file| format!("packages/{file}")) {
+                let path = path.as_str();
+                write(path, "changed\n");
+                assert_ne!(snapshot(), baseline, "{path} is a {task} input");
+                std::fs::remove_file(
+                    root.join_components(&path.split('/').collect::<Vec<_>>())
+                        .as_std_path(),
+                )
+                .unwrap();
+                assert_eq!(snapshot(), baseline);
+            }
+            // uv tasks run from the repository root, so working-directory
+            // configuration between the root and the package never applies.
+            for path in ["packages/.python-version", "packages/mypy.ini"] {
+                write(path, "ignored\n");
+                assert_eq!(snapshot(), baseline, "{path} is not a {task} input");
+                std::fs::remove_file(
+                    root.join_components(&path.split('/').collect::<Vec<_>>())
+                        .as_std_path(),
+                )
+                .unwrap();
+            }
+            write("packages/other/ruff.toml", "sibling\n");
+            assert_eq!(snapshot(), baseline, "sibling config is not a {task} input");
+            std::fs::remove_file(
+                root.join_components(&["packages", "other", "ruff.toml"])
+                    .as_std_path(),
+            )
+            .unwrap();
+        }
     }
 
     #[test]
@@ -5200,6 +5803,8 @@ version = "0.1.0"
             "packages/py-app/src/py_app/__init__.py",
             "packages/py-lib/src/py_lib/__init__.py",
             "ruff.toml",
+            "packages/ruff.toml",
+            "packages/conftest.py",
         ] {
             write(path, "changed\n");
             assert_ne!(snapshot(), baseline, "{path} is a quality input");

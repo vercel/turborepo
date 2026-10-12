@@ -777,24 +777,30 @@ fn test_enabled_go_workspace_reports_missing_go_executable() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_go_pure_workspace(tempdir.path());
 
-    // `ls` is an unfiltered, repository-wide query: lazy native discovery
-    // may load every contributor for it. The Go scope inventory itself needs
-    // no `go` binary, but the loaded owner does, so a missing `go` fails the
-    // listing with the ordinary missing-toolchain diagnostic.
-    let output = run_turbo_with_env(tempdir.path(), &["ls"], &[("PATH", "")]);
+    // Plain listing is identity-only: the in-process Go scope inventory must
+    // include every package without loading the owner or requiring `go`.
+    let output = run_turbo_with_env(tempdir.path(), &["ls", "--output=json"], &[("PATH", "")]);
+    assert_command_success(&output, "Go package inventory without Go on PATH");
+    let listing: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(listing["packageManager"], "");
+    assert_eq!(listing["packages"]["count"], 3);
+    let packages = listing["packages"]["items"].as_array().unwrap();
+    for (name, directory) in [
+        ("api", "apps/api"),
+        ("go-workspace", ""),
+        ("lib", "packages/lib"),
+    ] {
+        assert!(
+            packages.iter().any(|package| {
+                package["name"] == name
+                    && package["path"].as_str().unwrap().replace('\\', "/") == directory
+            }),
+            "missing Go inventory entry {name} at {directory}: {listing}"
+        );
+    }
 
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("Go is required for experimental Go workspaces")
-            && stderr.contains("Install Go 1.22 or newer")
-            && stderr.contains("PATH"),
-        "missing Go diagnostic must identify the requirement and remediation: {stderr}"
-    );
-    assert!(!stderr.contains("package manager"), "{stderr}");
-
-    // Selecting a Go task narrows the query to the Go scope, which loads the
-    // same owner; the diagnostic keeps its requirement and remediation.
+    // Selecting a Go task requires full contributor discovery, so missing Go
+    // still produces the ordinary requirement and remediation diagnostic.
     let output = run_turbo_with_env(
         tempdir.path(),
         &["run", "build", "--filter=api", "--dry-run=json"],
