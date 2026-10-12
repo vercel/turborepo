@@ -78,7 +78,7 @@ fn input(f: &Fixture, mode: &str) -> turborepo_run::RunBuilderInput {
     ])
     .unwrap();
     let root = turbopath::AbsoluteSystemPathBuf::try_from(f.owned.root()).unwrap();
-    CommandBase::new(
+    let mut input = CommandBase::new(
         args,
         root,
         "managed-fixture",
@@ -86,7 +86,10 @@ fn input(f: &Fixture, mode: &str) -> turborepo_run::RunBuilderInput {
     )
     .unwrap()
     .run_builder_input()
-    .unwrap()
+    .unwrap();
+    // CI exports Remote Cache credentials; these fixtures must stay offline.
+    input.api_auth = None;
+    input
 }
 
 fn execute(f: &Fixture, mode: &str, tools: Arc<ManagedRun>) -> String {
