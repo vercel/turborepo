@@ -1286,3 +1286,5 @@ fn go_drift_disabled_flag_and_stale_or_damaged_trees_fail_closed() {
         assert_eq!(state(repo.path()), before);
     }
 }
+
+mod additional;
