@@ -2,11 +2,14 @@
 # Release smoke for a packaged Linux standalone turbo. It installs the archive
 # with the POSIX installer from staged release assets while Node.js and
 # JavaScript package managers are absent from PATH, then checks that setup
-# selects GNU artifacts on this glibc host and rejects Alpine (musl) with
-# guidance. turbo itself runs without reachable network proxies.
+# selects GNU artifacts on this glibc host, runs the managed setup journey
+# (standalone-setup-journey.sh) against a loopback fixture mirror, and rejects
+# Alpine (musl) with guidance. turbo itself runs without reachable network
+# proxies.
 #
 # Usage: scripts/standalone-linux-smoke.sh <version> [standalone-artifacts]
-# The Alpine step downloads a pinned minirootfs and needs sudo, unshare, chroot.
+# The fixture mirror runs on the runner's Node.js, outside turbo's PATH. The
+# Alpine step downloads a pinned minirootfs and needs sudo, unshare, chroot.
 set -eu
 # Setup rejects group- or world-writable repositories; match a CI checkout.
 umask 022
@@ -141,6 +144,10 @@ cat >"$repo/turbo.lock" <<EOF
 EOF
 check 'managed installation is missing; run turbo setup'
 [ ! -e "$repo/.turbo" ] || fail 'setup --check wrote .turbo'
+
+# The musl-static binary provisions and activates GNU artifacts on this host.
+mirror_node=$(command -v node) || fail 'the fixture mirror needs Node.js on the runner'
+sh "$(dirname "$0")/standalone-setup-journey.sh" "$turbo" "$mirror_node"
 
 # Alpine: the same binary must refuse managed tools on musl, without network.
 release=3.22.6

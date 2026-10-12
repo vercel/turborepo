@@ -554,7 +554,8 @@ jobs:
       - name: Package standalone archives
         run: node scripts/package-standalone-archives.mjs "${{ needs.stage.outputs.version }}"
 
-      - name: Smoke-test the Linux x64 standalone install and setup checks
+      # Node.js runs only the loopback fixture mirror; turbo's PATH has none.
+      - name: Smoke-test the Linux x64 standalone install, managed setup, and run
         run: sh scripts/standalone-linux-smoke.sh "${{ needs.stage.outputs.version }}" standalone-artifacts
 
       - name: Upload standalone archives
