@@ -73,7 +73,7 @@ fn records_are_owner_only_and_round_trip_with_the_path_spelling() {
     let trust = f.publish();
     let record = trust.load().unwrap().unwrap();
     assert!(record.installation == f.installation(&trust));
-    assert_eq!(record.lock_sha256, hash(b"{}"));
+    assert_eq!(record.lock_sha256, Some(hash(b"{}")));
     assert!(
         trust
             .root
@@ -112,7 +112,10 @@ fn lock_changes_moved_roots_and_same_path_reclones_do_not_match() {
     let lock = read(&trust.root.join("turbo.lock"), false)
         .unwrap()
         .unwrap();
-    assert_ne!(trust.load().unwrap().unwrap().lock_sha256, hash(&lock));
+    assert_ne!(
+        trust.load().unwrap().unwrap().lock_sha256,
+        Some(hash(&lock))
+    );
 
     let moved = f.home.path().join("moved");
     fs::rename(f.repo.path(), &moved).unwrap();
