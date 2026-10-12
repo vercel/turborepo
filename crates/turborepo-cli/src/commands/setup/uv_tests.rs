@@ -1,10 +1,6 @@
 //! Python-only parser → discovery → uv lock writer → provisioning fixtures.
 //! Fixture uv binaries are installed but never executed by setup.
-use turborepo_setup::{
-    lock::{Lock, reconcile},
-    uv::UvArtifact,
-    uv_resolution::UvTransport,
-};
+use turborepo_setup::{lock::Lock, uv::UvArtifact, uv_resolution::UvTransport};
 
 use super::*;
 
