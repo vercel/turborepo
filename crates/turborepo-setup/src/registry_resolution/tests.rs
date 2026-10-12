@@ -8,7 +8,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha224, Sha256, Sha512};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -129,11 +129,11 @@ async fn exact_npm_pnpm_portable_identity_authored_pins_and_no_root_mutation() {
             json!(format!("touch {}/should-never-run", repo.path().display()));
         let bytes = archive(&pkg, &paths(&pkg));
         let registry = fixture(name, metadata(name, &bytes), bytes.clone()).await;
-        for algorithm in ["sha256", "sha512"] {
-            let digest = if algorithm == "sha256" {
-                format!("{:x}", Sha256::digest(&bytes))
-            } else {
-                format!("{:x}", Sha512::digest(&bytes))
+        for algorithm in ["sha224", "sha256", "sha512"] {
+            let digest = match algorithm {
+                "sha224" => format!("{:x}", Sha224::digest(&bytes)),
+                "sha256" => format!("{:x}", Sha256::digest(&bytes)),
+                _ => format!("{:x}", Sha512::digest(&bytes)),
             };
             let pin = CorepackIntegrity {
                 algorithm,
@@ -199,12 +199,15 @@ async fn exact_npm_pnpm_portable_identity_authored_pins_and_no_root_mutation() {
         }
         assert_eq!(
             *registry.requests.lock().unwrap(),
-            vec![
+            [
                 format!("/{name}/10.0.0"),
                 format!("/{name}/-/{name}-10.0.0.tgz"),
-                format!("/{name}/10.0.0"),
-                format!("/{name}/-/{name}-10.0.0.tgz")
             ]
+            .iter()
+            .cycle()
+            .take(6)
+            .cloned()
+            .collect::<Vec<_>>()
         );
     }
     assert_eq!(
@@ -293,7 +296,12 @@ async fn mandatory_real_bytes_and_authored_mismatch_including_late_native_altern
         .locked_integrity(selected.version(), &selected.artifact().sha256)
         .unwrap();
     selected.verify_authored(late.as_ref()).unwrap();
-    for (algorithm, length) in [("sha256", 64), ("sha512", 128), ("sha1", 40)] {
+    for (algorithm, length) in [
+        ("sha224", 56),
+        ("sha256", 64),
+        ("sha512", 128),
+        ("sha1", 40),
+    ] {
         let pin = CorepackIntegrity {
             algorithm,
             digest: "0".repeat(length),

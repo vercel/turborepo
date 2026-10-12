@@ -20,14 +20,17 @@ pub struct ResolvedRegistry {
     version: Version,
     artifact: Artifact,
     integrity: CorepackIntegrity,
+    /// SHA-224 of the verified archive bytes, for older Corepack pins.
+    sha224: String,
 }
 impl ResolvedRegistry {
-    pub(crate) fn new(release: RegistryArtifact, artifact: Artifact) -> Self {
+    pub(crate) fn new(release: RegistryArtifact, artifact: Artifact, sha224: String) -> Self {
         Self {
             manager: release.manager,
             version: release.version,
             artifact,
             integrity: release.integrity,
+            sha224,
         }
     }
     pub fn manager(&self) -> Manager {
@@ -51,6 +54,7 @@ impl ResolvedRegistry {
     pub fn verify_authored(&self, authored: Option<&CorepackIntegrity>) -> Result<(), Error> {
         let Some(pin) = authored else { return Ok(()) };
         let (length, actual) = match pin.algorithm {
+            "sha224" => (56, &self.sha224),
             "sha256" => (64, &self.artifact.sha256),
             "sha512" => (128, &self.integrity.digest),
             _ => return Err(RegistryMetadataError::InvalidIntegrity.into()),

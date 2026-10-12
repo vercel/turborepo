@@ -9,7 +9,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha224, Sha256, Sha512};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -544,4 +544,47 @@ async fn authored_pins_and_bounded_metadata_fail_before_artifacts() {
         Err(Error::Download(DownloadError::TooLarge))
     ));
     assert_eq!(manifest(repo.path()), snapshot);
+}
+
+#[tokio::test]
+async fn corepack_sha224_pins_check_downloaded_bytes_in_addition_to_sha512() {
+    let bytes = archive(&package().to_string(), "bin/pnpm.cjs");
+    let value = fixture(&bytes);
+    let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+    let (node, unpinned) = plans(&value);
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = seeded(repo.path(), &node);
+    let snapshot = manifest(repo.path());
+    let pin = |digest: String| CorepackIntegrity {
+        algorithm: "sha224",
+        digest,
+    };
+    let good = pin(format!("{:x}", Sha224::digest(&bytes)));
+    for (authored, document, expected) in [
+        // The pin is checked against the bytes the registry SHA-512 accepted.
+        (
+            pin("00".repeat(28)),
+            metadata(&bytes),
+            DownloadError::DigestMismatch,
+        ),
+        // A matching pin never replaces the mandatory registry SHA-512.
+        (
+            good.clone(),
+            metadata(b"other bytes"),
+            DownloadError::Sha512DigestMismatch,
+        ),
+    ] {
+        let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&authored)).unwrap();
+        let registry = serve(document, bytes.clone()).await;
+        let result = install(&mut store, &node, &pnpm, &registry).await;
+        assert!(matches!(&result, Err(Error::Download(error))
+            if std::mem::discriminant(error) == std::mem::discriminant(&expected)));
+        assert_eq!(registry.requests.lock().unwrap().len(), 2);
+        assert_eq!(manifest(repo.path()), snapshot);
+    }
+    let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&good)).unwrap();
+    assert_ne!(pnpm.inventory_tool(), unpinned.inventory_tool());
+    let registry = serve(metadata(&bytes), bytes.clone()).await;
+    install(&mut store, &node, &pnpm, &registry).await.unwrap();
+    assert_ne!(manifest(repo.path()), snapshot);
 }
