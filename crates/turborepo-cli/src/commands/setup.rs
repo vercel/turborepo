@@ -91,14 +91,14 @@ pub enum Error {
         code(turbo::setup::no_lock_node),
         help(
             "Declare Node in .nvmrc, .node-version, or package.json (devEngines.runtime or \
-             engines.node). --no-lock provisions only Node and an optional exact pnpm. No tools, \
-             dependencies, or locks were changed."
+             engines.node). --no-lock provisions only Node and an optional exact npm or pnpm. No \
+             tools, dependencies, or locks were changed."
         )
     )]
     NoLockNode,
     #[error(
-        "--no-lock provisions only Node and pnpm, but the repository declares {0}; clone-local \
-         setup for it is not supported yet"
+        "--no-lock provisions only Node with npm or pnpm, but the repository declares {0}; \
+         clone-local setup for it is not supported yet"
     )]
     #[diagnostic(
         code(turbo::setup::no_lock_tool),
