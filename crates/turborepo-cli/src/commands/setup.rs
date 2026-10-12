@@ -396,7 +396,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if matches!(control, "--force" | "--no-lock" | "--plan") {
+                if matches!(control, "--force" | "--plan") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(
