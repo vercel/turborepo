@@ -21,7 +21,7 @@ use std::{fs, io::Write, path::PathBuf, str::FromStr};
 
 use schemars::{schema::RootSchema, schema_for};
 use ts_rs::TS;
-use turborepo_turbo_json::{DependencyPolicy, RawTurboJson, ToolPolicy};
+use turborepo_turbo_json::{DependencyPolicy, LifecycleScripts, RawTurboJson, ToolPolicy};
 use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
 use usage::{Cli as UsageCli, Subcommands};
 
@@ -161,6 +161,7 @@ fn generate_typescript() -> String {
     add_type_decl::<UIMode>(&mut output, "");
     add_type_decl::<ToolPolicy>(&mut output, "");
     add_type_decl::<DependencyPolicy>(&mut output, "");
+    add_type_decl::<LifecycleScripts>(&mut output, "");
 
     // Simple type aliases for compatibility
     output.push_str("/**\n");
@@ -1102,6 +1103,15 @@ fn generate_setup_policy_interfaces() -> String {
    */
   dependencies?: DependencyPolicy;
 
+  /**
+   * Whether dependency setup runs package-manager lifecycle scripts for every
+   * toolchain.
+   *
+   * - `"native"`: Keep each package manager's defaults and committed allowlists or trust settings.
+   * - `"skip"`: Skip them with the package manager's own flag, or fail where it has none.
+   */
+  lifecycleScripts?: LifecycleScripts;
+
   /** Setup policy for the JavaScript toolchain. */
   javascript?: ToolchainSetupPolicy;
 
@@ -1121,6 +1131,9 @@ export interface ToolchainSetupPolicy {
 
   /** How `turbo setup` prepares this toolchain's dependencies. */
   dependencies?: DependencyPolicy;
+
+  /** Whether this toolchain's dependency setup runs lifecycle scripts. */
+  lifecycleScripts?: LifecycleScripts;
 }
 
 "#

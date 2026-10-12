@@ -87,10 +87,32 @@ struct SetupRequest {
     force: bool,
     offline: bool,
     tools_only: bool,
+    ignore_scripts: bool,
     update_lock: bool,
 }
 
 impl SetupRequest {
+    /// Lifecycle intent for a toolchain's dependency installer: CLI >
+    /// repository policy > native default.
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "consumed by dependency installers (TURBO-6229)")
+    )]
+    fn lifecycle(
+        &self,
+        repository: Option<turborepo_turbo_json::LifecycleScripts>,
+    ) -> turborepo_setup::lifecycle::Request {
+        use turborepo_setup::lifecycle::{Intent, Request};
+        use turborepo_turbo_json::LifecycleScripts;
+        Request::new(
+            self.ignore_scripts,
+            repository.map(|scripts| match scripts {
+                LifecycleScripts::Native => Intent::Native,
+                LifecycleScripts::Skip => Intent::Skip,
+            }),
+        )
+    }
+
     fn new(args: &SetupArgs, is_ci: bool) -> Result<Self, Error> {
         // Explicit conflicts are enforced by the argument parser. --no-lock
         // overrides only the inferred CI default, not explicit --frozen.
@@ -116,6 +138,7 @@ impl SetupRequest {
             force: args.force,
             offline: args.offline,
             tools_only: args.tools_only,
+            ignore_scripts: args.ignore_scripts,
             update_lock: args.update_lock,
         })
     }
@@ -310,6 +333,27 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn ignore_scripts_overrides_repository_lifecycle_policy() {
+        use turborepo_setup::lifecycle::{Intent, Origin};
+        use turborepo_turbo_json::LifecycleScripts;
+        let native = Some(LifecycleScripts::Native);
+        let cli = request(&["--tools-only", "--ignore-scripts"], false).unwrap();
+        assert!(validate_request(&cli).is_ok());
+        let resolved = cli.lifecycle(native);
+        assert_eq!(
+            (resolved.intent, resolved.origin),
+            (Intent::Skip, Origin::Cli)
+        );
+        let plain = request(&[], false).unwrap();
+        let resolved = plain.lifecycle(Some(LifecycleScripts::Skip));
+        assert_eq!(
+            (resolved.intent, resolved.origin),
+            (Intent::Skip, Origin::Repository)
+        );
+        assert_eq!(plain.lifecycle(None).origin, Origin::Default);
     }
 
     #[test]

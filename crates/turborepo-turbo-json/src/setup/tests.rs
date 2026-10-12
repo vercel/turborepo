@@ -91,6 +91,24 @@ fn toolchain_values_override_root_values() {
 }
 
 #[test]
+fn lifecycle_scripts_resolve_per_toolchain() {
+    let policy =
+        parse(r#"{"lifecycleScripts":"skip","python":{"lifecycleScripts":"native"}}"#).unwrap();
+    assert!(policy.is_configured());
+    let scripts = |id| policy.toolchain(&id).lifecycle_scripts;
+    assert_eq!(
+        scripts(ToolchainId::JAVASCRIPT),
+        Some(LifecycleScripts::Skip)
+    );
+    assert_eq!(scripts(ToolchainId::PYTHON), Some(LifecycleScripts::Native));
+    let unset = parse(r#"{"javascript":{"tools":"managed"}}"#).unwrap();
+    assert_eq!(
+        unset.toolchain(&ToolchainId::JAVASCRIPT).lifecycle_scripts,
+        None
+    );
+}
+
+#[test]
 fn policy_loads_deterministically_and_round_trips() {
     let setup =
         r#"{"go":{"tools":"skip"},"dependencies":"skip","javascript":{"tools":"verify-system"}}"#;
@@ -122,6 +140,7 @@ fn locked_dependencies_require_tools(setup: &str) {
 
 #[test_case(r#"{"tools":"system"}"#; "unknown tool policy")]
 #[test_case(r#"{"dependencies":"frozen"}"#; "unknown dependency policy")]
+#[test_case(r#"{"lifecycleScripts":"allow"}"#; "unknown lifecycle policy")]
 #[test_case(r#"{"cargo":{"tools":"skip"}}"#; "non canonical toolchain")]
 #[test_case(r#"{"typescript":{}}"#; "toolchain alias")]
 #[test_case(r#"{"rust":"skip"}"#; "toolchain shorthand")]
