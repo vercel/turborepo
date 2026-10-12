@@ -52,13 +52,18 @@ struct NodePnpm {
     platform: String,
 }
 
-/// Observed startup hosts only, NOT complete peer-contract qualification.
-/// Agent/proxy lookup, cache-hit and late validation remain pending combined
-/// activation tests. Linux is separately owned; never populate the public
-/// schema support matrix from this startup-only internal ABI.
+/// Hosts whose real-binary setup -> run journey, including copied-local
+/// handoff, runs in the normal test suite. This is NOT complete public schema
+/// support; never populate `managedRunSchemas` from this internal ABI.
 fn qualified_platform() -> Option<&'static str> {
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         Some("macos-arm64")
+    } else if cfg!(all(
+        target_os = "linux",
+        target_env = "gnu",
+        target_arch = "x86_64"
+    )) {
+        Some("linux-x64-gnu")
     } else {
         None
     }
@@ -194,6 +199,23 @@ mod tests {
             assert!(!peer.supports_schema(0));
             assert!(!peer.supports_experimental_node_pnpm(0));
             assert!(!peer.supports_experimental_node_pnpm(1));
+        }
+        // A peer built for another host never satisfies this host's contract.
+        for platform in [
+            "macos-arm64",
+            "macos-x64",
+            "linux-x64-gnu",
+            "linux-arm64-gnu",
+            "linux-x64-musl",
+            "windows-x64",
+        ] {
+            let peer = Capabilities::parse(format!(r#"{{"abiVersion":1,"cliVersion":"v","managedRunSchemas":[],"experimentalNodePnpm":{{"contractVersion":1,"lockSchema":0,"platform":"{platform}"}}}}"#).as_bytes()).unwrap();
+            assert_eq!(
+                peer.supports_experimental_node_pnpm(0),
+                qualified_platform() == Some(platform),
+                "{platform}"
+            );
+            assert!(!peer.supports_schema(0));
         }
         for scope in [
             "null",

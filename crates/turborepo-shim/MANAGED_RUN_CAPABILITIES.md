@@ -11,9 +11,9 @@ The exact standalone internal query is `--__internal-managed-run-capabilities`. 
 | `managedRunSchemas` | Complete public managed-run contract; currently `[]` |
 | `experimentalNodePnpm.contractVersion` | Startup-only internal adapter ABI, currently `1`; not complete peer qualification |
 | `experimentalNodePnpm.lockSchema` | Explicit prelaunch lock schema, currently `0` |
-| `experimentalNodePnpm.platform` | Observed native startup host, initially `macos-arm64`; complete qualification pending |
+| `experimentalNodePnpm.platform` | Native host with a real-binary journey in the normal test suite: `macos-arm64` or `linux-x64-gnu` |
 
-The experimental object is absent outside the observed startup platform. Old strict readers reject this extension, rather than mistaking it for complete-schema support. A wrong contract version, schema, or platform cannot meet the internal startup ABI. This object never certifies the complete peer contract: version labels, schema parsing, synthetic peers and isolated startup results cannot provide that qualification.
+The experimental object is absent on every other host. Old strict readers reject this extension, rather than mistaking it for complete-schema support. A wrong contract version, schema, or platform cannot meet the internal startup ABI. This object never certifies the complete peer contract: version labels, schema parsing, synthetic peers and isolated startup results cannot provide that qualification.
 
 ## Scope and unsupported behavior
 
@@ -21,7 +21,7 @@ The caller must first authorize the exact-root managed Node/pnpm cohort: `experi
 
 - Native macOS ARM64 Node/pnpm has bounded startup evidence only. Agent/proxy host-tool lookup, cache-hit validation and late-validation activation fixes remain pending; the combined result must be tested before advertising complete peer support, including on macOS.
 - Do not merge the public schema `[0]` claim from partial startup commit `e66df9ddd0b9a5b064572c15a7823c856cb4f612`. The parent owns extraction of only its help/version fixes; this recovery owns the internal ABI and root forwarding.
-- Linux GNU peer qualification is separately owned and is not advertised by this change. macOS x64, Linux musl, Windows, and other architectures are also unadvertised.
+- GNU Linux x64 is advertised because the binary-level setup -> run journey (`crates/turborepo/tests/setup_run_journey.rs`) exercises absent, copied-local compatible and incompatible pins on that host in CI. GNU Linux ARM64, macOS x64, Linux musl, Windows, and other architectures remain unadvertised until the same journey runs there.
 - npm/bundled npm, Rust, Python, Go, verify-system adapters, and the full product schema are not claimed by this experimental object.
 - Self-local execution stays in-process, under the same capability requirement. A copied local binary is queried and dispatched through the existing child path.
 - Installed incompatible, malformed, damaged, or unresolvable pins fail. They are not substituted with a global CLI or implicitly fetched.
