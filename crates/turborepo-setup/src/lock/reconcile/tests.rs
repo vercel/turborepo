@@ -439,14 +439,13 @@ fn reordered_provenance_preserves_pins_and_native_removal_preserves_other_tool()
     let reordered = edit(&old, |doc| {
         doc.tools.get_mut("node").unwrap().declarations.reverse()
     });
-    fs::write(
-        root.path().join("turbo.lock"),
-        serde_json::to_vec(reordered.document()).unwrap(),
-    )
-    .unwrap();
+    let compact = serde_json::to_vec(reordered.document()).unwrap();
+    fs::write(root.path().join("turbo.lock"), &compact).unwrap();
     for mode in [Mode::Frozen, Mode::NoLock, Mode::Local] {
         let result = reconcile(&snapshot(root.path()), mode, true, never).unwrap();
         assert_eq!(result.lock.tools()["node"].version, "24.0.0");
+        // An equivalent compact lock is never rewritten for formatting alone.
+        assert_eq!(bytes(root.path()), compact);
     }
     fs::remove_file(root.path().join(".nvmrc")).unwrap();
     fs::remove_file(root.path().join(".node-version")).unwrap();

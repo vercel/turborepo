@@ -265,6 +265,8 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     let initial = selected(&f);
     let manifest = f.manifest().unwrap();
     let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+    assert!(lock.starts_with(b"{\n  \"schemaVersion\": 0,\n  \"tools\": {\n    \"node\": {\n"));
+    assert!(lock.ends_with(b"\n  }\n}\n"));
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     assert_eq!(f.run(&empty, LOCAL).unwrap(), 0);
     assert_eq!(empty.hits(), 0); // Unchanged floating Node never refreshes.
