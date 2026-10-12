@@ -23,6 +23,7 @@ pub mod registry_metadata;
 pub mod registry_resolution;
 pub mod rust_discovery;
 pub mod rust_metadata;
+pub mod rust_provision;
 pub mod rust_resolution;
 pub mod rustup;
 pub mod rustup_provision;
