@@ -40,6 +40,25 @@ pub enum Error {
     NotImplemented,
     #[error("unsupported setup request: {0}")]
     Unsupported(&'static str),
+    #[error("managed tools are not supported on musl Linux hosts such as Alpine")]
+    #[diagnostic(
+        code(turbo::setup::musl_host),
+        help(
+            "Managed setup installs official glibc builds. On musl hosts, install the \
+             repository's tools in the image and use verify-system for them."
+        )
+    )]
+    MuslHost,
+    #[error("cannot classify this Linux host's C library: {0}")]
+    #[diagnostic(
+        code(turbo::setup::unclassified_libc),
+        help(
+            "turbo reads the ELF interpreter of /bin/sh and the libc.so.6 beside a glibc loader \
+             without running them. Managed setup requires a glibc host with those files; \
+             otherwise install the tools yourself and use verify-system."
+        )
+    )]
+    UnclassifiedLibc(turborepo_platform::LibcError),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
@@ -227,10 +246,16 @@ mod tests {
     }
 
     #[test]
-    fn platform_qualification_rejects_unsupported_hosts_including_musl() {
+    fn platform_qualification_follows_the_host_libc_not_the_build_target() {
+        use turborepo_platform::Libc;
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
-        let host = cfg!(target_os = "macos") || cfg!(all(target_os = "linux", target_env = "gnu"));
-        assert_eq!(provision::platform().is_ok(), arch && host);
+        let libc = turborepo_platform::host_libc();
+        let host = cfg!(target_os = "macos") || matches!(libc, Ok(Some(Libc::Glibc { .. })));
+        let platform = provision::platform();
+        assert_eq!(platform.is_ok(), arch && host);
+        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl))) {
+            assert!(matches!(platform, Err(Error::MuslHost)));
+        }
     }
 
     #[test]

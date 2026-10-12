@@ -1,9 +1,13 @@
 //! OS and architecture values shared by Turborepo crates.
 //!
 //! [`Platform::current`] describes the compiled binary's target. Explicit
-//! values describe other targets without cross-compiling. Vendor naming and
-//! artifact support belong to consumers; this crate does not detect runtime
-//! system libraries.
+//! values describe other targets without cross-compiling. [`host_libc`]
+//! classifies the running Linux host's C library, which can differ from the
+//! binary's own target. Vendor naming and artifact support belong to consumers.
+
+mod libc;
+
+pub use libc::{Libc, LibcError, host_libc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OperatingSystem {
