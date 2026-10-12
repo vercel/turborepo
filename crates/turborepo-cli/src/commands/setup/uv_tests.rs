@@ -29,18 +29,21 @@ fn declare(owned: &OwnedSetupFixture, request: &str) {
     fs::write(owned.root().join("pyproject.toml"), pyproject).unwrap();
 }
 fn upstream(versions: &[&str]) -> LoopbackServer {
+    upstream_with(versions, "#!/bin/sh\ntouch probe-ran\n", Vec::new())
+}
+fn upstream_with(
+    versions: &[&str],
+    uv: &str,
+    mut routes: Vec<(String, Vec<u8>)>,
+) -> LoopbackServer {
     let platform = provision::platform().unwrap();
     let mut index = String::new();
-    let mut routes = Vec::new();
     for version in versions {
         let official =
             UvArtifact::for_platform(&semver::Version::parse(version).unwrap(), platform).unwrap();
         let bytes = archive(
             &format!("uv-{}", official.target()),
-            &[
-                ("uv", "#!/bin/sh\ntouch probe-ran\n"),
-                ("uvx", "#!/bin/sh\nexit 1\n"),
-            ],
+            &[("uv", uv), ("uvx", "#!/bin/sh\nexit 1\n")],
         );
         index += &format!("{}\n", json!({"version": version, "artifacts": []}));
         let release = format!("/github/uv/releases/download/{version}");
@@ -80,6 +83,7 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
                     )
                     .unwrap(),
                 uv: UvTransport::loopback_http_for_tests(origin).unwrap(),
+                python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
             }),
             || Ok(owned.policy_at(&cwd)?),
         )
@@ -192,4 +196,87 @@ fn disabled_python_flag_ignores_uv_declarations() {
         ))
     ));
     assert!(locked(&owned).is_none());
+}
+
+/// Host CPython builds served by the fixture; the fixture uv lists them.
+fn python_upstream() -> LoopbackServer {
+    let (os, arch, libc) = match provision::platform().unwrap() {
+        turborepo_setup::lock::Platform::MacosArm64 => ("macos", "aarch64", "none"),
+        turborepo_setup::lock::Platform::MacosX64 => ("macos", "x86_64", "none"),
+        turborepo_setup::lock::Platform::LinuxX64Gnu => ("linux", "x86_64", "gnu"),
+        _ => ("linux", "aarch64", "gnu"),
+    };
+    let releases = "/github/python-build-standalone/releases/download/20260211";
+    let (mut listing, mut sums, mut routes) = (Vec::new(), String::new(), Vec::new());
+    for (version, minor) in [("3.12.12", "3.12"), ("3.13.1", "3.13")] {
+        let filename = format!("cpython-{version}+20260211-host-install_only_stripped.tar.gz");
+        let interpreter = "#!/bin/sh\necho managed-python\n";
+        let bytes = archive(
+            "python",
+            &[
+                (&format!("bin/python{minor}"), interpreter),
+                ("bin/python3", interpreter),
+            ],
+        );
+        sums += &format!("{:x}  {filename}\n", Sha256::digest(&bytes));
+        listing.push(
+            json!({"key":format!("cpython-{version}-{os}-{arch}-{libc}"),
+            "version":version,"os":os,"arch":arch,"libc":libc,"implementation":"cpython",
+            "variant":"default","url":format!("https://releases.astral.sh{releases}/{}",
+                filename.replace('+', "%2B"))}),
+        );
+        routes.push((
+            format!("{releases}/{}", filename.replace('+', "%2B")),
+            bytes,
+        ));
+    }
+    routes.push((format!("{releases}/SHA256SUMS"), sums.into_bytes()));
+    let uv = format!(
+        "#!/bin/sh\nif [ \"$1\" = python ]; then cat <<'EOF'\n{}\nEOF\nelse echo \
+         \"$UV_PYTHON_INSTALL_DIR|$UV_PYTHON_PREFERENCE|$*\"; fi\n",
+        Value::Array(listing)
+    );
+    upstream_with(&["0.13.0"], &uv, routes)
+}
+
+#[test]
+fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
+    let owned = fixture(PYTHON, ">=0.13");
+    fs::write(owned.root().join(".python-version"), "3.12\n").unwrap();
+    let upstream = python_upstream();
+    assert_eq!(run(&owned, &upstream, LOCAL).unwrap(), 0);
+    let lock = locked(&owned).unwrap();
+    assert_eq!(lock.tools().keys().collect::<Vec<_>>(), ["python", "uv"]);
+    assert_eq!(lock.tools()["python"].version, "3.12.12");
+    let store = turborepo_tool_install::Store::open(owned.root()).unwrap();
+    let current = store.current().unwrap().unwrap();
+    drop(store);
+    let tools = fs::canonicalize(current.bin.join("../tools")).unwrap();
+    let output = std::process::Command::new(current.bin.join("uv"))
+        .args(["run", "app"])
+        .env_clear()
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap().trim(),
+        format!("{}|only-managed|run app", tools.join("python").display())
+    );
+    assert!(current.bin.join("python3").exists());
+    // Resolution lists through a verified scratch uv; provisioning installs both.
+    let hits = upstream.hits();
+    for flags in [LOCAL, FROZEN] {
+        assert_eq!(run(&owned, &upstream, flags).unwrap(), 0);
+    }
+    assert_eq!(upstream.hits(), hits);
+    fs::write(owned.root().join(".python-version"), "3.13\n").unwrap();
+    match run(&owned, &upstream, FROZEN) {
+        Err(Error::Reconcile(reconcile::Error::Drift(ids))) => {
+            assert_eq!(ids.into_iter().collect::<Vec<_>>(), ["python"]);
+        }
+        other => panic!("expected named Python drift, got {other:?}"),
+    }
+    assert_eq!(run(&owned, &upstream, LOCAL).unwrap(), 0);
+    let lock = locked(&owned).unwrap();
+    assert_eq!(lock.tools()["python"].version, "3.13.1");
+    assert_eq!(uv_version(&owned), "0.13.0");
 }
