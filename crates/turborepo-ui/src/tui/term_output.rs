@@ -1,4 +1,7 @@
-use std::io::{Seek, SeekFrom, Write};
+use std::{
+    borrow::Cow,
+    io::{Seek, SeekFrom, Write},
+};
 
 use turborepo_ghostty as ghostty;
 
@@ -6,6 +9,7 @@ use super::{
     Error,
     event::{CacheResult, Direction, OutputLogs, TaskResult},
 };
+use crate::terminal_sink::has_bare_lf;
 
 /// Per-task raw output is kept in memory up to this size, then rolls over to
 /// an anonymous temporary file. The terminal parser already bounds visible
@@ -296,12 +300,12 @@ impl<W> TerminalOutput<W> {
 /// (e.g. Node.js calling `setRawMode(true)`), which means their output
 /// contains bare `\n` without `\r`. Without `\r`, subsequent lines start at
 /// whatever column the cursor was at, producing garbled overlapping text.
-fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
-    let has_bare_lf =
-        bytes.windows(2).any(|w| w[0] != b'\r' && w[1] == b'\n') || bytes.first() == Some(&b'\n');
-
-    if !has_bare_lf {
-        return bytes.to_vec();
+///
+/// Output that already has no bare `\n` (task output is normalized before it
+/// reaches the TUI) is returned as-is, without a copy.
+fn normalize_newlines(bytes: &[u8]) -> Cow<'_, [u8]> {
+    if !has_bare_lf(bytes) {
+        return Cow::Borrowed(bytes);
     }
 
     let mut result = Vec::with_capacity(bytes.len() + bytes.len() / 10);
@@ -311,7 +315,7 @@ fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
         }
         result.push(byte);
     }
-    result
+    Cow::Owned(result)
 }
 
 #[cfg(test)]
@@ -374,29 +378,38 @@ mod newline_tests {
     use super::*;
 
     #[test]
+    fn normalized_input_is_borrowed() {
+        assert!(matches!(
+            normalize_newlines(b"a\r\nb\r\n"),
+            Cow::Borrowed(_)
+        ));
+        assert!(matches!(normalize_newlines(b"a\nb"), Cow::Owned(_)));
+    }
+
+    #[test]
     fn no_newlines_passthrough() {
-        assert_eq!(normalize_newlines(b"hello"), b"hello");
+        assert_eq!(&*normalize_newlines(b"hello"), b"hello");
     }
 
     #[test]
     fn crlf_unchanged() {
-        assert_eq!(normalize_newlines(b"hello\r\nworld"), b"hello\r\nworld");
+        assert_eq!(&*normalize_newlines(b"hello\r\nworld"), b"hello\r\nworld");
     }
 
     #[test]
     fn bare_lf_gets_cr() {
-        assert_eq!(normalize_newlines(b"hello\nworld"), b"hello\r\nworld");
+        assert_eq!(&*normalize_newlines(b"hello\nworld"), b"hello\r\nworld");
     }
 
     #[test]
     fn leading_lf_gets_cr() {
-        assert_eq!(normalize_newlines(b"\nhello"), b"\r\nhello");
+        assert_eq!(&*normalize_newlines(b"\nhello"), b"\r\nhello");
     }
 
     #[test]
     fn mixed_lf_and_crlf() {
         assert_eq!(
-            normalize_newlines(b"a\r\nb\nc\r\nd\n"),
+            &*normalize_newlines(b"a\r\nb\nc\r\nd\n"),
             b"a\r\nb\r\nc\r\nd\r\n"
         );
     }
