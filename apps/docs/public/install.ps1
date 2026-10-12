@@ -1,3 +1,19 @@
+<#
+.SYNOPSIS
+Installs the standalone Turborepo CLI without Node.js or a JavaScript package manager.
+
+.DESCRIPTION
+By default, the installer uses the latest stable release, installs turbo.exe to
+%LOCALAPPDATA%\Programs\Turborepo\bin, and adds that directory to the user PATH.
+When the installed turbo supports it, the installer also adds the turbo shell
+hook to the PowerShell profile ($PROFILE.CurrentUserAllHosts).
+
+Each option has an environment variable for use with `irm ... | iex`:
+  -Version VERSION            TURBO_VERSION
+  -InstallDirectory DIRECTORY TURBO_INSTALL_DIR
+  -NoModifyPath               TURBO_NO_MODIFY_PATH=1  Change neither PATH nor the profile.
+  -NoShellHook                TURBO_NO_SHELL_HOOK=1   Do not add the shell hook.
+#>
 [CmdletBinding()]
 param(
   [Alias('Version')]
@@ -5,13 +21,16 @@ param(
   [Alias('InstallDirectory')]
   [string]$TurboInstallerInstallDirectory,
   [Alias('NoModifyPath')]
-  [switch]$TurboInstallerNoModifyPath
+  [switch]$TurboInstallerNoModifyPath,
+  [Alias('NoShellHook')]
+  [switch]$TurboInstallerNoShellHook
 )
 
 $installerArguments = @{
   Version = if ($PSBoundParameters.ContainsKey('TurboInstallerVersion')) { $TurboInstallerVersion } else { $env:TURBO_VERSION }
   InstallDirectory = if ($PSBoundParameters.ContainsKey('TurboInstallerInstallDirectory')) { $TurboInstallerInstallDirectory } else { $env:TURBO_INSTALL_DIR }
-  NoModifyPath = $PSBoundParameters.ContainsKey('TurboInstallerNoModifyPath') -and $TurboInstallerNoModifyPath
+  NoModifyPath = ($PSBoundParameters.ContainsKey('TurboInstallerNoModifyPath') -and $TurboInstallerNoModifyPath) -or $env:TURBO_NO_MODIFY_PATH -eq '1'
+  NoShellHook = ($PSBoundParameters.ContainsKey('TurboInstallerNoShellHook') -and $TurboInstallerNoShellHook) -or $env:TURBO_NO_SHELL_HOOK -eq '1'
 }
 
 function Invoke-TurboInstaller {
@@ -19,7 +38,8 @@ function Invoke-TurboInstaller {
   param(
     [string]$Version,
     [string]$InstallDirectory,
-    [switch]$NoModifyPath
+    [switch]$NoModifyPath,
+    [switch]$NoShellHook
   )
 
 $ErrorActionPreference = 'Stop'
@@ -112,6 +132,112 @@ function Add-TurboToUserPath {
   }
   if (-not $alreadyInProcessPath) {
     $env:Path = if ([string]::IsNullOrWhiteSpace($env:Path)) { $Directory } else { "$Directory;$env:Path" }
+  }
+}
+
+$hookMarker = '# Turborepo standalone installer shell hook'
+
+# Keeps profile bytes intact: files without a byte order mark round-trip
+# through Latin-1, and lines the installer writes are stored there as UTF-8.
+function Read-TurboProfile {
+  param([string]$Path)
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    return [pscustomobject]@{ Encoding = [Text.UTF8Encoding]::new($true); Text = '' }
+  }
+  $bytes = [IO.File]::ReadAllBytes($Path)
+  $encoding = [Text.Encoding]::GetEncoding(28591)
+  $offset = 0
+  if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+    $encoding = [Text.UTF8Encoding]::new($true)
+    $offset = 3
+  } elseif ($bytes.Length -ge 2 -and (($bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) -or ($bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF))) {
+    $encoding = [Text.UnicodeEncoding]::new($bytes[0] -eq 0xFE, $true)
+    $offset = 2
+  }
+  return [pscustomobject]@{ Encoding = $encoding; Text = $encoding.GetString($bytes, $offset, $bytes.Length - $offset) }
+}
+
+function ConvertTo-TurboProfileLine {
+  param($Content, [string]$Line)
+
+  if ($Content.Encoding.CodePage -eq 28591) {
+    return $Content.Encoding.GetString([Text.Encoding]::UTF8.GetBytes($Line))
+  }
+  return $Line
+}
+
+function Get-TurboHookLine {
+  $quote = "['$([char]0x2018)$([char]0x2019)$([char]0x201A)$([char]0x201B)]"
+  return "Invoke-Expression (& '$($destination -replace $quote, '$0$0')' hook powershell | Out-String) $hookMarker"
+}
+
+# Owns one marked line per profile: replace it in place, dropping duplicates,
+# or append it.
+function Set-TurboProfileHook {
+  param([string]$Path)
+
+  $content = Read-TurboProfile -Path $Path
+  $line = ConvertTo-TurboProfileLine -Content $content -Line (Get-TurboHookLine)
+  $segments = @([regex]::Split($content.Text, '(?<=\n)') | Where-Object { $_ -ne '' })
+  $marked = @($segments | Where-Object { $_.Contains($hookMarker) })
+  if ($marked.Count -eq 1 -and $marked[0].TrimEnd([char[]]@("`r", "`n")) -ceq $line) {
+    return
+  }
+  if ($marked.Count -eq 0) {
+    $newline = if ($content.Text.Contains("`n") -and -not $content.Text.Contains("`r`n")) { "`n" } else { "`r`n" }
+    $text = if ($content.Text.Length -eq 0) { $line + $newline } else { $content.Text + $newline + $line + $newline }
+  } else {
+    $replaced = $false
+    $text = -join @(foreach ($segment in $segments) {
+      if (-not $segment.Contains($hookMarker)) {
+        $segment
+      } elseif (-not $replaced) {
+        $replaced = $true
+        $line + $segment.Substring($segment.TrimEnd([char[]]@("`r", "`n")).Length)
+      }
+    })
+  }
+  [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($Path)) | Out-Null
+  [IO.File]::WriteAllText($Path, $text, $content.Encoding)
+}
+
+# New sessions ignore the Process scope, so check the scopes they will use.
+function Get-TurboProfileExecutionPolicy {
+  foreach ($scope in @('MachinePolicy', 'UserPolicy', 'CurrentUser', 'LocalMachine')) {
+    $policy = [string](Get-ExecutionPolicy -Scope $scope)
+    if ($policy -ne 'Undefined') {
+      return $policy
+    }
+  }
+  if ($PSVersionTable.PSEdition -eq 'Core') { return 'RemoteSigned' }
+  return 'Restricted'
+}
+
+function Add-TurboShellHook {
+  $profilePath = $PROFILE.CurrentUserAllHosts
+  if ([string]::IsNullOrWhiteSpace($profilePath)) {
+    return
+  }
+  # Older releases have no hook command.
+  try {
+    & $destination hook powershell *> $null
+    if ($LASTEXITCODE -ne 0) {
+      return
+    }
+  } catch {
+    return
+  }
+  $policy = Get-TurboProfileExecutionPolicy
+  if ($policy -in @('Restricted', 'AllSigned')) {
+    Write-Host "Skipped the turbo shell hook because the PowerShell execution policy ($policy) does not run profile scripts."
+    return
+  }
+  try {
+    Set-TurboProfileHook -Path $profilePath
+    Write-Host "Added the turbo shell hook to $profilePath. Open a new terminal to use it."
+  } catch {
+    Write-Warning "turbo was installed, but the shell hook could not be added to $profilePath."
   }
 }
 
@@ -249,6 +375,9 @@ try {
   }
   $action = if ($replaced) { "Upgraded" } else { "Installed" }
   Write-Host "$action turbo $Version at $destination"
+  if (-not $NoModifyPath -and -not $NoShellHook -and [string]::IsNullOrWhiteSpace($env:GITHUB_PATH)) {
+    Add-TurboShellHook
+  }
 } finally {
   if ($null -ne $stagedBinary -and (Test-Path -LiteralPath $stagedBinary)) {
     Remove-Item -LiteralPath $stagedBinary -Force

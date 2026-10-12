@@ -5,16 +5,62 @@ $previousGitHubPath = $env:GITHUB_PATH
 $previousTurboVersion = $env:TURBO_VERSION
 $previousTurboInstallDirectory = $env:TURBO_INSTALL_DIR
 $previousPath = $env:Path
+$previousNoModifyPath = $env:TURBO_NO_MODIFY_PATH
+$previousNoShellHook = $env:TURBO_NO_SHELL_HOOK
+# Shell hook tests let the installer edit the user PATH; restore its exact value.
+$environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+$previousUserPath = $environmentKey.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+$previousUserPathKind = if ($null -ne $previousUserPath) { $environmentKey.GetValueKind('Path') } else { $null }
+$hookMarker = '# Turborepo standalone installer shell hook'
 $script:RequestCount = 0
 $script:ChecksumFixture = $null
 $script:ArchiveFixture = $null
 $script:ArchiveName = $null
+$script:ExecutionPolicy = 'RemoteSigned'
 
 function Assert-True {
   param([bool]$Condition, [string]$Message)
   if (-not $Condition) {
     throw $Message
   }
+}
+
+function Get-ExecutionPolicy {
+  param([string]$Scope)
+  if ($Scope -eq 'CurrentUser') {
+    return $script:ExecutionPolicy
+  }
+  return 'Undefined'
+}
+
+function New-FixtureExecutable {
+  param([string]$Name, [string]$Body)
+  $path = Join-Path $testRoot "$Name.exe"
+  Add-Type -TypeDefinition "public static class $Name { public static int Main(string[] args) { $Body } }" -OutputAssembly $path -OutputType ConsoleApplication
+  return $path
+}
+
+function Set-ArchiveFixture {
+  param([string]$Binary)
+  $directory = Join-Path $testRoot ('archive-' + [Guid]::NewGuid().ToString('N'))
+  [IO.Directory]::CreateDirectory($directory) | Out-Null
+  Copy-Item -LiteralPath $Binary -Destination (Join-Path $directory 'turbo.exe')
+  $script:ArchiveFixture = Join-Path $testRoot ([Guid]::NewGuid().ToString('N') + '.tar.gz')
+  & $tarCommand.Source -czf $script:ArchiveFixture -C $directory 'turbo.exe'
+  Assert-True ($LASTEXITCODE -eq 0) 'Could not create the test archive.'
+  $digest = (Get-FileHash -LiteralPath $script:ArchiveFixture -Algorithm SHA256).Hash.ToLowerInvariant()
+  [IO.File]::WriteAllText($script:ChecksumFixture, "$digest  $script:ArchiveName`n")
+}
+
+function Invoke-Installer {
+  param([hashtable]$Arguments)
+  # Out-String wraps host output at the console width.
+  return (. $installerPath @Arguments 6>&1 | ForEach-Object { [string]$_ }) -join "`n"
+}
+
+function Test-UserPathContains {
+  param([string]$Directory)
+  return @([Environment]::GetEnvironmentVariable('Path', 'User') -split ';') -contains $Directory
 }
 
 function Invoke-WebRequest {
@@ -208,6 +254,73 @@ try {
   $env:Path = $previousPath
 
   Write-Output 'PASS: Windows installer replaces its own binary, refuses PATH shims, and preserves files on failure.'
+
+  Remove-Item Env:GITHUB_PATH -ErrorAction SilentlyContinue
+  $hookTurbo = New-FixtureExecutable -Name 'HookTurbo' -Body 'if (args.Length == 2 && args[0] == "hook" && args[1] == "powershell") { System.Console.WriteLine("$env:TURBO_HOOKED = ''powershell''"); return 0; } return 1;'
+  $oldTurbo = New-FixtureExecutable -Name 'OldTurbo' -Body 'return 1;'
+  $profilePath = Join-Path $testRoot 'Documents\WindowsPowerShell\profile.ps1'
+  $PROFILE = [pscustomobject]@{ CurrentUserAllHosts = $profilePath }
+  $hookDirectory = Join-Path $testRoot "hook o'install"
+  $hookLine = "Invoke-Expression (& '$((Join-Path $hookDirectory 'turbo.exe').Replace("'", "''"))' hook powershell | Out-String) $hookMarker"
+  Set-ArchiveFixture -Binary $hookTurbo
+  $env:Path = $systemPath
+  $hookOutput = Invoke-Installer -Arguments @{ Version = '2.11.5'; InstallDirectory = $hookDirectory }
+  Assert-True ($hookOutput.Contains("Added the turbo shell hook to $profilePath")) "Installer did not report the shell hook. Received: $hookOutput"
+  Assert-True (Test-UserPathContains -Directory $hookDirectory) 'Installer did not add its directory to the user PATH.'
+  $profileBytes = [IO.File]::ReadAllBytes($profilePath)
+  Assert-True ($profileBytes[0] -eq 0xEF -and $profileBytes[1] -eq 0xBB -and $profileBytes[2] -eq 0xBF) 'New profile is missing the UTF-8 byte order mark Windows PowerShell needs.'
+  Assert-True ([IO.File]::ReadAllText($profilePath) -ceq "$hookLine`r`n") 'Installer wrote an unexpected new profile.'
+  $powershell = (Get-Process -Id $PID).Path
+  $hooked = & $powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -Command ". '$profilePath'; `$env:TURBO_HOOKED"
+  Assert-True ($hooked -eq 'powershell') "The profile line did not load the turbo hook. Received: $hooked"
+
+  # Re-running or upgrading replaces the first marked line in place and drops duplicates.
+  $staleLine = "Invoke-Expression (& 'C:\old\turbo.exe' hook powershell | Out-String) $hookMarker"
+  [IO.File]::WriteAllText($profilePath, "# mine`r`n$staleLine`r`n# also mine`r`n$staleLine`r`n")
+  foreach ($run in 1..2) {
+    $env:Path = $systemPath
+    $null = Invoke-Installer -Arguments @{ Version = '2.11.5'; InstallDirectory = $hookDirectory }
+  }
+  Assert-True ([IO.File]::ReadAllText($profilePath) -ceq "# mine`r`n$hookLine`r`n# also mine`r`n") 'Installer did not keep exactly one hook line in place.'
+  Write-Output 'PASS: Windows installer adds the shell hook once and updates only its own line.'
+
+  $scenarios = @(
+    @{ Name = '-NoShellHook'; Arguments = @{ NoShellHook = $true }; UserPath = $true },
+    @{ Name = 'TURBO_NO_SHELL_HOOK=1'; Variable = 'TURBO_NO_SHELL_HOOK'; UserPath = $true },
+    @{ Name = 'an older release'; Binary = $oldTurbo; UserPath = $true },
+    @{ Name = 'a Restricted execution policy'; Policy = 'Restricted'; UserPath = $true; Output = 'Skipped the turbo shell hook' },
+    @{ Name = '-NoModifyPath'; Arguments = @{ NoModifyPath = $true }; UserPath = $false },
+    @{ Name = 'TURBO_NO_MODIFY_PATH=1'; Variable = 'TURBO_NO_MODIFY_PATH'; UserPath = $false },
+    @{ Name = 'GitHub Actions'; GitHub = $true; UserPath = $false }
+  )
+  for ($index = 0; $index -lt $scenarios.Count; $index++) {
+    $scenario = $scenarios[$index]
+    Remove-Item -LiteralPath $profilePath -Force -ErrorAction SilentlyContinue
+    $directory = Join-Path $testRoot "opt-out-$index"
+    $arguments = @{ Version = '2.11.5'; InstallDirectory = $directory }
+    if ($scenario.Arguments) { $arguments += $scenario.Arguments }
+    if ($scenario.Variable) { Set-Item -Path "Env:$($scenario.Variable)" -Value '1' }
+    if ($scenario.GitHub) { $env:GITHUB_PATH = $githubPathFixture }
+    if ($scenario.Policy) { $script:ExecutionPolicy = $scenario.Policy }
+    Set-ArchiveFixture -Binary $(if ($scenario.Binary) { $scenario.Binary } else { $hookTurbo })
+    $env:Path = $systemPath
+    try {
+      $output = Invoke-Installer -Arguments $arguments
+    } finally {
+      if ($scenario.Variable) { Remove-Item -Path "Env:$($scenario.Variable)" }
+      Remove-Item Env:GITHUB_PATH -ErrorAction SilentlyContinue
+      $script:ExecutionPolicy = 'RemoteSigned'
+    }
+    Assert-True ($output.Contains('Installed turbo 2.11.5')) "Install failed for $($scenario.Name). Received: $output"
+    Assert-True (-not (Test-Path -LiteralPath $profilePath)) "Installer edited the profile for $($scenario.Name)."
+    Assert-True ((Test-UserPathContains -Directory $directory) -eq $scenario.UserPath) "Installer handled the user PATH incorrectly for $($scenario.Name)."
+    if ($scenario.Output) {
+      Assert-True ($output.Contains($scenario.Output)) "Installer did not explain the skipped hook for $($scenario.Name). Received: $output"
+    } else {
+      Assert-True (-not $output.Contains('shell hook')) "Installer mentioned the shell hook for $($scenario.Name). Received: $output"
+    }
+  }
+  Write-Output 'PASS: Windows installer skips the shell hook for each opt-out, CI, older releases, and blocked profiles.'
 } finally {
   if (Test-Path -LiteralPath $testRoot) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force
@@ -227,5 +340,13 @@ try {
   } else {
     $env:TURBO_INSTALL_DIR = $previousTurboInstallDirectory
   }
+  $env:TURBO_NO_MODIFY_PATH = $previousNoModifyPath
+  $env:TURBO_NO_SHELL_HOOK = $previousNoShellHook
+  if ($null -eq $previousUserPath) {
+    $environmentKey.DeleteValue('Path', $false)
+  } else {
+    $environmentKey.SetValue('Path', $previousUserPath, $previousUserPathKind)
+  }
+  $environmentKey.Dispose()
   $env:Path = $previousPath
 }
