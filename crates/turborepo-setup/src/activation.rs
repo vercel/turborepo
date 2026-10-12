@@ -1,4 +1,4 @@
-//! Read-only Node/pnpm environment planning, not execution authorization.
+//! Read-only Node/pnpm/Go environment planning, not execution authorization.
 //! Repo-writable inventory proves readiness only. Consumers must separately
 //! authorize setup-recorded tools with trusted-root user state, gate managed
 //! mode, and revalidate before use. No CLI support is advertised by this
@@ -14,7 +14,9 @@ use turborepo_tool_install::{Store, Tool};
 
 use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot},
-    lock::{Installation, Platform, Snapshot, StorageError},
+    go_discovery::GoVersion,
+    go_provision::GoPlan,
+    lock::{Ecosystems, Installation, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
     pnpm_provision::PnpmPlan,
 };
@@ -27,7 +29,9 @@ pub enum Error {
         "native declarations disagree with turbo.lock; run turbo setup locally and commit the lock"
     )]
     DeclarationDrift,
-    #[error("activation planning supports only managed Node/pnpm; use a supported setup adapter")]
+    #[error(
+        "activation planning supports only managed Node/pnpm/Go; use a supported setup adapter"
+    )]
     UnsupportedAdapter,
     #[error(
         "managed activation is unqualified for this platform; use a supported macOS/GNU Linux \
@@ -59,8 +63,8 @@ pub struct ActivationPlan {
     snapshot: ExecutionSnapshot,
     bin: PathBuf,
     tools: Vec<Tool>,
-    // These adapters require no additional runtime variables. Keep that explicit
-    // rather than inheriting or inventing host-dependent runtime settings.
+    // Only variables an adapter requires (Node and pnpm need none), derived
+    // from the checked generation. Never inherited or host-dependent settings.
     runtime_env: BTreeMap<String, OsString>,
 }
 
@@ -68,8 +72,20 @@ impl ActivationPlan {
     /// Caller selects the exact root and execution context; no root/host
     /// probes, ancestor search, system-tool fallback, resolution, or
     /// storage creation. A missing lock is an error, not unconfigured-mode
-    /// policy for future callers.
+    /// policy for future callers. Plans JavaScript tools only; see
+    /// [`Self::inspect_with`].
     pub fn inspect(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
+        Self::inspect_with(repo, Ecosystems::default(), context)
+    }
+
+    /// Like [`Self::inspect`], also reading the declarations of the caller's
+    /// flag-enabled `ecosystems`, as setup does. A locked selection for a
+    /// disabled ecosystem is declaration drift, never activated.
+    pub fn inspect_with(
+        repo: &Path,
+        ecosystems: Ecosystems,
+        context: ExecutionContext,
+    ) -> Result<Self, Error> {
         let platform = context.artifact_platform();
         if !cfg!(unix)
             || !matches!(
@@ -83,7 +99,7 @@ impl ActivationPlan {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = repo.canonicalize().map_err(StorageError::from)?;
-        let sources = Snapshot::capture(&repo)?;
+        let sources = Snapshot::capture_with(&repo, ecosystems)?;
         Self::from_sources(&repo, &sources, context)
     }
 
@@ -96,7 +112,7 @@ impl ActivationPlan {
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
-                    || !matches!(id.as_str(), "node" | "pnpm")
+                    || !matches!(id.as_str(), "node" | "pnpm" | "go")
                     || !matches!(tool.installation, Installation::Managed { .. })
             })
         {
@@ -112,24 +128,52 @@ impl ActivationPlan {
             return Err(Error::DeclarationDrift);
         }
         let platform = context.artifact_platform();
-        let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
-        let version = semver::Version::parse(&node.inventory_tool().version)
+        // Go-only repositories need no Node, exactly as setup provisions them.
+        let node = (lock.tools().contains_key("node"))
+            .then(|| NodePlan::from_lock(lock, platform))
+            .transpose()
             .map_err(|_| Error::InvalidLock)?;
-        if !sources
-            .node_requirements()?
-            .matches_locked_version(&version)
-        {
-            return Err(Error::DeclarationDrift);
+        let mut tools = Vec::new();
+        if let Some(node) = &node {
+            let version = semver::Version::parse(&node.inventory_tool().version)
+                .map_err(|_| Error::InvalidLock)?;
+            if !sources
+                .node_requirements()?
+                .matches_locked_version(&version)
+            {
+                return Err(Error::DeclarationDrift);
+            }
+            tools.push(node.inventory_tool().clone());
         }
-        let mut tools = vec![node.inventory_tool().clone()];
         if lock.tools().contains_key("pnpm") {
+            // Setup never locks pnpm without the Node it runs on.
+            let node = node.as_ref().ok_or(Error::InvalidLock)?;
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
             // Share setup's full authored-pin validation and reuse identity;
             // an authoritative version does not erase devEngines integrity.
-            let pnpm = PnpmPlan::from_declaration(lock, platform, &node, &manager)
+            let pnpm = PnpmPlan::from_declaration(lock, platform, node, &manager)
                 .map_err(|_| Error::InvalidLock)?;
             tools.push(pnpm.inventory_tool().clone());
         }
+        let go = (lock.tools().contains_key("go"))
+            .then(|| GoPlan::from_lock(lock, platform))
+            .transpose()
+            .map_err(|_| Error::InvalidLock)?;
+        if let Some(go) = &go {
+            let version =
+                GoVersion::parse(&go.inventory_tool().version).ok_or(Error::InvalidLock)?;
+            // Matching provenance cannot authorize a release outside the native
+            // minimum or an exact `toolchain` preference.
+            if !sources
+                .go_requirements()?
+                .is_some_and(|requirements| requirements.matches_locked(version))
+            {
+                return Err(Error::DeclarationDrift);
+            }
+            tools.push(go.inventory_tool().clone());
+        }
+        // Store inventories are ordered by tool id.
+        tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
         let current = Store::inspect(repo)
@@ -139,17 +183,29 @@ impl ActivationPlan {
         if current.tools != tools {
             return Err(Error::StaleInventory);
         }
-        let tree = current
-            .tool_tree(node.inventory_tool())
-            .ok_or(Error::StaleInventory)?;
-        node.verify_bundled_npm(&tree)
-            .map_err(|_| Error::StaleInventory)?;
+        let tree = |tool: &Tool| current.tool_tree(tool).ok_or(Error::StaleInventory);
+        if let Some(node) = &node {
+            node.verify_bundled_npm(&tree(node.inventory_tool())?)
+                .map_err(|_| Error::StaleInventory)?;
+        }
+        let mut runtime_env = BTreeMap::new();
+        if let Some(go) = &go {
+            // `GOTOOLCHAIN=local` stops toolchain switches and downloads. The
+            // caller's GOROOT reaches loose-mode tasks and strict-mode Go tasks,
+            // so pin it to this verified tree; otherwise the locked `go` would
+            // build with another release's standard library and tools.
+            for (key, value) in crate::go_provision::RUNTIME_ENV {
+                runtime_env.insert(key.to_owned(), OsString::from(value));
+            }
+            let root = tree(go.inventory_tool())?;
+            runtime_env.insert("GOROOT".to_owned(), root.into_os_string());
+        }
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
             bin: current.bin,
             tools,
-            runtime_env: BTreeMap::new(),
+            runtime_env,
         })
     }
 

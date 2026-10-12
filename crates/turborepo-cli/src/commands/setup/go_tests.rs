@@ -133,6 +133,36 @@ fn go_needs_its_workspace_flag_and_preserves_unaffected_node_selections() {
 }
 
 #[test]
+fn check_reports_go_readiness_and_fails_closed_without_the_flag_or_on_damage() {
+    use turborepo_setup::activation::Error as Activation;
+    const CHECK: &[&str] = &["--check", "--tools-only"];
+    let f = go_only();
+    let root = f.owned.root();
+    let u = LoopbackServer::new(go_routes(&["1.22.12"]), |_| {}).unwrap();
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    let hits = u.hits();
+    for flags in [CHECK, &["--check", "--tools-only", "--offline"]] {
+        assert_eq!(f.check(flags).unwrap(), 0);
+    }
+    // With the workspace flag off, go.work is unread and the selection drifts.
+    fs::write(root.join("turbo.json"), ENABLED).unwrap();
+    let result = f.check(CHECK);
+    assert!(matches!(
+        result,
+        Err(Error::Activation(Activation::DeclarationDrift))
+    ));
+    fs::write(root.join("turbo.json"), GO).unwrap();
+    fs::write(current(&f).bin.join("../tools/go/src/go.mod"), "damage").unwrap();
+    let result = f.check(CHECK);
+    assert!(matches!(
+        result,
+        Err(Error::Activation(Activation::DamagedInventory(_)))
+    ));
+    assert_eq!(u.hits(), hits);
+    untouched(&f);
+}
+
+#[test]
 fn unsupported_go_directives_fail_before_any_writer() {
     let f = go_only();
     let root = f.owned.root();

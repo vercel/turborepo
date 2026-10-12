@@ -186,7 +186,7 @@ impl ExecutionSnapshot {
         let mut tools = BTreeMap::new();
         for id in selected_ids {
             let tool = lock.tools().get(id).ok_or(Error::MissingTool)?;
-            if !matches!(tool.adapter.as_str(), "node" | "npm" | "pnpm") {
+            if !matches!(tool.adapter.as_str(), "node" | "npm" | "pnpm" | "go") {
                 return Err(Error::UnsupportedAdapter);
             }
             let installation = match &tool.installation {

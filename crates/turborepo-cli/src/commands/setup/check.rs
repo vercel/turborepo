@@ -2,7 +2,7 @@
 use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::{ExecutionContext, Libc},
-    lock::{Platform, Snapshot},
+    lock::{Ecosystems, Platform, Snapshot},
     source_policy::OfficialSourcePolicy,
 };
 
@@ -33,7 +33,12 @@ pub(super) fn run(
 ) -> Result<i32, Error> {
     let context = context()?;
     preflight()?;
-    let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;
+    // The same flag-gated ecosystems setup captured and provisioned.
+    let ecosystems = Ecosystems {
+        go: discovery.source_eligibility().go(),
+    };
+    let root = discovery.snapshot_root()?;
+    let plan = ActivationPlan::inspect_with(root.as_std_path(), ecosystems, context)?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.
     preflight()?;
