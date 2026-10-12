@@ -8,6 +8,7 @@ prerequisites:
   - /docs/getting-started/installation
 related:
   - /docs/reference/setup
+  - /docs/reference/hook
   - /docs/reference/run
   - /docs/reference/configuration#experimentalsetup
 ---
@@ -122,11 +123,10 @@ Tasks use the managed Node.js and pnpm, even if other versions are installed on 
 </Steps>
 
 <Callout type="info">
-  This release doesn't install dependencies, and managed tools are only
-  available to tasks that `turbo run` starts. Commands you type in your shell,
-  such as `pnpm install`, still use your `PATH`. Install dependencies the way
-  your repository does today. `turbo exec`, a shell hook, and dependency
-  installation will arrive in later releases.
+  This release doesn't install dependencies. Install them the way your
+  repository does today. To use the managed tools for commands you type, such
+  as `pnpm install`, see [Using managed tools in your
+  shell](#using-managed-tools-in-your-shell).
 </Callout>
 
 ## `turbo.lock`
@@ -235,6 +235,15 @@ When you invoke the global `turbo` in a repository that installs `turbo` as a de
   global `turbo` binary.
 </Callout>
 
+## Using managed tools in your shell
+
+`turbo run` activates the managed tools only for the tasks it starts. For everything else, use one of these:
+
+- **The [shell hook](/docs/reference/hook)** puts the managed tools first on `PATH` while your bash, zsh, fish, or PowerShell session is inside the repository, and restores `PATH` when you leave. The standalone installer for macOS and Linux adds it by default.
+- **`turbo exec -- <command>`** runs one command with the managed tools. Use it in scripts, CI steps, `cmd.exe`, and processes started by other applications. See [when to use `turbo exec`](/docs/reference/hook#when-to-use-turbo-exec).
+
+When `turbo.lock` changes after `turbo setup`, the shell hook keeps the previously installed tools active and asks you to run `turbo setup`. `turbo run` and `turbo exec` fail until you do.
+
 ## Using `turbo setup` in CI
 
 Install the standalone `turbo` binary in your CI job, as described in [Global `turbo` in CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci), then run setup before your tasks:
@@ -259,6 +268,6 @@ This experimental release has these limitations:
 - **Official sources only.** Tools download from `nodejs.org` and the public npm registry. Mirrors and npm configuration aren't supported yet, and `turbo setup` stops if it finds any. See [troubleshooting](/docs/reference/setup#official-only-setup-rejects-npm-configuration).
 - **A Git repository is required.** `turbo setup` uses Git to confirm that `.turbo/` is ignored, so it can't install tools outside a Git repository, such as in a Docker build of `turbo prune` output.
 - **No repository-local `turbo`.** See [Repository-local `turbo`](#repository-local-turbo).
-- **No shell activation.** Managed tools are only available to tasks started by `turbo run`. [`turbo watch`](/docs/reference/watch) doesn't use them yet.
+- **No `turbo watch`.** [`turbo watch`](/docs/reference/watch) doesn't use managed tools yet.
 - **Not yet implemented.** [`--plan`](/docs/reference/setup#--plan), [`--no-lock`](/docs/reference/setup#--no-lock), and [`--offline`](/docs/reference/setup#--offline) exit with an error.
 - **No cleanup.** Each clone and worktree has its own `.turbo/tools`, and earlier installations aren't removed. Delete `.turbo/tools` and run `turbo setup` again to reclaim space.
