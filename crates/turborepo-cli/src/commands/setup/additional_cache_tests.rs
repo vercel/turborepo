@@ -117,8 +117,8 @@ fn the_artifact_mirror_serves_host_prefixed_paths_with_canonical_provenance() {
         |path: &str| Some(Mirror::loopback_for_tests(&format!("{}{path}", m.origin())).unwrap());
     let mirrors = Mirrors {
         node: mirror("/mirror/node"),
-        registry: None,
         artifact: mirror("/mirror/artifacts/"),
+        ..Mirrors::default()
     };
     let policy = || -> Result<OfficialSourcePolicy, Error> {
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
