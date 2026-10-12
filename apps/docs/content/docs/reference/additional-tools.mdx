@@ -89,10 +89,11 @@ Add the tool under `setup.additionalTools` in the root `turbo.json`:
 ### Run `turbo setup`
 
 ```bash title="Terminal"
-turbo setup --tools-only
+turbo setup
 ```
 
 ```txt title="Terminal"
+javascript: tools managed (inferred); dependencies locked (inferred)
 turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
 acme: locked 1.4.2
 node: locked 24.21.0
@@ -314,7 +315,7 @@ If a tool is already a dependency of your repository, such as an npm package in 
 This experimental release has these limitations:
 
 - **A native declaration is still required.** To create `turbo.lock`, the repository also needs a supported toolchain declaration, such as `.nvmrc`.
-- **macOS, Linux with glibc, and Windows x64 only.** See [Platforms](#platforms). The shell hook doesn't activate tools on Windows yet; use `turbo exec` there.
+- **macOS, Linux with glibc, and Windows x64 only.** See [Platforms](#platforms) and [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms). The shell hook doesn't activate tools on Windows yet; use `turbo exec` there.
 - **No authenticated downloads.** Artifacts must be downloadable without credentials, from their URL or your mirror.
 
 ## Troubleshooting
@@ -331,3 +332,4 @@ This experimental release has these limitations:
 | `additional tool "<id>" exports "<name>", which "<tool>" also exports`           | Rename the executable under `setup.additionalTools.<id>.artifacts`.                                                            |
 | `managed installation is damaged or unsafe; run turbo setup`                     | A file in the installed tree changed. Run `turbo setup` to reinstall it.                                                       |
 | `unsupported setup request: a native Node declaration is required`               | Add a Node.js declaration, such as `.nvmrc`, at the repository root.                                                           |
+| `official-only setup rejects ... configuration`                            | Keep only [setup policy](/docs/reference/setup-policy) keys and `additionalTools` under `setup`.                                          |

@@ -6,6 +6,8 @@ type: reference
 summary: Reference for the experimental root `setup` key in `turbo.json`, including tool and dependency modes, lifecycle-script policy, download mirrors, precedence with `turbo setup` flags, and `verify-system`.
 related:
   - /docs/reference/configuration
+  - /docs/reference/setup
+  - /docs/reference/additional-tools
 ---
 
 import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
@@ -160,7 +162,7 @@ A line appears for `rust`, `python`, or `go` only when its workspace flag is ena
 
 ## Tools-only repositories
 
-Set `"dependencies": "skip"` to make tools-only setup the repository default. Plain `turbo setup` and `turbo setup --check` then work without `--tools-only`, locally and in CI:
+Set `"dependencies": "skip"` to make tools-only setup the repository default. [`turbo setup --plan`](/docs/reference/setup#--plan) and [`turbo setup --check`](/docs/reference/setup#--check) then work without `--tools-only`, locally and in CI:
 
 ```jsonc title="./turbo.json"
 {
@@ -184,7 +186,9 @@ node: locked 24.21.0
 pnpm: locked 10.18.0
 node 24.21.0: installed
 pnpm 10.18.0: installed
-Dependencies skipped. No tasks run; managed activation is not enabled.
+Managed tools use 218.9 MB in this clone's .turbo/tools.
+Shared download cache: 62.3 MB.
+Dependencies skipped (dependency installation is not supported yet). No tasks run.
 ```
 
 Install dependencies the way your repository does today. `--tools-only` still works, and it also overrides `"dependencies": "locked"` for one invocation.
@@ -260,6 +264,12 @@ A `turbo.lock` created under one mode isn't trusted under the other, so plain an
 - Only Node.js and pnpm. A `packageManager` that pins npm, Yarn, or Bun isn't supported, and neither is a Corepack integrity suffix, such as `pnpm@10.28.0+sha512.<hex>`.
 - npm isn't verified separately from Node.js.
 - A repository can't mix managed and `verify-system` tools.
+- `turbo setup --plan` isn't implemented for `verify-system` tools.
+- `turbo run` and [`turbo exec`](/docs/reference/exec) fail in a repository whose `turbo.lock` records `verify-system` tools, even though `turbo setup` says tasks use the verified tools on `PATH`. On musl hosts, they also fail because managed runs aren't supported there. See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms#musl-linux).
+
+```txt title="Terminal"
+managed setup validation failed: turbo.lock selects verify-system tools, which come from PATH rather than a managed installation; run turbo setup --check to verify them
+```
 
 ## Skipping toolchains
 
@@ -270,9 +280,11 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
 <Callout type="info">
   When `experimentalCargoWorkspaces`, `experimentalPythonWorkspaces`, or
   `experimentalGoWorkspaces` is enabled, `turbo setup` considers that toolchain
-  part of the repository. Setup can't prepare Rust, Python, or Go yet, so set
-  that toolchain's `tools` to `skip`. Otherwise, `turbo setup` exits with
-  `non-JavaScript workspace setup`.
+  part of the repository and installs its [managed
+  tools](/docs/reference/setup#other-toolchains). Rust, Python, and Go support
+  `managed` and `skip`, not `verify-system`. Managed Rust, Python, or Go tools
+  also need managed `javascript` tools when the repository has JavaScript
+  declarations.
 </Callout>
 
 ## Mirrors
@@ -362,7 +374,8 @@ TURBO_SETUP_NODE_MIRROR=https://nodejs.org/dist turbo setup
 | `The "<toolchain>" setup policy requires`                                                 | Enable the named workspace flag, or remove the toolchain key.                                   |
 | `Setup dependencies cannot be "locked" when tools are "skip".`                            | Set `tools` to `managed` or `verify-system`, or set `dependencies` to `skip`.                   |
 | `dependency setup requires a committed <lockfile>`                                        | Commit the lockfile, set `"dependencies": "skip"`, or pass `--tools-only`.                      |
-| `unsupported setup request: non-JavaScript workspace setup`                               | Set `tools` to `skip` for Rust, Python, or Go.                                                  |
+| `verify-system tools for Rust, Python or Go workspaces`                                   | Set `tools` to `managed` or `skip` for Rust, Python, and Go.                                    |
+| `managed Rust, Python or Go tools with a skip or verify-system JavaScript tools policy`   | Use `managed` `javascript` tools, or skip Rust, Python, and Go.                                 |
 | `turbo.lock selects tools that the setup policy skips`                                    | Remove the skip, or remove the tools from `turbo.lock`.                                         |
 | `official-only setup rejects ... configuration`                                           | An empty `"setup": {}` isn't accepted. Add a key or remove `setup`.                             |
 | `setup.mirrors.<key> must be an absolute HTTPS URL`                                       | Use an `https://` base URL without credentials, a query, or a fragment.                         |
