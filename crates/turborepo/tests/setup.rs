@@ -1182,6 +1182,8 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         ("macos", "aarch64") => "darwin-arm64",
         ("macos", _) => "darwin-x64",
         ("linux", "aarch64") => "linux-arm64",
+        // #14591's Windows x64 fixture.
+        ("windows", _) => "win-x64",
         _ => "linux-x64",
     };
     let prefix = format!("node-v24.0.0-{spelling}");
