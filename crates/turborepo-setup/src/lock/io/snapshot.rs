@@ -12,10 +12,10 @@ use super::{
 };
 use crate::{
     go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT},
+    lock::{Tool, additional},
     python_discovery::PythonRequirement,
     uv_discovery::{self, UvRequirement},
 };
-use crate::lock::{Tool, additional};
 
 const SOURCES: [(&str, usize); 5] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),

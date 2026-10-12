@@ -3,8 +3,8 @@
 
 pub mod activation;
 pub mod artifact_cache;
-pub mod bun_provision;
 pub mod artifact_provision;
+pub mod bun_provision;
 pub mod bundled_npm;
 pub mod cargo_prefetch;
 pub mod ephemeral_reconcile;
