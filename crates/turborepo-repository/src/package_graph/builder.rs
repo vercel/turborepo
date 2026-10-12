@@ -17,6 +17,7 @@ use super::{
     javascript,
 };
 use crate::{
+    bootstrap::{ContributorOptions, ContributorPlan, Registry},
     discovery::{
         self, CachingPackageDiscovery, LocalPackageDiscoveryBuilder, PackageDiscovery,
         PackageDiscoveryBuilder,
@@ -54,6 +55,10 @@ pub struct PackageGraphBuilder<'a, T> {
     /// are discovered alongside JavaScript packages; name collisions across
     /// toolchains are a hard error.
     extra_contributors: Vec<Arc<dyn RepositoryContributor>>,
+    /// Resolve registry contributors at construction, after all builder options
+    /// are known. Only adapters recognizing this repository root participate.
+    bootstrap_registries: Vec<Registry>,
+    bootstrap_plans: Vec<ContributorPlan>,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -140,6 +145,8 @@ pub enum Error {
     Discovery(#[from] crate::discovery::Error),
     #[error(transparent)]
     Contribution(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    Bootstrap(#[from] crate::bootstrap::BootstrapError),
 }
 
 // JavaScript contribution errors map onto the pre-existing variants rather than
@@ -276,6 +283,8 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             load_lockfile: true,
             package_manager: None,
             extra_contributors: Vec::new(),
+            bootstrap_registries: Vec::new(),
+            bootstrap_plans: Vec::new(),
         }
     }
 
@@ -337,27 +346,63 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
         self
     }
 
+    /// Register enabled bootstrap adapters for this graph generation.
+    ///
+    /// Construction probes the native root before creating its contributor,
+    /// preserving probe errors even for callers that did not validate the root
+    /// first. Factories receive the final external-resolution setting,
+    /// regardless of the order of this call and
+    /// `without_external_dependencies`.
+    pub fn with_bootstrap_registry(mut self, registry: &Registry) -> Self {
+        self.bootstrap_registries.push(registry.clone());
+        self
+    }
+
+    /// Consume a recognized immutable plan; construction never re-probes it.
+    /// Factories receive final options regardless of builder call order.
+    pub fn with_bootstrap_plan(mut self, plan: &ContributorPlan) -> Self {
+        assert_eq!(
+            self.repo_root,
+            plan.root(),
+            "bootstrap plan belongs to another root"
+        );
+        self.bootstrap_plans.push(plan.clone());
+        self
+    }
+
+    pub fn repository_root(&self) -> &AbsoluteSystemPath {
+        self.repo_root
+    }
+
+    fn register_bootstrap_contributors(&mut self) -> Result<(), Error> {
+        let options = ContributorOptions {
+            resolve_external_dependencies: self.load_lockfile,
+        };
+        // Legacy convenience registration observes once at construction. Root
+        // loaders instead supply a retained plan, so no second probe occurs.
+        for registry in std::mem::take(&mut self.bootstrap_registries) {
+            self.bootstrap_plans
+                .push(registry.contributor_plan(self.repo_root)?);
+        }
+        for plan in std::mem::take(&mut self.bootstrap_plans) {
+            self.extra_contributors.extend(plan.contributors(options));
+        }
+        Ok(())
+    }
+
     /// Enable Cargo repository contribution for this graph generation.
     pub fn with_cargo(self) -> Self {
-        let repo_root = self.repo_root.to_owned();
-        let contributor = if self.load_lockfile {
-            crate::cargo::CargoContributor::new(repo_root)
-        } else {
-            crate::cargo::CargoContributor::new_without_external_dependencies(repo_root)
-        };
-        self.with_contributor(contributor)
+        self.with_bootstrap_registry(&Registry::new([ToolchainId::RUST]))
     }
 
     /// Enable uv (Python) repository contribution for this graph generation.
     pub fn with_uv(self) -> Self {
-        let repo_root = self.repo_root.to_owned();
-        self.with_contributor(crate::uv::UvContributor::new(repo_root))
+        self.with_bootstrap_registry(&Registry::new([ToolchainId::PYTHON]))
     }
 
     /// Enable Go repository contribution for this graph generation.
     pub fn with_go(self) -> Self {
-        let repo_root = self.repo_root.to_owned();
-        self.with_contributor(crate::go::GoContributor::new(repo_root))
+        self.with_bootstrap_registry(&Registry::new([ToolchainId::GO]))
     }
 
     /// Set the package discovery strategy to use. Note that whatever strategy
@@ -378,6 +423,8 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             package_discovery: discovery,
             package_manager: self.package_manager,
             extra_contributors: self.extra_contributors,
+            bootstrap_registries: self.bootstrap_registries,
+            bootstrap_plans: self.bootstrap_plans,
         }
     }
 }
@@ -391,6 +438,10 @@ where
     /// Build the `PackageGraph`.
     #[tracing::instrument(skip(self))]
     pub async fn build(mut self) -> Result<PackageGraph, Error> {
+        self.register_bootstrap_contributors()?;
+        // Single-package mode is a JavaScript optimization, not permission to
+        // discard the scopes of explicitly registered native contributors.
+        self.is_single_package &= self.extra_contributors.is_empty();
         let is_single_package = self.is_single_package;
 
         // If no pre-supplied lockfile, start reading it on a blocking thread
@@ -455,11 +506,12 @@ where
     /// toolchains.
     #[tracing::instrument(skip(self))]
     pub async fn build_lazy(
-        self,
+        mut self,
     ) -> Result<LazyPackageGraph<CachingPackageDiscovery<T::Output>>, Error> {
+        self.register_bootstrap_contributors()?;
+        self.is_single_package &= self.extra_contributors.is_empty();
         if self.is_single_package {
-            // Single-package mode consults no additional contributors, so
-            // there is nothing to inventory or load.
+            // Only a JavaScript-only graph may skip contributor inventories.
             let repo_root = self.repo_root.to_owned();
             let graph = Arc::new(self.build().await?);
             return Ok(LazyPackageGraph {
@@ -1049,6 +1101,8 @@ where
             package_discovery,
             package_manager,
             extra_contributors,
+            bootstrap_registries: _,
+            bootstrap_plans: _,
         } = builder;
         let assembler = PackageGraphAssembler::new(root_package_json.clone());
 
@@ -2057,7 +2111,7 @@ fn package_name_from_identity(identity: &str) -> PackageName {
 mod test {
     use std::{
         collections::{HashMap, HashSet},
-        sync::atomic::{AtomicUsize, Ordering},
+        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
     use turborepo_errors::Spanned;
@@ -2370,6 +2424,136 @@ mod test {
                 ))
             })
         }
+    }
+
+    struct TestBootstrap {
+        contributor: Arc<LazyContributor>,
+        recognizes_root: bool,
+        external_dependencies: Arc<AtomicBool>,
+        factory_calls: Arc<AtomicUsize>,
+    }
+
+    impl crate::bootstrap::ToolchainBootstrap for TestBootstrap {
+        fn id(&self) -> ToolchainId {
+            self.contributor.id()
+        }
+
+        fn probe(
+            &self,
+            root: &AbsoluteSystemPath,
+        ) -> Result<Option<crate::bootstrap::BootstrapWorkspace>, crate::bootstrap::BootstrapError>
+        {
+            Ok(self.recognizes_root.then(|| {
+                crate::bootstrap::BootstrapWorkspace::new(
+                    root.to_owned(),
+                    root.join_component("native-root"),
+                    self.contributor.clone(),
+                )
+            }))
+        }
+
+        fn contributor(
+            &self,
+            _root: &AbsoluteSystemPath,
+            options: ContributorOptions,
+        ) -> Option<Arc<dyn RepositoryContributor>> {
+            self.factory_calls.fetch_add(1, Ordering::SeqCst);
+            self.external_dependencies
+                .store(options.resolve_external_dependencies, Ordering::SeqCst);
+            Some(self.contributor.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn bootstrap_registry_only_registers_applicable_roots_with_final_options() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        for recognizes_root in [false, true] {
+            let contributor = Arc::new(LazyContributor::new(
+                ToolchainId::new("custom-bootstrap"),
+                root,
+                &["native-pkg"],
+                vec![LazyContributor::native_package(root, "native-pkg")],
+            ));
+            let external_dependencies = Arc::new(AtomicBool::new(true));
+            let factory_calls = Arc::new(AtomicUsize::new(0));
+            let registry = Registry::default().with_adapter(Arc::new(TestBootstrap {
+                contributor: contributor.clone(),
+                recognizes_root,
+                external_dependencies: external_dependencies.clone(),
+                factory_calls: factory_calls.clone(),
+            }));
+            let lazy = PackageGraphBuilder::new_optional(root, None)
+                .with_bootstrap_registry(&registry)
+                // This must work even when set after registry registration.
+                .without_external_dependencies()
+                .with_package_discovery(MockDiscovery)
+                .build_lazy()
+                .await
+                .unwrap();
+            assert_eq!(
+                factory_calls.load(Ordering::SeqCst),
+                usize::from(recognizes_root)
+            );
+            assert_eq!(
+                contributor.inventory_calls.load(Ordering::SeqCst),
+                usize::from(recognizes_root)
+            );
+            assert_eq!(contributor.full_calls.load(Ordering::SeqCst), 0);
+            assert_eq!(lazy.graph().has_unloaded_scopes(), recognizes_root);
+            if recognizes_root {
+                assert!(!external_dependencies.load(Ordering::SeqCst));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn bootstrap_registry_preserves_probe_errors_in_eager_and_lazy_builds() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let path = root.join_component("Cargo.toml");
+        path.create_with_contents("[workspace").unwrap();
+        let builder = || PackageGraphBuilder::new_optional(root, None).with_cargo();
+        for error in [
+            builder().build().await.err().unwrap(),
+            builder().build_lazy().await.err().unwrap(),
+        ] {
+            let Error::Bootstrap(error) = error else {
+                panic!("expected bootstrap error, got {error}");
+            };
+            assert_eq!(error.toolchain, ToolchainId::RUST);
+            assert_eq!(error.path, path);
+        }
+    }
+
+    #[tokio::test]
+    async fn single_package_mode_does_not_discard_registered_native_contributors() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let id = ToolchainId::new("native");
+        let contributor = Arc::new(LazyContributor::new(
+            id.clone(),
+            root,
+            &["native-pkg"],
+            vec![LazyContributor::native_package(root, "native-pkg")],
+        ));
+        let builder = || {
+            PackageGraphBuilder::new_optional(root, None)
+                .with_single_package_mode(true)
+                .with_contributor(contributor.clone())
+        };
+        let graph = builder().build().await.unwrap();
+        let native = PackageName::from("native-pkg");
+        assert_eq!(graph.package_toolchain(&native), Some(&id));
+        assert!(!graph.has_unloaded_scopes());
+        let (graph, mut plan) = builder().build_lazy().await.unwrap().into_parts();
+        assert_eq!(graph.unloaded_scope_owner(&native), Some(&id));
+        assert_eq!(contributor.inventory_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(contributor.full_calls.load(Ordering::SeqCst), 1);
+        let graph = plan.load(&HashSet::from([id.clone()])).await.unwrap();
+        assert_eq!(graph.package_toolchain(&native), Some(&id));
+        assert!(!graph.has_unloaded_scopes());
+        assert_eq!(contributor.full_calls.load(Ordering::SeqCst), 2);
     }
 
     #[tokio::test]
@@ -3758,18 +3942,17 @@ mod test {
     }
 
     #[tokio::test]
-    async fn single_package_reports_only_javascript_root_without_running_extra_contributors() {
+    async fn single_package_reports_javascript_and_registered_contributor_roots() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
         let graph = PackageGraphBuilder::new(&root, PackageJson::default())
             .with_package_manager(PackageManager::Npm)
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(HashMap::new()))
             .with_single_package_mode(true)
             .with_contributor(Arc::new(RootObservingContributor {
-                id: ToolchainId::new("unused-extra"),
-                roots: vec![WorkspaceRoot::new(
-                    "unused-extra",
-                    root.join_component("other"),
-                )],
+                id: ToolchainId::new("extra"),
+                roots: vec![WorkspaceRoot::new("extra", root.clone())],
             }))
             .build()
             .await
@@ -3778,8 +3961,9 @@ mod test {
             .repository_knowledge()
             .workspace_roots()
             .collect::<Vec<_>>();
-        assert_eq!(roots.len(), 1);
-        assert_eq!(roots[0].kind(), "npm");
+        assert_eq!(roots.len(), 2);
+        assert!(roots.iter().any(|root| root.kind() == "npm"));
+        assert!(roots.iter().any(|root| root.kind() == "extra"));
     }
 
     #[tokio::test]

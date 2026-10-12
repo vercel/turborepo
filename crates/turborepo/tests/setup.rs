@@ -240,11 +240,11 @@ fn standalone_gate_reads_only_the_selected_root_config() {
 fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
-    // A missing local pin/manager and unusable Cargo marker must not bootstrap
-    // anything.
+    // Inference parses enabled native manifests in-process, but a missing local
+    // pin/manager and Cargo executable must not trigger provisioning or handoff.
     let package = r#"{"devDependencies":{"turbo":"2.0.3"},"scripts":{"setup":"exit 99"}}"#;
     write(root, "package.json", package);
-    write(root, "Cargo.toml", "must not run cargo metadata");
+    write(root, "Cargo.toml", "[workspace]\nmembers = []\n");
     write(
         root,
         "turbo.json",
@@ -299,6 +299,31 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     for flags in [vec!["--update-lock", "--no-frozen"], vec!["--no-lock"]] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
         failure(root, &words, true, PENDING);
+    }
+}
+
+#[test]
+fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "Cargo.toml", "must not run cargo metadata");
+    for enabled in [false, true] {
+        write(
+            root,
+            "turbo.json",
+            &format!(
+                r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":{enabled}}}}}"#
+            ),
+        );
+        for words in [&["setup"][..], &["setup", "--plan"], &["setup", "--check"]] {
+            if enabled {
+                let text = failure(root, words, false, "failed to parse Cargo.toml");
+                assert_diagnostic_path(&text, &root.join("Cargo.toml"));
+                assert!(!text.contains(PENDING), "{text}");
+            } else {
+                failure(root, words, false, PENDING);
+            }
+        }
     }
 }
 
