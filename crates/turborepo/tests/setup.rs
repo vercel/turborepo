@@ -367,8 +367,14 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     write(root, "custom.json", ENABLED);
     fs::create_dir(root.join("selected-root")).unwrap();
     write(root, "selected-root/turbo.json", ENABLED);
+    // #14518 admits --offline, which reads (and rejects) the invalid lock.
+    failure(
+        root,
+        &["setup", "--offline"],
+        false,
+        "invalid turbo.lock JSON",
+    );
     for words in [
-        vec!["setup", "--offline"],
         vec!["--root-turbo-json", "custom.json", "setup", "--plan"],
         vec!["--cwd=selected-root", "setup", "--plan"],
     ] {
@@ -424,18 +430,30 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
                 "--plan" | "--check" | "--offline" | "--no-lock" | "--__test-run"
             )
         });
+        // #14518 admits --offline, which needs a lock first, and #14486 admits
+        // --no-lock, whose native baseline covers only Node and pnpm.
+        let offline = words.contains(&"--offline");
+        let no_lock = words.contains(&"--no-lock");
         // A Cargo workspace without a root rust-toolchain file declares no tool.
+        // Frozen (#14492) and forced (#14540) setup need turbo.lock before
+        // they look for a Node declaration.
         let text = failure(
             root,
             &words,
             false,
             match (supported, QUALIFIED) {
+                (_, true) if offline => "offline setup requires turbo.lock",
+                (_, true) if no_lock => "invalid or unsupported native resolution record",
                 (false, _) => PENDING,
+                (true, true) if words.contains(&"--frozen") => "frozen mode requires turbo.lock",
+                (true, true) if words.contains(&"--force") => {
+                    "locked provisioning requires turbo.lock"
+                }
                 (true, true) => "a native Node declaration is required",
                 (true, false) => UNQUALIFIED,
             },
         );
-        if !supported {
+        if !supported && !offline && !no_lock {
             assert!(text.contains("no tasks were run"), "{text}");
         }
         assert!(!text.contains("test run successful"), "{text}");
@@ -462,7 +480,17 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             UNQUALIFIED
         },
     );
-    failure(root, &["setup", "--no-lock"], true, PENDING);
+    // #14486 admits CI --no-lock; its native baseline rejects a Rust-only repo.
+    failure(
+        root,
+        &["setup", "--no-lock"],
+        true,
+        if QUALIFIED {
+            "invalid or unsupported native resolution record"
+        } else {
+            UNQUALIFIED
+        },
+    );
 }
 
 #[test]
@@ -485,9 +513,10 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 assert!(!text.contains(PENDING), "{text}");
             } else if words.len() == 1 {
                 // Plain setup reaches JS provisioning without parsing Cargo.
+                // (#14653's Node-required message names experimentalCargoWorkspaces.)
                 let (code, text) = invoke(root, words, false);
                 assert_eq!(code, 1, "{text}");
-                assert!(!text.contains("Cargo"), "{text}");
+                assert!(!text.contains("Cargo.toml"), "{text}");
             } else {
                 failure(root, words, false, PENDING);
             }
@@ -1496,12 +1525,14 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
     monitor.set_nonblocking(true).unwrap();
     let proxy = format!("http://{}", monitor.local_addr().unwrap());
+    // Stack B (#14494) keeps setup user state outside the repository.
+    let home = tempfile::tempdir().unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
         .env_clear()
         .current_dir(root)
         .args(["setup", "--frozen"])
         .env("PATH", bin.path())
-        .env("HOME", root.join("home"))
+        .env("HOME", home.path())
         .env("TURBO_TELEMETRY_DISABLED", "1")
         .env("HTTP_PROXY", &proxy)
         .env("HTTPS_PROXY", &proxy)

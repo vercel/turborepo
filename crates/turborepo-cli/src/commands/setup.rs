@@ -778,8 +778,6 @@ mod tests {
         for (flags, mode) in [
             (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
             (vec!["--check"], Mode::Check),
-            (vec!["--offline"], Mode::Provision),
-            (vec!["--no-lock"], Mode::Provision),
         ] {
             let request = request(&flags, false).unwrap();
             assert_eq!(request.mode, mode);
@@ -787,6 +785,12 @@ mod tests {
                 validate_request(&request),
                 Err(Error::NotImplemented)
             ));
+        }
+        // #14518 admits --offline and #14486 admits --no-lock.
+        for flags in [vec!["--offline"], vec!["--no-lock"]] {
+            let request = request(&flags, false).unwrap();
+            assert_eq!(request.mode, Mode::Provision);
+            assert!(validate_request(&request).is_ok(), "{flags:?}");
         }
         let request =
             request(&["--force", "--offline", "--tools-only", "--no-lock"], true).unwrap();

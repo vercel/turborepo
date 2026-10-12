@@ -29,6 +29,13 @@ fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
     files
 }
 
+/// Stack B (#14494) keeps setup user state outside the repository; one home
+/// per test process (nextest runs each test in its own process).
+fn home() -> &'static Path {
+    static HOME: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    HOME.get_or_init(|| tempfile::tempdir().unwrap()).path()
+}
+
 /// Runs standalone turbo without HTTP access. Returns the exit code and
 /// combined output without wrapping or gutters.
 fn turbo(root: &Path, words: &[&str], path: &Path) -> (i32, String) {
@@ -40,7 +47,7 @@ fn turbo(root: &Path, words: &[&str], path: &Path) -> (i32, String) {
         .current_dir(root)
         .args(words)
         .env("PATH", path)
-        .env("HOME", root.join("home"))
+        .env("HOME", home())
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
         .env("VERCEL_CONFIG_DIR_PATH", root.join("config"))

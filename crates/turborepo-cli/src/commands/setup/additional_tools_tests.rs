@@ -100,8 +100,15 @@ fn drift_and_checksum_failures_keep_the_previous_installation() {
     // Same version, different digest: frozen setup names the declaration.
     declare(&f, json!({"fixture": tool("0".repeat(64))}));
     let error = f.run(&u, FROZEN).unwrap_err();
+    // The composed frozen path reconciles first, so reconcile's drift (which
+    // #14583 extends to additional tools) can name it before #14581's check.
     assert!(
-        matches!(&error, Error::AdditionalToolDrift(ids) if ids.contains("fixture")),
+        matches!(
+            &error,
+            Error::AdditionalToolDrift(ids)
+                | Error::Reconcile(turborepo_setup::lock::reconcile::Error::Drift(ids))
+                if ids.contains("fixture")
+        ),
         "{error}"
     );
     assert_eq!(u.hits(), 2);

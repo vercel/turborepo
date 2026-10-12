@@ -390,11 +390,10 @@ fn root_policy_and_cli_overrides_select_the_effective_setup() {
     let f = Fixture::new();
     configure(&f, "", r#"{"dependencies":"locked"}"#);
     let u = Upstream::new(&f, false, None);
-    assert!(matches!(
-        f.run(&u, &["--frozen"]),
-        Err(Error::NotImplemented)
-    ));
-    assert_eq!(u.hits(), 0);
+    // Plain setup provisions tools and reports dependencies skipped (#14650;
+    // ledger), so locked dependencies no longer make plain --frozen pending.
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
 
     // Skipping an ecosystem without a setup adapter lets JavaScript proceed.
@@ -402,7 +401,9 @@ fn root_policy_and_cli_overrides_select_the_effective_setup() {
     let f = Fixture::new();
     configure(&f, cargo, r#"{"tools":"managed"}"#);
     let u = Upstream::new(&f, false, None);
-    assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
+    // #14653 adds a managed Rust adapter; a Cargo workspace without a root
+    // rust-toolchain file declares no Rust tool, so JavaScript proceeds.
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     configure(&f, cargo, r#"{"rust":{"tools":"skip"}}"#);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 3);
@@ -437,12 +438,18 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        if flags == ["--no-frozen", "--tools-only"] || flags == ["--frozen"] {
+        // #14486 provisions plain --no-lock without writing a lock.
+        if flags == ["--no-frozen", "--tools-only"]
+            || flags == ["--frozen"]
+            || flags == ["--no-lock"]
+        {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else {
             let result = f.run(&u, &flags);
-            if flags.contains(&"--offline") {
+            // `--no-lock --offline` stays a pending combination (no offline
+            // transport for --no-lock).
+            if flags.contains(&"--offline") && !flags.contains(&"--no-lock") {
                 assert!(matches!(result, Err(Error::Offline(_))));
             } else {
                 assert!(matches!(result, Err(Error::NotImplemented)));

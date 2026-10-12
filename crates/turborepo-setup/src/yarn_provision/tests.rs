@@ -275,8 +275,10 @@ async fn classic_pins_cover_the_registry_archive() {
         };
         assert!(result.is_err());
     }
-    // Only the SHA-512 pin needs registry metadata; no artifact is downloaded.
-    assert_eq!(server.hits(), hits + 1);
+    // The SHA-512 pin needs registry metadata. #14640 verifies SHA-224 pins
+    // against the archive bytes, so that pin also fetches metadata and the
+    // archive; nothing is installed.
+    assert_eq!(server.hits(), hits + 3);
     assert!(store.current().unwrap().is_none());
 }
 
