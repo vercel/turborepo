@@ -800,14 +800,16 @@ mod tests {
                 assert!(validate_request(&request).is_ok(), "{flags:?}");
             }
         }
-        for (flags, mode) in [(vec!["--plan", "--force", "--update-lock"], Mode::Plan)] {
-            let request = request(&flags, false).unwrap();
-            assert_eq!(request.mode, mode);
-            assert!(matches!(
-                validate_request(&request),
-                Err(Error::NotImplemented)
-            ));
-        }
+        // Plans still need --tools-only; plain --check does not (#14650).
+        let plan = request(&["--plan", "--force", "--update-lock"], false).unwrap();
+        assert_eq!(plan.mode, Mode::Plan);
+        assert!(matches!(
+            validate_request(&plan),
+            Err(Error::NotImplemented)
+        ));
+        let check = request(&["--check"], false).unwrap();
+        assert_eq!(check.mode, Mode::Check);
+        assert!(validate_request(&check).is_ok());
         // #14518 admits --offline and #14486 admits --no-lock.
         for flags in [vec!["--offline"], vec!["--no-lock"]] {
             let request = request(&flags, false).unwrap();

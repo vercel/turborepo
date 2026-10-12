@@ -990,9 +990,30 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             assert!(text.contains(line), "{text}");
         }
     }
-    // Locked dependencies still need dependency setup, unless the CLI skips it.
+    // Locked dependencies are still skipped until dependency installers exist:
+    // plain --check checks the same tools (#14650) and never claims dependency
+    // readiness.
     write(root, "turbo.json", &config("locked"));
-    failure(root, &["setup", "--check"], false, PENDING);
+    let (code, text) = invoke(root, &["setup", "--check"], false);
+    assert_eq!(code, 1, "{text}");
+    assert!(!diagnostic_contains(&text, PENDING), "{text}");
+    if cfg!(all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    )) && !external_system_policy_blocked(code, &text)
+    {
+        assert!(
+            diagnostic_contains(&text, "managed activation requires turbo.lock"),
+            "{text}"
+        );
+        assert!(
+            text.contains("dependencies locked (turbo.json setup policy)"),
+            "{text}"
+        );
+    }
 }
 
 #[test]
