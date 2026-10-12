@@ -48,6 +48,11 @@ pub enum Error {
     )]
     Configured(ConfigOwner),
     #[error(
+        "official-only setup rejects line {1} of the {0:?} .npmrc: only known install-layout \
+         settings are allowed there; remove it or wait for mirror/policy support"
+    )]
+    Setting(ConfigOwner, usize),
+    #[error(
         "cannot safely inspect {0:?} configuration (unreadable, non-file, link/reparse point or \
          invalid policy); no public traffic is allowed"
     )]
@@ -74,6 +79,9 @@ impl OfficialSourcePolicy {
     /// `etc/npmrc` is inspected here too (Homebrew's Node formulas write
     /// exactly `prefix = $HOMEBREW_PREFIX`). The only followed config link is
     /// a linked keg's bundled npmrc in that prefix's own Cellar.
+    /// Project `.npmrc` files (the invocation directory and its ancestors)
+    /// pass only when every setting is on the non-fetching allowlist in
+    /// `npmrc`; user, system, and prefix npmrc files are rejected outright.
     /// Windows inspects npm's default global prefix, `%APPDATA%\npm`.
     /// NPM_CONFIG_* variables outside the wrapper allowlist, regardless of
     /// spelling/value, are rejected before filesystem inspection. Registry
@@ -317,6 +325,10 @@ enum Observation {
     Readable,
     /// Bundled npmrc whose only setting is this absolute `prefix`.
     BundledPrefix(PathBuf),
+    /// Project npmrc whose every setting is on the non-fetching allowlist.
+    NonFetching,
+    /// Project npmrc with a rejected setting on this 1-based line.
+    Setting(usize),
     PolicyAbsent,
     Unsafe,
 }
@@ -353,6 +365,15 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
             }
             Err(_) => Observation::Unsafe,
         };
+    }
+    if matches!(owner, ConfigOwner::Repository | ConfigOwner::Ancestor) {
+        let mut bytes = Vec::new();
+        if file.take(npmrc::LIMIT + 1).read_to_end(&mut bytes).is_err()
+            || bytes.len() as u64 > npmrc::LIMIT
+        {
+            return Observation::Unsafe;
+        }
+        return npmrc::rejected_line(&bytes).map_or(Observation::NonFetching, Observation::Setting);
     }
     if owner != ConfigOwner::RootPolicy {
         return if file.read(&mut [0u8; 1]).is_ok() {
@@ -462,11 +483,14 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
 // secrets.
 fn validate(owner: ConfigOwner, observation: Observation) -> Result<(), Error> {
     match observation {
-        Observation::Missing | Observation::PolicyAbsent => Ok(()),
+        Observation::Missing | Observation::PolicyAbsent | Observation::NonFetching => Ok(()),
         Observation::Readable | Observation::BundledPrefix(_) => Err(Error::Configured(owner)),
+        Observation::Setting(line) => Err(Error::Setting(owner, line)),
         Observation::Unsafe => Err(Error::Inspection(owner)),
     }
 }
+
+mod npmrc;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
