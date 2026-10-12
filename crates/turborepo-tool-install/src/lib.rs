@@ -610,7 +610,8 @@ impl Store {
         let mut damaged = false;
         for installed in &inventory.tools {
             let tree = tools.join(&installed.tool.id);
-            damaged |= !stamps.fresh(installed, &tree)? && tree_hash(&tree)? != installed.tree_sha256;
+            damaged |=
+                !stamps.fresh(installed, &tree)? && tree_hash(&tree)? != installed.tree_sha256;
             check_executables(&tree, &installed.tool)?;
             for (name, executable) in &installed.tool.executables {
                 let shim = shim_name(name, executable)?;
