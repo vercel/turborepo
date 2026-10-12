@@ -80,7 +80,10 @@ pub(super) fn run(
         (_, Some(native)) => native.selection(),
         _ => return Err(Error::Unsupported("missing native selection")),
     };
-    let provision::Plans { node, pnpm } = provision::plans(&snapshot, selection)?;
+    let provision::Plans { node, pnpm, npm } = provision::plans(&snapshot, selection)?;
+    if npm.is_some() {
+        return Err(Error::Unsupported("npm provisioning with --no-lock"));
+    }
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
         desired.push(pnpm.inventory_tool().clone());

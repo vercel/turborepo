@@ -58,6 +58,14 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
     use turborepo_setup::activation::Error as Activation;
     match error {
         Error::Disabled | Error::FrozenUpdateLock => SetupFailure::Request,
+        Error::MuslHost | Error::UnclassifiedLibc(_) => SetupFailure::Platform,
+        Error::LockDiagnostics(super::lock_diagnostics::Error::Missing) => {
+            SetupFailure::LockMissing
+        }
+        Error::LockDiagnostics(super::lock_diagnostics::Error::Drift(_)) => SetupFailure::LockStale,
+        Error::Offline(_) => SetupFailure::Readiness,
+        Error::Native(_) => SetupFailure::Unsupported,
+        Error::Ephemeral(_) => SetupFailure::Resolution,
         Error::NotImplemented => SetupFailure::Unsupported,
         Error::Unsupported(message) => match *message {
             "managed promotion requires macOS or GNU Linux"
@@ -88,7 +96,7 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         },
         Error::Storage(_) | Error::Lock(_) => SetupFailure::LockInvalid,
         Error::Reconcile(_) => SetupFailure::Resolution,
-        Error::Node(_) | Error::Pnpm(_) => SetupFailure::Download,
+        Error::Node(_) | Error::Registry(_) => SetupFailure::Download,
         Error::Install(_) => SetupFailure::Install,
         Error::Root(_) | Error::Path(_) => SetupFailure::Discovery,
         Error::Io(_) => SetupFailure::Io,
