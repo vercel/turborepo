@@ -578,7 +578,11 @@ impl PreparedRegistry {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
         copy_tree(&self.tree.root_path(), destination)?;
-        fs::create_dir(destination.join(&self.launch_directory))?;
+        // Owner-only like every other store directory, whatever the umask.
+        let mut launch = fs::DirBuilder::new();
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
+        launch.create(destination.join(&self.launch_directory))?;
         for (name, path) in &self.tool.executables {
             // The bin forwarder calls this file directly, so %~dp0 is always
             // the launch directory. Entry points are fixed validated mappings.

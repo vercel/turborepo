@@ -1021,6 +1021,13 @@ fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
         node_provision::NodePlan,
         pnpm_provision::PnpmPlan,
     };
+    // Ubuntu's default 0002 umask leaves fresh clones group-writable.
+    #[cfg(unix)]
+    fs::set_permissions(
+        root,
+        <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o775),
+    )
+    .unwrap();
     write(root, "turbo.json", ENABLED);
     write(root, ".nvmrc", "24.0.0");
     write(root, ".gitignore", "/.turbo/\n");
