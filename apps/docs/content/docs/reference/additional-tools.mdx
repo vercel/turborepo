@@ -16,10 +16,9 @@ import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
 
 <Callout type="warn">
   Additional tools are experimental and require `futureFlags.experimentalSetup`.
-  In this release, `turbo setup` installs them, but they aren't available to
-  tasks yet: `turbo run` doesn't put them on `PATH`. Activation in `turbo run`
-  and `turbo exec`, and including them in task hashes, will arrive in later
-  releases. Read the [limitations](#limitations) before trying them.
+  In this release, `turbo setup` installs them, but `turbo run`, `turbo exec`,
+  and `turbo setup --check` fail in a repository whose `turbo.lock` records
+  additional tools. Read the [limitations](#limitations) before trying them.
 </Callout>
 
 ## Declaring a tool
@@ -89,16 +88,17 @@ Add the tool under `setup.additionalTools` in the root `turbo.json`:
 ### Run `turbo setup`
 
 ```bash title="Terminal"
-turbo setup --tools-only
+turbo setup
 ```
 
 ```txt title="Terminal"
+javascript: tools managed (inferred); dependencies locked (inferred)
 turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
 acme: locked 1.4.2
 node: locked 24.21.0
 node 24.21.0: installed
 acme 1.4.2: installed (https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz)
-Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled.
+Dependencies skipped (dependency installation is not supported yet). No tasks run.
 ```
 
 Each additional tool's line names the URL it came from.
@@ -263,11 +263,10 @@ If a tool is already a dependency of your repository, such as an npm package in 
 
 This experimental release has these limitations:
 
-- **Not available to tasks yet.** `turbo run` doesn't put additional tools on `PATH`, and `turbo exec` doesn't exist yet. Task hashes don't include them.
+- **Not available to tasks yet.** `turbo run` and [`turbo exec`](/docs/reference/exec) fail in a repository whose `turbo.lock` records additional tools.
 - **No `--check`.** `turbo setup --check` fails when `turbo.lock` contains additional tools.
-- **Tools-only setup with Node.js.** `--tools-only` is required, and the repository still needs a Node.js declaration, such as `.nvmrc`.
-- **No other `setup` keys.** `turbo setup` refuses a `setup` object that contains anything besides `additionalTools`.
-- **macOS and Linux with glibc only.** See [Platforms](#platforms).
+- **A built-in toolchain is required.** The repository still needs a declaration for a built-in tool, such as a Node.js version in `.nvmrc`.
+- **macOS and Linux with glibc only.** See [Platforms](#platforms) and [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms).
 - **No redirects, mirrors, offline installs, or authenticated downloads.** URLs that redirect, such as GitHub release downloads, fail.
 - **Single-directory archives.** Archives must have one top-level directory.
 
@@ -282,6 +281,6 @@ This experimental release has these limitations:
 | `cannot download additional tool "<id>": artifact SHA-256 does not match`  | The bytes at the URL changed or the digest is wrong. Verify the artifact and fix `sha256`.                                                |
 | `cannot download additional tool "<id>": download redirects are forbidden` | Use a URL that serves the artifact directly.                                                                                              |
 | `invalid inventory, tool identity or executable collision`                 | Check that every executable path exists in the archive and has its executable permission set.                                             |
-| `activation planning supports only managed Node/pnpm`                      | `--check` doesn't support additional tools yet. `turbo setup --frozen --tools-only` checks `turbo.lock` and reuses healthy installations. |
+| `activation planning supports managed Node, npm, pnpm, Yarn, Bun…`         | `--check`, `turbo run`, and `turbo exec` don't support additional tools yet. `turbo setup --frozen` checks `turbo.lock` instead.          |
 | `unsupported setup request: a native Node declaration is required`         | Add a Node.js declaration, such as `.nvmrc`, at the repository root.                                                                      |
-| `official-only setup rejects ... configuration`                            | Remove `setup` keys other than `additionalTools`.                                                                                         |
+| `official-only setup rejects ... configuration`                            | Keep only [setup policy](/docs/reference/setup-policy) keys and `additionalTools` under `setup`.                                          |

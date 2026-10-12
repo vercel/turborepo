@@ -18,13 +18,15 @@ import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
 [`turbo.lock`](/docs/core-concepts/managed-toolchains#turbolock) records the exact toolchain that your declarations resolve to. When a dependency bot changes one of those declarations, the same pull request must update `turbo.lock`. Otherwise, [frozen mode](/docs/reference/setup#frozen-mode) stops `turbo setup` in CI:
 
 ```txt title="Terminal"
-turbo.lock declarations changed; run setup locally and commit the updated lock
+turbo.lock declarations changed: pnpm: package.json (/packageManager)
 ```
 
 <Callout type="warn">
   [Managed toolchains](/docs/core-concepts/managed-toolchains) are experimental.
-  This guide covers the Node.js and pnpm declarations that this release
-  supports.
+  This guide's examples cover Node.js and pnpm. If your repository declares
+  other [tools that `turbo.lock`
+  records](/docs/reference/setup#supported-declarations), include their updates
+  in the same rules.
 </Callout>
 
 ## Updates that change `turbo.lock`
