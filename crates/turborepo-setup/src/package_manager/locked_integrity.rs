@@ -7,6 +7,7 @@ impl Declaration {
     /// are explicitly unsupported, never flattened into AND or silently
     /// ignored. SHA-256 is checked against the selected lock before any
     /// preparation; SHA-512 is retained for metadata/byte verification and
+    /// SHA-224 (older Corepack) for byte verification, both also binding
     /// reuse identity.
     pub fn locked_integrity(
         &self,
@@ -66,6 +67,16 @@ impl Declaration {
                 DEV,
                 "conflicting authoritative and devEngines integrity",
             )),
+            // Only one pin is carried to byte verification. SHA-224 cannot be
+            // checked here, so never let another algorithm displace it.
+            (Some(a), Some(b))
+                if a.algorithm != b.algorithm && [a.algorithm, b.algorithm].contains(&"sha224") =>
+            {
+                Err(invalid(
+                    DEV,
+                    "SHA-224 integrity cannot be combined with another authored algorithm",
+                ))
+            }
             (Some(a), Some(b)) => Ok(Some(if b.algorithm == "sha512" { b } else { a })),
             (a, b) => Ok(a.or(b)),
         }
@@ -77,6 +88,7 @@ fn checked(request: &Request, locked: Option<&str>) -> Result<Option<CorepackInt
         return Ok(None);
     };
     let length = match pin.algorithm {
+        "sha224" => 56,
         "sha256" => 64,
         "sha512" => 128,
         _ => {

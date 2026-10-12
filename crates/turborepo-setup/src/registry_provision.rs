@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha224, Sha256};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
@@ -89,7 +89,9 @@ impl RegistryTransport {
             executables,
         };
         Ok(crate::registry_resolution::ResolvedRegistry::new(
-            release, artifact,
+            release,
+            artifact,
+            sha224_hex(&bytes),
         ))
     }
 
@@ -111,8 +113,9 @@ impl RegistryTransport {
             .await?;
         let release = registry_metadata::parse_release(&metadata, manager, version, authored)?;
         let additional = release
-            .additional_sha256
+            .byte_pin
             .as_ref()
+            .filter(|pin| pin.algorithm == "sha256")
             .map(|pin| pin.digest.as_str());
         if locked_sha256
             .zip(additional)
@@ -133,6 +136,13 @@ impl RegistryTransport {
                 Limits::new(64 * 1024 * 1024, Duration::from_secs(120))?,
             )
             .await?;
+        // Older Corepack pins: checked in addition to the registry SHA-512.
+        if let Some(pin) = release.byte_pin.as_ref()
+            && pin.algorithm == "sha224"
+            && sha224_hex(&bytes) != pin.digest
+        {
+            return Err(turborepo_download::Error::DigestMismatch.into());
+        }
         Ok((release, bytes))
     }
 
@@ -147,6 +157,10 @@ impl RegistryTransport {
 }
 
 type Mappings = &'static [(&'static str, &'static str)];
+fn sha224_hex(bytes: &VerifiedArtifact) -> String {
+    format!("{:x}", Sha224::digest(bytes.as_bytes()))
+}
+
 fn standard_mappings(manager: Manager) -> Result<(&'static str, Mappings), Error> {
     match manager {
         Manager::Npm => Ok((

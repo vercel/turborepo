@@ -44,7 +44,9 @@ pub struct RegistryArtifact {
     pub version: Version,
     pub tarball: String,
     pub integrity: CorepackIntegrity,
-    pub additional_sha256: Option<CorepackIntegrity>,
+    /// Authored SHA-256 or SHA-224 that registry SHA-512 cannot prove. Callers
+    /// must verify it against the downloaded bytes.
+    pub byte_pin: Option<CorepackIntegrity>,
 }
 
 #[derive(Deserialize)]
@@ -104,12 +106,13 @@ pub fn parse_release(
         return Err(RegistryMetadataError::InvalidTarball);
     }
     let integrity = sri_sha512(&document.dist.integrity)?;
-    let additional_sha256 = match authored {
+    let byte_pin = match authored {
         None => None,
         Some(pin) => {
             let length = match pin.algorithm {
                 "sha512" => 128,
                 "sha256" => 64,
+                "sha224" => 56,
                 _ => return Err(RegistryMetadataError::InvalidIntegrity),
             };
             if pin.digest.len() != length || !pin.digest.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -125,8 +128,8 @@ pub fn parse_release(
                 }
                 None
             } else {
-                // Registry SHA-512 cannot prove a SHA-256 pin. Preserve it for
-                // mandatory verification against actual artifact bytes later.
+                // Registry SHA-512 cannot prove a SHA-256/SHA-224 pin. Preserve
+                // it for mandatory verification against actual artifact bytes.
                 Some(pin)
             }
         }
@@ -136,7 +139,7 @@ pub fn parse_release(
         version,
         tarball,
         integrity,
-        additional_sha256,
+        byte_pin,
     })
 }
 
