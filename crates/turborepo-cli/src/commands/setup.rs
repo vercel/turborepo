@@ -18,7 +18,7 @@ mod cleanup;
 #[cfg(windows)]
 mod dacl;
 mod dependencies;
-mod effective;
+pub(crate) mod effective;
 mod lock_diagnostics;
 mod no_lock;
 mod offline;
@@ -309,6 +309,9 @@ fn run_with_policy(
     if args.test_run {
         return Err(Error::NotImplemented);
     }
+    // Rust, Python and Go have managed setup adapters; a skip policy ignores
+    // their declarations. Managed run derives the same ecosystems.
+    let ecosystems = effective::ecosystems(&discovery.flags(), discovery.policy());
     if plan.unsupported() {
         return Err(Error::Unsupported("verify-system non-JavaScript tools"));
     }
@@ -323,11 +326,9 @@ fn run_with_policy(
     // interpretation of that ecosystem's declarations.
     let snapshot = turborepo_setup::lock::Snapshot::capture_with(
         discovery.snapshot_root()?.as_std_path(),
-        turborepo_setup::lock::Ecosystems {
-            python: eligible.python() && !skipped(&ToolchainId::PYTHON),
-            rust: eligible.cargo() && !skipped(&ToolchainId::RUST),
-            go: eligible.go() && !skipped(&ToolchainId::GO),
-        },
+        // Python declarations are captured only when experimentalPythonWorkspaces
+        // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
+        ecosystems,
     )?;
     if snapshot.previous_lock().is_some_and(|lock| {
         lock.tools().values().any(|tool| {

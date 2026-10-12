@@ -311,6 +311,25 @@ fn check_reports_go_readiness_and_fails_closed_without_the_flag_or_on_damage() {
 }
 
 #[test]
+fn managed_run_pins_the_locked_go_toolchain_and_follows_the_workspace_flag() {
+    let f = go_only();
+    let u = LoopbackServer::new(go_routes(&["1.22.12"]), |_| {}).unwrap();
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    let (env, bin) = run_overrides(&f.owned).unwrap();
+    assert!(bin.join("go").exists() && bin.join("gofmt").exists());
+    assert_eq!(env["GOTOOLCHAIN"], "local");
+    assert!(
+        std::path::Path::new(&env["GOROOT"]).join("bin/go").exists(),
+        "{env:?}"
+    );
+    // Setup ignores go.work without the flag, so run reads the selection as drift.
+    fs::write(f.owned.root().join("turbo.json"), ENABLED).unwrap();
+    let error = run_overrides(&f.owned).unwrap_err();
+    assert!(error.contains("no longer match turbo.lock"), "{error}");
+    assert!(!f.owned.root().join("probe-ran").exists());
+}
+
+#[test]
 fn unsupported_go_directives_fail_before_any_writer() {
     let f = go_only();
     let root = f.owned.root();

@@ -8,7 +8,9 @@
 use std::path::{Path, PathBuf};
 
 use turborepo_setup::{
-    activation::ActivationPlan, execution_identity::ExecutionContext, lock::Snapshot,
+    activation::ActivationPlan,
+    execution_identity::ExecutionContext,
+    lock::{Ecosystems, Snapshot},
 };
 
 use super::trust::TrustStore;
@@ -127,6 +129,7 @@ pub(crate) struct Authorization {
     root: PathBuf,
     sources: Snapshot,
     context: ExecutionContext,
+    ecosystems: Ecosystems,
     plan: ActivationPlan,
     trust: TrustStore,
     clone_local: bool,
@@ -136,34 +139,38 @@ pub(crate) struct Authorization {
 impl Authorization {
     /// User-state base must come from the caller's user directory, never config
     /// authored by the repository. Missing state fails closed without creating
-    /// it.
+    /// it. `ecosystems` must be the ones setup captured with (root workspace
+    /// flags and tools policy), or Rust, Python and Go selections drift.
     pub(crate) fn inspect(
         root: &Path,
         user_state_base: &Path,
         context: ExecutionContext,
+        ecosystems: Ecosystems,
     ) -> Result<Self, Error> {
-        Self::authorize(root, user_state_base, context, false)
+        Self::authorize(root, user_state_base, context, ecosystems, false)
     }
 
     /// `inspect` for a `turbo setup --no-lock` clone: the sealed clone-local
     /// selection in place of turbo.lock, authorized only by a lockless record
-    /// for that selection.
+    /// for that selection. Node/npm/pnpm ecosystems only, like `--no-lock`
+    /// setup.
     pub(crate) fn inspect_clone_local(
         root: &Path,
         user_state_base: &Path,
         context: ExecutionContext,
     ) -> Result<Self, Error> {
-        Self::authorize(root, user_state_base, context, true)
+        Self::authorize(root, user_state_base, context, Ecosystems::default(), true)
     }
 
     fn authorize(
         root: &Path,
         user_state_base: &Path,
         context: ExecutionContext,
+        ecosystems: Ecosystems,
         clone_local: bool,
     ) -> Result<Self, Error> {
         let root = root.canonicalize()?;
-        let sources = Snapshot::capture(&root)?;
+        let sources = Snapshot::capture_with(&root, ecosystems)?;
         let trust = TrustStore::new(user_state_base, &root)?;
         trust.preflight()?;
         // Initial authorization never trusts repo-writable publication stamps.
@@ -180,6 +187,7 @@ impl Authorization {
             root,
             sources,
             context,
+            ecosystems,
             plan,
             trust,
             clone_local,
@@ -189,12 +197,13 @@ impl Authorization {
     fn plan(
         root: &Path,
         context: ExecutionContext,
+        ecosystems: Ecosystems,
         clone_local: bool,
     ) -> Result<ActivationPlan, Error> {
         Ok(if clone_local {
             ActivationPlan::inspect_clone_local(root, context)?
         } else {
-            ActivationPlan::inspect(root, context)?
+            ActivationPlan::inspect_with(root, context, ecosystems)?
         })
     }
 
@@ -208,7 +217,12 @@ impl Authorization {
         use_plan: impl FnOnce(&ActivationPlan) -> T,
     ) -> Result<T, Error> {
         self.sources.ensure_current()?;
-        let current = Self::plan(&self.root, self.context.clone(), self.clone_local)?;
+        let current = Self::plan(
+            &self.root,
+            self.context.clone(),
+            self.ecosystems,
+            self.clone_local,
+        )?;
         if current.path_prepend() != self.plan.path_prepend()
             || current.tools() != self.plan.tools()
             || current.snapshot().canonical_identity() != self.plan.snapshot().canonical_identity()
