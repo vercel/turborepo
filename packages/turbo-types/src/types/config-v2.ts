@@ -605,6 +605,15 @@ export interface SetupMirrors {
 
   /** Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn packages. */
   npmRegistry?: string;
+
+  /** Replaces the `https://github.com` origin for Bun releases, keeping official paths. */
+  bun?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for uv, keeping official paths. */
+  uv?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for CPython, keeping official paths. */
+  python?: string;
 }
 
 export interface AdditionalTool {

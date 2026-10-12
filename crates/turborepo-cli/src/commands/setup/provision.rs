@@ -79,6 +79,18 @@ impl Transports {
             Some(mirror) => NodeTransport::mirrored(policy, mirror)?,
             None => NodeTransport::official(policy)?,
         };
+        let bun = match &mirrors.bun {
+            Some(mirror) => BunTransport::mirrored(policy, mirror)?,
+            None => BunTransport::official(policy)?,
+        };
+        let uv = match &mirrors.uv {
+            Some(mirror) => UvTransport::mirrored(policy, mirror)?,
+            None => UvTransport::official(policy)?,
+        };
+        let python = match &mirrors.python {
+            Some(mirror) => PythonTransport::mirrored(policy, mirror)?,
+            None => PythonTransport::official(policy)?,
+        };
         Ok(Self {
             node: node.with_cache(cache.clone()),
             pnpm: registry()?.with_cache(cache.clone()),
@@ -87,10 +99,10 @@ impl Transports {
             trust_base: None,
             cache,
             rustup: RustupTransport::official(policy)?,
-            uv: UvTransport::official(policy)?,
-            python: PythonTransport::official(policy)?,
+            uv,
+            python,
             go: GoTransport::official(policy)?,
-            bun: BunTransport::official(policy)?,
+            bun,
             artifact: None,
         })
     }
