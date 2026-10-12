@@ -29,6 +29,12 @@ pub enum Error {
     DeclarationDrift,
     #[error("activation planning supports only managed Node/pnpm; use a supported setup adapter")]
     UnsupportedAdapter,
+    /// Intentional external tools, unlike a missing managed installation.
+    #[error(
+        "turbo.lock selects verify-system tools, which come from PATH rather than a managed \
+         installation; run turbo setup --check to verify them"
+    )]
+    VerifySystem,
     #[error(
         "managed activation is unqualified for this platform; use a supported macOS/GNU Linux \
          target"
@@ -93,6 +99,14 @@ impl ActivationPlan {
         context: ExecutionContext,
     ) -> Result<Self, Error> {
         let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
+        if !lock.tools().is_empty()
+            && lock
+                .tools()
+                .values()
+                .all(|tool| matches!(tool.installation, Installation::VerifySystem { .. }))
+        {
+            return Err(Error::VerifySystem);
+        }
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter

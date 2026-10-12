@@ -13,6 +13,7 @@ mod check;
 mod effective;
 mod provision;
 mod root;
+mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -57,6 +58,8 @@ pub enum Error {
     Node(#[from] turborepo_setup::node_provision::Error),
     #[error(transparent)]
     Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
+    #[error(transparent)]
+    SystemTool(#[from] turborepo_setup::system_tool::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
@@ -200,9 +203,6 @@ fn run_with_policy(
     let javascript = plan
         .toolchain(&ToolchainId::JAVASCRIPT)
         .map_or(ToolPolicy::Skip, |toolchain| toolchain.tools.0);
-    if javascript == ToolPolicy::VerifySystem {
-        return Err(Error::Unsupported("verify-system JavaScript tools"));
-    }
     let snapshot =
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     // Report the effective decisions before any traffic or installation.
@@ -223,17 +223,26 @@ fn run_with_policy(
         println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
         return Ok(0);
     }
-    match request.mode {
-        Mode::Check => check::run(&discovery, snapshot, preflight),
+    let resolution = if request.update_lock {
+        turborepo_setup::lock::reconcile::Mode::Refresh
+    } else {
+        turborepo_setup::lock::reconcile::Mode::Local
+    };
+    match (request.mode, javascript) {
+        (Mode::Check, ToolPolicy::VerifySystem) => verify_system::check(&discovery, snapshot),
+        (_, ToolPolicy::VerifySystem) => verify_system::provision(
+            &discovery,
+            snapshot,
+            request.lock,
+            resolution,
+            request.force,
+        ),
+        (Mode::Check, _) => check::run(&discovery, snapshot, preflight),
         _ => provision::run(
             &discovery,
             snapshot,
             request.lock,
-            if request.update_lock {
-                turborepo_setup::lock::reconcile::Mode::Refresh
-            } else {
-                turborepo_setup::lock::reconcile::Mode::Local
-            },
+            resolution,
             request.force,
             transports,
             preflight,

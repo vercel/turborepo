@@ -72,11 +72,18 @@ impl Toolchain {
             DependencyPolicy::Locked => "locked",
             DependencyPolicy::Skip => "skipped",
         };
-        format!(
+        let mut line = format!(
             "{id}: tools {tools} ({}); dependencies {dependencies} ({})",
             tools_source.label(),
             dependencies_source.label()
-        )
+        );
+        if self.tools.0 == ToolPolicy::VerifySystem {
+            line.push_str(
+                "; turbo setup verifies the installed tools against turbo.lock but does not \
+                 install them, so consistency depends on each machine",
+            );
+        }
+        line
     }
 }
 
@@ -176,7 +183,8 @@ mod tests {
         assert_eq!(
             plan.report()[0],
             "javascript: tools verify-system (turbo.json setup policy); dependencies skipped \
-             (--tools-only)"
+             (--tools-only); turbo setup verifies the installed tools against turbo.lock but does \
+             not install them, so consistency depends on each machine"
         );
     }
 }
