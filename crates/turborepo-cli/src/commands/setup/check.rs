@@ -32,14 +32,15 @@ pub(super) fn run(
     tools_only: bool,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
-    // Activation readiness does not cover uv yet; never report it as ready.
+    // Activation readiness does not cover uv/Python yet; never report ready.
     if sources.uv_requirement()?.is_some()
-        || sources
-            .previous_lock()
-            .is_some_and(|lock| lock.tools().contains_key("uv"))
+        || sources.python_requirement()?.is_some()
+        || sources.previous_lock().is_some_and(|lock| {
+            lock.tools().contains_key("uv") || lock.tools().contains_key("python")
+        })
     {
         return Err(Error::Unsupported(
-            "uv readiness checks are not implemented; run turbo setup --tools-only",
+            "uv and Python readiness checks are not implemented; run turbo setup --tools-only",
         ));
     }
     if sources.declarations().contains_key("rustup") {

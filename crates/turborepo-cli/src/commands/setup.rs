@@ -93,6 +93,10 @@ pub enum Error {
     #[error(transparent)]
     Rustup(#[from] turborepo_setup::rustup_provision::Error),
     #[error(transparent)]
+    Python(#[from] turborepo_setup::python_provision::Error),
+    #[error(transparent)]
+    PythonResolution(#[from] turborepo_setup::python_resolution::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),

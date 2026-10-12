@@ -83,6 +83,7 @@ impl Repo {
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
                     rustup: RustupTransport::loopback_http_for_tests(origin).unwrap(),
                     uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin).unwrap(),
+                    python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                 }),
                 || Ok(self.owned.policy_at(self.owned.root())?),
             )
