@@ -20,8 +20,8 @@ use turborepo_watch::WatchClient;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, setup, telemetry, unlink,
+        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, hook, info,
+        link, login, logout, ls, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
@@ -38,8 +38,8 @@ mod test;
 pub use args::{
     AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
     EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
-    GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
-    QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
+    GraphOutput, HookShell, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat,
+    OutputLogsModeArg, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -381,6 +381,11 @@ pub fn run(
     if let Some(result) = dispatch_setup(&cli_args, setup::run) {
         return result.map_err(Into::into);
     }
+    // Runs at every prompt: no telemetry, update checks, agent guidance,
+    // repository-local handoff, or worker runtimes.
+    if let Some(Command::Hook { shell, export }) = &cli_args.command {
+        return Ok(hook::run(*shell, *export));
+    }
 
     // Initialize rayon's global pool before the tokio runtime so we
     // control thread count and avoid lazy initialization during a hot path.
@@ -509,7 +514,9 @@ async fn run_main(
     };
 
     let cli_result = match command {
-        Command::Setup { .. } => unreachable!("setup is dispatched before runtime startup"),
+        Command::Setup { .. } | Command::Hook { .. } => {
+            unreachable!("setup and the shell hook are dispatched before runtime startup")
+        }
         Command::Bin => {
             CommandEventBuilder::new("bin")
                 .with_parent(&root_telemetry)

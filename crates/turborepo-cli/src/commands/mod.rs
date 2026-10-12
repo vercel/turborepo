@@ -21,6 +21,7 @@ pub(crate) mod devtools;
 pub(crate) mod docs;
 pub(crate) mod generate;
 pub(crate) mod get_mfe_port;
+pub(crate) mod hook;
 pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;

@@ -13,7 +13,7 @@ pub(crate) mod authorization;
 mod check;
 mod provision;
 mod root;
-mod trust;
+pub(crate) mod trust;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
