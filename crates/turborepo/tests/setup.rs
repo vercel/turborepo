@@ -209,6 +209,16 @@ fn check_failure(root: &Path, words: &[&str], ci: bool, expected: &str) {
     );
 }
 
+/// Setup qualification follows the host C library, not this test's target.
+fn qualified_host() -> bool {
+    cfg!(any(target_arch = "x86_64", target_arch = "aarch64"))
+        && (cfg!(target_os = "macos")
+            || matches!(
+                turborepo_platform::host_libc(),
+                Ok(Some(turborepo_platform::Libc::Glibc { .. }))
+            ))
+}
+
 fn diagnostic_contains(text: &str, expected: &str) -> bool {
     // Miette may wrap sentences and filenames across lines with `|` gutters.
     text.replace([' ', '|'], "")
@@ -218,9 +228,12 @@ fn diagnostic_contains(text: &str, expected: &str) -> bool {
 #[test]
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(target_os = "macos", target_os = "linux")
 ))]
 fn frozen_and_local_unsupported_plans_are_read_only() {
+    if !qualified_host() {
+        return;
+    }
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
@@ -704,13 +717,11 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
-    let qualified = cfg!(all(
-        any(target_arch = "x86_64", target_arch = "aarch64"),
-        any(
-            target_os = "macos",
-            all(target_os = "linux", target_env = "gnu")
-        )
-    ));
+    let qualified = qualified_host();
+    let musl = matches!(
+        turborepo_platform::host_libc(),
+        Ok(Some(turborepo_platform::Libc::Musl))
+    );
     for ci in [false, true] {
         for extra in [
             None,
@@ -726,6 +737,8 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
                 ci,
                 if qualified {
                     "managed activation requires turbo.lock"
+                } else if musl {
+                    "not supported on musl Linux hosts"
                 } else {
                     "managed promotion requires macOS or GNU Linux"
                 },
@@ -795,7 +808,7 @@ fn npm_and_pnpm_wrapper_environments_reach_setup_but_custom_registries_do_not() 
 /// holds.
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(target_os = "macos", target_os = "linux")
 ))]
 fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
     use turborepo_setup::{
@@ -854,7 +867,7 @@ fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
 /// exercise actual downloads. Executables fail loudly if anything probes them.
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(target_os = "macos", target_os = "linux")
 ))]
 fn seed_generation(
     root: &Path,
@@ -881,10 +894,13 @@ fn seed_generation(
 
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(target_os = "macos", target_os = "linux")
 ))]
 #[test]
 fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
+    if !qualified_host() {
+        return;
+    }
     let owned = turborepo_setup::test_support::OwnedSetupFixture::new().unwrap();
     owned.init_git().unwrap();
     let root = owned.root();
@@ -1018,7 +1034,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
 /// The real `turbo prune` binary, without network or writes to the source.
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(target_os = "macos", target_os = "linux")
 ))]
 fn prune(root: &Path, output: &Path, docker: bool) {
     let monitor = TcpListener::bind("127.0.0.1:0").expect("bind HTTP monitor");
@@ -1057,10 +1073,13 @@ fn prune(root: &Path, output: &Path, docker: bool) {
 /// `turbo.lock`, from the output root and from a pruned package.
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(target_os = "macos", target_os = "linux")
 ))]
 #[test]
 fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
+    if !qualified_host() {
+        return;
+    }
     use turborepo_setup::{
         activation::ActivationPlan,
         execution_identity::{ExecutionContext, Libc},
@@ -1272,9 +1291,12 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
 #[test]
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(target_os = "macos", target_os = "linux")
 ))]
 fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
+    if !qualified_host() {
+        return;
+    }
     for (node, package, expected) in [
         (None, "{}", "a native Node declaration is required"),
         (
