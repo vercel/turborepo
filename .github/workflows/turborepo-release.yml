@@ -425,6 +425,21 @@ jobs:
       - name: Build
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
 
+      # Node.js runs only the loopback fixture mirror; turbo's PATH has none.
+      - name: Setup Node for the Windows standalone smoke
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-node
+        with:
+          package-install: false
+
+      # Windows arm64 has no runner; the smoke's arm64 refusal branch is unclaimed in CI.
+      - name: Smoke-test the Windows x64 standalone install, managed setup, and run
+        if: runner.os == 'Windows'
+        shell: powershell
+        env:
+          VERSION: ${{ needs.stage.outputs.version }}
+        run: ./scripts/standalone-windows-smoke.ps1 -Version $env:VERSION -Binary target/x86_64-pc-windows-msvc/release-turborepo/turbo.exe
+
       - name: Install rcodesign
         if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
         run: cargo install apple-codesign --version 0.29.0 --locked
