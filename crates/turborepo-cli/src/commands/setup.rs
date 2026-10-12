@@ -389,6 +389,52 @@ fn run_with_policy(
     Ok(code)
 }
 
+/// `turbo setup --frozen --tools-only` against loopback fixture artifacts,
+/// publishing trust evidence under `user_base`, so binary tests can exercise
+/// real managed activation. Fixture injection only, like `run_with_policy`.
+#[cfg(feature = "test-support")]
+pub fn frozen_tools_for_tests(
+    invocation: &std::path::Path,
+    user_base: &std::path::Path,
+    origin: &str,
+    policy: impl Fn() -> Result<OfficialSourcePolicy, turborepo_setup::source_policy::Error>,
+) -> Result<i32, String> {
+    use turborepo_setup::{
+        node_provision::NodeTransport, pnpm_provision::PnpmTransport,
+        registry_resolution::RegistryTransport,
+    };
+    let words = ["turbo", "setup", "--frozen", "--tools-only", "--cwd"]
+        .map(std::ffi::OsString::from)
+        .into_iter()
+        .chain([invocation.as_os_str().to_owned()])
+        .collect();
+    let args = Args::parse_args(words)?;
+    let Some(crate::cli::Command::Setup { setup_args }) = &args.command else {
+        unreachable!("the words select setup");
+    };
+    let transports = provision::Transports {
+        trust_base: Some(user_base.to_owned()),
+        registry: RegistryTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
+        node: NodeTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
+        pnpm: PnpmTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(
+            origin,
+        )
+        .map_err(|e| e.to_string())?,
+        artifact: None,
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+    };
+    run_with_policy(&args, setup_args, Some(transports), || Ok(policy()?))
+        .map_err(|e| e.to_string())
+}
+
 #[cfg(test)]
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     validate(request, request.tools_only)

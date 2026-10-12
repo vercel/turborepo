@@ -1,0 +1,46 @@
+---
+title: exec (Experimental)
+description: API reference for the `turbo exec` command
+product: turborepo
+type: reference
+summary: Run one command outside the task graph with the tools that `turbo setup` prepared for the repository.
+related:
+  - /docs/reference/run
+---
+
+<Callout type="warn">
+  `turbo exec` is experimental and can change at any time. It requires
+  `"futureFlags": { "experimentalSetup": true }` in the root `turbo.json`.
+</Callout>
+
+Run one command with the repository's managed tools.
+
+```bash title="Terminal"
+turbo exec [flags] -- <command> [args...]
+```
+
+```bash title="Terminal"
+turbo exec -- node --version
+turbo exec -- pnpm install --frozen-lockfile
+```
+
+`turbo exec` uses the same managed environment that [`turbo run`](/docs/reference/run) gives tasks. Tools that `turbo setup` installed come first on `PATH`, followed by your `PATH`, along with any runtime variables those tools need. Tasks don't need `turbo exec`, because `turbo run` already uses the managed tools. Use `turbo exec` for scripts, CI steps, and other commands outside the task graph.
+
+## Arguments
+
+Everything after `--` is the command and its arguments, passed through unchanged. The `--` is required, so nothing after it is read as a `turbo` flag.
+
+Before `--`, `turbo exec` accepts global flags such as `--cwd` and `--root-turbo-json`. It has no setup, lock, or task flags.
+
+To run a task named `exec`, use `turbo run exec`.
+
+## Behavior
+
+- The command runs in your current directory, which can be anywhere inside the repository. With `--cwd`, it runs in that directory instead.
+- `turbo exec` never installs or downloads tools and never changes `turbo.lock`. If the repository has no `turbo.lock`, or its managed tools are missing or out of date, it fails and tells you to run `turbo setup`. It never falls back to tools on your `PATH`.
+- `turbo exec` exits with the command's exit code. If a signal stops the command, `turbo exec` exits with `128` plus the signal number.
+- Pressing Ctrl+C in a terminal reaches the command once. `SIGTERM` or `SIGHUP` sent to `turbo` is forwarded to the command as `SIGTERM`.
+
+## Supported platforms
+
+Managed tools for `turbo exec` support macOS and Linux (glibc) on x64 and arm64. Native Windows is not supported yet.
