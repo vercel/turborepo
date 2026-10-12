@@ -1,10 +1,12 @@
-//! Captured native Node + exact npm/pnpm → portable cohort. Only reconcile's
-//! permitted IDs resolve; Node ownership changes only within its npm/npx grant.
-//! Unaffected release/artifact bytes stay exact. No installation or execution.
+//! Captured native Node + exact npm/pnpm/Yarn/Bun → portable cohort. Only
+//! reconcile's permitted IDs resolve; Node ownership changes only within its
+//! npm/npx grant. Unaffected release/artifact bytes stay exact. No installation
+//! or execution.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
+    bun_provision::BunTransport,
     lock::{self, Document, Installation, Lock, Tool, reconcile::Resolution},
     node_provision::{NodePlan, NodeTransport},
     package_manager::{self, Declaration, Manager},
@@ -25,6 +27,8 @@ pub enum Error {
     Native(#[from] package_manager::Error),
     #[error(transparent)]
     Bundled(#[from] crate::bundled_npm::Error),
+    #[error(transparent)]
+    Bun(#[from] crate::bun_provision::Error),
     #[error("unsupported native JS resolution: {0}")]
     Unsupported(&'static str),
 }
@@ -32,20 +36,31 @@ pub enum Error {
 // Without an authoritative pin, only one unambiguous exact identity is in
 // scope. Never choose the first dev alternative or query a floating index.
 pub(crate) fn exact_manager(declaration: &Declaration) -> Result<String, Error> {
-    let (floating, ambiguous, missing, limit) = if declaration.manager == Manager::Npm {
-        (
+    let (floating, ambiguous, missing, limit) = match declaration.manager {
+        Manager::Npm => (
             "floating npm request",
             "ambiguous exact npm alternatives",
             "missing npm pin",
             "npm identity exceeds lock limit",
-        )
-    } else {
-        (
+        ),
+        Manager::Yarn => (
+            "floating Yarn request",
+            "ambiguous exact Yarn alternatives",
+            "missing Yarn pin",
+            "Yarn identity exceeds lock limit",
+        ),
+        Manager::Bun => (
+            "floating Bun request",
+            "ambiguous exact Bun alternatives",
+            "missing Bun pin",
+            "Bun identity exceeds lock limit",
+        ),
+        _ => (
             "floating pnpm request",
             "ambiguous exact pnpm alternatives",
             "missing pnpm pin",
             "pnpm identity exceeds lock limit",
-        )
+        ),
     };
     let requests = declaration
         .package_manager
@@ -70,8 +85,10 @@ pub(crate) fn exact_manager(declaration: &Declaration) -> Result<String, Error> 
     if version.len() > 128 {
         return Err(Error::Unsupported(limit));
     }
-    crate::registry_metadata::validate_selection(declaration.manager, &version)
-        .map_err(crate::registry_resolution::Error::from)?;
+    if declaration.manager != Manager::Bun {
+        crate::registry_metadata::validate_selection(declaration.manager, &version)
+            .map_err(crate::registry_resolution::Error::from)?;
+    }
     Ok(version)
 }
 
@@ -79,11 +96,17 @@ pub(crate) fn exact_manager(declaration: &Declaration) -> Result<String, Error> 
 // host/promotion restrictions. Inspect EVERY variant, not the current platform.
 pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
     let invalid = || Error::Registry(crate::registry_resolution::Error::InvalidLock);
-    let (id, version) =
+    let (name, version) =
         crate::registry_metadata::validate_selection(declaration.manager, &tool.version)
             .map_err(crate::registry_resolution::Error::from)?;
     let Installation::Managed { artifacts } = &tool.installation else {
         return Err(invalid());
+    };
+    let id = match declaration.manager {
+        Manager::Npm => "npm",
+        Manager::Pnpm => "pnpm",
+        Manager::Yarn => "yarn",
+        _ => return Err(invalid()),
     };
     if tool.adapter != id || !tool.options.is_empty() {
         return Err(invalid());
@@ -96,7 +119,11 @@ pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Resul
             parts,
         )
         .map_err(|_| invalid())?;
-        declaration.locked_integrity(&version, &package.sha256)?;
+        if crate::registry_metadata::is_modern_yarn(declaration.manager, &version) {
+            declaration.preflight_integrity(&version)?;
+        } else {
+            declaration.locked_integrity(&version, &package.sha256)?;
+        }
     }
     Ok(())
 }
@@ -110,7 +137,7 @@ fn remove_node_npm_exports(node: &mut Tool) {
         }
     }
 }
-const JS: [&str; 3] = ["node", "npm", "pnpm"];
+const JS: [&str; 5] = ["node", "npm", "pnpm", "yarn", "bun"];
 
 /// Concrete async resolver for the existing synchronous reconcile callback.
 /// Callers can block_on OUTSIDE async; reconcile owns checked publication.
@@ -121,8 +148,27 @@ pub async fn resolve(
     node: &NodeTransport,
     registry: &RegistryTransport,
 ) -> Result<Lock, Error> {
+    resolve_inner(request, node, registry, None).await
+}
+
+/// Resolve the JS cohort with an explicitly authorized Bun transport.
+pub async fn resolve_with_bun(
+    request: Resolution<'_>,
+    node: &NodeTransport,
+    registry: &RegistryTransport,
+    bun: &BunTransport,
+) -> Result<Lock, Error> {
+    resolve_inner(request, node, registry, Some(bun)).await
+}
+
+async fn resolve_inner(
+    request: Resolution<'_>,
+    node: &NodeTransport,
+    registry: &RegistryTransport,
+    bun: Option<&BunTransport>,
+) -> Result<Lock, Error> {
     let snapshot = request.snapshot();
-    let tools = resolve_tools(&request, node, registry).await?;
+    let tools = resolve_tools_with_bun(&request, node, registry, bun).await?;
     let candidate = Lock::new(Document {
         schema_version: lock::SCHEMA_VERSION,
         tools,
@@ -147,6 +193,15 @@ pub(crate) async fn resolve_tools(
     node: &NodeTransport,
     registry: &RegistryTransport,
 ) -> Result<BTreeMap<String, Tool>, Error> {
+    resolve_tools_with_bun(request, node, registry, None).await
+}
+
+pub(crate) async fn resolve_tools_with_bun(
+    request: &Resolution<'_>,
+    node: &NodeTransport,
+    registry: &RegistryTransport,
+    bun: Option<&BunTransport>,
+) -> Result<BTreeMap<String, Tool>, Error> {
     let snapshot = request.snapshot();
     snapshot.ensure_current()?;
     if !snapshot.declarations().contains_key("node") {
@@ -155,10 +210,13 @@ pub(crate) async fn resolve_tools(
         ));
     }
     let manager = snapshot.package_manager()?;
-    let manager_id = manager.as_ref().map(|m| match m.manager {
-        Manager::Npm => "npm",
-        _ => "pnpm", // Native discovery admits only npm and pnpm.
-    });
+    let manager_id = match manager.as_ref().map(|m| m.manager) {
+        None => None,
+        Some(Manager::Npm) => Some("npm"),
+        Some(Manager::Pnpm) => Some("pnpm"),
+        Some(Manager::Yarn) => Some("yarn"),
+        Some(Manager::Bun) => Some("bun"),
+    };
     let manager_version = manager
         .as_ref()
         .filter(|_| manager_id.is_some_and(|id| request.version_ids().contains(id)))
@@ -209,6 +267,8 @@ pub(crate) async fn resolve_tools(
                     "bundled npm cannot prove archive integrity",
                 ));
             }
+        } else if declaration.manager == Manager::Bun {
+            crate::bun_provision::validate(tool, declaration)?;
         } else {
             validate_registry(tool, declaration)?;
         }
@@ -233,20 +293,29 @@ pub(crate) async fn resolve_tools(
         let tool = if let Some(tool) = bundled {
             tool
         } else {
-            let selected = registry
-                .resolve_exact(declaration.manager, &version, None)
-                .await?;
-            let pin =
-                declaration.locked_integrity(selected.version(), &selected.artifact().sha256)?;
-            selected.verify_authored(pin.as_ref())?;
+            let installation = if declaration.manager == Manager::Bun {
+                bun.ok_or(Error::Unsupported(
+                    "Bun resolution requires its authorized transport",
+                ))?
+                .resolve_exact(&version)
+                .await?
+            } else {
+                let selected = registry
+                    .resolve_exact(declaration.manager, &version, None)
+                    .await?;
+                let pin =
+                    declaration.locked_integrity(selected.version(), selected.pinned_sha256())?;
+                selected.verify_authored(pin.as_ref())?;
+                Installation::Managed {
+                    artifacts: selected.into_artifacts(),
+                }
+            };
             Tool {
                 adapter: id.into(),
                 version,
                 declarations: snapshot.declarations()[id].clone(),
                 options: BTreeMap::new(),
-                installation: Installation::Managed {
-                    artifacts: selected.into_artifacts(),
-                },
+                installation,
             }
         };
         tools.insert(id.into(), tool);

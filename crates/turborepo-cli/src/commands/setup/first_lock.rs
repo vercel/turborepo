@@ -8,6 +8,8 @@ const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 mod ci;
 #[path = "go_tests.rs"]
 mod go;
+#[path = "manager_lock_tests.rs"]
+mod managers;
 #[path = "no_lock_tests.rs"]
 mod no_lock;
 #[path = "refresh.rs"]

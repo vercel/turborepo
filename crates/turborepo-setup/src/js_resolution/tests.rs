@@ -113,6 +113,7 @@ struct World {
     _server: LoopbackServer,
     node: NodeTransport,
     registry: RegistryTransport,
+    bun: crate::bun_provision::BunTransport,
     requests: Arc<Mutex<Vec<String>>>,
 }
 impl World {
@@ -127,6 +128,8 @@ impl World {
         Self {
             node: NodeTransport::loopback_http_for_tests(server.origin()).unwrap(),
             registry: RegistryTransport::loopback_http_for_tests(server.origin()).unwrap(),
+            bun: crate::bun_provision::BunTransport::loopback_http_for_tests(server.origin())
+                .unwrap(),
             _server: server,
             requests,
         }
@@ -172,7 +175,7 @@ fn apply(
     reconcile::reconcile(&snapshot, mode, offline, |request| {
         let before = lock_bytes(root);
         let manifest = fs::read(root.join("package.json")).unwrap();
-        let result = runtime.block_on(resolve(request, &world.node, &world.registry));
+        let result = runtime.block_on(resolve(request, &world.node, &world.registry, &world.bun));
         assert_eq!(lock_bytes(root), before); // Resolver never publishes.
         // Only explicit response-hook drift may change this sentinel.
         if result.is_ok() {
@@ -460,7 +463,7 @@ fn fresh_source_drift_revalidation_fails_before_publication_and_next_traffic() {
     assert!(
         reconcile::reconcile(&snapshot, Mode::Local, false, |request| {
             fs::write(p.join(".nvmrc"), "24.1.0").unwrap();
-            rt.block_on(resolve(request, &world.node, &world.registry))
+            rt.block_on(resolve(request, &world.node, &world.registry, &world.bun))
                 .map_err(|e| reconcile::Error::Resolution(e.to_string()))
         })
         .is_err()
