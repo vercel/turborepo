@@ -122,7 +122,7 @@ fn bundled(prefix: &str) -> Vec<u8> {
     gzip.write_all(&tar.into_inner().unwrap()).unwrap();
     gzip.finish().unwrap()
 }
-fn base64(bytes: &[u8]) -> String {
+pub(super) fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = String::new();
     for chunk in bytes.chunks(3) {

@@ -9,6 +9,7 @@ use turborepo_setup::{
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
     source_policy::OfficialSourcePolicy,
+    yarn_provision::YarnPlan,
 };
 use turborepo_tool_install::Store;
 
@@ -93,6 +94,11 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
 pub(super) struct Plans {
     pub node: NodePlan,
     pub pnpm: Option<PnpmPlan>,
+    pub yarn: Option<YarnPlan>,
+}
+const SUPPORTED: &str = "only managed Node, pnpm, and Yarn are supported";
+fn supported(id: &str) -> bool {
+    matches!(id, "node" | "pnpm" | "yarn")
 }
 pub(super) fn plans(
     snapshot: &Snapshot,
@@ -104,14 +110,8 @@ pub(super) fn plans(
             "turbo.lock declarations changed; run setup locally and commit the updated lock",
         ));
     }
-    if lock
-        .tools()
-        .keys()
-        .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
-    {
-        return Err(Error::Unsupported(
-            "only managed Node and pnpm are supported",
-        ));
+    if lock.tools().keys().any(|id| !supported(id)) {
+        return Err(Error::Unsupported(SUPPORTED));
     }
     let node = NodePlan::from_lock(lock, platform)?;
     let version = semver::Version::parse(&node.inventory_tool().version)
@@ -124,16 +124,18 @@ pub(super) fn plans(
             "locked Node does not satisfy native declarations",
         ));
     }
-    let manager = snapshot.package_manager()?;
-    let pnpm = if let Some(manager) = manager {
-        if manager.manager != Manager::Pnpm {
-            return Err(Error::Unsupported("npm override provisioning"));
+    let (mut pnpm, mut yarn) = (None, None);
+    match snapshot.package_manager()? {
+        Some(m) if m.manager == Manager::Pnpm => {
+            pnpm = Some(PnpmPlan::from_declaration(lock, platform, &node, &m)?);
         }
-        Some(PnpmPlan::from_declaration(lock, platform, &node, &manager)?)
-    } else {
-        None
-    };
-    Ok(Plans { node, pnpm })
+        Some(m) if m.manager == Manager::Yarn => {
+            yarn = Some(YarnPlan::from_declaration(lock, platform, &node, &m)?);
+        }
+        Some(_) => return Err(Error::Unsupported("npm override provisioning")),
+        None => {}
+    }
+    Ok(Plans { node, pnpm, yarn })
 }
 
 pub(super) fn lock_report(
@@ -184,7 +186,10 @@ pub(super) fn run(
     platform()?;
     // Unsupported native requests must fail before ANY writer, even no-op locks.
     let manager = snapshot.package_manager()?;
-    if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
+    if manager
+        .as_ref()
+        .is_some_and(|m| !matches!(m.manager, Manager::Pnpm | Manager::Yarn))
+    {
         return Err(Error::Unsupported("npm override provisioning"));
     }
     if write && !snapshot.declarations().contains_key("node") {
@@ -195,14 +200,9 @@ pub(super) fn run(
     // the candidate callback still gates EVERY new selection before any writer.
     if write && let Some(lock) = snapshot.previous_lock() {
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
-            && lock
-                .tools()
-                .keys()
-                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+            && lock.tools().keys().any(|id| !supported(id))
         {
-            return Err(Error::Unsupported(
-                "only managed Node and pnpm are supported",
-            ));
+            return Err(Error::Unsupported(SUPPORTED));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
             && lock.matches_native(snapshot.declarations())?
@@ -269,11 +269,10 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
-    let Plans { node, pnpm } = plans(&snapshot, lock)?;
+    let Plans { node, pnpm, yarn } = plans(&snapshot, lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
-    if let Some(pnpm) = &pnpm {
-        desired.push(pnpm.inventory_tool().clone());
-    }
+    desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
     let policy = preflight()?;
     let transports = transports
         .map(Ok)
@@ -299,21 +298,26 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm) = runtime.block_on(async {
+    let (prepared_node, prepared_manager) = runtime.block_on(async {
         let node = node
             .prepare(&store, &desired, &transports.node, preparation)
             .await?;
         preflight()?;
         revalidate(discovery)?;
         snapshot.check_guard(&guard)?;
-        let pnpm = match &pnpm {
-            Some(plan) => {
+        // Yarn shares the registry transport and preparation type with pnpm.
+        let manager = match (&pnpm, &yarn) {
+            (Some(plan), _) => {
                 plan.prepare(&store, &desired, &transports.pnpm, preparation)
                     .await?
             }
-            None => None,
+            (_, Some(plan)) => {
+                plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                    .await?
+            }
+            _ => None,
         };
-        Ok::<_, Error>((node, pnpm))
+        Ok::<_, Error>((node, manager))
     })?;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
         if tool == node.inventory_tool() {
@@ -322,7 +326,7 @@ pub(super) fn run(
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?
                 .stage(tool, destination)
         } else {
-            prepared_pnpm
+            prepared_manager
                 .as_ref()
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?
                 .stage(tool, destination)
@@ -346,7 +350,7 @@ pub(super) fn run(
             tool.id,
             tool.version,
             if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id == "pnpm" && prepared_pnpm.is_none())
+                || (tool.id != "node" && prepared_manager.is_none())
             {
                 "reused"
             } else {

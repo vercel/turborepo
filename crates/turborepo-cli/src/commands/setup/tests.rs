@@ -201,6 +201,8 @@ mod first_lock;
 mod force;
 #[path = "publication_guards.rs"]
 mod publication_guards;
+#[path = "yarn_tests.rs"]
+mod yarn;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {

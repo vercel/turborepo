@@ -17,6 +17,7 @@ use crate::{
     lock::{Installation, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
     pnpm_provision::PnpmPlan,
+    yarn_provision::YarnPlan,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +28,9 @@ pub enum Error {
         "native declarations disagree with turbo.lock; run turbo setup locally and commit the lock"
     )]
     DeclarationDrift,
-    #[error("activation planning supports only managed Node/pnpm; use a supported setup adapter")]
+    #[error(
+        "activation planning supports only managed Node/pnpm/Yarn; use a supported setup adapter"
+    )]
     UnsupportedAdapter,
     #[error(
         "managed activation is unqualified for this platform; use a supported macOS/GNU Linux \
@@ -96,7 +99,7 @@ impl ActivationPlan {
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
-                    || !matches!(id.as_str(), "node" | "pnpm")
+                    || !matches!(id.as_str(), "node" | "pnpm" | "yarn")
                     || !matches!(tool.installation, Installation::Managed { .. })
             })
         {
@@ -129,6 +132,12 @@ impl ActivationPlan {
             let pnpm = PnpmPlan::from_declaration(lock, platform, &node, &manager)
                 .map_err(|_| Error::InvalidLock)?;
             tools.push(pnpm.inventory_tool().clone());
+        }
+        if lock.tools().contains_key("yarn") {
+            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
+            let yarn = YarnPlan::from_declaration(lock, platform, &node, &manager)
+                .map_err(|_| Error::InvalidLock)?;
+            tools.push(yarn.inventory_tool().clone());
         }
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;

@@ -19,7 +19,7 @@ const MAX_VERSION_BYTES: usize = 256;
 pub enum RegistryMetadataError {
     #[error("registry metadata byte limit exceeded")]
     TooLarge,
-    #[error("registry metadata supports only npm and pnpm")]
+    #[error("registry metadata supports only npm, pnpm, and Yarn 1")]
     UnsupportedManager,
     #[error("an exact canonical published version is required")]
     InvalidVersion,
@@ -140,15 +140,14 @@ pub fn parse_release(
     })
 }
 
+/// Registry package name for an exact selection, validated before traffic.
 pub(crate) fn validate_selection(
     manager: Manager,
     exact_version: &str,
 ) -> Result<(&'static str, Version), RegistryMetadataError> {
-    let name = match manager {
-        Manager::Npm => "npm",
-        Manager::Pnpm => "pnpm",
-        _ => return Err(RegistryMetadataError::UnsupportedManager),
-    };
+    if !matches!(manager, Manager::Npm | Manager::Pnpm | Manager::Yarn) {
+        return Err(RegistryMetadataError::UnsupportedManager);
+    }
     if exact_version.len() > MAX_VERSION_BYTES {
         return Err(RegistryMetadataError::InvalidVersion);
     }
@@ -157,6 +156,13 @@ pub(crate) fn validate_selection(
     if !is_valid_release(&version) || version.to_string() != exact_version {
         return Err(RegistryMetadataError::InvalidVersion);
     }
+    let name = match manager {
+        Manager::Npm => "npm",
+        Manager::Pnpm => "pnpm",
+        // TODO(TURBO-6369): Yarn 2+ ships as the `@yarnpkg/cli-dist` bundle.
+        _ if version.major >= 2 => return Err(RegistryMetadataError::UnsupportedManager),
+        _ => "yarn",
+    };
     Ok((name, version))
 }
 

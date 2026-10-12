@@ -520,7 +520,7 @@ fn unknown_adapters_aliases_sources_and_unsupported_managers_fail_closed() {
             assert!(!root.path().join(".turbo").exists());
         }
     }
-    let root = root(Some("yarn@4.0.0"));
+    let root = root(Some("aube@4.0.0"));
     assert!(Snapshot::capture(root.path()).is_err());
     assert!(!root.path().join(".turbo").exists());
 }
