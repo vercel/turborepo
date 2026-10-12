@@ -1016,4 +1016,39 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
         };
         failure(root, words, ci, r#"native declarations changed for {"uv"}"#);
     }
+    // --check accepts uv selections: a matching lock without an installation
+    // is reported missing on every qualified host, without writes.
+    let artifacts: serde_json::Map<_, _> = [
+        ("macos-x64", "x86_64-apple-darwin"),
+        ("macos-arm64", "aarch64-apple-darwin"),
+        ("linux-x64-gnu", "x86_64-unknown-linux-gnu"),
+        ("linux-arm64-gnu", "aarch64-unknown-linux-gnu"),
+    ]
+    .into_iter()
+    .map(|(platform, target)| {
+        let url = format!(
+            "https://releases.astral.sh/github/uv/releases/download/0.13.0/uv-{target}.tar.gz"
+        );
+        let artifact = serde_json::json!({"url":url,"sha256":"1".repeat(64),"format":"tar-gz",
+            "rootPrefix":format!("uv-{target}"),"executables":{"uv":"uv","uvx":"uvx"}});
+        (
+            platform.to_owned(),
+            serde_json::json!({"distribution": artifact}),
+        )
+    })
+    .collect();
+    let mut lock: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("turbo.lock")).unwrap()).unwrap();
+    lock["tools"]["uv"]["declarations"][0]["request"] = ">=0.13".into();
+    lock["tools"]["uv"]["installation"]["artifacts"] = artifacts.into();
+    write(root, "turbo.lock", &lock.to_string());
+    for ci in [false, true] {
+        check_failure(
+            root,
+            &["setup", "--check", "--tools-only"],
+            ci,
+            "managed installation is missing; run turbo setup",
+        );
+    }
+    assert!(!root.join(".turbo").exists());
 }

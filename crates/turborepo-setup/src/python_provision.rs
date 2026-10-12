@@ -107,6 +107,11 @@ impl PythonPlan {
         &self.tool
     }
 
+    /// uv's download key for this build, which is also its directory name.
+    pub fn key(&self) -> &str {
+        &self.key
+    }
+
     /// The caller supplies ALL desired tools and reconciles that same set,
     /// holding this Store lock throughout preparation and reconciliation.
     pub async fn prepare(
