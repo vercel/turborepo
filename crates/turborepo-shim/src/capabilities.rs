@@ -33,9 +33,9 @@ struct Report {
     /// Diagnostic only: never use the CLI version as a compatibility floor.
     cli_version: String,
     /// Sorted, unique lock schemas with the COMPLETE managed-run contract:
-    /// activation before probes, drift validation, strict/loose task env and
-    /// portable toolchain hashing. Accepting a lock schema alone is
-    /// insufficient.
+    /// activation before probes, drift validation, strict/loose task env,
+    /// portable toolchain hashing, and `turbo exec` with the same environment.
+    /// Accepting a lock schema alone is insufficient.
     managed_run_schemas: Vec<u32>,
 }
 

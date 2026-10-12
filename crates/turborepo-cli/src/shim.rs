@@ -76,7 +76,11 @@ impl TurboRunner for TurboCliRunner<'_> {
             cli::Args::new(words);
             unreachable!("Args::new exits for arguments that fail to parse");
         };
-        if !matches!(args.command, Some(cli::Command::Run { .. })) {
+        // Exec follows run's local CLI policy: validate before any handoff.
+        if !matches!(
+            args.command,
+            Some(cli::Command::Run { .. } | cli::Command::Exec { .. })
+        ) {
             return Ok(None);
         }
         let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
