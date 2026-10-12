@@ -14,7 +14,10 @@ use crate::node_discovery::UniqueJson;
 mod io;
 pub mod reconcile;
 pub(crate) use io::probe_native_with;
-pub use io::{DeclarationMap, Snapshot, StorageError, WriteOutcome, probe_native, write};
+pub use io::{
+    DeclarationMap, Ecosystems, Snapshot, StorageError, WriteOutcome, probe_native,
+    probe_native_in, write,
+};
 
 pub const SCHEMA_VERSION: u32 = 0;
 pub const MAX_LOCK_BYTES: usize = 1024 * 1024;

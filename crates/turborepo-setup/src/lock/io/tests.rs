@@ -430,3 +430,37 @@ fn read_only_probe_and_symlink_directory_fifo_safety() {
     assert!(status.success());
     assert!(probe_native(root.path()).is_err());
 }
+
+#[test]
+fn rust_toolchain_files_declare_rustup_only_when_enabled_and_unambiguous() {
+    let root = tempfile::tempdir().unwrap();
+    let rust = Ecosystems { rust: true };
+    assert!(probe_native_in(root.path(), rust).unwrap().is_empty());
+    let channel = |file: &str, channel: &str| match file {
+        "rust-toolchain" => format!("{channel}\n"),
+        _ => format!("[toolchain]\nchannel = \"{channel}\"\n"),
+    };
+    for file in RUST_TOOLCHAIN_FILES {
+        fs::write(root.path().join(file), channel(file, "stable")).unwrap();
+        assert!(probe_native(root.path()).unwrap().is_empty());
+        let declared = probe_native_in(root.path(), rust).unwrap();
+        assert_eq!(
+            declared["rustup"],
+            [Declaration {
+                file: file.into(),
+                field: None,
+                request: None,
+            }]
+        );
+        // Content changes are the channel's provenance, not the installer's.
+        fs::write(root.path().join(file), channel(file, "nightly")).unwrap();
+        let changed = probe_native_in(root.path(), rust).unwrap();
+        assert_eq!(changed["rustup"], declared["rustup"]);
+        fs::remove_file(root.path().join(file)).unwrap();
+    }
+    for file in RUST_TOOLCHAIN_FILES {
+        fs::write(root.path().join(file), channel(file, "stable")).unwrap();
+    }
+    assert!(probe_native_in(root.path(), rust).is_err());
+    assert!(probe_native(root.path()).unwrap().is_empty());
+}

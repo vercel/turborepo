@@ -4,6 +4,7 @@
 pub mod activation;
 pub mod artifact_cache;
 pub mod bundled_npm;
+pub mod cargo_prefetch;
 pub mod ephemeral_reconcile;
 pub mod execution_identity;
 pub mod js_resolution;
@@ -26,6 +27,12 @@ pub mod pnpm_provision {
 }
 pub mod registry_metadata;
 pub mod registry_resolution;
+pub mod rust_discovery;
+pub mod rust_metadata;
+pub mod rust_provision;
+pub mod rust_resolution;
+pub mod rustup;
+pub mod rustup_provision;
 pub mod source_policy;
 pub mod system_tool;
 pub mod version_managers;

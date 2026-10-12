@@ -111,6 +111,10 @@ pub enum Error {
     #[error(transparent)]
     SystemTool(#[from] turborepo_setup::system_tool::Error),
     #[error(transparent)]
+    Rustup(#[from] turborepo_setup::rustup_provision::Error),
+    #[error(transparent)]
+    Rust(#[from] turborepo_setup::rust_provision::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -294,14 +298,31 @@ fn run_reporting(
     if args.test_run {
         return Err(Error::NotImplemented);
     }
+    // Rust has a setup adapter; Rust skip ignores its declarations.
+    let rust = eligible.cargo()
+        && plan
+            .toolchain(&ToolchainId::RUST)
+            .is_some_and(|toolchain| toolchain.tools.0 == ToolPolicy::Managed);
     if plan.unsupported() {
-        return Err(Error::Unsupported("non-JavaScript workspace setup"));
+        return Err(Error::Unsupported("Python or Go workspace setup"));
     }
     let javascript = plan
         .toolchain(&ToolchainId::JAVASCRIPT)
         .map_or(ToolPolicy::Skip, |toolchain| toolchain.tools.0);
-    let snapshot =
-        turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
+    // Only JavaScript has skip and verify-system paths; managed Rust composes
+    // only with managed JavaScript tools or a repository without JavaScript.
+    if rust
+        && javascript != ToolPolicy::Managed
+        && plan.toolchain(&ToolchainId::JAVASCRIPT).is_some()
+    {
+        return Err(Error::Unsupported(
+            "managed Rust tools with a skip or verify-system JavaScript tools policy",
+        ));
+    }
+    let snapshot = turborepo_setup::lock::Snapshot::capture_with(
+        discovery.snapshot_root()?.as_std_path(),
+        turborepo_setup::lock::Ecosystems { rust },
+    )?;
     // Never silently: version-manager files are reported, not read as requests.
     if let Some(report) = turborepo_setup::version_managers::report(
         &snapshot.ignored_declarations(),
@@ -313,7 +334,7 @@ fn run_reporting(
     for line in plan.report() {
         println!("{line}");
     }
-    if javascript == ToolPolicy::Skip {
+    if javascript == ToolPolicy::Skip && !rust {
         // Never silently ignore committed selections for a skipped toolchain.
         if snapshot
             .previous_lock()

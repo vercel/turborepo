@@ -16,7 +16,17 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 3] = ["node", "npm", "pnpm"];
+const NATIVE: [&str; 5] = ["node", "npm", "pnpm", "rust", "rustup"];
+/// rustup's root toolchain files. Both at once is ambiguous, not precedence.
+const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
+const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
+
+/// Ecosystems whose declarations the caller's workspace flags enable. Their
+/// files stay in the CAS either way; disabled declarations are ignored.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ecosystems {
+    pub rust: bool,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -26,6 +36,8 @@ pub enum StorageError {
     Io(#[from] io::Error),
     #[error("invalid native setup declarations")]
     Declarations,
+    #[error(transparent)]
+    Rust(#[from] crate::rust_discovery::Error),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }
@@ -142,11 +154,19 @@ fn read_optional(root: &Path, name: &str, limit: usize) -> io::Result<Option<Vec
 /// Read only. No lock sidecar, resolver, release metadata, or installation.
 /// Capture package.json once so both adapters see the same manifest snapshot.
 pub fn probe_native(root: &Path) -> Result<DeclarationMap, StorageError> {
+    probe_native_in(root, Ecosystems::default())
+}
+
+pub fn probe_native_in(
+    root: &Path,
+    ecosystems: Ecosystems,
+) -> Result<DeclarationMap, StorageError> {
     let root = root.canonicalize()?;
-    probe_native_with(|file, limit| read_optional(&root, file, limit))
+    probe_native_with(ecosystems, |file, limit| read_optional(&root, file, limit))
 }
 
 pub(crate) fn probe_native_with(
+    ecosystems: Ecosystems,
     mut read: impl FnMut(&'static str, usize) -> io::Result<Option<Vec<u8>>>,
 ) -> Result<DeclarationMap, StorageError> {
     let manifest = read("package.json", crate::node_discovery::MAX_MANIFEST_BYTES)?
@@ -222,11 +242,44 @@ pub(crate) fn probe_native_with(
             result.insert(name.into(), sources);
         }
     }
+    if ecosystems.rust {
+        let mut present = Vec::new();
+        for file in RUST_TOOLCHAIN_FILES {
+            if let Some(bytes) = read(file, MAX_TOOLCHAIN_BYTES)? {
+                present.push((file, bytes));
+            }
+        }
+        match present.as_slice() {
+            [] => {}
+            // The private installer serves whichever channel the file names.
+            [(file, bytes)] => {
+                result.insert(
+                    "rustup".into(),
+                    vec![Declaration {
+                        file: (*file).into(),
+                        field: None,
+                        request: None,
+                    }],
+                );
+                let toolchain = rust_toolchain(file, bytes.clone())?;
+                result.insert("rust".into(), toolchain.declarations().to_vec());
+            }
+            _ => return Err(StorageError::Declarations),
+        }
+    }
     for values in result.values_mut() {
         declarations(values)?;
         sort_declarations(values);
     }
     Ok(result)
+}
+
+pub(super) fn rust_toolchain(
+    file: &'static str,
+    bytes: Vec<u8>,
+) -> Result<crate::rust_discovery::Toolchain, StorageError> {
+    let text = String::from_utf8(bytes).map_err(|_| crate::rust_discovery::Error::Invalid(file))?;
+    Ok(crate::rust_discovery::Toolchain::parse(file, &text)?)
 }
 
 /// Explicit unconditional publication of a complete validated selection.

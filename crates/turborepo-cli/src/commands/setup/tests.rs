@@ -141,6 +141,10 @@ impl Fixture {
                     .unwrap()
                     .with_cache(cache.clone()),
                     cache: cache.clone(),
+                    rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
                 }),
                 || {
                     Ok(self
@@ -241,6 +245,8 @@ mod trust_publication;
 mod trusted_roots;
 #[path = "unlocked_trust_tests.rs"]
 mod unlocked_trust;
+#[path = "rustup_tests.rs"]
+mod rustup;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
