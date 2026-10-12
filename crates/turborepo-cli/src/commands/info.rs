@@ -1,6 +1,6 @@
 use std::{env, path::Path, process};
 
-use sysinfo::{System, SystemExt};
+use sysinfo::{RefreshKind, System, SystemExt};
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
 use super::CommandBase;
@@ -12,7 +12,9 @@ fn is_wsl() -> bool {
 }
 
 pub async fn run(base: CommandBase) {
-    let system = System::new_all();
+    // Only available memory is reported. Refreshing everything would also
+    // enumerate every process, disk, network interface, and sensor.
+    let system = System::new_with_specifics(RefreshKind::new().with_memory());
     let daemon_status = match DaemonConnector::new(false, false, &base.repo_root, None) {
         Ok(connector) => match connector.connect().await {
             Ok(_status) => "Running",
