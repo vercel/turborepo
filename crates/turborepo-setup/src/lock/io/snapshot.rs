@@ -40,11 +40,8 @@ pub struct Snapshot {
     previous: Option<Lock>,
     inputs: Inputs,
     native: DeclarationMap,
-<<<<<<< HEAD
     ecosystems: Ecosystems,
-=======
     additional: BTreeMap<String, Tool>,
->>>>>>> 9781c0a6956b868900b3107d2c13c2c0d14cd3e8
 }
 
 // Raw manifests may contain unrelated secrets. Never print snapshot contents.
@@ -115,7 +112,6 @@ impl Snapshot {
                 .cloned()
                 .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
         })?;
-<<<<<<< HEAD
         if ecosystems.python {
             if let Some(uv) = read_uv(&captured)? {
                 native.insert("uv".into(), vec![uv.declaration()]);
@@ -124,9 +120,7 @@ impl Snapshot {
                 native.insert("python".into(), vec![python.declaration()]);
             }
         }
-=======
         let additional = project_additional(&captured)?;
->>>>>>> 9781c0a6956b868900b3107d2c13c2c0d14cd3e8
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
         if same_file::Handle::from_path(&root)? != *root_identity
@@ -142,11 +136,8 @@ impl Snapshot {
             previous,
             inputs: captured,
             native,
-<<<<<<< HEAD
             ecosystems,
-=======
             additional,
->>>>>>> 9781c0a6956b868900b3107d2c13c2c0d14cd3e8
         })
     }
 
