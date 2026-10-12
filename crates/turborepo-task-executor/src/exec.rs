@@ -130,6 +130,8 @@ pub enum SuccessOutcome {
 /// Internal errors that can occur during task execution.
 #[derive(Debug, thiserror::Error)]
 pub enum InternalError {
+    #[error("managed setup validation failed: {0}")]
+    ManagedTools(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("unable to determine why task exited")]
@@ -197,6 +199,7 @@ pub struct TaskExecutor<H, E, W, A> {
     pub cmd: Command,
     pub execution_env: EnvironmentVariableMap,
     pub manager: ProcessManager,
+    pub managed_environment: Option<Arc<dyn crate::ManagedEnvironment>>,
     pub takes_input: bool,
 
     // Configuration
@@ -345,6 +348,9 @@ where
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(InternalError::ManagedTools)?;
+        }
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -395,6 +401,11 @@ where
         // and cache hits finish without ever starting.
         task_output.start(self.task_cache.output_logs().into());
 
+        // Recheck at the actual spawn boundary, after cache waits and serial
+        // group acquisition. Selection-time validation is not a lease.
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(InternalError::ManagedTools)?;
+        }
         // Spawn the process
         let cmd = self.cmd.clone();
         let mut process =

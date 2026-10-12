@@ -119,6 +119,7 @@ impl Fixture {
                 args,
                 setup_args,
                 Some(provision::Transports {
+                    trust_base: Some(self.owned.home().to_owned()),
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
                         upstream.origin(),
@@ -197,14 +198,27 @@ mod checks;
 mod plans;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "authorization_tests.rs"]
+mod authorization;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]
 mod force;
+#[path = "managed_run_tests.rs"]
+mod managed_run;
 #[path = "npm_tests.rs"]
 mod npm;
+#[path = "offline_tests.rs"]
+mod offline_repeat;
 #[path = "publication_guards.rs"]
 mod publication_guards;
+#[cfg(target_os = "macos")]
+#[path = "trust_acl_tests.rs"]
+mod trust_acl;
+#[path = "trust_publication_test.rs"]
+mod trust_publication;
+#[path = "trust_tests.rs"]
+mod trusted_roots;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
@@ -321,7 +335,12 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else {
-            assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+            let result = f.run(&u, &flags);
+            if flags.contains(&"--offline") {
+                assert!(matches!(result, Err(Error::Offline(_))));
+            } else {
+                assert!(matches!(result, Err(Error::NotImplemented)));
+            }
             assert_eq!(u.hits(), 0);
             assert!(!f.owned.root().join(".turbo").exists());
         }

@@ -208,7 +208,13 @@ fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+        let result = f.run(&u, &flags);
+        if flags.contains(&"--offline") {
+            // Nothing is installed, so offline force has no verified bytes.
+            assert!(matches!(result, Err(Error::Offline(_))));
+        } else {
+            assert!(matches!(result, Err(Error::NotImplemented)));
+        }
         assert_eq!(u.hits(), 0);
         assert!(!f.owned.root().join(".turbo").exists());
     }

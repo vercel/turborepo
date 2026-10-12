@@ -10,13 +10,18 @@ use turborepo_ui::ColorConfig;
 
 use crate::cli::{Args, SetupArgs};
 
+#[cfg(target_os = "macos")]
+mod acl;
+pub(crate) mod authorization;
 mod check;
 mod lock_diagnostics;
 mod no_lock;
+mod offline;
 mod plan;
 mod provision;
 mod root;
 mod telemetry;
+mod trust;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -73,6 +78,8 @@ pub enum Error {
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
+    #[error(transparent)]
+    Offline(#[from] offline::Error),
     #[error(transparent)]
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
@@ -257,7 +264,17 @@ fn run_reporting(
             );
             return Ok(0);
         }
-        // Clone-local --no-lock reports its own skipped dependencies.
+        // Offline repeats and clone-local --no-lock report their own skipped
+        // dependencies.
+        Mode::Provision if request.offline => {
+            return offline::run(
+                &discovery,
+                snapshot,
+                transports.as_ref(),
+                preflight,
+                request.force,
+            );
+        }
         Mode::Provision if request.lock == LockMode::NoLock => {
             return no_lock::run(&discovery, snapshot, transports, preflight);
         }
@@ -281,7 +298,7 @@ fn run_reporting(
     // Never claim dependencies are ready: they are skipped until dependency
     // policy and installers exist, even without --tools-only.
     println!(
-        "Dependencies skipped ({}). No tasks run; managed activation is not enabled.",
+        "Dependencies skipped ({}). No tasks run.",
         if request.tools_only {
             "--tools-only"
         } else {
@@ -307,11 +324,19 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // dependency installers exist, plain setup provisions exactly the tools
     // --tools-only does and reports dependencies as skipped.
     if request.mode != Mode::Provision
-        || (request.lock == LockMode::NoLock && (request.force || request.update_lock))
-        || request.offline
+        || (request.lock == LockMode::NoLock
+            && (request.force || request.update_lock || request.offline))
         || (request.force && request.update_lock)
     {
         return Err(Error::NotImplemented);
+    }
+    // --offline --force reinstalls only from verified local bytes; resolution
+    // always needs the network.
+    if request.offline && request.update_lock {
+        return Err(Error::Unsupported(
+            "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \
+             --update-lock without --offline",
+        ));
     }
     Ok(())
 }
@@ -448,7 +473,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if matches!(control, "--force" | "--no-lock" | "--plan") {
+                if matches!(control, "--force" | "--no-lock" | "--plan" | "--offline") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(

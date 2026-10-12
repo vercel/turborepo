@@ -255,6 +255,7 @@ fn dispatch(
 ) -> Result<i32, Error> {
     let args = f.args(flags);
     crate::cli::dispatch_setup(&args, |args, setup_args| run_with_policy(args, setup_args, Some(provision::Transports {
+        trust_base: Some(f.owned.home().to_owned()),
         node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
