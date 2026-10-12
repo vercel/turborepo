@@ -3,6 +3,7 @@
 
 pub mod activation;
 pub mod bundled_npm;
+pub mod cargo_prefetch;
 pub mod ephemeral_reconcile;
 pub mod execution_identity;
 pub mod go_discovery;
