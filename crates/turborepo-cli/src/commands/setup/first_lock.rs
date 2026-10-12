@@ -92,14 +92,23 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
         untouched(&f);
     }
 }
+const TRAP: &str = "#!/bin/sh\ntouch probe-ran\nexit 91\n";
 pub(super) fn bundled(prefix: &str) -> Vec<u8> {
-    bundled_with(prefix, "throw new Error('never execute');")
+    node_release(prefix, TRAP, NEVER)
 }
+const NEVER: &str = "throw new Error('never execute');";
 /// A Node release whose bundled npm and npx CLIs are `cli`.
 pub(super) fn bundled_with(prefix: &str, cli: &str) -> Vec<u8> {
+    node_release(prefix, TRAP, cli)
+}
+/// A Node release whose `bin/node` is `node`.
+fn bundled_node(prefix: &str, node: &str) -> Vec<u8> {
+    node_release(prefix, node, NEVER)
+}
+fn node_release(prefix: &str, node: &str, cli: &str) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in [
-        ("bin/node", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
+        ("bin/node", node),
         ("resource", "complete Node resource"),
         (
             "lib/node_modules/npm/package.json",
@@ -152,6 +161,15 @@ pub(super) fn routes(
     node_version: &str,
     manager_version: &str,
 ) -> Vec<(String, Vec<u8>)> {
+    routes_with(f, node_version, manager_version, TRAP)
+}
+/// `routes` whose Node archives run `node` as `bin/node`.
+pub(super) fn routes_with(
+    f: &Fixture,
+    node_version: &str,
+    manager_version: &str,
+    node: &str,
+) -> Vec<(String, Vec<u8>)> {
     let index = json!([{"version":format!("v{node_version}"),"npm":"11.6.1","lts":"Krypton",
         "files":["osx-x64-tar","osx-arm64-tar","linux-x64","linux-arm64","win-x64-zip","win-arm64-zip"]}]);
     let mut result = vec![(
@@ -179,7 +197,7 @@ pub(super) fn routes(
         let bytes = if windows {
             b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec()
         } else {
-            bundled(&prefix)
+            bundled_node(&prefix, node)
         };
         let filename = format!("{prefix}.{}", if windows { "zip" } else { "tar.gz" });
         sums.push_str(&format!("{:x}  {filename}\n", Sha256::digest(&bytes)));

@@ -28,12 +28,15 @@ pub enum Error {
         )
     )]
     Disabled,
-    #[error("`turbo exec` requires managed setup, but the repository root has no turbo.lock")]
+    #[error(
+        "`turbo exec` requires managed setup, but the repository root has no turbo.lock or `turbo \
+         setup --no-lock` tools"
+    )]
     #[diagnostic(
         code(turbo::exec::managed_setup_required),
         help(
-            "Run `turbo setup` first. No command was run. `turbo exec` never falls back to tools \
-             on the host PATH."
+            "Run `turbo setup` (or `turbo setup --no-lock` for this clone only) first. No command \
+             was run. `turbo exec` never falls back to tools on the host PATH."
         )
     )]
     ManagedSetupRequired,

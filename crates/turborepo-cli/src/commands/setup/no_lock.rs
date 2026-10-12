@@ -188,5 +188,6 @@ pub(super) fn run(
         "No turbo.lock written (--no-lock). Clone-local selections do not establish cross-machine \
          reproducibility or frozen readiness."
     );
+    println!("turbo run uses these tools in this clone only.");
     Ok(0)
 }
