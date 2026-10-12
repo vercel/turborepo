@@ -17,6 +17,12 @@ pub use turborepo_types::{CONFIG_FILE, CONFIG_FILE_JSONC};
 
 use crate::{Error, FutureFlags, Pipeline, RawTaskDefinition, TurboJson};
 
+/// Below this many packages, preloading turbo.json files runs on the calling
+/// thread. Fanning a handful of loads out across the rayon pool wakes every
+/// worker, and each then allocates in its own memory region, which costs more
+/// than the loads themselves.
+const PARALLEL_PRELOAD_MIN_PACKAGES: usize = 32;
+
 /// Path to the config file that will be used to store the trace results
 /// (relative to repo root)
 pub const TASK_ACCESS_CONFIG_PATH: [&str; 2] = [".turbo", "traced-config.json"];
@@ -448,9 +454,10 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
             .ok_or_else(|| LoaderError::TurboJson(Error::NoTurboJSON).into())
     }
 
-    /// Pre-warm the cache by loading all package turbo.json files in parallel.
-    /// Errors are silently ignored — the next sequential `load()` call will
-    /// report them. This is purely an optimization to overlap I/O and parsing.
+    /// Pre-warm the cache by loading all package turbo.json files, in parallel
+    /// unless there are only a few packages. Errors are silently ignored — the
+    /// next sequential `load()` call will report them. This is purely an
+    /// optimization to overlap I/O and parsing.
     pub fn preload_all(&self)
     where
         U::Error: From<LoaderError> + Send,
@@ -464,16 +471,23 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
             _ => return,
         };
 
-        packages.par_iter().for_each(|pkg| {
-            let _ = self.load(pkg);
-        });
+        if packages.len() < PARALLEL_PRELOAD_MIN_PACKAGES {
+            for pkg in &packages {
+                let _ = self.load(pkg);
+            }
+        } else {
+            packages.par_iter().for_each(|pkg| {
+                let _ = self.load(pkg);
+            });
+        }
     }
 
-    /// Pre-warm the cache by loading the given packages' turbo.json files in
-    /// parallel. Errors are silently ignored — the next sequential `load()`
-    /// call will report them. Like `preload_all`, this is purely an
-    /// optimization to overlap I/O and parsing, scoped to the provided
-    /// packages; anything else loads lazily on demand.
+    /// Pre-warm the cache by loading the given packages' turbo.json files, in
+    /// parallel unless there are only a few packages. Errors are silently
+    /// ignored — the next sequential `load()` call will report them. Like
+    /// `preload_all`, this is purely an optimization to overlap I/O and
+    /// parsing, scoped to the provided packages; anything else loads lazily
+    /// on demand.
     pub fn preload_packages(&self, packages: impl IntoIterator<Item = PackageName>)
     where
         U::Error: From<LoaderError> + Send,
@@ -488,9 +502,15 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
             _ => return,
         };
 
-        packages.par_iter().for_each(|pkg| {
-            let _ = self.load(pkg);
-        });
+        if packages.len() < PARALLEL_PRELOAD_MIN_PACKAGES {
+            for pkg in &packages {
+                let _ = self.load(pkg);
+            }
+        } else {
+            packages.par_iter().for_each(|pkg| {
+                let _ = self.load(pkg);
+            });
+        }
     }
 
     fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, U::Error>

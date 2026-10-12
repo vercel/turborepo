@@ -51,6 +51,10 @@ use crate::{
     relationships::Relationship,
 };
 
+/// Below this many workspaces, JavaScript discovery parses `package.json`
+/// manifests on the calling thread instead of the rayon pool.
+const PARALLEL_MANIFEST_PARSE_MIN_WORKSPACES: usize = 32;
+
 /// Identifies a toolchain: the language ecosystem a package belongs to.
 ///
 /// Open by design (see the module's design rules): any string can be a
@@ -898,19 +902,30 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
             let workspace_root =
                 WorkspaceRoot::new(package_manager.command(), self.repo_root.clone());
             // Parse manifests in parallel; manifest parsing dominates discovery
-            // time on large repositories.
+            // time on large repositories. A handful of manifests parse faster on
+            // the calling thread than fanned out across the rayon pool, where
+            // every woken worker also allocates in its own memory region.
             let _span = tracing::info_span!("manifest_parse").entered();
             let packages = turborepo_rayon_compat::block_in_place(|| {
-                use rayon::prelude::*;
-                response
-                    .workspaces
-                    .into_par_iter()
-                    .map(|workspace| {
-                        let (package_json, _) = workspace.into_paths();
-                        let descriptor = self.package_json_loader.load(&package_json)?;
-                        Ok(Self::package_from_json(package_json, descriptor))
-                    })
-                    .collect::<Result<Vec<_>, Error>>()
+                let parse = |workspace: discovery::WorkspaceData| -> Result<_, Error> {
+                    let (package_json, _) = workspace.into_paths();
+                    let descriptor = self.package_json_loader.load(&package_json)?;
+                    Ok(Self::package_from_json(package_json, descriptor))
+                };
+                if response.workspaces.len() < PARALLEL_MANIFEST_PARSE_MIN_WORKSPACES {
+                    response
+                        .workspaces
+                        .into_iter()
+                        .map(parse)
+                        .collect::<Result<Vec<_>, Error>>()
+                } else {
+                    use rayon::prelude::*;
+                    response
+                        .workspaces
+                        .into_par_iter()
+                        .map(parse)
+                        .collect::<Result<Vec<_>, Error>>()
+                }
             })?;
             Ok(DiscoveredPackages::new(packages, vec![workspace_root]))
         })

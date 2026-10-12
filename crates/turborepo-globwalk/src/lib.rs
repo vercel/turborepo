@@ -942,6 +942,10 @@ fn try_decompose_shallow_wildcard(
     Some((prefix, suffix))
 }
 
+/// Below this many shallow-wildcard candidates, they are checked on the calling
+/// thread instead of the rayon pool.
+const PARALLEL_STAT_MIN_CANDIDATES: usize = 32;
+
 fn walk_compiled_globs(
     compiled: &CompiledGlobs,
     walk_type: WalkType,
@@ -1005,34 +1009,45 @@ fn walk_compiled_globs(
         .collect();
 
     let ex_patterns = &compiled.ex_patterns;
-    let shallow_results: Vec<AbsoluteSystemPathBuf> = shallow_candidates
-        .par_iter()
-        .filter_map(|candidate| {
-            let meta = candidate.symlink_metadata().ok()?;
-            let dominated = match walk_type {
-                WalkType::Files => meta.is_file() || meta.is_symlink(),
-                WalkType::Folders => meta.is_dir(),
-                WalkType::All => true,
-            };
-            if !dominated {
+    let shallow_match = |candidate: &PathBuf| -> Option<AbsoluteSystemPathBuf> {
+        let meta = candidate.symlink_metadata().ok()?;
+        let dominated = match walk_type {
+            WalkType::Files => meta.is_file() || meta.is_symlink(),
+            WalkType::Folders => meta.is_dir(),
+            WalkType::All => true,
+        };
+        if !dominated {
+            return None;
+        }
+        // Check exclusion patterns. Exclusion globs are compiled from
+        // absolute paths (e.g. `/repo/**/node_modules/**`), so match
+        // against the full candidate path using slash-normalized form for
+        // cross-platform correctness.
+        if !ex_patterns.is_empty() {
+            let candidate_str = candidate.to_slash_lossy();
+            if ex_patterns
+                .iter()
+                .any(|ex| ex.is_match(candidate_str.as_ref()))
+            {
                 return None;
             }
-            // Check exclusion patterns. Exclusion globs are compiled from
-            // absolute paths (e.g. `/repo/**/node_modules/**`), so match
-            // against the full candidate path using slash-normalized form for
-            // cross-platform correctness.
-            if !ex_patterns.is_empty() {
-                let candidate_str = candidate.to_slash_lossy();
-                if ex_patterns
-                    .iter()
-                    .any(|ex| ex.is_match(candidate_str.as_ref()))
-                {
-                    return None;
-                }
-            }
-            AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
-        })
-        .collect();
+        }
+        AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
+    };
+    // A handful of stats is faster on the calling thread than fanned out
+    // across the rayon pool, which wakes every worker.
+    let shallow_results: Vec<AbsoluteSystemPathBuf> =
+        if shallow_candidates.len() < PARALLEL_STAT_MIN_CANDIDATES {
+            shallow_candidates
+                .iter()
+                .filter_map(shallow_match)
+                .collect()
+        } else {
+            shallow_candidates
+                .par_iter()
+                .filter_map(shallow_match)
+                .collect()
+        };
 
     let mut results: HashSet<AbsoluteSystemPathBuf> = variant_globs
         .par_iter()

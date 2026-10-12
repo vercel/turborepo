@@ -1613,6 +1613,10 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
     }
 }
 
+/// Below this many packages, dependency classification runs on the calling
+/// thread instead of the rayon pool.
+const PARALLEL_CLASSIFICATION_MIN_PACKAGES: usize = 32;
+
 impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T> {
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
@@ -1651,56 +1655,64 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedWorkspaces, T
             .map(|identity| (identity, native_relationships.remove(identity)))
             .collect();
         debug_assert!(native_relationships.is_empty());
-        // Release the map's retained capacity before parallel classification allocates
+        // Release the map's retained capacity before classification allocates
         // results.
         drop(native_relationships);
-        // Classification is read-only and remains parallel across packages.
-        // RelationshipKnowledge sorts the indexed results before retaining
-        // the immutable generation.
-        let groups = {
+        // Classification is read-only. RelationshipKnowledge sorts the indexed
+        // results before retaining the immutable generation, so evaluation
+        // order doesn't matter.
+        let classify = |(identity, native)| -> Result<_, Error> {
+            let relationships = match native {
+                Some(relationships) => relationships,
+                None => {
+                    let name = package_name_from_identity(identity);
+                    let entry = self.assembler.package_jsons.get(&name).ok_or_else(|| {
+                        Error::MissingDescriptor {
+                            name: identity.to_string(),
+                        }
+                    })?;
+                    let definition_path =
+                        scope_definition_path(knowledge, &name).ok_or_else(|| {
+                            Error::MissingDescriptor {
+                                name: identity.to_string(),
+                            }
+                        })?;
+                    let source_name_index =
+                        if definition_path.as_path().file_name() == Some("package.json".as_ref()) {
+                            &name_index
+                        } else {
+                            legacy_name_index.get_or_init(|| {
+                                WorkspaceNameIndex::from_workspaces(&self.assembler.package_jsons)
+                            })
+                        };
+                    Relationships::classify(
+                        self.repo_root,
+                        definition_path,
+                        &self.assembler.package_jsons,
+                        link_workspace_packages,
+                        entry.dependencies_with_kind(),
+                        &path_index,
+                        source_name_index,
+                        catalogs.as_ref(),
+                    )
+                }
+            };
+            Ok(RelationshipGroup::new(identity, relationships))
+        };
+        // Classifying one package takes tens of microseconds. For a handful of
+        // packages, fanning out across the rayon pool (waking every worker,
+        // each of which then allocates in its own memory region) costs more
+        // than the work, so small workspaces classify on the calling thread.
+        let groups = if inputs.len() < PARALLEL_CLASSIFICATION_MIN_PACKAGES {
+            inputs
+                .into_iter()
+                .map(&classify)
+                .collect::<Result<Vec<_>, _>>()?
+        } else {
             use rayon::prelude::*;
             inputs
                 .into_par_iter()
-                .map(|(identity, native)| -> Result<_, Error> {
-                    let relationships = match native {
-                        Some(relationships) => relationships,
-                        None => {
-                            let name = package_name_from_identity(identity);
-                            let entry =
-                                self.assembler.package_jsons.get(&name).ok_or_else(|| {
-                                    Error::MissingDescriptor {
-                                        name: identity.to_string(),
-                                    }
-                                })?;
-                            let definition_path = scope_definition_path(knowledge, &name)
-                                .ok_or_else(|| Error::MissingDescriptor {
-                                    name: identity.to_string(),
-                                })?;
-                            let source_name_index = if definition_path.as_path().file_name()
-                                == Some("package.json".as_ref())
-                            {
-                                &name_index
-                            } else {
-                                legacy_name_index.get_or_init(|| {
-                                    WorkspaceNameIndex::from_workspaces(
-                                        &self.assembler.package_jsons,
-                                    )
-                                })
-                            };
-                            Relationships::classify(
-                                self.repo_root,
-                                definition_path,
-                                &self.assembler.package_jsons,
-                                link_workspace_packages,
-                                entry.dependencies_with_kind(),
-                                &path_index,
-                                source_name_index,
-                                catalogs.as_ref(),
-                            )
-                        }
-                    };
-                    Ok(RelationshipGroup::new(identity, relationships))
-                })
+                .map(&classify)
                 .collect::<Result<Vec<_>, _>>()?
         };
         let relationship_knowledge = Arc::new(RelationshipKnowledge::build(knowledge, groups)?);
