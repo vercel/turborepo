@@ -122,3 +122,6 @@ fn drift_and_checksum_failures_keep_the_previous_installation() {
     assert_eq!(installed(&f), ["fixture", "node"]);
     f.no_execution();
 }
+
+#[path = "additional_cache_tests.rs"]
+mod cached;

@@ -14,10 +14,12 @@ use url::Url;
 
 use crate::{
     Preparation,
+    artifact_cache::ArtifactCache,
     lock::{
         self, Format, Installation, Lock, Platform,
         additional::{ADAPTER, PART},
     },
+    mirror::Mirror,
     node_provision::copy_tree,
 };
 
@@ -61,6 +63,8 @@ pub enum Error {
     },
     #[error("cannot prepare additional tool downloads: {0}")]
     Transport(#[source] turborepo_download::Error),
+    #[error("offline setup has no verified cached artifact and never contacts upstream")]
+    Offline,
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
 }
@@ -69,6 +73,10 @@ pub struct ArtifactTransport {
     client: DownloadClient,
     // Test transport changes only the origin; lock provenance is unchanged.
     loopback: Option<String>,
+    /// Serves `<base>/<host>/<path>` for each locked URL.
+    mirror: Option<String>,
+    cache: Option<ArtifactCache>,
+    offline: bool,
 }
 
 impl ArtifactTransport {
@@ -88,27 +96,65 @@ impl ArtifactTransport {
             .collect::<Result<Vec<_>, _>>()
             .map_err(Error::Transport)?;
         let client = DownloadClient::new(approved).map_err(Error::Transport)?;
-        Ok(Self {
+        Ok(Self::with_client(client, None, None))
+    }
+
+    /// Send every request to a validated mirror instead, at
+    /// `<mirror>/<host>/<path>` for each locked URL (the layout `wget -x`
+    /// writes), so artifacts from several hosts share one mirror. turbo.lock
+    /// keeps the declared URLs and every download is still verified against
+    /// its locked digest.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &Mirror,
+    ) -> Result<Self, Error> {
+        let client = mirror.client().map_err(Error::Transport)?;
+        Ok(Self::with_client(client, None, Some(mirror.base().into())))
+    }
+
+    fn with_client(
+        client: DownloadClient,
+        loopback: Option<String>,
+        mirror: Option<String>,
+    ) -> Self {
+        Self {
             client: client.with_https_redirects(),
-            loopback: None,
-        })
+            loopback,
+            mirror,
+            cache: None,
+            offline: false,
+        }
+    }
+
+    /// Reuse verified artifact bytes from a caller-selected user cache. Hits
+    /// are re-verified against the locked digest; downloads are stored.
+    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
+        self.cache = cache;
+        self
+    }
+
+    /// Serve only verified cache hits; a miss fails before any request.
+    pub fn offline(mut self) -> Self {
+        self.offline = true;
+        self
     }
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only.
     #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         let client = DownloadClient::loopback_http_for_tests(origin).map_err(Error::Transport)?;
-        Ok(Self {
-            client: client.with_https_redirects(),
-            loopback: Some(origin.trim_end_matches('/').into()),
-        })
+        let loopback = Some(origin.trim_end_matches('/').into());
+        Ok(Self::with_client(client, loopback, None))
     }
 }
 
 pub struct ArtifactPlan {
     tool: Tool,
+    platform: Platform,
     artifact: lock::Artifact,
     origin: String,
+    /// `host[:port]` of the locked URL, the mirror path's first component.
+    authority: String,
     path: String,
 }
 
@@ -165,8 +211,13 @@ impl ArtifactPlan {
                 artifact_sha256: artifact.sha256.clone(),
                 executables: artifact.executables.clone(),
             },
+            platform,
             artifact: artifact.clone(),
             origin: url.origin().ascii_serialization(),
+            authority: match url.port() {
+                Some(port) => format!("{}:{port}", url.host_str().ok_or_else(invalid)?),
+                None => url.host_str().ok_or_else(invalid)?.into(),
+            },
             path: url.path().into(),
         })
     }
@@ -206,32 +257,40 @@ impl ArtifactPlan {
         self.download(transport).await.map(Some)
     }
 
-    /// Download, verify, and unpack into private staging. Declared executables
-    /// must be regular files inside the archive root.
+    /// Download (or read from the shared cache), verify, and unpack into
+    /// private staging. Declared executables must be regular files inside the
+    /// archive root.
     pub async fn download(&self, transport: &ArtifactTransport) -> Result<PreparedArtifact, Error> {
-        let url = match &transport.loopback {
-            Some(origin) => format!("{origin}{}", self.path),
-            None => self.artifact.url.clone(),
-        };
-        let download = |source| Error::Download {
-            tool: self.tool.id.clone(),
-            source,
-        };
-        let digest = ExpectedSha256::from_hex(&self.artifact.sha256).map_err(download)?;
-        let limits = turborepo_download::Limits::new(MAX_DOWNLOAD_BYTES, DOWNLOAD_TIMEOUT)
-            .map_err(download)?;
-        let bytes = transport
-            .client
-            .download_verified(&url, digest, limits)
-            .await
-            .map_err(download)?;
-        let format = match self.artifact.format {
-            Format::Binary => {
-                return Ok(PreparedArtifact {
-                    payload: Payload::Binary(bytes),
-                    tool: self.tool.clone(),
-                });
+        let cached = transport
+            .cache
+            .as_ref()
+            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, MAX_DOWNLOAD_BYTES));
+        let from_cache = cached.is_some();
+        let bytes = match cached {
+            Some(bytes) => bytes,
+            None if transport.offline => return Err(Error::Offline),
+            None => {
+                let bytes = self.fetch(transport).await?;
+                // Best effort: a cache write failure never fails verified setup.
+                if let Some(cache) = &transport.cache {
+                    let _ = cache.put(self.platform, &bytes);
+                }
+                bytes
             }
+        };
+        let downloaded_bytes = if from_cache {
+            0
+        } else {
+            bytes.as_bytes().len() as u64
+        };
+        let prepared = |payload| PreparedArtifact {
+            payload,
+            tool: self.tool.clone(),
+            from_cache,
+            downloaded_bytes,
+        };
+        let format = match self.artifact.format {
+            Format::Binary => return Ok(prepared(Payload::Binary(bytes))),
             Format::Tar => turborepo_archive::Format::Tar,
             Format::TarGz => turborepo_archive::Format::TarGz,
             Format::Zip => turborepo_archive::Format::Zip,
@@ -250,10 +309,27 @@ impl ArtifactPlan {
             required_files: &required,
         };
         let tree = turborepo_archive::extract(&bytes, format, limits, layout).map_err(unpack)?;
-        Ok(PreparedArtifact {
-            payload: Payload::Archive(tree),
-            tool: self.tool.clone(),
-        })
+        Ok(prepared(Payload::Archive(tree)))
+    }
+
+    async fn fetch(&self, transport: &ArtifactTransport) -> Result<VerifiedArtifact, Error> {
+        let url = match (&transport.loopback, &transport.mirror) {
+            (Some(origin), _) => format!("{origin}{}", self.path),
+            (None, Some(base)) => format!("{base}/{}{}", self.authority, self.path),
+            (None, None) => self.artifact.url.clone(),
+        };
+        let download = |source| Error::Download {
+            tool: self.tool.id.clone(),
+            source,
+        };
+        let digest = ExpectedSha256::from_hex(&self.artifact.sha256).map_err(download)?;
+        let limits = turborepo_download::Limits::new(MAX_DOWNLOAD_BYTES, DOWNLOAD_TIMEOUT)
+            .map_err(download)?;
+        transport
+            .client
+            .download_verified(&url, digest, limits)
+            .await
+            .map_err(download)
     }
 }
 
@@ -304,9 +380,21 @@ enum Payload {
 pub struct PreparedArtifact {
     payload: Payload,
     tool: Tool,
+    from_cache: bool,
+    downloaded_bytes: u64,
 }
 
 impl PreparedArtifact {
+    /// Whether verified bytes came from the shared download cache.
+    pub fn from_cache(&self) -> bool {
+        self.from_cache
+    }
+
+    /// Bytes fetched over the network; zero for a cache hit.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Callback for Store::reconcile. Copies the FULL verified tree, keeping
     /// adjacent resources, executable modes, and safe relative links.
     pub fn stage(
