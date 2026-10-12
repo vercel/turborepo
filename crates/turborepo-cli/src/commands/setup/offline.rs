@@ -115,7 +115,7 @@ pub(super) fn run(
         .transpose()?
         .or_else(dirs_next::data_local_dir)
         .ok_or_else(|| std::io::Error::other("cannot locate setup user state directory"))?;
-    let authorization = Authorization::inspect(root, &base, context)
+    let authorization = Authorization::inspect(root, &base, context, sources.ecosystems())
         .map_err(|error| unavailable(error, &artifacts))?;
     // Keep the original discovery/source/lock expectations even though the
     // authorization consumer captures its own snapshot. Recheck them BEFORE the

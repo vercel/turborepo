@@ -8,6 +8,19 @@ use turborepo_setup::test_support::{LoopbackServer, OwnedSetupFixture};
 use super::*;
 
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+/// The overrides managed `turbo run` applies from the committed root config
+/// and the fixture's trusted setup record, plus the managed bin first on PATH.
+fn run_overrides(
+    owned: &OwnedSetupFixture,
+) -> Result<(turborepo_run::EnvironmentVariableMap, PathBuf), String> {
+    use crate::commands::managed::{ManagedTools, context};
+    let root = owned.root();
+    let tools = ManagedTools::inspect(root, &root.join("turbo.json"), true, owned.home(), context)?
+        .ok_or("unmanaged")?;
+    let env = tools.revalidate()?;
+    let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
+    Ok((env, bin))
+}
 fn archive(root: &str, files: &[(&str, &str)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in files {

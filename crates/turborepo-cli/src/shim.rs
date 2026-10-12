@@ -82,8 +82,8 @@ impl TurboRunner for TurboCliRunner<'_> {
             }
         };
         let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
-        crate::commands::managed::select(&base)
-            .map(|tools| tools.map(|_| 0))
+        crate::commands::managed::validate(&base)
+            .map(|managed| managed.then_some(0))
             .map_err(Into::into)
     }
 

@@ -1,47 +1,49 @@
 //! Exact-root strict activation shared by `turbo run` and `turbo exec`.
-//! No provisioning, HTTP, ancestor inventory search or process-global mutation.
+//! No provisioning, HTTP or ancestor inventory search. Only `turbo run`'s
+//! [`activate_probes`] changes the process environment, after selection.
 
 use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 
 use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
-use turborepo_setup::execution_identity::{ExecutionContext, Libc};
+use turborepo_setup::{
+    activation::External,
+    execution_identity::{ExecutionContext, Libc},
+    lock::Ecosystems,
+    system_tool,
+};
+use turborepo_turbo_json::{RawTurboJson, SetupPolicy};
 
-use crate::commands::setup::authorization::Authorization;
+use crate::commands::setup::{authorization::Authorization, effective};
 
 pub(crate) fn select(
     base: &crate::commands::CommandBase,
 ) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
+    select_with(base, true)
+}
+
+/// Validates managed state like `select`, before local CLI handoff or
+/// telemetry, but leaves the verify-system probes to the run itself.
+pub(crate) fn validate(base: &crate::commands::CommandBase) -> Result<bool, turborepo_run::Error> {
+    Ok(select_with(base, false)?.is_some())
+}
+
+fn select_with(
+    base: &crate::commands::CommandBase,
+    external: bool,
+) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
     if !base.opts.future_flags.experimental_setup {
         return Ok(None);
-    }
-    // These initial managed adapters must not probe unprovisioned native tools.
-    let flags = &base.opts.future_flags;
-    for (enabled, marker) in [
-        (flags.experimental_cargo_workspaces, "Cargo.toml"),
-        (flags.experimental_python_workspaces, "pyproject.toml"),
-        (flags.experimental_go_workspaces, "go.work"),
-        (flags.experimental_go_workspaces, "go.mod"),
-    ] {
-        if enabled
-            && base.repo_root.join_component(marker).exists()
-            && std::fs::symlink_metadata(base.repo_root.join_component("turbo.lock")).is_ok()
-        {
-            return Err(turborepo_run::Error::ManagedTools(
-                "initial managed run supports Node/pnpm JS repositories only; use a supported \
-                 setup adapter"
-                    .into(),
-            ));
-        }
     }
     let user_base = dirs_next::data_local_dir().ok_or_else(|| {
         turborepo_run::Error::ManagedTools("cannot locate setup user state directory".into())
     })?;
-    ManagedTools::inspect(
+    ManagedTools::inspect_with(
         base.repo_root.as_std_path(),
         base.opts.repo_opts.root_turbo_json_path.as_std_path(),
         true,
         &user_base,
         context,
+        external,
     )
     .map_err(turborepo_run::Error::ManagedTools)
 }
@@ -54,12 +56,24 @@ pub(crate) struct ManagedTools {
 }
 
 impl ManagedTools {
+    #[cfg(test)]
     pub(crate) fn inspect(
         root: &Path,
         config: &Path,
         enabled: bool,
         user_base: &Path,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
+    ) -> Result<Option<Arc<ManagedRun>>, String> {
+        Self::inspect_with(root, config, enabled, user_base, context, true)
+    }
+
+    fn inspect_with(
+        root: &Path,
+        config: &Path,
+        enabled: bool,
+        user_base: &Path,
+        context: impl FnOnce() -> Result<ExecutionContext, String>,
+        external: bool,
     ) -> Result<Option<Arc<ManagedRun>>, String> {
         // A lock alone must never change unconfigured-repository behavior.
         if !enabled {
@@ -86,21 +100,91 @@ impl ManagedTools {
             );
         }
         let ci = turborepo_ci::is_ci();
-        let authorization = Authorization::inspect(&canonical, user_base, context()?)
+        let ecosystems = ecosystems(&canonical, config)?;
+        let authorization = Authorization::inspect(&canonical, user_base, context()?, ecosystems)
             .map_err(|e| e.guidance(ci))?;
-        let snapshot = authorization
-            .with_current(|p| p.snapshot().clone())
+        let (snapshot, tools) = authorization
+            .with_current(|p| (p.snapshot().clone(), p.external().to_vec()))
             .map_err(|e| e.guidance(ci))?;
         let identity = snapshot.fingerprint().to_owned();
+        let inherited_path = std::env::var_os("PATH");
+        // Once per run: a changed system tool fails here rather than running
+        // under the locked identity. Tasks then find it on the same PATH.
+        let notices = if external {
+            verify_external(&tools, inherited_path.as_deref(), &canonical)?
+        } else {
+            Vec::new()
+        };
         let tools = Arc::new(Self {
             authorization,
-            inherited_path: std::env::var_os("PATH"),
+            inherited_path,
             identity,
             ci,
         });
         tools.revalidate()?;
-        Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
+        Ok(Some(Arc::new(
+            ManagedRun::new(snapshot, tools)?.with_notices(notices),
+        )))
     }
+}
+
+/// Verifies each locked verify-system tool at its exact version on `path`,
+/// exactly as `turbo setup --check` does, and reports where it was found.
+fn verify_external(
+    tools: &[External],
+    path: Option<&std::ffi::OsStr>,
+    root: &Path,
+) -> Result<Vec<String>, String> {
+    let mut notices = Vec::new();
+    for tool in tools {
+        let verified =
+            system_tool::verify_tool(&tool.id, &tool.version, &tool.executables, path, root)
+                .map_err(|e| format!("verify-system {}: {e}", tool.id))?;
+        notices.extend(verified.into_iter().map(|tool| {
+            let path = tool.path.display();
+            format!(
+                "{} {} from PATH ({path}, verify-system)",
+                tool.id, tool.version
+            )
+        }));
+    }
+    Ok(notices)
+}
+
+/// Setup's ecosystems from the root configuration's flags and `setup` policy.
+/// The snapshot's CAS covers the configuration, so a later edit is drift.
+fn ecosystems(root: &Path, config: &Path) -> Result<Ecosystems, String> {
+    let path = |path| turbopath::AbsoluteSystemPath::from_std_path(path).map_err(|e| e.to_string());
+    let raw = RawTurboJson::read(path(root)?, path(config)?, true)
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+    let flags = raw.future_flags.map(|f| *f.as_inner()).unwrap_or_default();
+    let policy = SetupPolicy::from_raw(raw.setup.as_ref(), &flags).map_err(|e| e.to_string())?;
+    Ok(effective::ecosystems(&flags, &policy))
+}
+
+/// turbo's own toolchain probes (`cargo metadata`, `rustc`, uv and `go env`)
+/// and the Cargo home read for config hashing all come from turbo's process
+/// environment, so apply the freshly validated managed PATH and runtime
+/// variables to it before the run builder discovers the repository. Tasks
+/// still receive the same overlay from each later revalidation, and every
+/// in-repository executable other than the managed bin stays untrusted.
+pub(crate) fn activate_probes(tools: &ManagedRun) -> Result<(), turborepo_run::Error> {
+    let overrides = tools
+        .revalidate()
+        .map_err(turborepo_run::Error::ManagedTools)?;
+    if let Some(bin) = overrides
+        .get("PATH")
+        .and_then(|path| std::env::split_paths(path).next())
+    {
+        turborepo_repository::uv::trust_managed_bin(bin);
+    }
+    for (key, value) in overrides.iter() {
+        // SAFETY: like the shim warning's removal in `run`, this happens once,
+        // before the run builder starts discovery threads or task processes.
+        unsafe { std::env::set_var(key, value) };
+    }
+    Ok(())
 }
 
 impl ManagedEnvironment for ManagedTools {
@@ -108,15 +192,18 @@ impl ManagedEnvironment for ManagedTools {
         self.authorization
             .with_current(|plan| {
                 let mut overrides = EnvironmentVariableMap::default();
-                let path = plan
-                    .path(self.inherited_path.as_deref())
-                    .map_err(|e| e.to_string())?;
-                overrides.insert(
-                    "PATH".into(),
-                    path.into_string().map_err(|_| {
-                        "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
-                    })?,
-                );
+                // verify-system tools alone keep the caller's PATH unchanged.
+                if plan.path_prepend().is_some() {
+                    let path = plan
+                        .path(self.inherited_path.as_deref())
+                        .map_err(|e| e.to_string())?;
+                    overrides.insert(
+                        "PATH".into(),
+                        path.into_string().map_err(|_| {
+                            "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
+                        })?,
+                    );
+                }
                 for (key, value) in plan.runtime_env() {
                     overrides.insert(
                         key.clone(),
@@ -137,30 +224,17 @@ impl ManagedEnvironment for ManagedTools {
 }
 
 /// Conservative native execution identity. No readiness-only/unprobed labels.
-/// These initial adapters are supported only on native macOS, GNU Linux and
+/// These initial adapters are supported only on native macOS, glibc Linux and
 /// Windows x64. Windows arm64 is unqualified and never borrows x64 artifacts.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
     if !cfg!(any(
         target_os = "macos",
-        all(target_os = "linux", target_env = "gnu"),
+        target_os = "linux",
         all(windows, target_arch = "x86_64")
     )) {
-        return Err("managed Node/pnpm run is unsupported on this host".into());
+        return Err("managed run is unsupported on this host".into());
     }
-    let libc = {
-        #[cfg(all(target_os = "linux", target_env = "gnu"))]
-        {
-            let abi = unsafe { std::ffi::CStr::from_ptr(libc::gnu_get_libc_version()) }
-                .to_str()
-                .map_err(|e| e.to_string())?
-                .to_owned();
-            Libc::Gnu { abi }
-        }
-        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
-        {
-            Libc::None
-        }
-    };
+    let libc = host_libc(turborepo_platform::host_libc())?;
     let mut cpu = BTreeSet::from(["baseline".into()]);
     #[cfg(target_arch = "x86_64")]
     for (name, detected) in [
@@ -199,6 +273,56 @@ pub(crate) fn context() -> Result<ExecutionContext, String> {
         cpu,
     )
     .map_err(|e| e.to_string())
+}
+
+/// The host's C library, not the one turbo was built against: released Linux
+/// binaries are static musl builds, and they select glibc artifacts on glibc
+/// hosts exactly like setup does. The glibc release is the ABI label.
+fn host_libc(
+    host: Result<Option<turborepo_platform::Libc>, turborepo_platform::LibcError>,
+) -> Result<Libc, String> {
+    match host {
+        Ok(None) => Ok(Libc::None),
+        Ok(Some(turborepo_platform::Libc::Glibc { version })) => Ok(Libc::Gnu { abi: version }),
+        Ok(Some(turborepo_platform::Libc::Musl)) => Err("managed tools are not supported on musl \
+                                                         Linux hosts such as Alpine; install the \
+                                                         repository's tools in the image and use \
+                                                         verify-system for them"
+            .into()),
+        Err(error) => Err(format!(
+            "cannot classify this Linux host's C library ({error}); managed run requires a glibc \
+             host, otherwise install the tools yourself and use verify-system"
+        )),
+    }
+}
+
+#[cfg(test)]
+mod libc_tests {
+    use turborepo_platform::Libc as Host;
+
+    use super::{Libc, host_libc};
+
+    #[test]
+    fn glibc_hosts_select_gnu_and_musl_or_unclassified_hosts_fail_closed() {
+        let gnu = host_libc(Ok(Some(Host::Glibc {
+            version: "2.39".into(),
+        })));
+        assert_eq!(gnu, Ok(Libc::Gnu { abi: "2.39".into() }));
+        assert_eq!(host_libc(Ok(None)), Ok(Libc::None));
+        let musl = host_libc(Ok(Some(Host::Musl))).unwrap_err();
+        assert!(
+            musl.contains("musl") && musl.contains("verify-system"),
+            "{musl}"
+        );
+        // The real host classification agrees with what setup qualifies.
+        if cfg!(target_os = "linux") {
+            let context = super::context();
+            match turborepo_platform::host_libc() {
+                Ok(Some(Host::Glibc { .. })) => assert!(context.is_ok(), "{context:?}"),
+                _ => assert!(context.is_err()),
+            }
+        }
+    }
 }
 
 #[cfg(all(test, windows))]

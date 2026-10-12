@@ -19,7 +19,7 @@ mod check;
 mod cleanup;
 #[cfg(windows)]
 mod dacl;
-mod effective;
+pub(crate) mod effective;
 mod lock_diagnostics;
 mod no_lock;
 mod offline;
@@ -366,14 +366,9 @@ fn run_reporting(
         return Err(Error::NotImplemented);
     }
     // Rust, Python and Go have managed setup adapters; a skip policy ignores
-    // their declarations.
-    let managed = |id: &ToolchainId| {
-        plan.toolchain(id)
-            .is_some_and(|toolchain| toolchain.tools.0 == ToolPolicy::Managed)
-    };
-    let rust = eligible.cargo() && managed(&ToolchainId::RUST);
-    let python = eligible.python() && managed(&ToolchainId::PYTHON);
-    let go = eligible.go() && managed(&ToolchainId::GO);
+    // their declarations. Managed run derives the same ecosystems.
+    let ecosystems = effective::ecosystems(&discovery.flags(), discovery.policy());
+    let turborepo_setup::lock::Ecosystems { rust, python, go } = ecosystems;
     if plan.unsupported() {
         return Err(Error::Unsupported(
             "verify-system tools for Rust, Python or Go workspaces",
@@ -396,7 +391,7 @@ fn run_reporting(
         discovery.snapshot_root()?.as_std_path(),
         // Python declarations are captured only when experimentalPythonWorkspaces
         // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
-        turborepo_setup::lock::Ecosystems { rust, python, go },
+        ecosystems,
     )?;
     // Never silently: version-manager files are reported, not read as requests.
     if let Some(report) = turborepo_setup::version_managers::report(
@@ -508,13 +503,34 @@ pub fn frozen_tools_for_tests(
     origin: &str,
     policy: impl Fn() -> Result<OfficialSourcePolicy, turborepo_setup::source_policy::Error>,
 ) -> Result<i32, String> {
+    setup_for_tests(
+        invocation,
+        user_base,
+        origin,
+        &["--frozen", "--tools-only"],
+        policy,
+    )
+}
+
+/// `turbo setup <flags>` from `invocation`, like `frozen_tools_for_tests`, so
+/// binary tests can also create `turbo.lock` from loopback release metadata.
+#[cfg(feature = "test-support")]
+pub fn setup_for_tests(
+    invocation: &std::path::Path,
+    user_base: &std::path::Path,
+    origin: &str,
+    flags: &[&str],
+    policy: impl Fn() -> Result<OfficialSourcePolicy, turborepo_setup::source_policy::Error>,
+) -> Result<i32, String> {
     use turborepo_setup::{
         node_provision::NodeTransport, pnpm_provision::PnpmTransport,
         registry_resolution::RegistryTransport,
     };
-    let words = ["turbo", "setup", "--frozen", "--tools-only", "--cwd"]
+    let words = ["turbo", "setup"]
+        .iter()
+        .chain(flags)
+        .chain(&["--cwd"])
         .map(std::ffi::OsString::from)
-        .into_iter()
         .chain([invocation.as_os_str().to_owned()])
         .collect();
     let args = Args::parse_args(words)?;

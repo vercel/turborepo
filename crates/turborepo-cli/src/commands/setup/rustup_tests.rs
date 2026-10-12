@@ -247,6 +247,27 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
 }
 
 #[test]
+fn managed_run_activates_locked_rust_in_cargo_repositories_by_policy() {
+    let repo = Repo::new(FLAGS);
+    repo.lock();
+    assert_eq!(repo.run(&repo.upstream(false), FROZEN).unwrap(), 0);
+    let (env, bin) = run_overrides(&repo.owned).unwrap();
+    assert!(bin.join("cargo").exists() && bin.join("rustc").exists());
+    assert_eq!(env["RUSTUP_TOOLCHAIN"], format!("1.99.0-{}", triple()));
+    let home = std::path::Path::new(&env["RUSTUP_HOME"]);
+    assert!(home.join("toolchains").is_dir(), "{env:?}");
+    let cargo_home = repo.owned.root().join(".turbo/cargo-home");
+    assert_eq!(std::path::Path::new(&env["CARGO_HOME"]), cargo_home);
+    // Like setup, a Rust skip policy ignores rust-toolchain.toml, so the locked
+    // selection is drift rather than an activation.
+    let skip = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true},"setup":{"rust":{"tools":"skip"}}}"#;
+    fs::write(repo.owned.root().join("turbo.json"), skip).unwrap();
+    let error = run_overrides(&repo.owned).unwrap_err();
+    assert!(error.contains("no longer match turbo.lock"), "{error}");
+    assert!(!cargo_home.exists(), "inspection never creates CARGO_HOME");
+}
+
+#[test]
 fn changed_components_or_targets_are_frozen_drift_before_any_install() {
     let repo = Repo::new(FLAGS);
     repo.lock();

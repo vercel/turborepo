@@ -31,7 +31,12 @@ fn context() -> ExecutionContext {
 }
 
 fn inspect(f: &Fixture) -> Result<Authorization, AuthorizationError> {
-    Authorization::inspect(f.owned.root(), f.owned.home(), context())
+    Authorization::inspect(
+        f.owned.root(),
+        f.owned.home(),
+        context(),
+        Default::default(),
+    )
 }
 
 fn installed() -> (Fixture, Upstream) {
@@ -114,7 +119,7 @@ fn authorization_success_is_readonly_and_rechecks_at_every_use_without_locks() {
                 let entries: Vec<_> = std::env::split_paths(&path).collect();
                 assert_eq!(
                     entries,
-                    vec![plan.path_prepend().to_owned(), "/host/bin".into()]
+                    vec![plan.path_prepend().unwrap().to_owned(), "/host/bin".into()]
                 );
             })
             .unwrap();
@@ -341,7 +346,7 @@ fn missing_user_state_is_not_created_or_replaced_by_ancestor_evidence() {
     let home = f.owned.home().join("never-created");
     let before = snapshot(f.owned.root().parent().unwrap());
     assert!(matches!(
-        Authorization::inspect(f.owned.root(), &home, context()),
+        Authorization::inspect(f.owned.root(), &home, context(), Default::default()),
         Err(AuthorizationError::Untrusted)
     ));
     assert!(!home.exists());
@@ -374,7 +379,9 @@ fn moved_and_same_path_recloned_roots_require_new_setup() {
             moved.as_path()
         };
         assert!(ActivationPlan::inspect(root, context()).is_ok());
-        assert!(Authorization::inspect(root, f.owned.home(), context()).is_err());
+        assert!(
+            Authorization::inspect(root, f.owned.home(), context(), Default::default()).is_err()
+        );
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
         assert_eq!(u.hits(), 3);
     }

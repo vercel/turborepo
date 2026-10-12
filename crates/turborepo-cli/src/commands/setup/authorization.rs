@@ -1,4 +1,4 @@
-//! Read-only strict Node/pnpm authorization prerequisite, not managed-run
+//! Read-only strict managed-tool authorization prerequisite, not managed-run
 //! wiring. The caller owns exact root discovery, feature gating, pre-handoff
 //! compatibility, execution-context qualification, hashing, and task
 //! environment propagation. Do not extract this interface independently of the
@@ -7,7 +7,9 @@
 use std::path::{Path, PathBuf};
 
 use turborepo_setup::{
-    activation::ActivationPlan, execution_identity::ExecutionContext, lock::Snapshot,
+    activation::ActivationPlan,
+    execution_identity::ExecutionContext,
+    lock::{Ecosystems, Installation, Snapshot},
 };
 
 use super::trust::TrustStore;
@@ -92,26 +94,40 @@ pub(crate) struct Authorization {
     root: PathBuf,
     sources: Snapshot,
     context: ExecutionContext,
+    ecosystems: Ecosystems,
     plan: ActivationPlan,
-    trust: TrustStore,
+    trust: Option<TrustStore>,
 }
 
 #[allow(dead_code)]
 impl Authorization {
     /// User-state base must come from the caller's user directory, never config
     /// authored by the repository. Missing state fails closed without creating
-    /// it.
+    /// it. `ecosystems` must be the ones setup captured with (root workspace
+    /// flags and tools policy), or Rust, Python and Go selections drift.
     pub(crate) fn inspect(
         root: &Path,
         user_state_base: &Path,
         context: ExecutionContext,
+        ecosystems: Ecosystems,
     ) -> Result<Self, Error> {
         let root = root.canonicalize()?;
-        let sources = Snapshot::capture(&root)?;
-        let trust = TrustStore::new(user_state_base, &root)?;
-        trust.preflight()?;
-        let plan = ActivationPlan::inspect(&root, context.clone())?;
-        if !trust.authorizes(&plan)? {
+        let sources = Snapshot::capture_with(&root, ecosystems)?;
+        // Only installed tools need setup's trusted record. verify-system tools
+        // activate nothing from the repository and keep no user state.
+        let installed = sources.previous_lock().is_some_and(|lock| {
+            lock.tools()
+                .values()
+                .any(|tool| !matches!(tool.installation, Installation::VerifySystem { .. }))
+        });
+        let trust = installed
+            .then(|| TrustStore::new(user_state_base, &root))
+            .transpose()?;
+        if let Some(trust) = &trust {
+            trust.preflight()?;
+        }
+        let plan = ActivationPlan::inspect_with(&root, context.clone(), ecosystems)?;
+        if !authorized(trust.as_ref(), &plan)? {
             return Err(Error::Untrusted);
         }
         sources.ensure_current()?;
@@ -119,6 +135,7 @@ impl Authorization {
             root,
             sources,
             context,
+            ecosystems,
             plan,
             trust,
         })
@@ -134,17 +151,26 @@ impl Authorization {
         use_plan: impl FnOnce(&ActivationPlan) -> T,
     ) -> Result<T, Error> {
         self.sources.ensure_current()?;
-        let current = ActivationPlan::inspect(&self.root, self.context.clone())?;
+        let current =
+            ActivationPlan::inspect_with(&self.root, self.context.clone(), self.ecosystems)?;
         if current.path_prepend() != self.plan.path_prepend()
             || current.tools() != self.plan.tools()
             || current.snapshot().canonical_identity() != self.plan.snapshot().canonical_identity()
         {
             return Err(Error::Changed);
         }
-        if !self.trust.authorizes(&current)? {
+        if !authorized(self.trust.as_ref(), &current)? {
             return Err(Error::Untrusted);
         }
         self.sources.ensure_current()?;
         Ok(use_plan(&current))
+    }
+}
+
+/// Without a trust store, only a plan that installs nothing is authorized.
+fn authorized(trust: Option<&TrustStore>, plan: &ActivationPlan) -> std::io::Result<bool> {
+    match trust {
+        Some(trust) => trust.authorizes(plan),
+        None => Ok(plan.tools().is_empty()),
     }
 }

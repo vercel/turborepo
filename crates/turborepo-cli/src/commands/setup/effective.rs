@@ -2,7 +2,25 @@
 //! inferred default. Reported before any download or installation.
 
 use turborepo_repository::toolchain::ToolchainId;
-use turborepo_turbo_json::{DependencyPolicy, SetupPolicy, ToolPolicy};
+use turborepo_setup::lock::Ecosystems;
+use turborepo_turbo_json::{DependencyPolicy, FutureFlags, SetupPolicy, ToolPolicy};
+
+/// The non-JavaScript ecosystems whose declarations setup captures: the
+/// workspace flag is on and the root policy manages the toolchain's tools (a
+/// skip policy ignores its declarations). Managed run must capture exactly the
+/// same way, or its Rust, Python and Go selections would read as drift.
+pub(crate) fn ecosystems(flags: &FutureFlags, policy: &SetupPolicy) -> Ecosystems {
+    let managed = |enabled: bool, id: ToolchainId| {
+        flags.experimental_setup
+            && enabled
+            && policy.toolchain(&id).tools.unwrap_or(ToolPolicy::Managed) == ToolPolicy::Managed
+    };
+    Ecosystems {
+        rust: managed(flags.experimental_cargo_workspaces, ToolchainId::RUST),
+        python: managed(flags.experimental_python_workspaces, ToolchainId::PYTHON),
+        go: managed(flags.experimental_go_workspaces, ToolchainId::GO),
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Source {
@@ -183,6 +201,49 @@ mod tests {
                  verifies its tools, so tasks use whatever is on PATH",
             ]
         );
+    }
+
+    #[test]
+    fn ecosystems_need_the_workspace_flag_and_managed_tools() {
+        let all = FutureFlags {
+            experimental_setup: true,
+            experimental_cargo_workspaces: true,
+            experimental_python_workspaces: true,
+            experimental_go_workspaces: true,
+            ..Default::default()
+        };
+        let every = Ecosystems {
+            rust: true,
+            python: true,
+            go: true,
+        };
+        assert_eq!(ecosystems(&all, &policy("{}")), every);
+        // A default skip applies to every toolchain; a toolchain override wins.
+        let skip = policy(r#"{"tools":"skip","rust":{"tools":"managed"}}"#);
+        let rust = Ecosystems {
+            rust: true,
+            ..Default::default()
+        };
+        assert_eq!(ecosystems(&all, &skip), rust);
+        let rust_skip = policy(r#"{"rust":{"tools":"skip"}}"#);
+        assert_eq!(
+            ecosystems(&all, &rust_skip),
+            Ecosystems {
+                rust: false,
+                ..every
+            }
+        );
+        // Flags gate even managed tools, and nothing applies without setup.
+        let no_cargo = FutureFlags {
+            experimental_cargo_workspaces: false,
+            ..all
+        };
+        assert!(!ecosystems(&no_cargo, &policy("{}")).rust);
+        let disabled = FutureFlags {
+            experimental_setup: false,
+            ..all
+        };
+        assert_eq!(ecosystems(&disabled, &policy("{}")), Ecosystems::default());
     }
 
     #[test]

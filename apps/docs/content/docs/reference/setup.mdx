@@ -37,7 +37,7 @@ You can run `turbo setup` from any directory in your repository. It walks up to 
 
 - A root `turbo.json` or `turbo.jsonc` that sets `futureFlags.experimentalSetup` to `true`.
 - macOS or Linux with glibc, on x64 or arm64.
-- A Git repository where `.turbo/` is ignored and untracked. Add `/.turbo/` to your `.gitignore`.
+- In a Git repository, `.turbo/` must be ignored and untracked. Add `/.turbo/` to your `.gitignore`. Outside a Git repository, such as in [`turbo prune --docker` output](/docs/guides/tools/docker#managed-toolchains), `turbo setup` skips this check.
 - A Node.js declaration at the repository root.
 - No npm configuration or mirror overrides. See [troubleshooting](#official-only-setup-rejects-npm-configuration).
 
@@ -185,7 +185,7 @@ Add `--tools-only`, and remove `--plan`, `--no-lock`, and `--offline`. Nothing w
 storage must be untracked and Git-ignored; add /.turbo/ to .gitignore
 ```
 
-Add `/.turbo/` to your root `.gitignore`. If files under `.turbo/` are tracked, remove them from Git with `git rm -r --cached .turbo`. This error also appears outside of a Git repository.
+Add `/.turbo/` to your root `.gitignore`. If files under `.turbo/` are tracked, remove them from Git with `git rm -r --cached .turbo`. Outside a Git repository, `turbo setup` skips this check and prints `No Git repository found; skipped checking that .turbo/ is Git-ignored.`
 
 ### Official-only setup rejects npm configuration
 

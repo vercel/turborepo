@@ -204,7 +204,7 @@ In a managed repository, a committed `turbo.lock` is a global dependency for [`-
 
 ### Pruning
 
-In a managed repository, [`turbo prune`](/docs/reference/prune) copies `turbo.lock`, the declaration files it records, and the root `turbo.json` into the output. With `--docker`, both `json/` and `full/` receive them.
+In a managed repository, [`turbo prune`](/docs/reference/prune) copies `turbo.lock`, the declaration files it records, and the root `turbo.json` into the output. With `--docker`, both `json/` and `full/` receive them. To build pruned output in Docker, see [Docker](/docs/guides/tools/docker#managed-toolchains).
 
 ## How `turbo run` uses managed tools
 
@@ -266,7 +266,7 @@ This experimental release has these limitations:
 - **Exact pnpm versions.** pnpm must be pinned to an exact version. Node.js can use ranges and aliases.
 - **macOS and Linux with glibc.** Windows and musl-based Linux distributions, such as Alpine, aren't supported.
 - **Official sources only.** Tools download from `nodejs.org` and the public npm registry. Mirrors and npm configuration aren't supported yet, and `turbo setup` stops if it finds any. See [troubleshooting](/docs/reference/setup#official-only-setup-rejects-npm-configuration).
-- **A Git repository is required.** `turbo setup` uses Git to confirm that `.turbo/` is ignored, so it can't install tools outside a Git repository, such as in a Docker build of `turbo prune` output.
+- **One `turbo setup` per Docker `RUN` instruction.** Each `RUN` instruction that uses the managed tools must run `turbo setup` first. See [Docker](/docs/guides/tools/docker#managed-toolchains).
 - **No repository-local `turbo`.** See [Repository-local `turbo`](#repository-local-turbo).
 - **No `turbo watch`.** [`turbo watch`](/docs/reference/watch) doesn't use managed tools yet.
 - **Not yet implemented.** [`--plan`](/docs/reference/setup#--plan), [`--no-lock`](/docs/reference/setup#--no-lock), and [`--offline`](/docs/reference/setup#--offline) exit with an error.
