@@ -450,12 +450,16 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             // `--no-lock --offline` stays a pending combination (no offline
             // transport for --no-lock).
             if flags.contains(&"--offline") && !flags.contains(&"--no-lock") {
-                assert!(matches!(result, Err(Error::Offline(_))));
+                // Nothing trusted (#14518) or cached (#14540): every artifact
+                // is listed and nothing is installed, though the cache path
+                // may create setup's lock files.
+                assert!(matches!(result, Err(Error::OfflineMissing(_))));
+                assert!(f.manifest().is_none());
             } else {
                 assert!(matches!(result, Err(Error::NotImplemented)));
+                assert!(!f.owned.root().join(".turbo").exists());
             }
             assert_eq!(u.hits(), 0);
-            assert!(!f.owned.root().join(".turbo").exists());
         }
         f.no_execution();
     }

@@ -432,16 +432,27 @@ fn run_reporting(
             );
             return Ok(0);
         }
+        // Plain offline setup first reuses the trusted installation without
+        // writes (#14518). What trusted reuse cannot authorize falls through to
+        // verified cached bytes (#14540), which install what is cached or list
+        // every missing artifact. Offline --force always takes the cache path.
         // Offline repeats and clone-local --no-lock report their own skipped
-        // dependencies. Offline --force always takes the cache-backed path.
+        // dependencies.
         (Mode::Provision, _) if request.offline && !request.force => {
-            return offline::run(
+            match offline::run(
                 &discovery,
-                snapshot,
+                &snapshot,
                 transports.as_ref(),
-                preflight,
+                &preflight,
                 request.force,
-            );
+            ) {
+                Err(Error::Offline(_))
+                    if offline::cache_may_repair(&discovery, transports.as_ref())? =>
+                {
+                    provision::run(&discovery, snapshot, &request, transports, preflight)?
+                }
+                result => return result,
+            }
         }
         (Mode::Provision, _) if request.lock == LockMode::NoLock => {
             return no_lock::run(&discovery, snapshot, transports, preflight);

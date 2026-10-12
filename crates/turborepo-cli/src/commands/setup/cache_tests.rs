@@ -285,8 +285,13 @@ fn offline_never_creates_refreshes_or_re_resolves_a_lock() {
             }
             _ => &["--tools-only", "--no-frozen", "--offline", "--update-lock"],
         };
+        // Plain offline tries trusted reuse first (#14518), which names the
+        // drifted declaration before the cache path could.
         assert!(
-            matches!(f.run(&u, flags), Err(Error::Unsupported(_))),
+            matches!(
+                f.run(&u, flags),
+                Err(Error::Unsupported(_) | Error::LockDiagnostics(_))
+            ),
             "{case}"
         );
         assert_eq!(u.hits(), 0);

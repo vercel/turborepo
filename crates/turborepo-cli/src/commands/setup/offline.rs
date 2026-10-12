@@ -14,7 +14,7 @@ pub enum Error {
     #[error(
         "offline setup cannot reuse the locked installation: {reason}\nRequired artifacts not \
          verified for offline reuse/repair:\n{artifacts}\nRun turbo setup --tools-only without \
-         --offline to verify or repair them. Offline download-cache repair is not implemented."
+         --offline to verify or repair them."
     )]
     Unavailable {
         #[source]
@@ -30,9 +30,32 @@ fn unavailable(reason: impl std::error::Error + Send + Sync + 'static, artifacts
     }
 }
 
+/// Whether verified cached bytes (#14540) may still provide what trusted reuse
+/// could not authorize. The cache path needs the same safe storage and user
+/// state; without them it fails the same way, so this module's report (the
+/// cause plus every required artifact) is final.
+pub(super) fn cache_may_repair(
+    discovery: &Discovery,
+    transports: Option<&provision::Transports>,
+) -> Result<bool, SetupError> {
+    let root = discovery.snapshot_root()?.as_std_path();
+    if provision::storage(root).is_err() {
+        return Ok(false);
+    }
+    let base = match transports {
+        Some(transports) => transports.trust_base().ok(),
+        None => dirs_next::data_local_dir(),
+    };
+    Ok(base.is_some_and(|base| {
+        super::trust::TrustStore::new(&base, root)
+            .and_then(|trust| trust.preflight())
+            .is_ok()
+    }))
+}
+
 pub(super) fn run(
     discovery: &Discovery,
-    sources: Snapshot,
+    sources: &Snapshot,
     transports: Option<&provision::Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
     force: bool,
@@ -57,7 +80,7 @@ pub(super) fn run(
     ))?;
     // Reuse exactly the same native constraints, authored integrity and host
     // mappings as locked provisioning, before looking at any local inventory.
-    provision::plans(&sources, lock)?;
+    provision::plans(sources, lock)?;
     let artifacts = lock
         .tools()
         .iter()
