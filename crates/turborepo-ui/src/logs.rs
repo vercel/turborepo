@@ -90,10 +90,7 @@ impl<W: Write> Write for LogWriter<W> {
     }
 }
 
-pub fn replay_logs<W: Write>(
-    output: W,
-    log_file_name: &AbsoluteSystemPath,
-) -> Result<(), Error> {
+pub fn replay_logs<W: Write>(output: W, log_file_name: &AbsoluteSystemPath) -> Result<(), Error> {
     debug!("start replaying logs");
 
     let log_file = File::open(log_file_name).map_err(|err| {
