@@ -364,24 +364,36 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--__test-run"],
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        // Plain setup provisions like --tools-only, so it reaches the same gate.
-        let supported = !words.iter().any(|word| {
-            matches!(
-                *word,
-                "--plan" | "--check" | "--offline" | "--no-lock" | "--__test-run"
-            )
-        });
+        // Plain setup and --check act like --tools-only, so they reach the same gate.
+        let supported = !words
+            .iter()
+            .any(|word| matches!(*word, "--plan" | "--offline" | "--no-lock" | "--__test-run"));
         // A Cargo workspace without a root rust-toolchain file declares no tool.
-        let text = failure(
-            root,
-            &words,
-            false,
-            match (supported, QUALIFIED) {
-                (false, _) => PENDING,
-                (true, true) => "a native Node declaration is required",
-                (true, false) => UNQUALIFIED,
-            },
-        );
+        let text = if supported && words.contains(&"--check") {
+            let (code, text) = invoke(root, &words, false);
+            assert_eq!(code, 1, "{text}");
+            let expected = if QUALIFIED {
+                "managed activation requires turbo.lock"
+            } else {
+                UNQUALIFIED
+            };
+            assert!(
+                diagnostic_contains(&text, expected) || external_system_policy_blocked(code, &text),
+                "{text}"
+            );
+            text
+        } else {
+            failure(
+                root,
+                &words,
+                false,
+                match (supported, QUALIFIED) {
+                    (false, _) => PENDING,
+                    (true, true) => "a native Node declaration is required",
+                    (true, false) => UNQUALIFIED,
+                },
+            )
+        };
         if !supported {
             assert!(text.contains("no tasks were run"), "{text}");
         }
@@ -430,8 +442,8 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 let text = failure(root, words, false, "failed to parse Cargo.toml");
                 assert_diagnostic_path(&text, &root.join("Cargo.toml"));
                 assert!(!text.contains(PENDING), "{text}");
-            } else if words.len() == 1 {
-                // Plain setup reaches JS provisioning without parsing Cargo.
+            } else if !words.contains(&"--plan") {
+                // Plain setup and check reach JS tools without parsing Cargo.
                 let (code, text) = invoke(root, words, false);
                 assert_eq!(code, 1, "{text}");
                 assert!(!text.contains("Cargo"), "{text}");
@@ -1473,42 +1485,57 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
     monitor.set_nonblocking(true).unwrap();
     let proxy = format!("http://{}", monitor.local_addr().unwrap());
-    let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
-        .env_clear()
-        .current_dir(root)
-        .args(["setup", "--frozen"])
-        .env("PATH", bin.path())
-        .env("HOME", root.join("home"))
-        .env("TURBO_TELEMETRY_DISABLED", "1")
-        .env("HTTP_PROXY", &proxy)
-        .env("HTTPS_PROXY", &proxy)
-        .env("ALL_PROXY", &proxy)
-        .env("NO_PROXY", "")
-        .output()
-        .unwrap();
-    assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-    .split_whitespace()
-    .collect::<Vec<_>>()
-    .join(" ");
-    let code = output.status.code().unwrap();
-    if external_system_policy_blocked(code, &text) {
-        return;
+    // Plain --check checks the same tools and never claims dependency readiness.
+    for (mode, outcome, skipped) in [
+        (
+            "--frozen",
+            "reused",
+            "dependency installation is not supported yet",
+        ),
+        (
+            "--check",
+            "ready",
+            "dependency checks are not supported yet",
+        ),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
+            .env_clear()
+            .current_dir(root)
+            .args(["setup", mode])
+            .env("PATH", bin.path())
+            .env("HOME", root.join("home"))
+            .env("TURBO_TELEMETRY_DISABLED", "1")
+            .env("HTTP_PROXY", &proxy)
+            .env("HTTPS_PROXY", &proxy)
+            .env("ALL_PROXY", &proxy)
+            .env("NO_PROXY", "")
+            .output()
+            .unwrap();
+        assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+        let code = output.status.code().unwrap();
+        if external_system_policy_blocked(code, &text) {
+            return;
+        }
+        assert_eq!(code, 0, "{text}");
+        assert!(
+            text.contains(&format!("node 24.0.0: {outcome}"))
+                && text.contains(&format!("pnpm 10.0.0: {outcome}")),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!("Dependencies skipped ({skipped})")),
+            "{text}"
+        );
+        assert!(!root.join("probe-ran").exists() && !root.join("node_modules").exists());
     }
-    assert_eq!(code, 0, "{text}");
-    assert!(
-        text.contains("node 24.0.0: reused") && text.contains("pnpm 10.0.0: reused"),
-        "{text}"
-    );
-    assert!(
-        text.contains("Dependencies skipped (dependency installation is not supported yet)"),
-        "{text}"
-    );
-    assert!(!root.join("probe-ran").exists() && !root.join("node_modules").exists());
 }
 
 #[test]

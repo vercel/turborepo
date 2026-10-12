@@ -379,9 +379,11 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
         dispatch(&["--frozen", "--tools-only"]),
         Err(setup::Error::Unsupported(_))
     ));
-    for flags in [&["--plan"][..], &["--check"], &["--__test-run"]] {
+    for flags in [&["--plan"][..], &["--__test-run"]] {
         assert!(matches!(dispatch(flags), Err(setup::Error::NotImplemented)));
     }
+    // Plain --check is a read-only tools check; nothing is installed here.
+    assert!(matches!(dispatch(&["--check"]), Err(e) if !matches!(e, setup::Error::NotImplemented)));
     assert!(
         Args::parse_args(
             ["turbo", "setup", "--frozen", "--update-lock"]
