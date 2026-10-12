@@ -1,13 +1,15 @@
 #!/bin/sh
-# Release smoke for a packaged Linux standalone turbo. It installs the archive
-# with the POSIX installer from staged release assets while Node.js and
+# Release smoke for a packaged Linux or macOS standalone turbo. It installs the
+# archive with the POSIX installer from staged release assets while Node.js and
 # JavaScript package managers are absent from PATH, then checks that setup
-# selects GNU artifacts on this glibc host, runs the managed setup journey
-# (standalone-setup-journey.sh) against a loopback fixture mirror, and rejects
+# selects this host's artifacts (GNU ones on a glibc host) and runs the managed
+# setup journey (standalone-setup-journey.sh) against a loopback fixture
+# mirror. On macOS, with TURBO_SMOKE_SIGNING_IDENTIFIER set, the installed copy
+# must still carry that valid signature. On Linux, the same binary must reject
 # Alpine (musl) with guidance. turbo itself runs without reachable network
 # proxies.
 #
-# Usage: scripts/standalone-linux-smoke.sh <version> [standalone-artifacts]
+# Usage: scripts/standalone-posix-smoke.sh <version> [standalone-artifacts]
 # The fixture mirror runs on the runner's Node.js, outside turbo's PATH. The
 # Alpine step downloads a pinned minirootfs and needs sudo, unshare, chroot.
 set -eu
@@ -15,7 +17,7 @@ set -eu
 umask 022
 
 fail() {
-  printf 'standalone Linux smoke: %s\n' "$1" >&2
+  printf 'standalone smoke: %s\n' "$1" >&2
   exit 1
 }
 
@@ -28,7 +30,7 @@ contains() {
 }
 
 version=${1:-}
-[ -n "$version" ] || fail 'usage: standalone-linux-smoke.sh <version> [standalone-artifacts]'
+[ -n "$version" ] || fail 'usage: standalone-posix-smoke.sh <version> [standalone-artifacts]'
 assets=$(cd "${2:-standalone-artifacts}" && pwd)
 installer=$(cd "$(dirname "$0")/.." && pwd)/apps/docs/public/install
 arch=$(uname -m)
@@ -41,13 +43,15 @@ case "$(uname -s):$arch" in
     target=aarch64-unknown-linux-musl selector=linux-arm64-gnu node=linux-arm64
     alpine=821565fa8f3953eefd12497b166b4b50add2f7c57fb312e75862f5867e06fefe
     ;;
+  Darwin:arm64) target=aarch64-apple-darwin selector=macos-arm64 node=darwin-arm64 ;;
+  Darwin:x86_64) target=x86_64-apple-darwin selector=macos-x64 node=darwin-x64 ;;
   *) fail "unsupported smoke host: $(uname -s)/$arch" ;;
 esac
 archive=turbo-$version-$target.tar.gz
 [ -f "$assets/$archive" ] && [ -f "$assets/SHA256SUMS" ] ||
   fail "missing $archive or SHA256SUMS in $assets"
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/turbo-linux-smoke.XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/turbo-standalone-smoke.XXXXXX")
 cleanup() {
   if [ -d "$work/alpine" ]; then sudo rm -rf "$work/alpine"; fi
   rm -rf "$work"
@@ -58,10 +62,13 @@ trap cleanup 0
 # assets for the installer's release URLs and rejects every other request.
 tools=$work/tools
 mkdir "$tools" "$work/home" "$work/tmp"
-for utility in sh tar gzip awk grep sed head mktemp mkdir cp chmod mv ln rm tr sha256sum uname; do
+for utility in sh tar gzip awk grep sed head mktemp mkdir cp chmod mv ln rm tr uname; do
   path=$(command -v "$utility") || fail "runner is missing $utility"
   ln -s "$path" "$tools/$utility"
 done
+# The installer takes either SHA-256 utility; older macOS has only shasum.
+path=$(command -v sha256sum || command -v shasum) || fail 'runner is missing sha256sum or shasum'
+ln -s "$path" "$tools/${path##*/}"
 cat >"$tools/curl" <<'EOF'
 #!/bin/sh
 set -eu
@@ -119,9 +126,17 @@ contains "$output" "Installed turbo $version at $turbo" || fail "unexpected inst
 reported=$(hermetic "$turbo" --version) || fail 'turbo --version failed'
 [ "$reported" = "$version" ] || fail "turbo --version reported $reported, expected $version"
 
+# Packaging and installation keep the signed, notarized bytes intact.
+if [ -n "${TURBO_SMOKE_SIGNING_IDENTIFIER:-}" ]; then
+  codesign --verify --strict --verbose=2 "$turbo" || fail 'the installed turbo fails codesign verification'
+  details=$(codesign -dv "$turbo" 2>&1)
+  contains "$details" "Identifier=$TURBO_SMOKE_SIGNING_IDENTIFIER" ||
+    fail "the installed turbo is not signed as $TURBO_SMOKE_SIGNING_IDENTIFIER: $details"
+fi
+
 # Read-only setup checks need no network. Reaching turbo.lock proves this
-# musl-static binary qualified the glibc host; the missing installation proves
-# it selected the GNU Node artifact rather than rejecting the target.
+# binary qualified the host (a glibc host for the musl-static Linux build); the
+# missing installation proves it selected this host's Node artifact.
 repo=$work/repo
 mkdir "$repo"
 printf '%s\n' '{"futureFlags":{"experimentalSetup":true}}' >"$repo/turbo.json"
@@ -145,9 +160,13 @@ EOF
 check 'managed installation is missing; run turbo setup'
 [ ! -e "$repo/.turbo" ] || fail 'setup --check wrote .turbo'
 
-# The musl-static binary provisions and activates GNU artifacts on this host.
+# Managed setup and plain turbo run with this host's artifacts.
 mirror_node=$(command -v node) || fail 'the fixture mirror needs Node.js on the runner'
 sh "$(dirname "$0")/standalone-setup-journey.sh" "$turbo" "$mirror_node"
+if [ "$(uname -s)" = Darwin ]; then
+  printf 'Standalone smoke passed for turbo %s (%s).\n' "$version" "$target"
+  exit 0
+fi
 
 # Alpine: the same binary must refuse managed tools on musl, without network.
 release=3.22.6
@@ -169,4 +188,4 @@ if ! contains "$output" 'managed tools are not supported on musl Linux hosts' ||
   fail "unexpected Alpine result: $output"
 fi
 
-printf 'Standalone Linux smoke passed for turbo %s (%s).\n' "$version" "$target"
+printf 'Standalone smoke passed for turbo %s (%s).\n' "$version" "$target"

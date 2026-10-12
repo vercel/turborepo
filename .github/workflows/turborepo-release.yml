@@ -518,6 +518,30 @@ jobs:
         shell: bash
         run: rm -f "${APPLE_CERT_PATH:-}" "${APPLE_API_KEY_PATH:-}"
 
+      # Node.js runs only the loopback fixture mirror; turbo's PATH has none.
+      - name: Setup Node for the macOS standalone smoke
+        if: ${{ matrix.settings.target == 'aarch64-apple-darwin' }}
+        uses: ./.github/actions/setup-node
+        with:
+          package-install: false
+
+      # Tests the signed, notarized bytes as the standalone archive ships them.
+      # Intel macOS is unclaimed: no workflow has an Intel macOS runner.
+      - name: Smoke-test the macOS arm64 standalone install, managed setup, and run
+        if: ${{ matrix.settings.target == 'aarch64-apple-darwin' }}
+        shell: bash
+        env:
+          VERSION: ${{ needs.stage.outputs.version }}
+          TURBO_SMOKE_SIGNING_IDENTIFIER: com.vercel.turbo
+        run: |
+          set -euo pipefail
+          assets="$RUNNER_TEMP/standalone-smoke"
+          archive="turbo-$VERSION-aarch64-apple-darwin.tar.gz"
+          mkdir -p "$assets"
+          COPYFILE_DISABLE=1 tar --no-xattrs -czf "$assets/$archive" -C target/aarch64-apple-darwin/release-turborepo turbo
+          (cd "$assets" && shasum -a 256 "$archive" > SHA256SUMS)
+          sh scripts/standalone-posix-smoke.sh "$VERSION" "$assets"
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -556,7 +580,7 @@ jobs:
 
       # Node.js runs only the loopback fixture mirror; turbo's PATH has none.
       - name: Smoke-test the Linux x64 standalone install, managed setup, and run
-        run: sh scripts/standalone-linux-smoke.sh "${{ needs.stage.outputs.version }}" standalone-artifacts
+        run: sh scripts/standalone-posix-smoke.sh "${{ needs.stage.outputs.version }}" standalone-artifacts
 
       - name: Upload standalone archives
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
