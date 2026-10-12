@@ -22,7 +22,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_types::{DryRunMode, EngineInfo, EnvMode, HashTrackerInfo, RunOptsInfo};
-use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln};
+use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cwriteln};
 
 use crate::{
     GlobalHashSummary, SCMState, TaskTracker,
@@ -481,9 +481,14 @@ impl<'a> RunSummary<'a> {
     ) -> Result<(), Error> {
         self.normalize();
 
+        // Render everything into one buffered handle on stdout. Writing
+        // through `io::stdout()` directly made every line its own write.
+        let stdout = io::stdout();
+        let mut out = io::BufWriter::with_capacity(TEXT_OUTPUT_BUFFER_BYTES, stdout.lock());
+
         if self.monorepo {
-            println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
-            let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
+            writeln!(out, "\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"))?;
+            let mut tab_writer = TabWriter::new(&mut out).minwidth(0).padding(1);
             writeln!(tab_writer, "Name\tPath\t")?;
             for pkg in &self.packages {
                 if matches!(pkg, PackageName::Root) {
@@ -501,8 +506,8 @@ impl<'a> RunSummary<'a> {
 
         let file_count = self.global_hash_summary.files.len();
 
-        let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
-        cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
+        cwriteln!(out, ui, BOLD_CYAN, "\nGlobal Hash Inputs")?;
+        let mut tab_writer = TabWriter::new(&mut out).minwidth(0).padding(1);
         cwriteln!(tab_writer, ui, GREY, "  Global Files\t=\t{}", file_count)?;
         cwriteln!(
             tab_writer,
@@ -593,17 +598,17 @@ impl<'a> RunSummary<'a> {
         )?;
 
         tab_writer.flush()?;
-        println!();
-        cprintln!(ui, BOLD_CYAN, "Tasks to Run");
+        writeln!(out)?;
+        cwriteln!(out, ui, BOLD_CYAN, "Tasks to Run")?;
 
         for task in &self.tasks {
             if self.monorepo {
-                cprintln!(ui, BOLD, "{}", task.task_id);
+                cwriteln!(out, ui, BOLD, "{}", task.task_id)?;
             } else {
-                cprintln!(ui, BOLD, "{}", task.task_id.task());
+                cwriteln!(out, ui, BOLD, "{}", task.task_id.task())?;
             };
 
-            let mut tab_writer = TabWriter::new(io::stdout()).padding(1).minwidth(0);
+            let mut tab_writer = TabWriter::new(&mut out).padding(1).minwidth(0);
             cwriteln!(tab_writer, ui, GREY, "  Task\t=\t{}", task.task)?;
             if self.monorepo {
                 cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", &task.package)?;
@@ -766,6 +771,7 @@ impl<'a> RunSummary<'a> {
             tab_writer.flush()?;
         }
 
+        out.flush()?;
         Ok(())
     }
 
@@ -844,6 +850,10 @@ impl<'a> RunSummary<'a> {
         Ok(())
     }
 }
+
+/// Buffer size for the `--dry` text rendering. Its output is a few lines per
+/// task, so a large monorepo's dry run prints megabytes.
+const TEXT_OUTPUT_BUFFER_BYTES: usize = 64 * 1024;
 
 fn write_pretty_json(writer: &mut impl Write, value: &impl Serialize) -> Result<(), Error> {
     serde_json::to_writer_pretty(&mut *writer, value)?;
