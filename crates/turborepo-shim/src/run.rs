@@ -15,7 +15,6 @@ use turbo_updater::{UpdateCheckConfig, display_update_check};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
-    package_manager,
     package_manager::PackageManager,
 };
 use turborepo_ui::ColorConfig;
@@ -241,7 +240,7 @@ where
     if is_turbo_binary_path_set() {
         let repo_state = {
             let _span = tracing::info_span!("repo_inference").entered();
-            match RepoState::infer(&args.cwd) {
+            match RepoState::infer_with_config(&args.cwd, args.root_turbo_json.as_deref()) {
                 Ok(state) => state,
                 Err(e) => return ShimResult::ShimError(e.into()),
             }
@@ -252,20 +251,21 @@ where
 
     let repo_result = {
         let _span = tracing::info_span!("repo_inference").entered();
-        RepoState::infer(&args.cwd)
+        RepoState::infer_with_config(&args.cwd, args.root_turbo_json.as_deref())
     };
     match repo_result {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
             run_correct_turbo(runtime, repo_state, args, color_config)
         }
-        Err(err) => {
-            // If we cannot infer, we still run global turbo. This allows for global
-            // commands like login/logout/link/unlink to still work
+        Err(err @ turborepo_repository::inference::Error::NotFound(_)) => {
+            // A missing repository can still run global turbo. Malformed repository
+            // configuration must retain its inference error instead of falling back.
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
             run_cli(runtime, None, color_config)
         }
+        Err(err) => ShimResult::ShimError(err.into()),
     }
 }
 
@@ -303,7 +303,10 @@ where
     S: ChildSpawner,
     V: VersionProvider,
 {
-    let package_manager = repo_state.package_manager.as_ref();
+    let package_manager = repo_state
+        .javascript
+        .as_ref()
+        .and_then(|javascript| javascript.package_manager.as_ref().ok());
 
     if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
         let config = runtime
@@ -349,18 +352,20 @@ where
         let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
             .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
 
-        let declared_version = repo_state
-            .root_package_json
-            .dependencies
-            .as_ref()
-            .and_then(|deps| deps.get("turbo"))
-            .or_else(|| {
-                repo_state
-                    .root_package_json
-                    .dev_dependencies
-                    .as_ref()
-                    .and_then(|deps| deps.get("turbo"))
-            });
+        let declared_version = repo_state.javascript.as_ref().and_then(|javascript| {
+            javascript
+                .package_json
+                .dependencies
+                .as_ref()
+                .and_then(|deps| deps.get("turbo"))
+                .or_else(|| {
+                    javascript
+                        .package_json
+                        .dev_dependencies
+                        .as_ref()
+                        .and_then(|deps| deps.get("turbo"))
+                })
+        });
 
         if should_warn_on_global {
             let message = if let Some(declared_version) = declared_version {
@@ -470,9 +475,9 @@ where
 
 fn package_manager_for_download(repo_state: &RepoState) -> PackageManager {
     repo_state
-        .package_manager
+        .javascript
         .as_ref()
-        .ok()
+        .and_then(|javascript| javascript.package_manager.as_ref().ok())
         .cloned()
         // Also support repositories identifying their manager only by a lockfile.
         .or_else(|| PackageManager::detect_package_manager(&repo_state.root).ok())
@@ -644,7 +649,7 @@ fn try_check_for_updates(
     args: &ShimArgs,
     current_version: &str,
     config: &ShimConfigurationOptions,
-    package_manager: Result<&PackageManager, &package_manager::Error>,
+    package_manager: Option<&PackageManager>,
 ) {
     let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
 
@@ -675,6 +680,8 @@ fn try_check_for_updates(
 
 #[cfg(test)]
 mod tests {
+    use turborepo_repository::inference::JavaScriptRoot;
+
     use super::*;
     use crate::DefaultChildSpawner;
 
@@ -707,6 +714,181 @@ mod tests {
         fn get_version(&self) -> &'static str {
             "2.0.0"
         }
+    }
+
+    struct InferenceRunner {
+        expected_root: Option<AbsoluteSystemPathBuf>,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl TurboRunner for InferenceRunner {
+        type Error = std::io::Error;
+
+        fn is_global_command(&self) -> bool {
+            false
+        }
+
+        fn run(&self, repo_state: Option<RepoState>, _ui: ColorConfig) -> Result<i32, Self::Error> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match (&self.expected_root, repo_state) {
+                (Some(root), Some(state)) => {
+                    assert_eq!(&state.root, root);
+                    assert_eq!(state.mode, RepoMode::MultiPackage);
+                    assert!(state.javascript.is_none());
+                }
+                (None, None) => {}
+                _ => panic!("unexpected repository passed to CLI runner"),
+            }
+            Ok(0)
+        }
+    }
+
+    struct UnexpectedChildSpawner;
+
+    impl ChildSpawner for UnexpectedChildSpawner {
+        fn spawn(&self, _command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+            panic!("shim boundary tests must not spawn a child process")
+        }
+    }
+
+    fn inference_runtime(
+        expected_root: Option<AbsoluteSystemPathBuf>,
+    ) -> ShimRuntime<InferenceRunner, MockConfigProvider, UnexpectedChildSpawner, MockVersionProvider>
+    {
+        ShimRuntime::new(
+            InferenceRunner {
+                expected_root,
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            },
+            MockConfigProvider,
+            UnexpectedChildSpawner,
+            MockVersionProvider,
+        )
+    }
+
+    fn boundary_args(invocation_dir: &AbsoluteSystemPathBuf, extra: &[&str]) -> ShimArgs {
+        ShimArgs::parse_from_iter(
+            invocation_dir.clone(),
+            ["turbo", "run", "build", "--no-update-notifier"]
+                .into_iter()
+                .chain(extra.iter().copied())
+                .map(str::to_owned),
+        )
+        .unwrap()
+    }
+
+    #[test_case::test_case("experimentalCargoWorkspaces", "Cargo.toml", "[workspace]\nmembers = []\n" ; "cargo")]
+    #[test_case::test_case("experimentalPythonWorkspaces", "pyproject.toml", "[tool.uv.workspace]\nmembers = []\n" ; "python")]
+    #[test_case::test_case("experimentalGoWorkspaces", "go.work", "go 1.24\n" ; "go")]
+    fn native_root_reaches_cli_without_package_json(flag: &str, manifest: &str, contents: &str) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(manifest)
+            .create_with_contents(contents.as_bytes())
+            .unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(format!(r#"{{"futureFlags":{{"{flag}":true}}}}"#).as_bytes())
+            .unwrap();
+        assert!(!root.join_component("package.json").exists());
+
+        let runtime = inference_runtime(Some(root.clone()));
+        assert!(matches!(
+            run_with_args(&runtime, boundary_args(&root, &[])),
+            ShimResult::Ok(0)
+        ));
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[test_case::test_case(&["--cwd", "native", "--root-turbo-json", "custom.json"] ; "separate values")]
+    #[test_case::test_case(&["--cwd=native", "--root-turbo-json=custom.json"] ; "equals values")]
+    fn custom_config_is_resolved_from_invocation_not_cwd(extra: &[&str]) {
+        let tmp = tempfile::tempdir().unwrap();
+        let invocation_dir = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let root = invocation_dir.join_component("native");
+        root.create_dir_all().unwrap();
+        root.join_component("Cargo.toml")
+            .create_with_contents(b"[workspace]\nmembers = []\n")
+            .unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(b"{}")
+            .unwrap();
+        let config = invocation_dir.join_component("custom.json");
+        config
+            .create_with_contents(br#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#)
+            .unwrap();
+        let args = boundary_args(&invocation_dir, extra);
+        assert_eq!(args.cwd, root);
+        assert_eq!(args.root_turbo_json.as_ref(), Some(&config));
+
+        let runtime = inference_runtime(Some(root));
+        assert!(matches!(run_with_args(&runtime, args), ShimResult::Ok(0)));
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[test]
+    fn missing_repository_falls_back_to_cli() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let runtime = inference_runtime(None);
+        assert!(matches!(
+            run_with_args(&runtime, boundary_args(&root, &[])),
+            ShimResult::Ok(0)
+        ));
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[test_case::test_case("turbo.json", b"{", b"[workspace]\nmembers = []\n", &[] ; "malformed config")]
+    #[test_case::test_case("custom.json", b"{", b"[workspace]\nmembers = []\n", &["--root-turbo-json=custom.json"] ; "malformed custom config")]
+    #[test_case::test_case("turbo.json", br#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#, b"[workspace", &[] ; "malformed native manifest")]
+    fn malformed_inference_does_not_run_cli(
+        config_name: &str,
+        config: &[u8],
+        manifest: &[u8],
+        extra: &[&str],
+    ) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(config_name)
+            .create_with_contents(config)
+            .unwrap();
+        root.join_component("Cargo.toml")
+            .create_with_contents(manifest)
+            .unwrap();
+        let runtime = inference_runtime(None);
+        match run_with_args(&runtime, boundary_args(&root, extra)) {
+            ShimResult::ShimError(Error::Inference(err)) => {
+                assert!(!matches!(
+                    err,
+                    turborepo_repository::inference::Error::NotFound(_)
+                ));
+            }
+            _ => panic!("malformed inference must preserve its error"),
+        }
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
     }
 
     #[test]
@@ -773,8 +955,10 @@ mod tests {
         let repo = RepoState {
             root: root.clone(),
             mode: RepoMode::SinglePackage,
-            root_package_json: Default::default(),
-            package_manager: Ok(PackageManager::Bun),
+            javascript: Some(JavaScriptRoot {
+                package_json: Default::default(),
+                package_manager: Ok(PackageManager::Bun),
+            }),
         };
         for (version, expected) in [
             (

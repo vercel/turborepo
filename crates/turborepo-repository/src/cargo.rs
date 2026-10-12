@@ -736,6 +736,36 @@ fn join_prefix(prefix: &str, rel: &str) -> String {
     }
 }
 
+/// Input globs for tool configuration that applies to a crate from the
+/// repository root and from every directory between the root and the crate:
+/// Clippy reads `clippy.toml` from the linted crate's manifest directory
+/// upward, and rustfmt resolves `rustfmt.toml` per formatted file. Unlike
+/// Cargo's own config, neither depends on the task's working directory.
+/// `crate_directories` are repository-relative; the crate's own directory is
+/// already covered by its sources.
+fn ancestor_config_globs(
+    path_to_root: &str,
+    crate_directories: &[String],
+    files: &[&str],
+) -> Vec<String> {
+    let mut directories = BTreeSet::from([String::new()]);
+    for directory in crate_directories {
+        let mut ancestor = directory.as_str();
+        while let Some((parent, _)) = ancestor.rsplit_once('/') {
+            directories.insert(parent.to_string());
+            ancestor = parent;
+        }
+    }
+    directories
+        .iter()
+        .flat_map(|directory| {
+            files
+                .iter()
+                .map(move |file| join_prefix(path_to_root, &join_prefix(directory, file)))
+        })
+        .collect()
+}
+
 /// Input globs whose changes should invalidate a Cargo task's cache: the
 /// workspace root manifest (profiles, lints, `[patch]`, and feature
 /// unification all live there), Cargo config files, and pinned toolchain
@@ -829,11 +859,37 @@ impl CargoTaskContract {
             env: HASHED_ENV_VARS.iter().map(|var| var.to_string()).collect(),
             ..Default::default()
         };
+        let dependency_directories = || {
+            dependencies
+                .iter()
+                .map(|dependency| dependency.directory().to_unix().to_string())
+        };
+        // The workspace package's commands cover every member. A crate's own
+        // `cargo fmt` formats only that crate, while its `cargo clippy` also
+        // lints the local crates it depends on.
+        let own_directories: Vec<String> = match self.package.kind {
+            CargoPackageKind::Workspace => dependency_directories().collect(),
+            CargoPackageKind::Entrypoint | CargoPackageKind::Library => {
+                vec![package.directory().to_unix().to_string()]
+            }
+        };
         if subcommand == "fmt" {
-            io.input_globs.extend(
-                ["rustfmt.toml", ".rustfmt.toml"].map(|path| join_prefix(path_to_root, path)),
-            );
+            io.input_globs.extend(ancestor_config_globs(
+                path_to_root,
+                &own_directories,
+                &["rustfmt.toml", ".rustfmt.toml"],
+            ));
             io.env.push("RUSTFMT".to_string());
+        }
+        if subcommand == "clippy" {
+            let mut linted_directories = own_directories;
+            linted_directories.extend(dependency_directories());
+            io.input_globs.extend(ancestor_config_globs(
+                path_to_root,
+                &linted_directories,
+                &["clippy.toml", ".clippy.toml"],
+            ));
+            io.env.push("CLIPPY_CONF_DIR".to_string());
         }
         if let Some(workspace) = &self.workspace
             && !workspace.compiler_identified
@@ -5009,6 +5065,130 @@ release: 1.96.0-nightly\n",
         // The workspace package's directory is the repo root.
         assert_eq!(cmd.cwd, root);
         assert_eq!(cmd.serial_group, None);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lint_and_format_inputs_include_tool_config_above_crates() {
+        let (_tmp, root) = tempdir_root();
+        write_fixture_workspace(&root);
+        let toolchain = CargoContributor::new(root.clone());
+        let discovered = toolchain.discover_packages().await.unwrap();
+        let contracts: HashMap<_, _> = discovered
+            .packages()
+            .iter()
+            .cloned()
+            .filter_map(|package| {
+                let parts = package.into_parts();
+                Some((parts.name?, parts.task_contract?))
+            })
+            .collect();
+        let app_ctx = task_context(&toolchain, &root, "app", "crates/app");
+        let lib_ctx = task_context(&toolchain, &root, "lib-a", "crates/lib-a");
+        let workspace_ctx = task_context(&toolchain, &root, "fixture-ws", "");
+        let environment = toolchain::TaskIOEnvironment::default();
+        let context = toolchain::TaskIOContext {
+            task_args: None,
+            environment: &environment,
+        };
+
+        let lint = contracts["app"]
+            .derived_task_io(
+                &app_ctx,
+                "lint",
+                "../..",
+                std::slice::from_ref(&lib_ctx),
+                true,
+                &context,
+            )
+            .unwrap();
+        for glob in [
+            "../../clippy.toml",
+            "../../.clippy.toml",
+            "../../crates/clippy.toml",
+            "../../crates/.clippy.toml",
+        ] {
+            assert!(lint.input_globs.contains(&glob.to_string()), "{glob}");
+        }
+        assert!(lint.env.contains(&"CLIPPY_CONF_DIR".to_string()));
+        assert!(
+            !lint.input_globs.iter().any(|glob| glob.contains("rustfmt")),
+            "{:?}",
+            lint.input_globs
+        );
+
+        let workspace_lint = contracts["fixture-ws"]
+            .derived_task_io(
+                &workspace_ctx,
+                "lint",
+                "",
+                &[app_ctx.clone(), lib_ctx.clone()],
+                true,
+                &context,
+            )
+            .unwrap();
+        for glob in ["clippy.toml", "crates/clippy.toml", "crates/.clippy.toml"] {
+            assert!(
+                workspace_lint.input_globs.contains(&glob.to_string()),
+                "{glob}"
+            );
+        }
+
+        let format = contracts["app"]
+            .derived_task_io(&app_ctx, "format", "../..", &[], true, &context)
+            .unwrap();
+        for glob in ["../../rustfmt.toml", "../../crates/.rustfmt.toml"] {
+            assert!(format.input_globs.contains(&glob.to_string()), "{glob}");
+        }
+
+        // Clippy lints local dependencies too, so configuration above a
+        // dependency in another subtree applies; rustfmt formats only the crate.
+        let distant_dependency = task_context(&toolchain, &root, "lib-a", "libs/lib-a");
+        let lint = contracts["app"]
+            .derived_task_io(
+                &app_ctx,
+                "lint",
+                "../..",
+                std::slice::from_ref(&distant_dependency),
+                true,
+                &context,
+            )
+            .unwrap();
+        assert!(
+            lint.input_globs
+                .contains(&"../../libs/clippy.toml".to_string()),
+            "{:?}",
+            lint.input_globs
+        );
+        let format = contracts["app"]
+            .derived_task_io(
+                &app_ctx,
+                "format",
+                "../..",
+                std::slice::from_ref(&distant_dependency),
+                true,
+                &context,
+            )
+            .unwrap();
+        assert!(
+            !format
+                .input_globs
+                .iter()
+                .any(|glob| glob.starts_with("../../libs/") && glob.ends_with("rustfmt.toml")),
+            "{:?}",
+            format.input_globs
+        );
+
+        let build = contracts["app"]
+            .derived_task_io(&app_ctx, "build", "../..", &[lib_ctx], true, &context)
+            .unwrap();
+        assert!(
+            !build
+                .input_globs
+                .iter()
+                .any(|glob| glob.contains("clippy") || glob.contains("rustfmt")),
+            "{:?}",
+            build.input_globs
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

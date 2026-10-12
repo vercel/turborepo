@@ -170,11 +170,7 @@ fn selectors_preserve_root_single_package_for_other_commands() {
 #[test_case::test_case(&["turbo", "query", "ls"] ; "ls")]
 #[test_case::test_case(&["turbo", "query"] ; "server")]
 fn query_selectors_preserve_inferred_and_explicit_repository_mode(argv: &[&str]) {
-    use turborepo_repository::{
-        inference::{RepoMode, RepoState},
-        package_json::PackageJson,
-        package_manager::PackageManager,
-    };
+    use turborepo_repository::inference::{RepoMode, RepoState};
 
     let tmp = tempfile::tempdir().unwrap();
     let root = turbopath::AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
@@ -188,8 +184,7 @@ fn query_selectors_preserve_inferred_and_explicit_repository_mode(argv: &[&str])
         let repo_state = mode.map(|mode| RepoState {
             root: root.clone(),
             mode,
-            root_package_json: PackageJson::default(),
-            package_manager: Ok(PackageManager::Npm),
+            javascript: None,
         });
         let mut args = parse_args(argv).unwrap();
         args.single_package = explicit;

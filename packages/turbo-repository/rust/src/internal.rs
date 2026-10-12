@@ -268,6 +268,8 @@ pub(crate) enum Error {
     PackagePath(#[from] PathError),
     #[error(transparent)]
     Inference(#[from] inference::Error),
+    #[error("@turbo/repository requires a JavaScript root package.json at {path}")]
+    JavaScriptRootRequired { path: AbsoluteSystemPathBuf },
     #[error("Failed to resolve package manager from {path}: {error}")]
     PackageManager {
         error: String,
@@ -332,30 +334,35 @@ impl Workspace {
             }),
         }?;
         let mut workspace_state = WorkspaceState::infer(&reference_dir)?;
+        // This API exposes JavaScript package-manager and lockfile metadata.
+        // Native-only roots are valid repositories, but cannot supply it.
+        let javascript =
+            workspace_state
+                .javascript
+                .as_mut()
+                .ok_or_else(|| Error::JavaScriptRootRequired {
+                    path: workspace_state.root.clone(),
+                })?;
         // The CLI requires a declared package manager (`packageManager` or
         // `devEngines.packageManager`), but this library analyzes repositories
         // it doesn't control, so fall back to lockfile-based detection when the
         // declaration is missing or unusable — mirroring the CLI's
         // `--dangerously-allow-missing-package-manager` behavior. If detection
         // also fails, surface the original declaration error below.
-        if workspace_state.package_manager.is_err()
+        if javascript.package_manager.is_err()
             && let Ok(detected) =
                 package_manager::PackageManager::detect_package_manager(&workspace_state.root)
         {
-            // `mode` was derived while the package manager was unresolved,
-            // so workspace globs could not be read; recompute it with the
-            // detected package manager.
-            workspace_state.mode = if detected.get_workspace_globs(&workspace_state.root).is_ok() {
-                WorkspaceType::MultiPackage
-            } else {
-                WorkspaceType::SinglePackage
-            };
-            workspace_state.package_manager = Ok(detected);
+            // Unresolved JavaScript workspace globs can promote the inferred
+            // mode, but must not erase an already recognized native workspace.
+            if detected.get_workspace_globs(&workspace_state.root).is_ok() {
+                workspace_state.mode = WorkspaceType::MultiPackage;
+            }
+            javascript.package_manager = Ok(detected);
         }
-        let workspace_state = workspace_state;
         let is_multi_package = workspace_state.mode == WorkspaceType::MultiPackage;
         let package_manager =
-            workspace_state
+            javascript
                 .package_manager
                 .as_ref()
                 .map_err(|error| Error::PackageManager {
@@ -681,6 +688,82 @@ mod tests {
         )
         .unwrap();
         temp
+    }
+
+    #[tokio::test]
+    async fn find_detects_package_manager_without_a_valid_declaration() {
+        for package_json in [
+            r#"{"name":"root","private":true}"#,
+            r#"{"name":"root","private":true,"packageManager":"invalid"}"#,
+        ] {
+            let temp = pnpm_workspace_fixture();
+            std::fs::write(temp.path().join("package.json"), package_json).unwrap();
+            let workspace =
+                Workspace::find_internal(Some(temp.path().to_string_lossy().into_owned()), false)
+                    .await
+                    .unwrap();
+
+            assert_eq!(workspace.package_manager.name, "pnpm");
+            assert!(workspace.is_multi_package);
+            assert!(
+                workspace
+                    .packages_internal()
+                    .await
+                    .unwrap()
+                    .iter()
+                    .any(|package| package.name == "a")
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn detected_package_manager_preserves_native_workspace_mode() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir(root.join(".git")).unwrap();
+        std::fs::write(root.join("package.json"), r#"{"name":"root"}"#).unwrap();
+        std::fs::write(
+            root.join("package-lock.json"),
+            r#"{"name":"root","lockfileVersion":3,"packages":{}}"#,
+        )
+        .unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        std::fs::write(
+            root.join("turbo.json"),
+            r#"{"futureFlags":{"experimentalCargoWorkspaces":true},"tasks":{}}"#,
+        )
+        .unwrap();
+
+        let workspace = Workspace::find_internal(Some(root.to_string_lossy().into_owned()), true)
+            .await
+            .unwrap();
+
+        assert_eq!(workspace.package_manager.name, "npm");
+        assert!(workspace.is_multi_package);
+    }
+
+    #[tokio::test]
+    async fn native_only_root_requires_javascript_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir(root.join(".git")).unwrap();
+        std::fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        std::fs::write(
+            root.join("turbo.json"),
+            r#"{"futureFlags":{"experimentalCargoWorkspaces":true},"tasks":{}}"#,
+        )
+        .unwrap();
+
+        for mode in [
+            DiscoveryMode::Full,
+            DiscoveryMode::SkipPackageGraph,
+            DiscoveryMode::Static,
+        ] {
+            let result =
+                Workspace::find_with_mode(Some(root.to_string_lossy().into_owned()), mode).await;
+            assert!(matches!(result, Err(Error::JavaScriptRootRequired { .. })));
+        }
+        assert!(!root.join("package.json").exists());
     }
 
     #[tokio::test]

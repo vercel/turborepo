@@ -229,6 +229,46 @@ for (const codeEmpty of [false, true]) {
 }
 
 for (const empty of [false, true]) {
+  test(`accepts base-repository review runs with ${empty ? "empty" : "present"} associations`, async (t) => {
+    const f = fixture(t);
+    f.review.head_repository = repo();
+    if (empty) {
+      f.review.pull_requests = [];
+      f.runs[0].pull_requests = [];
+    }
+    assert.equal(await f.validate(), 100);
+    assert.deepEqual(f.delays, []);
+  });
+
+  for (const headRepository of [
+    { id: 3, full_name: "unrelated/turborepo" },
+    { id: 1, full_name: "unrelated/turborepo" },
+    { id: 3, full_name: "vercel/turborepo" }
+  ]) {
+    test(`rejects review head repository ${JSON.stringify(headRepository)} with ${empty ? "empty" : "present"} associations`, async (t) => {
+      const f = fixture(t);
+      f.review.head_repository = headRepository;
+      if (empty) f.review.pull_requests = [];
+      await assert.rejects(f.validate(), RUN_MISMATCH);
+      assert.equal(f.counts.get("workflow"), undefined);
+    });
+  }
+
+  test(`rejects base-repository code run detail with ${empty ? "empty" : "present"} associations`, async (t) => {
+    const f = fixture(t);
+    f.details.set(
+      100,
+      codeRun({
+        head_repository: repo(),
+        pull_requests: empty ? [] : [association()]
+      })
+    );
+    await assert.rejects(f.validate(), RUN_MISMATCH);
+    assert.equal(f.counts.get("jobs"), undefined);
+  });
+}
+
+for (const empty of [false, true]) {
   for (const label of [
     "Code checks",
     "Code checks (PR #43, main)",
