@@ -66,6 +66,11 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
             Err(e) => return Err(e.into()),
         }
     }
+    // Nothing can be committed without a repository, so there is nothing to
+    // check. Any `.git` at or above the root keeps the strict checks below.
+    if turborepo_setup::writer_storage::outside_git_repository(root)? {
+        return Ok(());
+    }
     let git = |arguments: &[&str]| {
         Command::new("git")
             .current_dir(root)
@@ -74,8 +79,19 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
             .env_remove("GIT_INDEX_FILE")
             .args(arguments)
             .output()
+            .map_err(turborepo_setup::writer_storage::git_spawn_error)
     };
     let ignored = git(&["check-ignore", "--", ".turbo/"])?;
+    // Exit 128 is a Git failure (for example, a broken or untrusted `.git`), not
+    // a missing ignore rule; editing .gitignore would not help.
+    if ignored.status.code() == Some(128) {
+        return Err(io::Error::other(format!(
+            "Git could not check whether .turbo/ is ignored ({}); run turbo setup inside the \
+             repository's Git checkout",
+            String::from_utf8_lossy(&ignored.stderr).trim()
+        ))
+        .into());
+    }
     let tracked = git(&["ls-files", "--", ".turbo/"])?;
     if !ignored.status.success()
         || ignored.stdout != b".turbo/\n"
@@ -374,6 +390,9 @@ pub(super) fn run(
         )
     {
         println!("npm {}: provided by managed Node (bundled)", npm.version);
+    }
+    if turborepo_setup::writer_storage::outside_git_repository(root)? {
+        println!("No Git repository found; skipped checking that .turbo/ is Git-ignored.");
     }
     Ok(0)
 }

@@ -1,0 +1,255 @@
+//! Setup explains missing or unusable Git inside repositories before any
+//! writer, and needs no Git outside any repository (pruned Docker output).
+#![cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+#![allow(clippy::unwrap_used)]
+
+use std::{
+    fs, io,
+    net::TcpListener,
+    path::{Path, PathBuf},
+    process::Command,
+};
+
+fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut files = vec![];
+    for entry in fs::read_dir(root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            files.extend(snapshot(&path));
+            files.push((path, vec![]));
+        } else {
+            let bytes = fs::read(&path).unwrap();
+            files.push((path, bytes));
+        }
+    }
+    files.sort();
+    files
+}
+
+/// Runs standalone turbo without HTTP access. Returns the exit code and
+/// combined output without wrapping or gutters.
+fn turbo(root: &Path, words: &[&str], path: &Path) -> (i32, String) {
+    let proxy = TcpListener::bind("127.0.0.1:0").unwrap();
+    proxy.set_nonblocking(true).unwrap();
+    let url = format!("http://{}", proxy.local_addr().unwrap());
+    let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
+        .env_clear()
+        .current_dir(root)
+        .args(words)
+        .env("PATH", path)
+        .env("HOME", root.join("home"))
+        .env("XDG_CONFIG_HOME", root.join("config"))
+        .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
+        .env("VERCEL_CONFIG_DIR_PATH", root.join("config"))
+        .env("TURBO_TELEMETRY_DISABLED", "1")
+        .env("DO_NOT_TRACK", "1")
+        .env("HTTP_PROXY", &url)
+        .env("HTTPS_PROXY", &url)
+        .env("ALL_PROXY", &url)
+        .env("NO_PROXY", "")
+        .output()
+        .unwrap();
+    assert!(
+        matches!(proxy.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock),
+        "unexpected HTTP connection"
+    );
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (
+        output.status.code().unwrap(),
+        text.replace([' ', '|', '\n'], ""),
+    )
+}
+
+/// Runs local first-lock setup, which must fail without writing.
+fn failed_setup(root: &Path, path: &Path) -> String {
+    let before = snapshot(root);
+    let (code, text) = turbo(root, &["setup", "--tools-only", "--no-frozen"], path);
+    assert_eq!(code, 1, "{text}");
+    assert_eq!(snapshot(root), before, "setup must not write");
+    text
+}
+
+/// Strict source policy may stop on host System npm configuration (as on
+/// macOS runners) before Git is consulted. That is reported, never bypassed.
+fn system_policy_blocked(text: &str) -> bool {
+    let blocked = text.contains("official-onlysetuprejectsSystemconfiguration")
+        || text.contains("cannotsafelyinspectSystemconfiguration");
+    if blocked {
+        eprintln!("Git diagnostics not reached: blocked by host System npm configuration.");
+    }
+    blocked
+}
+
+/// A directory containing only the real Git executable.
+fn git_only_path() -> tempfile::TempDir {
+    let bin = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(which::which("git").unwrap(), bin.path().join("git")).unwrap();
+    bin
+}
+
+#[test]
+fn missing_git_and_unusable_repositories_get_actionable_errors() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    fs::write(
+        root.join("turbo.json"),
+        r#"{"futureFlags":{"experimentalSetup":true}}"#,
+    )
+    .unwrap();
+    fs::write(root.join(".nvmrc"), "24.x").unwrap();
+    // A `.git` Git cannot use still marks a repository: the checks stay strict.
+    fs::create_dir(root.join(".git")).unwrap();
+
+    let text = failed_setup(root, Path::new(""));
+    if system_policy_blocked(&text) {
+        return;
+    }
+    assert!(
+        text.contains("couldnotrun`git`:itwasnotfoundonPATH"),
+        "{text}"
+    );
+    assert!(!text.contains("(oserror2)"), "{text}");
+
+    // With Git available, an unusable repository is a Git failure, not a
+    // missing ignore rule that editing .gitignore could fix.
+    let bin = git_only_path();
+    let text = failed_setup(root, bin.path());
+    assert!(
+        text.contains("Gitcouldnotcheckwhether.turbo/isignored"),
+        "{text}"
+    );
+    assert!(!text.contains(".gitignore"), "{text}");
+}
+
+#[test]
+fn pruned_docker_output_without_git_provisions_and_checks() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use turborepo_setup::{
+        lock::{Lock, Platform, Snapshot},
+        node_provision::NodePlan,
+        pnpm_provision::PnpmPlan,
+    };
+
+    let temp = tempfile::tempdir().unwrap();
+    let source = temp.path().join("source");
+    fs::create_dir_all(source.join("apps/web")).unwrap();
+    for (name, contents) in [
+        (
+            "turbo.json",
+            r#"{"futureFlags":{"experimentalSetup":true}}"#,
+        ),
+        (".nvmrc", "24.0.0"),
+        (
+            "package.json",
+            r#"{"name":"fixture","packageManager":"pnpm@10.0.0","workspaces":["apps/*"]}"#,
+        ),
+        ("pnpm-workspace.yaml", "packages: ['apps/*']\n"),
+        (
+            "pnpm-lock.yaml",
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
+        ),
+        ("apps/web/package.json", r#"{"name":"web"}"#),
+    ] {
+        fs::write(source.join(name), contents).unwrap();
+    }
+    let (platform, selector, spelling) = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => (Platform::MacosArm64, "macos-arm64", "darwin-arm64"),
+        ("macos", _) => (Platform::MacosX64, "macos-x64", "darwin-x64"),
+        ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64-gnu", "linux-arm64"),
+        _ => (Platform::LinuxX64Gnu, "linux-x64-gnu", "linux-x64"),
+    };
+    let prefix = format!("node-v24.0.0-{spelling}");
+    let lock = serde_json::json!({"schemaVersion":0,"tools":{
+        "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
+            "installation":{"kind":"managed","artifacts":{selector:{"distribution":{
+                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz"),"sha256":"0".repeat(64),
+                "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}}}}}},
+        "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
+            "installation":{"kind":"managed","artifacts":{"any":{"package":{
+                "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"1".repeat(64),
+                "format":"tar-gz","rootPrefix":"package","executables":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}}}}}
+    }}).to_string();
+    fs::write(source.join("turbo.lock"), &lock).unwrap();
+
+    let out = temp.path().join("out");
+    let out_dir = out.to_str().unwrap();
+    let (code, text) = turbo(
+        &source,
+        &["prune", "web", "--docker", "--out-dir", out_dir],
+        Path::new(""),
+    );
+    assert_eq!(code, 0, "{text}");
+    let root = out.join("full");
+    assert!(turborepo_setup::writer_storage::outside_git_repository(&root).unwrap());
+
+    // Seed the locked generation through the real Store so frozen setup reuses
+    // it without downloads; the CLI library fixtures cover actual downloads.
+    let lock = Lock::parse(lock.as_bytes()).unwrap();
+    let node = NodePlan::from_lock(&lock, platform).unwrap();
+    let declaration = Snapshot::capture(&root)
+        .unwrap()
+        .package_manager()
+        .unwrap()
+        .unwrap();
+    let pnpm = PnpmPlan::from_declaration(&lock, platform, &node, &declaration).unwrap();
+    let tools = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
+        for relative in tool.executables.values() {
+            let file = destination.join(relative);
+            fs::create_dir_all(file.parent().unwrap())?;
+            fs::write(&file, "#!/bin/sh\nexit 99\n")?;
+            fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
+        }
+        Ok::<_, turborepo_tool_install::Error>(())
+    };
+    let mut store = turborepo_tool_install::Store::open(&root).unwrap();
+    store.reconcile(&tools, stage).unwrap();
+    drop(store);
+
+    // Docker images often lack Git too; neither run needs it here.
+    let frozen = ["setup", "--frozen", "--tools-only"];
+    let (code, text) = turbo(&root, &frozen, Path::new(""));
+    if system_policy_blocked(&text) {
+        return;
+    }
+    assert_eq!(code, 0, "{text}");
+    assert!(
+        text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
+        "{text}"
+    );
+    assert!(text.contains("NoGitrepositoryfound"), "{text}");
+    let (code, text) = turbo(&root, &["setup", "--check", "--tools-only"], Path::new(""));
+    assert_eq!(code, 0, "{text}");
+    assert!(text.contains("node24.0.0:ready"), "{text}");
+
+    // Once the output is a repository, the strict checks apply again.
+    let bin = git_only_path();
+    assert!(
+        Command::new("git")
+            .current_dir(&root)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let (code, text) = turbo(&root, &frozen, Path::new(""));
+    assert_eq!(code, 1, "{text}");
+    assert!(
+        text.contains("couldnotrun`git`:itwasnotfoundonPATH"),
+        "{text}"
+    );
+    let (code, text) = turbo(&root, &frozen, bin.path());
+    assert_eq!(code, 1, "{text}");
+    assert!(text.contains("add/.turbo/to.gitignore"), "{text}");
+}
