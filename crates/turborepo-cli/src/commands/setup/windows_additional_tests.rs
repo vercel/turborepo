@@ -99,10 +99,14 @@ fn a_running_managed_executable_never_blocks_rollback_or_upgrade() {
     declare(&f, Some(&first));
     let u = f.upstream_with([(TOOL_ZIP.into(), first.clone())]);
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
-    // The selected executable stays open in a running process.
+    // The selected executable stays open in a running process. A builtin
+    // `pause` on a held stdin pipe blocks without a child process to leak.
     let bin = f.plan().path_prepend().to_path_buf();
     let mut running = Command::new(bin.join("fixture-exe.exe"))
-        .args(["/d", "/c", "ping -n 60 127.0.0.1 >nul"])
+        .args(["/d", "/c", "pause"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .spawn()
         .unwrap();
 
