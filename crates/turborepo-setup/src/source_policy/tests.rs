@@ -453,21 +453,22 @@ fn homebrew_bundled_prefix_is_allowed_only_while_its_global_config_is_inspected(
     use std::os::unix::fs::symlink;
     let fixture = Fixture::new()?;
     // GitHub's macOS images: `brew install node@22 && brew link --force`.
+    // Linking makes real `lib/node_modules/**` directories and links each file.
     let brew = fixture.directory.path().join("homebrew");
     let keg = brew.join("Cellar/node@22/22.0.0");
     for dir in [
         brew.join("bin"),
         keg.join("bin"),
-        brew.join("lib/node_modules"),
+        brew.join("lib/node_modules/npm"),
+        keg.join("lib/node_modules/npm"),
     ] {
         fs::create_dir_all(dir)?;
     }
     fs::write(keg.join("bin/node"), b"never execute this")?;
     symlink(keg.join("bin/node"), brew.join("bin/node"))?;
-    fs::create_dir_all(keg.join(BUNDLED_NPMRC).parent().ok_or("fixture")?)?;
     symlink(
-        keg.join("lib/node_modules/npm"),
-        brew.join("lib/node_modules/npm"),
+        "../../../Cellar/node@22/22.0.0/lib/node_modules/npm/npmrc",
+        brew.join(BUNDLED_NPMRC),
     )?;
     let check = |node: Option<&Path>| {
         inspect_inputs(
@@ -564,5 +565,56 @@ fn windows_global_npm_prefix_is_inspected_and_required() -> TestResult {
         assert_eq!(result.err(), Some(Error::Configured(ConfigOwner::System)));
         fs::remove_file(path)?;
     }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn only_a_linked_keg_npmrc_in_its_own_cellar_is_followed() -> TestResult {
+    use std::os::unix::fs::symlink;
+    let fixture = Fixture::new()?;
+    let brew = fixture.directory.path().join("homebrew");
+    let link = brew.join(BUNDLED_NPMRC);
+    let homebrew = format!("prefix = {}\n", brew.display());
+    let check = || {
+        inspect_inputs(
+            &fixture.root,
+            &fixture.home,
+            None,
+            &[],
+            vec![brew.join("etc/npmrc")],
+            Some(fixture.directory.path()),
+        )
+        .err()
+    };
+    let other = fixture.directory.path().join("other");
+    fs::create_dir_all(link.parent().ok_or("fixture")?)?;
+    for target in [
+        other.join(BUNDLED_NPMRC),
+        other.join("Cellar/node@22/22.0.0").join(BUNDLED_NPMRC),
+        brew.join("Cellar/node@22").join(BUNDLED_NPMRC),
+        brew.join("Cellar/node@22/22.0.0/libexec")
+            .join(BUNDLED_NPMRC),
+        brew.join("Cellar/node@22/22.0.0/npmrc"),
+    ] {
+        fs::create_dir_all(target.parent().ok_or("fixture")?)?;
+        fs::write(&target, &homebrew)?;
+        symlink(&target, &link)?;
+        let blocked = Some(Error::Inspection(ConfigOwner::System));
+        assert_eq!(check(), blocked, "{target:?}");
+        fs::remove_file(&link)?;
+    }
+    // A keg-shaped link must still resolve to a regular file.
+    let keg = brew.join("Cellar/node@22/22.0.0").join(BUNDLED_NPMRC);
+    symlink(&keg, &link)?;
+    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::System)));
+    fs::create_dir_all(&keg)?;
+    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::System)));
+    fs::remove_dir(&keg)?;
+    fs::write(&keg, &homebrew)?;
+    assert_eq!(check(), None);
+    // No other layer follows a link, even into a keg.
+    symlink(&keg, fixture.home.join(".npmrc"))?;
+    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::User)));
     Ok(())
 }
