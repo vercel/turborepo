@@ -22,8 +22,9 @@ Tasks need more than source code. They also need the right Node.js and package m
 <Callout type="warn">
   Managed toolchains are experimental and can change at any time, including the
   format of `turbo.lock`. This release supports Node.js, the npm that ships with
-  Node.js, and pnpm on macOS and Linux with glibc. It installs toolchains only,
-  not dependencies. Read the [limitations](#limitations) before trying it.
+  Node.js, and pnpm on macOS and Linux with glibc. It installs dependencies only
+  with the [supported package managers](/docs/reference/setup#dependencies).
+  Read the [limitations](#limitations) before trying it.
 </Callout>
 
 ## How it works
@@ -123,9 +124,12 @@ Tasks use the managed Node.js and pnpm, even if other versions are installed on 
 </Steps>
 
 <Callout type="info">
-  This release doesn't install dependencies. Install them the way your
-  repository does today. To use the managed tools for commands you type, such
-  as `pnpm install`, see [Using managed tools in your
+  Without `--tools-only`, `turbo setup` installs dependencies with the package
+  manager's frozen install, such as `pnpm install --frozen-lockfile`, from your
+  committed lockfile. See [Dependencies](/docs/reference/setup#dependencies).
+  With package managers that aren't supported yet, install dependencies the way
+  your repository does today. To use the managed tools for commands you type, such as `pnpm
+  install`, see [Using managed tools in your
   shell](#using-managed-tools-in-your-shell).
 </Callout>
 

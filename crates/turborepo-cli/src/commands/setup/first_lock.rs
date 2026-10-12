@@ -94,9 +94,18 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
 }
 const TRAP: &str = "#!/bin/sh\ntouch probe-ran\nexit 91\n";
 pub(super) fn bundled(prefix: &str) -> Vec<u8> {
-    bundled_with(prefix, TRAP)
+    node_release(prefix, TRAP, NEVER)
 }
-fn bundled_with(prefix: &str, node: &str) -> Vec<u8> {
+const NEVER: &str = "throw new Error('never execute');";
+/// A Node release whose bundled npm and npx CLIs are `cli`.
+pub(super) fn bundled_with(prefix: &str, cli: &str) -> Vec<u8> {
+    node_release(prefix, TRAP, cli)
+}
+/// A Node release whose `bin/node` is `node`.
+fn bundled_node(prefix: &str, node: &str) -> Vec<u8> {
+    node_release(prefix, node, NEVER)
+}
+fn node_release(prefix: &str, node: &str, cli: &str) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in [
         ("bin/node", node),
@@ -105,14 +114,8 @@ fn bundled_with(prefix: &str, node: &str) -> Vec<u8> {
             "lib/node_modules/npm/package.json",
             r#"{"name":"npm","version":"11.6.1","bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}"#,
         ),
-        (
-            "lib/node_modules/npm/bin/npm-cli.js",
-            "throw new Error('never execute');",
-        ),
-        (
-            "lib/node_modules/npm/bin/npx-cli.js",
-            "throw new Error('never execute');",
-        ),
+        ("lib/node_modules/npm/bin/npm-cli.js", cli),
+        ("lib/node_modules/npm/bin/npx-cli.js", cli),
     ] {
         let mut h = tar::Header::new_gnu();
         h.set_size(body.len() as u64);
@@ -194,7 +197,7 @@ pub(super) fn routes_with(
         let bytes = if windows {
             b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec()
         } else {
-            bundled_with(&prefix, node)
+            bundled_node(&prefix, node)
         };
         let filename = format!("{prefix}.{}", if windows { "zip" } else { "tar.gz" });
         sums.push_str(&format!("{:x}  {filename}\n", Sha256::digest(&bytes)));
@@ -351,6 +354,8 @@ fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
     for flags in [LOCAL, &["--no-frozen"]] {
         let f = fresh();
         fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+        // Plain setup would also run pnpm, which this fixture's Node cannot.
+        fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
         assert_eq!(f.run(&u, flags).unwrap(), 0);
         assert_eq!(u.hits(), 7);

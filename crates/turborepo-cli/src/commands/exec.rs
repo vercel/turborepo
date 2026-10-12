@@ -151,7 +151,7 @@ fn launch(command: std::process::Command) -> io::Result<Arc<SharedChild>> {
 /// A signal death becomes the shell's `128 + signal`, so in-process exec and
 /// local CLI handoff report the same status. Windows exit codes, including
 /// NTSTATUS values such as `STATUS_CONTROL_C_EXIT`, pass through unchanged.
-fn exit_code(status: ExitStatus) -> i32 {
+pub(crate) fn exit_code(status: ExitStatus) -> i32 {
     #[cfg(unix)]
     if let Some(signal) = std::os::unix::process::ExitStatusExt::signal(&status) {
         return 128 + signal;

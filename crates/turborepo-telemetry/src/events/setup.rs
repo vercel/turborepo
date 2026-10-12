@@ -68,6 +68,8 @@ vocabulary!(
         Download => "download",
         /// Writing the repository-local installation.
         Install => "install",
+        /// A dependency installer failed or its lockfile is missing.
+        Dependencies => "dependencies",
         Io => "io",
     }
 );
