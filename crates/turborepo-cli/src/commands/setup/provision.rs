@@ -4,6 +4,7 @@
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
+    artifact_cache::ArtifactCache,
     lock::{Platform, Snapshot},
     node_provision::{NodePlan, NodeTransport},
     package_manager::Manager,
@@ -21,9 +22,12 @@ pub(super) struct Transports {
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
+        // Verified archive bytes are shared through the user's cache directory;
+        // extraction and activation stay in each repository's .turbo/tools.
+        let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
         Ok(Self {
-            node: NodeTransport::official(policy)?,
-            pnpm: PnpmTransport::official(policy)?,
+            node: NodeTransport::official(policy)?.with_cache(cache.clone()),
+            pnpm: PnpmTransport::official(policy)?.with_cache(cache),
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
         })
     }
@@ -341,16 +345,19 @@ pub(super) fn run(
         store.reconcile_checked(&desired, stage, before_publish)?;
     }
     for tool in &desired {
+        let from_cache = if tool.id == "node" {
+            prepared_node.as_ref().map(|node| node.from_cache())
+        } else {
+            prepared_pnpm.as_ref().map(|pnpm| pnpm.from_cache())
+        };
         println!(
             "{} {}: {}",
             tool.id,
             tool.version,
-            if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id == "pnpm" && prepared_pnpm.is_none())
-            {
-                "reused"
-            } else {
-                "installed"
+            match from_cache {
+                None => "reused",
+                Some(false) => "installed",
+                Some(true) => "installed from the shared download cache",
             }
         );
     }
