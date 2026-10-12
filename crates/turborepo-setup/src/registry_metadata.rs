@@ -19,7 +19,7 @@ const MAX_VERSION_BYTES: usize = 256;
 pub enum RegistryMetadataError {
     #[error("registry metadata byte limit exceeded")]
     TooLarge,
-    #[error("registry metadata supports only npm, pnpm, and Yarn 1")]
+    #[error("registry metadata supports only npm, pnpm, and Yarn")]
     UnsupportedManager,
     #[error("an exact canonical published version is required")]
     InvalidVersion,
@@ -170,6 +170,7 @@ pub(crate) fn tarball_path(name: &str, version: &str) -> String {
 }
 
 /// Registry package name for an exact selection, validated before traffic.
+/// Like Corepack, Yarn 2+ is the single-file `@yarnpkg/cli-dist` bundle.
 pub(crate) fn validate_selection(
     manager: Manager,
     exact_version: &str,
@@ -188,11 +189,21 @@ pub(crate) fn validate_selection(
     let name = match manager {
         Manager::Npm => "npm",
         Manager::Pnpm => "pnpm",
-        // TODO(TURBO-6369): Yarn 2+ ships as the `@yarnpkg/cli-dist` bundle.
-        _ if version.major >= 2 => return Err(RegistryMetadataError::UnsupportedManager),
+        _ if is_modern_yarn(manager, &version) => "@yarnpkg/cli-dist",
         _ => "yarn",
     };
     Ok((name, version))
+}
+
+/// Modern Yarn authored integrity covers `bin/yarn.js`, not the tarball.
+pub(crate) fn is_modern_yarn(manager: Manager, version: &Version) -> bool {
+    manager == Manager::Yarn && version.major >= 2
+}
+
+/// `{name}/-/{basename}-{version}.tgz`; scoped packages drop the scope.
+pub(crate) fn tarball_path(name: &str, version: &str) -> String {
+    let base = name.rsplit_once('/').map_or(name, |(_, base)| base);
+    format!("{name}/-/{base}-{version}.tgz")
 }
 
 fn sri_sha512(value: &str) -> Result<CorepackIntegrity, RegistryMetadataError> {

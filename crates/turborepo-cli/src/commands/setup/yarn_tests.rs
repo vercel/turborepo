@@ -135,3 +135,8 @@ fn yarn_without_node_rejects_before_writers_even_with_native_uv() {
     }
     f.no_execution();
 }
+
+#[test]
+fn locked_modern_yarn_provisions_checks_repeats_and_rejects_frozen_drift() {
+    provisions_checks_repeats_and_rejects_drift("4.5.0", "@yarnpkg/cli-dist", "yarn@4.6.0");
+}
