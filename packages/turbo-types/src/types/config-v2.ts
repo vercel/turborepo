@@ -611,10 +611,10 @@ export interface AdditionalToolArtifact {
   /** `binary` for a single executable file, or the archive format. */
   format: ArtifactFormat;
 
-  /** The single top-level archive directory. Required for archives only. */
+  /** The single top-level archive directory. Omit it for archives without one. */
   rootPrefix?: string;
 
-  /** Executable names mapped to paths relative to `rootPrefix`. */
+  /** Executable names mapped to paths relative to `rootPrefix` or the archive top level. */
   executables: Record<string, string>;
 }
 

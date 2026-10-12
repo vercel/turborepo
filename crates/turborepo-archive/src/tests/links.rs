@@ -304,6 +304,7 @@ fn validation_failure_creates_no_links_and_cleans_owned_staging() {
         let mut tree = Tree {
             staging,
             root: "pkg".into(),
+            rootless: false,
             nodes: BTreeMap::new(),
             limits: limits(),
             bytes: 0,
@@ -334,6 +335,7 @@ fn materialization_is_deferred_and_io_failure_cleans_partial_links() {
     let mut tree = Tree {
         staging,
         root: "pkg".into(),
+        rootless: false,
         nodes: BTreeMap::new(),
         limits: limits(),
         bytes: 0,
