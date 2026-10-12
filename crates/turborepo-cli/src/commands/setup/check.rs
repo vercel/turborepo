@@ -58,6 +58,10 @@ pub(super) fn run(
     {
         println!("npm {}: ready (bundled with managed Node)", npm.version);
     }
+    // Reports what setup would clean up; checks never remove anything.
+    for line in super::cleanup::inspect(discovery.snapshot_root()?.as_std_path()) {
+        println!("{line}");
+    }
     // Plain checks cover the same tools; dependency readiness is never claimed.
     println!(
         "Dependencies skipped ({}); dependency readiness was not checked. No tasks run.",
