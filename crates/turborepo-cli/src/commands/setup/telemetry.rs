@@ -104,9 +104,7 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         | Error::Rustup(_)
         | Error::Rust(_)
         | Error::Uv(_)
-        | Error::Python(_) => {
-            SetupFailure::Download
-        }
+        | Error::Python(_) => SetupFailure::Download,
         Error::Mirror(_) => SetupFailure::Request,
         Error::Install(_) => SetupFailure::Install,
         Error::Root(_) | Error::Path(_) => SetupFailure::Discovery,

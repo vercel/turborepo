@@ -12,10 +12,10 @@ use turborepo_setup::{
     npm_provision::NpmPlan,
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
-    rust_provision::RustPlan,
-    rustup_provision::{RustupPlan, RustupTransport},
     python_provision::PythonPlan,
     python_resolution::PythonTransport,
+    rust_provision::RustPlan,
+    rustup_provision::{RustupPlan, RustupTransport},
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
     uv_resolution::UvTransport,
@@ -323,12 +323,7 @@ pub(super) fn plans(
         }
         None => None,
     };
-    if node.is_none()
-        && uv.is_none()
-        && python.is_none()
-        && rustup.is_none()
-        && rust.is_none()
-    {
+    if node.is_none() && uv.is_none() && python.is_none() && rustup.is_none() && rust.is_none() {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
     Ok(Plans {
