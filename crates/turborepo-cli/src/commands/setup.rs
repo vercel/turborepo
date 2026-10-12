@@ -48,6 +48,8 @@ pub enum Error {
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
+    Mirror(#[from] turborepo_setup::mirror::Error),
+    #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
     #[error(transparent)]
     Storage(#[from] turborepo_setup::lock::StorageError),

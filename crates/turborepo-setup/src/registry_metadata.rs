@@ -83,6 +83,18 @@ pub fn parse_release(
     exact_version: &str,
     authored: Option<&CorepackIntegrity>,
 ) -> Result<RegistryArtifact, RegistryMetadataError> {
+    parse_release_from(bytes, manager, exact_version, authored, None)
+}
+
+/// A mirror may point `dist.tarball` at its own canonical path. The returned
+/// tarball is always the public registry URL, so locks never record mirrors.
+pub(crate) fn parse_release_from(
+    bytes: &[u8],
+    manager: Manager,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+    mirror: Option<&str>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
     if bytes.len() > MAX_METADATA_BYTES {
         return Err(RegistryMetadataError::TooLarge);
     }
@@ -100,7 +112,8 @@ pub fn parse_release(
     }
     // Compare the literal decoded string, not a URL parser's normalized form.
     let tarball = format!("{PUBLIC_NPM_REGISTRY}/{name}/-/{name}-{exact_version}.tgz");
-    if document.dist.tarball != tarball {
+    let mirrored = mirror.map(|base| format!("{base}/{name}/-/{name}-{exact_version}.tgz"));
+    if document.dist.tarball != tarball && Some(&document.dist.tarball) != mirrored.as_ref() {
         return Err(RegistryMetadataError::InvalidTarball);
     }
     let integrity = sri_sha512(&document.dist.integrity)?;

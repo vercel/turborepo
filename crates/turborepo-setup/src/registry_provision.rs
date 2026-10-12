@@ -13,6 +13,7 @@ use turborepo_tool_install::{Store, Tool};
 use crate::{
     artifact_cache::ArtifactCache,
     lock::{self, Format, Installation, Lock, Platform},
+    mirror::Mirror,
     node_discovery::UniqueJson,
     node_provision::{NodePlan, copy_tree},
     package_manager::{CorepackIntegrity, Manager},
@@ -50,16 +51,33 @@ const PACKAGE_LIMIT: usize = 64 * 1024 * 1024;
 pub struct RegistryTransport {
     client: DownloadClient,
     origin: String,
+    // Mirrors may serve metadata whose tarball points at the mirror itself.
+    mirrored: bool,
     cache: Option<ArtifactCache>,
     offline: bool,
 }
 impl RegistryTransport {
-    // TODO(TURBO-6219): Apply mirror/registry policy to requests and validation.
-    // Never fall back to public npm or forward credentials across origins.
+    // TODO(TURBO-6216): Apply repository-configured mirrors. Never fall back
+    // to public npm or forward credentials across origins.
     pub fn official(policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
             origin: policy.registry().into(),
+            mirrored: false,
+            cache: None,
+            offline: false,
+        })
+    }
+
+    /// Send the same registry requests to a validated mirror base only.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            origin: mirror.base().into(),
+            mirrored: true,
             cache: None,
             offline: false,
         })
@@ -159,7 +177,13 @@ impl RegistryTransport {
                 Limits::new(MAX_METADATA_BYTES, Duration::from_secs(30))?,
             )
             .await?;
-        let release = registry_metadata::parse_release(&metadata, manager, version, authored)?;
+        let release = registry_metadata::parse_release_from(
+            &metadata,
+            manager,
+            version,
+            authored,
+            self.mirrored.then_some(self.origin.as_str()),
+        )?;
         let additional = release
             .additional_sha256
             .as_ref()
@@ -192,6 +216,7 @@ impl RegistryTransport {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
+            mirrored: false,
             cache: None,
             offline: false,
         })
