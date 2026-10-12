@@ -24,6 +24,7 @@ use crate::{
     rust_provision::{self, RustPlan},
     rustup_provision::RustupPlan,
     uv_provision::UvPlan,
+    yarn_provision::YarnPlan,
 };
 
 const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "rust", "rustup"];
@@ -37,7 +38,7 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports managed Node/npm/pnpm/Rust, plus uv and Python with \
+        "activation planning supports managed Node/npm/pnpm/Yarn/Rust, plus uv and Python with \
          experimentalPythonWorkspaces; use a supported setup adapter"
     )]
     UnsupportedAdapter,
@@ -133,7 +134,7 @@ impl ActivationPlan {
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
-                    || !(SUPPORTED.contains(&id.as_str())
+                    || !((SUPPORTED.contains(&id.as_str()) || id == "yarn")
                         || (python && matches!(id.as_str(), "uv" | "python")))
                     || !(matches!(tool.installation, Installation::Managed { .. })
                         || (id == "npm"
@@ -186,6 +187,12 @@ impl ActivationPlan {
             {
                 tools.push(npm.inventory_tool().clone());
             }
+        }
+        if lock.tools().contains_key("yarn") {
+            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
+            let yarn = YarnPlan::from_declaration(lock, platform, &node, &manager)
+                .map_err(|_| Error::InvalidLock)?;
+            tools.push(yarn.inventory_tool().clone());
         }
         let uv = lock.tools().contains_key("uv");
         if uv {

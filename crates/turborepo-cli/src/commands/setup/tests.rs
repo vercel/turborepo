@@ -249,6 +249,8 @@ mod trusted_roots;
 mod unlocked_trust;
 #[path = "uv_tests.rs"]
 mod uv;
+#[path = "yarn_tests.rs"]
+mod yarn;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
