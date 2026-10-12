@@ -499,7 +499,7 @@ async fn run_main(
     // or agent-file maintenance; shim handoff validation is not sufficient.
     if matches!(cli_args.command, Some(Command::Run { .. })) {
         let base = CommandBase::new(cli_args.clone(), repo_root.clone(), version, color_config)?;
-        managed::select(&base)?;
+        managed::validate(&base)?;
     }
     let telemetry_handle = {
         let _span = tracing::info_span!("telemetry_init").entered();

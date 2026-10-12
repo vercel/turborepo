@@ -174,22 +174,36 @@ pub fn verify(lock: &Lock, path: Option<&OsStr>, repo: &Path) -> Result<Vec<Veri
         if executables(id).is_none() || id != &tool.adapter {
             return Err(Error::Unsupported);
         }
-        for name in names {
-            let (found, version) = probe(name, path, repo)?;
-            if version.to_string() != tool.version {
-                return Err(Error::Mismatch {
-                    name: name.clone(),
-                    path: found,
-                    found: version,
-                    expected: tool.version.clone(),
-                });
-            }
-            verified.push(Verified {
-                id: id.clone(),
-                version: tool.version.clone(),
+        verified.extend(verify_tool(id, &tool.version, names, path, repo)?);
+    }
+    Ok(verified)
+}
+
+/// Verifies one locked tool's executables on `path` at its exact version, as
+/// managed `turbo run` does for the verify-system tools of an activation plan.
+pub fn verify_tool(
+    id: &str,
+    expected: &str,
+    names: &[String],
+    path: Option<&OsStr>,
+    repo: &Path,
+) -> Result<Vec<Verified>, Error> {
+    let mut verified = Vec::new();
+    for name in names {
+        let (found, version) = probe(name, path, repo)?;
+        if version.to_string() != expected {
+            return Err(Error::Mismatch {
+                name: name.clone(),
                 path: found,
+                found: version,
+                expected: expected.to_owned(),
             });
         }
+        verified.push(Verified {
+            id: id.to_owned(),
+            version: expected.to_owned(),
+            path: found,
+        });
     }
     Ok(verified)
 }

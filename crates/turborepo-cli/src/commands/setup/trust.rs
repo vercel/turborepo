@@ -408,7 +408,7 @@ impl TrustStore {
         let installation =
             self.inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))?;
         Ok(installation.as_ref() == Some(&record.installation)
-            && record.installation.bin == plan.path_prepend()
+            && plan.path_prepend() == Some(record.installation.bin.as_path())
             && record.installation.tools == plan.tools()
             && read(&self.root.join("turbo.lock"), false)? == lock
             && self.load()?.is_some_and(|after| {

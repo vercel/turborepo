@@ -891,7 +891,22 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
     };
     tool("node", "v24.0.0");
-    tool("pnpm", "10.0.0");
+    let pnpm =
+        "#!/bin/sh\ncase \"$1\" in --version) echo 10.0.0;; *) echo \"system-pnpm $*\";; esac\n";
+    fs::write(bin.join("pnpm"), pnpm).unwrap();
+    fs::set_permissions(bin.join("pnpm"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::create_dir_all(root.join("apps/web")).unwrap();
+    write(&root, "pnpm-workspace.yaml", "packages: ['apps/*']\n");
+    write(
+        &root,
+        "pnpm-lock.yaml",
+        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
+    );
+    write(
+        &root,
+        "apps/web/package.json",
+        r#"{"name":"web","scripts":{"build":"build"}}"#,
+    );
     let git = Command::new("git")
         .args(["init", "-q"])
         .current_dir(&root)
@@ -903,7 +918,7 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
     write(
         &root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true},
+        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{"cache":false}},
             "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#,
     );
     // Fake tools come first; the host PATH only supplies git.
@@ -944,7 +959,28 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         assert_eq!(code, 0, "{text}");
         assert!(text.contains("node 24.0.0:"), "{text}");
     }
+    // Plain `turbo run` uses the verified tools from PATH and says so, in
+    // strict and loose modes, instead of failing as a missing installation.
+    for mode in ["--env-mode=strict", "--env-mode=loose"] {
+        let words = ["run", "build", mode, "--ui=stream"];
+        let (code, text) = invoke_on_path(&root, &words, false, &path, false);
+        assert_eq!(code, 0, "{text}");
+        for expected in [
+            "Using node 24.0.0 from PATH",
+            "Using pnpm 10.0.0 from PATH",
+            "system-pnpm run build",
+        ] {
+            assert!(text.contains(expected), "{expected}: {text}");
+        }
+    }
+    assert!(!root.join(".turbo/tools").exists());
     tool("node", "v24.1.0");
+    // A changed system tool never runs under the locked identity.
+    let words = ["run", "build", "--ui=stream"];
+    let (code, text) = invoke_on_path(&root, &words, false, &path, false);
+    assert_eq!(code, 1, "{text}");
+    assert!(diagnostic_contains(&text, "requires 24.0.0"), "{text}");
+    assert!(!text.contains("system-pnpm run"), "{text}");
     for words in [
         ["setup", "--frozen"],
         ["setup", "--check"],
@@ -1626,7 +1662,11 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     "Real prune output {}: owned typed Node/pnpm readiness passed",
                     output_root.display()
                 );
-                fs::write(plan.path_prepend().join("../tools/pnpm/resource"), "damage").unwrap();
+                fs::write(
+                    plan.path_prepend().unwrap().join("../tools/pnpm/resource"),
+                    "damage",
+                )
+                .unwrap();
                 let damaged = snapshot(pruned.root().parent().unwrap());
                 assert!(matches!(
                     ActivationPlan::inspect(&output_root, context.clone()),
