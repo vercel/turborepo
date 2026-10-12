@@ -288,8 +288,13 @@ fn exit_on_relayed_ctrl_c() -> Result<(), Error> {
 // override.
 #[cfg(all(
     test,
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+    any(
+        all(
+            any(target_arch = "x86_64", target_arch = "aarch64"),
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+        ),
+        all(windows, target_arch = "x86_64")
+    )
 ))]
 fn run_with_policy(
     args: &Args,

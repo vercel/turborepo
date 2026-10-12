@@ -119,6 +119,9 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         Error::Install(_) => SetupFailure::Install,
         Error::Root(_) | Error::Path(_) => SetupFailure::Discovery,
         Error::Io(_) => SetupFailure::Io,
+        // #14591's Windows Ctrl+C relay failed to register (suggested bucket).
+        #[cfg(windows)]
+        Error::Signal(_) => SetupFailure::Io,
     }
 }
 
