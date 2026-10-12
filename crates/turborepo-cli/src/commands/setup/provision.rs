@@ -285,24 +285,30 @@ pub(super) fn run(
             resolution_mode,
             false,
             |request| {
-                check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
-                if ["rust", "rustup"]
-                    .iter()
-                    .any(|id| request.version_ids().contains(*id))
-                {
-                    return Err(reconcile::Error::Resolution(
-                        "resolving Rust toolchain declarations into turbo.lock is not implemented \
-                         yet"
-                        .into(),
-                    ));
+                let failed =
+                    |e: &dyn std::fmt::Display| reconcile::Error::Resolution(e.to_string());
+                check().map_err(|e| failed(&e))?;
+                // Each ecosystem resolves only its own changed declarations;
+                // reconcile still checks every unaffected selection's bytes.
+                let rust =
+                    turborepo_setup::rust_resolution::resolve_request(&request, &sources.rustup);
+                let mut tools = runtime.block_on(rust).map_err(|e| failed(&e))?;
+                if request.snapshot().declarations().contains_key("node") {
+                    let js = runtime
+                        .block_on(turborepo_setup::js_resolution::resolve(
+                            request,
+                            &sources.node,
+                            &sources.registry,
+                        ))
+                        .map_err(|e| failed(&e))?;
+                    tools.extend(js.tools().clone());
                 }
-                runtime
-                    .block_on(turborepo_setup::js_resolution::resolve(
-                        request,
-                        &sources.node,
-                        &sources.registry,
-                    ))
-                    .map_err(|e| reconcile::Error::Resolution(e.to_string()))
+                Ok(turborepo_setup::lock::Lock::new(
+                    turborepo_setup::lock::Document {
+                        schema_version: turborepo_setup::lock::SCHEMA_VERSION,
+                        tools,
+                    },
+                )?)
             },
             |candidate| {
                 plans(&snapshot, candidate)

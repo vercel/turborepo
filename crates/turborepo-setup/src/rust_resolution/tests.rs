@@ -169,3 +169,108 @@ async fn official_resolution_reads_only_the_requested_channel_manifest() {
     assert_eq!(tool.version, "nightly-2026-10-11");
     assert_eq!(server.requests(), [path]);
 }
+
+mod lock_updates {
+    use std::{fs, path::Path, process::Command};
+
+    use super::*;
+    use crate::lock::{
+        Ecosystems, Snapshot,
+        reconcile::{self, Mode},
+    };
+
+    fn upstream(stable: &str) -> LoopbackServer {
+        let mut routes = vec![
+            (
+                "/rustup/release-stable.toml".to_owned(),
+                b"schema-version = '1'\nversion = '1.29.1'\n".to_vec(),
+            ),
+            (
+                "/dist/channel-rust-stable.toml".into(),
+                fixture(stable, "2026-10-01").into_bytes(),
+            ),
+            (
+                "/dist/channel-rust-1.99.0.toml".into(),
+                fixture("1.99.0", "2026-10-01").into_bytes(),
+            ),
+        ];
+        for platform in rustup::PLATFORMS {
+            let url = rustup::installer_url(&semver::Version::new(1, 29, 1), platform).unwrap();
+            let path = url.strip_prefix("https://static.rust-lang.org").unwrap();
+            routes.push((
+                format!("{path}.sha256"),
+                format!("{}\n", "a".repeat(64)).into_bytes(),
+            ));
+        }
+        LoopbackServer::new(routes, |_| {}).unwrap()
+    }
+
+    fn update(root: &Path, server: &LoopbackServer, mode: Mode) -> Lock {
+        let transport = RustupTransport::loopback_http_for_tests(server.origin()).unwrap();
+        let snapshot = Snapshot::capture_with(root, Ecosystems { rust: true }).unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        reconcile::reconcile(&snapshot, mode, false, |request| {
+            let tools = runtime
+                .block_on(resolve_request(&request, &transport))
+                .unwrap();
+            Ok(Lock::new(Document {
+                schema_version: lock::SCHEMA_VERSION,
+                tools,
+            })?)
+        })
+        .unwrap()
+        .lock
+    }
+
+    #[test]
+    fn edits_keep_the_locked_release_until_an_explicit_refresh() {
+        let root = tempfile::tempdir().unwrap();
+        let git = Command::new("git")
+            .args(["init", "--quiet"])
+            .arg(root.path())
+            .status();
+        assert!(git.unwrap().success());
+        fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
+        let file = root.path().join("rust-toolchain.toml");
+        fs::write(
+            &file,
+            "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n",
+        )
+        .unwrap();
+        let created = update(root.path(), &upstream("1.99.0"), Mode::Local);
+        assert_eq!(created.tools()["rust"].version, "1.99.0");
+        assert_eq!(created.tools()["rustup"].version, "1.29.1");
+
+        // A newer stable exists, but only the component edit re-resolves.
+        let newer = upstream("1.100.0");
+        let edited = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\ncomponents = \
+                      [\"rust-src\"]\n";
+        fs::write(&file, edited).unwrap();
+        let targeted = update(root.path(), &newer, Mode::Local);
+        assert_eq!(newer.requests(), ["/dist/channel-rust-1.99.0.toml"]);
+        assert_eq!(targeted.tools()["rust"].version, "1.99.0");
+        assert_eq!(targeted.tools()["rust"].options["components"], ["rust-src"]);
+        assert_eq!(targeted.tools()["rustup"], created.tools()["rustup"]);
+
+        let refreshed = update(root.path(), &newer, Mode::Refresh);
+        assert_eq!(refreshed.tools()["rust"].version, "1.100.0");
+        assert!(
+            newer
+                .requests()
+                .contains(&"/dist/channel-rust-stable.toml".to_owned())
+        );
+
+        // Removing the file drops both selections without any resolution.
+        fs::remove_file(&file).unwrap();
+        let offline = LoopbackServer::new([], |_| {}).unwrap();
+        assert!(
+            update(root.path(), &offline, Mode::Local)
+                .tools()
+                .is_empty()
+        );
+        assert_eq!(offline.hits(), 0);
+    }
+}
