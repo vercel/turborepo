@@ -365,12 +365,23 @@ fn footer(change: Option<&str>) -> String {
 impl Fixture {
     /// The real parser, request normalization and plan dispatch, captured.
     fn proposed(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<String, Error> {
+        self.proposed_in(upstream, flags, Default::default())
+    }
+
+    /// Captures sources like setup does when `ecosystems` are enabled.
+    fn proposed_in(
+        &self,
+        upstream: &LoopbackServer,
+        flags: &[&str],
+        ecosystems: turborepo_setup::lock::Ecosystems,
+    ) -> Result<String, Error> {
         let mut report = None;
         crate::cli::dispatch_setup(&self.args(flags), |args, setup_args| {
             let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
             validate_request(&request)?;
             let discovery = root::Discovery::capture(args)?;
-            let sources = turborepo_setup::lock::Snapshot::capture(self.owned.root())?;
+            let sources =
+                turborepo_setup::lock::Snapshot::capture_with(self.owned.root(), ecosystems)?;
             let transports = Some(loopback(self, upstream));
             report = Some(plan::report(
                 &discovery,
@@ -487,6 +498,45 @@ fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
             footer(None)
         )
     );
+}
+
+#[test]
+fn proposed_first_lock_resolves_rust_alongside_node_and_pnpm() {
+    use super::rustup::{FLAGS, TOOLCHAIN, rust_routes, triple};
+    // Node, pnpm, and Rust declarations without turbo.lock, as in this repository.
+    let f = super::first_lock::fresh();
+    let root = f.owned.root();
+    fs::write(root.join("turbo.json"), FLAGS).unwrap();
+    fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    fs::write(root.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
+    let installer = format!("/rustup/archive/1.29.1/{}/rustup-init", triple());
+    let mut routes = super::first_lock::routes(&f, "24.0.0", "10.0.0");
+    routes.extend(rust_routes("never run\n", &installer, "1.99.0"));
+    let u = LoopbackServer::new(routes, |_| {}).unwrap();
+    // The real dispatch captures Rust declarations under the Cargo flag.
+    assert_eq!(f.readonly(|| f.run(&u, PROPOSE).unwrap()), 0);
+    let rust = turborepo_setup::lock::Ecosystems {
+        rust: true,
+        ..Default::default()
+    };
+    let report = f.readonly(|| f.proposed_in(&u, PROPOSE, rust).unwrap());
+    assert!(
+        report.starts_with("Proposed tools-only plan (turbo.lock would be created):\n"),
+        "{report}"
+    );
+    for tool in ["node 24.0.0", "pnpm 10.0.0", "rust 1.99.0", "rustup 1.29.1"] {
+        assert!(
+            report.contains(&format!("\n{tool}: install (missing installation)\n")),
+            "{tool}: {report}"
+        );
+    }
+    for change in ["rust: locked 1.99.0", "rustup: locked 1.29.1"] {
+        assert!(
+            report.contains(&format!("\n  {change}\n")),
+            "{change}: {report}"
+        );
+    }
+    assert!(!root.join(".turbo").exists());
 }
 
 #[test]

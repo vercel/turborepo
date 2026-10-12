@@ -8,10 +8,10 @@ use turborepo_setup::{
 
 use super::*;
 
-const FLAGS: &str =
+pub(super) const FLAGS: &str =
     r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
 const CHECK: &[&str] = &["--check", "--tools-only"];
-const TOOLCHAIN: &str = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n";
+pub(super) const TOOLCHAIN: &str = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n";
 
 // Official-shaped channel manifest for this host's minimal profile, plus a
 // target-independent rust-src.
@@ -39,13 +39,45 @@ fn manifest(version: &str) -> String {
     text
 }
 
-fn triple() -> &'static str {
+pub(super) fn triple() -> &'static str {
     match provision::platform().unwrap() {
         turborepo_setup::lock::Platform::MacosArm64 => "aarch64-apple-darwin",
         turborepo_setup::lock::Platform::MacosX64 => "x86_64-apple-darwin",
         turborepo_setup::lock::Platform::LinuxX64Gnu => "x86_64-unknown-linux-gnu",
         _ => "aarch64-unknown-linux-gnu",
     }
+}
+
+/// Official release metadata and checksums plus the installer at `path`.
+pub(super) fn rust_routes(installer: &str, path: &str, stable: &str) -> Vec<(String, Vec<u8>)> {
+    let release = b"schema-version = '1'\nversion = '1.29.1'\n".to_vec();
+    let mut routes = vec![
+        (path.to_owned(), installer.as_bytes().to_vec()),
+        ("/rustup/release-stable.toml".into(), release),
+        (
+            "/dist/channel-rust-stable.toml".into(),
+            manifest(stable).into_bytes(),
+        ),
+    ];
+    for version in ["1.99.0", "1.100.0"] {
+        let path = format!("/dist/channel-rust-{version}.toml");
+        routes.push((path, manifest(version).into_bytes()));
+    }
+    let digest = format!("{:x}\n", Sha256::digest(installer)).into_bytes();
+    for (arch, os) in ["x86_64", "aarch64"].into_iter().flat_map(|arch| {
+        [
+            "apple-darwin",
+            "unknown-linux-gnu",
+            "unknown-linux-musl",
+            "pc-windows-msvc",
+        ]
+        .map(|os| (arch, os))
+    }) {
+        let exe = if os.contains("windows") { ".exe" } else { "" };
+        let path = format!("/rustup/archive/1.29.1/{arch}-{os}/rustup-init{exe}.sha256");
+        routes.push((path, digest.clone()));
+    }
+    routes
 }
 
 struct Repo {
@@ -112,36 +144,8 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
         };
         LoopbackServer::new([(self.path.clone(), body.as_bytes().to_vec())], |_| {}).unwrap()
     }
-    // Official release metadata and checksums plus the installer.
     fn resolver(&self, stable: &str) -> LoopbackServer {
-        let release = b"schema-version = '1'\nversion = '1.29.1'\n".to_vec();
-        let mut routes = vec![
-            (self.path.clone(), self.installer.clone().into_bytes()),
-            ("/rustup/release-stable.toml".into(), release),
-            (
-                "/dist/channel-rust-stable.toml".into(),
-                manifest(stable).into_bytes(),
-            ),
-        ];
-        for version in ["1.99.0", "1.100.0"] {
-            let path = format!("/dist/channel-rust-{version}.toml");
-            routes.push((path, manifest(version).into_bytes()));
-        }
-        let digest = format!("{:x}\n", Sha256::digest(&self.installer)).into_bytes();
-        for (arch, os) in ["x86_64", "aarch64"].into_iter().flat_map(|arch| {
-            [
-                "apple-darwin",
-                "unknown-linux-gnu",
-                "unknown-linux-musl",
-                "pc-windows-msvc",
-            ]
-            .map(|os| (arch, os))
-        }) {
-            let exe = if os.contains("windows") { ".exe" } else { "" };
-            let path = format!("/rustup/archive/1.29.1/{arch}-{os}/rustup-init{exe}.sha256");
-            routes.push((path, digest.clone()));
-        }
-        LoopbackServer::new(routes, |_| {}).unwrap()
+        LoopbackServer::new(rust_routes(&self.installer, &self.path, stable), |_| {}).unwrap()
     }
     fn locked(&self, id: &str) -> turborepo_setup::lock::Tool {
         let lock = turborepo_setup::lock::Lock::read(self.owned.root())
@@ -361,6 +365,11 @@ fn local_setup_creates_targets_and_refreshes_rust_selections() {
     let repo = Repo::new(FLAGS);
     let file = repo.owned.root().join("rust-toolchain.toml");
     let local = &["--tools-only", "--no-frozen"];
+    // A Rust-only plan passes setup's own declaration gate and writes nothing.
+    let plan = &["--plan", "--tools-only", "--no-frozen"];
+    assert_eq!(repo.run(&repo.resolver("1.99.0"), plan).unwrap(), 0);
+    assert!(!repo.owned.root().join("turbo.lock").exists());
+    assert!(!repo.owned.root().join(".turbo").exists() && repo.calls().is_empty());
     assert_eq!(repo.run(&repo.resolver("1.99.0"), local).unwrap(), 0);
     assert_eq!(repo.locked("rust").version, "1.99.0");
     let rustup = repo.locked("rustup");
