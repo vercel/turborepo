@@ -1,7 +1,10 @@
 //! Native Windows parity for `turbo run` through the standalone binary and the
 //! installed npm wrapper. Direct turbo receives Ctrl+C as a console control
 //! event. Under a package manager with a terminal, the wrapper reads Ctrl+C in
-//! raw mode and relays it over its fd 3 pipe instead.
+//! raw mode and relays it over its fd 3 pipe instead. `turbo exec` with
+//! managed `.exe` and `.cmd` programs (installed by a real `turbo setup` from a
+//! loopback mirror) gets the same entrypoint matrix; it leaves the console to
+//! the command, so no entrypoint relays Ctrl+C for it.
 #![cfg(windows)]
 #![feature(windows_process_extensions_show_window)]
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
@@ -12,8 +15,8 @@ use std::{
     fs,
     io::{Read, Write},
     os::windows::process::CommandExt,
-    path::Path,
-    process::Command,
+    path::{Path, PathBuf},
+    process::{Child, Command, Stdio},
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -270,7 +273,7 @@ impl Run {
             Launch::Wrapper | Launch::WrapperUnderNpm => Entrypoint::NpmWrapper,
         };
         let mut command = launcher.command(entry, root);
-        command.args(["run", "dev", "--ui=stream"]).args(args);
+        command.args(args);
         if launch == Launch::WrapperUnderNpm {
             command.env("npm_config_user_agent", "npm/10.5.0 node/v22.0.0 win32 x64");
         }
@@ -441,20 +444,32 @@ fn start(
     terminal: Terminal,
     args: &[&str],
 ) -> (tempfile::TempDir, Run, Tree) {
+    let dir = tempfile::tempdir().unwrap();
+    repo(dir.path());
+    let words = [&["run", "dev", "--ui=stream"], args].concat();
+    let (run, tree) = start_in(launcher, launch, terminal, dir.path(), &words);
+    (dir, run, tree)
+}
+
+fn start_in(
+    launcher: &ProcessLauncher,
+    launch: Launch,
+    terminal: Terminal,
+    root: &Path,
+    args: &[&str],
+) -> (Run, Tree) {
     // CI runners can start tests with Ctrl+C ignored, a state every child
     // inherits that hides console Ctrl+C from turbo and its tasks. Restore the
     // interactive default. Nothing here signals this process's own console.
     // SAFETY: Changes only this process's inheritable Ctrl+C disposition.
     unsafe { SetConsoleCtrlHandler(None, 0) };
-    let dir = tempfile::tempdir().unwrap();
-    repo(dir.path());
-    let mut run = Run::spawn(launcher, launch, terminal, dir.path(), args);
-    let pids = dir.path().join("pids.json");
+    let mut run = Run::spawn(launcher, launch, terminal, root, args);
+    let pids = root.join("pids.json");
     run.wait_for(&pids);
     let [task, descendant]: [u32; 2] =
         serde_json::from_str(&fs::read_to_string(pids).unwrap()).unwrap();
     let tree = Tree::capture(run.pid(), &[task, descendant]);
-    (dir, run, tree)
+    (run, tree)
 }
 
 /// The pipe path synthesizes a Ctrl+C in each task's own console. The
@@ -478,8 +493,8 @@ fn exit_status_and_output_streams_match() {
             let dir = tempfile::tempdir().unwrap();
             repo(dir.path());
             // Arguments after `--` reach the task script, which exits with 3.
-            let outcome =
-                Run::spawn(&launcher, launch, terminal, dir.path(), &["--", "3"]).finish();
+            let args = ["run", "dev", "--ui=stream", "--", "3"];
+            let outcome = Run::spawn(&launcher, launch, terminal, dir.path(), &args).finish();
             let context = format!("{launch:?} {terminal:?}\n{}", outcome.output);
             assert_eq!(outcome.code, 3, "{context}");
             for marker in ["PARITY_STDOUT", "PARITY_STDERR"] {
@@ -564,4 +579,263 @@ fn terminating_the_entrypoint_leaves_no_orphans() {
         assert_eq!(outcome.code, 1, "{launch:?}\n{}", outcome.output);
         tree.assert_gone();
     }
+}
+
+/// A repository whose managed Node.js and pnpm a real `turbo setup` installed
+/// from the loopback fixture mirror (`scripts/setup-fixture-mirror.mjs`, which
+/// repackages the host's own Node.js). The mirror stays up, so any later
+/// request is visible; nothing else is reachable.
+struct Managed {
+    _dir: tempfile::TempDir,
+    root: PathBuf,
+    mirror: Child,
+    requests: PathBuf,
+    served: usize,
+    lock: Vec<u8>,
+}
+
+const CLOSED: &str = "http://127.0.0.1:9";
+
+impl Managed {
+    /// `None` where managed setup is unqualified: only Windows x64 hosts.
+    fn new(launcher: &ProcessLauncher) -> Option<Self> {
+        if !cfg!(target_arch = "x86_64") || common::windows_arm64_host() {
+            return None;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let (root, state) = (dir.path().join("repo"), dir.path().join("mirror"));
+        fs::create_dir_all(root.join("apps/web")).unwrap();
+        fs::create_dir(&state).unwrap();
+        let scripts = common::manifest_dir().join("../../scripts");
+        let mut mirror = Command::new(&launcher.node)
+            .arg(scripts.join("setup-fixture-mirror.mjs"))
+            .arg(&state)
+            .stdin(Stdio::null())
+            .spawn()
+            .unwrap();
+        let start = Instant::now();
+        let ready = loop {
+            if let Ok(ready) = fs::read_to_string(state.join("ready"))
+                && ready.ends_with('\n')
+            {
+                break ready;
+            }
+            let running = mirror.try_wait().unwrap().is_none();
+            assert!(
+                running && start.elapsed() < TIMEOUT,
+                "the mirror did not start"
+            );
+            thread::sleep(Duration::from_millis(50));
+        };
+        let (port, version) = ready.trim().split_once(' ').unwrap();
+        let files = [
+            ("turbo.json", r#"{"futureFlags":{"experimentalSetup":true}}"#.to_owned()),
+            (".nvmrc", format!("{version}\n")),
+            (
+                "package.json",
+                r#"{"name":"exec-parity","private":true,"packageManager":"pnpm@10.0.0"}"#.to_owned(),
+            ),
+            ("task.js", TASK.to_owned()),
+            (
+                "apps/web/package.json",
+                r#"{"name":"web","scripts":{"probe":"node -e \"console.log('cmd-ok'); process.exit(6)\""}}"#
+                    .to_owned(),
+            ),
+        ];
+        for (name, contents) in files {
+            fs::write(root.join(name), contents).unwrap();
+        }
+        common::git(&root, &["init", "--quiet"]);
+        let mut setup = Command::new(&launcher.standalone);
+        // CI selects frozen mode, and npm settings fail the official-source
+        // preflight; neither belongs to this fixture.
+        for (key, _) in std::env::vars_os() {
+            let name = key.to_string_lossy().to_ascii_lowercase();
+            if name.starts_with("turbo_") || name.starts_with("npm_") || name == "ci" {
+                setup.env_remove(&key);
+            }
+        }
+        let base = format!("https://127.0.0.1:{port}");
+        let output = setup
+            .current_dir(&root)
+            .args(["setup", "--tools-only"])
+            .env_remove("GITHUB_ACTIONS")
+            .env(
+                "SSL_CERT_FILE",
+                scripts.join("fixtures/setup-mirror/ca.pem"),
+            )
+            .env("TURBO_SETUP_NODE_MIRROR", format!("{base}/node"))
+            .env("TURBO_SETUP_NPM_REGISTRY", format!("{base}/npm"))
+            .envs([
+                ("HTTPS_PROXY", CLOSED),
+                ("HTTP_PROXY", CLOSED),
+                ("ALL_PROXY", CLOSED),
+                ("NO_PROXY", "127.0.0.1"),
+                ("TURBO_TELEMETRY_DISABLED", "1"),
+            ])
+            .output()
+            .unwrap();
+        if !output.status.success() {
+            let _ = mirror.kill();
+            panic!("managed setup failed: {}", combined_output(&output));
+        }
+        let requests = state.join("requests.log");
+        Some(Self {
+            served: fs::read_to_string(&requests).unwrap().lines().count(),
+            lock: fs::read(root.join("turbo.lock")).unwrap(),
+            requests,
+            _dir: dir,
+            root,
+            mirror,
+        })
+    }
+
+    /// `turbo exec` never downloads tools or changes the lock.
+    fn assert_untouched(&self) {
+        let served = fs::read_to_string(&self.requests).unwrap().lines().count();
+        assert_eq!(served, self.served, "turbo exec contacted the mirror");
+        assert_eq!(fs::read(self.root.join("turbo.lock")).unwrap(), self.lock);
+    }
+
+    /// Clears the task's markers between entrypoints.
+    fn reset(&self) {
+        for marker in ["pids.json", "interrupts", "release", "cleanup.done"] {
+            let _ = fs::remove_file(self.root.join(marker));
+        }
+    }
+}
+
+impl Drop for Managed {
+    fn drop(&mut self) {
+        let _ = self.mirror.kill();
+        let _ = self.mirror.wait();
+    }
+}
+
+fn exec_command(launcher: &ProcessLauncher, launch: Launch, cwd: &Path) -> Command {
+    let entry = match launch {
+        Launch::Standalone => Entrypoint::Standalone,
+        Launch::Wrapper | Launch::WrapperUnderNpm => Entrypoint::NpmWrapper,
+    };
+    let mut command = launcher.command(entry, cwd);
+    command.envs([
+        ("HTTPS_PROXY", CLOSED),
+        ("HTTP_PROXY", CLOSED),
+        ("ALL_PROXY", CLOSED),
+    ]);
+    if launch == Launch::WrapperUnderNpm {
+        command.env("npm_config_user_agent", "npm/10.5.0 node/v22.0.0 win32 x64");
+    }
+    command
+}
+
+#[test]
+fn managed_exec_delivers_one_ctrl_c_and_leaves_no_orphans() {
+    let launcher = ProcessLauncher::new();
+    let Some(managed) = Managed::new(&launcher) else {
+        return;
+    };
+    let exec = ["exec", "--", "node", "task.js"];
+    for (terminal, launch) in CASES {
+        eprintln!("case: {launch:?} {terminal:?}");
+        managed.reset();
+        let (mut run, tree) = start_in(&launcher, launch, terminal, &managed.root, &exec);
+        run.ctrl_c(&launcher);
+        run.wait_for(&managed.root.join("interrupts"));
+        // A duplicated delivery would reach the command twice.
+        thread::sleep(Duration::from_millis(500));
+        run.assert_running("while cleanup was blocked");
+        fs::write(managed.root.join("release"), "").unwrap();
+        let outcome = run.finish();
+        let context = format!("{launch:?} {terminal:?}\n{}", outcome.output);
+        assert_eq!(outcome.code, 0, "{context}");
+        let interrupts = fs::read(managed.root.join("interrupts")).unwrap();
+        assert_eq!(interrupts, b"x", "{context}");
+        assert!(managed.root.join("cleanup.done").exists(), "{context}");
+        // exec leaves the console to the command; nothing relays a second copy.
+        assert!(
+            !outcome.output.contains("generated console Ctrl-C"),
+            "{context}"
+        );
+        tree.assert_gone();
+    }
+    // A terminated entrypoint takes the managed command's tree down with it.
+    for launch in [Launch::Standalone, Launch::Wrapper] {
+        eprintln!("case: {launch:?} terminated");
+        managed.reset();
+        let (mut run, tree) = start_in(&launcher, launch, Terminal::Console, &managed.root, &exec);
+        let Run::Console(Some(process)) = &mut run else {
+            unreachable!()
+        };
+        process.child.kill().unwrap();
+        let outcome = run.finish();
+        assert_eq!(outcome.code, 1, "{launch:?}\n{}", outcome.output);
+        tree.assert_gone();
+    }
+    managed.assert_untouched();
+}
+
+#[test]
+fn managed_exec_arguments_directory_stdin_and_exit_codes_match_across_entrypoints() {
+    let launcher = ProcessLauncher::new();
+    let Some(managed) = Managed::new(&launcher) else {
+        return;
+    };
+    let web = managed.root.join("apps/web");
+    let script = "let input = ''; process.stdin.on('data', (d) => (input += d)).on('end', () => { \
+                  console.log(JSON.stringify([require('fs').realpathSync(process.execPath), \
+                  process.cwd(), process.argv.slice(1), input])); process.exit(5); });";
+    let words = ["a b", "", "100%", "q\"uote", "back\\slash\\", "^&|<>"];
+    let mut results = Vec::new();
+    for launch in [Launch::Standalone, Launch::Wrapper, Launch::WrapperUnderNpm] {
+        let mut command = exec_command(&launcher, launch, &web);
+        command
+            .args(["exec", "--", "node", "-e", script])
+            .args(words);
+        let mut child = command.stdin(Stdio::piped()).spawn().unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"piped stdin")
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        let context = format!("{launch:?}\n{}", combined_output(&output));
+        assert_eq!(output.status.code(), Some(5), "{context}");
+        let (node, cwd, args, input): (String, PathBuf, Vec<String>, String) =
+            serde_json::from_slice(&output.stdout).unwrap();
+        assert!(
+            node.contains(r"\.turbo\tools\") && node.ends_with("node.exe"),
+            "{context}"
+        );
+        assert_eq!(
+            cwd.canonicalize().unwrap(),
+            web.canonicalize().unwrap(),
+            "{context}"
+        );
+        assert_eq!(
+            (args, input.as_str()),
+            (words.map(String::from).to_vec(), "piped stdin")
+        );
+        results.push(output.stdout);
+    }
+    assert!(
+        results.windows(2).all(|pair| pair[0] == pair[1]),
+        "{results:?}"
+    );
+    // Managed .cmd launchers resolve through PATHEXT and keep exit codes.
+    for launch in [Launch::Standalone, Launch::Wrapper, Launch::WrapperUnderNpm] {
+        let mut command = exec_command(&launcher, launch, &web);
+        let output = command
+            .args(["exec", "--", "pnpm", "run", "probe"])
+            .output()
+            .unwrap();
+        let text = combined_output(&output);
+        assert_eq!(output.status.code(), Some(6), "{launch:?}\n{text}");
+        assert!(
+            text.contains("fixture-pnpm 10.0.0 run probe") && text.contains("cmd-ok"),
+            "{text}"
+        );
+    }
+    managed.assert_untouched();
 }
