@@ -16,7 +16,8 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 6] = ["node", "npm", "pnpm", "uv", "python", "rustup"];
+const NATIVE: [&str; 7] = ["node", "npm", "pnpm", "uv", "python", "rust", "rustup"];
+/// rustup's root toolchain files. Both at once is ambiguous, not precedence.
 const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
 const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
 
@@ -40,6 +41,8 @@ pub enum StorageError {
     Uv(#[from] crate::uv_discovery::UvDiscoveryError),
     #[error(transparent)]
     Python(#[from] crate::python_discovery::PythonDiscoveryError),
+    #[error(transparent)]
+    Rust(#[from] crate::rust_discovery::Error),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }
@@ -262,14 +265,14 @@ pub(crate) fn probe_native_with(
     if ecosystems.rust {
         let mut present = Vec::new();
         for file in RUST_TOOLCHAIN_FILES {
-            if read(file, MAX_TOOLCHAIN_BYTES)?.is_some() {
-                present.push(file);
+            if let Some(bytes) = read(file, MAX_TOOLCHAIN_BYTES)? {
+                present.push((file, bytes));
             }
         }
         match present.as_slice() {
             [] => {}
             // The private installer serves whichever channel the file names.
-            [file] => {
+            [(file, bytes)] => {
                 result.insert(
                     "rustup".into(),
                     vec![Declaration {
@@ -278,6 +281,8 @@ pub(crate) fn probe_native_with(
                         request: None,
                     }],
                 );
+                let toolchain = rust_toolchain(file, bytes.clone())?;
+                result.insert("rust".into(), toolchain.declarations().to_vec());
             }
             _ => return Err(StorageError::Declarations),
         }
@@ -287,6 +292,14 @@ pub(crate) fn probe_native_with(
         sort_declarations(values);
     }
     Ok(result)
+}
+
+pub(super) fn rust_toolchain(
+    file: &'static str,
+    bytes: Vec<u8>,
+) -> Result<crate::rust_discovery::Toolchain, StorageError> {
+    let text = String::from_utf8(bytes).map_err(|_| crate::rust_discovery::Error::Invalid(file))?;
+    Ok(crate::rust_discovery::Toolchain::parse(file, &text)?)
 }
 
 /// Explicit unconditional publication of a complete validated selection.

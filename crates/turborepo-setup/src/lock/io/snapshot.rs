@@ -8,7 +8,7 @@ use std::{
 use super::{
     DeclarationMap, Ecosystems, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, MAX_TOOLCHAIN_BYTES,
     NATIVE, RUST_TOOLCHAIN_FILES, StorageError, WriteOutcome, WriterStorage, probe_native_with,
-    read_optional, records,
+    read_optional, records, rust_toolchain,
 };
 use crate::{
     python_discovery::PythonRequirement,
@@ -187,6 +187,22 @@ impl Snapshot {
             |file| read_optional(&self.root, file, crate::version_managers::MAX_FILE_BYTES),
             self.inputs.get("package.json").and_then(Option::as_deref),
         )
+    }
+
+    /// The enabled root toolchain request, parsed from the captured bytes.
+    pub fn rust_toolchain(&self) -> Result<Option<crate::rust_discovery::Toolchain>, StorageError> {
+        let Some(declaration) = self.native.get("rust").and_then(|values| values.first()) else {
+            return Ok(None);
+        };
+        let file = RUST_TOOLCHAIN_FILES
+            .into_iter()
+            .find(|file| *file == declaration.file)
+            .ok_or(StorageError::Declarations)?;
+        let bytes = self.inputs.get(file).cloned().flatten();
+        Ok(Some(rust_toolchain(
+            file,
+            bytes.ok_or(StorageError::Declarations)?,
+        )?))
     }
 
     pub fn package_manager(
