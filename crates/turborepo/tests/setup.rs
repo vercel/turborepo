@@ -928,7 +928,7 @@ fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_t
                 words.extend(["--tools-only", control]);
             }
             let expected = if control == Some("--offline") {
-                "--offline cannot verify fresh artifacts for --force or resolve --update-lock"
+                "--offline cannot resolve --update-lock"
             } else {
                 PENDING
             };

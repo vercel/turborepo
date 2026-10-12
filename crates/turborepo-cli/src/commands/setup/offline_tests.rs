@@ -7,6 +7,7 @@ use turborepo_tool_install::Store;
 use super::{checks::snapshot, *};
 
 const OFFLINE: &[&str] = &["--tools-only", "--offline"];
+const OFFLINE_FORCE: &[&str] = &["--tools-only", "--offline", "--force"];
 
 fn installed() -> Fixture {
     let f = Fixture::new();
@@ -36,7 +37,10 @@ fn attempt(f: &Fixture, u: &LoopbackServer, flags: &[&str]) -> Result<i32, Error
     result
 }
 fn unavailable(f: &Fixture, u: &LoopbackServer) -> Error {
+    // Offline force has no other reinstall source than verified local bytes.
+    let forced = attempt(f, u, OFFLINE_FORCE).unwrap_err();
     let error = attempt(f, u, OFFLINE).unwrap_err();
+    assert_eq!(forced.to_string(), error.to_string());
     assert!(matches!(error, Error::Offline(_)), "{error}");
     let message = error.to_string();
     for fragment in [
@@ -73,6 +77,7 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         let empty = LoopbackServer::new([], |_| {}).unwrap();
         for flags in [
             OFFLINE,
+            OFFLINE_FORCE,
             &["--tools-only", "--offline", "--frozen"],
             &["--tools-only", "--offline", "--no-frozen"],
         ] {
@@ -222,7 +227,6 @@ fn declaration_drift_missing_lock_and_unsupported_offline_controls_never_resolve
     }
     let f = installed();
     for flags in [
-        vec!["--tools-only", "--offline", "--force"],
         vec!["--tools-only", "--offline", "--no-frozen", "--update-lock"],
         vec![
             "--tools-only",

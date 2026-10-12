@@ -206,7 +206,8 @@ fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
         let u = Upstream::new(&f, false, None);
         let result = f.run(&u, &flags);
         if flags.contains(&"--offline") {
-            assert!(matches!(result, Err(Error::Unsupported(_))));
+            // Nothing is installed, so offline force has no verified bytes.
+            assert!(matches!(result, Err(Error::Offline(_))));
         } else {
             assert!(matches!(result, Err(Error::NotImplemented)));
         }
