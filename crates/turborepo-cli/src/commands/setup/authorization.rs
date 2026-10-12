@@ -29,6 +29,57 @@ pub(crate) enum Error {
     State(#[from] std::io::Error),
 }
 
+impl Error {
+    /// `turbo run` guidance. Says whether turbo setup repairs the
+    /// installation or updates turbo.lock, and in CI, where setup is frozen,
+    /// sends lock updates back to a local setup. Never recommends a setup
+    /// that would fail the same way, such as for an unreadable lock.
+    pub(crate) fn guidance(&self, ci: bool) -> String {
+        use turborepo_setup::{activation::Error as Plan, lock::StorageError as Storage};
+        let repair = |cause: &dyn std::fmt::Display| {
+            format!("{cause}; run turbo setup to repair the installation (turbo.lock is unchanged)")
+        };
+        let invalid = |cause: &dyn std::fmt::Display| {
+            format!(
+                "turbo.lock is invalid for this repository ({cause}); restore the committed \
+                 turbo.lock, or delete it and run turbo setup locally to create a new one, then \
+                 commit it"
+            )
+        };
+        match self {
+            Self::Plan(Plan::DeclarationDrift) => {
+                let fix = if ci {
+                    "run turbo setup locally and commit the updated turbo.lock"
+                } else {
+                    "run turbo setup to update turbo.lock, then commit it"
+                };
+                format!("tool declarations no longer match turbo.lock; {fix}")
+            }
+            Self::Plan(Plan::MissingInventory) => repair(&"managed tools are not installed"),
+            Self::Plan(Plan::StaleInventory) => repair(&"managed tools do not match turbo.lock"),
+            Self::Plan(Plan::DamagedInventory(error)) => {
+                repair(&format!("managed tools are damaged or unsafe ({error})"))
+            }
+            Self::Untrusted => repair(&"managed tools have no matching trusted setup record"),
+            Self::Changed => repair(&"managed tools changed after this run selected them"),
+            Self::Plan(Plan::InvalidLock) => invalid(&"its tool metadata does not apply here"),
+            Self::Plan(Plan::Selection(error)) => invalid(error),
+            Self::Plan(Plan::Sources(Storage::Lock(error)))
+            | Self::Sources(Storage::Lock(error)) => invalid(error),
+            Self::Plan(Plan::Sources(Storage::Declarations))
+            | Self::Sources(Storage::Declarations) => {
+                "tool declarations are invalid; fix them, then run turbo setup".into()
+            }
+            Self::Plan(Plan::Sources(Storage::Conflict)) | Self::Sources(Storage::Conflict) => {
+                "turbo.lock or tool declarations changed during this run; rerun it, after turbo \
+                 setup if declarations changed"
+                    .into()
+            }
+            other => other.to_string(),
+        }
+    }
+}
+
 /// Unlike ActivationPlan, this selection requires external setup evidence.
 /// No public plan accessor: the intended use goes through fresh validation.
 /// The callback can copy plan data out; the type does NOT enforce that those
