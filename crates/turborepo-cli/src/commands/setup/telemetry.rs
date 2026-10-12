@@ -72,7 +72,9 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         Error::Unsupported(message) => match *message {
             "managed promotion requires macOS or GNU Linux"
             | "managed promotion requires macOS, GNU Linux or Windows x64"
-            | "managed setup is not qualified for Windows arm64; use Windows x64"
+            | "managed setup is not qualified for Windows arm64, including x64 turbo under \
+             emulation; use WSL or a Windows x64 machine"
+            | "managed setup could not confirm a Windows x64 host"
             | "cannot select setup check host platform" => SetupFailure::Platform,
             "frozen mode requires turbo.lock" | "locked provisioning requires turbo.lock" => {
                 SetupFailure::LockMissing
@@ -192,7 +194,9 @@ mod tests {
         for message in [
             "managed promotion requires macOS or GNU Linux",
             "managed promotion requires macOS, GNU Linux or Windows x64",
-            "managed setup is not qualified for Windows arm64; use Windows x64",
+            "managed setup is not qualified for Windows arm64, including x64 turbo under \
+             emulation; use WSL or a Windows x64 machine",
+            "managed setup could not confirm a Windows x64 host",
         ] {
             assert_eq!(unsupported(message), SetupFailure::Platform);
         }
