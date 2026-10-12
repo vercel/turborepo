@@ -55,6 +55,13 @@ pub enum Error {
     #[error(transparent)]
     Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
     #[error(transparent)]
+    Artifact(#[from] turborepo_setup::artifact_provision::Error),
+    #[error(
+        "setup.additionalTools changed for {0:?}; run `turbo setup` locally and commit the \
+         updated turbo.lock"
+    )]
+    AdditionalToolDrift(std::collections::BTreeSet<String>),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),

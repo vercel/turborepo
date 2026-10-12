@@ -128,6 +128,12 @@ impl Fixture {
                         upstream.origin(),
                     )
                     .unwrap(),
+                    artifact: Some(
+                        turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(
+                            upstream.origin(),
+                        )
+                        .unwrap(),
+                    ),
                 }),
                 || {
                     Ok(self
@@ -195,6 +201,8 @@ fn track(root: &std::path::Path) {
 mod checks;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "additional_tools_tests.rs"]
+mod additional_tools;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]

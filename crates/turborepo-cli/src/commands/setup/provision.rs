@@ -1,10 +1,12 @@
 //! Local reconciliation followed by locked tools-only provisioning.
 //! Force reinstalls committed selections without resolution or lock writes.
-//! No probes, dependency execution or activation.
+//! No probes, dependency execution or activation. Declared additional tools
+//! install through the generic artifact adapter.
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
-    lock::{Platform, Snapshot},
+    artifact_provision::{ArtifactPlan, ArtifactTransport},
+    lock::{Platform, Snapshot, additional},
     node_provision::{NodePlan, NodeTransport},
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
@@ -18,6 +20,8 @@ pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
+    /// Fixture override; otherwise built from the locked artifact origins.
+    pub artifact: Option<ArtifactTransport>,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -25,8 +29,13 @@ impl Transports {
             node: NodeTransport::official(policy)?,
             pnpm: PnpmTransport::official(policy)?,
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
+            artifact: None,
         })
     }
+}
+
+fn supported(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
+    matches!(id, "node" | "pnpm") || tool.adapter == additional::ADAPTER
 }
 
 pub(super) fn platform() -> Result<Platform, Error> {
@@ -93,6 +102,7 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
 pub(super) struct Plans {
     pub node: NodePlan,
     pub pnpm: Option<PnpmPlan>,
+    pub artifacts: Vec<ArtifactPlan>,
 }
 pub(super) fn plans(
     snapshot: &Snapshot,
@@ -104,13 +114,13 @@ pub(super) fn plans(
             "turbo.lock declarations changed; run setup locally and commit the updated lock",
         ));
     }
-    if lock
-        .tools()
-        .keys()
-        .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
-    {
+    let drift = snapshot.additional_drift(lock);
+    if !drift.is_empty() {
+        return Err(Error::AdditionalToolDrift(drift));
+    }
+    if lock.tools().iter().any(|(id, tool)| !supported(id, tool)) {
         return Err(Error::Unsupported(
-            "only managed Node and pnpm are supported",
+            "only managed Node, pnpm, and additional tools are supported",
         ));
     }
     let node = NodePlan::from_lock(lock, platform)?;
@@ -133,7 +143,12 @@ pub(super) fn plans(
     } else {
         None
     };
-    Ok(Plans { node, pnpm })
+    let artifacts = ArtifactPlan::from_lock(lock, platform)?;
+    Ok(Plans {
+        node,
+        pnpm,
+        artifacts,
+    })
 }
 
 pub(super) fn lock_report(
@@ -195,17 +210,15 @@ pub(super) fn run(
     // the candidate callback still gates EVERY new selection before any writer.
     if write && let Some(lock) = snapshot.previous_lock() {
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
-            && lock
-                .tools()
-                .keys()
-                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+            && lock.tools().iter().any(|(id, tool)| !supported(id, tool))
         {
             return Err(Error::Unsupported(
-                "only managed Node and pnpm are supported",
+                "only managed Node, pnpm, and additional tools are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
             && lock.matches_native(snapshot.declarations())?
+            && snapshot.matches_additional(lock)
         {
             plans(&snapshot, lock)?;
         }
@@ -269,15 +282,25 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
-    let Plans { node, pnpm } = plans(&snapshot, lock)?;
+    let Plans {
+        node,
+        pnpm,
+        artifacts,
+    } = plans(&snapshot, lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
         desired.push(pnpm.inventory_tool().clone());
     }
+    desired.extend(artifacts.iter().map(|plan| plan.inventory_tool().clone()));
     let policy = preflight()?;
-    let transports = transports
+    let mut transports = transports
         .map(Ok)
         .unwrap_or_else(|| Transports::official(&policy))?;
+    let artifact_transport = match transports.artifact.take() {
+        Some(transport) => Some(transport),
+        None if artifacts.is_empty() => None,
+        None => Some(ArtifactTransport::new(&policy, &artifacts)?),
+    };
     revalidate(discovery)?;
     storage(root)?;
     snapshot.ensure_current()?;
@@ -299,7 +322,7 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm) = runtime.block_on(async {
+    let (prepared_node, prepared_pnpm, prepared_artifacts) = runtime.block_on(async {
         let node = node
             .prepare(&store, &desired, &transports.node, preparation)
             .await?;
@@ -313,10 +336,30 @@ pub(super) fn run(
             }
             None => None,
         };
-        Ok::<_, Error>((node, pnpm))
+        let mut prepared = Vec::new();
+        if let Some(transport) = &artifact_transport {
+            for plan in &artifacts {
+                preflight()?;
+                revalidate(discovery)?;
+                snapshot.check_guard(&guard)?;
+                prepared.push(
+                    plan.prepare(&store, &desired, transport, preparation)
+                        .await?,
+                );
+            }
+        }
+        Ok::<_, Error>((node, pnpm, prepared))
     })?;
+    let additional = |tool: &turborepo_tool_install::Tool| {
+        let index = artifacts.iter().position(|p| p.inventory_tool() == tool)?;
+        Some((&artifacts[index], prepared_artifacts[index].as_ref()))
+    };
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        if tool == node.inventory_tool() {
+        if let Some((_, prepared)) = additional(tool) {
+            prepared
+                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
+                .stage(tool, destination)
+        } else if tool == node.inventory_tool() {
             prepared_node
                 .as_ref()
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?
@@ -341,18 +384,13 @@ pub(super) fn run(
         store.reconcile_checked(&desired, stage, before_publish)?;
     }
     for tool in &desired {
-        println!(
-            "{} {}: {}",
-            tool.id,
-            tool.version,
-            if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id == "pnpm" && prepared_pnpm.is_none())
-            {
-                "reused"
-            } else {
-                "installed"
-            }
-        );
+        let (reused, source) = match additional(tool) {
+            Some((plan, prepared)) => (prepared.is_none(), format!(" ({})", plan.source())),
+            None if tool.id == "node" => (prepared_node.is_none(), String::new()),
+            None => (prepared_pnpm.is_none(), String::new()),
+        };
+        let status = if reused { "reused" } else { "installed" };
+        println!("{} {}: {status}{source}", tool.id, tool.version);
     }
     println!(
         "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."

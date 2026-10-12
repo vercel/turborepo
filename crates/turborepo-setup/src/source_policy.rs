@@ -265,10 +265,18 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
     let Some(jsonc_parser::ast::Value::Object(object)) = parsed.value else {
         return Observation::Unsafe;
     };
+    // Setup consumes `additionalTools`; any other policy is not applied yet.
+    let applied = |value: &jsonc_parser::ast::Value| {
+        matches!(value, jsonc_parser::ast::Value::Object(setup) if !setup.properties.is_empty()
+            && setup
+                .properties
+                .iter()
+                .all(|property| property.name.as_str() == "additionalTools"))
+    };
     if object
         .properties
         .iter()
-        .any(|property| property.name.as_str() == "setup")
+        .any(|property| property.name.as_str() == "setup" && !applied(&property.value))
     {
         Observation::Readable
     } else {
