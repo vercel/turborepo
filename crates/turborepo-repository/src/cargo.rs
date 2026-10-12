@@ -792,14 +792,10 @@ pub fn hash_input_globs(prefix: &str) -> Vec<String> {
     .collect()
 }
 
-/// Input globs covering a Cargo crate's sources, with Turborepo's own task
-/// log directory excluded. Explicit input globs hash the filesystem (unlike
-/// default hashing, which is git-index based), so without the exclusion the
-/// `.turbo/turbo-<task>.log` written by each run would invalidate the next
-/// run's hash.
-fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 2] {
-    let base = join_prefix(prefix, crate_path);
-    [format!("{base}/**"), format!("!{base}/.turbo/**")]
+/// Input globs covering a Cargo crate's sources. See
+/// [`toolchain::directory_source_globs`] for the excluded directories.
+fn crate_source_globs(prefix: &str, crate_path: &str) -> [String; 4] {
+    toolchain::directory_source_globs(&join_prefix(prefix, crate_path))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -5287,6 +5283,16 @@ release: 1.96.0-nightly\n",
             "dependency crate task logs are excluded, got {:?}",
             io.input_globs
         );
+        for exclusion in [
+            "!../../crates/lib-a/.git/**",
+            "!../../crates/lib-a/**/node_modules/**",
+        ] {
+            assert!(
+                io.input_globs.contains(&exclusion.to_string()),
+                "tool-managed directories in dependency crates are excluded, got {:?}",
+                io.input_globs
+            );
+        }
         assert_eq!(io.package_default_inputs, Some(true));
         assert!(io.env.contains(&"RUSTC_WRAPPER".to_string()));
         assert!(!io.env.contains(&"RUSTUP_HOME".to_string()));

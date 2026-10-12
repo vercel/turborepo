@@ -717,6 +717,23 @@ pub struct DerivedTaskIO {
     pub outputs: DerivedOutputs,
 }
 
+/// Input globs covering the sources of a directory a toolchain task reads
+/// besides its own package, such as a local dependency.
+///
+/// Explicit input globs hash the filesystem (unlike default hashing, which is
+/// git-index based), so files written by Git, Turborepo, and JavaScript
+/// package managers inside the directory are excluded. Otherwise a
+/// dependency's task logs or `node_modules` would change its dependents'
+/// hashes.
+pub(crate) fn directory_source_globs(directory: &str) -> [String; 4] {
+    [
+        format!("{directory}/**"),
+        format!("!{directory}/.git/**"),
+        format!("!{directory}/.turbo/**"),
+        format!("!{directory}/**/node_modules/**"),
+    ]
+}
+
 /// The JavaScript contributor: packages discovered from `package.json`
 /// manifests.
 ///
