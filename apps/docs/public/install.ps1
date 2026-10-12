@@ -13,6 +13,8 @@ Each option has an environment variable for use with `irm ... | iex`:
   -InstallDirectory DIRECTORY TURBO_INSTALL_DIR
   -NoModifyPath               TURBO_NO_MODIFY_PATH=1  Change neither PATH nor the profile.
   -NoShellHook                TURBO_NO_SHELL_HOOK=1   Do not add the shell hook.
+  -Uninstall                  TURBO_UNINSTALL=1       Remove only what the installer
+                                                      added for the install directory.
 #>
 [CmdletBinding()]
 param(
@@ -23,7 +25,9 @@ param(
   [Alias('NoModifyPath')]
   [switch]$TurboInstallerNoModifyPath,
   [Alias('NoShellHook')]
-  [switch]$TurboInstallerNoShellHook
+  [switch]$TurboInstallerNoShellHook,
+  [Alias('Uninstall')]
+  [switch]$TurboInstallerUninstall
 )
 
 $installerArguments = @{
@@ -31,6 +35,7 @@ $installerArguments = @{
   InstallDirectory = if ($PSBoundParameters.ContainsKey('TurboInstallerInstallDirectory')) { $TurboInstallerInstallDirectory } else { $env:TURBO_INSTALL_DIR }
   NoModifyPath = ($PSBoundParameters.ContainsKey('TurboInstallerNoModifyPath') -and $TurboInstallerNoModifyPath) -or $env:TURBO_NO_MODIFY_PATH -eq '1'
   NoShellHook = ($PSBoundParameters.ContainsKey('TurboInstallerNoShellHook') -and $TurboInstallerNoShellHook) -or $env:TURBO_NO_SHELL_HOOK -eq '1'
+  Uninstall = ($PSBoundParameters.ContainsKey('TurboInstallerUninstall') -and $TurboInstallerUninstall) -or $env:TURBO_UNINSTALL -eq '1'
 }
 
 function Invoke-TurboInstaller {
@@ -39,7 +44,8 @@ function Invoke-TurboInstaller {
     [string]$Version,
     [string]$InstallDirectory,
     [switch]$NoModifyPath,
-    [switch]$NoShellHook
+    [switch]$NoShellHook,
+    [switch]$Uninstall
   )
 
 $ErrorActionPreference = 'Stop'
@@ -241,6 +247,113 @@ function Add-TurboShellHook {
   }
 }
 
+# Removes this installation's hook line, with the line break the installer
+# wrote before it, so the profile returns to its prior bytes.
+function Remove-TurboProfileHook {
+  param([string]$Path)
+
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+    return
+  }
+  $content = Read-TurboProfile -Path $Path
+  $line = ConvertTo-TurboProfileLine -Content $content -Line (Get-TurboHookLine)
+  $segments = [Collections.Generic.List[string]]@([regex]::Split($content.Text, '(?<=\n)') | Where-Object { $_ -ne '' })
+  $removed = $false
+  for ($index = $segments.Count - 1; $index -ge 0; $index--) {
+    if ($segments[$index].TrimEnd([char[]]@("`r", "`n")) -cne $line) {
+      continue
+    }
+    $removed = $true
+    $segments.RemoveAt($index)
+    if ($index -gt 0 -and $segments[$index - 1].Trim([char[]]@("`r", "`n")).Length -eq 0) {
+      $index--
+      $segments.RemoveAt($index)
+    } elseif ($index -gt 0 -and $index -eq $segments.Count) {
+      # The installer ended this line when the profile had no final newline.
+      $segments[$index - 1] = $segments[$index - 1].TrimEnd([char[]]@("`r", "`n"))
+    }
+  }
+  if ($removed) {
+    if ($segments.Count -eq 0) {
+      Remove-Item -LiteralPath $Path -Force
+    } else {
+      [IO.File]::WriteAllText($Path, (-join $segments), $content.Encoding)
+    }
+    Write-Host "Removed the turbo shell hook from $Path"
+  }
+  if ((Test-Path -LiteralPath $Path) -and (Read-TurboProfile -Path $Path).Text.Contains($hookMarker)) {
+    Write-Host "Left lines in $Path that are marked by the installer but do not match this installation."
+  }
+}
+
+function Remove-TurboFromUserPath {
+  param([string]$Directory)
+
+  $normalizedDirectory = $Directory.TrimEnd([char[]]@('\', '/'))
+  $isInstallDirectory = { param($entry) [string]::Equals($entry.TrimEnd([char[]]@('\', '/')), $normalizedDirectory, [StringComparison]::OrdinalIgnoreCase) }
+  $env:Path = @($env:Path -split ';' | Where-Object { -not (& $isInstallDirectory $_) }) -join ';'
+  $entries = @([Environment]::GetEnvironmentVariable('Path', 'User') -split ';')
+  $kept = @($entries | Where-Object { -not (& $isInstallDirectory $_) })
+  if ($kept.Count -eq $entries.Count) {
+    return $false
+  }
+  [Environment]::SetEnvironmentVariable('Path', ($kept -join ';'), 'User')
+  return $true
+}
+
+# Removes only what the installer owns: a regular turbo.exe at the destination
+# (the same rule upgrades use), the install directory and its user PATH entry
+# once nothing else is in it, and this installation's hook line in the
+# Windows PowerShell and PowerShell 7 profiles.
+function Uninstall-Turbo {
+  $item = Get-Item -LiteralPath $destination -Force -ErrorAction SilentlyContinue
+  if ($null -eq $item) {
+    Write-Host "No turbo.exe found at $destination"
+  } elseif ($item -isnot [IO.FileInfo] -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+    Write-Host "Left $destination because it is not a regular file."
+  } else {
+    try {
+      Remove-Item -LiteralPath $destination -Force
+    } catch {
+      throw "Could not remove $destination. Close any running turbo processes, then try again."
+    }
+    Write-Host "Removed $destination"
+  }
+
+  if (@(Get-ChildItem -LiteralPath $InstallDirectory -Force -ErrorAction SilentlyContinue).Count -eq 0) {
+    $directories = @($InstallDirectory)
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA) -and [string]::Equals($InstallDirectory, [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'Programs\Turborepo\bin')), [StringComparison]::OrdinalIgnoreCase)) {
+      $directories += Split-Path -Parent $InstallDirectory
+    }
+    foreach ($directory in $directories) {
+      if ((Test-Path -LiteralPath $directory -PathType Container) -and @(Get-ChildItem -LiteralPath $directory -Force).Count -eq 0) {
+        Remove-Item -LiteralPath $directory -Force
+      }
+    }
+    if (Remove-TurboFromUserPath -Directory $InstallDirectory) {
+      Write-Host "Removed $InstallDirectory from the user PATH."
+    }
+  } elseif (@([Environment]::GetEnvironmentVariable('Path', 'User') -split ';') -contains $InstallDirectory) {
+    Write-Host "Left $InstallDirectory on the user PATH because it still contains other files."
+  }
+
+  $profilePath = $PROFILE.CurrentUserAllHosts
+  if (-not [string]::IsNullOrWhiteSpace($profilePath)) {
+    $documents = Split-Path -Parent (Split-Path -Parent $profilePath)
+    $profilePaths = @($profilePath) + @(@('WindowsPowerShell', 'PowerShell') | ForEach-Object { Join-Path $documents "$_\profile.ps1" } | Where-Object { $_ -ne $profilePath })
+    foreach ($path in $profilePaths) {
+      Remove-TurboProfileHook -Path $path
+    }
+  }
+
+  $otherTurbo = Get-Command -Name 'turbo' -All -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandType -in @('Application', 'ExternalScript', 'Script') -and $_.Source -ne $destination } |
+    Select-Object -First 1
+  if ($null -ne $otherTurbo) {
+    Write-Host "Left $($otherTurbo.Source) because the installer did not install it."
+  }
+}
+
 if ([string]::IsNullOrWhiteSpace($InstallDirectory)) {
   if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
     throw 'LOCALAPPDATA is not set; provide -InstallDirectory or TURBO_INSTALL_DIR.'
@@ -252,6 +365,10 @@ if ($InstallDirectory.IndexOfAny([char[]]@(';', "`r", "`n")) -ge 0) {
   throw 'InstallDirectory must not contain a semicolon or line break.'
 }
 $destination = Join-Path $InstallDirectory 'turbo.exe'
+if ($Uninstall) {
+  Uninstall-Turbo
+  return
+}
 $existingTurbo = Get-Command -Name 'turbo' -All -ErrorAction SilentlyContinue |
   Where-Object { $_.CommandType -in @('Application', 'ExternalScript', 'Script') } |
   Select-Object -First 1

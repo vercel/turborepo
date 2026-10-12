@@ -116,6 +116,16 @@ After installing `turbo`, you can run commands from your terminal. For example:
 
 To use the global binary in CI, see [Constructing CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci).
 
+#### Uninstalling global `turbo`
+
+On Windows, run the installer with `-Uninstall` (or set `TURBO_UNINSTALL=1`). If you installed with `-InstallDirectory` or `TURBO_INSTALL_DIR`, pass the same directory.
+
+```powershell title="PowerShell"
+& ([scriptblock]::Create((irm https://turborepo.dev/install.ps1))) -Uninstall
+```
+
+Uninstalling removes only what the installer added: `turbo.exe` in the install directory, the directory and its user `PATH` entry once nothing else is in it, and the line marked `# Turborepo standalone installer shell hook` in your Windows PowerShell and PowerShell 7 profiles. If you haven't edited that line, your profiles return to what they contained before you installed. Other `turbo` installations, other files, and lines you wrote yourself stay in place, and the installer reports what it removed and what it left.
+
 ### Repository installation
 
 To pin the `turbo` version used in a repository, add it as a `devDependency` at the root:

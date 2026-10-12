@@ -7,6 +7,8 @@ $previousTurboInstallDirectory = $env:TURBO_INSTALL_DIR
 $previousPath = $env:Path
 $previousNoModifyPath = $env:TURBO_NO_MODIFY_PATH
 $previousNoShellHook = $env:TURBO_NO_SHELL_HOOK
+$previousUninstall = $env:TURBO_UNINSTALL
+$previousLocalAppData = $env:LOCALAPPDATA
 # Shell hook tests let the installer edit the user PATH; restore its exact value.
 $environmentKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
 $previousUserPath = $environmentKey.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
@@ -321,6 +323,93 @@ try {
     }
   }
   Write-Output 'PASS: Windows installer skips the shell hook for each opt-out, CI, older releases, and blocked profiles.'
+
+  Remove-Item Env:TURBO_INSTALL_DIR -ErrorAction SilentlyContinue
+  $env:LOCALAPPDATA = Join-Path $testRoot 'LocalAppData'
+  $defaultDirectory = Join-Path $env:LOCALAPPDATA 'Programs\Turborepo\bin'
+  $editionProfile = Join-Path $testRoot 'Documents\PowerShell\profile.ps1'
+  $userPathBeforeInstall = [Environment]::GetEnvironmentVariable('Path', 'User')
+  $roundTrips = @(
+    @{ Name = 'an existing profile without a final newline'; Profile = $profilePath; Bytes = [byte[]](@(0xEF, 0xBB, 0xBF) + [Text.Encoding]::UTF8.GetBytes("# mine`r`nSet-Alias ll Get-ChildItem")) },
+    @{ Name = 'a new profile'; Profile = $profilePath; Bytes = $null },
+    @{ Name = "the other edition's UTF-16 profile"; Profile = $editionProfile; Bytes = [byte[]]([Text.Encoding]::Unicode.GetPreamble() + [Text.Encoding]::Unicode.GetBytes("# seven`n")); Variable = $true }
+  )
+  foreach ($roundTrip in $roundTrips) {
+    foreach ($path in @($profilePath, $editionProfile)) {
+      Remove-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+    }
+    if ($null -ne $roundTrip.Bytes) {
+      [IO.Directory]::CreateDirectory((Split-Path -Parent $roundTrip.Profile)) | Out-Null
+      [IO.File]::WriteAllBytes($roundTrip.Profile, $roundTrip.Bytes)
+    }
+    $PROFILE = [pscustomobject]@{ CurrentUserAllHosts = $roundTrip.Profile }
+    Set-ArchiveFixture -Binary $hookTurbo
+    $env:Path = $systemPath
+    $null = Invoke-Installer -Arguments @{ Version = '2.11.5' }
+    Assert-True ([IO.File]::ReadAllText($roundTrip.Profile).Contains($hookMarker)) "Installer did not add the hook for $($roundTrip.Name)."
+    Assert-True (Test-UserPathContains -Directory $defaultDirectory) "Installer did not add the default directory to the user PATH for $($roundTrip.Name)."
+
+    # Uninstalling from Windows PowerShell also cleans the PowerShell 7 profile.
+    $PROFILE = [pscustomobject]@{ CurrentUserAllHosts = $profilePath }
+    $requestsBeforeUninstall = $script:RequestCount
+    $arguments = @{ Uninstall = $true }
+    if ($roundTrip.Variable) {
+      $env:TURBO_UNINSTALL = '1'
+      $arguments = @{}
+    }
+    try {
+      $output = Invoke-Installer -Arguments $arguments
+    } finally {
+      Remove-Item Env:TURBO_UNINSTALL -ErrorAction SilentlyContinue
+    }
+    $after = if (Test-Path -LiteralPath $roundTrip.Profile) { [Convert]::ToBase64String([IO.File]::ReadAllBytes($roundTrip.Profile)) } else { $null }
+    $expected = if ($null -ne $roundTrip.Bytes) { [Convert]::ToBase64String($roundTrip.Bytes) } else { $null }
+    Assert-True ($after -ceq $expected) "Uninstall did not restore $($roundTrip.Name) byte for byte."
+    Assert-True ([Environment]::GetEnvironmentVariable('Path', 'User') -ceq $userPathBeforeInstall) "Uninstall did not restore the user PATH for $($roundTrip.Name)."
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Programs\Turborepo'))) "Uninstall left the default install directory for $($roundTrip.Name)."
+    Assert-True ($script:RequestCount -eq $requestsBeforeUninstall) 'Uninstall made a network request.'
+    foreach ($message in @("Removed $defaultDirectory\turbo.exe", "Removed $defaultDirectory from the user PATH.", "Removed the turbo shell hook from $($roundTrip.Profile)")) {
+      Assert-True ($output.Contains($message)) "Uninstall did not report '$message'. Received: $output"
+    }
+    Assert-True (-not $output.Contains('Left ')) "Uninstall reported leftovers for $($roundTrip.Name). Received: $output"
+  }
+  Write-Output 'PASS: Windows uninstall restores PowerShell profiles byte for byte and removes its PATH entry and directory.'
+
+  $keptDirectory = Join-Path $testRoot 'kept install'
+  $otherDirectory = Join-Path $testRoot 'other-path'
+  [IO.Directory]::CreateDirectory($otherDirectory) | Out-Null
+  $otherShim = Join-Path $otherDirectory 'turbo.cmd'
+  $otherMarker = Join-Path $testRoot 'other-turbo-was-run'
+  [IO.File]::WriteAllText($otherShim, "@echo off`r`necho ran > `"$otherMarker`"`r`n")
+  $unmarkedProfile = "# mine`r`nInvoke-Expression (& turbo hook powershell | Out-String)`r`n"
+  $foreignProfile = "Invoke-Expression (& 'C:\elsewhere\turbo.exe' hook powershell | Out-String) $hookMarker`r`n"
+  [IO.File]::WriteAllText($profilePath, $unmarkedProfile)
+  [IO.File]::WriteAllText($editionProfile, $foreignProfile)
+  $env:Path = $systemPath
+  $null = Invoke-Installer -Arguments @{ Version = '2.11.5'; InstallDirectory = $keptDirectory }
+  [IO.File]::WriteAllText((Join-Path $keptDirectory 'notes.txt'), 'not turbo')
+  $directoryDestination = Join-Path $testRoot 'directory destination'
+  [IO.Directory]::CreateDirectory((Join-Path $directoryDestination 'turbo.exe')) | Out-Null
+  $env:Path = "$otherDirectory;$systemPath"
+  $output = Invoke-Installer -Arguments @{ InstallDirectory = $keptDirectory; Uninstall = $true }
+  $output += "`n" + (Invoke-Installer -Arguments @{ InstallDirectory = $directoryDestination; Uninstall = $true })
+  Assert-True (-not (Test-Path -LiteralPath (Join-Path $keptDirectory 'turbo.exe'))) 'Uninstall did not remove its own turbo.exe.'
+  Assert-True ([IO.File]::ReadAllText((Join-Path $keptDirectory 'notes.txt')) -eq 'not turbo') 'Uninstall removed a file it does not own.'
+  Assert-True (Test-UserPathContains -Directory $keptDirectory) 'Uninstall removed the user PATH entry of a directory that still has other files.'
+  Assert-True (Test-Path -LiteralPath (Join-Path $directoryDestination 'turbo.exe') -PathType Container) 'Uninstall removed a turbo.exe that is not a regular file.'
+  Assert-True ([IO.File]::ReadAllText($profilePath) -ceq $unmarkedProfile) 'Uninstall changed an unmarked profile line.'
+  Assert-True ([IO.File]::ReadAllText($editionProfile) -ceq $foreignProfile) "Uninstall changed another installation's hook line."
+  Assert-True ((Test-Path -LiteralPath $otherShim) -and -not (Test-Path -LiteralPath $otherMarker)) 'Uninstall removed or executed a turbo it does not own.'
+  foreach ($message in @(
+    "Left $keptDirectory on the user PATH because it still contains other files.",
+    "Left lines in $editionProfile that are marked by the installer",
+    "Left $directoryDestination\turbo.exe because it is not a regular file.",
+    "Left $otherShim because the installer did not install it."
+  )) {
+    Assert-True ($output.Contains($message)) "Uninstall did not report '$message'. Received: $output"
+  }
+  $env:Path = $systemPath
+  Write-Output 'PASS: Windows uninstall leaves binaries, files, PATH entries, and profile lines it does not own.'
 } finally {
   if (Test-Path -LiteralPath $testRoot) {
     Remove-Item -LiteralPath $testRoot -Recurse -Force
@@ -342,6 +431,8 @@ try {
   }
   $env:TURBO_NO_MODIFY_PATH = $previousNoModifyPath
   $env:TURBO_NO_SHELL_HOOK = $previousNoShellHook
+  $env:TURBO_UNINSTALL = $previousUninstall
+  $env:LOCALAPPDATA = $previousLocalAppData
   if ($null -eq $previousUserPath) {
     $environmentKey.DeleteValue('Path', $false)
   } else {
