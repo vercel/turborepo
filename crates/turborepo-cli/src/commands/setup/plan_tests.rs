@@ -329,6 +329,11 @@ fn loopback(u: &LoopbackServer, trust_base: &std::path::Path) -> provision::Tran
         pnpm: PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
         trust_base: Some(trust_base.to_owned()),
+        cache: None,
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+            u.origin(),
+        )
+        .unwrap(),
     }
 }
 

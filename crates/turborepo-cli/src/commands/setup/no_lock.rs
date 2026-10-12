@@ -80,10 +80,21 @@ pub(super) fn run(
         (_, Some(native)) => native.selection(),
         _ => return Err(Error::Unsupported("missing native selection")),
     };
-    let provision::Plans { node, pnpm, npm } = provision::plans(&snapshot, selection)?;
+    let provision::Plans {
+        node,
+        pnpm,
+        npm,
+        rustup,
+        rust,
+    } = provision::plans(&snapshot, selection)?;
     if npm.is_some() {
         return Err(Error::Unsupported("npm provisioning with --no-lock"));
     }
+    // The native baseline covers Node and pnpm only.
+    if rustup.is_some() || rust.is_some() {
+        return Err(Error::Unsupported("Rust provisioning with --no-lock"));
+    }
+    let node = node.ok_or(Error::Unsupported("a native Node declaration is required"))?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
         desired.push(pnpm.inventory_tool().clone());

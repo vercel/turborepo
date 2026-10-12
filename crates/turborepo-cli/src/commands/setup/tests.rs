@@ -236,6 +236,8 @@ mod npm;
 mod offline_repeat;
 #[path = "publication_guards.rs"]
 mod publication_guards;
+#[path = "rustup_tests.rs"]
+mod rustup;
 #[cfg(target_os = "macos")]
 #[path = "trust_acl_tests.rs"]
 mod trust_acl;
@@ -245,8 +247,6 @@ mod trust_publication;
 mod trusted_roots;
 #[path = "unlocked_trust_tests.rs"]
 mod unlocked_trust;
-#[path = "rustup_tests.rs"]
-mod rustup;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
@@ -581,6 +581,8 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
                 trust_base: Some(f.owned.home().to_owned()),
+                cache: None,
+                rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(u.origin()).unwrap(),
             };
             run_reporting(args, setup_args, Some(transports), &mut report, || {
                 Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
