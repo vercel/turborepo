@@ -990,6 +990,8 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
     let owned = OwnedSetupFixture::new().unwrap();
     owned.init_git().unwrap();
     let root = owned.root();
+    // Ubuntu's default 0002 umask leaves fresh clones group-writable.
+    fs::set_permissions(root, fs::Permissions::from_mode(0o775)).unwrap();
     write(root, "turbo.json", ENABLED);
     write(root, ".nvmrc", "24.0.0");
     write(root, ".gitignore", "/.turbo/\n");
