@@ -107,7 +107,8 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         | Error::Rust(_)
         | Error::Uv(_)
         | Error::Python(_)
-        | Error::Go(_) => SetupFailure::Download,
+        | Error::Go(_)
+        | Error::Bun(_) => SetupFailure::Download,
         Error::Mirror(_) => SetupFailure::Request,
         Error::Install(_) => SetupFailure::Install,
         Error::Root(_) | Error::Path(_) => SetupFailure::Discovery,

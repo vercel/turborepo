@@ -189,6 +189,7 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
             uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
             python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
             go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
+            bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
         }), || Ok(f.owned.policy_at(&root.join("apps/web/src"))?))).unwrap();
     assert_eq!(result.unwrap(), 0);
     let host_bin = f.owned.home().join("host-bin");

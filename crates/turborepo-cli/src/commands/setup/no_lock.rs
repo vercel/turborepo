@@ -67,6 +67,7 @@ pub(super) fn run(
                         request,
                         &sources.node,
                         &sources.registry,
+                        &sources.bun,
                     ))
                     .map_err(|e| reconcile::Error::Resolution(e.to_string()))
             },
@@ -89,9 +90,16 @@ pub(super) fn run(
         uv,
         python,
         go,
+        yarn,
+        bun,
     } = provision::plans(&snapshot, selection)?;
     if npm.is_some() {
         return Err(Error::Unsupported("npm provisioning with --no-lock"));
+    }
+    if yarn.is_some() || bun.is_some() {
+        return Err(Error::Unsupported(
+            "Yarn or Bun provisioning with --no-lock",
+        ));
     }
     // The native baseline covers Node and pnpm only.
     if rustup.is_some() || rust.is_some() || uv.is_some() || python.is_some() || go.is_some() {

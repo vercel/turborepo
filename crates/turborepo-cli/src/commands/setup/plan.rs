@@ -111,6 +111,7 @@ fn propose(
                     resolution,
                     &upstream.node,
                     &upstream.registry,
+                    &upstream.bun,
                 ))
                 .map_err(|e| reconcile::Error::Resolution(e.to_string()))
         },
@@ -130,6 +131,8 @@ fn propose(
         uv,
         python,
         go,
+        yarn,
+        bun,
     } = provision::plans(&sources, &outcome.lock)?;
     let mut desired = Vec::new();
     desired.extend(node.as_ref().map(|plan| plan.inventory_tool().clone()));
@@ -140,6 +143,8 @@ fn propose(
     desired.extend(uv.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(python.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(go.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(bun.as_ref().map(|plan| plan.inventory_tool().clone()));
     // Same per-tool reuse as setup's preparation; inspection never writes.
     let (installed, damaged) = match Store::inspect(root) {
         Ok(current) => (current.map(|c| c.tools).unwrap_or_default(), false),
