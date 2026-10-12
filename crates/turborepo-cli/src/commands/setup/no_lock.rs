@@ -18,6 +18,18 @@ pub(super) fn run(
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     let platform = provision::platform()?;
+    // Name what is missing or unsupported instead of the record's generic
+    // rejection; both fail before transports, writers, or Store.
+    let declared = snapshot.declarations();
+    if !declared.contains_key("node") {
+        return Err(Error::NoLockNode);
+    }
+    if let Some(id) = declared
+        .keys()
+        .find(|id| !matches!(id.as_str(), "node" | "pnpm"))
+    {
+        return Err(Error::NoLockTool(id.clone()));
+    }
     NativeRecord::preflight(&snapshot)?;
     // An existing real lock is authoritative: reject drift/unsupported semantics
     // before transports, WRITER, Store, or any ignored-state mutation.
