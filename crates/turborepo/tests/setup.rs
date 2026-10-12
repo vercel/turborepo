@@ -669,6 +669,38 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
 #[test]
+fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    let layout = "auto-install-peers = true\nhoist-pattern[]=react\nresolution-mode=highest\n";
+    write(root, ".npmrc", layout);
+    let words = ["setup", "--check", "--tools-only"];
+    // The policy passed, so check reaches its lock requirement.
+    check_failure(
+        root,
+        &words,
+        false,
+        "managed activation requires turbo.lock",
+    );
+    write(
+        root,
+        ".npmrc",
+        &format!("{layout}registry=https://registry.npmjs.org/\n"),
+    );
+    check_failure(
+        root,
+        &words,
+        false,
+        "official-only setup rejects line 4 of the Repository .npmrc",
+    );
+}
+
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+#[test]
 fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
     use std::os::unix::fs::PermissionsExt;
 
