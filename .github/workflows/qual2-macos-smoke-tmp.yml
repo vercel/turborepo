@@ -40,6 +40,12 @@ jobs:
           restore-keys: |
             cargo-target-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('rust-toolchain.toml', '.cargo/config.toml', 'Cargo.lock') }}-
 
+      # The preview predates #14566's linked-keg npmrc fix; apply only that delta.
+      - run: |
+          git fetch --quiet origin 6bb748693e80777812b8205d848d818a874c4a80 38f7548330
+          git diff 38f7548330 6bb748693e80777812b8205d848d818a874c4a80 | git apply -3
+          git status --short
+
       - run: cargo build -p turbo
 
       # Same packaging as the release step; an ad hoc signature stands in for
