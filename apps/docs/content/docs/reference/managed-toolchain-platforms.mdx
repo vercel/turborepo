@@ -1,0 +1,128 @@
+---
+title: Managed toolchain platforms
+description: Which platforms the experimental `turbo setup`, managed `turbo run` and `turbo exec`, and the shell hook support today, and which claims are still pending.
+product: turborepo
+type: reference
+summary: Support status of experimental managed toolchains for each operating system and architecture, how each status is tested, and the known gaps that block qualification.
+prerequisites:
+  - /docs/core-concepts/managed-toolchains
+related:
+  - /docs/reference/setup
+  - /docs/reference/setup-policy
+  - /docs/support-policy
+---
+
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+[Managed toolchains](/docs/core-concepts/managed-toolchains) work in three steps, and each platform supports a different subset of them today:
+
+1. **[`turbo setup`](/docs/reference/setup)** installs the tools that `turbo.lock` records into `.turbo/tools`.
+2. **Managed `turbo run` and [`turbo exec`](/docs/reference/exec)** run tasks and commands with those tools.
+3. **The [shell hook](/docs/reference/hook)** puts those tools first on `PATH` at your prompt.
+
+<Callout type="warn">
+  No platform is qualified for managed toolchains yet. A platform is qualified
+  once one complete journey passes there with real installers: standalone
+  install, `turbo setup`, `turbo run`, the shell hook, `turbo exec`, and an
+  offline repeat. Until then, this page describes what's implemented and how
+  it's tested, and any status can change.
+</Callout>
+
+## Support by platform
+
+| Platform                     | `turbo setup`                       | Managed `turbo run` and `turbo exec` | Shell hook |
+| ---------------------------- | ----------------------------------- | ------------------------------------ | ---------- |
+| macOS, Apple silicon (arm64) | Tested                              | Tested                               | Tested     |
+| macOS, Intel (x64)           | Untested                            | Untested                             | Untested   |
+| Linux x64, glibc             | Tested                              | Not available                        | Tested     |
+| Linux arm64, glibc           | Untested                            | Not available                        | Untested   |
+| Linux with musl, like Alpine | [`verify-system`](#musl-linux) only | Not available                        | No effect  |
+| Windows x64                  | Tested                              | Untested                             | No effect  |
+| Windows arm64                | Not available                       | Not available                        | No effect  |
+
+- **Tested**: Implemented, and automated tests for this step run on this platform.
+- **Untested**: Implemented, but no automated test runs on this platform yet.
+- **Not available**: `turbo` refuses or fails. See the platform's section for the message.
+- **No effect**: The hook can be installed, but it never changes `PATH`.
+
+Support also depends on the toolchain. For example, `turbo run` doesn't use managed Rust, Python, or Go tools on any platform yet. See the [limitations of managed toolchains](/docs/core-concepts/managed-toolchains#limitations).
+
+### Standalone installation
+
+The [standalone installer](/docs/getting-started/installation#global-installation) installs `turbo` on macOS (x64 and arm64), Linux (x64 and arm64, with any C library), and Windows x64. On Windows arm64, it stops instead of installing the x64 build to run under emulation.
+
+## macOS
+
+On Apple silicon, the tests that run `turbo setup` and then a plain `turbo run` through the real binary, and the shell hook tests for bash, zsh, fish, and PowerShell, run in CI.
+
+Intel Macs use the same code, and `turbo.lock` records their `macos-x64` downloads, but no CI job runs on an Intel Mac yet.
+
+## Linux with glibc
+
+`turbo setup` detects the host's C library at runtime. The published `turbo` binaries for Linux are built against musl so they run on any distribution, and on glibc hosts they still install each tool's glibc download, such as `linux-x64-gnu`. `turbo setup --check` and the shell hook work with those binaries too.
+
+<Callout type="warn">
+  In this release, managed `turbo run` and `turbo exec` don't work with the
+  published Linux binaries. They fail with:
+
+```txt title="Terminal"
+managed setup validation failed: managed Node/pnpm run is unsupported on this host
+```
+
+A `turbo` built for glibc (`*-unknown-linux-gnu`) passes the setup-then-run tests in CI on Linux x64, but no glibc build of `turbo` is published, on GitHub or npm.
+
+</Callout>
+
+`turbo setup` and its tests run in CI on Linux x64. Linux arm64 uses the same code, and `turbo.lock` records its `linux-arm64-gnu` downloads, but no CI job runs on Linux arm64 yet.
+
+## musl Linux
+
+Official Node.js releases don't include musl builds, so managed tools aren't available on musl-based distributions such as Alpine Linux:
+
+```txt title="Terminal"
+managed tools are not supported on musl Linux hosts such as Alpine
+```
+
+On these hosts, install Node.js and pnpm yourself, in containers from an exactly pinned image tag, and set the JavaScript toolchain to [`verify-system`](/docs/reference/setup-policy#verify-system). `turbo setup` then records and checks the installed Node.js and pnpm versions instead of downloading them.
+
+<Callout type="warn">
+  In this release, `turbo run` and `turbo exec` fail in any repository whose
+  `turbo.lock` records `verify-system` tools, on every platform. On musl hosts,
+  they also fail with `managed Node/pnpm run is unsupported on this host`.
+</Callout>
+
+`verify-system` setup is tested in CI on Linux with glibc, not on a musl host. Because `verify-system` installs nothing, the shell hook has nothing to activate.
+
+## Windows
+
+On Windows x64, CI runs `turbo setup` tests for local and frozen setup, `--check`, and recovery from an interrupted installation. Managed `turbo run` and `turbo exec` are implemented, but no test runs `turbo setup` and then a task or command with the installed tools on Windows yet.
+
+Two gaps remain on Windows x64:
+
+- **The shell hook doesn't activate tools yet.** The [Windows installer](/docs/reference/hook#the-installer-and-opting-out) adds the hook to your PowerShell profile, but it leaves `PATH` unchanged until Windows support lands. Use [`turbo exec`](/docs/reference/exec) instead.
+- **`turbo setup --check` can't measure disk use.** It prints `Warning: could not measure managed tool disk use` and still reports each tool.
+
+On Windows arm64, `turbo setup` refuses to install tools, including when the x64 build of `turbo` runs under emulation:
+
+```txt title="Terminal"
+managed setup is not qualified for Windows arm64, including x64 turbo under emulation; use WSL or a Windows x64 machine
+```
+
+## Network and external services
+
+- **Official sources.** `turbo setup` downloads each tool from its official release site and verifies it against `turbo.lock`. Only Node.js and the npm registry can use a mirror, set with `TURBO_SETUP_NODE_MIRROR` and `TURBO_SETUP_NPM_REGISTRY`.
+- **Proxies and certificates.** Downloads honor `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`.
+- **Offline.** [`--offline`](/docs/reference/setup#--offline) never contacts the network, so it only works after an earlier `turbo setup` on the same machine.
+- **Everything else is yours.** `turbo setup` doesn't install dependencies, system libraries, services, databases, or credentials. Tasks that need them still need them after `turbo setup`.
+
+## Pending qualification
+
+These claims are pending, and this page changes as each one is verified:
+
+- **Every platform:** The complete journey with real installers, including an offline repeat.
+- **macOS:** CI coverage on Intel Macs.
+- **Linux with glibc:** Managed `turbo run` and `turbo exec` with the published binaries, and CI coverage on arm64.
+- **musl Linux:** `turbo run` and `turbo exec` with `verify-system` tools, and CI coverage on a musl host.
+- **Windows x64:** The shell hook, and end-to-end tests of managed `turbo run` and `turbo exec`.
