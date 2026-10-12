@@ -65,6 +65,43 @@ fn failure(root: &Path, dir: &str, words: &[&str], expected: &str) {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn managed_exec_never_reaches_an_unvalidated_local_cli() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use turborepo_shim::TurboState;
+    let temp = tempfile::tempdir().expect("tempdir");
+    let root = temp.path();
+    let package = root.join("repo/node_modules").join(format!(
+        "{}/{}",
+        TurboState::scoped_platform_package_scope(),
+        TurboState::scoped_platform_package_dir()
+    ));
+    for dir in [root.join("bin"), package.join("bin")] {
+        fs::create_dir_all(dir).expect("fixture directory");
+    }
+    fs::write(package.join("package.json"), r#"{"version":"2.9.0"}"#).expect("package");
+    let pin = package.join("bin").join(TurboState::binary_name());
+    fs::write(&pin, "#!/bin/sh\n: > pin-ran\n").expect("pin");
+    fs::set_permissions(&pin, fs::Permissions::from_mode(0o755)).expect("chmod");
+    let repo = root.join("repo");
+    fs::write(
+        repo.join("package.json"),
+        r#"{"packageManager":"pnpm@10.0.0"}"#,
+    )
+    .expect("pkg");
+    fs::write(repo.join("turbo.json"), ENABLED).expect("turbo.json");
+    // A root lock makes the repository managed; setup never prepared it.
+    fs::write(repo.join("turbo.lock"), "{}").expect("turbo.lock");
+    failure(
+        root,
+        "repo",
+        &["exec", "--", "probe"],
+        "managed setup validation failed",
+    );
+}
+
 #[test]
 fn exec_is_gated_and_never_runs_the_program_without_activation() {
     let temp = tempfile::tempdir().expect("tempdir");
