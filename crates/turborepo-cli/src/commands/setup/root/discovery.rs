@@ -34,10 +34,6 @@ impl SourceEligibility {
         }
     }
 
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "pending guarded provisioner6320")
-    )]
     pub fn node(self) -> bool {
         self.node
     }
@@ -166,6 +162,10 @@ impl Discovery {
     }
     pub fn flags(&self) -> FutureFlags {
         self.root.flags
+    }
+    /// The validated root `setup` policy; `revalidate` rejects later edits.
+    pub fn policy(&self) -> &turborepo_turbo_json::SetupPolicy {
+        &self.root.policy
     }
 
     pub fn source_eligibility(&self) -> SourceEligibility {

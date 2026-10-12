@@ -382,18 +382,10 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
     let Some(jsonc_parser::ast::Value::Object(object)) = parsed.value else {
         return Observation::Unsafe;
     };
-    // Setup consumes `additionalTools`; any other policy is not applied yet.
-    let applied = |value: &jsonc_parser::ast::Value| {
-        matches!(value, jsonc_parser::ast::Value::Object(setup) if !setup.properties.is_empty()
-            && setup
-                .properties
-                .iter()
-                .all(|property| property.name.as_str() == "additionalTools"))
-    };
     if object
         .properties
         .iter()
-        .any(|property| property.name.as_str() == "setup" && !applied(&property.value))
+        .any(|property| property.name.as_str() == "setup" && !applied_policy(&property.value))
     {
         Observation::Readable
     } else {
@@ -453,6 +445,26 @@ fn bundled_prefix(bytes: &[u8]) -> Option<PathBuf> {
     (components.next() == Some(Component::RootDir)
         && components.all(|part| matches!(part, Component::Normal(_))))
     .then(|| prefix.to_path_buf())
+}
+
+/// Setup applies these root policy keys, and none configures download
+/// sources. Any other shape, including an empty policy, is not applied yet.
+fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
+    use jsonc_parser::ast::Value;
+    const VALUES: [&str; 3] = ["tools", "dependencies", "lifecycleScripts"];
+    const TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
+    let value =
+        |name: &str, value: &Value| VALUES.contains(&name) && matches!(value, Value::StringLit(_));
+    let toolchain = |name: &str, toolchain: &Value| {
+        TOOLCHAINS.contains(&name)
+            && matches!(toolchain, Value::Object(object)
+                if object.properties.iter().all(|p| value(p.name.as_str(), &p.value)))
+    };
+    matches!(setup, Value::Object(object) if !object.properties.is_empty()
+    && object.properties.iter().all(|p| {
+        let name = p.name.as_str();
+        value(name, &p.value) || toolchain(name, &p.value) || name == "additionalTools"
+    }))
 }
 
 // Pure policy decision: no reads, probes, URLs, environment mutation or

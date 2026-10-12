@@ -347,6 +347,55 @@ fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
     f.no_execution();
 }
 #[test]
+fn root_policy_and_cli_overrides_select_the_effective_setup() {
+    let configure = |f: &Fixture, flags: &str, setup: &str| {
+        let json =
+            format!(r#"{{"futureFlags":{{"experimentalSetup":true{flags}}},"setup":{setup}}}"#);
+        fs::write(f.owned.root().join("turbo.json"), json).unwrap();
+    };
+    // A repository-chosen tools-only setup needs no --tools-only.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"dependencies":"skip"}"#);
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--check"]).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // --tools-only overrides locked dependencies for one invocation.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"dependencies":"locked"}"#);
+    let u = Upstream::new(&f, false, None);
+    assert!(matches!(
+        f.run(&u, &["--frozen"]),
+        Err(Error::NotImplemented)
+    ));
+    assert_eq!(u.hits(), 0);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+
+    // Skipping an ecosystem without a setup adapter lets JavaScript proceed.
+    let cargo = r#","experimentalCargoWorkspaces":true"#;
+    let f = Fixture::new();
+    configure(&f, cargo, r#"{"tools":"managed"}"#);
+    let u = Upstream::new(&f, false, None);
+    assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
+    configure(&f, cargo, r#"{"rust":{"tools":"skip"}}"#);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+
+    // Skipped JavaScript tools prepare nothing and never hide locked tools.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"javascript":{"tools":"skip"}}"#);
+    let u = Upstream::new(&f, false, None);
+    assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
+    fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), 0);
+    assert!(!f.owned.root().join(".turbo").exists());
+    f.no_execution();
+}
+
+#[test]
 fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     for flags in [
         vec!["--plan"],
