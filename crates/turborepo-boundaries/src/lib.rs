@@ -752,8 +752,7 @@ impl BoundariesChecker {
 
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
-        let resolver =
-            PackageResolver::new(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
+        let resolver = PackageResolver::new(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
 
