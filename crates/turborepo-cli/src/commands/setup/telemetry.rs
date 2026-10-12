@@ -64,6 +64,7 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         }
         Error::LockDiagnostics(super::lock_diagnostics::Error::Drift(_)) => SetupFailure::LockStale,
         Error::Offline(_) => SetupFailure::Readiness,
+        Error::OfflineMissing(_) => SetupFailure::Download,
         Error::Native(_) => SetupFailure::Unsupported,
         Error::Ephemeral(_) => SetupFailure::Resolution,
         Error::NotImplemented => SetupFailure::Unsupported,
