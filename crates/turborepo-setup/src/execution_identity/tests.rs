@@ -6,6 +6,8 @@ use serde_json::{Value, json};
 
 use super::*;
 
+mod additional;
+
 fn fixture() -> Value {
     let part = |name: &str, digest: &str| {
         json!({
