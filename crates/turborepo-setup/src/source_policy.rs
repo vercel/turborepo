@@ -469,7 +469,7 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
     use jsonc_parser::ast::Value;
     const VALUES: [&str; 3] = ["tools", "dependencies", "lifecycleScripts"];
     const TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
-    const MIRRORS: [&str; 2] = ["node", "npmRegistry"];
+    const MIRRORS: [&str; 5] = ["node", "npmRegistry", "bun", "uv", "python"];
     let strings = |keys: &[&str], value: &Value| {
         matches!(value, Value::Object(object) if object.properties.iter().all(|p| {
             keys.contains(&p.name.as_str()) && matches!(p.value, Value::StringLit(_))

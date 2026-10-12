@@ -14,6 +14,12 @@ use turborepo_turbo_json::{SetupMirrors, setup::mirror_url};
 pub const NODE_MIRROR_ENV: &str = "TURBO_SETUP_NODE_MIRROR";
 /// Equivalent to `https://registry.npmjs.org`.
 pub const NPM_REGISTRY_ENV: &str = "TURBO_SETUP_NPM_REGISTRY";
+/// Replaces the `https://github.com` origin for Bun release paths.
+pub const BUN_MIRROR_ENV: &str = "TURBO_SETUP_BUN_MIRROR";
+/// Replaces the `https://releases.astral.sh` origin for uv paths.
+pub const UV_MIRROR_ENV: &str = "TURBO_SETUP_UV_MIRROR";
+/// Replaces the `https://releases.astral.sh` origin for CPython paths.
+pub const PYTHON_MIRROR_ENV: &str = "TURBO_SETUP_PYTHON_MIRROR";
 const NODE_POLICY: &str = "setup.mirrors.node";
 const NPM_REGISTRY_POLICY: &str = "setup.mirrors.npmRegistry";
 
@@ -37,6 +43,9 @@ pub struct Mirror {
 pub struct Mirrors {
     pub node: Option<Mirror>,
     pub registry: Option<Mirror>,
+    pub bun: Option<Mirror>,
+    pub uv: Option<Mirror>,
+    pub python: Option<Mirror>,
 }
 
 impl Mirrors {
@@ -65,6 +74,9 @@ impl Mirrors {
         Ok(Self {
             node: select(NODE_MIRROR_ENV, NODE_POLICY, &policy.node)?,
             registry: select(NPM_REGISTRY_ENV, NPM_REGISTRY_POLICY, &policy.npm_registry)?,
+            bun: select(BUN_MIRROR_ENV, "setup.mirrors.bun", &policy.bun)?,
+            uv: select(UV_MIRROR_ENV, "setup.mirrors.uv", &policy.uv)?,
+            python: select(PYTHON_MIRROR_ENV, "setup.mirrors.python", &policy.python)?,
         })
     }
 }
@@ -123,6 +135,8 @@ mod tests {
         SetupMirrors {
             node: Some(node.into()),
             npm_registry: Some(registry.into()),
+            python: Some("https://policy.example/astral".into()),
+            ..Default::default()
         }
     }
 
@@ -155,6 +169,15 @@ mod tests {
             base(mirrors.registry).as_deref(),
             Some("https://policy.example/npm")
         );
+        // Release hosts follow the same rule with their own variables.
+        let var = |name: &str| (name == UV_MIRROR_ENV).then(|| "https://env.example/uv".into());
+        let mirrors = Mirrors::resolve(var, &committed).unwrap();
+        assert_eq!(base(mirrors.uv).as_deref(), Some("https://env.example/uv"));
+        assert_eq!(
+            base(mirrors.python).as_deref(),
+            Some("https://policy.example/astral")
+        );
+        assert!(mirrors.bun.is_none());
         // An empty variable is unset, so the policy still applies.
         let mirrors = Mirrors::resolve(env(""), &committed).unwrap();
         assert_eq!(

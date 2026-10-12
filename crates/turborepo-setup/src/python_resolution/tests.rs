@@ -150,6 +150,27 @@ fn host_filtered_listings_fail_closed() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn mirrors_serve_the_official_checksum_paths_beneath_their_base() {
+    let path = format!("/mirror{RELEASES}{TAG}/SHA256SUMS");
+    let upstream = LoopbackServer::new([(path.clone(), sums("3.12.12"))], |_| {}).unwrap();
+    let fixture = crate::test_support::OwnedSetupFixture::new().unwrap();
+    let base = format!("{}/mirror", upstream.origin());
+    let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
+    let transport = PythonTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
+    let tool = transport.resolve(&requirement("3.12"), &listing()).await;
+    assert_eq!(upstream.requests(), [path]);
+    let Installation::Managed { artifacts } = &tool.unwrap().installation else {
+        panic!("expected managed Python");
+    };
+    let official = format!("{ORIGIN}{RELEASES}{TAG}/");
+    assert!(
+        artifacts
+            .values()
+            .all(|parts| parts["distribution"].url.starts_with(&official))
+    );
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn transport_binds_published_checksums_and_uv_keys() {
     let upstream = LoopbackServer::new(
         [(format!("{RELEASES}{TAG}/SHA256SUMS"), sums("3.12.12"))],

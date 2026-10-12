@@ -334,6 +334,17 @@ impl PythonTransport {
         })
     }
 
+    /// Send the official build paths to a validated mirror base.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &crate::mirror::Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            origin: mirror.base().into(),
+        })
+    }
+
     /// Select from the uv listing, then read only the selected builds'
     /// `SHA256SUMS`. No artifact download.
     pub async fn resolve(
