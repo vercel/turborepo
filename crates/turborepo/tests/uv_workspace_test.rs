@@ -545,6 +545,93 @@ fn test_uv_workspace_falls_back_with_unparsable_lockfile() {
 }
 
 #[test]
+fn test_uv_fallback_workspace_source_overrides_local_file_reference() {
+    for source_at_root in [false, true] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_uv_pure_workspace(tempdir.path());
+        fs::write(tempdir.path().join("uv.lock"), "not valid lockfile TOML").unwrap();
+        let source = "\n[tool.uv.sources]\npy-lib = { workspace = true }\n";
+        fs::write(
+            tempdir.path().join("packages/py-app/pyproject.toml"),
+            format!(
+                "[project]\nname = \"py-app\"\nversion = \"0.1.0\"\nrequires-python = \
+                 \">=3.9\"\ndependencies = [\"py-lib @ file:///nonexistent/vendor/py-lib\"]\n\n\
+                 [build-system]\nrequires = [\"uv_build>=0.8,<2\"]\nbuild-backend = \
+                 \"uv_build\"\n{}",
+                if source_at_root { "" } else { source }
+            ),
+        )
+        .unwrap();
+        if source_at_root {
+            append_manifest(tempdir.path(), "pyproject.toml", source);
+        }
+
+        let output = run_turbo(
+            tempdir.path(),
+            &["build", "--filter=py-app", "--dry-run=json"],
+        );
+        assert_command_success(&output, "fallback with a workspace source override");
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("using conservative Python task hashing")
+        );
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            find_task(&json, "py-app#build")["dependencies"],
+            serde_json::json!(["py-lib#build"])
+        );
+    }
+}
+
+/// When the manifest fallback rejects a local path source, the output must
+/// still explain why turbo left exact discovery.
+#[test]
+fn test_uv_fallback_rejection_reports_why_it_fell_back() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_uv_pure_workspace(tempdir.path());
+    fs::write(tempdir.path().join("uv.lock"), "not valid lockfile TOML").unwrap();
+    fs::write(
+        tempdir.path().join("packages/py-app/pyproject.toml"),
+        "[project]\nname = \"py-app\"\nversion = \"0.1.0\"\nrequires-python = \
+         \">=3.9\"\ndependencies = [\"py-lib\", \"helper\"]\n\n[tool.uv.sources]\npy-lib = { \
+         workspace = true }\nhelper = { path = \"../../vendor/helper\" }\n",
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("vendor/helper")).unwrap();
+    fs::write(
+        tempdir.path().join("vendor/helper/pyproject.toml"),
+        "[project]\nname = \"helper\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["build", "--filter=py-app", "--dry-run=json"],
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{combined}");
+    assert!(
+        combined.contains("using conservative Python task hashing"),
+        "{combined}"
+    );
+    // The diagnostic renderer wraps the error and prefixes continuation lines
+    // with a gutter, so match its message independently of terminal width.
+    let diagnostic = combined
+        .lines()
+        .map(|line| line.trim().trim_start_matches('|').trim())
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        diagnostic.contains("only uv workspace members are supported"),
+        "{combined}"
+    );
+}
+
+#[test]
 fn test_uv_lock_change_only_affects_dependency_closure() {
     if !uv_available() {
         return;
@@ -816,6 +903,16 @@ fn test_uv_virtual_environment_cannot_be_cached_as_output() {
 fn test_uv_prune() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
+    // Root tool configuration is hashed into task inputs, so pruned tasks need it.
+    for (name, contents) in [
+        ("conftest.py", "import pytest\n"),
+        ("ruff.toml", "line-length = 100\n"),
+        ("pytest.ini", "[pytest]\n"),
+        // Packaging configuration for a root project whose sources aren't kept.
+        ("setup.cfg", "[options]\npackage_dir = =src\n"),
+    ] {
+        fs::write(tempdir.path().join(name), contents).unwrap();
+    }
 
     let output = common::run_turbo_with_env(
         tempdir.path(),
@@ -827,6 +924,13 @@ fn test_uv_prune() {
 
     assert!(out.join("packages/py-app/pyproject.toml").exists());
     assert!(out.join("packages/py-lib/pyproject.toml").exists());
+    for name in ["conftest.py", "ruff.toml", "pytest.ini"] {
+        assert!(out.join(name).exists(), "{name} must be carried into out/");
+    }
+    assert!(
+        !out.join("setup.cfg").exists(),
+        "setup.cfg can configure an unpruned root package and must stay behind"
+    );
 
     let lock = fs::read_to_string(out.join("uv.lock")).unwrap();
     assert!(lock.contains("name = \"py-app\""));

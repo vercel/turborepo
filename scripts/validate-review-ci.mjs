@@ -112,8 +112,11 @@ export async function validateReviewCI({
   const matchesHead = (run, event = "pull_request") =>
     (run?.head_sha === headSha ||
       (event === "pull_request_review" && run?.head_sha === reviewSha)) &&
-    run.head_repository?.id === expected.head.repo.id &&
-    run.head_repository?.full_name === expected.head.repo.full_name &&
+    // Review events can report the base repository for a fork PR's head.
+    ((run.head_repository?.id === expected.head.repo.id &&
+      run.head_repository?.full_name === expected.head.repo.full_name) ||
+      (event === "pull_request_review" &&
+        matchesRepository(run.head_repository))) &&
     run.head_branch === expected.head.ref;
 
   function checkRun(run, event) {

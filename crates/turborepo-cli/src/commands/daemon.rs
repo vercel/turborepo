@@ -207,7 +207,7 @@ pub async fn daemon_server(
                     args.custom_turbo_json_path,
                     false,
                     args.allow_no_package_manager,
-                    graph_features,
+                    graph_features.clone(),
                     future_flags,
                 )
             }
