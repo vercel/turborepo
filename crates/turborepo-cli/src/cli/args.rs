@@ -1119,6 +1119,9 @@ pub struct SetupArgs {
     /// Skip dependency installation
     #[usage(long)]
     pub tools_only: bool,
+    /// Skip dependency lifecycle scripts with each package manager's own flag
+    #[usage(long)]
+    pub ignore_scripts: bool,
     /// Provision without writing turbo.lock; overrides CI-inferred frozen mode
     #[usage(long, conflicts = "update_lock")]
     pub no_lock: bool,
