@@ -80,6 +80,11 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LockDiagnostics(#[from] lock_diagnostics::Error),
+    #[error(
+        "offline setup is missing verified cached artifacts; nothing was installed:\n{0}\nRun \
+         turbo setup --tools-only without --offline to download and verify them."
+    )]
+    OfflineMissing(String),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
@@ -348,8 +353,8 @@ fn run_reporting(
             return Ok(0);
         }
         // Offline repeats and clone-local --no-lock report their own skipped
-        // dependencies.
-        (Mode::Provision, _) if request.offline => {
+        // dependencies. Offline --force always takes the cache-backed path.
+        (Mode::Provision, _) if request.offline && !request.force => {
             return offline::run(
                 &discovery,
                 snapshot,
@@ -361,15 +366,9 @@ fn run_reporting(
         (Mode::Provision, _) if request.lock == LockMode::NoLock => {
             return no_lock::run(&discovery, snapshot, transports, preflight);
         }
-        (Mode::Provision, _) => provision::run(
-            &discovery,
-            snapshot,
-            request.lock,
-            resolution,
-            request.force,
-            transports,
-            preflight,
-        )?,
+        (Mode::Provision, _) => {
+            provision::run(&discovery, snapshot, &request, transports, preflight)?
+        }
     };
     report.downloaded_bytes = provisioned.downloaded_bytes;
     report.tools_installed = provisioned.installed;
@@ -557,6 +556,16 @@ mod tests {
                 )
                 .is_ok()
             );
+            assert!(matches!(
+                validate_request(
+                    &request(
+                        &["--tools-only", "--no-frozen", "--update-lock", "--offline"],
+                        ci
+                    )
+                    .unwrap()
+                ),
+                Err(Error::Unsupported(_))
+            ));
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
                 if matches!(control, "--force" | "--no-lock" | "--plan" | "--offline") {

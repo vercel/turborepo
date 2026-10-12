@@ -1,10 +1,12 @@
 //! Local reconciliation followed by locked tool provisioning.
 //! Force reinstalls committed selections without resolution or lock writes.
+//! Offline uses only healthy installs and verified cached artifacts.
 //! No probes, dependency execution or activation.
 use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
-    lock::{Platform, Snapshot},
+    artifact_cache::ArtifactCache,
+    lock::{Installation, Platform, Snapshot},
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -24,9 +26,12 @@ pub(super) struct Transports {
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
+        // Verified archive bytes are shared through the user's cache directory;
+        // extraction and activation stay in each repository's .turbo/tools.
+        let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
         Ok(Self {
-            node: NodeTransport::official(policy)?,
-            pnpm: PnpmTransport::official(policy)?,
+            node: NodeTransport::official(policy)?.with_cache(cache.clone()),
+            pnpm: PnpmTransport::official(policy)?.with_cache(cache),
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
             #[cfg(test)]
             trust_base: None,
@@ -41,6 +46,45 @@ impl Transports {
         dirs_next::data_local_dir()
             .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
     }
+
+    // Keeps each transport's cache; every network path fails before traffic.
+    fn offline(self) -> Self {
+        Self {
+            node: self.node.offline(),
+            pnpm: self.pnpm.offline(),
+            registry: self.registry.offline(),
+            #[cfg(test)]
+            trust_base: self.trust_base,
+        }
+    }
+}
+
+// Lock-derived, credential-free provenance for each missing host artifact.
+fn missing_artifacts(
+    lock: &turborepo_setup::lock::Lock,
+    platform: Platform,
+    ids: &[&str],
+) -> String {
+    let mut lines = Vec::new();
+    for (id, tool) in lock
+        .tools()
+        .iter()
+        .filter(|(id, _)| ids.contains(&id.as_str()))
+    {
+        let Installation::Managed { artifacts } = &tool.installation else {
+            continue;
+        };
+        let parts = artifacts
+            .get(&platform)
+            .or_else(|| artifacts.get(&Platform::Any));
+        for (part, artifact) in parts.into_iter().flatten() {
+            lines.push(format!(
+                "  {id} {} [{part}]: {} (SHA-256 {})",
+                tool.version, artifact.url, artifact.sha256
+            ));
+        }
+    }
+    lines.join("\n")
 }
 
 pub(super) fn platform() -> Result<Platform, Error> {
@@ -224,18 +268,34 @@ pub(super) fn lock_report(
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
-    lock_mode: super::LockMode,
-    resolution_mode: turborepo_setup::lock::reconcile::Mode,
-    force: bool,
+    request: &super::SetupRequest,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<Provisioned, Error> {
-    // Force never enters resolution or lock publication, even in local Write.
-    let write = lock_mode == super::LockMode::Write && !force;
+    let (force, offline) = (request.force, request.offline);
+    let lock_mode = request.lock;
+    let resolution_mode = if request.update_lock {
+        turborepo_setup::lock::reconcile::Mode::Refresh
+    } else {
+        turborepo_setup::lock::reconcile::Mode::Local
+    };
+    // Force and offline never enter resolution or lock publication.
+    let write = lock_mode == super::LockMode::Write && !force && !offline;
     let root = discovery.snapshot_root()?.as_std_path();
-    platform()?;
+    let host = platform()?;
     if lock_mode == super::LockMode::Frozen {
         super::lock_diagnostics::frozen(&snapshot)?;
+    }
+    if offline {
+        let lock = snapshot.previous_lock().ok_or(Error::Unsupported(
+            "offline setup requires turbo.lock; run turbo setup --tools-only without --offline",
+        ))?;
+        if !lock.matches_native(snapshot.declarations())? {
+            return Err(Error::Unsupported(
+                "offline setup cannot resolve changed tool declarations; run turbo setup \
+                 --tools-only without --offline",
+            ));
+        }
     }
     if write && !snapshot.declarations().contains_key("node") {
         return Err(Error::Unsupported("a native Node declaration is required"));
@@ -353,6 +413,11 @@ pub(super) fn run(
     let transports = transports
         .map(Ok)
         .unwrap_or_else(|| Transports::official(&policy))?;
+    let transports = if offline {
+        transports.offline()
+    } else {
+        transports
+    };
     revalidate(discovery)?;
     storage(root)?;
     snapshot.ensure_current()?;
@@ -378,31 +443,96 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
+    // Offline misses are collected, not short-circuited, so the report names
+    // every missing artifact. Nothing is published unless all are present.
+    // Offline --force reinstalls from verified cached bytes, or else from the
+    // healthy installed tree the adapter would reuse, but only when the
+    // external trust record proves that tree's provenance.
+    let mut missing = Vec::new();
+    let mut reused = Vec::new();
     let (prepared_node, prepared_pnpm, prepared_npm) = runtime.block_on(async {
-        let node = node
-            .prepare(&store, &desired, &transports.node, preparation)
-            .await?;
+        use turborepo_setup::{Preparation::IfNeeded, node_provision::Error::Offline};
+        let transport = &transports.node;
+        let node = match node.prepare(&store, &desired, transport, preparation).await {
+            Err(Offline) if force && recorded => {
+                match node.prepare(&store, &desired, transport, IfNeeded).await {
+                    Ok(None) => {
+                        reused.push(node.inventory_tool().clone());
+                        None
+                    }
+                    Err(Offline) => {
+                        missing.push("node");
+                        None
+                    }
+                    result => result?,
+                }
+            }
+            Err(Offline) => {
+                missing.push("node");
+                None
+            }
+            result => result?,
+        };
         preflight()?;
         revalidate(discovery)?;
         snapshot.check_guard(&guard)?;
+        use turborepo_setup::pnpm_provision::Error::Offline as PnpmOffline;
+        let transport = &transports.pnpm;
         let pnpm = match &pnpm {
-            Some(plan) => {
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
+            Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
+                Err(PnpmOffline) if force && recorded => {
+                    match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(PnpmOffline) => {
+                            missing.push("pnpm");
+                            None
+                        }
+                        result => result?,
+                    }
+                }
+                Err(PnpmOffline) => {
+                    missing.push("pnpm");
+                    None
+                }
+                result => result?,
+            },
             None => None,
         };
+        // npm and pnpm use the same exact, integrity-verified registry
+        // transport; the plan determines package identity, never PATH.
         let npm = match &npm {
-            Some(plan) => {
-                // npm and pnpm use the same exact, integrity-verified registry
-                // transport; the plan determines package identity, never PATH.
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
+            Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
+                Err(PnpmOffline) if force && recorded => {
+                    match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(PnpmOffline) => {
+                            missing.push("npm");
+                            None
+                        }
+                        result => result?,
+                    }
+                }
+                Err(PnpmOffline) => {
+                    missing.push("npm");
+                    None
+                }
+                result => result?,
+            },
             None => None,
         };
         Ok::<_, Error>((node, pnpm, npm))
     })?;
+    if !missing.is_empty() {
+        return Err(Error::OfflineMissing(missing_artifacts(
+            lock, host, &missing,
+        )));
+    }
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
         if tool == node.inventory_tool() {
             prepared_node
@@ -426,7 +556,7 @@ pub(super) fn run(
         Ok(())
     };
     if replace {
-        store.force_reconcile_checked(&desired, stage, before_publish)?;
+        store.force_reconcile_reusing_checked(&desired, &reused, stage, before_publish)?;
     } else {
         store.reconcile_checked(&desired, stage, before_publish)?;
     }
@@ -447,10 +577,13 @@ pub(super) fn run(
         ..Provisioned::default()
     };
     for tool in &desired {
-        let reused = (tool.id == "node" && prepared_node.is_none())
-            || (tool.id == "pnpm" && prepared_pnpm.is_none())
-            || (tool.id == "npm" && prepared_npm.is_none());
-        if reused {
+        let from_cache = match tool.id.as_str() {
+            "node" => prepared_node.as_ref().map(|node| node.from_cache()),
+            "pnpm" => prepared_pnpm.as_ref().map(|pnpm| pnpm.from_cache()),
+            "npm" => prepared_npm.as_ref().map(|npm| npm.from_cache()),
+            _ => None,
+        };
+        if from_cache.is_none() {
             provisioned.reused += 1;
         } else {
             provisioned.installed += 1;
@@ -459,8 +592,16 @@ pub(super) fn run(
             "{} {}: {}",
             tool.id,
             tool.version,
-            if reused { "reused" } else { "installed" }
+            match from_cache {
+                None if force => "reinstalled from the verified installation",
+                None => "reused",
+                Some(false) => "installed",
+                Some(true) => "installed from the shared download cache",
+            }
         );
+    }
+    if offline {
+        println!("Offline: used only installed tools and verified cached artifacts.");
     }
     if let Some(npm) = lock.tools().get("npm")
         && matches!(

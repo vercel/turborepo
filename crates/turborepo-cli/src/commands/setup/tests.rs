@@ -113,22 +113,33 @@ impl Fixture {
         Args::parse_args(words).unwrap()
     }
     fn run(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
+        self.run_with(upstream.origin(), None, flags)
+    }
+    fn run_with(
+        &self,
+        origin: &str,
+        cache: Option<&std::path::Path>,
+        flags: &[&str],
+    ) -> Result<i32, Error> {
         let args = self.args(flags);
+        let cache = cache.and_then(turborepo_setup::artifact_cache::ArtifactCache::new);
         crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(
                 args,
                 setup_args,
                 Some(provision::Transports {
                     trust_base: Some(self.owned.home().to_owned()),
-                    registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
+                    registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
-                        upstream.origin(),
+                        origin,
                     )
-                    .unwrap(),
+                    .unwrap()
+                    .with_cache(cache.clone()),
                     pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(
-                        upstream.origin(),
+                        origin,
                     )
-                    .unwrap(),
+                    .unwrap()
+                    .with_cache(cache.clone()),
                 }),
                 || {
                     Ok(self
@@ -192,6 +203,8 @@ fn track(root: &std::path::Path) {
             .success()
     );
 }
+#[path = "cache_tests.rs"]
+mod cache;
 #[path = "check_tests.rs"]
 mod checks;
 #[path = "plan_tests.rs"]
