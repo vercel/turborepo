@@ -101,11 +101,7 @@ pub(super) fn plans(
     lock: &turborepo_setup::lock::Lock,
 ) -> Result<Plans, Error> {
     let platform = platform()?;
-    if !lock.matches_native(snapshot.declarations())? {
-        return Err(Error::Unsupported(
-            "turbo.lock declarations changed; run setup locally and commit the updated lock",
-        ));
-    }
+    super::lock_diagnostics::matching(snapshot, lock)?;
     if lock
         .tools()
         .keys()
@@ -187,6 +183,9 @@ pub(super) fn run(
     let write = lock_mode == super::LockMode::Write && !force;
     let root = discovery.snapshot_root()?.as_std_path();
     platform()?;
+    if lock_mode == super::LockMode::Frozen {
+        super::lock_diagnostics::frozen(&snapshot)?;
+    }
     if write && !snapshot.declarations().contains_key("node") {
         return Err(Error::Unsupported("a native Node declaration is required"));
     }

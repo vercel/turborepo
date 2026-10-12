@@ -8,6 +8,7 @@ use turborepo_setup::source_policy::OfficialSourcePolicy;
 use crate::cli::{Args, SetupArgs};
 
 mod check;
+mod lock_diagnostics;
 mod no_lock;
 mod plan;
 mod provision;
@@ -42,6 +43,9 @@ pub enum Error {
     NotImplemented,
     #[error("unsupported setup request: {0}")]
     Unsupported(&'static str),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LockDiagnostics(#[from] lock_diagnostics::Error),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
