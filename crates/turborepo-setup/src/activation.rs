@@ -122,19 +122,26 @@ impl ActivationPlan {
             return Err(Error::DeclarationDrift);
         }
         let platform = context.artifact_platform();
-        let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
-        let version = semver::Version::parse(&node.inventory_tool().version)
-            .map_err(|_| Error::InvalidLock)?;
-        if !sources
-            .node_requirements()?
-            .matches_locked_version(&version)
-        {
-            return Err(Error::DeclarationDrift);
-        }
-        let mut tools = vec![node.inventory_tool().clone()];
+        // The lock matches native declarations, so Node is absent only when the
+        // repository declares none (a Bun repository; other managers need it).
+        let node = if lock.tools().contains_key("node") {
+            let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+            let version = semver::Version::parse(&node.inventory_tool().version)
+                .map_err(|_| Error::InvalidLock)?;
+            if !sources
+                .node_requirements()?
+                .matches_locked_version(&version)
+            {
+                return Err(Error::DeclarationDrift);
+            }
+            Some(node)
+        } else {
+            None
+        };
+        let mut tools: Vec<_> = node.iter().map(|n| n.inventory_tool().clone()).collect();
         if lock.tools().keys().any(|id| id != "node") {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            tools.push(manager_tool(lock, platform, &node, &manager)?);
+            tools.push(manager_tool(lock, platform, node.as_ref(), &manager)?);
         }
         // Inventory records tools in ID order.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
@@ -147,11 +154,13 @@ impl ActivationPlan {
         if current.tools != tools {
             return Err(Error::StaleInventory);
         }
-        let tree = current
-            .tool_tree(node.inventory_tool())
-            .ok_or(Error::StaleInventory)?;
-        node.verify_bundled_npm(&tree)
-            .map_err(|_| Error::StaleInventory)?;
+        if let Some(node) = &node {
+            let tree = current
+                .tool_tree(node.inventory_tool())
+                .ok_or(Error::StaleInventory)?;
+            node.verify_bundled_npm(&tree)
+                .map_err(|_| Error::StaleInventory)?;
+        }
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
@@ -195,9 +204,11 @@ impl ActivationPlan {
 fn manager_tool(
     lock: &Lock,
     platform: Platform,
-    node: &NodePlan,
+    node: Option<&NodePlan>,
     manager: &Declaration,
 ) -> Result<Tool, Error> {
+    // pnpm and Yarn run on the selected managed Node; only Bun stands alone.
+    let node = || node.ok_or(Error::InvalidLock);
     let id = match manager.manager {
         Manager::Pnpm => "pnpm",
         Manager::Yarn => "yarn",
@@ -208,11 +219,11 @@ fn manager_tool(
         return Err(Error::DeclarationDrift);
     }
     Ok(match manager.manager {
-        Manager::Pnpm => PnpmPlan::from_declaration(lock, platform, node, manager)
+        Manager::Pnpm => PnpmPlan::from_declaration(lock, platform, node()?, manager)
             .map_err(|_| Error::InvalidLock)?
             .inventory_tool()
             .clone(),
-        Manager::Yarn => YarnPlan::from_declaration(lock, platform, node, manager)
+        Manager::Yarn => YarnPlan::from_declaration(lock, platform, node()?, manager)
             .map_err(|_| Error::InvalidLock)?
             .inventory_tool()
             .clone(),

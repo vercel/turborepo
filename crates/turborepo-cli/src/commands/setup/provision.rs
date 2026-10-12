@@ -7,7 +7,7 @@ use turborepo_setup::{
     bun_provision::{BunPlan, BunTransport},
     lock::{Platform, Snapshot},
     node_provision::{NodePlan, NodeTransport},
-    package_manager::Manager,
+    package_manager::{Declaration, Manager},
     pnpm_provision::{PnpmPlan, PnpmTransport},
     source_policy::OfficialSourcePolicy,
     yarn_provision::YarnPlan,
@@ -95,14 +95,20 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
 /// Read-only current-host selection, shared by frozen execution and checked
 /// publication. No storage, transports, probes or writes are initialized here.
 pub(super) struct Plans {
-    pub node: NodePlan,
+    /// Absent only for a Bun repository without a Node declaration.
+    pub node: Option<NodePlan>,
     pub pnpm: Option<PnpmPlan>,
     pub yarn: Option<YarnPlan>,
     pub bun: Option<BunPlan>,
 }
 const SUPPORTED: &str = "only managed Node, pnpm, Yarn, and Bun are supported";
+const NODE_REQUIRED: &str = "a native Node declaration is required";
 fn supported(id: &str) -> bool {
     matches!(id, "node" | "pnpm" | "yarn" | "bun")
+}
+/// Bun runs the repository's scripts itself; every other setup needs Node.
+fn requires_node(manager: Option<&Declaration>) -> bool {
+    !manager.is_some_and(|m| m.manager == Manager::Bun)
 }
 pub(super) fn plans(
     snapshot: &Snapshot,
@@ -117,24 +123,43 @@ pub(super) fn plans(
     if lock.tools().keys().any(|id| !supported(id)) {
         return Err(Error::Unsupported(SUPPORTED));
     }
-    let node = NodePlan::from_lock(lock, platform)?;
-    let version = semver::Version::parse(&node.inventory_tool().version)
-        .map_err(|_| Error::Unsupported("invalid locked Node version"))?;
-    if !snapshot
-        .node_requirements()?
-        .matches_locked_version(&version)
-    {
-        return Err(Error::Unsupported(
-            "locked Node does not satisfy native declarations",
-        ));
-    }
+    let manager = snapshot.package_manager()?;
+    // The lock matches native declarations, so it locks Node exactly when the
+    // repository declares it.
+    let node = if lock.tools().contains_key("node") || requires_node(manager.as_ref()) {
+        let node = NodePlan::from_lock(lock, platform)?;
+        let version = semver::Version::parse(&node.inventory_tool().version)
+            .map_err(|_| Error::Unsupported("invalid locked Node version"))?;
+        if !snapshot
+            .node_requirements()?
+            .matches_locked_version(&version)
+        {
+            return Err(Error::Unsupported(
+                "locked Node does not satisfy native declarations",
+            ));
+        }
+        Some(node)
+    } else {
+        None
+    };
     let (mut pnpm, mut yarn, mut bun) = (None, None, None);
-    match snapshot.package_manager()? {
+    let with_node = || node.as_ref().ok_or(Error::Unsupported(NODE_REQUIRED));
+    match manager {
         Some(m) if m.manager == Manager::Pnpm => {
-            pnpm = Some(PnpmPlan::from_declaration(lock, platform, &node, &m)?);
+            pnpm = Some(PnpmPlan::from_declaration(
+                lock,
+                platform,
+                with_node()?,
+                &m,
+            )?);
         }
         Some(m) if m.manager == Manager::Yarn => {
-            yarn = Some(YarnPlan::from_declaration(lock, platform, &node, &m)?);
+            yarn = Some(YarnPlan::from_declaration(
+                lock,
+                platform,
+                with_node()?,
+                &m,
+            )?);
         }
         Some(m) if m.manager == Manager::Bun => {
             bun = Some(BunPlan::from_declaration(lock, platform, &m)?);
@@ -204,8 +229,8 @@ pub(super) fn run(
     {
         return Err(Error::Unsupported("npm override provisioning"));
     }
-    if write && !snapshot.declarations().contains_key("node") {
-        return Err(Error::Unsupported("a native Node declaration is required"));
+    if write && !snapshot.declarations().contains_key("node") && requires_node(manager.as_ref()) {
+        return Err(Error::Unsupported(NODE_REQUIRED));
     }
     // Ordinary setup validates matching pins before its no-op writer. Explicit
     // refresh may repair invalid native selections within this supported cohort;
@@ -288,7 +313,10 @@ pub(super) fn run(
         yarn,
         bun,
     } = plans(&snapshot, lock)?;
-    let mut desired = vec![node.inventory_tool().clone()];
+    let mut desired: Vec<_> = node
+        .iter()
+        .map(|plan| plan.inventory_tool().clone())
+        .collect();
     desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(bun.as_ref().map(|plan| plan.inventory_tool().clone()));
@@ -318,9 +346,13 @@ pub(super) fn run(
         turborepo_setup::Preparation::IfNeeded
     };
     let (prepared_node, prepared_manager, prepared_bun) = runtime.block_on(async {
-        let node = node
-            .prepare(&store, &desired, &transports.node, preparation)
-            .await?;
+        let node = match &node {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.node, preparation)
+                    .await?
+            }
+            None => None,
+        };
         preflight()?;
         revalidate(discovery)?;
         snapshot.check_guard(&guard)?;
@@ -346,7 +378,10 @@ pub(super) fn run(
         Ok::<_, Error>((node, manager, bun))
     })?;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        if tool == node.inventory_tool() {
+        if node
+            .as_ref()
+            .is_some_and(|plan| tool == plan.inventory_tool())
+        {
             prepared_node
                 .as_ref()
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?

@@ -121,12 +121,14 @@ pub async fn resolve(
 ) -> Result<Lock, Error> {
     let snapshot = request.snapshot();
     snapshot.ensure_current()?;
-    if !snapshot.declarations().contains_key("node") {
+    let manager = snapshot.package_manager()?;
+    // Bun runs the repository's scripts itself; every other setup needs Node.
+    let declares_node = snapshot.declarations().contains_key("node");
+    if !declares_node && !manager.as_ref().is_some_and(|m| m.manager == Manager::Bun) {
         return Err(Error::Unsupported(
             "a captured Node declaration is required",
         ));
     }
-    let manager = snapshot.package_manager()?;
     let manager_id = match manager.as_ref().map(|m| m.manager) {
         None => None,
         Some(Manager::Pnpm) => Some("pnpm"),
@@ -152,7 +154,7 @@ pub async fn resolve(
         .filter(|(id, _)| snapshot.declarations().contains_key(*id))
         .map(|(id, tool)| (id.clone(), tool.clone()))
         .collect();
-    if !request.version_ids().contains("node") {
+    if declares_node && !request.version_ids().contains("node") {
         let previous = snapshot
             .previous_lock()
             .ok_or(Error::Unsupported("missing locked Node"))?;
