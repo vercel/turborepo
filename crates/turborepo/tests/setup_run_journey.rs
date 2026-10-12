@@ -278,6 +278,21 @@ impl Outcome {
         self
     }
 
+    /// Host npm configuration outside the fixture (for example Homebrew's
+    /// bundled npmrc) is rejected by setup's official-source preflight. Like
+    /// the other binary setup tests, report it rather than weaken the policy.
+    fn host_policy_blocked(&self) -> bool {
+        let blocked = contains(
+            &self.text,
+            "official-only setup rejects System configuration",
+        ) || contains(&self.text, "cannot safely inspect System configuration");
+        if blocked {
+            assert_ne!(self.code, 0, "{}", self.text);
+            eprintln!("Journey blocked by host System npm configuration; policy was not bypassed.");
+        }
+        blocked
+    }
+
     /// Fails before any task runs, with the expected guidance.
     fn fails(&self, expected: &str) -> &Self {
         assert_ne!(self.code, 0, "{}", self.text);
@@ -445,6 +460,9 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
 
     // First setup from a subdirectory creates the lock and asks for a commit.
     let first = j.turbo(&j.web, TOOLS_ONLY, &[]);
+    if first.host_policy_blocked() {
+        return;
+    }
     first.succeeds();
     assert!(contains(&first.text, "Commit turbo.lock"), "{}", first.text);
     assert!(!first.connects.is_empty() && !first.text.contains("fixture-"));
@@ -498,7 +516,11 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
 #[test]
 fn repository_local_cli_pins_after_global_setup() {
     let j = Journey::new();
-    j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
+    let first = j.turbo(&j.root, TOOLS_ONLY, &[]);
+    if first.host_policy_blocked() {
+        return;
+    }
+    first.succeeds();
     // No pin: the global CLI runs the guarded managed pipeline itself.
     j.build(&j.web, "strict", "24.0.0", &[]);
 
