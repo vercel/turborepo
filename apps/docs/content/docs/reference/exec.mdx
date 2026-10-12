@@ -43,4 +43,6 @@ To run a task named `exec`, use `turbo run exec`.
 
 ## Supported platforms
 
-Managed tools for `turbo exec` support macOS and Linux (glibc) on x64 and arm64. Native Windows is not supported yet.
+Managed tools for `turbo exec` support macOS and Linux (glibc) on x64 and arm64, and native Windows on x64.
+
+On Windows, `turbo exec` finds managed programs through `PATHEXT`, so `turbo exec -- pnpm install` runs the managed `pnpm.cmd`, and arguments reach `.exe` programs unchanged. Windows on arm64 is not supported, including x64 `turbo` running under emulation, because `turbo setup` refuses to install managed tools there. Use WSL instead.

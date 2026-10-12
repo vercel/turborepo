@@ -4,7 +4,9 @@
 # managed setup journey against the loopback fixture mirror
 # (setup-fixture-mirror.mjs): setup, plain `turbo run` in strict and loose
 # modes with managed x64 Node.js and pnpm, repeats, `--check --offline`, the
-# owner-only trusted record, and tamper repair. On an arm64 host, the installer
+# owner-only trusted record, `turbo exec` (arguments, directory, stdin, exit
+# codes, `.cmd` launchers, never installing), and tamper repair. On an arm64
+# host, the installer
 # and setup must refuse instead. turbo runs with a cleared environment and an
 # unreachable proxy; only the mirror answers.
 #
@@ -56,13 +58,14 @@ function ConvertTo-Argument([string]$Value) {
 }
 
 # Runs turbo with only $environment, like `env -i`. Sets Code, Text, Requests.
-function Invoke-Turbo([string]$Directory, [string[]]$Arguments, [hashtable]$Extra = @{}) {
+function Invoke-Turbo([string]$Directory, [string[]]$Arguments, [hashtable]$Extra = @{}, [string]$Stdin = $null) {
   $before = @(Get-Content -LiteralPath $requestLog).Count
   $info = New-Object Diagnostics.ProcessStartInfo
   $info.FileName = $turbo
   $info.Arguments = ($Arguments | ForEach-Object { ConvertTo-Argument $_ }) -join ' '
   $info.WorkingDirectory = $Directory
   $info.UseShellExecute = $false
+  $info.RedirectStandardInput = $true
   $info.RedirectStandardOutput = $true
   $info.RedirectStandardError = $true
   $info.EnvironmentVariables.Clear()
@@ -70,6 +73,8 @@ function Invoke-Turbo([string]$Directory, [string[]]$Arguments, [hashtable]$Extr
     foreach ($key in $variables.Keys) { $info.EnvironmentVariables[$key] = $variables[$key] }
   }
   $process = [Diagnostics.Process]::Start($info)
+  if ($Stdin) { $process.StandardInput.Write($Stdin) }
+  $process.StandardInput.Close()
   $stdout = $process.StandardOutput.ReadToEndAsync()
   $stderr = $process.StandardError.ReadToEndAsync()
   $process.WaitForExit()
@@ -264,6 +269,38 @@ console.log(`managed-probe ${node}|${process.version}|${process.arch}|${first}|$
   $null = Assert-Succeeds $repo @('setup', '--check', '--tools-only', '--offline') -Offline
   Assert-Unchanged 'setup'
 
+  # turbo exec runs arbitrary commands with the managed tools, from the
+  # caller's directory, with exact arguments, stdin, and exit codes, and finds
+  # managed .cmd launchers through PATHEXT.
+  $script = 'console.log("exec-probe " + JSON.stringify([require("fs").realpathSync(process.execPath), process.cwd(), process.argv.slice(1)]))'
+  $words = @('a b', '', '100%', 'q"uote', 'back\slash\', '%PATH%', '^&|<>')
+  $result = Assert-Succeeds $web (@('exec', '--', 'node', '-e', $script) + $words) -Offline
+  $node, $cwd, $seen = (($result.Text -split "`r?`n" | Where-Object { $_ -like 'exec-probe *' }) -replace '^exec-probe ', '' | ConvertFrom-Json)
+  if ($node -notmatch [regex]::Escape('\.turbo\tools\') -or $cwd -ne $web -or (@($seen) -join '|') -cne ($words -join '|')) {
+    Fail "turbo exec ran with the wrong node, directory, or arguments: $($result.Text)"
+  }
+  $result = Assert-Succeeds $web @('exec', '--', 'node', '-e', 'process.stdin.pipe(process.stdout)') -Stdin 'piped stdin' -Offline
+  if (-not $result.Text.Contains('piped stdin')) { Fail "turbo exec did not forward stdin: $($result.Text)" }
+  $result = Invoke-Turbo $web @('exec', '--', 'node', '-e', 'process.exit(7)')
+  if ($result.Code -ne 7) { Fail "turbo exec exited $($result.Code), expected 7: $($result.Text)" }
+  $result = Assert-Succeeds $web @('exec', '--', 'pnpm', 'run', 'build') -Offline
+  if (-not ($result.Text.Contains('fixture-pnpm 10.0.0 run build') -and $result.Text.Contains("|v$nodeVersion|x64|"))) { Fail "turbo exec did not run managed pnpm.cmd: $($result.Text)" }
+  $result = Invoke-Turbo $web @('exec', '--', 'pnpx')
+  if ($result.Code -ne 97) { Fail "turbo exec did not pass through pnpx.cmd's exit code: $($result.Code) $($result.Text)" }
+  Assert-Unchanged 'exec'
+
+  # A clone with the committed lock but no installation: exec never installs.
+  $clone = Join-Path $work 'clone'
+  [IO.Directory]::CreateDirectory($clone) | Out-Null
+  Get-ChildItem -LiteralPath $repo -Force | Where-Object { $_.Name -ne '.turbo' } | Copy-Item -Destination $clone -Recurse
+  $result = Invoke-Turbo $clone @('exec', '--', 'node', '-e', 'console.log("exec-ran")')
+  if ($result.Code -eq 0 -or -not (Test-Contains $result.Text 'turbo setup') -or $result.Text.Contains('exec-ran') -or $result.Requests -ne 0) {
+    Fail "turbo exec ran, downloaded, or gave no guidance without an installation: $($result.Text)"
+  }
+  if ((Test-Path -LiteralPath (Join-Path $clone '.turbo\tools')) -or (Get-FileHash -LiteralPath (Join-Path $clone 'turbo.lock')).Hash -ne $hashes['turbo.lock']) {
+    Fail 'turbo exec wrote an installation or changed turbo.lock'
+  }
+
   # Tamper: a deleted launcher and changed node.exe bytes each stop run before
   # any task and fail --check; setup repairs both.
   $damage = @(
@@ -274,6 +311,8 @@ console.log(`managed-probe ${node}|${process.version}|${process.arch}|${first}|$
     & $change
     $result = Invoke-Turbo $repo @('run', 'build')
     if ($result.Code -eq 0 -or -not (Test-Contains $result.Text 'turbo setup') -or $result.Text.Contains('managed-probe')) { Fail "run accepted a damaged installation: $($result.Text)" }
+    $result = Invoke-Turbo $repo @('exec', '--', 'node', '-e', 'console.log("exec-ran")')
+    if ($result.Code -eq 0 -or -not (Test-Contains $result.Text 'turbo setup') -or $result.Text.Contains('exec-ran') -or $result.Requests -ne 0) { Fail "exec accepted a damaged installation: $($result.Text)" }
     if ((Invoke-Turbo $repo @('setup', '--check', '--tools-only', '--offline')).Code -eq 0) { Fail 'setup --check accepted a damaged installation' }
     $null = Assert-Succeeds $repo @('setup', '--tools-only')
     if ((Get-FileHash -LiteralPath (Join-Path $repo 'turbo.lock')).Hash -ne $hashes['turbo.lock']) { Fail 'repair changed turbo.lock' }
