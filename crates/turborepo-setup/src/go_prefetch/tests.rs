@@ -54,6 +54,7 @@ impl Fixture {
             go: &self.temp.path().join("bin/go"),
             root: &self.temp.path().join("repo"),
             offline,
+            env: &BTreeMap::new(),
         }
         .run()
     }

@@ -100,6 +100,7 @@ After installing tools, `turbo setup` installs each toolchain's dependencies whe
 | Bun              | `bun install --frozen-lockfile`   | `bun.lock` or `bun.lockb`                    |
 | uv (Python)      | `uv sync --locked --all-packages` | `uv.lock`                                    |
 | Cargo (Rust)     | `cargo fetch --locked`            | `Cargo.lock`                                 |
+| Go               | `go mod download`                 | `go.mod` and `go.sum`, read-only             |
 
 - The package manager must be declared with `packageManager` or `devEngines.packageManager` in the root `package.json`.
 - A missing lockfile is an error, reported before anything is downloaded. `turbo setup` never creates or updates a lockfile. If a package manager changes one anyway, `turbo setup` restores it and fails.
@@ -108,7 +109,8 @@ After installing tools, `turbo setup` installs each toolchain's dependencies whe
 - Every run repeats the install. An unchanged lockfile doesn't prove that installed dependencies are complete, so `turbo setup` never skips the install because of it.
 - Python dependencies need `experimentalPythonWorkspaces` and a uv declaration, such as `required-version` in `[tool.uv]`. Skipping lifecycle scripts passes `--no-build`, so packages without a compatible wheel fail.
 - Rust dependencies need `experimentalCargoWorkspaces` and a `rust-toolchain.toml`. `cargo fetch` only downloads crates, into the repository's private `.turbo/cargo-home` rather than `~/.cargo`, and runs no build scripts.
-- Package managers that aren't listed, and Go dependencies, aren't installed yet. `turbo setup` reports them as skipped.
+- Go modules need `experimentalGoWorkspaces` and a `go` directive in `go.mod` or `go.work`. `turbo setup` runs the managed `go` with its own `GOROOT`, and restores `go.work`, `go.work.sum`, `go.mod`, and `go.sum` and fails if `go` changes them, which usually means missing checksums.
+- Package managers that aren't listed aren't supported yet. `turbo setup` reports them as skipped.
 
 ```txt title="Terminal"
 Installing javascript dependencies from package-lock.json with managed npm 11.6.1: npm ci (dependency installation, not a Turborepo task)
