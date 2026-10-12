@@ -390,6 +390,8 @@ pub enum ChangedPackagesError {
     Yarnrc(#[from] crate::package_manager::yarnrc::Error),
     #[error("uv lockfile error: {0}")]
     Uv(#[from] turborepo_lockfiles::UvLockError),
+    #[error("Cargo lockfile error: {0}")]
+    Cargo(#[from] turborepo_lockfiles::CargoLockError),
     #[error("Lockfile content is not UTF-8")]
     NonUtf8Lockfile,
 }
