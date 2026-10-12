@@ -256,13 +256,33 @@ mod tests {
     fn platform_qualification_rejects_unsupported_hosts_including_musl() {
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
         let host = cfg!(target_os = "macos") || cfg!(all(target_os = "linux", target_env = "gnu"));
-        let windows = cfg!(all(windows, target_arch = "x86_64"));
+        // An x64 build qualifies only on an x64 host, not under arm64 emulation.
+        let windows = cfg!(all(windows, target_arch = "x86_64"))
+            && provision::windows_host_machine() == Some(0x8664);
         assert_eq!(provision::platform().is_ok(), (arch && host) || windows);
-        if cfg!(all(windows, target_arch = "aarch64")) {
+        if cfg!(windows) && provision::windows_host_machine() == Some(0xAA64) {
             assert!(
                 provision::platform()
                     .is_err_and(|e| e.to_string().contains("not qualified for Windows arm64"))
             );
+        }
+    }
+
+    #[test]
+    fn windows_x64_builds_qualify_only_on_an_identified_x64_host() {
+        assert!(matches!(
+            provision::windows_x64_platform(Some(0x8664)),
+            Ok(turborepo_setup::lock::Platform::WindowsX64)
+        ));
+        let arm64 = provision::windows_x64_platform(Some(0xAA64)).unwrap_err();
+        assert!(
+            arm64
+                .to_string()
+                .contains("including x64 turbo under emulation; use WSL")
+        );
+        // x86, unknown, and an unanswered host query all fail closed.
+        for host in [Some(0x014C), Some(0), None] {
+            assert!(provision::windows_x64_platform(host).is_err(), "{host:?}");
         }
     }
 
