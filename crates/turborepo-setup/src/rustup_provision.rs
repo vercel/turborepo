@@ -74,7 +74,7 @@ impl RustupTransport {
         })
     }
 
-    async fn read(&self, path: &str, limit: usize) -> Result<Vec<u8>, Error> {
+    pub(crate) async fn read(&self, path: &str, limit: usize) -> Result<Vec<u8>, Error> {
         Ok(self
             .client
             .read_metadata(
