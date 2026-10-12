@@ -455,6 +455,16 @@ impl Store {
         }))
     }
 
+    /// Whether this exact root's manifest selects a generation carrying a
+    /// caller record, from bounded manifest metadata alone; absent inventory
+    /// is `false`. No tree, shim or record checks: a routing hint, never
+    /// readiness or authorization.
+    pub fn selects_record(repo: &Path) -> Result<bool, Error> {
+        let root = fs::canonicalize(repo)?.join(".turbo").join("tools");
+        Ok(Self::inventory_metadata(&root)?
+            .is_some_and(|inventory| inventory.record_sha256.is_some()))
+    }
+
     fn inventory_metadata(root: &Path) -> Result<Option<Inventory>, Error> {
         let Some(bytes) = Self::manifest_bytes(root)? else {
             return Ok(None);

@@ -1267,3 +1267,85 @@ fn node_based_managers_never_activate_without_managed_node() {
         assert_eq!(state(repo.path()), before);
     }
 }
+
+/// `fixture()`'s cohort as `turbo setup --no-lock` records it: no turbo.lock,
+/// the canonical selection sealed in the generation.
+fn clone_local(record: Option<&[u8]>) -> tempfile::TempDir {
+    let repo = tempfile::tempdir().unwrap();
+    write_sources(repo.path(), &fixture());
+    fs::remove_file(repo.path().join("turbo.lock")).unwrap();
+    let selection = Lock::parse(fixture().to_string().as_bytes()).unwrap();
+    let bytes = record.map_or_else(|| selection.canonical_bytes().unwrap(), <[u8]>::to_vec);
+    let mut store = Store::open(repo.path()).unwrap();
+    let expected = store.generation().unwrap();
+    let record = Record::new(bytes).unwrap();
+    let desired = desired(&fixture(), None);
+    store
+        .reconcile_recorded_checked(&desired, &record, &expected, false, stage, || Ok(()))
+        .unwrap();
+    repo
+}
+
+#[test]
+fn clone_local_selection_plans_like_its_lock_under_a_distinct_identity() {
+    let repo = clone_local(None);
+    let before = state(repo.path());
+    let plan = ActivationPlan::inspect_clone_local(repo.path(), context()).unwrap();
+    assert_eq!(plan.tools(), desired(&fixture(), None));
+    let identity: Value = serde_json::from_slice(plan.snapshot().canonical_identity()).unwrap();
+    assert_eq!(identity["resolution"], "clone-local");
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), context()),
+        Err(Error::MissingLock)
+    ));
+    assert_eq!(state(repo.path()), before);
+    // Committed, the same selection is the lock's: same tools, other identity,
+    // and the clone-local record no longer applies.
+    let lock = Lock::parse(fixture().to_string().as_bytes()).unwrap();
+    fs::write(
+        repo.path().join("turbo.lock"),
+        lock.canonical_bytes().unwrap(),
+    )
+    .unwrap();
+    let locked = ActivationPlan::inspect(repo.path(), context()).unwrap();
+    assert_eq!(locked.tools(), plan.tools());
+    assert_eq!(locked.path_prepend(), plan.path_prepend());
+    assert_ne!(
+        locked.snapshot().fingerprint(),
+        plan.snapshot().fingerprint()
+    );
+    assert!(matches!(
+        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        Err(Error::Sources(StorageError::Conflict))
+    ));
+}
+
+#[test]
+fn clone_local_drift_missing_recordless_and_invalid_selections_fail_closed() {
+    let repo = clone_local(None);
+    fs::write(repo.path().join(".nvmrc"), "24.1.0\n").unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        Err(Error::DeclarationDrift)
+    ));
+    let repo = clone_local(Some(br#"{"schemaVersion":0,"tools":{}}"#.as_slice()));
+    assert!(matches!(
+        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        Err(Error::InvalidSelection)
+    ));
+    // A lock-only generation left after deleting turbo.lock selects nothing.
+    let repo = installed();
+    fs::remove_file(repo.path().join("turbo.lock")).unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        Err(Error::StaleInventory)
+    ));
+    let repo = tempfile::tempdir().unwrap();
+    write_sources(repo.path(), &fixture());
+    fs::remove_file(repo.path().join("turbo.lock")).unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        Err(Error::MissingInventory)
+    ));
+    assert!(!repo.path().join(".turbo").exists());
+}

@@ -11,9 +11,13 @@ use turborepo_setup::{
     lock::Ecosystems,
     system_tool,
 };
+use turborepo_tool_install::Store;
 use turborepo_turbo_json::{RawTurboJson, SetupPolicy};
 
-use crate::commands::setup::{authorization::Authorization, effective};
+use crate::commands::setup::{
+    authorization::{self, Authorization},
+    effective,
+};
 
 pub(crate) fn select(
     base: &crate::commands::CommandBase,
@@ -53,6 +57,7 @@ pub(crate) struct ManagedTools {
     inherited_path: Option<OsString>,
     identity: String,
     ci: bool,
+    clone_local: bool,
 }
 
 impl ManagedTools {
@@ -67,6 +72,9 @@ impl ManagedTools {
         Self::inspect_with(root, config, enabled, user_base, context, true)
     }
 
+    /// A root turbo.lock, or without one the sealed selection of this clone's
+    /// `turbo setup --no-lock` generation, selects managed mode. Either way
+    /// activation is equally strict and never downloads.
     fn inspect_with(
         root: &Path,
         config: &Path,
@@ -79,11 +87,19 @@ impl ManagedTools {
         if !enabled {
             return Ok(None);
         }
-        match std::fs::symlink_metadata(root.join("turbo.lock")) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        let clone_local = match std::fs::symlink_metadata(root.join("turbo.lock")) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                // Lock-only leftovers and ordinary repositories stay unmanaged.
+                if !Store::selects_record(root).map_err(|e| {
+                    format!("cannot read managed tools; run turbo setup --no-lock: {e}")
+                })? {
+                    return Ok(None);
+                }
+                true
+            }
             Err(error) => return Err(format!("cannot read turbo.lock; run turbo setup: {error}")),
-            Ok(_) => {}
-        }
+            Ok(_) => false,
+        };
         let canonical = root.canonicalize().map_err(|e| e.to_string())?;
         if config
             .parent()
@@ -100,12 +116,19 @@ impl ManagedTools {
             );
         }
         let ci = turborepo_ci::is_ci();
-        let ecosystems = ecosystems(&canonical, config)?;
-        let authorization = Authorization::inspect(&canonical, user_base, context()?, ecosystems)
-            .map_err(|e| e.guidance(ci))?;
+        let explain = |e: authorization::Error| guidance(&e, ci, clone_local);
+        // `--no-lock` setup is Node/npm/pnpm only, so a clone-local selection
+        // uses the default ecosystems; a lock uses exactly setup's.
+        let authorization = if clone_local {
+            Authorization::inspect_clone_local(&canonical, user_base, context()?)
+        } else {
+            let ecosystems = ecosystems(&canonical, config)?;
+            Authorization::inspect(&canonical, user_base, context()?, ecosystems)
+        }
+        .map_err(explain)?;
         let (snapshot, tools) = authorization
             .with_current(|p| (p.snapshot().clone(), p.external().to_vec()))
-            .map_err(|e| e.guidance(ci))?;
+            .map_err(explain)?;
         let identity = snapshot.fingerprint().to_owned();
         let inherited_path = std::env::var_os("PATH");
         // Once per run: a changed system tool fails here rather than running
@@ -120,11 +143,20 @@ impl ManagedTools {
             inherited_path,
             identity,
             ci,
+            clone_local,
         });
         tools.revalidate()?;
         Ok(Some(Arc::new(
             ManagedRun::new(snapshot, tools)?.with_notices(notices),
         )))
+    }
+}
+
+fn guidance(error: &authorization::Error, ci: bool, clone_local: bool) -> String {
+    if clone_local {
+        error.no_lock_guidance()
+    } else {
+        error.guidance(ci)
     }
 }
 
@@ -215,7 +247,7 @@ impl ManagedEnvironment for ManagedTools {
                 }
                 Ok(overrides)
             })
-            .map_err(|e| e.guidance(self.ci))?
+            .map_err(|e| guidance(&e, self.ci, self.clone_local))?
     }
 
     fn cache_identity(&self) -> &str {

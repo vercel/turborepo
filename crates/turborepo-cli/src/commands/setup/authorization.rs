@@ -1,8 +1,9 @@
-//! Read-only strict managed-tool authorization prerequisite, not managed-run
-//! wiring. The caller owns exact root discovery, feature gating, pre-handoff
-//! compatibility, execution-context qualification, hashing, and task
-//! environment propagation. Do not extract this interface independently of the
-//! producer's private schema.
+//! Read-only strict authorization of turbo.lock or `turbo setup --no-lock`
+//! installations, not managed-run wiring. The caller owns exact root
+//! discovery, choosing the lock or clone-local mode, feature gating,
+//! pre-handoff compatibility, execution-context qualification, hashing, and
+//! task environment propagation. Do not extract this interface independently of
+//! the producer's private schema.
 
 use std::path::{Path, PathBuf};
 
@@ -80,6 +81,40 @@ impl Error {
             other => other.to_string(),
         }
     }
+
+    /// `turbo run` guidance for a `turbo setup --no-lock` clone, local or CI:
+    /// there is no turbo.lock to update or commit, so every repair is the
+    /// same clone-local setup.
+    pub(crate) fn no_lock_guidance(&self) -> String {
+        use turborepo_setup::{activation::Error as Plan, lock::StorageError as Storage};
+        let cause = match self {
+            Self::Plan(Plan::DeclarationDrift) => "tool declarations no longer match this clone's \
+                                                   `turbo setup --no-lock` selection"
+                .into(),
+            Self::Plan(Plan::MissingInventory) => "managed tools are not installed".into(),
+            Self::Plan(Plan::StaleInventory) => {
+                "managed tools do not match the clone-local selection".into()
+            }
+            Self::Plan(Plan::DamagedInventory(error)) => {
+                format!("managed tools are damaged or unsafe ({error})")
+            }
+            Self::Plan(Plan::InvalidSelection) => "the clone-local selection is invalid".into(),
+            Self::Untrusted => "managed tools have no matching trusted setup record".into(),
+            Self::Changed => "managed tools changed after this run selected them".into(),
+            Self::Plan(Plan::Sources(Storage::Conflict)) | Self::Sources(Storage::Conflict) => {
+                return "turbo.lock or tool declarations changed during this run; rerun it, after \
+                        turbo setup if a turbo.lock was added"
+                    .into();
+            }
+            Self::Plan(Plan::Sources(Storage::Declarations))
+            | Self::Sources(Storage::Declarations) => {
+                return "tool declarations are invalid; fix them, then run turbo setup --no-lock"
+                    .into();
+            }
+            other => return other.to_string(),
+        };
+        format!("{cause}; run turbo setup --no-lock to update this clone's managed tools")
+    }
 }
 
 /// Unlike ActivationPlan, this selection requires external setup evidence.
@@ -97,6 +132,7 @@ pub(crate) struct Authorization {
     ecosystems: Ecosystems,
     plan: ActivationPlan,
     trust: Option<TrustStore>,
+    clone_local: bool,
 }
 
 #[allow(dead_code)]
@@ -111,22 +147,46 @@ impl Authorization {
         context: ExecutionContext,
         ecosystems: Ecosystems,
     ) -> Result<Self, Error> {
+        Self::authorize(root, user_state_base, context, ecosystems, false)
+    }
+
+    /// `inspect` for a `turbo setup --no-lock` clone: the sealed clone-local
+    /// selection in place of turbo.lock, authorized only by a lockless record
+    /// for that selection. `--no-lock` setup is Node/npm/pnpm only, so the
+    /// sources use the default ecosystems.
+    pub(crate) fn inspect_clone_local(
+        root: &Path,
+        user_state_base: &Path,
+        context: ExecutionContext,
+    ) -> Result<Self, Error> {
+        Self::authorize(root, user_state_base, context, Ecosystems::default(), true)
+    }
+
+    fn authorize(
+        root: &Path,
+        user_state_base: &Path,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+        clone_local: bool,
+    ) -> Result<Self, Error> {
         let root = root.canonicalize()?;
         let sources = Snapshot::capture_with(&root, ecosystems)?;
         // Only installed tools need setup's trusted record. verify-system tools
-        // activate nothing from the repository and keep no user state.
-        let installed = sources.previous_lock().is_some_and(|lock| {
-            lock.tools()
-                .values()
-                .any(|tool| !matches!(tool.installation, Installation::VerifySystem { .. }))
-        });
+        // activate nothing from the repository and keep no user state. A
+        // clone-local selection is always an installed `--no-lock` generation.
+        let installed = clone_local
+            || sources.previous_lock().is_some_and(|lock| {
+                lock.tools()
+                    .values()
+                    .any(|tool| !matches!(tool.installation, Installation::VerifySystem { .. }))
+            });
         let trust = installed
             .then(|| TrustStore::new(user_state_base, &root))
             .transpose()?;
         if let Some(trust) = &trust {
             trust.preflight()?;
         }
-        let plan = ActivationPlan::inspect_with(&root, context.clone(), ecosystems)?;
+        let plan = Self::plan(&root, context.clone(), ecosystems, clone_local)?;
         if !authorized(trust.as_ref(), &plan)? {
             return Err(Error::Untrusted);
         }
@@ -138,6 +198,20 @@ impl Authorization {
             ecosystems,
             plan,
             trust,
+            clone_local,
+        })
+    }
+
+    fn plan(
+        root: &Path,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+        clone_local: bool,
+    ) -> Result<ActivationPlan, Error> {
+        Ok(if clone_local {
+            ActivationPlan::inspect_clone_local(root, context)?
+        } else {
+            ActivationPlan::inspect_with(root, context, ecosystems)?
         })
     }
 
@@ -151,8 +225,12 @@ impl Authorization {
         use_plan: impl FnOnce(&ActivationPlan) -> T,
     ) -> Result<T, Error> {
         self.sources.ensure_current()?;
-        let current =
-            ActivationPlan::inspect_with(&self.root, self.context.clone(), self.ecosystems)?;
+        let current = Self::plan(
+            &self.root,
+            self.context.clone(),
+            self.ecosystems,
+            self.clone_local,
+        )?;
         if current.path_prepend() != self.plan.path_prepend()
             || current.tools() != self.plan.tools()
             || current.snapshot().canonical_identity() != self.plan.snapshot().canonical_identity()

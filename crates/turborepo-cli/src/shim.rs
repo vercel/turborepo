@@ -64,10 +64,15 @@ impl TurboRunner for TurboCliRunner<'_> {
         root: &AbsoluteSystemPath,
         ui: ColorConfig,
     ) -> Result<Option<u32>, Self::Error> {
-        // Without a root lock the repository is unmanaged: keep existing
-        // routing, including a local CLI's own argument diagnostics.
+        // Without a root lock, or a `turbo setup --no-lock` selection in its
+        // place, the repository is unmanaged: keep existing routing, including
+        // a local CLI's own argument diagnostics. Unreadable inventory is left
+        // to managed selection to report.
         let lock = std::fs::symlink_metadata(root.join_component("turbo.lock").as_std_path());
-        if lock.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) {
+        if lock.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            && turborepo_tool_install::Store::selects_record(root.as_std_path())
+                .is_ok_and(|selected| !selected)
+        {
             return Ok(None);
         }
         let words: Vec<_> = std::env::args_os().collect();
