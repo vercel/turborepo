@@ -6,10 +6,10 @@ use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
     artifact_cache::ArtifactCache,
-    lock::{Installation, Platform, Snapshot},
-    mirror::Mirrors,
     go_provision::GoPlan,
     go_resolution::GoTransport,
+    lock::{Installation, Platform, Snapshot},
+    mirror::Mirrors,
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -373,7 +373,6 @@ pub(super) struct Provisioned {
     pub reused: usize,
 }
 
-
 pub(super) fn lock_report(
     previous: Option<&turborepo_setup::lock::Lock>,
     current: &turborepo_setup::lock::Lock,
@@ -609,11 +608,7 @@ pub(super) fn run(
     // Offline transports exist for Node and the npm registry only; rustup, uv,
     // CPython and Go downloads have no offline mode yet.
     if offline
-        && (rustup.is_some()
-            || rust.is_some()
-            || uv.is_some()
-            || python.is_some()
-            || go.is_some())
+        && (rustup.is_some() || rust.is_some() || uv.is_some() || python.is_some() || go.is_some())
     {
         return Err(Error::Unsupported(
             "offline setup for managed Rust, uv, Python or Go",
@@ -684,128 +679,127 @@ pub(super) fn run(
         prepared_uv,
         prepared_python,
         prepared_go,
-    ) =
-        runtime.block_on(async {
-            use turborepo_setup::{Preparation::IfNeeded, node_provision::Error::Offline};
-            let transport = &transports.node;
-            let node = match &node {
-                Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
-                    Err(Offline) if force && recorded => {
-                        match plan.prepare(&store, &desired, transport, IfNeeded).await {
-                            Ok(None) => {
-                                reused.push(plan.inventory_tool().clone());
-                                None
-                            }
-                            Err(Offline) => {
-                                missing.push("node");
-                                None
-                            }
-                            result => result?,
+    ) = runtime.block_on(async {
+        use turborepo_setup::{Preparation::IfNeeded, node_provision::Error::Offline};
+        let transport = &transports.node;
+        let node = match &node {
+            Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
+                Err(Offline) if force && recorded => {
+                    match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
                         }
-                    }
-                    Err(Offline) => {
-                        missing.push("node");
-                        None
-                    }
-                    result => result?,
-                },
-                None => None,
-            };
-            preflight()?;
-            revalidate(discovery)?;
-            snapshot.check_guard(&guard)?;
-            use turborepo_setup::pnpm_provision::Error::Offline as PnpmOffline;
-            let transport = &transports.pnpm;
-            let pnpm = match &pnpm {
-                Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
-                    Err(PnpmOffline) if force && recorded => {
-                        match plan.prepare(&store, &desired, transport, IfNeeded).await {
-                            Ok(None) => {
-                                reused.push(plan.inventory_tool().clone());
-                                None
-                            }
-                            Err(PnpmOffline) => {
-                                missing.push("pnpm");
-                                None
-                            }
-                            result => result?,
+                        Err(Offline) => {
+                            missing.push("node");
+                            None
                         }
+                        result => result?,
                     }
-                    Err(PnpmOffline) => {
-                        missing.push("pnpm");
-                        None
-                    }
-                    result => result?,
-                },
-                None => None,
-            };
-            // npm and pnpm use the same exact, integrity-verified registry
-            // transport; the plan determines package identity, never PATH.
-            let npm = match &npm {
-                Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
-                    Err(PnpmOffline) if force && recorded => {
-                        match plan.prepare(&store, &desired, transport, IfNeeded).await {
-                            Ok(None) => {
-                                reused.push(plan.inventory_tool().clone());
-                                None
-                            }
-                            Err(PnpmOffline) => {
-                                missing.push("npm");
-                                None
-                            }
-                            result => result?,
+                }
+                Err(Offline) => {
+                    missing.push("node");
+                    None
+                }
+                result => result?,
+            },
+            None => None,
+        };
+        preflight()?;
+        revalidate(discovery)?;
+        snapshot.check_guard(&guard)?;
+        use turborepo_setup::pnpm_provision::Error::Offline as PnpmOffline;
+        let transport = &transports.pnpm;
+        let pnpm = match &pnpm {
+            Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
+                Err(PnpmOffline) if force && recorded => {
+                    match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
                         }
+                        Err(PnpmOffline) => {
+                            missing.push("pnpm");
+                            None
+                        }
+                        result => result?,
                     }
-                    Err(PnpmOffline) => {
-                        missing.push("npm");
-                        None
+                }
+                Err(PnpmOffline) => {
+                    missing.push("pnpm");
+                    None
+                }
+                result => result?,
+            },
+            None => None,
+        };
+        // npm and pnpm use the same exact, integrity-verified registry
+        // transport; the plan determines package identity, never PATH.
+        let npm = match &npm {
+            Some(plan) => match plan.prepare(&store, &desired, transport, preparation).await {
+                Err(PnpmOffline) if force && recorded => {
+                    match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                        Ok(None) => {
+                            reused.push(plan.inventory_tool().clone());
+                            None
+                        }
+                        Err(PnpmOffline) => {
+                            missing.push("npm");
+                            None
+                        }
+                        result => result?,
                     }
-                    result => result?,
-                },
-                None => None,
-            };
-            preflight()?;
-            revalidate(discovery)?;
-            snapshot.check_guard(&guard)?;
-            let rustup = match &rustup {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.rustup, preparation)
-                        .await?
                 }
-                None => None,
-            };
-            preflight()?;
-            revalidate(discovery)?;
-            snapshot.check_guard(&guard)?;
-            let uv = match &uv {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.uv, preparation)
-                        .await?
+                Err(PnpmOffline) => {
+                    missing.push("npm");
+                    None
                 }
-                None => None,
-            };
-            preflight()?;
-            revalidate(discovery)?;
-            snapshot.check_guard(&guard)?;
-            let python = match &python {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.python, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            preflight()?;
-            revalidate(discovery)?;
-            snapshot.check_guard(&guard)?;
-            let go = match &go {
-                Some(plan) => {
-                    plan.prepare(&store, &desired, &transports.go, preparation)
-                        .await?
-                }
-                None => None,
-            };
-            Ok::<_, Error>((node, pnpm, npm, rustup, uv, python, go))
-        })?;
+                result => result?,
+            },
+            None => None,
+        };
+        preflight()?;
+        revalidate(discovery)?;
+        snapshot.check_guard(&guard)?;
+        let rustup = match &rustup {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.rustup, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        preflight()?;
+        revalidate(discovery)?;
+        snapshot.check_guard(&guard)?;
+        let uv = match &uv {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.uv, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        preflight()?;
+        revalidate(discovery)?;
+        snapshot.check_guard(&guard)?;
+        let python = match &python {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.python, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        preflight()?;
+        revalidate(discovery)?;
+        snapshot.check_guard(&guard)?;
+        let go = match &go {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.go, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, pnpm, npm, rustup, uv, python, go))
+    })?;
     if !missing.is_empty() {
         return Err(Error::OfflineMissing(missing_artifacts(
             lock, host, &missing,

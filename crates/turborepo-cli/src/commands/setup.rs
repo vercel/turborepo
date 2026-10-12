@@ -334,8 +334,7 @@ fn run_reporting(
         && plan.toolchain(&ToolchainId::JAVASCRIPT).is_some()
     {
         return Err(Error::Unsupported(
-            "managed Rust, Python or Go tools with a skip or verify-system JavaScript \
-             tools policy",
+            "managed Rust, Python or Go tools with a skip or verify-system JavaScript tools policy",
         ));
     }
     let snapshot = turborepo_setup::lock::Snapshot::capture_with(
