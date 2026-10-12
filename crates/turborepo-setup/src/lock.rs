@@ -198,6 +198,14 @@ impl Lock {
                     return Err(Error::Invalid("expected canonical exact builtin version"));
                 }
             }
+            if tool.adapter == "go"
+                && crate::go_discovery::GoVersion::parse(&tool.version)
+                    .is_none_or(|v| !v.is_toolchain() || v.to_string() != tool.version)
+            {
+                return Err(Error::Invalid(
+                    "expected canonical exact Go toolchain version",
+                ));
+            }
             declarations(&tool.declarations)?;
             if tool.options.len() > 32 {
                 return Err(Error::Invalid("too many semantic options"));

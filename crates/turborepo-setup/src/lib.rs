@@ -5,6 +5,7 @@ pub mod activation;
 pub mod bundled_npm;
 pub mod execution_identity;
 pub mod go_discovery;
+pub mod go_resolution;
 pub mod js_resolution;
 pub mod lock;
 pub mod node;
