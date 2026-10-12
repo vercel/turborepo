@@ -63,8 +63,19 @@ impl TurboRunner for TurboCliRunner<'_> {
         root: &AbsoluteSystemPath,
         ui: ColorConfig,
     ) -> Result<Option<u32>, Self::Error> {
-        let args = cli::Args::parse_args(std::env::args_os().collect())
-            .map_err(|e| turborepo_run::Error::ManagedTools(e.to_string()))?;
+        // Without a root lock the repository is unmanaged: keep existing
+        // routing, including a local CLI's own argument diagnostics.
+        let lock = std::fs::symlink_metadata(root.join_component("turbo.lock").as_std_path());
+        if lock.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) {
+            return Ok(None);
+        }
+        let words: Vec<_> = std::env::args_os().collect();
+        let Ok(args) = cli::Args::parse_args(words.clone()) else {
+            // Never hand unparseable arguments to an unvalidated local CLI.
+            // Args::new reports them exactly like the normal CLI, then exits.
+            cli::Args::new(words);
+            unreachable!("Args::new exits for arguments that fail to parse");
+        };
         if !matches!(args.command, Some(cli::Command::Run { .. })) {
             return Ok(None);
         }
