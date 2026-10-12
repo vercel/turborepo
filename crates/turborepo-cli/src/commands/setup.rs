@@ -19,7 +19,7 @@ mod check;
 mod cleanup;
 #[cfg(windows)]
 mod dacl;
-mod effective;
+pub(crate) mod effective;
 mod lock_diagnostics;
 mod no_lock;
 mod offline;
@@ -347,14 +347,9 @@ fn run_reporting(
         return Err(Error::NotImplemented);
     }
     // Rust, Python and Go have managed setup adapters; a skip policy ignores
-    // their declarations.
-    let managed = |id: &ToolchainId| {
-        plan.toolchain(id)
-            .is_some_and(|toolchain| toolchain.tools.0 == ToolPolicy::Managed)
-    };
-    let rust = eligible.cargo() && managed(&ToolchainId::RUST);
-    let python = eligible.python() && managed(&ToolchainId::PYTHON);
-    let go = eligible.go() && managed(&ToolchainId::GO);
+    // their declarations. Managed run derives the same ecosystems.
+    let ecosystems = effective::ecosystems(&discovery.flags(), discovery.policy());
+    let turborepo_setup::lock::Ecosystems { rust, python, go } = ecosystems;
     if plan.unsupported() {
         return Err(Error::Unsupported(
             "verify-system tools for Rust, Python or Go workspaces",
@@ -377,7 +372,7 @@ fn run_reporting(
         discovery.snapshot_root()?.as_std_path(),
         // Python declarations are captured only when experimentalPythonWorkspaces
         // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
-        turborepo_setup::lock::Ecosystems { rust, python, go },
+        ecosystems,
     )?;
     // Never silently: version-manager files are reported, not read as requests.
     if let Some(report) = turborepo_setup::version_managers::report(

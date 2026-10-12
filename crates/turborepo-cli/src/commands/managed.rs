@@ -1,37 +1,23 @@
 //! Exact-root strict activation shared by `turbo run` and `turbo exec`.
-//! No provisioning, HTTP, ancestor inventory search or process-global mutation.
+//! No provisioning, HTTP or ancestor inventory search. Only `turbo run`'s
+//! [`activate_probes`] changes the process environment, after selection.
 
 use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 
 use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
-use turborepo_setup::execution_identity::{ExecutionContext, Libc};
+use turborepo_setup::{
+    execution_identity::{ExecutionContext, Libc},
+    lock::Ecosystems,
+};
+use turborepo_turbo_json::{RawTurboJson, SetupPolicy};
 
-use crate::commands::setup::authorization::Authorization;
+use crate::commands::setup::{authorization::Authorization, effective};
 
 pub(crate) fn select(
     base: &crate::commands::CommandBase,
 ) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
     if !base.opts.future_flags.experimental_setup {
         return Ok(None);
-    }
-    // These initial managed adapters must not probe unprovisioned native tools.
-    let flags = &base.opts.future_flags;
-    for (enabled, marker) in [
-        (flags.experimental_cargo_workspaces, "Cargo.toml"),
-        (flags.experimental_python_workspaces, "pyproject.toml"),
-        (flags.experimental_go_workspaces, "go.work"),
-        (flags.experimental_go_workspaces, "go.mod"),
-    ] {
-        if enabled
-            && base.repo_root.join_component(marker).exists()
-            && std::fs::symlink_metadata(base.repo_root.join_component("turbo.lock")).is_ok()
-        {
-            return Err(turborepo_run::Error::ManagedTools(
-                "initial managed run supports Node/pnpm JS repositories only; use a supported \
-                 setup adapter"
-                    .into(),
-            ));
-        }
     }
     let user_base = dirs_next::data_local_dir().ok_or_else(|| {
         turborepo_run::Error::ManagedTools("cannot locate setup user state directory".into())
@@ -86,7 +72,8 @@ impl ManagedTools {
             );
         }
         let ci = turborepo_ci::is_ci();
-        let authorization = Authorization::inspect(&canonical, user_base, context()?)
+        let ecosystems = ecosystems(&canonical, config)?;
+        let authorization = Authorization::inspect(&canonical, user_base, context()?, ecosystems)
             .map_err(|e| e.guidance(ci))?;
         let snapshot = authorization
             .with_current(|p| p.snapshot().clone())
@@ -101,6 +88,42 @@ impl ManagedTools {
         tools.revalidate()?;
         Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
     }
+}
+
+/// Setup's ecosystems from the root configuration's flags and `setup` policy.
+/// The snapshot's CAS covers the configuration, so a later edit is drift.
+fn ecosystems(root: &Path, config: &Path) -> Result<Ecosystems, String> {
+    let path = |path| turbopath::AbsoluteSystemPath::from_std_path(path).map_err(|e| e.to_string());
+    let raw = RawTurboJson::read(path(root)?, path(config)?, true)
+        .map_err(|e| e.to_string())?
+        .unwrap_or_default();
+    let flags = raw.future_flags.map(|f| *f.as_inner()).unwrap_or_default();
+    let policy = SetupPolicy::from_raw(raw.setup.as_ref(), &flags).map_err(|e| e.to_string())?;
+    Ok(effective::ecosystems(&flags, &policy))
+}
+
+/// turbo's own toolchain probes (`cargo metadata`, `rustc`, uv and `go env`)
+/// and the Cargo home read for config hashing all come from turbo's process
+/// environment, so apply the freshly validated managed PATH and runtime
+/// variables to it before the run builder discovers the repository. Tasks
+/// still receive the same overlay from each later revalidation, and every
+/// in-repository executable other than the managed bin stays untrusted.
+pub(crate) fn activate_probes(tools: &ManagedRun) -> Result<(), turborepo_run::Error> {
+    let overrides = tools
+        .revalidate()
+        .map_err(turborepo_run::Error::ManagedTools)?;
+    if let Some(bin) = overrides
+        .get("PATH")
+        .and_then(|path| std::env::split_paths(path).next())
+    {
+        turborepo_repository::uv::trust_managed_bin(bin);
+    }
+    for (key, value) in overrides.iter() {
+        // SAFETY: like the shim warning's removal in `run`, this happens once,
+        // before the run builder starts discovery threads or task processes.
+        unsafe { std::env::set_var(key, value) };
+    }
+    Ok(())
 }
 
 impl ManagedEnvironment for ManagedTools {
