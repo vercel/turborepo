@@ -15,6 +15,8 @@ pub mod node_resolution;
 pub mod npm_provision;
 pub mod package_manager;
 pub mod pep440;
+pub mod python_discovery;
+pub mod python_resolution;
 mod registry_provision;
 pub mod pnpm_provision {
     pub use crate::registry_provision::{
