@@ -367,9 +367,10 @@ fn provenance(
     }
     let text = validated(serde_json::to_string(&manifest))?;
     files.insert("package.json".into(), text.clone());
-    let actual = validated(crate::lock::probe_native_with(|file, _| {
-        Ok(files.get(file).map(|s| s.as_bytes().to_vec()))
-    }))?;
+    let actual = validated(crate::lock::probe_native_with(
+        crate::lock::Ecosystems::default(),
+        |file, _| Ok(files.get(file).map(|s| s.as_bytes().to_vec())),
+    ))?;
     if actual.len() != declarations.len()
         || actual.iter().any(|(id, sources)| {
             declarations.get(id).is_none_or(|expected| {

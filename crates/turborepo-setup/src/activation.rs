@@ -217,8 +217,10 @@ impl ActivationPlan {
             tools.push(pnpm.inventory_tool().clone());
         }
         if lock.tools().contains_key("npm") {
+            // npm is bound to the locked Node it runs on.
+            let node = node.as_ref().ok_or(Error::InvalidLock)?;
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            if let Some(npm) = NpmPlan::from_declaration(lock, platform, &node, &manager)
+            if let Some(npm) = NpmPlan::from_declaration(lock, platform, node, &manager)
                 .map_err(|_| Error::InvalidLock)?
             {
                 tools.push(npm.inventory_tool().clone());
