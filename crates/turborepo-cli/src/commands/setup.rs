@@ -137,6 +137,9 @@ pub enum Error {
     Root(#[from] root::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+    #[cfg(windows)]
+    #[error(transparent)]
+    Signal(#[from] turborepo_signals::listeners::Error),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -243,6 +246,8 @@ fn run_observed(
     setup_args: &SetupArgs,
     report: &mut telemetry::Report,
 ) -> Result<i32, Error> {
+    #[cfg(windows)]
+    exit_on_relayed_ctrl_c()?;
     let invocation = match args.cwd.as_deref() {
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
@@ -253,6 +258,23 @@ fn run_observed(
             None,
         )?)
     })
+}
+
+/// Setup runs before turbo's signal handler and has no graceful phase, so a
+/// console Ctrl+C ends it through the default handler. The npm wrapper relays
+/// Ctrl+C over a pipe instead under a package manager terminal; end setup the
+/// same way, so locks release with the process and the transaction resumes.
+#[cfg(windows)]
+fn exit_on_relayed_ctrl_c() -> Result<(), Error> {
+    const STATUS_CONTROL_C_EXIT: u32 = 0xC000_013A;
+    if let Some(mut relay) = turborepo_signals::listeners::wrapper_ctrl_c()? {
+        std::thread::spawn(move || {
+            if let Some(Some(_)) = relay.blocking_recv() {
+                crate::process_exit::exit(STATUS_CONTROL_C_EXIT as i32);
+            }
+        });
+    }
+    Ok(())
 }
 
 // Trusted internal fixture injection only: never a CLI flag, repo URL or env
@@ -533,6 +555,10 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
 #[path = "setup/tests.rs"]
 mod provisioning_tests;
 
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+#[path = "setup/windows_tests.rs"]
+mod windows_provisioning_tests;
+
 #[cfg(test)]
 mod tests {
     use std::ffi::OsString;
@@ -555,8 +581,14 @@ mod tests {
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
         let libc = turborepo_platform::host_libc();
         let host = cfg!(target_os = "macos") || matches!(libc, Ok(Some(Libc::Glibc { .. })));
+        let windows = cfg!(all(windows, target_arch = "x86_64"));
         let platform = provision::platform();
-        assert_eq!(platform.is_ok(), arch && host);
+        assert_eq!(platform.is_ok(), (arch && host) || windows);
+        if cfg!(all(windows, target_arch = "aarch64")) {
+            assert!(
+                matches!(&platform, Err(e) if e.to_string().contains("not qualified for Windows arm64"))
+            );
+        }
         if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl))) {
             assert!(matches!(platform, Err(Error::MuslHost)));
         }

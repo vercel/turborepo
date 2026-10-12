@@ -142,6 +142,8 @@ fn invoke_in(
         .args(words)
         .env("PATH", path.unwrap_or(git_path.as_os_str()))
         .env("HOME", root.join("home"))
+        .env("USERPROFILE", root.join("home"))
+        .env("APPDATA", root.join("appdata"))
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
         .env("VERCEL_CONFIG_DIR_PATH", root.join("config"))
@@ -777,7 +779,7 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
-    let qualified = qualified_host();
+    let qualified = qualified_host() || cfg!(all(windows, target_arch = "x86_64"));
     let musl = matches!(
         turborepo_platform::host_libc(),
         Ok(Some(turborepo_platform::Libc::Musl))
@@ -799,8 +801,10 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
                     "managed activation requires turbo.lock"
                 } else if musl {
                     "not supported on musl Linux hosts"
+                } else if cfg!(all(windows, target_arch = "aarch64")) {
+                    "managed setup is not qualified for Windows arm64"
                 } else {
-                    "managed promotion requires macOS or GNU Linux"
+                    "managed promotion requires macOS, GNU Linux or Windows x64"
                 },
             );
         }
@@ -988,9 +992,12 @@ fn npm_and_pnpm_wrapper_environments_reach_setup_but_custom_registries_do_not() 
 /// A managed Node/pnpm repository whose `turbo.lock` records `.nvmrc` and
 /// `package.json#/packageManager`. Returns the tools a healthy generation
 /// holds.
-#[cfg(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", target_os = "linux")
+#[cfg(any(
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "linux")
+    ),
+    all(windows, target_arch = "x86_64")
 ))]
 fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
     use turborepo_setup::{
@@ -1018,14 +1025,20 @@ fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
         ("macos", "aarch64") => (Platform::MacosArm64, "macos-arm64", "darwin-arm64"),
         ("macos", _) => (Platform::MacosX64, "macos-x64", "darwin-x64"),
         ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64-gnu", "linux-arm64"),
+        ("windows", _) => (Platform::WindowsX64, "windows-x64", "win-x64"),
         _ => (Platform::LinuxX64Gnu, "linux-x64-gnu", "linux-x64"),
     };
     let prefix = format!("node-v24.0.0-{spelling}");
+    let (extension, format, executable) = if cfg!(windows) {
+        ("zip", "zip", "node.exe")
+    } else {
+        ("tar.gz", "tar-gz", "bin/node")
+    };
     let lock = serde_json::json!({"schemaVersion":0,"tools":{
         "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
             "installation":{"kind":"managed","artifacts":{selector:{"distribution":{
-                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz"),"sha256":"0".repeat(64),
-                "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}}}}}},
+                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.{extension}"),"sha256":"0".repeat(64),
+                "format":format,"rootPrefix":prefix,"executables":{"node":executable}}}}}},
         "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
             "installation":{"kind":"managed","artifacts":{"any":{"package":{
                 "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"1".repeat(64),
@@ -1047,20 +1060,25 @@ fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
 /// Seed a repo-local generation through the real Store/adapter contract.
 /// Production has no loopback override; the CLI library fixtures separately
 /// exercise actual downloads. Executables fail loudly if anything probes them.
-#[cfg(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", target_os = "linux")
+#[cfg(any(
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "linux")
+    ),
+    all(windows, target_arch = "x86_64")
 ))]
 fn seed_generation(
     root: &Path,
     tools: &[turborepo_tool_install::Tool],
 ) -> turborepo_tool_install::Current {
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
         for relative in tool.executables.values() {
             let file = destination.join(relative);
             fs::create_dir_all(file.parent().expect("executable parent"))?;
             fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
+            #[cfg(unix)]
             fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
         }
         fs::write(destination.join("resource"), "adjacent resource")?;
@@ -1074,9 +1092,12 @@ fn seed_generation(
         .expect("current generation")
 }
 
-#[cfg(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", target_os = "linux")
+#[cfg(any(
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "linux")
+    ),
+    all(windows, target_arch = "x86_64")
 ))]
 #[test]
 fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {

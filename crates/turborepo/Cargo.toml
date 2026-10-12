@@ -47,6 +47,14 @@ rustls = { version = "0.23.36", default-features = false, features = [
 sha2 = { workspace = true }
 tar = { version = "0.4.45", default-features = false }
 
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Console",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+] }
+
 [lints]
 workspace = true
 

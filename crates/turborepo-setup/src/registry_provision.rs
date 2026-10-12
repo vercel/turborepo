@@ -26,7 +26,10 @@ pub enum Error {
     InvalidLock,
     #[error("package manager requires the selected managed Node in the complete desired inventory")]
     NodeBinding,
-    #[error("registry package promotion is unqualified for Windows, musl or non-Unix hosts")]
+    #[error(
+        "registry package promotion is unqualified for this host, Windows arm64 or musl; use \
+         macOS, GNU Linux or Windows x64"
+    )]
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
@@ -368,15 +371,16 @@ impl RegistryPlan {
         manager: Manager,
     ) -> Result<Self, Error> {
         let (id, mappings) = standard_mappings(manager)?;
-        if !cfg!(unix)
-            || !matches!(
-                platform,
-                Platform::MacosX64
-                    | Platform::MacosArm64
-                    | Platform::LinuxX64Gnu
-                    | Platform::LinuxArm64Gnu
-            )
-        {
+        let windows = platform == Platform::WindowsX64;
+        let qualified = match platform {
+            Platform::MacosX64
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu => cfg!(unix),
+            Platform::WindowsX64 => cfg!(windows),
+            _ => false,
+        };
+        if !qualified {
             return Err(Error::UnsupportedTarget);
         }
         let selected_node = NodePlan::from_lock(lock, platform).map_err(|_| Error::NodeBinding)?;
@@ -425,10 +429,17 @@ impl RegistryPlan {
             serde_json::to_vec(&(&node, authored.map(|pin| (pin.algorithm, &pin.digest))))
                 .map_err(|_| Error::InvalidLock)?;
         let launch_directory = format!("managed-node-{:x}", Sha256::digest(binding));
+        // Windows launchers are batch files so PATHEXT resolves `pnpm`.
+        let extension = if windows { ".cmd" } else { "" };
         let executables = artifact
             .executables
             .keys()
-            .map(|name| (name.clone(), format!("{launch_directory}/{name}")))
+            .map(|name| {
+                (
+                    name.clone(),
+                    format!("{launch_directory}/{name}{extension}"),
+                )
+            })
             .collect();
         Ok(Self {
             tool: Tool {
@@ -557,7 +568,7 @@ impl PreparedRegistry {
         tool: &Tool,
         destination: &Path,
     ) -> Result<(), turborepo_tool_install::Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(turborepo_tool_install::Error::UnsupportedPlatform);
         }
         if tool != &self.tool
@@ -569,13 +580,22 @@ impl PreparedRegistry {
         copy_tree(&self.tree.root_path(), destination)?;
         fs::create_dir(destination.join(&self.launch_directory))?;
         for (name, path) in &self.tool.executables {
-            let script = format!(
-                "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
-                 \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) tools=\"$here/../tools\";; \
-                 esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) || exit 126\nexec \
-                 \"$tools/node/bin/node\" \"$tools/{}/{}\" \"$@\"\n",
-                self.launch_directory, self.tool.id, self.entrypoints[name]
-            );
+            // The bin forwarder calls this file directly, so %~dp0 is always
+            // the launch directory. Entry points are fixed validated mappings.
+            let script = if cfg!(windows) {
+                format!(
+                    "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\{}\" %*\r\n",
+                    self.entrypoints[name].replace('/', "\\")
+                )
+            } else {
+                format!(
+                    "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
+                     \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) \
+                     tools=\"$here/../tools\";; esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) \
+                     || exit 126\nexec \"$tools/node/bin/node\" \"$tools/{}/{}\" \"$@\"\n",
+                    self.launch_directory, self.tool.id, self.entrypoints[name]
+                )
+            };
             fs::write(destination.join(path), script)?;
             #[cfg(unix)]
             {
