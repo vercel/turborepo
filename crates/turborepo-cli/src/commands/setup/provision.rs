@@ -169,6 +169,32 @@ pub(super) fn lock_report(
     lines.join("\n")
 }
 
+/// Declarations lock resolution can start from. Setup and `--plan` share this
+/// gate and [`resolve`], so a plan proposes exactly what setup would publish;
+/// ecosystems that join resolution extend these, never one caller.
+pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
+    if !snapshot.declarations().contains_key("node") {
+        return Err(Error::Unsupported("a native Node declaration is required"));
+    }
+    Ok(())
+}
+
+/// The one candidate resolver behind setup's lock publication and `--plan`'s
+/// proposal. Callers run their own checks before calling it.
+pub(super) fn resolve(
+    runtime: &tokio::runtime::Runtime,
+    request: turborepo_setup::lock::reconcile::Resolution<'_>,
+    sources: &Transports,
+) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
+    runtime
+        .block_on(turborepo_setup::js_resolution::resolve(
+            request,
+            &sources.node,
+            &sources.registry,
+        ))
+        .map_err(|e| turborepo_setup::lock::reconcile::Error::Resolution(e.to_string()))
+}
+
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
@@ -187,8 +213,8 @@ pub(super) fn run(
     if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
         return Err(Error::Unsupported("npm override provisioning"));
     }
-    if write && !snapshot.declarations().contains_key("node") {
-        return Err(Error::Unsupported("a native Node declaration is required"));
+    if write {
+        resolvable(&snapshot)?;
     }
     // Ordinary setup validates matching pins before its no-op writer. Explicit
     // refresh may repair invalid native selections within this supported cohort;
@@ -235,13 +261,7 @@ pub(super) fn run(
             false,
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
-                runtime
-                    .block_on(turborepo_setup::js_resolution::resolve(
-                        request,
-                        &sources.node,
-                        &sources.registry,
-                    ))
-                    .map_err(|e| reconcile::Error::Resolution(e.to_string()))
+                resolve(&runtime, request, &sources)
             },
             |candidate| {
                 plans(&snapshot, candidate)
