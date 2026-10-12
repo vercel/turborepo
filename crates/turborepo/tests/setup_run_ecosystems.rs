@@ -18,6 +18,8 @@ mod go;
 mod rust;
 #[path = "setup_run_ecosystems/uv.rs"]
 mod uv;
+#[path = "setup_run_ecosystems/yarn_bun.rs"]
+mod yarn_bun;
 
 use std::{
     fs,
