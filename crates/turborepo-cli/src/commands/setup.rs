@@ -11,6 +11,8 @@ use crate::cli::{Args, SetupArgs};
 mod acl;
 pub(crate) mod authorization;
 mod check;
+#[cfg(windows)]
+mod dacl;
 mod provision;
 mod root;
 mod trust;

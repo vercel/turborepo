@@ -134,11 +134,13 @@ impl ManagedEnvironment for ManagedTools {
 }
 
 /// Conservative native execution identity. No readiness-only/unprobed labels.
-/// These initial adapters are supported only on native macOS and GNU Linux.
+/// These initial adapters are supported only on native macOS, GNU Linux and
+/// Windows x64. Windows arm64 is unqualified and never borrows x64 artifacts.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
     if !cfg!(any(
         target_os = "macos",
-        all(target_os = "linux", target_env = "gnu")
+        all(target_os = "linux", target_env = "gnu"),
+        all(windows, target_arch = "x86_64")
     )) {
         return Err("managed Node/pnpm run is unsupported on this host".into());
     }
@@ -194,4 +196,20 @@ pub(crate) fn context() -> Result<ExecutionContext, String> {
         cpu,
     )
     .map_err(|e| e.to_string())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use turborepo_setup::lock::Platform;
+
+    #[test]
+    fn only_windows_x64_qualifies_for_managed_execution() {
+        let context = super::context();
+        if cfg!(target_arch = "x86_64") {
+            let platform = context.map(|c| c.artifact_platform());
+            assert!(matches!(platform, Ok(Platform::WindowsX64)), "{platform:?}");
+        } else {
+            assert!(context.is_err());
+        }
+    }
 }
