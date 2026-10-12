@@ -460,9 +460,29 @@ pub fn frozen_tools_for_tests(
         registry: RegistryTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
         node: NodeTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
         pnpm: PnpmTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
+        cache: None,
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(
+            origin,
+        )
+        .map_err(|e| e.to_string())?,
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
     };
-    run_with_policy(&args, setup_args, Some(transports), || Ok(policy()?))
-        .map_err(|e| e.to_string())
+    // Like run_with_policy (test-only since #14546), never telemetry.
+    run_reporting(
+        &args,
+        setup_args,
+        Some(transports),
+        &mut telemetry::Report::default(),
+        || Ok(policy()?),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
