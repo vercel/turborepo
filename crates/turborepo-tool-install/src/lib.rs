@@ -5,7 +5,9 @@
 //! authorize setup-recorded tools using user state outside the repository,
 //! never repo data. Repository parents are trusted; same-user hostile mutation
 //! is out of scope, as with archive staging. Managed paths reject symlinks;
-//! staging is private. Native Windows qualification is deferred.
+//! staging is private. Windows exports are `.exe` hard links or generated
+//! `.cmd` forwarders found through PATHEXT, and directory handles are pinned
+//! without delete sharing instead of comparing inode identity.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -26,7 +28,7 @@ pub enum Error {
     InvalidInventory,
     #[error("another setup transaction is running")]
     Busy,
-    #[error("managed shims require a qualified Unix host")]
+    #[error("managed shims require a qualified Unix or Windows host and executable type")]
     UnsupportedPlatform,
     #[error("generation published but durability sync failed; recheck local inventory")]
     Published(#[source] Box<Error>),
@@ -161,17 +163,17 @@ pub enum Outcome {
 impl Store {
     /// Locks this clone's ignored .turbo/tools, without touching global state.
     pub fn open(repo: &Path) -> Result<Self, Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = fs::canonicalize(repo)?;
         real_directory(&repo)?;
-        let repo_handle = File::open(&repo)?;
+        let repo_handle = open_directory(&repo)?;
         let turbo = repo.join(".turbo");
         directory(&turbo)?;
         let root = turbo.join("tools");
         directory(&root)?;
-        let root_handle = File::open(&root)?;
+        let root_handle = open_directory(&root)?;
         let path = root.join("transaction.lock");
         match fs::symlink_metadata(&path) {
             Ok(m) if !m.is_file() || m.file_type().is_symlink() => return Err(Error::UnsafePath),
@@ -218,19 +220,11 @@ impl Store {
         if self.owner_pid != std::process::id() || fs::canonicalize(&self.root)? != self.root {
             return Err(Error::UnsafePath);
         }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            for (handle, path) in [
-                (&self.root_handle, self.root.as_path()),
-                (&self.repo_handle, self.repository_root()?),
-            ] {
-                let held = handle.metadata()?;
-                let now = fs::metadata(path)?;
-                if (held.dev(), held.ino()) != (now.dev(), now.ino()) {
-                    return Err(Error::UnsafePath);
-                }
-            }
+        for (handle, path) in [
+            (&self.root_handle, self.root.as_path()),
+            (&self.repo_handle, self.repository_root()?),
+        ] {
+            same_directory(handle, path)?;
         }
         Ok(())
     }
@@ -293,7 +287,7 @@ impl Store {
     /// Reject publication observed during inspection; callers must still handle
     /// later changes (this does not lease a generation against hostile edits).
     pub fn inspect(repo: &Path) -> Result<Option<Current>, Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = fs::canonicalize(repo)?;
@@ -306,7 +300,7 @@ impl Store {
                 result => result?,
             }
         }
-        let root_handle = File::open(&root)?;
+        let root_handle = open_directory(&root)?;
         let before = Self::manifest_bytes(&root)?;
         let Some(inventory) = Self::inventory(&root)? else {
             return Ok(None);
@@ -315,17 +309,9 @@ impl Store {
         if Self::manifest_bytes(&root)? != before {
             return Err(Error::InvalidInventory);
         }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            real_directory(&turbo)?;
-            real_directory(&root)?;
-            let held = root_handle.metadata()?;
-            let now = fs::metadata(&root)?;
-            if (held.dev(), held.ino()) != (now.dev(), now.ino()) {
-                return Err(Error::UnsafePath);
-            }
-        }
+        real_directory(&turbo)?;
+        real_directory(&root)?;
+        same_directory(&root_handle, &root)?;
         Ok(Some(Current {
             bin: root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
@@ -477,13 +463,9 @@ impl Store {
             }
             check_executables(&tree, &installed.tool)?;
             for (name, executable) in &installed.tool.executables {
-                names.insert(name.clone());
-                let shim = bin.join(name);
-                if !fs::symlink_metadata(&shim)?.file_type().is_symlink()
-                    || fs::read_link(shim)? != shim_target(&installed.tool.id, executable)
-                {
-                    return Err(Error::UnsafePath);
-                }
+                let shim = shim_name(name, executable)?;
+                check_shim(&bin.join(&shim), &tree, &installed.tool.id, executable)?;
+                names.insert(shim);
             }
         }
         let actual = fs::read_dir(bin)?
@@ -612,7 +594,7 @@ impl Store {
             let tree_sha256 = tree_hash(&tree)?;
             check_executables(&tree, &tool)?;
             for (name, path) in &tool.executables {
-                make_link(&shim_target(&tool.id, path), &bin.join(name))?;
+                make_shim(&tree, &bin, &tool.id, name, path)?;
             }
             installed.push(Installed { tool, tree_sha256 });
         }
@@ -770,6 +752,140 @@ fn real_directory(path: &Path) -> Result<(), Error> {
     if std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o022 != 0 {
         return Err(Error::UnsafePath);
     }
+    // Junctions are symlinks above; also reject every other reparse point.
+    #[cfg(windows)]
+    if std::os::windows::fs::MetadataExt::file_attributes(&m) & 0x400 != 0 {
+        return Err(Error::UnsafePath);
+    }
+    Ok(())
+}
+
+/// A held directory handle. Windows handles also deny delete sharing, so the
+/// pinned directory cannot be renamed or replaced while this Store is alive.
+fn open_directory(path: &Path) -> Result<File, Error> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT; share
+        // read and write only, matching writer storage.
+        let file = OpenOptions::new()
+            .read(true)
+            .custom_flags(0x0200_0000 | 0x0020_0000)
+            .share_mode(0x1 | 0x2)
+            .open(path)?;
+        real_directory(path)?;
+        Ok(file)
+    }
+    #[cfg(not(windows))]
+    Ok(File::open(path)?)
+}
+
+fn same_directory(held: &File, path: &Path) -> Result<(), Error> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let (held, now) = (held.metadata()?, fs::metadata(path)?);
+        if (held.dev(), held.ino()) != (now.dev(), now.ino()) {
+            return Err(Error::UnsafePath);
+        }
+    }
+    #[cfg(windows)]
+    if same_file::Handle::from_file(held.try_clone()?)? != same_file::Handle::from_path(path)? {
+        return Err(Error::UnsafePath);
+    }
+    #[cfg(not(any(unix, windows)))]
+    let _ = (held, path);
+    Ok(())
+}
+
+/// Lock paths use `/`; never join them unsplit onto a Windows verbatim path.
+fn relative_path(value: &str) -> PathBuf {
+    value.split('/').collect()
+}
+
+/// PATHEXT type of a Windows export. Forwarders interpolate the target into a
+/// batch line, so `.cmd` targets use a conservative spelling without `%`/`!`.
+#[cfg(windows)]
+fn windows_kind(path: &str) -> Result<&'static str, Error> {
+    let lower = path.to_ascii_lowercase();
+    if lower.ends_with(".exe") {
+        Ok("exe")
+    } else if lower.ends_with(".cmd")
+        && path
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_./".contains(&b))
+    {
+        Ok("cmd")
+    } else {
+        Err(Error::UnsupportedPlatform)
+    }
+}
+
+/// The PATH entry for a portable export name. Windows keeps the target's
+/// PATHEXT extension so `name` resolves to `name.exe` or `name.cmd`.
+fn shim_name(name: &str, path: &str) -> Result<String, Error> {
+    #[cfg(windows)]
+    return Ok(format!("{name}.{}", windows_kind(path)?));
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Ok(name.to_owned())
+    }
+}
+
+/// Transfers control to the tool's own batch launcher, preserving `%*` and
+/// its exit status. `%~dp0` is this bin directory.
+#[cfg(windows)]
+fn forwarder(id: &str, path: &str) -> Vec<u8> {
+    format!(
+        "@\"%~dp0..\\tools\\{id}\\{}\" %*\r\n",
+        path.replace('/', "\\")
+    )
+    .into_bytes()
+}
+
+fn make_shim(tree: &Path, bin: &Path, id: &str, name: &str, path: &str) -> Result<(), Error> {
+    let shim = bin.join(shim_name(name, path)?);
+    #[cfg(windows)]
+    {
+        // Hard links need no symlink privilege. The image path becomes
+        // bin\name.exe, so exe exports must not load adjacent resources.
+        if windows_kind(path)? == "exe" {
+            fs::hard_link(tree.join(relative_path(path)), shim)?;
+        } else {
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(shim)?
+                .write_all(&forwarder(id, path))?;
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = tree;
+        make_link(&shim_target(id, path), &shim)
+    }
+}
+
+fn check_shim(shim: &Path, tree: &Path, id: &str, path: &str) -> Result<(), Error> {
+    let metadata = fs::symlink_metadata(shim)?;
+    #[cfg(windows)]
+    let valid = metadata.is_file()
+        && std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 == 0
+        && if windows_kind(path)? == "exe" {
+            same_file::is_same_file(shim, tree.join(relative_path(path)))?
+        } else {
+            metadata.len() <= RECORD_LIMIT && fs::read(shim)? == forwarder(id, path)
+        };
+    #[cfg(not(windows))]
+    let valid = {
+        let _ = tree;
+        metadata.file_type().is_symlink() && fs::read_link(shim)? == shim_target(id, path)
+    };
+    if !valid {
+        return Err(Error::UnsafePath);
+    }
     Ok(())
 }
 
@@ -792,6 +908,7 @@ fn directory(path: &Path) -> Result<(), Error> {
     }
 }
 
+#[cfg(not(windows))]
 fn shim_target(id: &str, path: &str) -> PathBuf {
     PathBuf::from("../tools").join(id).join(path)
 }
@@ -811,7 +928,7 @@ fn make_link(target: &Path, path: &Path) -> Result<(), Error> {
 
 fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
     for path in tool.executables.values() {
-        let resolved = fs::canonicalize(root.join(path))?;
+        let resolved = fs::canonicalize(root.join(relative_path(path)))?;
         if !resolved.starts_with(root) || !resolved.is_file() {
             return Err(Error::UnsafePath);
         }
@@ -934,7 +1051,12 @@ fn sync_tree(root: &Path) -> Result<(), Error> {
         if m.is_dir() {
             dirs.push(path.to_path_buf());
         } else if m.is_file() {
-            File::open(path)?.sync_all()?;
+            // FlushFileBuffers requires write access on Windows.
+            OpenOptions::new()
+                .read(true)
+                .write(cfg!(windows))
+                .open(path)?
+                .sync_all()?;
         }
         Ok(())
     })?;
@@ -946,3 +1068,5 @@ fn sync_tree(root: &Path) -> Result<(), Error> {
 
 #[cfg(all(test, unix))]
 mod tests;
+#[cfg(all(test, windows))]
+mod windows_tests;
