@@ -1,10 +1,12 @@
-//! Captured native Node + exact pnpm → portable cohort. Only reconcile's
-//! permitted IDs resolve; unaffected selections (including Node exports) retain
-//! their exact bytes. No publication, installation, probes or task execution.
+//! Captured native Node + exact pnpm/Yarn/Bun → portable cohort. Only
+//! reconcile's permitted IDs resolve; unaffected selections (including Node
+//! exports) retain their exact bytes. No publication, installation, probes or
+//! task execution.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
+    bun_provision::BunTransport,
     lock::{self, Document, Format, Installation, Lock, Platform, Tool, reconcile::Resolution},
     node_provision::{NodePlan, NodeTransport},
     package_manager::{self, Declaration, Manager},
@@ -23,13 +25,20 @@ pub enum Error {
     Registry(#[from] crate::registry_resolution::Error),
     #[error(transparent)]
     Native(#[from] package_manager::Error),
+    #[error(transparent)]
+    Bun(#[from] crate::bun_provision::Error),
     #[error("unsupported native JS resolution: {0}")]
     Unsupported(&'static str),
 }
 
 // Without an authoritative pin, only one unambiguous exact identity is in
 // scope. Never choose the first dev alternative or query a floating index.
-fn exact_pnpm(declaration: &Declaration) -> Result<String, Error> {
+fn exact_manager(declaration: &Declaration) -> Result<String, Error> {
+    let (floating, ambiguous) = match declaration.manager {
+        Manager::Yarn => ("floating Yarn request", "ambiguous exact Yarn alternatives"),
+        Manager::Bun => ("floating Bun request", "ambiguous exact Bun alternatives"),
+        _ => ("floating pnpm request", "ambiguous exact pnpm alternatives"),
+    };
     let requests = declaration
         .package_manager
         .as_ref()
@@ -41,52 +50,62 @@ fn exact_pnpm(declaration: &Declaration) -> Result<String, Error> {
                 .request
                 .as_ref()
                 .and_then(crate::VersionRequest::exact_version)
-                .ok_or(Error::Unsupported("floating pnpm request"))
+                .ok_or(Error::Unsupported(floating))
         })
         .collect::<Result<_, _>>()?;
     if versions.len() != 1 {
-        return Err(Error::Unsupported("ambiguous exact pnpm alternatives"));
+        return Err(Error::Unsupported(ambiguous));
     }
     let version = versions
         .first()
-        .ok_or(Error::Unsupported("missing pnpm pin"))?;
+        .ok_or(Error::Unsupported("missing manager pin"))?;
     declaration.preflight_integrity(version)?;
     let version = version.to_string();
     if version.len() > 128 {
-        return Err(Error::Unsupported("pnpm identity exceeds lock limit"));
+        return Err(Error::Unsupported("manager identity exceeds lock limit"));
     }
     Ok(version)
 }
 
-// Pure portable payload checks, matching the locked pnpm adapter without its
-// host/promotion restrictions. Inspect EVERY variant, not the current platform.
-fn validate_pnpm(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
+// Pure portable payload checks, matching the locked registry adapters without
+// their host/promotion restrictions. Inspect EVERY variant, not the current
+// platform. Modern Yarn bundle pins are checked against bytes when prepared.
+fn validate_registry(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
     let invalid = || Error::Registry(crate::registry_resolution::Error::InvalidLock);
-    let version = semver::Version::parse(&tool.version).map_err(|_| invalid())?;
+    let (name, version) =
+        crate::registry_metadata::validate_selection(declaration.manager, &tool.version)
+            .map_err(|_| invalid())?;
+    let (id, entry, alias) = match declaration.manager {
+        Manager::Yarn => ("yarn", "bin/yarn.js", ("yarnpkg", "bin/yarn.js")),
+        _ => ("pnpm", "bin/pnpm.cjs", ("pnpx", "bin/pnpx.cjs")),
+    };
+    let tarball = crate::registry_metadata::tarball_path(name, &tool.version);
     let Installation::Managed { artifacts } = &tool.installation else {
         return Err(invalid());
     };
-    if tool.adapter != "pnpm" || !tool.options.is_empty() {
+    if tool.adapter != id || !tool.options.is_empty() {
         return Err(invalid());
     }
     for parts in artifacts.values() {
         let artifact = parts.values().next().ok_or_else(invalid)?;
         let paths = &artifact.executables;
         if parts.len() != 1
-            || artifact.url != format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz")
+            || artifact.url != format!("https://registry.npmjs.org/{tarball}")
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || paths.get("pnpm").map(String::as_str) != Some("bin/pnpm.cjs")
-            || paths.iter().any(|(name, path)| match name.as_str() {
-                "pnpm" => path != "bin/pnpm.cjs",
-                "pnpx" => path != "bin/pnpx.cjs",
-                _ => true,
-            })
+            || paths.get(id).map(String::as_str) != Some(entry)
+            || paths
+                .iter()
+                .any(|(name, path)| ![(id, entry), alias].contains(&(name.as_str(), path.as_str())))
         {
             return Err(invalid());
         }
-        declaration.locked_integrity(&version, &artifact.sha256)?;
+        if crate::registry_metadata::is_modern_yarn(declaration.manager, &version) {
+            declaration.preflight_integrity(&version)?;
+        } else {
+            declaration.locked_integrity(&version, &artifact.sha256)?;
+        }
     }
     Ok(())
 }
@@ -98,6 +117,7 @@ pub async fn resolve(
     request: Resolution<'_>,
     node: &NodeTransport,
     registry: &RegistryTransport,
+    bun: &BunTransport,
 ) -> Result<Lock, Error> {
     let snapshot = request.snapshot();
     snapshot.ensure_current()?;
@@ -107,13 +127,17 @@ pub async fn resolve(
         ));
     }
     let manager = snapshot.package_manager()?;
-    if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
-        return Err(Error::Unsupported("npm declaration resolution"));
-    }
-    let pnpm_version = manager
+    let manager_id = match manager.as_ref().map(|m| m.manager) {
+        None => None,
+        Some(Manager::Pnpm) => Some("pnpm"),
+        Some(Manager::Yarn) => Some("yarn"),
+        Some(Manager::Bun) => Some("bun"),
+        Some(_) => return Err(Error::Unsupported("npm declaration resolution")),
+    };
+    let manager_version = manager
         .as_ref()
-        .filter(|_| request.version_ids().contains("pnpm"))
-        .map(exact_pnpm)
+        .filter(|_| manager_id.is_some_and(|id| request.version_ids().contains(id)))
+        .map(exact_manager)
         .transpose()?;
     if request.offline() && !request.version_ids().is_empty() {
         return Err(Error::Unsupported(
@@ -148,10 +172,14 @@ pub async fn resolve(
             ));
         }
     }
-    if !request.version_ids().contains("pnpm")
-        && let Some(declaration) = &manager
+    if let (Some(id), Some(declaration)) = (manager_id, &manager)
+        && !request.version_ids().contains(id)
     {
-        validate_pnpm(&tools["pnpm"], declaration)?;
+        if declaration.manager == Manager::Bun {
+            crate::bun_provision::validate(&tools[id], declaration)?;
+        } else {
+            validate_registry(&tools[id], declaration)?;
+        }
     }
     // Preserved shapes and native choices are checked before EITHER transport.
     if request.version_ids().contains("node") {
@@ -160,25 +188,30 @@ pub async fn resolve(
         tools.insert("node".into(), selected);
     }
     snapshot.ensure_current()?;
-    if let (Some(version), Some(declaration)) = (pnpm_version, &manager) {
-        let selected = registry
-            .resolve_exact(Manager::Pnpm, &version, None)
-            .await?;
-        let pin = declaration.locked_integrity(selected.version(), &selected.artifact().sha256)?;
-        selected.verify_authored(pin.as_ref())?;
+    if let (Some(version), Some(declaration), Some(id)) = (manager_version, &manager, manager_id) {
+        let installation = if declaration.manager == Manager::Bun {
+            bun.resolve_exact(&version).await?
+        } else {
+            let selected = registry
+                .resolve_exact(declaration.manager, &version, None)
+                .await?;
+            let pin = declaration.locked_integrity(selected.version(), selected.pinned_sha256())?;
+            selected.verify_authored(pin.as_ref())?;
+            Installation::Managed {
+                artifacts: BTreeMap::from([(
+                    Platform::Any,
+                    BTreeMap::from([("package".into(), selected.into_artifact())]),
+                )]),
+            }
+        };
         tools.insert(
-            "pnpm".into(),
+            id.into(),
             Tool {
-                adapter: "pnpm".into(),
+                adapter: id.into(),
                 version,
-                declarations: snapshot.declarations()["pnpm"].clone(),
+                declarations: snapshot.declarations()[id].clone(),
                 options: BTreeMap::new(),
-                installation: Installation::Managed {
-                    artifacts: BTreeMap::from([(
-                        Platform::Any,
-                        BTreeMap::from([("package".into(), selected.into_artifact())]),
-                    )]),
-                },
+                installation,
             },
         );
     }

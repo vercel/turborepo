@@ -252,6 +252,7 @@ pub(super) fn run(
                         request,
                         &sources.node,
                         &sources.registry,
+                        &sources.bun,
                     ))
                     .map_err(|e| reconcile::Error::Resolution(e.to_string()))
             },
