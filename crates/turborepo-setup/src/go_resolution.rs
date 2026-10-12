@@ -202,16 +202,21 @@ pub fn resolve(requirements: &GoRequirements, index: &[u8]) -> Result<Tool, Erro
 }
 
 pub struct GoTransport {
-    client: DownloadClient,
-    // Test transports change only the origin; lock provenance stays official.
+    pub(crate) client: DownloadClient,
+    // Test transports change only origins; lock provenance stays official.
     metadata: String,
+    pub(crate) artifacts: String,
 }
 
 impl GoTransport {
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
-            client: DownloadClient::new([ApprovedOrigin::https(METADATA_ORIGIN)?])?,
+            client: DownloadClient::new([
+                ApprovedOrigin::https(METADATA_ORIGIN)?,
+                ApprovedOrigin::https(ARTIFACT_ORIGIN)?,
+            ])?,
             metadata: METADATA_ORIGIN.into(),
+            artifacts: ARTIFACT_ORIGIN.into(),
         })
     }
 
@@ -222,6 +227,7 @@ impl GoTransport {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             metadata: origin.into(),
+            artifacts: origin.into(),
         })
     }
 
