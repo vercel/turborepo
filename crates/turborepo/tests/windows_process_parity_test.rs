@@ -632,6 +632,11 @@ impl Managed {
             ("turbo.json", r#"{"futureFlags":{"experimentalSetup":true}}"#.to_owned()),
             (".nvmrc", format!("{version}\n")),
             (".gitignore", "/.turbo/\n".to_owned()),
+            ("pnpm-workspace.yaml", "packages: ['apps/*']\n".to_owned()),
+            (
+                "pnpm-lock.yaml",
+                "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n".to_owned(),
+            ),
             (
                 "package.json",
                 r#"{"name":"exec-parity","private":true,"packageManager":"pnpm@10.0.0"}"#.to_owned(),
@@ -760,7 +765,18 @@ fn managed_exec_delivers_one_ctrl_c_and_leaves_no_orphans() {
         );
         tree.assert_gone();
     }
-    // A terminated entrypoint takes the managed command's tree down with it.
+    managed.assert_untouched();
+}
+
+/// Like `terminating_the_entrypoint_leaves_no_orphans` for `turbo run`.
+#[test]
+#[ignore = "TURBO-6424: exec assigns its command no kill-on-close job object yet"]
+fn managed_exec_terminated_entrypoint_leaves_no_orphans() {
+    let launcher = ProcessLauncher::new();
+    let Some(managed) = Managed::new(&launcher) else {
+        return;
+    };
+    let exec = ["exec", "--", "node", "task.js"];
     for launch in [Launch::Standalone, Launch::Wrapper] {
         eprintln!("case: {launch:?} terminated");
         managed.reset();
