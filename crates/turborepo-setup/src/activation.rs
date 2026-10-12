@@ -1,6 +1,7 @@
 //! Read-only managed environment planning (Node and its package managers
-//! npm/pnpm/Yarn/Bun, Rust and Go, plus uv/Python when the caller enables
-//! Python workspaces), not execution authorization. Every adapter contributes
+//! npm/pnpm/Yarn/Bun, Rust and Go, uv/Python when the caller enables Python
+//! workspaces, and repository-declared additional tools), not execution
+//! authorization. Every adapter contributes
 //! the same shape: validated inventory tools whose exports share one managed
 //! bin directory, plus runtime variables, so consumers need no
 //! adapter-specific code. verify-system selections are listed as external
@@ -20,11 +21,12 @@ use std::{
 use turborepo_tool_install::{Current, Record, Store, Tool, Verification};
 
 use crate::{
+    artifact_provision::{self, ArtifactPlan},
     bun_provision::BunPlan,
     execution_identity::{ExecutionContext, ExecutionSnapshot},
     go_discovery::GoVersion,
     go_provision::GoPlan,
-    lock::{Ecosystems, Installation, Lock, Platform, Snapshot, StorageError},
+    lock::{Ecosystems, Installation, Lock, Platform, Snapshot, StorageError, additional},
     node_provision::NodePlan,
     npm_provision::NpmPlan,
     package_manager::{Declaration, Manager},
@@ -47,11 +49,15 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports managed Node, npm, pnpm, Yarn, Bun, Rust and Go, plus uv \
-         and Python with experimentalPythonWorkspaces, and verify-system Node.js and pnpm; use a \
-         supported setup adapter"
+        "activation planning supports managed Node, npm, pnpm, Yarn, Bun, Rust, Go and additional \
+         tools, plus uv and Python with experimentalPythonWorkspaces, and verify-system Node.js \
+         and pnpm; use a supported setup adapter"
     )]
     UnsupportedAdapter,
+    /// A locked additional tool without an artifact for this platform, or
+    /// whose export would shadow another selected tool.
+    #[error(transparent)]
+    AdditionalTool(artifact_provision::Error),
     #[error(
         "managed activation is unqualified for this platform; use a supported macOS, GNU Linux or \
          Windows x64 target"
@@ -250,10 +256,14 @@ impl ActivationPlan {
         };
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
-                id != &tool.adapter
-                    || !(SUPPORTED.contains(&id.as_str())
-                        || (python && matches!(id.as_str(), "uv" | "python")))
+                let builtin = id == &tool.adapter
+                    && (SUPPORTED.contains(&id.as_str())
+                        || (python && matches!(id.as_str(), "uv" | "python")));
+                let additional = tool.adapter == additional::ADAPTER;
+                !(builtin || additional)
                     || !installation(id, &tool.installation)
+                    // Additional tools are always managed artifacts.
+                    || (additional && !matches!(tool.installation, Installation::Managed { .. }))
             })
         {
             return Err(Error::UnsupportedAdapter);
@@ -261,9 +271,12 @@ impl ActivationPlan {
         sources
             .check_native_coverage(Some(lock))
             .map_err(|_| Error::InvalidLock)?;
+        // Additional-tool entries are projections of the root configuration,
+        // so any difference, including a removed declaration, is drift.
         if !lock
             .matches_native(sources.declarations())
             .map_err(|_| Error::InvalidLock)?
+            || !sources.matches_additional(lock)
         {
             return Err(Error::DeclarationDrift);
         }
@@ -375,6 +388,17 @@ impl ActivationPlan {
             }
             tools.push(go.inventory_tool().clone());
         }
+        // Declared executables share the managed bin directory with the
+        // built-in exports; their paths stay relative to the full installed
+        // tree, so executable-relative resources keep resolving.
+        let artifacts = ArtifactPlan::from_lock(lock, platform).map_err(|error| match error {
+            artifact_provision::Error::MissingTarget { .. } => Error::AdditionalTool(error),
+            _ => Error::InvalidLock,
+        })?;
+        let declared = artifacts.iter().map(ArtifactPlan::inventory_tool);
+        artifact_provision::check_exports(&tools, declared.clone())
+            .map_err(Error::AdditionalTool)?;
+        tools.extend(declared.cloned());
         // Store inventories are ordered by tool id.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();

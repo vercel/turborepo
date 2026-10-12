@@ -27,6 +27,7 @@ fn run_mirrored(
     let mirrors = Mirrors {
         node: mirror("/node/"),
         registry: mirror("/npm"),
+        artifact: None,
     };
     let policy = || -> Result<OfficialSourcePolicy, Error> {
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)

@@ -195,6 +195,31 @@ async fn binaries_install_at_their_declared_path() {
 }
 
 #[tokio::test]
+async fn archives_without_a_top_level_directory_install_their_whole_tree() {
+    let bytes = tar_gz(&[
+        ("bin/fixture", SCRIPT, 0o755),
+        ("include/fixture.proto", "resource", 0o644),
+    ]);
+    let mut tool = entry("1.2.3", "fixture.tar.gz", &bytes, "tar-gz");
+    let part = &mut tool["installation"]["artifacts"]["linux-x64-gnu"][PART];
+    part.as_object_mut().unwrap().remove("rootPrefix");
+    let upstream = serve(vec![("/fixture.tar.gz", bytes)]).await;
+    let transport = ArtifactTransport::loopback_http_for_tests(&upstream.origin).unwrap();
+    let plans = [plan(tool)];
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    let outcome = install(&mut store, &plans, &transport, Preparation::IfNeeded).await;
+    assert_eq!(outcome.unwrap(), Outcome::Replaced);
+    assert_eq!(run(&store, "fixture"), "fixture 1.2.3\n");
+    let current = store.current().unwrap().unwrap();
+    let tree = current.tool_tree(plans[0].inventory_tool()).unwrap();
+    assert_eq!(
+        fs::read_to_string(tree.join("include/fixture.proto")).unwrap(),
+        "resource"
+    );
+}
+
+#[tokio::test]
 async fn failures_leave_the_previous_installation_usable() {
     let good = archive();
     let escape = "turborepo-additional-tool-escape";
@@ -308,7 +333,7 @@ async fn plans_require_the_exact_locked_platform_and_shape() {
         },
         |tool| {
             let part = &mut tool["installation"]["artifacts"]["linux-x64-gnu"][PART];
-            part.as_object_mut().unwrap().remove("rootPrefix");
+            part["rootPrefix"] = json!("a/b");
         },
         |tool| {
             let parts = &mut tool["installation"]["artifacts"]["linux-x64-gnu"];
@@ -328,7 +353,7 @@ async fn plans_require_the_exact_locked_platform_and_shape() {
         ));
     }
 
-    // Windows promotion is unqualified.
+    // Windows artifacts install only on Windows hosts.
     let mut windows_lock = entry("1.2.3", "fixture.exe", SCRIPT.as_bytes(), "binary");
     let artifacts = windows_lock["installation"]["artifacts"]
         .as_object_mut()

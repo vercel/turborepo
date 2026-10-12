@@ -52,7 +52,8 @@ pub(super) struct Transports {
     pub python: PythonTransport,
     pub go: GoTransport,
     pub bun: BunTransport,
-    /// Fixture override; otherwise built from the locked artifact origins.
+    /// A mirror or fixture; otherwise built from the locked artifact origins.
+    /// Either way it uses `cache`, and offline setup makes it cache-only.
     pub artifact: Option<ArtifactTransport>,
 }
 impl Transports {
@@ -88,7 +89,12 @@ impl Transports {
             python: PythonTransport::official(policy)?,
             go: GoTransport::official(policy)?,
             bun: BunTransport::official(policy)?,
-            artifact: None,
+            // Otherwise built from the locked artifact origins.
+            artifact: mirrors
+                .artifact
+                .as_ref()
+                .map(|mirror| ArtifactTransport::mirrored(policy, mirror))
+                .transpose()?,
         })
     }
 
@@ -700,11 +706,10 @@ pub(super) fn run(
         bun,
         artifacts,
     } = plans(&snapshot, lock)?;
-    // Offline transports exist for Node and the npm registry only; rustup, uv,
-    // CPython, Go, Bun and additional tool downloads have no offline mode yet.
+    // Offline transports exist for Node, the npm registry and additional
+    // tools only; rustup, uv, CPython, Go and Bun have no offline mode yet.
     if offline
-        && (!artifacts.is_empty()
-            || rustup.is_some()
+        && (rustup.is_some()
             || rust.is_some()
             || uv.is_some()
             || python.is_some()
@@ -712,7 +717,7 @@ pub(super) fn run(
             || bun.is_some())
     {
         return Err(Error::Unsupported(
-            "offline setup for managed Bun, Rust, uv, Python, Go or additional tools",
+            "offline setup for managed Bun, Rust, uv, Python or Go",
         ));
     }
     let trust = match trust {
@@ -734,6 +739,13 @@ pub(super) fn run(
         .chain(artifacts.iter().map(ArtifactPlan::inventory_tool))
         .cloned()
         .collect();
+    // Activation rejects the same shadowing, so never install a cohort that
+    // `turbo run` would refuse.
+    let declared: Vec<_> = artifacts.iter().map(ArtifactPlan::inventory_tool).collect();
+    turborepo_setup::artifact_provision::check_exports(
+        desired.iter().filter(|tool| !declared.contains(tool)),
+        declared.iter().copied(),
+    )?;
     let policy = preflight()?;
     let mut transports = transports
         .map(Ok)
@@ -742,7 +754,15 @@ pub(super) fn run(
         Some(transport) => Some(transport),
         None if artifacts.is_empty() => None,
         None => Some(ArtifactTransport::new(&policy, &artifacts)?),
-    };
+    }
+    .map(|transport| {
+        let transport = transport.with_cache(transports.cache.clone());
+        if offline {
+            transport.offline()
+        } else {
+            transport
+        }
+    });
     let transports = if offline {
         transports.offline()
     } else {
@@ -946,13 +966,35 @@ pub(super) fn run(
         };
         let mut prepared = Vec::new();
         if let Some(transport) = &artifact_transport {
+            use turborepo_setup::artifact_provision::Error::Offline;
             for plan in &artifacts {
                 preflight()?;
                 revalidate(discovery)?;
                 snapshot.check_guard(&guard)?;
+                let tool = plan.inventory_tool();
+                // Same offline rules as Node: collect misses, and let a forced
+                // reinstall reuse the recorded tree when nothing is cached.
                 prepared.push(
-                    plan.prepare(&store, &desired, transport, preparation)
-                        .await?,
+                    match plan.prepare(&store, &desired, transport, preparation).await {
+                        Err(Offline) if force && recorded => {
+                            match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                                Ok(None) => {
+                                    reused.push(tool.clone());
+                                    None
+                                }
+                                Err(Offline) => {
+                                    missing.push(tool.id.as_str());
+                                    None
+                                }
+                                result => result?,
+                            }
+                        }
+                        Err(Offline) => {
+                            missing.push(tool.id.as_str());
+                            None
+                        }
+                        result => result?,
+                    },
                 );
             }
         }
@@ -1060,7 +1102,12 @@ pub(super) fn run(
                 .map_or(0, |npm| npm.downloaded_bytes())
             + prepared_yarn
                 .as_ref()
-                .map_or(0, |yarn| yarn.downloaded_bytes()),
+                .map_or(0, |yarn| yarn.downloaded_bytes())
+            + prepared_artifacts
+                .iter()
+                .flatten()
+                .map(|artifact| artifact.downloaded_bytes())
+                .sum::<u64>(),
         ..Provisioned::default()
     };
     for tool in &desired {
@@ -1068,9 +1115,8 @@ pub(super) fn run(
             .map(|(plan, _)| format!(" ({})", plan.source()))
             .unwrap_or_default();
         let from_cache = match tool.id.as_str() {
-            _ if additional(tool).is_some() => {
-                additional(tool).and_then(|(_, prepared)| prepared.map(|_| false))
-            }
+            _ if additional(tool).is_some() => additional(tool)
+                .and_then(|(_, prepared)| prepared.map(|prepared| prepared.from_cache())),
             "node" => prepared_node.as_ref().map(|node| node.from_cache()),
             "pnpm" => prepared_pnpm.as_ref().map(|pnpm| pnpm.from_cache()),
             "npm" => prepared_npm.as_ref().map(|npm| npm.from_cache()),

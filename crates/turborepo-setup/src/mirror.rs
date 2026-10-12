@@ -12,6 +12,8 @@ use turborepo_download::{ApprovedOrigin, DownloadClient};
 pub const NODE_MIRROR_ENV: &str = "TURBO_SETUP_NODE_MIRROR";
 /// Equivalent to `https://registry.npmjs.org`.
 pub const NPM_REGISTRY_ENV: &str = "TURBO_SETUP_NPM_REGISTRY";
+/// Serves each additional-tool artifact at `<mirror>/<host>/<path>`.
+pub const ARTIFACT_MIRROR_ENV: &str = "TURBO_SETUP_ARTIFACT_MIRROR";
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error(
@@ -33,6 +35,7 @@ pub struct Mirror {
 pub struct Mirrors {
     pub node: Option<Mirror>,
     pub registry: Option<Mirror>,
+    pub artifact: Option<Mirror>,
 }
 
 impl Mirrors {
@@ -51,6 +54,7 @@ impl Mirrors {
         Ok(Self {
             node: read(NODE_MIRROR_ENV)?,
             registry: read(NPM_REGISTRY_ENV)?,
+            artifact: read(ARTIFACT_MIRROR_ENV)?,
         })
     }
 }

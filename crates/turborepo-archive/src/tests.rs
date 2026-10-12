@@ -2,6 +2,7 @@
 
 mod allowances;
 mod links;
+mod rootless;
 
 use std::{io::Write, mem::discriminant};
 
@@ -359,6 +360,7 @@ fn failure_cleanup_and_no_surrounding_writes() {
     let mut tree = Tree {
         staging,
         root: "pkg".into(),
+        rootless: false,
         nodes: BTreeMap::new(),
         limits: limits(),
         bytes: 0,

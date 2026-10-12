@@ -1349,3 +1349,5 @@ fn clone_local_drift_missing_recordless_and_invalid_selections_fail_closed() {
     ));
     assert!(!repo.path().join(".turbo").exists());
 }
+
+mod additional;

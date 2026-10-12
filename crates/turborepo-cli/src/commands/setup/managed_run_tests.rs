@@ -489,3 +489,6 @@ fn no_lock_run_fails_closed_with_clone_local_guidance() {
         f.no_execution();
     }
 }
+
+#[path = "additional_activation_tests.rs"]
+mod additional;
