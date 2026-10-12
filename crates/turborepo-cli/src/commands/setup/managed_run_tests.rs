@@ -232,8 +232,8 @@ fn declaration_drift_after_selection_fails_before_builder_work_or_task_dispatch(
             Ok(_) => panic!("stale run succeeded"),
         }
     });
-    assert!(error.contains("run turbo setup locally"));
-    assert!(error.contains("commit the changed turbo.lock"));
+    assert!(error.contains("changed during this run"), "{error}");
+    assert!(error.contains("after turbo setup if declarations changed"));
     assert!(!f.owned.root().join("apps/web/managed-result").exists());
     assert_eq!(u.hits(), 3);
 }
@@ -305,4 +305,95 @@ fn managed_overrides_do_not_modify_host_environment_and_damage_never_falls_back(
     f.run(&u, FROZEN).unwrap(); // Explicit setup repairs the complete cohort.
     assert!(!execute(&f, "strict", select(&f).unwrap().unwrap()).is_empty());
     assert_eq!(u.hits(), 6);
+}
+
+#[test]
+fn guidance_says_whether_setup_repairs_tools_or_updates_the_lock() {
+    use turborepo_setup::activation::Error as Plan;
+
+    use crate::commands::setup::authorization::Error;
+    let repair = "; run turbo setup to repair the installation (turbo.lock is unchanged)";
+    for ci in [false, true] {
+        let drift = Error::Plan(Plan::DeclarationDrift).guidance(ci);
+        assert!(drift.starts_with("tool declarations no longer match turbo.lock; "));
+        // CI setup is frozen, so CI is sent back to a local lock update.
+        assert_eq!(
+            drift.contains("run turbo setup locally and commit the updated turbo.lock"),
+            ci
+        );
+        assert_eq!(
+            drift.contains("run turbo setup to update turbo.lock, then commit it"),
+            !ci
+        );
+        for error in [
+            Error::Plan(Plan::MissingInventory),
+            Error::Plan(Plan::StaleInventory),
+            Error::Untrusted,
+            Error::Changed,
+        ] {
+            let text = error.guidance(ci);
+            assert!(text.ends_with(repair) && !text.contains("commit"), "{text}");
+        }
+        // Setup rejects an invalid lock too, so it is never the whole answer.
+        let invalid = Error::Plan(Plan::InvalidLock).guidance(ci);
+        assert!(
+            invalid.contains("restore the committed turbo.lock, or delete it and run turbo setup"),
+            "{invalid}"
+        );
+        // Unsupported inputs keep their own next action.
+        assert_eq!(
+            Error::Plan(Plan::UnsupportedAdapter).guidance(ci),
+            Plan::UnsupportedAdapter.to_string()
+        );
+    }
+}
+
+#[test]
+fn deleted_shims_and_declaration_drift_never_download_and_setup_recovers() {
+    use turborepo_setup::activation::Error as Plan;
+
+    use crate::commands::setup::authorization::Error;
+    let f = runnable();
+    let u = Upstream::new(&f, false, None);
+    f.run(&u, FROZEN).unwrap();
+    let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+    let current = turborepo_tool_install::Store::inspect(f.owned.root())
+        .unwrap()
+        .unwrap();
+    fs::remove_file(current.bin.join("node")).unwrap();
+    let hits = u.hits();
+    let error = select(&f).err().unwrap();
+    assert!(
+        error.contains("run turbo setup to repair the installation"),
+        "{error}"
+    );
+    assert_eq!(u.hits(), hits); // Run never downloads.
+    // The recommended setup also works in CI: frozen setup repairs from the lock.
+    f.run(&u, FROZEN).unwrap();
+    assert!(select(&f).unwrap().is_some());
+    assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+
+    fs::write(f.owned.root().join(".nvmrc"), "24.x\n").unwrap();
+    let hits = u.hits();
+    assert_eq!(
+        select(&f).err().unwrap(),
+        Error::Plan(Plan::DeclarationDrift).guidance(turborepo_ci::is_ci())
+    );
+    // Frozen setup refuses the stale lock, matching the CI guidance, while
+    // local setup updates it so the next run is ready instead of looping.
+    assert!(f.run(&u, FROZEN).is_err());
+    assert_eq!(u.hits(), hits);
+    // Only Node is re-resolved; pnpm keeps its locked bytes.
+    let mut routes = super::first_lock::routes(&f, "24.0.0", "10.0.0");
+    routes.retain(|(path, _)| path.starts_with("/dist/"));
+    let integrity = super::first_lock::base64(&sha2::Sha512::digest(&f.pnpm));
+    let metadata = json!({"name":"pnpm","version":"10.0.0","dist":{
+        "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
+        "integrity":format!("sha512-{integrity}")}});
+    routes.push(("/pnpm/10.0.0".into(), metadata.to_string().into_bytes()));
+    routes.push(("/pnpm/-/pnpm-10.0.0.tgz".into(), f.pnpm.clone()));
+    let resolver = LoopbackServer::new(routes, |_| {}).unwrap();
+    f.run(&resolver, &["--tools-only", "--no-frozen"]).unwrap();
+    assert_ne!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+    assert!(select(&f).unwrap().is_some());
 }
