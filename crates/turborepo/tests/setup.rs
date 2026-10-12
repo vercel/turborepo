@@ -1487,8 +1487,11 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         return;
     };
     repo.seed();
+    // pnpm installs need a pnpm-lock.yaml, so this repository skips them.
     // Plain --check checks the same tools and never claims dependency readiness.
-    let installation = "pnpm dependency installation is not supported yet";
+    let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
+    fs::write(repo.root.join("turbo.json"), policy).unwrap();
+    let installation = "turbo.json setup policy";
     for (mode, outcome, skipped) in [
         (
             "--frozen",

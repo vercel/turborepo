@@ -46,6 +46,26 @@ fn missing_lock_is_an_error_not_permission_to_create_one() {
 }
 
 #[test]
+fn pnpm_installs_frozen_from_pnpm_lock_yaml() {
+    let f = Fixture::new();
+    let pnpm = Frozen::new(Manager::Pnpm).unwrap();
+    let error = pnpm.lockfile(&f.root()).unwrap_err().to_string();
+    assert!(
+        error.contains("committed pnpm-lock.yaml") && error.contains("`pnpm install`"),
+        "{error}"
+    );
+    fs::write(f.root().join("pnpm-lock.yaml"), "lockfileVersion: '9.0'\n").unwrap();
+    assert_eq!(pnpm.lockfile(&f.root()).unwrap(), "pnpm-lock.yaml");
+    let args = pnpm.args(&Version::new(10, 0, 0));
+    assert_eq!(args, ["install", "--frozen-lockfile"]);
+    let rewrite = f.npm("echo rewritten > pnpm-lock.yaml");
+    let error = pnpm.run(&rewrite, args, &f.root(), &BTreeMap::new());
+    assert!(matches!(error, Err(Error::LockChanged { .. })));
+    let lock = fs::read(f.root().join("pnpm-lock.yaml")).unwrap();
+    assert_eq!(lock, b"lockfileVersion: '9.0'\n");
+}
+
+#[test]
 fn runs_the_frozen_command_with_the_given_environment_and_returns_its_status() {
     let f = Fixture::new();
     fs::write(f.root().join("package-lock.json"), "lock").unwrap();

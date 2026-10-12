@@ -334,6 +334,8 @@ fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
     for flags in [LOCAL, &["--no-frozen"]] {
         let f = fresh();
         fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+        // Plain setup would also run pnpm, which this fixture's Node cannot.
+        fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
         assert_eq!(f.run(&u, flags).unwrap(), 0);
         assert_eq!(u.hits(), 7);

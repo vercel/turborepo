@@ -91,16 +91,17 @@ Pass [`--no-frozen`](#--no-frozen) to use local mode in CI.
 
 After installing tools, `turbo setup` installs each toolchain's dependencies when its [dependency policy](/docs/reference/setup-policy#dependencies) is `locked`, the default. It runs only the package manager's frozen install, using the managed package manager rather than one from your `PATH`, with the managed tools first on `PATH`. A dependency install isn't a Turborepo task.
 
-| Package manager | Command  | Lockfile                                      |
-| --------------- | -------- | --------------------------------------------- |
-| npm             | `npm ci` | `npm-shrinkwrap.json` or `package-lock.json`  |
+| Package manager | Command                          | Lockfile                                     |
+| --------------- | -------------------------------- | -------------------------------------------- |
+| npm             | `npm ci`                         | `npm-shrinkwrap.json` or `package-lock.json` |
+| pnpm            | `pnpm install --frozen-lockfile` | `pnpm-lock.yaml`                             |
 
 - The package manager must be declared with `packageManager` or `devEngines.packageManager` in the root `package.json`.
 - A missing lockfile is an error, reported before anything is downloaded. `turbo setup` never creates or updates a lockfile. If a package manager changes one anyway, `turbo setup` restores it and fails.
 - Before each install, `turbo setup` prints the effective [lifecycle-script policy](/docs/reference/setup-policy#lifecyclescripts). Pass `--ignore-scripts` to skip lifecycle scripts for one run.
 - If the install fails, `turbo setup` exits with the package manager's exit code.
 - Every run repeats the install. An unchanged lockfile doesn't prove that installed dependencies are complete, so `turbo setup` never skips the install because of it.
-- Other package managers, and Rust, Python, and Go dependencies, aren't installed yet. `turbo setup` reports them as skipped.
+- Package managers that aren't listed, and Rust, Python, and Go dependencies, aren't installed yet. `turbo setup` reports them as skipped.
 
 ```txt title="Terminal"
 Installing javascript dependencies from package-lock.json with managed npm 11.6.1: npm ci (dependency installation, not a Turborepo task)

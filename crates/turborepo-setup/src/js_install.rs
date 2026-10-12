@@ -58,6 +58,7 @@ impl Frozen {
     pub fn new(manager: Manager) -> Option<Self> {
         let (lockfiles, regenerate): (&'static [_], _) = match manager {
             Manager::Npm => (&["npm-shrinkwrap.json", "package-lock.json"], "npm install"),
+            Manager::Pnpm => (&["pnpm-lock.yaml"], "pnpm install"),
             _ => return None,
         };
         Some(Self {
@@ -81,6 +82,8 @@ impl Frozen {
         match self.manager {
             // Installs exactly the lockfile and fails if package.json disagrees.
             Manager::Npm => &["ci"],
+            // Installs the whole workspace and fails instead of updating the lock.
+            Manager::Pnpm => &["install", "--frozen-lockfile"],
             _ => unreachable!("Frozen::new admits only adapted managers"),
         }
     }
