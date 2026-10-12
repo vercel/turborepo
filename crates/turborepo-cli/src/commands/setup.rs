@@ -3,11 +3,14 @@
 
 use miette::Diagnostic;
 use thiserror::Error;
+use turborepo_repository::toolchain::ToolchainId;
 use turborepo_setup::source_policy::OfficialSourcePolicy;
+use turborepo_turbo_json::ToolPolicy;
 
 use crate::cli::{Args, SetupArgs};
 
 mod check;
+mod effective;
 mod provision;
 mod root;
 
@@ -174,16 +177,52 @@ fn run_with_policy(
     }
 
     let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
-    validate_request(&request)?;
+    let eligible = discovery.source_eligibility();
+    let plan = effective::Plan::new(
+        discovery.policy(),
+        [
+            (eligible.node(), ToolchainId::JAVASCRIPT),
+            (eligible.cargo(), ToolchainId::RUST),
+            (eligible.python(), ToolchainId::PYTHON),
+            (eligible.go(), ToolchainId::GO),
+        ]
+        .into_iter()
+        .filter_map(|(eligible, id)| eligible.then_some(id)),
+        request.tools_only,
+    );
+    validate(&request, plan.tools_only())?;
     if args.test_run {
         return Err(Error::NotImplemented);
     }
-    let eligible = discovery.source_eligibility();
-    if eligible.cargo() || eligible.python() || eligible.go() {
+    if plan.unsupported() {
         return Err(Error::Unsupported("non-JavaScript workspace setup"));
+    }
+    let javascript = plan
+        .toolchain(&ToolchainId::JAVASCRIPT)
+        .map_or(ToolPolicy::Skip, |toolchain| toolchain.tools.0);
+    if javascript == ToolPolicy::VerifySystem {
+        return Err(Error::Unsupported("verify-system JavaScript tools"));
     }
     let snapshot =
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
+    // Report the effective decisions before any traffic or installation.
+    for line in plan.report() {
+        println!("{line}");
+    }
+    if javascript == ToolPolicy::Skip {
+        // Never silently ignore committed selections for a skipped toolchain.
+        if snapshot
+            .previous_lock()
+            .is_some_and(|lock| !lock.tools().is_empty())
+        {
+            return Err(Error::Unsupported(
+                "turbo.lock selects tools that the setup policy skips; remove the skip or the \
+                 locked tools",
+            ));
+        }
+        println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
+        return Ok(0);
+    }
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
         _ => provision::run(
@@ -202,9 +241,16 @@ fn run_with_policy(
     }
 }
 
+#[cfg(test)]
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
+    validate(request, request.tools_only)
+}
+
+/// `tools_only` is the effective decision: `--tools-only` or a root policy
+/// that skips every eligible toolchain's dependencies.
+fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     if request.mode == Mode::Check
-        && request.tools_only
+        && tools_only
         && request.lock != LockMode::NoLock
         && !request.force
         && !request.update_lock
@@ -216,7 +262,7 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
         || request.lock == LockMode::NoLock
-        || !request.tools_only
+        || !tools_only
         || request.offline
         || (request.force && request.update_lock)
     {

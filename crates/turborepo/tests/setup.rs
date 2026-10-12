@@ -646,6 +646,46 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     }
 }
 
+#[test]
+fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "Cargo.toml", "[workspace]\nmembers = []\n");
+    let config = |dependencies: &str| {
+        format!(
+            r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":true}},
+                "setup":{{"dependencies":"{dependencies}","rust":{{"tools":"skip"}}}}}}"#
+        )
+    };
+    write(root, "turbo.json", &config("skip"));
+    // The source preflight accepts the policy, which makes this a tools-only
+    // check without --tools-only and lifts the unsupported Rust ecosystem.
+    let (code, text) = invoke(root, &["setup", "--check"], false);
+    assert_eq!(code, 1, "{text}");
+    if cfg!(all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    )) && !external_system_policy_blocked(code, &text)
+    {
+        assert!(
+            diagnostic_contains(&text, "managed activation requires turbo.lock"),
+            "{text}"
+        );
+        for line in [
+            "javascript: tools managed (inferred); dependencies skipped (turbo.json setup policy)",
+            "rust: skipped (turbo.json setup policy)",
+        ] {
+            assert!(text.contains(line), "{text}");
+        }
+    }
+    // Locked dependencies still need dependency setup, unless the CLI skips it.
+    write(root, "turbo.json", &config("locked"));
+    failure(root, &["setup", "--check"], false, PENDING);
+}
+
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))

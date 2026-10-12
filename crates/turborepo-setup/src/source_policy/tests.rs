@@ -159,6 +159,10 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
             "{\"setup\":{}}",
             "{\"setup\":null}",
             "{\"setup\":{\"registry\":\"private-secret\"}}",
+            "{\"setup\":{\"tools\":\"skip\",\"mirror\":\"private-secret\"}}",
+            "{\"setup\":{\"javascript\":{\"registry\":\"private-secret\"}}}",
+            "{\"setup\":{\"tools\":{\"url\":\"private-secret\"}}}",
+            "{\"setup\":{\"javascript\":\"skip\"}}",
         ] {
             fs::write(&path, contents)?;
             assert_eq!(
@@ -166,6 +170,14 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
                 Some(Error::Configured(ConfigOwner::RootPolicy))
             );
         }
+        // Setup applies tool, dependency, and lifecycle policy, none of which
+        // configures download sources.
+        fs::write(
+            &path,
+            "{\"setup\":{\"tools\":\"managed\",\"dependencies\":\"skip\",\"lifecycleScripts\":\"\
+             skip\",\"rust\":{},\"javascript\":{\"tools\":\"verify-system\"}}}",
+        )?;
+        assert!(fixture.check(&[]).is_ok());
         fs::write(path, "invalid private-secret")?;
         assert_eq!(
             fixture.check(&[]).err(),

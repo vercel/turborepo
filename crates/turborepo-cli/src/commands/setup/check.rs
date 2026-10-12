@@ -46,9 +46,7 @@ pub(super) fn run(
     for tool in plan.tools() {
         println!("{} {}: ready", tool.id, tool.version);
     }
-    println!(
-        "Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run."
-    );
+    println!("Dependencies skipped; dependency readiness was not checked. No tasks run.");
     Ok(0)
 }
 
