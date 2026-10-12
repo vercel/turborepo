@@ -162,8 +162,5 @@ pub(super) fn run(
         "No turbo.lock written (--no-lock). Clone-local selections do not establish cross-machine \
          reproducibility or frozen readiness."
     );
-    println!(
-        "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."
-    );
     Ok(0)
 }
