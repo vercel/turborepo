@@ -23,6 +23,7 @@ use crate::{
     source_policy::test_support::LoopbackServer,
 };
 
+mod ephemeral;
 mod npm;
 
 const PNPM_PATHS: [&str; 2] = ["/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"];

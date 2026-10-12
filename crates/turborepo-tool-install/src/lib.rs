@@ -15,6 +15,8 @@ use std::{
     sync::Arc,
 };
 
+mod repair;
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -114,10 +116,18 @@ pub struct GenerationExpectation {
     identity: Arc<()>,
     manifest: Option<Vec<u8>>,
     current: Option<Current>,
+    repair: Option<(PathBuf, Option<String>)>,
 }
 
 impl GenerationExpectation {
-    /// Full inspected trees and hash-bound metadata for caller validation.
+    /// False for repair evidence: semantic selection is not installed
+    /// readiness.
+    pub fn healthy(&self) -> bool {
+        self.repair.is_none()
+    }
+
+    /// Hash-bound selection metadata. Resources are inspected for CAS, but
+    /// usable only when healthy(); repair evidence never authorizes reuse.
     /// None means truly absent manifest, not a broken selected generation.
     pub fn current(&self) -> Option<&Current> {
         self.current.as_ref()
@@ -267,6 +277,7 @@ impl Store {
             identity: self.identity.clone(),
             manifest,
             current,
+            repair: None,
         };
         self.check_generation(&expected)?;
         Ok(expected)
@@ -279,7 +290,11 @@ impl Store {
         self.check_root()?;
         if !Arc::ptr_eq(&self.identity, &expected.identity)
             || Self::manifest_bytes(&self.root)? != expected.manifest
-            || self.current()?.is_none() != expected.current.is_none()
+            || if let Some((_, state)) = &expected.repair {
+                self.repair_state(expected)? != *state
+            } else {
+                self.current()?.is_none() != expected.current.is_none()
+            }
             || Self::manifest_bytes(&self.root)? != expected.manifest
         {
             return Err(Error::InvalidInventory);
@@ -333,7 +348,7 @@ impl Store {
         }))
     }
 
-    fn inventory(root: &Path) -> Result<Option<Inventory>, Error> {
+    fn inventory_metadata(root: &Path) -> Result<Option<Inventory>, Error> {
         let Some(bytes) = Self::manifest_bytes(root)? else {
             return Ok(None);
         };
@@ -359,6 +374,13 @@ impl Store {
                 .map(|t| t.tool.clone())
                 .collect::<Vec<_>>(),
         )?;
+        Ok(Some(inventory))
+    }
+
+    fn inventory(root: &Path) -> Result<Option<Inventory>, Error> {
+        let Some(inventory) = Self::inventory_metadata(root)? else {
+            return Ok(None);
+        };
         match real_directory(&root.join(&inventory.generation)) {
             Ok(()) => Ok(Some(inventory)),
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -441,6 +463,10 @@ impl Store {
             .record_sha256
             .as_ref()
             .ok_or(Error::InvalidInventory)?;
+        Self::read_record(&path, &metadata, expected).map(Some)
+    }
+
+    fn read_record(path: &Path, metadata: &fs::Metadata, expected: &str) -> Result<Record, Error> {
         if !metadata.is_file() || metadata.file_type().is_symlink() {
             return Err(Error::UnsafePath);
         }
@@ -456,10 +482,10 @@ impl Store {
             .take(RECORD_LIMIT + 1)
             .read_to_end(&mut bytes)?;
         let record = Record::new(bytes)?;
-        if record.hash() != *expected {
+        if record.hash() != expected {
             return Err(Error::InvalidInventory);
         }
-        Ok(Some(record))
+        Ok(record)
     }
 
     fn check(root: &Path, inventory: &Inventory) -> Result<Option<Record>, Error> {
@@ -571,8 +597,9 @@ impl Store {
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
         validate_tools(desired)?;
-        if let Some((_, expected)) = recorded {
+        if let Some((record, expected)) = recorded {
             self.check_generation(expected)?;
+            self.preserve_record(record)?;
         }
         let record_sha256 = recorded.map(|(record, _)| record.hash());
         let old = self.healthy_inventory()?;
@@ -585,8 +612,9 @@ impl Store {
         }) {
             before_publish()?;
             self.check_root()?;
-            if let Some((_, expected)) = recorded {
+            if let Some((record, expected)) = recorded {
                 self.check_generation(expected)?;
+                self.preserve_record(record)?;
             }
             return Ok(Outcome::Unchanged);
         }
@@ -656,8 +684,9 @@ impl Store {
         before_publish()?;
         self.check_root()?;
         Self::check(&self.root, &inventory)?;
-        if let Some((_, expected)) = recorded {
+        if let Some((record, expected)) = recorded {
             self.check_generation(expected)?;
+            self.preserve_record(record)?;
         }
         manifest
             .persist(self.root.join("manifest.json"))
@@ -832,6 +861,10 @@ fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
 // symlinks confined to this tool's full tree, preserving adjacent
 // libraries/resources.
 fn tree_hash(root: &Path) -> Result<String, Error> {
+    state_hash(root, true)
+}
+
+fn state_hash(root: &Path, healthy_links: bool) -> Result<String, Error> {
     real_directory(root)?;
     let mut hash = Sha256::new();
     walk(root, &mut |path| {
@@ -844,7 +877,8 @@ fn tree_hash(root: &Path) -> Result<String, Error> {
         hash.update(name.as_bytes());
         if m.file_type().is_symlink() {
             let target = fs::read_link(path)?;
-            if target.is_absolute() || !fs::canonicalize(path)?.starts_with(root) {
+            if healthy_links && (target.is_absolute() || !fs::canonicalize(path)?.starts_with(root))
+            {
                 return Err(Error::UnsafePath);
             }
             hash.update(b"link");
