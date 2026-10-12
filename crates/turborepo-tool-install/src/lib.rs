@@ -916,7 +916,19 @@ impl Store {
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
             result => result?,
         }
-        File::open(path)?.set_modified(SystemTime::now())?;
+        // Windows opens a directory only with FILE_FLAG_BACKUP_SEMANTICS, and
+        // setting its time needs write-attribute access (#14584/#14591 store).
+        #[cfg(windows)]
+        let file = {
+            use std::os::windows::fs::OpenOptionsExt;
+            OpenOptions::new()
+                .write(true)
+                .custom_flags(0x0200_0000)
+                .open(path)?
+        };
+        #[cfg(not(windows))]
+        let file = File::open(path)?;
+        file.set_modified(SystemTime::now())?;
         Ok(())
     }
 
