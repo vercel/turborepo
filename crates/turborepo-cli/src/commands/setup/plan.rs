@@ -105,7 +105,7 @@ fn propose(
         |resolution| {
             resolved.set(true);
             // Setup's own resolver, so the proposal is the candidate it would write.
-            provision::resolve(&runtime, resolution, &upstream, &sources)
+            provision::resolve(&runtime, &sources, resolution, &upstream)
         },
         |candidate| {
             provision::plans(&sources, candidate)

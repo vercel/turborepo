@@ -503,17 +503,16 @@ pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
 }
 
 /// The one candidate resolver behind setup's lock publication and `--plan`'s
-/// proposal. Callers run their own checks before calling it. `snapshot` is the
-/// caller's captured snapshot, which Go's completion reads after the request
-/// moves into native resolution.
+/// proposal. Callers run their own checks before calling it.
 pub(super) fn resolve(
     runtime: &tokio::runtime::Runtime,
+    snapshot: &Snapshot,
     request: turborepo_setup::lock::reconcile::Resolution<'_>,
     sources: &Transports,
-    snapshot: &Snapshot,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
-    use turborepo_setup::lock::reconcile;
-    let failed = |e: &dyn std::fmt::Display| reconcile::Error::Resolution(e.to_string());
+    let failed = |e: &dyn std::fmt::Display| {
+        turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
+    };
     // Each ecosystem resolves only its own changed declarations;
     // reconcile still checks every unaffected selection's bytes.
     let go = request.version_ids().contains("go");
@@ -651,7 +650,7 @@ pub(super) fn run(
             false,
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
-                resolve(&runtime, request, &sources, &snapshot)
+                resolve(&runtime, &snapshot, request, &sources)
             },
             |candidate| {
                 plans(&snapshot, candidate)
