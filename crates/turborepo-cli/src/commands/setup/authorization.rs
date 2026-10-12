@@ -1,8 +1,9 @@
-//! Read-only strict Node/pnpm authorization prerequisite, not managed-run
-//! wiring. The caller owns exact root discovery, feature gating, pre-handoff
-//! compatibility, execution-context qualification, hashing, and task
-//! environment propagation. Do not extract this interface independently of the
-//! producer's private schema.
+//! Read-only strict authorization of turbo.lock or `turbo setup --no-lock`
+//! installations, not managed-run wiring. The caller owns exact root
+//! discovery, choosing the lock or clone-local mode, feature gating,
+//! pre-handoff compatibility, execution-context qualification, hashing, and
+//! task environment propagation. Do not extract this interface independently of
+//! the producer's private schema.
 
 use std::path::{Path, PathBuf};
 
@@ -78,6 +79,40 @@ impl Error {
             other => other.to_string(),
         }
     }
+
+    /// `turbo run` guidance for a `turbo setup --no-lock` clone, local or CI:
+    /// there is no turbo.lock to update or commit, so every repair is the
+    /// same clone-local setup.
+    pub(crate) fn no_lock_guidance(&self) -> String {
+        use turborepo_setup::{activation::Error as Plan, lock::StorageError as Storage};
+        let cause = match self {
+            Self::Plan(Plan::DeclarationDrift) => "tool declarations no longer match this clone's \
+                                                   `turbo setup --no-lock` selection"
+                .into(),
+            Self::Plan(Plan::MissingInventory) => "managed tools are not installed".into(),
+            Self::Plan(Plan::StaleInventory) => {
+                "managed tools do not match the clone-local selection".into()
+            }
+            Self::Plan(Plan::DamagedInventory(error)) => {
+                format!("managed tools are damaged or unsafe ({error})")
+            }
+            Self::Plan(Plan::InvalidSelection) => "the clone-local selection is invalid".into(),
+            Self::Untrusted => "managed tools have no matching trusted setup record".into(),
+            Self::Changed => "managed tools changed after this run selected them".into(),
+            Self::Plan(Plan::Sources(Storage::Conflict)) | Self::Sources(Storage::Conflict) => {
+                return "turbo.lock or tool declarations changed during this run; rerun it, after \
+                        turbo setup if a turbo.lock was added"
+                    .into();
+            }
+            Self::Plan(Plan::Sources(Storage::Declarations))
+            | Self::Sources(Storage::Declarations) => {
+                return "tool declarations are invalid; fix them, then run turbo setup --no-lock"
+                    .into();
+            }
+            other => return other.to_string(),
+        };
+        format!("{cause}; run turbo setup --no-lock to update this clone's managed tools")
+    }
 }
 
 /// Unlike ActivationPlan, this selection requires external setup evidence.
@@ -94,6 +129,7 @@ pub(crate) struct Authorization {
     context: ExecutionContext,
     plan: ActivationPlan,
     trust: TrustStore,
+    clone_local: bool,
 }
 
 #[allow(dead_code)]
@@ -106,11 +142,31 @@ impl Authorization {
         user_state_base: &Path,
         context: ExecutionContext,
     ) -> Result<Self, Error> {
+        Self::authorize(root, user_state_base, context, false)
+    }
+
+    /// `inspect` for a `turbo setup --no-lock` clone: the sealed clone-local
+    /// selection in place of turbo.lock, authorized only by a lockless record
+    /// for that selection.
+    pub(crate) fn inspect_clone_local(
+        root: &Path,
+        user_state_base: &Path,
+        context: ExecutionContext,
+    ) -> Result<Self, Error> {
+        Self::authorize(root, user_state_base, context, true)
+    }
+
+    fn authorize(
+        root: &Path,
+        user_state_base: &Path,
+        context: ExecutionContext,
+        clone_local: bool,
+    ) -> Result<Self, Error> {
         let root = root.canonicalize()?;
         let sources = Snapshot::capture(&root)?;
         let trust = TrustStore::new(user_state_base, &root)?;
         trust.preflight()?;
-        let plan = ActivationPlan::inspect(&root, context.clone())?;
+        let plan = Self::plan(&root, context.clone(), clone_local)?;
         if !trust.authorizes(&plan)? {
             return Err(Error::Untrusted);
         }
@@ -121,6 +177,19 @@ impl Authorization {
             context,
             plan,
             trust,
+            clone_local,
+        })
+    }
+
+    fn plan(
+        root: &Path,
+        context: ExecutionContext,
+        clone_local: bool,
+    ) -> Result<ActivationPlan, Error> {
+        Ok(if clone_local {
+            ActivationPlan::inspect_clone_local(root, context)?
+        } else {
+            ActivationPlan::inspect(root, context)?
         })
     }
 
@@ -134,7 +203,7 @@ impl Authorization {
         use_plan: impl FnOnce(&ActivationPlan) -> T,
     ) -> Result<T, Error> {
         self.sources.ensure_current()?;
-        let current = ActivationPlan::inspect(&self.root, self.context.clone())?;
+        let current = Self::plan(&self.root, self.context.clone(), self.clone_local)?;
         if current.path_prepend() != self.plan.path_prepend()
             || current.tools() != self.plan.tools()
             || current.snapshot().canonical_identity() != self.plan.snapshot().canonical_identity()

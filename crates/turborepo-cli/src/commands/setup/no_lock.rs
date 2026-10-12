@@ -219,7 +219,8 @@ pub(super) fn run(
          reproducibility or frozen readiness."
     );
     println!(
-        "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."
+        "Dependencies skipped (--tools-only). No tasks run. turbo run uses these tools in this \
+         clone only."
     );
     Ok(0)
 }

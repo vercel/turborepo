@@ -94,7 +94,9 @@ impl NativeRecord {
         self.manager.as_ref()
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self, Error> {
+    /// Crate-private: activation reads only the record of the generation it
+    /// also checks, never caller bytes.
+    pub(crate) fn decode(bytes: &[u8]) -> Result<Self, Error> {
         let selection = validated(Lock::parse(bytes))?;
         if validated(selection.canonical_bytes())? != bytes
             || !selection.tools().contains_key("node")
