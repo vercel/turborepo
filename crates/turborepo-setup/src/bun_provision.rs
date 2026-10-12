@@ -18,6 +18,11 @@ use crate::{
 };
 
 const RELEASES: &str = "https://github.com";
+// GitHub answers release downloads with a redirect to its asset CDN.
+const ASSETS: [&str; 2] = [
+    "https://release-assets.githubusercontent.com",
+    "https://objects.githubusercontent.com",
+];
 const PLATFORMS: [Platform; 6] = [
     Platform::MacosX64,
     Platform::MacosArm64,
@@ -128,11 +133,14 @@ pub struct BunTransport {
     origin: String,
 }
 impl BunTransport {
-    // TODO(TURBO-6373): GitHub answers release downloads with a redirect to
-    // its asset CDN; approve those origins once redirect support lands.
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+        let assets = ASSETS
+            .into_iter()
+            .map(ApprovedOrigin::https)
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            client: DownloadClient::new([ApprovedOrigin::https(RELEASES)?])?,
+            client: DownloadClient::new([ApprovedOrigin::https(RELEASES)?])?
+                .with_redirect_origins(assets),
             origin: RELEASES.into(),
         })
     }
