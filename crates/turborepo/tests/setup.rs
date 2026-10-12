@@ -1032,7 +1032,7 @@ fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
         root,
         <fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o775),
     )
-    .unwrap();
+    .expect("make the fixture root group-writable");
     write(root, "turbo.json", ENABLED);
     write(root, ".nvmrc", "24.0.0");
     write(root, ".gitignore", "/.turbo/\n");
