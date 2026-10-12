@@ -66,6 +66,15 @@ fn snapshot(root: &Path) -> Vec<Entry> {
 }
 
 fn invoke_raw(root: &Path, words: &[&str], ci: bool) -> (i32, String, String) {
+    invoke_raw_with(root, words, ci, &[])
+}
+
+fn invoke_raw_with(
+    root: &Path,
+    words: &[&str],
+    ci: bool,
+    env: &[(&str, std::ffi::OsString)],
+) -> (i32, String, String) {
     let proxy = TcpListener::bind("127.0.0.1:0").expect("bind HTTP monitor");
     proxy.set_nonblocking(true).expect("nonblocking monitor");
     let url = format!("http://{}", proxy.local_addr().expect("monitor address"));
@@ -93,7 +102,8 @@ fn invoke_raw(root: &Path, words: &[&str], ci: bool) -> (i32, String, String) {
         .env("HTTP_PROXY", &url)
         .env("HTTPS_PROXY", &url)
         .env("ALL_PROXY", &url)
-        .env("NO_PROXY", "");
+        .env("NO_PROXY", "")
+        .envs(env.iter().cloned());
     if ci {
         // Even this normal shim override must not trigger JS inference or handoff.
         command
@@ -118,7 +128,16 @@ fn invoke_raw(root: &Path, words: &[&str], ci: bool) -> (i32, String, String) {
 }
 
 fn invoke(root: &Path, words: &[&str], ci: bool) -> (i32, String) {
-    let (code, stdout, stderr) = invoke_raw(root, words, ci);
+    invoke_with(root, words, ci, &[])
+}
+
+fn invoke_with(
+    root: &Path,
+    words: &[&str],
+    ci: bool,
+    env: &[(&str, std::ffi::OsString)],
+) -> (i32, String) {
+    let (code, stdout, stderr) = invoke_raw_with(root, words, ci, env);
     let text = format!("{stdout}{stderr}")
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -683,6 +702,57 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
             assert_eq!(code, 1, "{text}");
             assert!(!text.contains("ready"), "{text}");
         }
+    }
+}
+
+#[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn npm_and_pnpm_wrapper_environments_reach_setup_but_custom_registries_do_not() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    let at = |path: &str| root.join(path).into_os_string();
+    // Default `npx turbo setup` (npm 11) and `pnpm turbo setup` (pnpm 11+).
+    let npm = vec![
+        ("npm_config_cache", at("home/.npm")),
+        ("npm_config_global_prefix", at("prefix")),
+        ("npm_config_globalconfig", at("prefix/etc/npmrc")),
+        ("npm_config_init_module", at("home/.npm-init.js")),
+        ("npm_config_local_prefix", root.as_os_str().to_owned()),
+        ("npm_config_node_gyp", at("prefix/node-gyp.js")),
+        ("npm_config_noproxy", "".into()),
+        ("npm_config_npm_version", "11.13.0".into()),
+        ("npm_config_prefix", at("prefix")),
+        ("npm_config_user_agent", "npm/11.13.0 node/v24.0.0".into()),
+        ("npm_config_userconfig", at("home/.npmrc")),
+        ("npm_config_yes", "true".into()),
+        ("npm_lifecycle_event", "npx".into()),
+    ];
+    let pnpm = vec![
+        ("npm_config_node_gyp", at("pnpm/node-gyp.js")),
+        ("npm_config_user_agent", "pnpm/11.0.0 node/v24.0.0".into()),
+    ];
+    let words = ["setup", "--check", "--tools-only"];
+    for env in [&npm, &pnpm] {
+        let (code, text) = invoke_with(root, &words, false, env);
+        assert_eq!(code, 1, "{text}");
+        assert!(
+            diagnostic_contains(&text, "managed activation requires turbo.lock")
+                || external_system_policy_blocked(code, &text),
+            "{text}"
+        );
+        let mut custom = env.clone();
+        custom.push(("npm_config_registry", "https://private.invalid/".into()));
+        let (code, text) = invoke_with(root, &words, false, &custom);
+        assert_eq!(code, 1, "{text}");
+        assert!(
+            diagnostic_contains(&text, "rejects npm configuration environment"),
+            "{text}"
+        );
+        assert!(!text.contains("private.invalid"), "{text}");
     }
 }
 
