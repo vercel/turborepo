@@ -12,6 +12,7 @@ The files are the same MDX sources used by turborepo.dev. Site-absolute links su
 | Understand packages and task relationships        | [Package and task graph](./core-concepts/package-and-task-graph.mdx)                                                    |
 | Configure tasks, dependencies, inputs, or outputs | [Configuring tasks](./crafting-your-repository/configuring-tasks.mdx)                                                   |
 | Look up `turbo.json` fields                       | [Configuration reference](./reference/configuration.mdx)                                                                |
+| Configure `turbo setup` defaults (experimental)   | [Setup policy](./reference/setup-policy.mdx)                                                                            |
 | Run or filter tasks                               | [Running tasks](./crafting-your-repository/running-tasks.mdx) and [`turbo run` reference](./reference/run.mdx)          |
 | Configure caching or debug cache misses           | [Caching](./crafting-your-repository/caching.mdx)                                                                       |
 | Set up Remote Cache                               | [Remote Caching](./core-concepts/remote-caching.mdx)                                                                    |

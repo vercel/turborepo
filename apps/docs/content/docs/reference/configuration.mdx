@@ -630,6 +630,23 @@ When enabled, existing top-level keys are moved under `global` with these rename
   specific global files via negation globs.
 </Callout>
 
+### `setup` <ExperimentalBadge>Experimental</ExperimentalBadge>
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalSetup": true,
+  },
+  "setup": {
+    "dependencies": "skip",
+  },
+}
+```
+
+Repository defaults for the experimental `turbo setup` command, such as tools-only setup, skipping a toolchain, or verifying installed tools instead of downloading them. Requires `futureFlags.experimentalSetup` and is only allowed in the root `turbo.json`.
+
+[Visit the Setup policy reference to learn more](/docs/reference/setup-policy).
+
 ## Defining tasks
 
 ### `tasks`
