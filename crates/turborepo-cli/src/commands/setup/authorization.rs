@@ -59,7 +59,8 @@ impl Authorization {
         let sources = Snapshot::capture(&root)?;
         let trust = TrustStore::new(user_state_base, &root)?;
         trust.preflight()?;
-        let plan = ActivationPlan::inspect(&root, context.clone())?;
+        // Initial authorization never trusts repo-writable publication stamps.
+        let plan = ActivationPlan::verify_captured(&sources, context.clone())?;
         if !trust.authorizes(&plan)? {
             return Err(Error::Untrusted);
         }

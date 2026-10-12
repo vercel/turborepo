@@ -35,7 +35,7 @@ pub(super) fn run(
     let context = context()?;
     preflight()?;
     // Keep the original captured sources and their workspace-flag gating.
-    let plan = ActivationPlan::inspect_captured(&sources, context)?;
+    let plan = ActivationPlan::verify_captured(&sources, context)?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.
     preflight()?;

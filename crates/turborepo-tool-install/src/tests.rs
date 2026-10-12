@@ -13,6 +13,7 @@ mod inherited_lock;
 mod paths_permissions;
 mod record;
 mod recovery;
+mod stamps;
 
 fn tool(id: &str) -> Tool {
     Tool {
