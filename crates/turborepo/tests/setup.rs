@@ -1462,118 +1462,33 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
 ))]
 #[test]
 fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
-    use std::os::unix::fs::PermissionsExt;
-
-    use turborepo_setup::{
-        lock::{Lock, Platform, Snapshot},
-        node_provision::NodePlan,
-        pnpm_provision::PnpmPlan,
-    };
-    let temp = tempfile::tempdir().unwrap();
-    let root = temp.path();
-    write(root, "turbo.json", ENABLED);
-    write(root, ".nvmrc", "24.0.0");
-    write(root, ".gitignore", "/.turbo/\n");
-    write(root, "package.json", r#"{"packageManager":"pnpm@10.0.0"}"#);
-    let (platform, selector, spelling) = match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => (Platform::MacosArm64, "macos-arm64", "darwin-arm64"),
-        ("macos", _) => (Platform::MacosX64, "macos-x64", "darwin-x64"),
-        ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64-gnu", "linux-arm64"),
-        _ => (Platform::LinuxX64Gnu, "linux-x64-gnu", "linux-x64"),
-    };
-    let prefix = format!("node-v24.0.0-{spelling}");
-    let lock = serde_json::json!({"schemaVersion":0,"tools":{
-        "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
-            "installation":{"kind":"managed","artifacts":{selector:{"distribution":{
-                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz"),"sha256":"0".repeat(64),
-                "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}}}}}},
-        "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
-            "installation":{"kind":"managed","artifacts":{"any":{"package":{
-                "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"1".repeat(64),
-                "format":"tar-gz","rootPrefix":"package","executables":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}}}}}
-    }}).to_string();
-    write(root, "turbo.lock", &lock);
-    let lock = Lock::parse(lock.as_bytes()).unwrap();
-    let node = NodePlan::from_lock(&lock, platform).unwrap();
-    let declaration = Snapshot::capture(root)
-        .unwrap()
-        .package_manager()
-        .unwrap()
-        .unwrap();
-    let pnpm = PnpmPlan::from_declaration(&lock, platform, &node, &declaration).unwrap();
-    // Seed the locked generation so frozen setup reuses it without downloads;
-    // the CLI library fixtures cover actual downloads.
-    let mut store = turborepo_tool_install::Store::open(root).unwrap();
-    store
-        .reconcile(
-            &[node.inventory_tool().clone(), pnpm.inventory_tool().clone()],
-            |tool, destination| {
-                for relative in tool.executables.values() {
-                    let file = destination.join(relative);
-                    fs::create_dir_all(file.parent().unwrap())?;
-                    fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
-                    fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
-                }
-                Ok::<_, turborepo_tool_install::Error>(())
-            },
-        )
-        .unwrap();
-    drop(store);
-    let git = which::which("git").unwrap();
-    assert!(
-        Command::new(&git)
-            .current_dir(root)
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .args(["init", "-q"])
-            .status()
-            .unwrap()
-            .success()
-    );
-    let bin = tempfile::tempdir().unwrap();
-    std::os::unix::fs::symlink(git, bin.path().join("git")).unwrap();
-    let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
-    monitor.set_nonblocking(true).unwrap();
-    let proxy = format!("http://{}", monitor.local_addr().unwrap());
-    // Stack B (#14494) keeps setup user state outside the repository.
-    let home = tempfile::tempdir().unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
-        .env_clear()
-        .current_dir(root)
-        .args(["setup", "--frozen"])
-        .env("PATH", bin.path())
-        .env("HOME", home.path())
-        .env("TURBO_TELEMETRY_DISABLED", "1")
-        .env("HTTP_PROXY", &proxy)
-        .env("HTTPS_PROXY", &proxy)
-        .env("ALL_PROXY", &proxy)
-        .env("NO_PROXY", "")
-        .output()
-        .unwrap();
-    assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
-    let text = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
-    .split_whitespace()
-    .collect::<Vec<_>>()
-    .join(" ");
-    let code = output.status.code().unwrap();
-    if external_system_policy_blocked(code, &text) {
+    // #14494 reuses only generations with a trusted user record, so a
+    // generation seeded straight into `.turbo/tools` is never reused. Seed the
+    // shared download cache instead, like #14569's recovery fixture: plain
+    // frozen setup installs from verified cached bytes and records trust, and
+    // the repeat reuses them. `Repo::run` fails on any network connection.
+    let Some(repo) = recovery::Repo::new() else {
         return;
+    };
+    repo.seed();
+    for outcome in ["installed from the shared download cache", "reused"] {
+        let recovery::Run { status, text } = repo.run(None, &["setup", "--frozen"]);
+        let code = status.code().unwrap();
+        if external_system_policy_blocked(code, &text) {
+            return;
+        }
+        assert_eq!(code, 0, "{text}");
+        assert!(
+            text.contains(&format!("node 24.0.0: {outcome}"))
+                && text.contains(&format!("pnpm 10.0.0: {outcome}")),
+            "{text}"
+        );
+        assert!(
+            text.contains("Dependencies skipped (dependency installation is not supported yet)"),
+            "{text}"
+        );
     }
-    assert_eq!(code, 0, "{text}");
-    assert!(
-        text.contains("node 24.0.0: reused") && text.contains("pnpm 10.0.0: reused"),
-        "{text}"
-    );
-    assert!(
-        text.contains("Dependencies skipped (dependency installation is not supported yet)"),
-        "{text}"
-    );
-    assert!(!root.join("probe-ran").exists() && !root.join("node_modules").exists());
+    assert!(!repo.root.join("probe-ran").exists() && !repo.root.join("node_modules").exists());
 }
 
 #[test]
