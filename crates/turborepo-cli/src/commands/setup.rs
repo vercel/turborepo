@@ -40,6 +40,11 @@ pub enum Error {
     NotImplemented,
     #[error("unsupported setup request: {0}")]
     Unsupported(&'static str),
+    #[error(
+        "offline setup is missing verified cached artifacts; nothing was installed:\n{0}\nRun \
+         turbo setup --tools-only without --offline to download and verify them."
+    )]
+    OfflineMissing(String),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
@@ -163,19 +168,7 @@ fn run_with_policy(
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
-        _ => provision::run(
-            &discovery,
-            snapshot,
-            request.lock,
-            if request.update_lock {
-                turborepo_setup::lock::reconcile::Mode::Refresh
-            } else {
-                turborepo_setup::lock::reconcile::Mode::Local
-            },
-            request.force,
-            transports,
-            preflight,
-        ),
+        _ => provision::run(&discovery, snapshot, &request, transports, preflight),
     }
 }
 
@@ -194,10 +187,15 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     if request.mode != Mode::Provision
         || request.lock == LockMode::NoLock
         || !request.tools_only
-        || request.offline
         || (request.force && request.update_lock)
     {
         return Err(Error::NotImplemented);
+    }
+    if request.offline && request.update_lock {
+        return Err(Error::Unsupported(
+            "--offline cannot resolve --update-lock; run turbo setup --tools-only --update-lock \
+             without --offline",
+        ));
     }
     Ok(())
 }
@@ -298,9 +296,19 @@ mod tests {
                 )
                 .is_ok()
             );
+            assert!(matches!(
+                validate_request(
+                    &request(
+                        &["--tools-only", "--no-frozen", "--update-lock", "--offline"],
+                        ci
+                    )
+                    .unwrap()
+                ),
+                Err(Error::Unsupported(_))
+            ));
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if control == "--force" {
+                if matches!(control, "--force" | "--offline") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(

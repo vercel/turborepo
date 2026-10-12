@@ -317,7 +317,6 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         vec!["--no-lock", "--tools-only"],
         vec!["--frozen"],
         vec!["--plan", "--tools-only", "--force"],
-        vec!["--frozen", "--tools-only", "--offline"],
         vec!["--no-frozen", "--update-lock"],
     ] {
         let f = Fixture::new();
