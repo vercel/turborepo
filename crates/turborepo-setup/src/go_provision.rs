@@ -20,9 +20,10 @@ use crate::{
 /// of switching to, and downloading, a release named by `go`/`toolchain`
 /// lines, `go env -w`, or the caller's environment.
 pub const RUNTIME_ENV: [(&str, &str); 1] = [("GOTOOLCHAIN", "local")];
-// Go's own compiler regression suite: unused by the go command, and it
-// contains PAX-named non-ASCII fixtures that are never written.
-const EXCLUDED: [&str; 1] = ["test"];
+// Exactly `go/test`, Go's own compiler regression suite: unused by the go
+// command, and it contains PAX-named non-ASCII fixtures. A Go-only constant;
+// no lock, index, or repository input can change it.
+const EXCLUDED: &[&str] = &["test"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -144,7 +145,7 @@ impl GoPlan {
                 root: "go",
                 required_files: &required,
             },
-            &EXCLUDED,
+            EXCLUDED,
         )?;
         Ok(PreparedGo {
             tree,

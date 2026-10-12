@@ -24,9 +24,12 @@
 //! metadata is borrowed from the bounded input, never allocated from ZIP
 //! counts. Native platform qualification is required before claiming support.
 //!
-//! Callers may name root-relative subtrees to exclude. Their entries are
-//! parsed and bounded but never written. A PAX `path` record is accepted only
-//! to identify such a skipped entry; PAX is otherwise unsupported.
+//! An adapter may opt in to excluding fixed subtrees with compile-time
+//! (`'static`) names, never names from locks, metadata, or repository content.
+//! Matching is exact and case-sensitive on whole components below the layout
+//! root. Excluded entries are parsed and bounded but never written, and links
+//! cannot resolve into them. A PAX `path` record is accepted only to identify
+//! such a skipped entry; PAX is otherwise unsupported.
 
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -141,14 +144,15 @@ pub fn extract(
     extract_excluding(artifact, format, limits, layout, &[])
 }
 
-/// Like [`extract`], but never writes entries inside `excluded` root-relative
-/// directories. Required files cannot be excluded.
+/// Like [`extract`], but never writes entries at or below the `excluded`
+/// directories, given relative to `layout.root`. The `'static` bound keeps the
+/// list a compile-time adapter constant. Required files cannot be excluded.
 pub fn extract_excluding(
     artifact: &VerifiedArtifact,
     format: Format,
     limits: Limits,
     layout: Layout<'_>,
-    excluded: &[&str],
+    excluded: &'static [&'static str],
 ) -> Result<ExtractedArtifact, Error> {
     if artifact.as_bytes().len() > limits.bytes {
         return Err(Error::LimitExceeded);
