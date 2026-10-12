@@ -107,7 +107,11 @@ pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result
         schema_version: lock::SCHEMA_VERSION,
         tools,
     })?;
-    if !candidate.matches_native(declared)? {
+    // Only this cohort: Rust and Go compose their own selections, and
+    // reconcile checks the complete candidate.
+    let mut cohort = declared.clone();
+    cohort.retain(|id, _| matches!(id.as_str(), "node" | "npm" | "pnpm" | "uv" | "python"));
+    if !candidate.matches_native(&cohort)? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",
         ));
