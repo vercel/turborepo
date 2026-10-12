@@ -27,7 +27,7 @@ mod plan;
 mod provision;
 mod root;
 mod telemetry;
-mod trust;
+pub(crate) mod trust;
 mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]

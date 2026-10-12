@@ -427,6 +427,29 @@ impl From<CompletionShell> for usage::complete::Shell {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HookShell {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+}
+impl FromStr for HookShell {
+    type Err = String;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "bash" => Ok(Self::Bash),
+            "zsh" => Ok(Self::Zsh),
+            "fish" => Ok(Self::Fish),
+            "powershell" | "pwsh" => Ok(Self::PowerShell),
+            // cmd.exe has no prompt hook; `turbo exec` covers it.
+            _ => Err(format!(
+                "unsupported shell: {value} (supported shells: bash, zsh, fish, powershell)"
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NonEmptyPath(pub(crate) Utf8PathBuf);
 impl FromStr for NonEmptyPath {
@@ -643,6 +666,11 @@ impl Args {
     /// Route setup before validating its tail or inferring a repository.
     pub(crate) fn is_setup_command(words: &[OsString]) -> bool {
         Self::selects_command(words, "setup")
+    }
+
+    /// The shell hook always runs in the invoking (global) binary.
+    pub(crate) fn is_hook_command(words: &[OsString]) -> bool {
+        Self::selects_command(words, "hook")
     }
 
     /// The command grammar, not a word scan, consumes global values and
@@ -1171,6 +1199,22 @@ pub enum Command {
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: CompletionShell },
+    /// EXPERIMENTAL: Print a shell hook that activates managed tools at the
+    /// prompt
+    ///
+    /// Add `eval "$(turbo hook zsh)"` to ~/.zshrc, `eval "$(turbo hook
+    /// bash)"` to ~/.bashrc, `turbo hook fish | source` to
+    /// ~/.config/fish/config.fish, or `Invoke-Expression (& turbo hook
+    /// powershell | Out-String)` to $PROFILE. Inside a repository with root
+    /// futureFlags.experimentalSetup, the hook puts the tools `turbo setup`
+    /// installed first on PATH and removes them when you leave. It never
+    /// installs tools or updates turbo.lock.
+    Hook {
+        shell: HookShell,
+        /// Print the shell changes for the current directory
+        #[usage(long, hide = true)]
+        export: bool,
+    },
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod
