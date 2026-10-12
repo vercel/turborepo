@@ -1189,3 +1189,5 @@ fn node_based_managers_never_activate_without_managed_node() {
         assert_eq!(state(repo.path()), before);
     }
 }
+
+mod additional;
