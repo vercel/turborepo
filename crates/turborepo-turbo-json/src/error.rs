@@ -466,6 +466,23 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+
+    #[error(
+        "setup.mirrors.{key} must be an absolute HTTPS URL without credentials, a query, or a \
+         fragment."
+    )]
+    #[diagnostic(help(
+        "Commit a credential-free base URL that serves the official paths, such as \
+         https://mirror.example.com/nodejs/dist. Mirror values are masked here because they may \
+         contain a secret."
+    ))]
+    SetupInvalidMirror {
+        key: &'static str,
+        #[label("invalid mirror")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
 }
 
 impl From<crate::parser::BiomeParseError> for Error {

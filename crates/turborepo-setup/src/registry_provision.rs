@@ -60,8 +60,8 @@ pub struct RegistryTransport {
     offline: bool,
 }
 impl RegistryTransport {
-    // TODO(TURBO-6216): Apply repository-configured mirrors. Never fall back
-    // to public npm or forward credentials across origins.
+    // A configured mirror uses `mirrored` instead; neither falls back to
+    // public npm or forwards credentials across origins.
     pub fn official(policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,

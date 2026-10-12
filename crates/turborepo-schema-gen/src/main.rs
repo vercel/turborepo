@@ -1130,6 +1130,20 @@ fn generate_setup_policy_interfaces() -> String {
 
   /** Tools that no built-in adapter manages, keyed by tool ID. */
   additionalTools?: Record<string, AdditionalTool>;
+
+  /**
+   * Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the
+   * official URLs, and environment variables override these values.
+   */
+  mirrors?: SetupMirrors;
+}
+
+export interface SetupMirrors {
+  /** Replaces `https://nodejs.org/dist` for Node.js release metadata and archives. */
+  node?: string;
+
+  /** Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn packages. */
+  npmRegistry?: string;
 }
 
 export interface AdditionalTool {

@@ -1,17 +1,21 @@
-//! Credential-free download mirrors from the environment. A mirror replaces
-//! only the transport base: `turbo.lock` keeps canonical provenance URLs and
-//! locked bytes are still verified against lock digests. Values are never
-//! echoed in errors because a mistyped value can contain a secret.
-//! Repository-configured mirrors wait for the root `setup` policy.
+//! Credential-free download mirrors. For each mirror, an environment variable
+//! overrides the root `setup.mirrors` policy, which overrides the official
+//! source. A mirror replaces only the transport base: `turbo.lock` keeps
+//! canonical provenance URLs and locked bytes are still verified against lock
+//! digests. Values are never echoed in errors because a mistyped value can
+//! contain a secret.
 
 use std::ffi::OsString;
 
 use turborepo_download::{ApprovedOrigin, DownloadClient};
+use turborepo_turbo_json::{SetupMirrors, setup::mirror_url};
 
 /// Equivalent to `https://nodejs.org/dist`.
 pub const NODE_MIRROR_ENV: &str = "TURBO_SETUP_NODE_MIRROR";
 /// Equivalent to `https://registry.npmjs.org`.
 pub const NPM_REGISTRY_ENV: &str = "TURBO_SETUP_NPM_REGISTRY";
+const NODE_POLICY: &str = "setup.mirrors.node";
+const NPM_REGISTRY_POLICY: &str = "setup.mirrors.npmRegistry";
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error(
@@ -36,21 +40,31 @@ pub struct Mirrors {
 }
 
 impl Mirrors {
-    pub fn from_env() -> Result<Self, Error> {
-        Self::from_vars(|name| std::env::var_os(name))
+    /// This process's environment over the repository's `setup.mirrors`.
+    pub fn configured(policy: &SetupMirrors) -> Result<Self, Error> {
+        Self::resolve(|name| std::env::var_os(name), policy)
     }
 
-    /// Empty values are unset, like most mirror variables in the ecosystem.
-    pub fn from_vars(var: impl Fn(&str) -> Option<OsString>) -> Result<Self, Error> {
-        let read = |name| {
-            var(name)
+    /// Environment over policy over official, separately for each mirror.
+    /// Empty variables are unset, like most mirror variables in the
+    /// ecosystem, so they fall through to the policy.
+    pub fn resolve(
+        var: impl Fn(&str) -> Option<OsString>,
+        policy: &SetupMirrors,
+    ) -> Result<Self, Error> {
+        let select =
+            |env: &'static str, key: &'static str, committed: &Option<String>| match var(env)
                 .filter(|value| !value.is_empty())
-                .map(|value| Mirror::parse(name, value, false))
-                .transpose()
-        };
+            {
+                Some(value) => Mirror::parse(env, value, false).map(Some),
+                None => committed
+                    .as_ref()
+                    .map(|value| Mirror::parse(key, value.into(), false))
+                    .transpose(),
+            };
         Ok(Self {
-            node: read(NODE_MIRROR_ENV)?,
-            registry: read(NPM_REGISTRY_ENV)?,
+            node: select(NODE_MIRROR_ENV, NODE_POLICY, &policy.node)?,
+            registry: select(NPM_REGISTRY_ENV, NPM_REGISTRY_POLICY, &policy.npm_registry)?,
         })
     }
 }
@@ -59,20 +73,8 @@ impl Mirror {
     fn parse(name: &'static str, value: OsString, loopback: bool) -> Result<Self, Error> {
         let invalid = || Error(name);
         let value = value.into_string().map_err(|_| invalid())?;
-        let url = url::Url::parse(&value).map_err(|_| invalid())?;
-        // Inspect the raw authority too: URL normalization erases empty
-        // userinfo such as `https://@host`.
-        let authority = value
-            .split_once("://")
-            .and_then(|(_, rest)| rest.split(['/', '?', '#']).next())
-            .ok_or_else(invalid)?;
-        if authority.is_empty()
-            || authority.contains('@')
-            || value.contains(['?', '#'])
-            || url.host().is_none()
-        {
-            return Err(invalid());
-        }
+        // The same rule validates committed `setup.mirrors` values.
+        let url = mirror_url(&value).ok_or_else(invalid)?;
         let origin = url.origin().ascii_serialization();
         let approved = if loopback {
             ApprovedOrigin::loopback_http_for_tests(&origin)
@@ -112,18 +114,73 @@ impl Mirror {
 mod tests {
     use super::*;
 
-    fn parse(node: &str) -> Result<Mirrors, Error> {
-        Mirrors::from_vars(|name| (name == NODE_MIRROR_ENV).then(|| node.into()))
+    fn env(node: &str) -> impl Fn(&str) -> Option<OsString> {
+        let node = node.to_owned();
+        move |name| (name == NODE_MIRROR_ENV).then(|| node.clone().into())
+    }
+
+    fn policy(node: &str, registry: &str) -> SetupMirrors {
+        SetupMirrors {
+            node: Some(node.into()),
+            npm_registry: Some(registry.into()),
+        }
+    }
+
+    fn base(mirror: Option<Mirror>) -> Option<String> {
+        mirror.map(|mirror| mirror.base)
     }
 
     #[test]
     fn bases_keep_path_prefixes_and_drop_trailing_slashes() {
-        let mirrors = parse("https://mirror.example:8443/nodejs/dist/").unwrap();
-        let node = mirrors.node.unwrap();
+        let none = SetupMirrors::default();
+        let mirrors = Mirrors::resolve(env("https://mirror.example:8443/nodejs/dist/"), &none);
+        let node = mirrors.unwrap().node.unwrap();
         assert_eq!(node.base(), "https://mirror.example:8443/nodejs/dist");
         assert_eq!(node.origin, "https://mirror.example:8443");
-        assert!(mirrors.registry.is_none());
-        assert_eq!(parse("").unwrap(), Mirrors::default());
+        assert_eq!(
+            Mirrors::resolve(env(""), &none).unwrap(),
+            Mirrors::default()
+        );
+    }
+
+    #[test]
+    fn environment_overrides_policy_for_each_mirror_separately() {
+        let committed = policy("https://policy.example/node", "https://policy.example/npm/");
+        let mirrors = Mirrors::resolve(env("https://env.example/dist"), &committed).unwrap();
+        assert_eq!(
+            base(mirrors.node).as_deref(),
+            Some("https://env.example/dist")
+        );
+        assert_eq!(
+            base(mirrors.registry).as_deref(),
+            Some("https://policy.example/npm")
+        );
+        // An empty variable is unset, so the policy still applies.
+        let mirrors = Mirrors::resolve(env(""), &committed).unwrap();
+        assert_eq!(
+            base(mirrors.node).as_deref(),
+            Some("https://policy.example/node")
+        );
+        // Explicit official bases opt out of a policy mirror for one run.
+        let official = Mirrors::resolve(env("https://nodejs.org/dist"), &committed).unwrap();
+        assert_eq!(
+            base(official.node).as_deref(),
+            Some("https://nodejs.org/dist")
+        );
+    }
+
+    #[test]
+    fn invalid_values_name_their_channel_without_echo() {
+        let committed = policy(
+            "https://policy.example/node",
+            "https://user:s3cret@npm.example",
+        );
+        let error = Mirrors::resolve(env(""), &committed).unwrap_err();
+        assert_eq!(error, Error(NPM_REGISTRY_POLICY));
+        // A valid policy never masks an invalid override.
+        let error = Mirrors::resolve(env("http://s3cret.example"), &committed).unwrap_err();
+        assert_eq!(error, Error(NODE_MIRROR_ENV));
+        assert!(!error.to_string().contains("s3cret"));
     }
 
     #[test]
@@ -138,7 +195,8 @@ mod tests {
             "http://127.0.0.1:9/s3cret",
             "mirror.example/s3cret",
         ] {
-            let error = parse(value).unwrap_err().to_string();
+            let none = SetupMirrors::default();
+            let error = Mirrors::resolve(env(value), &none).unwrap_err().to_string();
             assert!(error.contains(NODE_MIRROR_ENV), "{error}");
             assert!(!error.contains("s3cret") && !error.contains("mirror.example"));
         }

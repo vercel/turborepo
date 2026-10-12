@@ -317,6 +317,9 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
             "{\"setup\":{\"javascript\":{\"registry\":\"private-secret\"}}}",
             "{\"setup\":{\"tools\":{\"url\":\"private-secret\"}}}",
             "{\"setup\":{\"javascript\":\"skip\"}}",
+            "{\"setup\":{\"mirrors\":\"private-secret\"}}",
+            "{\"setup\":{\"mirrors\":{\"bun\":\"private-secret\"}}}",
+            "{\"setup\":{\"mirrors\":{\"node\":{\"url\":\"private-secret\"}}}}",
         ] {
             fs::write(&path, contents)?;
             assert_eq!(
@@ -340,12 +343,39 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
         assert!(fixture.check(&[]).is_ok());
         fs::write(&path, "{\"setup\":{\"additionalTools\":{}}}")?;
         assert!(fixture.check(&[]).is_ok());
+        // Setup applies mirrors through its own validated transports.
+        fs::write(
+            &path,
+            "{\"setup\":{\"tools\":\"managed\",\"mirrors\":{\"node\":\"https://mirror.invalid/\
+             dist\",\"npmRegistry\":\"https://mirror.invalid/npm\"}}}",
+        )?;
+        assert!(fixture.check(&[]).is_ok());
         fs::write(path, "invalid private-secret")?;
         assert_eq!(
             fixture.check(&[]).err(),
             Some(Error::Inspection(ConfigOwner::RootPolicy))
         );
     }
+    Ok(())
+}
+
+/// A committed npmrc never stands in for, or agrees with, `setup.mirrors`:
+/// setup does not parse npm configuration, so even a matching registry stays
+/// rejected.
+#[test]
+fn npmrc_matching_the_policy_registry_mirror_is_still_rejected() -> TestResult {
+    let fixture = Fixture::new()?;
+    let mirror = "https://mirror.invalid/npm";
+    fs::write(
+        fixture.root.join("turbo.json"),
+        format!("{{\"setup\":{{\"mirrors\":{{\"npmRegistry\":\"{mirror}\"}}}}}}"),
+    )?;
+    assert!(fixture.check(&[]).is_ok());
+    fs::write(fixture.root.join(".npmrc"), format!("registry={mirror}/\n"))?;
+    assert_eq!(
+        fixture.check(&[]).err(),
+        Some(Error::Configured(ConfigOwner::Repository))
+    );
     Ok(())
 }
 

@@ -908,6 +908,34 @@
         }
       }
     },
+    "SetupMirrors": {
+      "description": "Credential-free HTTPS mirrors for `turbo setup` downloads. Each value is a base URL that serves the same paths as the official source.",
+      "type": "object",
+      "properties": {
+        "node": {
+          "description": "Replaces `https://nodejs.org/dist` for Node.js release metadata and archives.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "npmRegistry": {
+          "description": "Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn package metadata and tarballs.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "SetupPolicy": {
       "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
       "type": "object",
@@ -957,6 +985,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/LifecycleScripts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mirrors": {
+          "description": "Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the official URLs, and environment variables override these values.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SetupMirrors"
             },
             {
               "type": "null"
