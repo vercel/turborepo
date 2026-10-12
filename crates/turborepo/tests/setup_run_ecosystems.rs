@@ -16,6 +16,8 @@
 mod go;
 #[path = "setup_run_ecosystems/rust.rs"]
 mod rust;
+#[path = "setup_run_ecosystems/uv.rs"]
+mod uv;
 
 use std::{
     fs,
