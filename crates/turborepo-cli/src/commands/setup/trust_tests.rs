@@ -288,21 +288,35 @@ fn unsafe_external_state_fails_before_traffic_without_following_links() {
 }
 
 #[test]
-fn shared_turbo_config_parent_only_needs_to_be_unwritable_by_others() {
-    // macOS places turbo's config files in the same 0755 directory.
+fn existing_user_state_ancestors_only_need_to_be_unwritable_by_everyone() {
+    // macOS places turbo's config files in the same directory, and Ubuntu's
+    // 0002 umask leaves an existing `~/.local/share` 0775.
     let f = Fixture::new();
     let shared = f.owned.home().join("turborepo");
     fs::create_dir(&shared).unwrap();
-    fs::set_permissions(&shared, fs::Permissions::from_mode(0o755)).unwrap();
     fs::write(shared.join("telemetry.json"), "{}").unwrap();
+    for path in [f.owned.home(), shared.as_path()] {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o775)).unwrap();
+    }
     let u = Upstream::new(&f, false, None);
     f.run(&u, FROZEN).unwrap();
     let (path, _) = record(&f);
-    let records = fs::metadata(path.parent().unwrap()).unwrap();
-    assert_eq!(records.mode() & 0o777, 0o700);
-    fs::set_permissions(&shared, fs::Permissions::from_mode(0o775)).unwrap();
+    let records = path.parent().unwrap();
+    assert_eq!(fs::metadata(records).unwrap().mode() & 0o777, 0o700);
     let empty = LoopbackServer::new([], |_| {}).unwrap();
-    assert!(f.run(&empty, FROZEN).is_err());
+    f.run(&empty, FROZEN).unwrap();
+    // The record directory setup creates stays private, and a world-writable
+    // ancestor fails closed before traffic.
+    for (path, mode, restore) in [
+        (records, 0o750, 0o700),
+        (shared.as_path(), 0o777, 0o775),
+        (f.owned.home(), 0o777, 0o775),
+    ] {
+        fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
+        assert!(f.run(&empty, FROZEN).is_err(), "{path:?} {mode:o}");
+        fs::set_permissions(path, fs::Permissions::from_mode(restore)).unwrap();
+    }
+    f.run(&empty, FROZEN).unwrap();
     assert_eq!(empty.hits(), 0);
     f.no_execution();
 }
