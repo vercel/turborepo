@@ -46,15 +46,14 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use local or frozen provisioning, --plan \
-         --tools-only reports or --check readiness checks"
+        "this setup mode is not implemented; use local or frozen provisioning, --plan reports or \
+         --check readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run. Dependency \
-             plans and checks are not implemented."
+             No tools, dependencies, or locks were changed and no tasks were run."
         )
     )]
     NotImplemented,
@@ -423,10 +422,7 @@ fn run_reporting(
         return Ok(0);
     }
     // Decided before any download, so a missing ecosystem lockfile fails first.
-    // Plans and checks do not cover dependencies yet.
-    let dependencies = (request.mode == Mode::Provision)
-        .then(|| dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request))
-        .transpose()?;
+    let dependencies = dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request)?;
     let ecosystems = snapshot.ecosystems();
     let resolution = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
@@ -453,12 +449,19 @@ fn run_reporting(
             );
         }
         (Mode::Check, _) => {
-            return check::run(&discovery, snapshot, request.tools_only, preflight);
+            return check::run(&discovery, snapshot, &dependencies, preflight);
         }
         (Mode::Plan, _) => {
             println!(
                 "{}",
-                plan::report(&discovery, snapshot, &request, transports, preflight)?
+                plan::report(
+                    &discovery,
+                    snapshot,
+                    &request,
+                    &dependencies,
+                    transports,
+                    preflight
+                )?
             );
             return Ok(0);
         }
@@ -494,9 +497,6 @@ fn run_reporting(
     report.downloaded_bytes = provisioned.downloaded_bytes;
     report.tools_installed = provisioned.installed;
     report.tools_reused = provisioned.reused;
-    let Some(dependencies) = dependencies else {
-        unreachable!("only provisioning reaches dependency setup");
-    };
     let root = discovery.snapshot_root()?.as_std_path();
     Ok(dependencies.install(root, ecosystems, trust_base)?)
 }
@@ -571,14 +571,12 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     };
     // Plain checks cover the same tools as --check --tools-only (#14650);
     // plans still need the effective tools-only decision.
-    if read_only && (tools_only || request.mode == Mode::Check) && request.lock != LockMode::NoLock
-    {
+    if read_only && request.lock != LockMode::NoLock {
         // CI/frozen/offline never change read-only modes into resolution or repair.
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
-    // Write normalization. Combined force/refresh remains fail-closed. Plain
-    // checks cover tools (#14650); dependency plans are not implemented.
+    // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
         || (request.lock == LockMode::NoLock
             && (request.force || request.update_lock || request.offline))
@@ -821,7 +819,7 @@ mod tests {
     }
 
     #[test]
-    fn plain_setup_provisions_and_checks_like_tools_only_but_plan_does_not() {
+    fn plain_setup_plans_and_checks_include_locked_dependencies() {
         for ci in [false, true] {
             for flags in [
                 vec![],
@@ -829,6 +827,7 @@ mod tests {
                 vec!["--no-frozen"],
                 vec!["--force"],
                 vec!["--no-frozen", "--update-lock"],
+                vec!["--plan"],
                 vec!["--check"],
                 vec!["--check", "--offline"],
             ] {
@@ -837,16 +836,12 @@ mod tests {
                 assert!(validate_request(&request).is_ok(), "{flags:?}");
             }
         }
-        // Plans still need --tools-only; plain --check does not (#14650).
         let plan = request(&["--plan", "--force", "--update-lock"], false).unwrap();
         assert_eq!(plan.mode, Mode::Plan);
         assert!(matches!(
             validate_request(&plan),
             Err(Error::NotImplemented)
         ));
-        let check = request(&["--check"], false).unwrap();
-        assert_eq!(check.mode, Mode::Check);
-        assert!(validate_request(&check).is_ok());
         // Offline repeats (#14518) and --no-lock (#14486) cannot install
         // locked dependencies; with dependencies skipped they still provision.
         for flags in [vec!["--offline"], vec!["--no-lock"]] {

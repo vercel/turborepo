@@ -28,10 +28,8 @@ The root `setup` key in `turbo.json` or `turbo.jsonc` sets repository-wide defau
 
 <Callout type="warn">
   The `setup` key is experimental and can change in any release. In this
-  release, `turbo setup` prepares only the JavaScript toolchain (Node.js, the
-  npm that ships with it, and pnpm) and doesn't install dependencies, so
-  dependencies must be skipped. [`lifecycleScripts`](#lifecyclescripts) is
-  accepted but has no effect until dependency installation arrives.
+  release, `turbo setup` installs dependencies only with npm. It reports
+  dependencies for other package managers and toolchains as skipped.
 </Callout>
 
 ## Requirements
@@ -79,11 +77,7 @@ How `turbo setup` prepares a toolchain's dependencies:
 - `locked`: Install dependencies from the committed lockfile without changing it. This is the default.
 - `skip`: Don't install dependencies.
 
-<Callout type="info">
-  Dependency installation isn't implemented yet. Until it is, `locked` makes
-  `turbo setup` exit with `this setup mode is not implemented` without changing
-  anything. Set `"dependencies": "skip"` or pass `--tools-only`.
-</Callout>
+With `locked`, a missing lockfile is an error, and `turbo setup` never creates or rewrites one. See [Dependencies](/docs/reference/setup#dependencies) for the commands it runs.
 
 `"dependencies": "locked"` can't be combined with `"tools": "skip"` for the same toolchain, because dependency installation needs a managed or verified tool.
 
@@ -94,7 +88,7 @@ Whether package managers may run dependency lifecycle scripts, such as `postinst
 - `native`: Keep each package manager's own defaults and the settings committed to your repository, such as allowlists of packages that may run build scripts. `turbo setup` never enables scripts that the package manager or your repository blocks. This is the default.
 - `skip`: Pass the package manager's own flag for skipping scripts. If a package manager has no such flag, setup fails instead of claiming the scripts were skipped.
 
-`turbo setup` doesn't install dependencies yet, so this key, and the [`--ignore-scripts`](#cli-overrides) flag, don't change anything today. When dependency installation arrives, `skip` maps to these flags:
+`turbo setup` prints the effective policy before each install. `skip`, and the [`--ignore-scripts`](#cli-overrides) flag, map to these flags:
 
 | Package manager           | Flag passed                       |
 | ------------------------- | --------------------------------- |
@@ -288,7 +282,7 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
 | `The "setup" key can only be used in the root turbo.json.`                                | Move `setup` to the root `turbo.json`.                                                          |
 | `The "<toolchain>" setup policy requires`                                                 | Enable the named workspace flag, or remove the toolchain key.                                   |
 | `Setup dependencies cannot be "locked" when tools are "skip".`                            | Set `tools` to `managed` or `verify-system`, or set `dependencies` to `skip`.                   |
-| `this setup mode is not implemented`                                                      | Set `"dependencies": "skip"` or pass `--tools-only`.                                            |
+| `dependency setup requires a committed <lockfile>`                                        | Commit the lockfile, set `"dependencies": "skip"`, or pass `--tools-only`.                      |
 | `unsupported setup request: non-JavaScript workspace setup`                               | Set `tools` to `skip` for Rust, Python, or Go.                                                  |
 | `turbo.lock selects tools that the setup policy skips`                                    | Remove the skip, or remove the tools from `turbo.lock`.                                         |
 | `official-only setup rejects ... configuration`                                           | An empty `"setup": {}` isn't accepted. Add a key or remove `setup`.                             |

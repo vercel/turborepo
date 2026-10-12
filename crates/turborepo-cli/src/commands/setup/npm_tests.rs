@@ -624,6 +624,51 @@ fn locked_npm_dependencies_install_with_managed_npm_and_repeat_safely() {
 }
 
 #[test]
+fn npm_plans_and_checks_report_the_install_and_policy_without_running_it() {
+    let n = installing("touch hook-ran");
+    let (root, lock) = (n.f.owned.root(), n.lock());
+    let disclosure = "  Permitted lifecycle scripts run package code that can start other \
+                      commands. turbo setup runs no Turborepo tasks.";
+    assert_eq!(
+        n.f.dependencies(&["--plan"]).plan(root, &lock).unwrap(),
+        [
+            "javascript dependencies: npm ci from package-lock.json with managed npm 11.6.1 \
+             (package-lock.json stays unchanged)",
+            "  npm 11.6.1: native npm policy; project scripts run; dependency scripts run",
+            disclosure,
+        ]
+    );
+    let check = n.f.dependencies(&["--check"]).check(root, &lock).unwrap();
+    assert_eq!(
+        check[0],
+        "javascript dependencies: not checked; turbo setup reruns npm ci from package-lock.json, \
+         because dependency readiness is not tracked"
+    );
+    assert_eq!(check.last().unwrap(), "No tasks run.");
+    let skipped = n.f.dependencies(&["--plan", "--ignore-scripts"]);
+    assert_eq!(
+        skipped.plan(root, &lock).unwrap()[1..],
+        [
+            "  npm 11.6.1: lifecycle scripts skipped (--ignore-scripts); passing --ignore-scripts \
+             to npm"
+        ]
+    );
+    assert_eq!(
+        n.f.dependencies(&["--plan", "--tools-only"])
+            .plan(root, &lock)
+            .unwrap(),
+        ["Dependencies skipped (--tools-only); dependency readiness was not checked."]
+    );
+    // Plans and checks run end to end without running npm.
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--plan"]).unwrap(), 0);
+    assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(n.f.run(&u, &["--check"]).unwrap(), 0);
+    assert!(n.args().is_empty());
+    n.no_tasks();
+}
+
+#[test]
 fn npm_lifecycle_skip_controls_pass_ignore_scripts_and_tools_only_skips_npm() {
     let n = installing("");
     let u = n.upstream();
