@@ -294,17 +294,16 @@ pub(super) fn run(
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<Provisioned, Error> {
     let (force, offline) = (request.force, request.offline);
-    let lock_mode = request.lock;
     let resolution_mode = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
     } else {
         turborepo_setup::lock::reconcile::Mode::Local
     };
     // Force and offline never enter resolution or lock publication.
-    let write = lock_mode == super::LockMode::Write && !force && !offline;
+    let write = request.lock == super::LockMode::Write && !force && !offline;
     let root = discovery.snapshot_root()?.as_std_path();
     let host = platform()?;
-    if lock_mode == super::LockMode::Frozen {
+    if request.lock == super::LockMode::Frozen {
         super::lock_diagnostics::frozen(&snapshot)?;
     }
     if offline {
