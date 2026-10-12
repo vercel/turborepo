@@ -373,39 +373,55 @@ fn failure_cleanup_and_no_surrounding_writes() {
     drop(tree);
     assert!(!path.exists());
 }
+type PaxEntry<'a> = (&'a str, Kind, &'a [u8], &'a [(&'a str, &'a [u8])]);
+// Link entries carry their target in the data column.
+fn pax_tar(entries: &[PaxEntry<'_>]) -> Vec<u8> {
+    let mut builder = tar::Builder::new(Vec::new());
+    for &(name, kind, data, pax) in entries {
+        if !pax.is_empty() {
+            builder.append_pax_extensions(pax.iter().copied()).unwrap();
+        }
+        if name.is_empty() {
+            continue;
+        }
+        let link = kind.is_symlink() || kind.is_hard_link();
+        let mut header = tar::Header::new_ustar();
+        header.set_entry_type(kind);
+        header.set_mode(0o644);
+        header.set_size(if link { 0 } else { data.len() as u64 });
+        header.set_path(name).unwrap();
+        if link {
+            header
+                .set_link_name(std::str::from_utf8(data).unwrap())
+                .unwrap();
+        }
+        header.set_cksum();
+        builder
+            .append(&header, if link { &[][..] } else { data })
+            .unwrap();
+    }
+    builder.into_inner().unwrap()
+}
+fn unpack_excluding(
+    bytes: Vec<u8>,
+    required: &[&str],
+    excluded: &'static [&'static str],
+) -> Result<ExtractedArtifact, Error> {
+    extract_excluding(&verified(bytes), Tar, limits(), layout(required), excluded)
+}
+const TOOL: PaxEntry<'static> = ("pkg/bin/tool", Regular, b"tool", &[]);
+// Go distributions name compiler test fixtures with UTF-8 PAX paths.
+const UTF8: &[(&str, &[u8])] = &[("path", "pkg/test/\u{de}x.go".as_bytes())];
+
 #[test]
 fn excluded_subtrees_skip_pax_named_entries_without_writing() {
-    type Entry<'a> = (&'a str, &'a [u8], &'a [(&'a str, &'a [u8])]);
-    let build = |entries: &[Entry<'_>]| {
-        let mut builder = tar::Builder::new(Vec::new());
-        for &(name, data, pax) in entries {
-            if !pax.is_empty() {
-                builder.append_pax_extensions(pax.iter().copied()).unwrap();
-            }
-            if name.is_empty() {
-                continue;
-            }
-            let mut header = tar::Header::new_ustar();
-            header.set_mode(0o644);
-            header.set_size(data.len() as u64);
-            header.set_path(name).unwrap();
-            header.set_cksum();
-            builder.append(&header, data).unwrap();
-        }
-        builder.into_inner().unwrap()
-    };
-    let unpack = |bytes: Vec<u8>, required: &[&str], excluded: &[&str]| {
-        extract_excluding(&verified(bytes), Tar, limits(), layout(required), excluded)
-    };
-    // Go distributions name compiler test fixtures with UTF-8 PAX paths.
-    let utf8: &[(&str, &[u8])] = &[("path", "pkg/test/\u{de}x.go".as_bytes())];
-    let archive = build(&[
-        ("pkg/bin/tool", b"tool", &[]),
-        ("pkg/test/a.txt", b"skipped", &[]),
-        ("pkg/test/x.go", b"skipped", utf8),
-        ("pkg/testdata/kept", b"kept", &[]),
+    let archive = pax_tar(&[
+        TOOL,
+        ("pkg/test/a.txt", Regular, b"skipped", &[]),
+        ("pkg/test/x.go", Regular, b"skipped", UTF8),
+        ("pkg/testdata/kept", Regular, b"kept", &[]),
     ]);
-    let extracted = unpack(archive.clone(), &["bin/tool"], &["test"]).unwrap();
+    let extracted = unpack_excluding(archive.clone(), &["bin/tool"], &["test"]).unwrap();
     assert_eq!(
         fs::read(extracted.root_path().join("bin/tool")).unwrap(),
         b"tool"
@@ -414,7 +430,7 @@ fn excluded_subtrees_skip_pax_named_entries_without_writing() {
     assert!(extracted.root_path().join("testdata/kept").is_file());
     // Without the exclusion PAX stays unsupported.
     assert!(matches!(
-        unpack(archive, &["bin/tool"], &[]),
+        unpack_excluding(archive, &["bin/tool"], &[]),
         Err(UnsupportedEntry)
     ));
     let records: [&[(&str, &[u8])]; 4] = [
@@ -427,19 +443,75 @@ fn excluded_subtrees_skip_pax_named_entries_without_writing() {
         &[("linkpath", b"pkg/test/x".as_slice())],
     ];
     for pax in records {
-        let bytes = build(&[("pkg/bin/tool", b"tool", &[]), ("pkg/test/x", b"x", pax)]);
-        let error = unpack(bytes, &["bin/tool"], &["test"]).err().unwrap();
+        let bytes = pax_tar(&[TOOL, ("pkg/test/x", Regular, b"x", pax)]);
+        let error = unpack_excluding(bytes, &["bin/tool"], &["test"])
+            .err()
+            .unwrap();
         assert!(matches!(error, UnsupportedEntry), "{pax:?}: {error}");
     }
-    let dangling = build(&[("pkg/bin/tool", b"tool", &[]), ("", b"", utf8)]);
+    let dangling = pax_tar(&[TOOL, ("", Regular, b"", UTF8)]);
     assert!(matches!(
-        unpack(dangling, &["bin/tool"], &["test"]),
+        unpack_excluding(dangling, &["bin/tool"], &["test"]),
         Err(InvalidArchive)
     ));
-    let required = unpack(valid_tar(), &["bin/tool"], &["bin"]);
+    let required = unpack_excluding(valid_tar(), &["bin/tool"], &["bin"]);
     assert!(matches!(required, Err(LayoutMismatch)));
     assert!(matches!(
-        unpack(valid_tar(), &["bin/tool"], &[".."]),
+        unpack_excluding(valid_tar(), &["bin/tool"], &[".."]),
         Err(UnsafePath)
     ));
+}
+#[test]
+fn exclusions_are_exact_and_cannot_hide_lookalikes_links_or_other_roots() {
+    // Exact, case-sensitive whole components: lookalikes are still validated.
+    for name in [
+        "pkg/Test/\u{de}x",
+        "pkg/testdata/\u{de}x",
+        "pkg/bin/test/\u{de}x",
+    ] {
+        let bytes = pax_tar(&[TOOL, (name, Regular, b"x", &[])]);
+        let error = unpack_excluding(bytes, &["bin/tool"], &["test"])
+            .err()
+            .unwrap();
+        assert!(matches!(error, UnsafePath), "{name}: {error}");
+    }
+    // A PAX path must name the excluded subtree below this archive's root.
+    let other: &[(&str, &[u8])] = &[("path", b"other/test/x".as_slice())];
+    let bytes = pax_tar(&[TOOL, ("pkg/test/x", Regular, b"x", other)]);
+    let error = unpack_excluding(bytes, &["bin/tool"], &["test"])
+        .err()
+        .unwrap();
+    assert!(matches!(error, UnsupportedEntry), "{error}");
+    // Global PAX headers and PAX-described hard links stay unsupported.
+    let global = tar(&[
+        ("pkg/bin/tool", Regular, b"tool"),
+        ("pkg/test/g", Kind::XGlobalHeader, b""),
+    ]);
+    let error = unpack_excluding(global, &["bin/tool"], &["test"])
+        .err()
+        .unwrap();
+    assert!(matches!(error, UnsupportedEntry), "{error}");
+    let hard = pax_tar(&[TOOL, ("pkg/test/x", Kind::Link, b"pkg/bin/tool", UTF8)]);
+    let error = unpack_excluding(hard, &["bin/tool"], &["test"])
+        .err()
+        .unwrap();
+    assert!(matches!(error, UnsupportedLink), "{error}");
+    // Links outside the exclusion cannot resolve to a skipped entry.
+    #[cfg(unix)]
+    {
+        let link = pax_tar(&[
+            TOOL,
+            ("pkg/test/a", Regular, b"a", &[]),
+            ("pkg/bin/a", Kind::Symlink, b"../test/a", &[]),
+        ]);
+        let error = unpack_excluding(link, &["bin/tool"], &["test"])
+            .err()
+            .unwrap();
+        assert!(matches!(error, UnsafeLink), "{error}");
+    }
+    // The layout root itself can never be excluded.
+    let error = unpack_excluding(valid_tar(), &["bin/tool"], &[""])
+        .err()
+        .unwrap();
+    assert!(matches!(error, UnsafePath), "{error}");
 }
