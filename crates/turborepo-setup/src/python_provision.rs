@@ -6,7 +6,7 @@
 
 use std::{fs, io, path::Path, time::Duration};
 
-use turborepo_archive::{ExtractedArtifact, Layout};
+use turborepo_archive::{Allowances, ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
 use turborepo_tool_install::{Store, Tool};
 
@@ -15,6 +15,14 @@ use crate::{
     node_provision::copy_tree,
     python_resolution::{PythonTransport, is_official},
     uv::{ORIGIN, exact_release},
+};
+
+/// The official builds rename `python/install/...` headers in place, leaving
+/// the old name's tail after the NUL, and their Linux terminfo has case-only
+/// siblings that are different terminals (`E/Eterm`, `e/eterm`).
+const OFFICIAL_ARCHIVE: Allowances = Allowances {
+    tar_name_residue: true,
+    case_sensitive_dir: Some("share/terminfo"),
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -140,7 +148,7 @@ impl PythonPlan {
                 turborepo_download::Limits::new(256 * 1024 * 1024, Duration::from_secs(300))?,
             )
             .await?;
-        let tree = turborepo_archive::extract(
+        let tree = turborepo_archive::extract_with(
             &bytes,
             turborepo_archive::Format::TarGz,
             turborepo_archive::Limits::new(1024 * 1024 * 1024, 200_000, 4096, 64)?,
@@ -148,6 +156,7 @@ impl PythonPlan {
                 root: "python",
                 required_files: &[&self.interpreter],
             },
+            OFFICIAL_ARCHIVE,
         )?;
         Ok(Some(PreparedPython {
             tree,
