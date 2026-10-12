@@ -1770,7 +1770,7 @@ fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_t
             let mut words = vec!["setup", "--no-frozen", "--update-lock", "--tools-only"];
             words.extend(controls);
             let expected = if controls.contains(&"--offline") {
-                "--offline cannot verify fresh artifacts for --force or resolve --update-lock"
+                "--offline cannot resolve --update-lock"
             } else {
                 PENDING
             };

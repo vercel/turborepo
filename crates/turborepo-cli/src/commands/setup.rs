@@ -234,7 +234,7 @@ fn run_with_policy(
         return Ok(0);
     }
     let code = if request.offline {
-        offline::run(&discovery, snapshot, transports.as_ref(), preflight)
+        offline::run(&discovery, snapshot, transports.as_ref(), preflight, request.force)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
@@ -287,10 +287,12 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     {
         return Err(Error::NotImplemented);
     }
-    if request.offline && (request.force || request.update_lock) {
+    // --offline --force reinstalls only from verified local bytes; resolution
+    // always needs the network.
+    if request.offline && request.update_lock {
         return Err(Error::Unsupported(
-            "--offline cannot verify fresh artifacts for --force or resolve --update-lock; run \
-             turbo setup --tools-only online without --offline",
+            "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \
+             --update-lock without --offline",
         ));
     }
     Ok(())

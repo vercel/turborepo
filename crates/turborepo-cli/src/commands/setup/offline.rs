@@ -35,6 +35,7 @@ pub(super) fn run(
     sources: Snapshot,
     transports: Option<&provision::Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
+    force: bool,
 ) -> Result<i32, SetupError> {
     let context = check::context()?;
     let platform = context.artifact_platform();
@@ -103,10 +104,14 @@ pub(super) fn run(
             plan.tools()
                 .iter()
                 .map(|tool| {
-                    format!(
-                        "{} {}: reused (trusted installed bytes; offline)",
-                        tool.id, tool.version,
-                    )
+                    // Offline, the verified installed bytes are the only
+                    // reinstall source, and they were just fully re-verified.
+                    let outcome = if force {
+                        "re-verified (trusted installed bytes; offline --force)"
+                    } else {
+                        "reused (trusted installed bytes; offline)"
+                    };
+                    format!("{} {}: {outcome}", tool.id, tool.version)
                 })
                 .collect::<Vec<_>>()
         })
