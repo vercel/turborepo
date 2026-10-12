@@ -1162,9 +1162,13 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     };
                     assert_eq!(code, 0, "{stderr}");
                     assert_eq!(stderr, "");
+                    // #14664 reports the effective policy before every plan;
+                    // #14591 fixtures use Node's Windows zip.
+                    let extension = if cfg!(windows) { "zip" } else { "tar.gz" };
                     assert_eq!(stdout, format!(
-                        "Locked tools-only plan (turbo.lock unchanged):\n\
-                         node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz\n  SHA-256: {}\n\
+                        "javascript: tools managed (inferred); dependencies skipped (--tools-only)\n\
+                         Locked tools-only plan (turbo.lock unchanged):\n\
+                         node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org/dist/v24.0.0/{prefix}.{extension}\n  SHA-256: {}\n\
                          pnpm 10.0.0: {action}\n  Declaration: package.json#/packageManager (pnpm@10.0.0)\n  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n  SHA-256: {}\n\
                          Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
                          Tracked changes: none. No downloads, probes, or tasks run.\n",
@@ -1233,7 +1237,12 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
             let (code, stdout, stderr) = invoke_raw(root, &words, true);
             if external_system_policy_blocked(code, &stderr) || corrupt_manifest {
                 assert_eq!(code, 1, "{stderr}");
-                assert_eq!(stdout, "");
+                // #14664 reports the effective policy before planning, so a
+                // failed plan still prints only that line.
+                assert_eq!(
+                    stdout,
+                    "javascript: tools managed (inferred); dependencies skipped (--tools-only)\n"
+                );
                 assert!(
                     diagnostic_contains(&stderr, "managed installation is damaged or unsafe")
                         || external_system_policy_blocked(code, &stderr),
@@ -2011,7 +2020,12 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
         } else {
             &words
         };
-        failure(root, words, ci, r#"native declarations changed for {"uv"}"#);
+        failure(
+            root,
+            words,
+            ci,
+            "turbo.lock declarations changed: uv: pyproject.toml",
+        );
     }
     // --check accepts uv selections: a matching lock without an installation
     // is reported missing on every qualified host, without writes.

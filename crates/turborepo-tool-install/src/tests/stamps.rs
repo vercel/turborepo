@@ -48,7 +48,7 @@ fn stamped_checks_trust_matching_stamps_and_full_checks_reread_bytes() {
     assert!(store.current().unwrap().is_some());
     assert!(matches!(
         Store::inspect_with(repo.path(), Verification::Full),
-        Err(Error::InvalidInventory)
+        Err(Error::DamagedContents)
     ));
 
     // Reuse copies the tree and re-hashes it, so the edit is never blessed.

@@ -217,7 +217,13 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
     // lock rewrite.
     let install = "rustup|toolchain install 1.99.0 --no-self-update --profile minimal";
     assert_eq!(repo.calls(), [install]);
-    assert_eq!(fs::read_dir(repo.owned.home()).unwrap().count(), 0);
+    // Setup's own trusted-root record (stack B) is the only expected entry.
+    let home: Vec<_> = fs::read_dir(repo.owned.home())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .filter(|name| name != "turborepo")
+        .collect();
+    assert_eq!(home, Vec::<std::ffi::OsString>::new());
     assert_eq!(
         fs::read(repo.owned.root().join("turbo.lock")).unwrap(),
         lock

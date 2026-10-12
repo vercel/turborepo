@@ -145,8 +145,11 @@ fn declaration_changes_update_locally_and_frozen_names_uv() {
     declare(&owned, "==0.12.*");
     let bytes = fs::read(owned.root().join("turbo.lock")).unwrap();
     match run(&owned, &upstream, FROZEN) {
-        Err(Error::Reconcile(reconcile::Error::Drift(ids))) => {
-            assert_eq!(ids.into_iter().collect::<Vec<_>>(), ["uv"]);
+        Err(Error::LockDiagnostics(super::lock_diagnostics::Error::Drift(names))) => {
+            assert!(
+                names.starts_with("uv: ") && !names.contains(", "),
+                "{names}"
+            );
         }
         other => panic!("expected named uv drift, got {other:?}"),
     }
@@ -184,7 +187,10 @@ fn disabled_python_flag_ignores_uv_declarations() {
     let before = publication_guards::state(owned.root());
     assert!(matches!(
         run(&owned, &upstream, LOCAL),
-        Err(Error::Unsupported("a native Node declaration is required"))
+        Err(Error::Unsupported(
+            "a native Node declaration is required (or a root rust-toolchain file with \
+             experimentalCargoWorkspaces)"
+        ))
     ));
     assert_eq!(publication_guards::state(owned.root()), before);
     assert_eq!(upstream.hits(), 0);
@@ -303,8 +309,11 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
         ))
     ));
     match run(&owned, &upstream, FROZEN) {
-        Err(Error::Reconcile(reconcile::Error::Drift(ids))) => {
-            assert_eq!(ids.into_iter().collect::<Vec<_>>(), ["python"]);
+        Err(Error::LockDiagnostics(super::lock_diagnostics::Error::Drift(names))) => {
+            assert!(
+                names.starts_with("python: ") && !names.contains(", "),
+                "{names}"
+            );
         }
         other => panic!("expected named Python drift, got {other:?}"),
     }
