@@ -279,3 +279,64 @@ fn shared_turbo_config_parent_only_needs_to_be_unwritable_by_others() {
     assert_eq!(empty.hits(), 0);
     f.no_execution();
 }
+
+#[test]
+fn setup_prunes_only_records_whose_root_is_gone_or_replaced() {
+    use std::os::unix::fs::OpenOptionsExt;
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    f.run(&u, FROZEN).unwrap();
+    let (own, value) = record(&f);
+    let directory = own.parent().unwrap().to_owned();
+    let write = |name: String, root: &std::path::Path, identity: (u64, u64)| {
+        let mut other = value.clone();
+        other["installation"]["root"] = json!(root);
+        other["installation"]["device"] = json!(identity.0);
+        other["installation"]["inode"] = json!(identity.1);
+        let path = directory.join(format!("{name}.json"));
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path)
+            .unwrap()
+            .write_all(&serde_json::to_vec(&other).unwrap())
+            .unwrap();
+        path
+    };
+    let named = |root: &std::path::Path| {
+        format!("{:x}", Sha256::digest(root.as_os_str().as_encoded_bytes()))
+    };
+    let live = f.owned.home().join("live-repo");
+    let recloned = f.owned.home().join("recloned-repo");
+    let deleted = f.owned.home().join("deleted-repo");
+    for dir in [&live, &recloned] {
+        fs::create_dir(dir).unwrap();
+    }
+    let identity = |root: &std::path::Path| {
+        let metadata = fs::metadata(root).unwrap();
+        (metadata.dev(), metadata.ino())
+    };
+    let kept = write(named(&live), &live, identity(&live));
+    let replaced = write(
+        named(&recloned),
+        &recloned,
+        (identity(&recloned).0, u64::MAX),
+    );
+    let gone = write(named(&deleted), &deleted, identity(&live));
+    // A record filed under another root's name never describes that root.
+    let misfiled = write("0".repeat(64), &deleted, identity(&live));
+
+    // A repeat setup prunes without traffic and keeps its own authority.
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    f.run(&empty, FROZEN).unwrap();
+    assert_eq!(empty.hits(), 0);
+    assert!(own.exists() && kept.exists() && misfiled.exists());
+    assert!(!replaced.exists() && !gone.exists());
+    assert!(
+        trust(&f)
+            .allows_reuse(&Store::open(f.owned.root()).unwrap())
+            .unwrap()
+    );
+    f.no_execution();
+}

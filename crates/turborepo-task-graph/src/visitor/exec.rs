@@ -75,11 +75,16 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
         };
         let mut command_factory = CommandFactory::new();
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {
-            command_factory.add_provider(MicroFrontendProxyProvider::new(
+            let provider = MicroFrontendProxyProvider::new(
                 visitor.repo.pkg_dep_graph.as_ref(),
                 engine.task_ids(),
                 micro_frontends_configs,
-            ));
+            );
+            command_factory.add_provider(if visitor.managed_environment.is_some() {
+                provider.with_managed_path()
+            } else {
+                provider
+            });
         }
         command_factory.add_provider(pkg_graph_provider);
 
