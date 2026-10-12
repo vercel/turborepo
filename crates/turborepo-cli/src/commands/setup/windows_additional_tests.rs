@@ -112,8 +112,10 @@ fn a_running_managed_executable_never_blocks_rollback_or_upgrade() {
     let manifest = f.manifest();
     assert!(f.run(&u, LOCAL).is_err());
     assert_eq!(f.manifest(), manifest);
-    let path = f.plan().path(Some(system32().as_os_str())).unwrap();
-    assert_eq!(exit_code(&path, "fixture"), Some(5));
+    // turbo.lock already names the new digest, so run and exec would ask for
+    // setup, but the selected generation still runs intact.
+    let previous = std::env::join_paths([bin.clone(), system32()]).unwrap();
+    assert_eq!(exit_code(&previous, "fixture"), Some(5));
 
     // A verified upgrade publishes a new generation beside the locked one.
     let v = f.upstream_with([(TOOL_ZIP.into(), second)]);
