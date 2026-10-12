@@ -72,8 +72,11 @@ pub struct ArtifactTransport {
 }
 
 impl ArtifactTransport {
-    /// Approves exactly the origins of the selected artifacts, never a prefix
-    /// or wildcard. Construct only after the setup source preflight passes.
+    /// Requests go exactly to the origins of the selected artifacts, never a
+    /// prefix or wildcard. Release hosts often redirect to a CDN, so these
+    /// digest-pinned downloads may follow HTTPS redirects to any origin; the
+    /// lock still records only the declared URL. Construct only after the
+    /// setup source preflight passes.
     pub fn new(
         _policy: &crate::source_policy::OfficialSourcePolicy,
         plans: &[ArtifactPlan],
@@ -84,8 +87,9 @@ impl ArtifactTransport {
             .map(ApprovedOrigin::https)
             .collect::<Result<Vec<_>, _>>()
             .map_err(Error::Transport)?;
+        let client = DownloadClient::new(approved).map_err(Error::Transport)?;
         Ok(Self {
-            client: DownloadClient::new(approved).map_err(Error::Transport)?,
+            client: client.with_https_redirects(),
             loopback: None,
         })
     }
@@ -93,8 +97,9 @@ impl ArtifactTransport {
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only.
     #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
+        let client = DownloadClient::loopback_http_for_tests(origin).map_err(Error::Transport)?;
         Ok(Self {
-            client: DownloadClient::loopback_http_for_tests(origin).map_err(Error::Transport)?,
+            client: client.with_https_redirects(),
             loopback: Some(origin.trim_end_matches('/').into()),
         })
     }
