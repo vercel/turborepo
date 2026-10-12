@@ -379,9 +379,11 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
     }
 
     /// Declare that the caller will load every contributor of a lazy graph,
-    /// letting [`PackageGraphBuilder::build_lazy`] start their full discovery
-    /// subprocesses while it builds the inventory graph. Results, errors, and
-    /// warnings are unchanged; only scheduling differs.
+    /// letting [`PackageGraphBuilder::build_lazy`] start a contributor's full
+    /// discovery subprocesses once its subprocess-free inventory has
+    /// succeeded with at least one scope, overlapping the rest of
+    /// construction. Results, errors, and warnings are unchanged; only
+    /// scheduling differs.
     pub fn with_contributor_prefetch(mut self, prefetch: bool) -> Self {
         self.prefetch_contributors = prefetch;
         self
@@ -523,11 +525,6 @@ where
         mut self,
     ) -> Result<LazyPackageGraph<CachingPackageDiscovery<T::Output>>, Error> {
         self.register_bootstrap_contributors()?;
-        if self.prefetch_contributors {
-            for contributor in &self.extra_contributors {
-                contributor.prefetch_packages();
-            }
-        }
         self.is_single_package &= self.extra_contributors.is_empty();
         if self.is_single_package {
             // Only a JavaScript-only graph may skip contributor inventories.
@@ -549,6 +546,7 @@ where
             load_lockfile,
             package_jsons,
             package_json_loader,
+            prefetch_contributors,
             ..
         } = self;
 
@@ -579,6 +577,32 @@ where
         // fails (for example a malformed manifest) fails construction with
         // the existing diagnostics — core never falls back to running the
         // toolchain for a run that may not need it.
+        //
+        // Inventories are taken before JavaScript discovery so that a
+        // prefetch, when requested, can start as soon as a contributor's
+        // static inventory proves it owns scopes, and still overlap the rest
+        // of construction. A contributor whose inventory fails or is empty is
+        // never prefetched: no toolchain subprocess starts until static
+        // analysis says the toolchain is in play. Errors still surface in
+        // their original order: JavaScript first, then each inventory.
+        let mut inventories = Vec::with_capacity(extra_contributors.len());
+        for contributor in &extra_contributors {
+            let inventory = contributor.discover_package_scopes().await;
+            let failed = match &inventory {
+                Ok(inventory) => {
+                    if prefetch_contributors && !inventory.scopes().is_empty() {
+                        contributor.prefetch_packages();
+                    }
+                    false
+                }
+                Err(_) => true,
+            };
+            inventories.push((contributor.id(), inventory));
+            if failed {
+                break;
+            }
+        }
+
         let mut observations = Vec::with_capacity(extra_contributors.len() + 1);
         if let Some(javascript) = javascript.as_ref() {
             let output = match package_jsons.as_ref() {
@@ -594,10 +618,8 @@ where
                 ContributorObservation::Full(output),
             ));
         }
-        for contributor in &extra_contributors {
-            let id = contributor.id();
-            let inventory = contributor.discover_package_scopes().await?;
-            observations.push((id, ContributorObservation::Inventory(inventory)));
+        for (id, inventory) in inventories {
+            observations.push((id, ContributorObservation::Inventory(inventory?)));
         }
 
         let mut plan = LazyPlan {
@@ -2370,6 +2392,8 @@ mod test {
         full_packages: Vec<DiscoveredPackage>,
         inventory_calls: Arc<AtomicUsize>,
         full_calls: Arc<AtomicUsize>,
+        prefetch_calls: Arc<AtomicUsize>,
+        inventory_fails: bool,
     }
 
     impl LazyContributor {
@@ -2395,6 +2419,8 @@ mod test {
                 full_packages,
                 inventory_calls: Arc::new(AtomicUsize::new(0)),
                 full_calls: Arc::new(AtomicUsize::new(0)),
+                prefetch_calls: Arc::new(AtomicUsize::new(0)),
+                inventory_fails: false,
             }
         }
 
@@ -2433,11 +2459,21 @@ mod test {
             })
         }
 
+        fn prefetch_packages(&self) {
+            self.prefetch_calls.fetch_add(1, Ordering::SeqCst);
+        }
+
         fn discover_package_scopes(&self) -> DiscoverPackageScopesFuture<'_> {
             self.inventory_calls.fetch_add(1, Ordering::SeqCst);
             let scopes = self.scopes.clone();
             let root = self.root.clone();
+            let fails = self.inventory_fails;
             Box::pin(async move {
+                if fails {
+                    return Err(crate::toolchain::Error::Failed(
+                        "malformed native manifest".into(),
+                    ));
+                }
                 Ok(DiscoveredPackageScopes::new(
                     scopes,
                     vec![WorkspaceRoot::new("lazy", root)],
@@ -2622,6 +2658,45 @@ mod test {
             graph.package_toolchain(&native),
             Some(&ToolchainId::new("lazy-native"))
         );
+    }
+
+    #[tokio::test]
+    async fn lazy_prefetch_waits_for_a_successful_non_empty_inventory() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        // (scope names, inventory fails, prefetch requested, expected prefetches)
+        let cases: [(&[&str], bool, bool, usize); 4] = [
+            (&["native-pkg"], false, true, 1),
+            (&["native-pkg"], false, false, 0),
+            // Static analysis found nothing to own: no toolchain subprocess.
+            (&[], false, true, 0),
+            // Static analysis rejected the workspace: no toolchain subprocess.
+            (&["native-pkg"], true, true, 0),
+        ];
+        for (scope_names, inventory_fails, prefetch, expected) in cases {
+            let mut contributor = LazyContributor::new(
+                ToolchainId::new("lazy-native"),
+                &root,
+                scope_names,
+                Vec::new(),
+            );
+            contributor.inventory_fails = inventory_fails;
+            let (inventory_calls, prefetch_calls, full_calls) = (
+                contributor.inventory_calls.clone(),
+                contributor.prefetch_calls.clone(),
+                contributor.full_calls.clone(),
+            );
+            let result = PackageGraphBuilder::new(&root, PackageJson::default())
+                .with_package_discovery(MockDiscovery)
+                .with_contributor(Arc::new(contributor))
+                .with_contributor_prefetch(prefetch)
+                .build_lazy()
+                .await;
+            assert_eq!(result.is_err(), inventory_fails);
+            assert_eq!(inventory_calls.load(Ordering::SeqCst), 1);
+            assert_eq!(prefetch_calls.load(Ordering::SeqCst), expected);
+            assert_eq!(full_calls.load(Ordering::SeqCst), 0);
+        }
     }
 
     #[tokio::test]

@@ -544,7 +544,11 @@ pub trait RepositoryContributor: Send + Sync {
     /// requested, so toolchain subprocesses may start in the background and
     /// overlap other construction work.
     ///
-    /// Core only issues this hint when the run will load every owner.
+    /// Core only issues this hint when the run will load every owner, and
+    /// only after [`RepositoryContributor::discover_package_scopes`] for this
+    /// contributor has succeeded with at least one scope. Static analysis
+    /// always decides eligibility first; a repository the inventory rejects
+    /// or finds empty never starts a toolchain subprocess through this hint.
     /// Prefetching MUST NOT change any observable result: errors, warnings,
     /// and facts are still produced by `discover_packages`. Default: no-op.
     fn prefetch_packages(&self) {}

@@ -1817,6 +1817,9 @@ impl RepositoryContributor for CargoContributor {
         ToolchainId::RUST
     }
 
+    /// Core calls this only after [`Self::discover_package_scopes`] found
+    /// named workspace crates, so Cargo eligibility is already established
+    /// statically before any subprocess starts.
     fn prefetch_packages(&self) {
         if !self.repo_root.join_component(CARGO_TOML).exists() {
             return;
@@ -1845,8 +1848,8 @@ impl RepositoryContributor for CargoContributor {
         Box::pin(async move {
             // Discovery spawns `cargo metadata` synchronously, so keep it off
             // the async runtime like the JavaScript manifest-parsing path.
-            // A root manifest means Cargo runs, so probe the compiler alongside
-            // it instead of serially afterwards.
+            // Without a prefetch, the compiler is only probed after discovery
+            // establishes there are named crates to host, as before.
             let discover = || {
                 if self.resolve_external_dependencies {
                     discover_contributor_workspace(&self.repo_root)
@@ -1867,9 +1870,6 @@ impl RepositoryContributor for CargoContributor {
                             .map(|workspace| (workspace, ContributorMetadata::Absent)),
                     };
                     (discovery, Some(compiler))
-                } else if self.repo_root.join_component(CARGO_TOML).exists() {
-                    let (discovery, probe) = with_compiler_probe(&self.repo_root, discover);
-                    (discovery, Some(probe))
                 } else {
                     (discover(), None)
                 }
