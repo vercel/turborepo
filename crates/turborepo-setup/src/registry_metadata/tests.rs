@@ -124,12 +124,16 @@ fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
 #[test]
 fn names_exact_versions_and_manager_families_cannot_be_substituted() {
     let valid = document("npm", "10.8.2");
-    for manager in [Manager::Yarn, Manager::Bun, Manager::Nub, Manager::Aube] {
+    for manager in [Manager::Bun, Manager::Nub, Manager::Aube] {
         assert_eq!(
             parse(&valid, manager, "10.8.2", None),
             Err(UnsupportedManager)
         );
     }
+    assert_eq!(
+        parse(&valid, Manager::Yarn, "10.8.2", None),
+        Err(IdentityMismatch)
+    );
     for version in [
         "",
         "latest",

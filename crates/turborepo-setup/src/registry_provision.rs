@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
@@ -70,8 +70,10 @@ impl RegistryTransport {
         if exact_version.len() > 128 {
             return Err(registry_metadata::RegistryMetadataError::InvalidVersion.into());
         }
+        let (_, version) = registry_metadata::validate_selection(manager, exact_version)?;
+        let bundled = registry_metadata::is_modern_yarn(manager, &version);
         let (release, bytes) = self
-            .verified_release(manager, exact_version, authored, None)
+            .verified_release(manager, exact_version, authored.filter(|_| !bundled), None)
             .await?;
         let (_, mappings) = standard_mappings(manager)?;
         let executables = mappings
@@ -79,6 +81,10 @@ impl RegistryTransport {
             .map(|(name, path)| (name.to_string(), path.to_string()))
             .collect();
         let tree = extract_package(&bytes, manager, exact_version, &executables, true)?;
+        let bundle = bundled.then(|| bundle_digests(&tree)).transpose()?;
+        if let (Some((sha256, sha512)), Some(pin)) = (&bundle, authored) {
+            crate::registry_resolution::check_pin(pin, sha256, sha512)?;
+        }
         drop(tree);
         let artifact = lock::Artifact {
             url: release.tarball.clone(),
@@ -89,7 +95,7 @@ impl RegistryTransport {
             executables,
         };
         Ok(crate::registry_resolution::ResolvedRegistry::new(
-            release, artifact,
+            release, artifact, bundle,
         ))
     }
 
@@ -127,7 +133,11 @@ impl RegistryTransport {
         let bytes = self
             .client
             .download_verified_sha512(
-                &format!("{}/{name}/-/{name}-{version}.tgz", self.origin),
+                &format!(
+                    "{}/{}",
+                    self.origin,
+                    registry_metadata::tarball_path(name, version)
+                ),
                 ExpectedSha512::from_hex(&release.integrity.digest)?,
                 sha256,
                 Limits::new(64 * 1024 * 1024, Duration::from_secs(120))?,
@@ -165,6 +175,15 @@ fn standard_mappings(manager: Manager) -> Result<(&'static str, Mappings), Error
     }
 }
 
+/// SHA-256/SHA-512 of modern Yarn's verified single-file bundle.
+fn bundle_digests(tree: &ExtractedArtifact) -> Result<(String, String), Error> {
+    let bundle = fs::read(tree.root_path().join("bin/yarn.js"))?;
+    Ok((
+        hex::encode(Sha256::digest(&bundle)),
+        hex::encode(Sha512::digest(&bundle)),
+    ))
+}
+
 fn extract_package(
     bytes: &VerifiedArtifact,
     manager: Manager,
@@ -172,7 +191,7 @@ fn extract_package(
     executables: &BTreeMap<String, String>,
     exact_bins: bool,
 ) -> Result<ExtractedArtifact, Error> {
-    let (name, _) = standard_mappings(manager)?;
+    let (name, _) = registry_metadata::validate_selection(manager, version)?;
     let mut required = vec!["package.json"];
     required.extend(executables.values().map(String::as_str));
     let tree = turborepo_archive::extract(
@@ -219,10 +238,13 @@ pub(crate) struct RegistryPlan {
     authored: Option<CorepackIntegrity>,
     launch_directory: String,
     manager: Manager,
+    /// Authored pins cover modern Yarn's `bin/yarn.js`, not the archive.
+    bundled: bool,
 }
 impl RegistryPlan {
     /// Validate every applicable authored pin before storage or transport, and
     /// bind the effective strong pin into the inventory's reuse identity.
+    /// The lock cannot prove bundle pins, so preparation checks verified bytes.
     pub(crate) fn from_declaration(
         lock: &Lock,
         platform: Platform,
@@ -235,7 +257,11 @@ impl RegistryPlan {
         }
         let plan = Self::from_lock(lock, platform, node, None, manager)?;
         let version = semver::Version::parse(&plan.tool.version).map_err(|_| Error::InvalidLock)?;
-        let authored = declaration.locked_integrity(&version, &plan.tool.artifact_sha256)?;
+        let authored = if plan.bundled {
+            declaration.preflight_integrity(&version)?
+        } else {
+            declaration.locked_integrity(&version, &plan.tool.artifact_sha256)?
+        };
         Self::from_lock(lock, platform, node, authored.as_ref(), manager)
     }
 
@@ -267,7 +293,7 @@ impl RegistryPlan {
         if package.adapter != id || !package.options.is_empty() {
             return Err(Error::InvalidLock);
         }
-        let (name, _) = registry_metadata::validate_selection(manager, &package.version)?;
+        let (name, version) = registry_metadata::validate_selection(manager, &package.version)?;
         let Installation::Managed { artifacts } = &package.installation else {
             return Err(Error::InvalidLock);
         };
@@ -279,7 +305,11 @@ impl RegistryPlan {
             return Err(Error::InvalidLock);
         }
         let artifact = parts.values().next().ok_or(Error::InvalidLock)?.clone();
-        if artifact.url != format!("{REGISTRY}/{name}/-/{name}-{}.tgz", package.version)
+        if artifact.url
+            != format!(
+                "{REGISTRY}/{}",
+                registry_metadata::tarball_path(name, &package.version)
+            )
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
@@ -319,6 +349,7 @@ impl RegistryPlan {
             authored: authored.cloned(),
             launch_directory,
             manager,
+            bundled: registry_metadata::is_modern_yarn(manager, &version),
         })
     }
 
@@ -357,7 +388,7 @@ impl RegistryPlan {
             .verified_release(
                 self.manager,
                 &self.tool.version,
-                self.authored.as_ref(),
+                self.authored.as_ref().filter(|_| !self.bundled),
                 Some(&self.artifact.sha256),
             )
             .await?;
@@ -368,6 +399,10 @@ impl RegistryPlan {
             &self.artifact.executables,
             self.manager == Manager::Npm,
         )?;
+        if let Some(pin) = self.authored.as_ref().filter(|_| self.bundled) {
+            let (sha256, sha512) = bundle_digests(&tree)?;
+            crate::registry_resolution::check_pin(pin, &sha256, &sha512)?;
+        }
         if tree.root_path().join(&self.launch_directory).try_exists()? {
             return Err(Error::InvalidPackage);
         }

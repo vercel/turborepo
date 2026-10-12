@@ -8,8 +8,7 @@ use sha2::{Digest, Sha256, Sha512};
 
 use super::*;
 use crate::{
-    package_manager::discover_package_manager, registry_metadata::RegistryMetadataError,
-    source_policy::test_support::LoopbackServer,
+    package_manager::discover_package_manager, source_policy::test_support::LoopbackServer,
 };
 
 const TARGET: Platform = Platform::MacosArm64;
@@ -25,6 +24,12 @@ const CLASSIC: Line = Line {
     package: "yarn",
     tarball: "/yarn/-/yarn-1.22.22.tgz",
     bin: "./bin/yarn.js",
+};
+const MODERN: Line = Line {
+    version: "4.5.0",
+    package: "@yarnpkg/cli-dist",
+    tarball: "/@yarnpkg/cli-dist/-/cli-dist-4.5.0.tgz",
+    bin: "bin/yarn.js",
 };
 
 fn bundle(line: &Line) -> String {
@@ -179,6 +184,55 @@ async fn classic_locks_and_invokes_the_exact_bundle_through_managed_node() {
 }
 
 #[tokio::test]
+async fn modern_locks_and_invokes_the_exact_bundle_through_managed_node() {
+    locks_and_invokes_the_exact_bundle(&MODERN).await;
+}
+
+#[tokio::test]
+async fn modern_pins_cover_the_bundle_not_the_registry_archive() {
+    let bytes = archive(&MODERN);
+    let bundle = bundle(&MODERN).into_bytes();
+    let (server, transport) = serve(&MODERN, &bytes);
+    let (good, bad) = (sha512(&bundle), sha512(&bytes));
+    let resolve = |pin| transport.resolve_exact(Manager::Yarn, MODERN.version, Some(pin));
+    assert!(matches!(resolve(&bad).await, Err(Error::Metadata(_))));
+    let resolved = resolve(&good).await.unwrap();
+    assert_eq!(resolved.pinned_sha256(), sha256(&bundle));
+    assert_eq!(resolved.artifact().sha256, sha256(&bytes));
+    resolved.verify_authored(Some(&good)).unwrap();
+    assert!(resolved.verify_authored(Some(&bad)).is_err());
+
+    let pinned = |digest: String| {
+        let request = format!("yarn@{}+sha256.{digest}", MODERN.version);
+        (
+            lock(artifact(&MODERN, &bytes), MODERN.version, &request),
+            request,
+        )
+    };
+    let repo = tempfile::tempdir().unwrap();
+    let store = Store::open(repo.path()).unwrap();
+    for (digest, matches) in [(sha256(&bundle), true), (sha256(&bytes), false)] {
+        // The lock cannot prove bundle pins; verified bundle bytes decide.
+        let (value, request) = pinned(digest);
+        let (node, yarn) = plan(&value, &request).unwrap();
+        let hits = server.hits();
+        let result = yarn
+            .prepare_if_needed(&store, &desired(&node, &yarn), &transport)
+            .await;
+        assert_eq!(server.hits(), hits + 2);
+        if matches {
+            assert!(result.unwrap().is_some());
+        } else {
+            assert!(matches!(
+                result,
+                Err(Error::Download(turborepo_download::Error::DigestMismatch))
+            ));
+        }
+    }
+    assert!(store.current().unwrap().is_none());
+}
+
+#[tokio::test]
 async fn classic_pins_cover_the_registry_archive() {
     let bytes = archive(&CLASSIC);
     let (server, transport) = serve(&CLASSIC, &bytes);
@@ -239,6 +293,8 @@ fn url_managers_mismatched_locks_and_hosts_fail_clearly() {
     let valid = lock(artifact(&CLASSIC, b"bytes"), "1.22.22", "yarn@1.22.22");
     let node = NodePlan::from_lock(&parse(&valid), TARGET).unwrap();
     assert!(YarnPlan::from_lock(&parse(&valid), TARGET, &node, None).is_ok());
+    let modern = lock(artifact(&MODERN, b"bytes"), "4.5.0", "yarn@4.5.0");
+    assert!(YarnPlan::from_lock(&parse(&modern), TARGET, &node, None).is_ok());
     assert!(matches!(
         YarnPlan::from_lock(&parse(&valid), Platform::WindowsX64, &node, None),
         Err(Error::UnsupportedTarget)
@@ -248,6 +304,8 @@ fn url_managers_mismatched_locks_and_hosts_fail_clearly() {
         "/installation/artifacts/any/package/executables",
     );
     for (pointer, value) in [
+        // Each line keeps its own registry package; no cross-line substitution.
+        ("/version", json!("4.5.0")),
         ("/version", json!("1.22.21")),
         (
             location,
@@ -268,11 +326,4 @@ fn url_managers_mismatched_locks_and_hosts_fail_clearly() {
             Err(Error::InvalidLock)
         ));
     }
-    // TODO(TURBO-6369): Yarn 2+ is the `@yarnpkg/cli-dist` bundle.
-    let mut modern = valid.clone();
-    modern["tools"]["yarn"]["version"] = json!("4.5.0");
-    assert!(matches!(
-        YarnPlan::from_lock(&parse(&modern), TARGET, &node, None),
-        Err(Error::Metadata(RegistryMetadataError::UnsupportedManager))
-    ));
 }

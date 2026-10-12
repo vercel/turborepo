@@ -103,3 +103,8 @@ fn provisions_checks_repeats_and_rejects_drift(version: &str, package: &str, dri
 fn locked_yarn_classic_provisions_checks_repeats_and_rejects_frozen_drift() {
     provisions_checks_repeats_and_rejects_drift("1.22.22", "yarn", "yarn@1.22.21");
 }
+
+#[test]
+fn locked_modern_yarn_provisions_checks_repeats_and_rejects_frozen_drift() {
+    provisions_checks_repeats_and_rejects_drift("4.5.0", "@yarnpkg/cli-dist", "yarn@4.6.0");
+}
