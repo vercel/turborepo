@@ -82,6 +82,7 @@ pub(super) fn run(
     };
     // NativeRecord preflight limits clone-local selections to Node and pnpm.
     let provision::Plans { node, pnpm, .. } = provision::plans(&snapshot, selection)?;
+    let node = node.ok_or(Error::Unsupported("a native Node declaration is required"))?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
         desired.push(pnpm.inventory_tool().clone());

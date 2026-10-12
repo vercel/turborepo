@@ -138,7 +138,10 @@ fn frozen_guard_rejects_a_replaced_directory_at_the_same_canonical_path() {
             write_file(repo.path(), name, bytes);
         }
     }
-    assert_eq!(inputs(repo.path()).unwrap(), snapshot.inputs);
+    assert_eq!(
+        inputs(repo.path(), snapshot.ecosystems).unwrap(),
+        snapshot.inputs
+    );
     assert!(guard.read_lock().unwrap().is_none());
     assert!(matches!(
         snapshot.check_guard(&guard),

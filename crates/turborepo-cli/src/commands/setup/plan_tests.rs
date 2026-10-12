@@ -332,6 +332,8 @@ fn loopback(u: &LoopbackServer) -> provision::Transports {
         node: NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin())
+            .unwrap(),
     }
 }
 
