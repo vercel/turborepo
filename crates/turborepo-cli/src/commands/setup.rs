@@ -469,8 +469,9 @@ fn run_reporting(
         // writes (#14518). What trusted reuse cannot authorize falls through to
         // verified cached bytes (#14540), which install what is cached or list
         // every missing artifact. Offline --force always takes the cache path.
-        // Offline repeats and clone-local --no-lock run only when every
-        // dependency is skipped (`validate`).
+        // Either way, enabled dependencies then install offline from the
+        // native caches. Clone-local --no-lock runs only when every dependency
+        // is skipped (`validate`).
         (Mode::Provision, _) if request.offline && !request.force => {
             match offline::run(
                 &discovery,
@@ -479,12 +480,24 @@ fn run_reporting(
                 &preflight,
                 request.force,
             ) {
+                Ok(_) if dependencies.skipped() => {
+                    println!(
+                        "Dependencies skipped (--tools-only). No resolution, downloads, writes, \
+                         probes, or tasks run."
+                    );
+                    return Ok(0);
+                }
+                Ok(reused) => provision::Provisioned {
+                    downloaded_bytes: 0,
+                    installed: 0,
+                    reused,
+                },
                 Err(Error::Offline(_))
                     if offline::cache_may_repair(&discovery, transports.as_ref())? =>
                 {
                     provision::run(&discovery, snapshot, &request, transports, preflight)?
                 }
-                result => return result,
+                Err(error) => return Err(error),
             }
         }
         (Mode::Provision, _) if request.lock == LockMode::NoLock => {
@@ -584,14 +597,8 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     {
         return Err(Error::NotImplemented);
     }
-    // Installers run with the activation that turbo.lock records and contact
-    // package registries, so neither mode can install locked dependencies.
-    if !tools_only && request.offline {
-        return Err(Error::Unsupported(
-            "--offline cannot install locked dependencies yet; add --tools-only to prepare only \
-             tools offline",
-        ));
-    }
+    // Installers run with the activation that turbo.lock records. Offline,
+    // they use their native offline modes (`dependencies`).
     if !tools_only && request.lock == LockMode::NoLock {
         return Err(Error::Unsupported(
             "--no-lock cannot install locked dependencies, because installers run with the \
@@ -830,6 +837,10 @@ mod tests {
                 vec!["--plan"],
                 vec!["--check"],
                 vec!["--check", "--offline"],
+                // Native offline installs (`dependencies`).
+                vec!["--offline"],
+                vec!["--frozen", "--offline"],
+                vec!["--force", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert!(!request.tools_only);
@@ -842,17 +853,15 @@ mod tests {
             validate_request(&plan),
             Err(Error::NotImplemented)
         ));
-        // Offline repeats (#14518) and --no-lock (#14486) cannot install
-        // locked dependencies; with dependencies skipped they still provision.
-        for flags in [vec!["--offline"], vec!["--no-lock"]] {
-            let request = request(&flags, false).unwrap();
-            assert_eq!(request.mode, Mode::Provision);
-            assert!(matches!(
-                validate_request(&request),
-                Err(Error::Unsupported(_))
-            ));
-            assert!(validate(&request, true).is_ok(), "{flags:?}");
-        }
+        // --no-lock (#14486) cannot install locked dependencies; with
+        // dependencies skipped it still provisions.
+        let no_lock = request(&["--no-lock"], false).unwrap();
+        assert_eq!(no_lock.mode, Mode::Provision);
+        assert!(matches!(
+            validate_request(&no_lock),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(validate(&no_lock, true).is_ok());
         let request =
             request(&["--force", "--offline", "--tools-only", "--no-lock"], true).unwrap();
         assert!(request.force && request.offline && request.tools_only);

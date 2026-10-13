@@ -53,13 +53,14 @@ pub(super) fn cache_may_repair(
     }))
 }
 
+/// The number of reused tools; the caller reports dependencies.
 pub(super) fn run(
     discovery: &Discovery,
     sources: &Snapshot,
     transports: Option<&provision::Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
     force: bool,
-) -> Result<i32, SetupError> {
+) -> Result<usize, SetupError> {
     let context = check::context()?;
     let platform = context.artifact_platform();
     let root = discovery.snapshot_root()?.as_std_path();
@@ -140,9 +141,5 @@ pub(super) fn run(
         })
         .map_err(|error| unavailable(error, &artifacts))?;
     println!("{}", lines.join("\n"));
-    println!(
-        "Dependencies skipped (--tools-only). No resolution, downloads, writes, probes, or tasks \
-         run."
-    );
-    Ok(0)
+    Ok(lines.len())
 }

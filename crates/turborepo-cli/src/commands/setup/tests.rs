@@ -491,12 +491,13 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         } else {
             let result = f.run(&u, &flags);
             match flags.as_slice() {
-                // Plain setup and plans need the fixture's missing pnpm-lock.yaml.
-                ["--plan"] | ["--frozen"] => {
+                // Plain and offline setup and plans need the fixture's missing
+                // pnpm-lock.yaml.
+                ["--plan"] | ["--frozen"] | ["--frozen", "--offline"] => {
                     assert!(matches!(result, Err(Error::Dependencies(_))));
                 }
-                // Neither can install locked dependencies (#14486, #14518).
-                ["--no-lock"] | ["--frozen", "--offline"] => {
+                // It cannot install locked dependencies (#14486).
+                ["--no-lock"] => {
                     assert!(matches!(result, Err(Error::Unsupported(_))));
                 }
                 // `--no-lock --offline` stays a pending combination (no

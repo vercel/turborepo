@@ -105,7 +105,11 @@ fn checksum_mutations_are_restored_and_reported() {
 #[test]
 fn offline_and_command_failures_are_classified_with_exit_status() {
     let f = Fixture::new("offline");
-    assert!(matches!(f.run(true), Err(Error::Offline)));
+    let offline = f.run(true).unwrap_err();
+    assert!(
+        matches!(&offline, Error::Offline { code: 1, stderr } if stderr.ends_with("disabled by GOPROXY=off")),
+        "{offline}"
+    );
     assert!(
         f.log()
             .ends_with("GOTOOLCHAIN=local GOPROXY=off mod download\n")
