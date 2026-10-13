@@ -51,17 +51,31 @@ impl Repo {
         fs::write(root.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
         let outside = dunce::simplified(root.parent().unwrap()).to_path_buf();
         fs::write(outside.join("manifest.toml"), manifest()).unwrap();
-        let script = format!(
-            "@echo off\r\n>>\"{out}\\rustup-calls\" echo %*\r\nset \
-             \"tc=%RUSTUP_HOME%\\toolchains\\%3-{HOST}\"\r\nmkdir \"%tc%\\bin\" \
-             \"%tc%\\lib\\rustlib\"\r\nfor %%e in (cargo rustc rustdoc) do \
-             >\"%tc%\\bin\\%%e.exe\" echo %%e\r\n(\r\necho cargo-{HOST}\r\necho \
-             rust-std-{HOST}\r\necho rustc-{HOST}\r\n) \
-             >\"%tc%\\lib\\rustlib\\components\"\r\ncopy /y \"{out}\\manifest.toml\" \
-             \"%tc%\\lib\\rustlib\\multirust-channel-manifest.toml\" \
-             >nul\r\n>\"%RUSTUP_HOME%\\settings.toml\" echo version = \"12\"\r\n",
-            out = outside.display(),
-        );
+        // Each step traces its errorlevel, for failure messages.
+        let out = outside.display();
+        let trace = format!(">>\"{out}\\rustup-trace\" echo");
+        let script = [
+            "@echo off".to_owned(),
+            format!("{trace} [%CMDCMDLINE%] [%CD%] [%RUSTUP_HOME%]"),
+            format!(">>\"{out}\\rustup-calls\" echo %*"),
+            format!("set \"tc=%RUSTUP_HOME%\\toolchains\\%3-{HOST}\""),
+            "mkdir \"%tc%\\bin\" \"%tc%\\lib\\rustlib\"".to_owned(),
+            format!("{trace} mkdir %ERRORLEVEL%"),
+            "for %%e in (cargo rustc rustdoc) do >\"%tc%\\bin\\%%e.exe\" echo %%e".to_owned(),
+            format!(
+                "(echo cargo-{HOST}& echo rust-std-{HOST}& echo rustc-{HOST}) \
+                 >\"%tc%\\lib\\rustlib\\components\""
+            ),
+            format!("{trace} layout %ERRORLEVEL%"),
+            "set \"manifest=%tc%\\lib\\rustlib\\multirust-channel-manifest.toml\"".to_owned(),
+            format!("copy /y \"{out}\\manifest.toml\" \"%manifest%\" >nul"),
+            format!("{trace} copy %ERRORLEVEL%"),
+            format!("if not exist \"%manifest%\" type \"{out}\\manifest.toml\" >\"%manifest%\""),
+            format!("{trace} type %ERRORLEVEL%"),
+            ">\"%RUSTUP_HOME%\\settings.toml\" echo version = \"12\"".to_owned(),
+            "if exist \"%manifest%\" exit /b 0".to_owned(),
+        ]
+        .join("\r\n");
         fs::write(outside.join("rustup.cmd"), script).unwrap();
         Self {
             installer: fs::read(system32().join("cmd.exe")).unwrap(),
@@ -144,6 +158,13 @@ impl Repo {
         .unwrap()
     }
 
+    /// Setup that must succeed, with the stand-in's trace on failure.
+    fn ok(&self, upstream: &LoopbackServer, flags: &[&str]) -> i32 {
+        let status = self.run(upstream, flags);
+        let trace = fs::read_to_string(self.outside.join("rustup-trace"));
+        status.unwrap_or_else(|error| panic!("{error:?}\n{}", trace.unwrap_or_default()))
+    }
+
     fn calls(&self) -> Vec<String> {
         fs::read_to_string(self.outside.join("rustup-calls"))
             .unwrap_or_default()
@@ -182,7 +203,7 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     repo.lock();
     let lock = fs::read(repo.owned.root().join("turbo.lock")).unwrap();
     let upstream = repo.upstream();
-    assert_eq!(repo.run(&upstream, FROZEN).unwrap(), 0);
+    assert_eq!(repo.ok(&upstream, FROZEN), 0);
     assert_eq!(upstream.requests(), [INSTALLER]);
     // One private install by the staged rustup.exe, never rustup-init's setup.
     assert_eq!(repo.calls(), [INSTALL]);
@@ -232,7 +253,7 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     // Repeats and checks reuse everything without traffic or a rustup run.
     let manifest = repo.manifest();
     for flags in [FROZEN, CHECK] {
-        assert_eq!(repo.run(&upstream, flags).unwrap(), 0);
+        assert_eq!(repo.ok(&upstream, flags), 0);
     }
     assert_eq!((upstream.hits(), repo.calls().len()), (1, 1));
     assert_eq!(repo.manifest(), manifest);
@@ -251,10 +272,10 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     // A damaged proxy is reported by --check, and setup reinstalls it.
     fs::remove_file(bin.join("rustc.exe")).unwrap();
     assert!(repo.run(&upstream, CHECK).is_err());
-    assert_eq!(repo.run(&upstream, FROZEN).unwrap(), 0);
+    assert_eq!(repo.ok(&upstream, FROZEN), 0);
     assert_eq!(repo.calls(), [INSTALL, INSTALL]);
     assert_ne!(repo.manifest(), manifest);
-    assert_eq!(repo.run(&upstream, CHECK).unwrap(), 0);
+    assert_eq!(repo.ok(&upstream, CHECK), 0);
 }
 
 #[test]
@@ -263,7 +284,7 @@ fn local_rust_setup_locks_windows_artifacts_then_reuses_them_offline() {
         return;
     }
     let repo = Repo::new();
-    assert_eq!(repo.run(&repo.resolver(), LOCAL).unwrap(), 0);
+    assert_eq!(repo.ok(&repo.resolver(), LOCAL), 0);
     let lock: Value =
         serde_json::from_slice(&fs::read(repo.owned.root().join("turbo.lock")).unwrap()).unwrap();
     let rust = &lock["tools"]["rust"]["installation"]["artifacts"]["windows-x64"];
@@ -281,7 +302,7 @@ fn local_rust_setup_locks_windows_artifacts_then_reuses_them_offline() {
     let manifest = repo.manifest();
     let offline = LoopbackServer::new([], |_| {}).unwrap();
     for flags in [FROZEN, LOCAL, CHECK] {
-        assert_eq!(repo.run(&offline, flags).unwrap(), 0);
+        assert_eq!(repo.ok(&offline, flags), 0);
     }
     assert_eq!(offline.hits(), 0);
     assert_eq!((repo.calls().len(), repo.manifest()), (1, manifest));
