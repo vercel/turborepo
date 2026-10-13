@@ -1384,7 +1384,7 @@ fn state_hash(root: &Path, healthy_links: bool) -> Result<String, Error> {
 fn state_digest(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<String, Error> {
     real_directory(root)?;
     let mut hash = Sha256::new();
-    walk(root, &mut |path| {
+    descend(root, &mut |path| {
         // A Windows stamp reads each entry's type and stats from one handle.
         #[cfg(windows)]
         let (m, stat) = match digest {
@@ -1457,12 +1457,26 @@ fn state_digest(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<
         } else {
             return Err(Error::UnsafePath);
         }
-        Ok(())
+        // A Windows stamp's handle also decides descent. Other digests re-read
+        // the type, as `walk` does.
+        #[cfg(windows)]
+        if stat.is_some() {
+            return Ok(m.is_dir());
+        }
+        Ok(fs::symlink_metadata(path)?.is_dir())
     })?;
     Ok(hex::encode(hash.finalize()))
 }
 
 fn walk(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<(), Error>) -> Result<(), Error> {
+    descend(dir, &mut |path| {
+        visit(path)?;
+        Ok(fs::symlink_metadata(path)?.is_dir())
+    })
+}
+
+/// `walk`, entering each entry that `visit` reports as a real directory.
+fn descend(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<bool, Error>) -> Result<(), Error> {
     let mut entries = fs::read_dir(dir)?
         .map(|e| e.map(|e| e.path()))
         .collect::<Result<Vec<_>, _>>()?;
@@ -1473,9 +1487,8 @@ fn walk(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<(), Error>) -> Resul
             .and_then(|n| n.to_str())
             .ok_or(Error::UnsafePath)?;
         artifact_component(name)?;
-        visit(&path)?;
-        if fs::symlink_metadata(&path)?.is_dir() {
-            walk(&path, visit)?;
+        if visit(&path)? {
+            descend(&path, visit)?;
         }
     }
     Ok(())
