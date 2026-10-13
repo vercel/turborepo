@@ -221,6 +221,7 @@ async fn native_and_additional_provenance_is_copied_without_adapter_allowlists()
                         url: "https://example.com/tool.tar.gz".into(),
                         sha256: "a".repeat(64),
                         format: lock::Format::TarGz,
+                        alternates: BTreeMap::new(),
                         root_prefix: Some("tool".into()),
                         destination: None,
                         executables: BTreeMap::from([("custom".into(), "bin/custom".into())]),

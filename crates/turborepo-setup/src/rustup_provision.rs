@@ -108,6 +108,7 @@ impl RustupTransport {
                         url,
                         sha256,
                         format: Format::Binary,
+                        alternates: BTreeMap::new(),
                         root_prefix: None,
                         destination: None,
                         executables: BTreeMap::from([(

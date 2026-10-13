@@ -55,6 +55,7 @@ fn selection(snapshot: &Snapshot, version: &str) -> Lock {
                                         url: format!("https://example.test/{id}-{version}.tgz"),
                                         sha256: "a".repeat(64),
                                         format: Format::TarGz,
+                                        alternates: BTreeMap::new(),
                                         root_prefix: Some("package".into()),
                                         destination: None,
                                         executables: BTreeMap::from([(

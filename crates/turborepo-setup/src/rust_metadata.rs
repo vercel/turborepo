@@ -44,15 +44,24 @@ struct Target {
     available: bool,
     url: Option<String>,
     hash: Option<String>,
+    xz_url: Option<String>,
+    xz_hash: Option<String>,
+    zst_url: Option<String>,
 }
 
-/// One official gzip component tarball, as rustup's manifest pins it.
+/// One official component's gzip and xz tarballs, as rustup's manifest pins
+/// them. rustup downloads the xz copy.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tarball<'a> {
     pub url: &'a str,
     pub sha256: &'a str,
+    pub xz_url: &'a str,
+    pub xz_sha256: &'a str,
     /// The archive's single top-level directory.
     pub stem: &'a str,
+    /// A zstd copy, which rustup would download instead and turbo.lock never
+    /// pins, is also published.
+    pub zst: bool,
 }
 
 impl Manifest {
@@ -99,20 +108,34 @@ impl Manifest {
             .map_or(component, |rename| rename.to.as_str())
     }
 
-    /// The tarball for this host target, or the target-independent `*` one.
-    /// Unavailable, non-gzip and off-origin entries are absent, not errors.
+    /// The tarballs for this host target, or the target-independent `*` ones.
+    /// Unavailable and off-origin entries, and entries without both a gzip
+    /// and a matching xz copy, are absent, not errors.
     pub fn tarball(&self, package: &str, target: &str) -> Option<Tarball<'_>> {
         let targets = &self.pkg.get(package)?.target;
         let entry = targets.get(target).or_else(|| targets.get("*"))?;
         let url = entry.url.as_deref().filter(|_| entry.available)?;
-        let sha256 = entry.hash.as_deref()?;
+        let (sha256, xz_sha256) = (entry.hash.as_deref()?, entry.xz_hash.as_deref()?);
+        let xz_url = entry.xz_url.as_deref()?;
         let file = url.strip_prefix(DIST)?.rsplit('/').next()?;
         let stem = file.strip_suffix(".tar.gz")?;
-        let hex = |b: u8| b.is_ascii_digit() || (b'a'..=b'f').contains(&b);
-        (sha256.len() == 64 && sha256.bytes().all(hex) && !stem.is_empty()).then_some(Tarball {
+        let hex = |digest: &str| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        };
+        (hex(sha256)
+            && hex(xz_sha256)
+            && !stem.is_empty()
+            && xz_url.strip_suffix(".tar.xz") == url.strip_suffix(".tar.gz"))
+        .then_some(Tarball {
             url,
             sha256,
+            xz_url,
+            xz_sha256,
             stem,
+            zst: entry.zst_url.is_some(),
         })
     }
 }
@@ -153,11 +176,12 @@ pub(crate) mod tests {
                 } else {
                     format!("-{target}")
                 };
-                let url = format!("{DIST}{date}/{file}-{name}{suffix}.tar.gz");
-                let hash = format!("{:x}", Sha256::digest(&url));
+                let url = format!("{DIST}{date}/{file}-{name}{suffix}.tar");
+                let [hash, xz_hash] = [".gz", ".xz"].map(|ext| Sha256::digest(url.clone() + ext));
                 text.push_str(&format!(
-                    "[pkg.{package}.target.\"{target}\"]\navailable = true\nurl = \"{url}\"\nhash \
-                     = \"{hash}\"\nxz_url = \"{DIST}{date}/x.tar.xz\"\n"
+                    "[pkg.{package}.target.\"{target}\"]\navailable = true\nurl = \
+                     \"{url}.gz\"\nhash = \"{hash:x}\"\nxz_url = \"{url}.xz\"\nxz_hash = \
+                     \"{xz_hash:x}\"\n"
                 ));
             }
         }
@@ -181,6 +205,12 @@ pub(crate) mod tests {
                 .url
                 .ends_with("/2026-10-01/clippy-1.99.0-aarch64-apple-darwin.tar.gz")
         );
+        assert_eq!(clippy.xz_url, clippy.url.replace(".tar.gz", ".tar.xz"));
+        assert_eq!(
+            clippy.xz_sha256,
+            format!("{:x}", Sha256::digest(clippy.xz_url))
+        );
+        assert!(!clippy.zst);
         assert_eq!(
             manifest
                 .tarball("rust-src", "aarch64-apple-darwin")
@@ -218,9 +248,15 @@ pub(crate) mod tests {
                 "https://mirror.example/dist/",
             ),
             (".tar.gz\"", ".tar.zst\""),
+            ("xz_url", "xz_url_missing"),
+            (".tar.xz\"", "-other.tar.xz\""),
+            ("xz_hash = \"", "xz_hash = \"A"),
         ] {
             let manifest = Manifest::parse(base.replacen(from, to, 1).as_bytes()).unwrap();
             assert_eq!(manifest.tarball("rustc", host), None, "{from}");
         }
+        let zst = base.replacen("xz_url", "zst_url = \"x\"\nxz_url", 1);
+        let manifest = Manifest::parse(zst.as_bytes()).unwrap();
+        assert!(manifest.tarball("rustc", host).unwrap().zst);
     }
 }
