@@ -419,17 +419,6 @@ pub enum Error {
     // ============================================================
     // Setup policy errors
     // ============================================================
-    #[error("The \"setup\" key requires \"futureFlags.experimentalSetup\" to be enabled.")]
-    #[diagnostic(help(
-        "Add `\"futureFlags\": {{ \"experimentalSetup\": true }}` to your root turbo.json."
-    ))]
-    SetupRequiresFlag {
-        #[label("\"setup\" key found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-
     #[error("The {key:?} setup policy requires `futureFlags.{flag}`.")]
     SetupToolchainRequiresFlag {
         key: String,

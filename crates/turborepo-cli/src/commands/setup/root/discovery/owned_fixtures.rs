@@ -18,7 +18,8 @@ use super::*;
 use crate::{cli::Command, commands::setup};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
 const ABC_SHA256: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
 fn fixture() -> Result<OwnedSetupFixture, Box<dyn std::error::Error>> {
@@ -110,7 +111,9 @@ fn owned_nested_config_workspace_and_git_drift_preserve_discovery_guard() -> Tes
         f.policy().err(),
         Some(PolicyError::Configured(ConfigOwner::RootPolicy))
     );
-    assert!(matches!(d.revalidate(), Err(Error::TurboJson(_))));
+    // A root policy edited after capture is drift, never adopted.
+    fs::write(f.root().join("turbo.json"), r#"{"setup":{"tools":"skip"}}"#)?;
+    assert!(!d.revalidate()?);
     Ok(())
 }
 

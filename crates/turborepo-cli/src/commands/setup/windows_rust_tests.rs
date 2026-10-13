@@ -10,8 +10,7 @@ use turborepo_setup::{rust_discovery::Toolchain, rustup_provision::RustupTranspo
 
 use super::*;
 
-const RUST: &str =
-    r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
+const RUST: &str = r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#;
 const TOOLCHAIN: &str = "[toolchain]\nchannel = \"1.99.0\"\nprofile = \"minimal\"\n";
 const HOST: &str = "x86_64-pc-windows-msvc";
 const INSTALLER: &str = "/rustup/archive/1.29.1/x86_64-pc-windows-msvc/rustup-init.exe";
@@ -197,13 +196,8 @@ impl Repo {
     fn overrides(&self) -> (turborepo_run::EnvironmentVariableMap, PathBuf) {
         use crate::commands::managed::{ManagedTools, context};
         let root = self.owned.root();
-        let tools = ManagedTools::inspect(
-            root,
-            &root.join("turbo.json"),
-            true,
-            self.owned.home(),
-            context,
-        );
+        let tools =
+            ManagedTools::inspect(root, &root.join("turbo.json"), self.owned.home(), context);
         let env = tools.unwrap().unwrap().revalidate().unwrap();
         let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
         (env, bin)

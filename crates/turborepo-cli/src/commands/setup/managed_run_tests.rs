@@ -14,7 +14,6 @@ fn select(f: &Fixture) -> Result<Option<Arc<ManagedRun>>, String> {
     ManagedTools::inspect(
         f.owned.root(),
         &f.owned.root().join("turbo.json"),
-        true,
         f.owned.home(),
         managed::context,
     )
@@ -41,8 +40,11 @@ fn runnable() -> Fixture {
         "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
     )
     .unwrap();
-    fs::write(f.owned.root().join("turbo.json"),
-        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{"cache":false}},"noUpdateNotifier":true}"#).unwrap();
+    fs::write(
+        f.owned.root().join("turbo.json"),
+        r#"{"tasks":{"build":{"cache":false}},"noUpdateNotifier":true}"#,
+    )
+    .unwrap();
     // Managed Node trap doubles as a harmless fixture runtime. pnpm's shim must
     // dispatch through THIS executable; no host language runtime is required.
     let prefix = f.lock["tools"]["node"]["installation"]["artifacts"]
@@ -239,22 +241,14 @@ fn declaration_drift_after_selection_fails_before_builder_work_or_task_dispatch(
 }
 
 #[test]
-fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qualification() {
+fn exact_lock_root_gates_selection_without_ancestor_fallback_or_host_qualification() {
     let f = Fixture::new();
     let config = f.owned.root().join("turbo.json");
-    assert!(
-        ManagedTools::inspect(f.owned.root(), &config, false, f.owned.home(), || panic!(
-            "disabled repo probed host"
-        ))
-        .unwrap()
-        .is_none()
-    );
     let nested = f.owned.root().join("apps/web");
     assert!(
         ManagedTools::inspect(
             &nested,
             &nested.join("turbo.json"),
-            true,
             f.owned.home(),
             || panic!("missing exact-root lock probed host")
         )
@@ -278,7 +272,7 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
         )
         .map_err(|e| e.to_string())
     };
-    let error = ManagedTools::inspect(f.owned.root(), &config, true, f.owned.home(), musl);
+    let error = ManagedTools::inspect(f.owned.root(), &config, f.owned.home(), musl);
     let error = error.err().unwrap();
     assert!(error.contains("not supported on musl"), "{error}");
     assert!(!error.contains("run turbo setup"), "{error}");
@@ -288,7 +282,7 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
         "[workspace]\nmembers = []\n",
     )
     .unwrap();
-    let cargo = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
+    let cargo = r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#;
     fs::write(&config, cargo).unwrap();
     let error = select(&f).err().unwrap();
     assert!(error.contains("run turbo setup"), "{error}");

@@ -567,6 +567,8 @@ fn find_root(cwd: &Path) -> Option<PathBuf> {
     None
 }
 
+/// A lock activates tools only beside a valid root turbo.json or turbo.jsonc,
+/// so a stray turbo.lock outside a Turborepo repository stays quiet.
 fn enabled(root: &Path) -> bool {
     let Ok(root) = AbsoluteSystemPath::from_std_path(root) else {
         return false;
@@ -574,8 +576,7 @@ fn enabled(root: &Path) -> bool {
     turborepo_config::resolve_turbo_config_path(root)
         .ok()
         .and_then(|config| RawTurboJson::read(root, &config, true).ok().flatten())
-        .and_then(|raw| raw.future_flags)
-        .is_some_and(|flags| flags.as_inner().experimental_setup)
+        .is_some()
 }
 
 fn metadata(stamp: &mut Vec<u8>, path: &Path) {
@@ -1117,7 +1118,6 @@ mod tests {
         assert_eq!(find_root(&outer).unwrap(), outer);
 
         let outer = outer.canonicalize().unwrap();
-        fs::write(outer.join("turbo.json"), "{}").unwrap();
         let off = changes(None, "/usr/bin", Some(&outer), Some(&home), || false);
         assert!(off.path.is_none() && off.notice.is_none());
         let off_state = State::parse(off.state.clone().unwrap().as_deref().unwrap());
@@ -1127,11 +1127,7 @@ mod tests {
             Changes::default()
         );
 
-        fs::write(
-            outer.join("turbo.json"),
-            r#"{"futureFlags":{"experimentalSetup":true}}"#,
-        )
-        .unwrap();
+        fs::write(outer.join("turbo.json"), "{}").unwrap();
         let missing = changes(None, "/usr/bin", Some(&outer), Some(&home), || false);
         assert!(missing.path.is_none());
         assert!(missing.notice.unwrap().contains("not installed"));
@@ -1151,11 +1147,7 @@ mod tests {
         let root = temp.path().join("repo");
         fs::create_dir_all(root.join(".git")).unwrap();
         let root = root.canonicalize().unwrap();
-        fs::write(
-            root.join("turbo.json"),
-            r#"{"futureFlags":{"experimentalSetup":true}}"#,
-        )
-        .unwrap();
+        fs::write(root.join("turbo.json"), "{}").unwrap();
         let node = |kind: &str| {
             let installation = match kind {
                 "verify-system" => r#"{"kind":"verify-system","executables":["node"]}"#,
@@ -1206,11 +1198,7 @@ mod tests {
         fs::create_dir_all(root.join("apps/web")).unwrap();
         let root = root.canonicalize().unwrap();
         let web = root.join("apps/web");
-        fs::write(
-            root.join("turbo.json"),
-            r#"{"futureFlags":{"experimentalSetup":true}}"#,
-        )
-        .unwrap();
+        fs::write(root.join("turbo.json"), "{}").unwrap();
         let tool = Tool {
             id: "node".into(),
             version: "24.0.0".into(),

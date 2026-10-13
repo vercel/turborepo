@@ -256,8 +256,7 @@ export interface RootSchema extends BaseSchema {
   futureFlags?: FutureFlags;
 
   /**
-   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
-   * and requires `futureFlags.experimentalSetup`.
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json.
    */
   setup?: SetupPolicy;
 }
@@ -411,17 +410,6 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalGoWorkspaces?: boolean;
-
-  /**
-   * Opt into experimental setup features that are still in progress.
-   *
-   * All future setup surfaces must require this flag. The `turbo.lock`
-   * format is unstable. This parser-only foundation ships no setup commands
-   * and does not interpret `turbo.lock` or change run or hash behavior.
-   *
-   * @defaultValue `false`
-   */
-  experimentalSetup?: boolean;
 }
 
 export interface GlobalConfig {

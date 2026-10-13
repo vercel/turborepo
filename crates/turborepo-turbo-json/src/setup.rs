@@ -82,8 +82,7 @@ pub struct RawToolchainSetupPolicy {
     pub lifecycle_scripts: Option<Spanned<LifecycleScripts>>,
 }
 
-/// Repository policy for `turbo setup`. Only allowed in the root turbo.json
-/// and requires `futureFlags.experimentalSetup`.
+/// Repository policy for `turbo setup`. Only allowed in the root turbo.json.
 ///
 /// Optional: without it, `turbo setup` infers what to prepare from native
 /// declaration files, and detected tools are managed. Root `tools` and
@@ -156,10 +155,6 @@ impl SetupPolicy {
         let Some(raw) = raw else {
             return Ok(Self::default());
         };
-        if !future_flags.experimental_setup {
-            let (span, text) = raw.span_and_text("turbo.json");
-            return Err(Error::SetupRequiresFlag { span, text });
-        }
         let raw = raw.as_inner();
         let defaults = ToolchainSetupPolicy {
             tools: raw.tools.as_ref().map(|tools| *tools.as_inner()),

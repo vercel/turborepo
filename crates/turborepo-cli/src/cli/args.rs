@@ -1199,15 +1199,14 @@ pub enum Command {
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: CompletionShell },
-    /// EXPERIMENTAL: Print a shell hook that activates managed tools at the
-    /// prompt
+    /// Print a shell hook that activates managed tools at the prompt
     ///
     /// Add `eval "$(turbo hook zsh)"` to ~/.zshrc, `eval "$(turbo hook
     /// bash)"` to ~/.bashrc, `turbo hook fish | source` to
     /// ~/.config/fish/config.fish, or `Invoke-Expression (& turbo hook
-    /// powershell | Out-String)` to $PROFILE. Inside a repository with root
-    /// futureFlags.experimentalSetup, the hook puts the tools `turbo setup`
-    /// installed first on PATH and removes them when you leave. It never
+    /// powershell | Out-String)` to $PROFILE. Inside a repository with a root
+    /// turbo.lock, the hook puts the tools `turbo setup` installed first on
+    /// PATH and removes them when you leave. It never
     /// installs tools or updates turbo.lock. On native Windows, only
     /// PowerShell is supported.
     Hook {
@@ -1354,21 +1353,19 @@ pub enum Command {
         use_gitignore: Option<bool>,
     },
 
-    /// EXPERIMENTAL: Provision repository tools and dependencies (not yet
-    /// implemented)
+    /// Provision repository tools and dependencies
     ///
-    /// Requires root futureFlags.experimentalSetup. Never runs tasks.
+    /// Requires a root turbo.json or turbo.jsonc. Never runs tasks.
     Setup {
         #[usage(flatten)]
         setup_args: SetupArgs,
     },
 
-    /// EXPERIMENTAL: Run a command with the repository's managed tools (not
-    /// yet implemented)
+    /// Run a command with the repository's managed tools
     ///
-    /// Requires root futureFlags.experimentalSetup. Pass the command after
-    /// '--'; turbo does not interpret its arguments. Never installs tools,
-    /// updates turbo.lock, or runs tasks.
+    /// Requires `turbo setup` first. Pass the command after '--'; turbo does
+    /// not interpret its arguments. Never installs tools, updates turbo.lock,
+    /// or runs tasks.
     Exec {
         /// The program to run and its arguments
         #[usage(value_name = "COMMAND", double_dash = "required", required = true)]

@@ -280,12 +280,8 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 f.lock["tools"]["pnpm"]["version"] = json!("11.0.0");
                 f.save();
             }
-            7 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            8 => fs::write(
-                f.owned.root().join("turbo.json"),
-                r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
-            )
-            .unwrap(),
+            7 => fs::remove_file(f.owned.root().join("turbo.json")).unwrap(),
+            8 => fs::write(f.owned.root().join("turbo.json"), r#"{"setup":{}}"#).unwrap(),
             9 => flags.push("--no-lock"),
             10 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
             11 => {
@@ -298,7 +294,11 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 f.save();
             }
             _ => {
-                fs::write(f.owned.root().join("turbo.json"), r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#).unwrap();
+                fs::write(
+                    f.owned.root().join("turbo.json"),
+                    r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#,
+                )
+                .unwrap();
                 fs::write(f.owned.root().join("Cargo.toml"), "must not probe").unwrap();
             }
         }
@@ -573,7 +573,7 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
             calls.set(calls.get() + 1);
             if calls.get() == 2 {
                 let (path, contents) = match case {
-                    0 => (f.owned.root().join("turbo.json"), "{}".into()),
+                    0 => (f.owned.root().join("turbo.json"), r#"{"tasks":{}}"#.into()),
                     1 => (f.owned.root().join("turbo.lock"), format!("{} ", f.lock)),
                     2 => (f.owned.root().join(".nvmrc"), "26.0.0".into()),
                     3 => (f.owned.root().join("apps/web/turbo.json"), ENABLED.into()),

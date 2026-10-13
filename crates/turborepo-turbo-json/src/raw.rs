@@ -655,7 +655,7 @@ pub struct RawTurboJson {
     pub global: Option<Spanned<RawGlobalConfig>>,
 
     /// Repository policy for `turbo setup`. Only allowed in the root
-    /// turbo.json and requires `futureFlags.experimentalSetup`.
+    /// turbo.json.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "SetupPolicy")]
     pub setup: Option<Spanned<RawSetupPolicy>>,

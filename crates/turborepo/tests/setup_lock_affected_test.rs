@@ -17,7 +17,7 @@ fn commit(dir: &Path, message: &str) {
 const TASK_INPUT_MODES: [(bool, bool); 4] =
     [(false, false), (false, true), (true, false), (true, true)];
 
-fn fixture(dir: &Path, enabled: bool, task_inputs: (bool, bool), committed_lock: bool) {
+fn fixture(dir: &Path, task_inputs: (bool, bool), committed_lock: bool) {
     fs::write(
         dir.join("package.json"),
         r#"{"name":"root","private":true,"packageManager":"npm@10.5.0","workspaces":["packages/*"]}"#,
@@ -32,7 +32,6 @@ fn fixture(dir: &Path, enabled: bool, task_inputs: (bool, bool), committed_lock:
         dir.join("turbo.json"),
         serde_json::json!({
             "futureFlags": {
-                "experimentalSetup": enabled,
                 "affectedUsingTaskInputs": task_inputs.0,
                 "filterUsingTasks": task_inputs.1
             },
@@ -86,12 +85,9 @@ fn assert_selection(dir: &Path, managed: bool, base: &str, head: &str) {
     } else {
         format!("--filter=[{base}...{head}]")
     };
-    // A flagged root lock makes `turbo run` managed. Without setup evidence it
-    // fails instead of using host tools; `turbo query` still reports selection.
-    let config: serde_json::Value =
-        serde_json::from_slice(&fs::read(dir.join("turbo.json")).unwrap()).unwrap();
-    let managed_run =
-        config["futureFlags"]["experimentalSetup"] == true && dir.join("turbo.lock").exists();
+    // A root lock makes `turbo run` managed. Without setup evidence it fails
+    // instead of using host tools; `turbo query` still reports selection.
+    let managed_run = dir.join("turbo.lock").exists();
     for args in [
         vec!["run", "build", "--affected", "--dry=json"],
         vec!["run", "build", &filter, "--dry=json"],
@@ -166,7 +162,7 @@ fn committed_setup_lock_changes_select_all_packages_in_both_modes() {
     for task_inputs in TASK_INPUT_MODES {
         let temp = tempfile::tempdir().unwrap();
         let dir = temp.path();
-        fixture(dir, true, task_inputs, true);
+        fixture(dir, task_inputs, true);
         fs::write(dir.join("turbo.lock"), "updated resolution\n").unwrap();
         commit(dir, "Update setup lock");
         assert_selection(dir, true, "HEAD~1", "HEAD");
@@ -176,19 +172,15 @@ fn committed_setup_lock_changes_select_all_packages_in_both_modes() {
 }
 
 #[test]
-fn setup_lock_changes_preserve_unconfigured_repositories() {
-    for (enabled, committed_lock) in [(false, true), (false, false), (true, false)] {
-        for task_inputs in TASK_INPUT_MODES {
-            let temp = tempfile::tempdir().unwrap();
-            let dir = temp.path();
-            fixture(dir, enabled, task_inputs, committed_lock);
-            fs::write(dir.join("turbo.lock"), "local resolution\n").unwrap();
-            assert_selection(dir, false, "HEAD", "");
-            if !committed_lock {
-                git(dir, &["add", "turbo.lock"]);
-                assert_selection(dir, false, "HEAD", "");
-            }
-        }
+fn uncommitted_setup_lock_preserves_unmanaged_change_detection() {
+    for task_inputs in TASK_INPUT_MODES {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path();
+        fixture(dir, task_inputs, false);
+        fs::write(dir.join("turbo.lock"), "local resolution\n").unwrap();
+        assert_selection(dir, false, "HEAD", "");
+        git(dir, &["add", "turbo.lock"]);
+        assert_selection(dir, false, "HEAD", "");
     }
 }
 
@@ -197,7 +189,7 @@ fn committing_setup_lock_opts_change_detection_into_managed_mode() {
     for task_inputs in TASK_INPUT_MODES {
         let temp = tempfile::tempdir().unwrap();
         let dir = temp.path();
-        fixture(dir, true, task_inputs, false);
+        fixture(dir, task_inputs, false);
         fs::write(dir.join("turbo.lock"), "initial resolution\n").unwrap();
         commit(dir, "Commit setup lock");
         assert_selection(dir, true, "HEAD~1", "HEAD");
@@ -209,7 +201,7 @@ fn working_tree_setup_lock_deletion_is_global_in_both_modes() {
     for task_inputs in TASK_INPUT_MODES {
         let temp = tempfile::tempdir().unwrap();
         let dir = temp.path();
-        fixture(dir, true, task_inputs, true);
+        fixture(dir, task_inputs, true);
         fs::remove_file(dir.join("turbo.lock")).unwrap();
         assert_selection(dir, true, "HEAD", "");
     }
@@ -220,7 +212,7 @@ fn package_local_setup_lock_is_not_global() {
     for task_inputs in TASK_INPUT_MODES {
         let temp = tempfile::tempdir().unwrap();
         let dir = temp.path();
-        fixture(dir, true, task_inputs, true);
+        fixture(dir, task_inputs, true);
         fs::write(dir.join("packages/a/turbo.lock"), "local resolution\n").unwrap();
         // Narrow task inputs exclude this package-local file. Package-level
         // affectedness may select a, but must not select the unrelated b.

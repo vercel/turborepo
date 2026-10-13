@@ -783,8 +783,7 @@ fn generate_root_schema_interface() -> String {
   futureFlags?: FutureFlags;
 
   /**
-   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
-   * and requires `futureFlags.experimentalSetup`.
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json.
    */
   setup?: SetupPolicy;
 }
@@ -938,17 +937,6 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalGoWorkspaces?: boolean;
-
-  /**
-   * Opt into experimental setup features that are still in progress.
-   *
-   * All future setup surfaces must require this flag. The `turbo.lock`
-   * format is unstable. This parser-only foundation ships no setup commands
-   * and does not interpret `turbo.lock` or change run or hash behavior.
-   *
-   * @defaultValue `false`
-   */
-  experimentalSetup?: boolean;
 }
 
 "#
@@ -1303,18 +1291,11 @@ mod cli_tests {
     use super::{Cli, Commands};
 
     #[test]
-    fn experimental_setup_is_an_optional_boolean_future_flag() {
+    fn graduated_setup_flag_is_not_in_the_schema() {
         let schema = serde_json::to_value(super::generate_schema()).unwrap();
-        let flags = &schema["definitions"]["FutureFlags"];
-        let setup = &flags["properties"]["experimentalSetup"];
-        assert_eq!(setup["type"], "boolean");
-        assert_eq!(setup["default"], false);
-        assert!(
-            flags["required"]
-                .as_array()
-                .is_none_or(|fields| !fields.contains(&serde_json::json!("experimentalSetup")))
-        );
-        assert!(super::generate_root_schema_interface().contains("experimentalSetup?: boolean;"));
+        let flags = &schema["definitions"]["FutureFlags"]["properties"];
+        assert!(flags.get("experimentalSetup").is_none());
+        assert!(!super::generate_root_schema_interface().contains("experimentalSetup"));
         assert!(!super::generate_workspace_schema_interface().contains("futureFlags"));
     }
 

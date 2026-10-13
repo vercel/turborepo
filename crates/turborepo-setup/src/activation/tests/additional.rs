@@ -3,7 +3,7 @@ use super::*;
 use crate::artifact_provision::{self, ArtifactPlan};
 
 fn declare(repo: &Path, tools: Value) {
-    let config = json!({"futureFlags": {"experimentalSetup": true},
+    let config = json!({
         "setup": {"additionalTools": tools}});
     fs::write(repo.join("turbo.json"), config.to_string()).unwrap();
 }

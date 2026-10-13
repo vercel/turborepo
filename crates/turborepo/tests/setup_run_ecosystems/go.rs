@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 
-const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalSetup":true,"experimentalGoWorkspaces":true},
+const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalGoWorkspaces":true},
     "agentGuidance":false,"noUpdateNotifier":true,"tasks":{"build":{"cache":false},"format":{"cache":false}}}"#;
 
 /// Answers turbo's Go discovery probes for one `./app` module, then reports

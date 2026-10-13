@@ -6,7 +6,7 @@ use test_case::test_case;
 use super::*;
 use crate::{RawPackageTurboJson, RawRootTurboJson, RawTurboJson, TurboJson};
 
-const ALL_FLAGS: &str = r#"{"experimentalSetup":true,"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}"#;
+const ALL_FLAGS: &str = r#"{"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}"#;
 
 fn root(flags: &str, setup: &str) -> Result<RawTurboJson, Error> {
     let json = format!(r#"{{"futureFlags":{flags},"setup":{setup}}}"#);
@@ -224,14 +224,12 @@ fn invalid_values_identify_their_source(setup: &str) {
     }
 }
 
-#[test_case("{}"; "flags omitted")]
-#[test_case(r#"{"experimentalSetup":false}"#; "flag disabled")]
-fn setup_requires_the_future_flag(flags: &str) {
-    let error = root(flags, r#"{"tools":"skip"}"#).unwrap_err();
-    assert!(
-        matches!(error, Error::SetupRequiresFlag { span: Some(_), .. }),
-        "{error:?}"
-    );
+#[test]
+fn setup_needs_no_future_flag() {
+    let raw = root("{}", r#"{"tools":"skip"}"#).unwrap();
+    let flags = raw.future_flags.clone().unwrap().into_inner();
+    let policy = SetupPolicy::from_raw(raw.setup.as_ref(), &flags).unwrap();
+    assert!(policy.is_configured());
 }
 
 #[test_case("rust", "experimentalCargoWorkspaces")]
@@ -239,7 +237,7 @@ fn setup_requires_the_future_flag(flags: &str) {
 #[test_case("go", "experimentalGoWorkspaces")]
 fn gated_toolchains_require_their_workspace_flag(key: &str, flag: &str) {
     let setup = format!(r#"{{"{key}":{{}}}}"#);
-    let error = root(r#"{"experimentalSetup":true}"#, &setup).unwrap_err();
+    let error = root("{}", &setup).unwrap_err();
     assert!(
         matches!(
             &error,

@@ -216,7 +216,7 @@ fn lock_declaration_and_captured_source_drift_fail_closed() {
             )
             .unwrap(),
             4 => fs::write(f.owned.root().join(".node-version"), "26.0.0").unwrap(),
-            _ => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+            _ => fs::write(f.owned.root().join("turbo.json"), r#"{"tasks":{}}"#).unwrap(),
         }
         let before = snapshot(f.owned.root().parent().unwrap());
         let called = Cell::new(false);

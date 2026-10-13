@@ -9,7 +9,8 @@ use turborepo_setup::test_support::{LoopbackServer, OwnedSetupFixture};
 
 use super::*;
 
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
 const PREFIX: &str = "node-v24.0.0-win-x64";
 const NODE_ZIP: &str = "/dist/v24.0.0/node-v24.0.0-win-x64.zip";
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];

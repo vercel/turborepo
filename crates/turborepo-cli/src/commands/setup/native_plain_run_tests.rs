@@ -78,7 +78,7 @@ impl NativeArtifacts {
         fs::write(root.join("package.json"), json!({"name":"native-fixture","packageManager":format!("pnpm@{}",self.manager_version),"scripts":{"probe":"node report.cjs","invalidate":"node invalidate.cjs"}}).to_string()).unwrap();
         fs::write(
             root.join("turbo.json"),
-            json!({"futureFlags":{"experimentalSetup":true},"tasks":{
+            json!({"tasks":{
                 "probe":{"cache":false,"inputs":["report.cjs"],"env":["FIXTURE_DECLARED"]},
                 "invalidate":{"cache":false,"inputs":["invalidate.cjs"],"env":["FIXTURE_RECORD"]}
             }})

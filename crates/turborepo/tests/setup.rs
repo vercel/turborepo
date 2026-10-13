@@ -14,8 +14,9 @@ use std::{fs, io, net::TcpListener, path::Path, process::Command};
 mod no_lock;
 
 const PENDING: &str = "this setup mode is not implemented";
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
-const DISABLED: &str = "requires root futureFlags.experimentalSetup";
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
+const NO_CONFIG: &str = "requires a root turbo.json or turbo.jsonc";
 const UNQUALIFIED: &str = "managed promotion requires macOS, GNU Linux or Windows x64";
 const QUALIFIED: bool = cfg!(any(
     all(
@@ -348,34 +349,25 @@ fn standalone_help_needs_no_js_or_gate_and_does_not_parse_config() {
         ] {
             assert!(text.contains(flag), "missing {flag}: {text}");
         }
-        assert!(text.contains("not yet implemented"));
+        assert!(text.contains("Provision repository tools"), "{text}");
     }
 }
 
 #[test]
-fn standalone_gate_reads_only_the_selected_root_config() {
+fn standalone_setup_reads_only_the_selected_root_config() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.lock", "must not activate anything");
-    for config in [
-        None,
-        Some("{}"),
-        Some(r#"{"futureFlags":{"experimentalSetup":false}}"#),
-    ] {
-        if let Some(config) = config {
-            write(root, "turbo.json", config);
-        }
-        let text = failure(root, &["setup"], false, DISABLED);
-        assert!(text.contains("--cwd"), "{text}");
-        assert!(!diagnostic_contains(&text, PENDING), "{text}");
-    }
-    // jsonc and both existing global root selectors work without JS.
-    fs::remove_file(root.join("turbo.json")).unwrap();
-    let jsonc = "{ // gate\n\"futureFlags\": {\"experimentalSetup\": true},\n}";
-    write(root, "turbo.jsonc", jsonc);
-    write(root, "custom.json", ENABLED);
+    // Without a root configuration there is no repository to set up.
+    let text = failure(root, &["setup"], false, NO_CONFIG);
+    assert!(text.contains("--cwd"), "{text}");
+    assert!(!diagnostic_contains(&text, PENDING), "{text}");
+    // jsonc and both existing global root selectors work without JS or a
+    // future flag.
+    write(root, "turbo.jsonc", "{ // root\n\"tasks\": {},\n}");
+    write(root, "custom.json", "{}");
     fs::create_dir(root.join("selected-root")).unwrap();
-    write(root, "selected-root/turbo.json", ENABLED);
+    write(root, "selected-root/turbo.json", "{}");
     // #14518 admits --offline, which reads (and rejects) the invalid lock,
     // with or without dependencies.
     for words in [
@@ -390,10 +382,10 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     ] {
         failure(root, &words, false, PENDING);
     }
-    let invalid_gate = r#"{"futureFlags":{"experimentalSetup":"true"}}"#;
-    write(root, "custom.json", invalid_gate);
-    let (code, text) = invoke(root, &["setup", "--root-turbo-json=custom.json"], false);
-    assert_eq!(code, 1);
+    let removed = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+    write(root, "custom.json", removed);
+    let words = ["setup", "--root-turbo-json=custom.json"];
+    let text = failure(root, &words, false, "graduated to stable");
     assert!(!text.contains(PENDING), "{text}");
 }
 
@@ -409,7 +401,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     write(
         root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#,
+        r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#,
     );
     for flags in [
         vec![],
@@ -495,9 +487,7 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
         write(
             root,
             "turbo.json",
-            &format!(
-                r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":{enabled}}}}}"#
-            ),
+            &format!(r#"{{"futureFlags":{{"experimentalCargoWorkspaces":{enabled}}}}}"#),
         );
         for words in [&["setup"][..], &["setup", "--plan"], &["setup", "--check"]] {
             if enabled {
@@ -621,7 +611,7 @@ fn nested_non_js_roots_need_no_package_json_or_language_tools() {
         write(
             root,
             "turbo.jsonc",
-            &format!(r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":true}}}}"#),
+            &format!(r#"{{"futureFlags":{{"{flag}":true}}}}"#),
         );
         write(root, manifest, contents);
         fs::create_dir_all(root.join("packages/app/src")).unwrap();
@@ -688,7 +678,7 @@ fn nested_native_workspace_markers_follow_root_flags() {
             write(
                 root,
                 "turbo.json",
-                &format!(r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":{enabled}}}}}"#),
+                &format!(r#"{{"futureFlags":{{"{flag}":{enabled}}}}}"#),
             );
             if enabled {
                 let text = failure(
@@ -753,7 +743,7 @@ fn git_boundaries_and_explicit_configs_do_not_borrow_outer_tools() {
     fs::create_dir_all(root.join("inner/src")).unwrap();
     // Worktree .git files are boundaries just like clone .git directories.
     write(root, "inner/.git", "gitdir: unrelated");
-    failure(root, &["setup", "--cwd=inner/src"], false, DISABLED);
+    failure(root, &["setup", "--cwd=inner/src"], false, NO_CONFIG);
     failure(
         root,
         &["setup", "--cwd=inner/src", "--root-turbo-json=turbo.json"],
@@ -787,7 +777,7 @@ fn malformed_or_duplicate_root_configs_are_not_silently_skipped() {
     let (code, text) = invoke(root, &["setup", "--cwd=src"], false);
     assert_eq!(code, 1);
     assert!(
-        !text.contains(DISABLED) && !text.contains(PENDING),
+        !text.contains(NO_CONFIG) && !text.contains(PENDING),
         "{text}"
     );
     assert_diagnostic_path(&text, &root.join("turbo.json"));
@@ -888,7 +878,7 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
     write(
         &root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{"cache":false}},
+        r#"{"tasks":{"build":{"cache":false}},
             "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#,
     );
     // Fake tools come first; the host PATH only supplies git.
@@ -975,7 +965,7 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
     write(root, "Cargo.toml", "[workspace]\nmembers = []\n");
     let config = |dependencies: &str| {
         format!(
-            r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":true}},
+            r#"{{"futureFlags":{{"experimentalCargoWorkspaces":true}},
                 "setup":{{"dependencies":"{dependencies}","rust":{{"tools":"skip"}}}}}}"#
         )
     };
@@ -1550,7 +1540,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     repo.seed();
     // pnpm installs need a pnpm-lock.yaml, so this repository skips them.
     // Plain --check checks the same tools and never claims dependency readiness.
-    let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
+    let policy = r#"{"setup":{"javascript":{"dependencies":"skip"}}}"#;
     fs::write(repo.root.join("turbo.json"), policy).unwrap();
     let installation = "turbo.json setup policy";
     for (mode, outcome, skipped) in [
@@ -1784,7 +1774,7 @@ fn setup_telemetry_is_standard_opt_out_redacted_and_never_changes_the_result() {
     unchanged(code, &stderr);
     assert!(!stderr.contains(NOTICE) && !telemetry_events(&stdout).is_empty());
 
-    // Each standard opt-out, and setup without the future flag: the same local
+    // Each standard opt-out, and setup outside a repository: the same local
     // diagnostic with no notice, events, config, or connection.
     let disable = Command::new(env!("CARGO_BIN_EXE_turbo"))
         .env_clear()
@@ -1815,11 +1805,11 @@ fn setup_telemetry_is_standard_opt_out_redacted_and_never_changes_the_result() {
         assert!(!stderr.contains(NOTICE) && !stdout.contains("[telemetry") && !connected);
         assert_eq!(config.exists(), opt_out.is_none());
     }
-    write(&root, "turbo.json", "{}");
-    let config = temp.path().join("flagless");
+    fs::remove_file(root.join("turbo.json")).unwrap();
+    let config = temp.path().join("unconfigured");
     let (code, stdout, stderr, connected) = invoke_with_telemetry(&root, &config, &words, None);
     assert_eq!(code, 1);
-    assert!(diagnostic_contains(&stderr, DISABLED), "{stderr}");
+    assert!(diagnostic_contains(&stderr, NO_CONFIG), "{stderr}");
     assert!(!stderr.contains(NOTICE) && !stdout.contains("[telemetry") && !connected);
     assert!(!config.exists());
 }
@@ -2017,9 +2007,6 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
         true,
         "invalid turbo.lock JSON",
     );
-    write(root, "turbo.json", "{}");
-    failure(root, &["setup", "--plan", "--tools-only"], true, DISABLED);
-    write(root, "turbo.json", ENABLED);
     write(root, "turbo.lock", r#"{"schemaVersion":0,"tools":{}}"#);
     write(root, ".npmrc", "registry=https://private.invalid");
     check_failure(
@@ -2036,32 +2023,30 @@ fn profiling_and_malformed_setup_tails_do_not_write() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "profile.json", "existing profile");
-    for enabled in [false, true] {
-        write(root, "turbo.json", if enabled { ENABLED } else { "{}" });
-        for words in [
-            vec!["setup", "--heap=profile.json"],
-            vec!["setup", "--plan", "--heap=profile.json"],
-            vec!["setup", "--check", "--heap=profile.json"],
-            vec!["setup", "--help", "--heap=profile.json"],
-            vec!["setup", "--profile=profile.json"],
-            vec!["setup", "--anon-profile=profile.json"],
-            vec!["setup", "--plan", "--profile=profile.json"],
-            vec!["setup", "--check", "--anon-profile=profile.json"],
-            vec!["setup", "--help", "--profile=profile.json"],
-            vec!["setup", "--help", "--anon-profile=profile.json"],
-            vec!["setup", "--unknown"],
-            vec!["setup", "--force", "config"],
-            vec!["setup", "--", "echo"],
-        ] {
-            let (code, text) = invoke(root, &words, false);
-            let expected = if words.contains(&"--help") { 0 } else { 1 };
-            assert_eq!(code, expected, "{words:?}: {text}");
-            if !words.contains(&"--help") && !words.iter().any(|word| word.starts_with("--heap=")) {
-                assert!(
-                    !text.contains(PENDING) && !text.contains(DISABLED),
-                    "{text}"
-                );
-            }
+    write(root, "turbo.json", ENABLED);
+    for words in [
+        vec!["setup", "--heap=profile.json"],
+        vec!["setup", "--plan", "--heap=profile.json"],
+        vec!["setup", "--check", "--heap=profile.json"],
+        vec!["setup", "--help", "--heap=profile.json"],
+        vec!["setup", "--profile=profile.json"],
+        vec!["setup", "--anon-profile=profile.json"],
+        vec!["setup", "--plan", "--profile=profile.json"],
+        vec!["setup", "--check", "--anon-profile=profile.json"],
+        vec!["setup", "--help", "--profile=profile.json"],
+        vec!["setup", "--help", "--anon-profile=profile.json"],
+        vec!["setup", "--unknown"],
+        vec!["setup", "--force", "config"],
+        vec!["setup", "--", "echo"],
+    ] {
+        let (code, text) = invoke(root, &words, false);
+        let expected = if words.contains(&"--help") { 0 } else { 1 };
+        assert_eq!(code, expected, "{words:?}: {text}");
+        if !words.contains(&"--help") && !words.iter().any(|word| word.starts_with("--heap=")) {
+            assert!(
+                !text.contains(PENDING) && !text.contains(NO_CONFIG),
+                "{text}"
+            );
         }
     }
 }
@@ -2077,7 +2062,7 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
     write(
         root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true}}"#,
+        r#"{"futureFlags":{"experimentalPythonWorkspaces":true}}"#,
     );
     write(
         root,

@@ -157,12 +157,16 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
     f.declare(json!({"name":"handoff-fixture","private":true,"packageManager":"pnpm@10.0.0"}));
     let result_file = root.join("apps/web/result.json");
     let config = |task: &str| {
-        json!({"futureFlags":{"experimentalSetup":true},"agentGuidance":false,
+        json!({"agentGuidance":false,
         "noUpdateNotifier":true,"tasks":{task:{"cache":false,"inputs":["report.cjs"],"env":["HANDOFF_DECLARED"]}}}).to_string()
     };
     // Both are valid. Without an explicit file, production rejects ambiguity;
     // falling back to turbo.json must never authorize managed execution.
-    fs::write(root.join("turbo.json"), r#"{"futureFlags":{"experimentalSetup":false},"agentGuidance":false,"noUpdateNotifier":true,"tasks":{"refuse":{}}}"#).unwrap();
+    fs::write(
+        root.join("turbo.json"),
+        r#"{"agentGuidance":false,"noUpdateNotifier":true,"tasks":{"refuse":{}}}"#,
+    )
+    .unwrap();
     fs::write(root.join("turbo.jsonc"), config("probe")).unwrap();
     fs::write(root.join("apps/web/report.cjs"), r#"const fs=require('fs'),cp=require('child_process'); const p=cp.spawnSync('pnpm',['--version'],{encoding:'utf8'}); if(p.status!==0) throw Error(p.stderr); fs.writeFileSync('result.json',JSON.stringify({version:process.versions.node,v8:process.versions.v8,proof:require('crypto').createHash('sha256').update('current-native').digest('hex'),exe:process.execPath,manager:process.env.npm_execpath,pnpm:p.stdout.trim(),secret:process.env.HANDOFF_SECRET||null,declared:process.env.HANDOFF_DECLARED,hash:process.env.TURBO_HASH,args:process.argv.slice(2)}));"#).unwrap();
     let user_base = if cfg!(target_os = "macos") {

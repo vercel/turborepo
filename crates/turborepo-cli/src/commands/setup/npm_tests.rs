@@ -596,7 +596,6 @@ fn npm_no_lock_provisions_bundled_or_registry_npm_that_turbo_run_activates() {
         let tools = crate::commands::managed::ManagedTools::inspect(
             root,
             &root.join("turbo.json"),
-            true,
             f.owned.home(),
             crate::commands::managed::context,
         )
@@ -798,7 +797,7 @@ fn npm_lifecycle_skip_controls_pass_ignore_scripts_and_tools_only_skips_npm() {
     assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
     assert!(n.args().is_empty());
     assert_eq!(n.f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
-    let skip = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"lifecycleScripts":"skip"}}"#;
+    let skip = r#"{"setup":{"lifecycleScripts":"skip"}}"#;
     fs::write(n.f.owned.root().join("turbo.json"), skip).unwrap();
     assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
     fs::write(n.f.owned.root().join("turbo.json"), ENABLED).unwrap();

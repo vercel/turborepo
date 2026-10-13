@@ -4,7 +4,7 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 
-const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true},
+const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalPythonWorkspaces":true},
     "agentGuidance":false,"noUpdateNotifier":true,"tasks":{"build":{"cache":false}}}"#;
 const PYPROJECT: &str = "[tool.turbo]\nname = \"acme\"\n\n[tool.uv]\nrequired-version = \
                          \">=0.13\"\n\n[tool.uv.workspace]\nmembers = [\"packages/*\"]\n";

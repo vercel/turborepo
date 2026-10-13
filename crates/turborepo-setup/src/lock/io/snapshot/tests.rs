@@ -25,11 +25,7 @@ fn root() -> tempfile::TempDir {
     let root = writer_root();
     write_file(root.path(), ".nvmrc", ">=24 <30\n");
     write_file(root.path(), "package.json", "{}");
-    write_file(
-        root.path(),
-        CONFIG_FILE,
-        r#"{"futureFlags":{"experimentalSetup":true}}"#,
-    );
+    write_file(root.path(), CONFIG_FILE, "{}");
     root
 }
 fn candidate(snapshot: &Snapshot, version: &str) -> Lock {
@@ -257,7 +253,7 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
                 fs::write(root.path().join(LOCK_NAME), bytes).unwrap();
             }
             file if CONFIG_FILES.contains(&file) => write_file(root.path(), file,
-                r#"{"futureFlags":{"experimentalSetup":false},"setup":{"javascript":"skip"}}"#),
+                r#"{"setup":{"javascript":"skip"}}"#),
             "inactive-runtime" | "runtime-policy" => write_file(root.path(), "package.json",
                 json!({"devEngines":{"runtime":{"name":if change == "inactive-runtime" {"other"} else {"node"},"onFail":"error"}}}).to_string()),
             "package-whitespace" => write_file(root.path(), "package.json", " { }\n"),
@@ -377,10 +373,7 @@ fn final_post_flush_check_aborts_source_and_lock_races_and_failures() {
                 "config-deleted" => fs::remove_file(root.path().join(CONFIG_FILE)),
                 "source-deleted" => fs::remove_file(root.path().join(".nvmrc")),
                 "source-created" => fs::write(root.path().join(".node-version"), "24.0.0"),
-                "flags-policy" => fs::write(
-                    root.path().join(CONFIG_FILE_JSONC),
-                    r#"{"futureFlags":{"experimentalSetup":false},"setup":{}}"#,
-                ),
+                "flags-policy" => fs::write(root.path().join(CONFIG_FILE_JSONC), r#"{"setup":{}}"#),
                 _ => Err(io::Error::other("injected pre-promotion failure")),
             }
         });

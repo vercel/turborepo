@@ -247,7 +247,7 @@ fn refresh_late_guards_keep_original_discovery_and_snapshot_across_publication()
                 }
                 match case {
                     0 => fs::write(root.join(".nvmrc"), "26.x").unwrap(),
-                    1 => fs::write(root.join("turbo.json"), "{}").unwrap(),
+                    1 => fs::write(root.join("turbo.json"), r#"{"tasks":{}}"#).unwrap(),
                     2 => fs::write(root.join("apps/web/turbo.json"), ENABLED).unwrap(),
                     3 => {
                         fs::rename(root.join(".git"), root.join(".git-old")).unwrap();

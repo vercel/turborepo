@@ -31,7 +31,6 @@ fn missing_lock_publication_succeeds_and_revokes_previous_locked_authority() {
         ManagedTools::inspect(
             f.owned.root(),
             &f.owned.root().join("turbo.json"),
-            true,
             f.owned.home(),
             || panic!("missing-lock repo must not probe the host")
         )
@@ -45,7 +44,6 @@ fn missing_lock_publication_succeeds_and_revokes_previous_locked_authority() {
         ManagedTools::inspect(
             f.owned.root(),
             &f.owned.root().join("turbo.json"),
-            true,
             f.owned.home(),
             managed::context
         )

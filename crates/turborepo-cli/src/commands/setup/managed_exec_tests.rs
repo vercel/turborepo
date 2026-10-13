@@ -38,7 +38,6 @@ fn exec_runs_authorized_managed_tools_and_never_runs_stale_ones() {
     let tools = ManagedTools::inspect(
         root,
         &root.join("turbo.json"),
-        true,
         f.owned.home(),
         managed::context,
     )

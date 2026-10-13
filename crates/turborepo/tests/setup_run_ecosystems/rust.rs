@@ -3,7 +3,7 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 
-const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true},
+const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalCargoWorkspaces":true},
     "agentGuidance":false,"noUpdateNotifier":true,"tasks":{"build":{"cache":false}}}"#;
 const CARGO_TOML: &str = "[workspace]\nmembers = [\"crates/app\"]\nresolver = \
                           \"2\"\n\n[workspace.metadata]\nname = \"demo\"\n";

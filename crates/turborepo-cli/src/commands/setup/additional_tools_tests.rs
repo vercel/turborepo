@@ -22,7 +22,7 @@ fn tool(sha256: String) -> Value {
 }
 
 fn declare(f: &Fixture, tools: Value) {
-    let config = json!({"futureFlags": {"experimentalSetup": true},
+    let config = json!({
         "setup": {"additionalTools": tools}});
     fs::write(f.owned.root().join("turbo.json"), config.to_string()).unwrap();
 }

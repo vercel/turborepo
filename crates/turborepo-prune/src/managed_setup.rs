@@ -142,11 +142,8 @@ impl ManagedSetup {
     }
 
     /// Complete source and destination preflight before Prune::new creates any
-    /// output. Disabled setup and an absent lock preserve legacy behavior.
+    /// output. An absent lock preserves legacy behavior.
     pub(super) fn plan(input: &PruneInput) -> Result<Self, Error> {
-        if !input.future_flags.experimental_setup {
-            return Ok(Self::default());
-        }
         let root = input.repo_root.as_std_path();
         let lock_path = root.join("turbo.lock");
         match fs::symlink_metadata(&lock_path) {

@@ -6,8 +6,7 @@ use turborepo_setup::uv::UvArtifact;
 
 use super::*;
 
-const PYTHON: &str =
-    r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true}}"#;
+const PYTHON: &str = r#"{"futureFlags":{"experimentalPythonWorkspaces":true}}"#;
 const BUILD: &str = "/github/python-build-standalone/releases/download/20261009/cpython-3.12.12%\
                      2B20261009-x86_64-pc-windows-msvc-install_only_stripped.tar.gz";
 const KEY: &str = "cpython-3.12.12-windows-x86_64-none";
@@ -119,7 +118,7 @@ impl Repo {
         use crate::commands::managed::{ManagedTools, context};
         let root = self.owned.root();
         let config = root.join("turbo.json");
-        let tools = ManagedTools::inspect(root, &config, true, self.owned.home(), context)
+        let tools = ManagedTools::inspect(root, &config, self.owned.home(), context)
             .unwrap()
             .unwrap();
         let env = tools.revalidate().unwrap();

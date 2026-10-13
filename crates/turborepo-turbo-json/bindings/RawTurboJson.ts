@@ -164,6 +164,6 @@ futureFlags?: FutureFlags,
 global?: GlobalConfig, 
 /**
  * Repository policy for `turbo setup`. Only allowed in the root
- * turbo.json and requires `futureFlags.experimentalSetup`.
+ * turbo.json.
  */
 setup?: SetupPolicy, };

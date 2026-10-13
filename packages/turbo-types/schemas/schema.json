@@ -191,7 +191,7 @@
       ]
     },
     "setup": {
-      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.",
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json.",
       "anyOf": [
         {
           "$ref": "#/definitions/SetupPolicy"
@@ -421,11 +421,6 @@
         },
         "experimentalPythonWorkspaces": {
           "description": "Treat the members of a uv workspace as Turborepo packages.\n\nWhen enabled, Python packages are discovered from the root `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the package graph, resolve in `--filter` expressions, and appear in `turbo query`. uv is the only supported Python package manager. This feature is experimental.",
-          "default": false,
-          "type": "boolean"
-        },
-        "experimentalSetup": {
-          "description": "Opt into experimental setup features that are still in progress.\n\nSetup invocation requires this flag; help is available without it. The `turbo.lock` format is unstable. Only parsing and help are implemented; provisioning, planning, and checking return a diagnostic. Setup does not interpret `turbo.lock` or change run or hash behavior.",
           "default": false,
           "type": "boolean"
         },
@@ -992,7 +987,7 @@
       }
     },
     "SetupPolicy": {
-      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
       "type": "object",
       "properties": {
         "additionalTools": {

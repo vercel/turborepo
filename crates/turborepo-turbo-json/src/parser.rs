@@ -716,37 +716,35 @@ mod tests {
         assert!(RawPackageTurboJson::parse(&package_json, "packages/web/turbo.json").is_err());
     }
 
+    #[test_case("true"; "enabled")]
+    #[test_case("false"; "disabled")]
     #[test_case(r#""true""#; "string")]
-    #[test_case("1"; "number")]
     #[test_case("null"; "null")]
-    #[test_case("[]"; "array")]
     #[test_case("{}"; "object")]
-    fn test_experimental_setup_rejects_non_boolean(value: &str) {
+    fn test_graduated_experimental_setup_is_rejected(value: &str) {
         let json = format!(r#"{{"futureFlags":{{"experimentalSetup":{value}}}}}"#);
         let error = RawRootTurboJson::parse(&json, "turbo.json").unwrap_err();
-        assert!(!error.diagnostics.is_empty());
-    }
-
-    #[test_case(""; "setup flag omitted")]
-    #[test_case(r#""experimentalSetup":true,"#; "setup flag enabled")]
-    #[test_case(r#""experimentalSetup":false,"#; "setup flag disabled")]
-    fn test_future_flags_reject_unknown_flags(setup_flag: &str) {
-        let json = format!(r#"{{"futureFlags":{{{setup_flag}"unknownSetupFlag":true}}}}"#);
-        let error = RawRootTurboJson::parse(&json, "turbo.json").unwrap_err();
-        assert!(!error.diagnostics.is_empty());
-    }
-
-    #[test_case(true; "enabled")]
-    #[test_case(false; "disabled")]
-    fn test_experimental_setup_not_allowed_in_package(enabled: bool) {
-        let json =
-            format!(r#"{{"extends":["//"],"futureFlags":{{"experimentalSetup":{enabled}}}}}"#);
-        assert!(RawPackageTurboJson::parse(&json, "packages/web/turbo.json").is_err());
+        let [diagnostic] = error.diagnostics.as_slice() else {
+            panic!("expected one diagnostic: {error:?}");
+        };
+        assert_eq!(diagnostic.to_string(), crate::future_flags::SETUP_GRADUATED);
+        assert!(
+            diagnostic
+                .labels()
+                .is_some_and(|mut labels| labels.next().is_some())
+        );
     }
 
     #[test]
-    fn test_experimental_setup_enables_setup_configuration() {
-        let json = r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#;
+    fn test_future_flags_reject_unknown_flags() {
+        let json = r#"{"futureFlags":{"unknownSetupFlag":true}}"#;
+        let error = RawRootTurboJson::parse(json, "turbo.json").unwrap_err();
+        assert!(!error.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_setup_configuration_needs_no_future_flag() {
+        let json = r#"{"setup":{}}"#;
         let raw = RawRootTurboJson::parse(json, "turbo.json").unwrap();
         assert!(RawTurboJson::try_from(raw).unwrap().setup.is_some());
     }

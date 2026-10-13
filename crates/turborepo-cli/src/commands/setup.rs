@@ -36,15 +36,6 @@ mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("`turbo setup` requires root futureFlags.experimentalSetup to be true")]
-    #[diagnostic(
-        code(turbo::setup::disabled),
-        help(
-            "Set \"futureFlags\": {{\"experimentalSetup\": true}} in the root turbo.json or \
-             turbo.jsonc. Select the intended repository with --cwd=<root> if necessary."
-        )
-    )]
-    Disabled,
     #[error("--update-lock cannot be used in frozen mode (inferred in CI)")]
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
@@ -343,10 +334,7 @@ fn run_reporting(
     // config pipeline, graph, package manager detection, or local CLI handoff.
     let discovery = root::Discovery::capture(args)?;
     tracing::debug!("setup root: {}", discovery.root_path());
-    if !discovery.flags().experimental_setup {
-        return Err(Error::Disabled);
-    }
-    report.gate_passed();
+    report.discovered();
 
     let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
     report.request(&request);

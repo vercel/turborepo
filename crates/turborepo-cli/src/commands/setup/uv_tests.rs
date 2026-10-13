@@ -4,8 +4,7 @@ use turborepo_setup::{lock::Lock, uv::UvArtifact, uv_resolution::UvTransport};
 
 use super::*;
 
-const PYTHON: &str =
-    r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true}}"#;
+const PYTHON: &str = r#"{"futureFlags":{"experimentalPythonWorkspaces":true}}"#;
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 const REFRESH: &[&str] = &["--tools-only", "--no-frozen", "--update-lock"];
 const CHECK: &[&str] = &["--check", "--tools-only"];
