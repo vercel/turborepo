@@ -161,8 +161,10 @@ impl Repo {
     /// Setup that must succeed, with the stand-in's trace on failure.
     fn ok(&self, upstream: &LoopbackServer, flags: &[&str]) -> i32 {
         let status = self.run(upstream, flags);
-        let trace = fs::read_to_string(self.outside.join("rustup-trace"));
-        status.unwrap_or_else(|error| panic!("{error:?}\n{}", trace.unwrap_or_default()))
+        let trace = fs::read_to_string(self.outside.join("rustup-trace")).unwrap_or_default();
+        let cwd = std::env::current_dir();
+        let outside = self.outside.display();
+        status.unwrap_or_else(|error| panic!("{error:?}\noutside={outside} cwd={cwd:?}\n{trace}"))
     }
 
     fn calls(&self) -> Vec<String> {

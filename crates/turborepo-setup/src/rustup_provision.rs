@@ -354,15 +354,18 @@ impl PrivateHomes {
     /// channel manifest; callers bind its `.tar.gz` entries to `turbo.lock`.
     pub fn command(&self, rustup: &Path, transport: &RustupTransport) -> Command {
         let origin = &transport.origin;
+        // Under a canonical `\\?\` store, rustup's image and homes get the
+        // ordinary spelling unless only the verbatim one is exact.
+        #[cfg(windows)]
+        let (rustup, homes) = (
+            dunce::simplified(rustup),
+            [&self.rustup, &self.cargo].map(|home| dunce::simplified(home)),
+        );
+        #[cfg(not(windows))]
+        let homes = [&self.rustup, &self.cargo].map(PathBuf::as_path);
         let mut command = Command::new(rustup);
         #[cfg(any(test, feature = "test-support"))]
         command.args(&transport.launcher);
-        // Under a canonical `\\?\` store, rustup gets the ordinary spelling
-        // unless only the verbatim one is exact.
-        #[cfg(windows)]
-        let homes = [&self.rustup, &self.cargo].map(|home| dunce::simplified(home));
-        #[cfg(not(windows))]
-        let homes = [&self.rustup, &self.cargo].map(PathBuf::as_path);
         command
             .env("RUSTUP_HOME", homes[0])
             .env("CARGO_HOME", homes[1])
