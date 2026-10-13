@@ -46,6 +46,14 @@ pub(crate) fn target(platform: Platform) -> Option<(&'static str, &'static str)>
     })
 }
 
+/// The host triple for a lock spelling such as `windows-x64`.
+pub(crate) fn host(spelling: &str) -> Option<&'static str> {
+    PLATFORMS
+        .into_iter()
+        .filter_map(target)
+        .find_map(|(triple, lock)| (lock == spelling).then_some(triple))
+}
+
 pub(crate) fn windows(platform: Platform) -> bool {
     matches!(platform, Platform::WindowsX64 | Platform::WindowsArm64)
 }

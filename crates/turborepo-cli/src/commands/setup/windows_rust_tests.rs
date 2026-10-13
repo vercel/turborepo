@@ -294,6 +294,33 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     assert_eq!(repo.ok(&upstream, CHECK), 0);
 }
 
+/// The shell hook puts the same proxies first on PATH and exports the same
+/// variables as managed run and exec, from the trusted record alone.
+#[test]
+fn the_shell_hook_activates_the_proxies_with_the_run_variables() {
+    if unqualified_host() {
+        return;
+    }
+    let repo = Repo::new();
+    repo.lock();
+    assert_eq!(repo.run(&repo.upstream(), FROZEN).unwrap(), 0);
+    let (run, bin) = repo.overrides();
+    let path = r"C:\Windows\System32";
+    // A shell's working directory uses the ordinary spelling.
+    let cwd = dunce::simplified(repo.owned.root()).join("apps");
+    fs::create_dir(&cwd).unwrap();
+    let (hooked, env) = crate::commands::hook::entering_for_tests(&cwd, repo.owned.home(), path);
+    assert_eq!(hooked, Some(format!("{};{path}", bin.display())));
+    let names = [
+        "CARGO_HOME",
+        "RUSTUP_AUTO_INSTALL",
+        "RUSTUP_HOME",
+        "RUSTUP_TOOLCHAIN",
+    ];
+    let expected = names.map(|name| (name.to_owned(), Some(run[name].clone())));
+    assert_eq!(env, expected);
+}
+
 #[test]
 fn local_rust_setup_locks_windows_artifacts_then_reuses_them_offline() {
     if unqualified_host() {

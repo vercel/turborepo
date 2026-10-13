@@ -1,6 +1,6 @@
-//! Windows PowerShell 5.1 and PowerShell 7 prompts on native Windows. Setup
-//! records no trusted roots on Windows yet, so the hook must stay off and keep
-//! PATH exactly as the shell started.
+//! Windows PowerShell 5.1 and PowerShell 7 prompts on native Windows. Without
+//! this user's trusted setup record the hook activates nothing and keeps PATH
+//! exactly as the shell started; on x64 it reports the missing installation.
 #![cfg(windows)]
 #![allow(clippy::unwrap_used)]
 
@@ -82,11 +82,14 @@ fn journey(shell: &str) {
     let on = value("on");
     let (path, state) = on.split_once('|').unwrap();
     assert_eq!(path, start);
-    // The hook ran and recorded the repository as off.
-    assert!(state.starts_with("1;") && state.contains(";off;"), "{on}");
+    // The hook ran; setup records trusted roots only on Windows x64 (#14659).
+    let x64 = cfg!(target_arch = "x86_64");
+    let status = if x64 { ";missing;" } else { ";off;" };
+    assert!(state.starts_with("1;") && state.contains(status), "{on}");
     assert_eq!(value("off"), start);
     assert_eq!(value("end"), format!("{start}|"));
-    assert!(!stderr.contains("turbo:"), "{stderr}");
+    let notice = "turbo: this repository's managed tools are not installed";
+    assert_eq!(stderr.matches(notice).count(), usize::from(x64), "{stderr}");
 }
 
 #[test]

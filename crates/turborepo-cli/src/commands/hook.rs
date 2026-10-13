@@ -5,12 +5,14 @@
 //! `turbo run` stays strict.
 
 use std::{
+    collections::BTreeMap,
     fmt::Write as _,
     fs,
     io::Write,
     path::{Path, PathBuf},
 };
 
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use turbopath::AbsoluteSystemPath;
 use turborepo_turbo_json::RawTurboJson;
@@ -19,6 +21,9 @@ use crate::{cli::HookShell, commands::setup::trust::TrustStore};
 
 /// Exported so nested shells agree on what the hook added. Internal only.
 const STATE: &str = "__TURBO_HOOK_STATE";
+/// The variables this hook set and what each replaced, so leaving restores
+/// them exactly. Internal only, and absent while the hook sets none.
+const ENV_STATE: &str = "__TURBO_HOOK_ENV";
 const SEPARATOR: char = if cfg!(windows) { ';' } else { ':' };
 
 const BASH: &str = r#"_turbo_hook() {
@@ -125,12 +130,71 @@ impl State {
     }
 }
 
+/// Variables to set, or unset when `None`.
+type EnvChanges = Vec<(String, Option<String>)>;
+
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Changes {
     path: Option<String>,
     /// `Some(None)` unsets the state.
     state: Option<Option<String>>,
+    env: EnvChanges,
+    /// `Some(None)` unsets the variable state.
+    env_state: Option<Option<String>>,
     notice: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct Saved {
+    set: String,
+    previous: Option<String>,
+}
+
+/// Apply `recorded` over what this hook set before (`saved`), given the
+/// shell's current values. A variable the user changed since is theirs: it is
+/// neither restored nor set again.
+fn env_changes(
+    saved: Option<&str>,
+    recorded: &BTreeMap<String, String>,
+    current: &dyn Fn(&str) -> Option<String>,
+) -> (EnvChanges, Option<Option<String>>) {
+    let saved: BTreeMap<String, Saved> = saved
+        .and_then(|saved| serde_json::from_str(saved).ok())
+        .unwrap_or_default();
+    let mut changes = Vec::new();
+    let mut next = BTreeMap::new();
+    let names: std::collections::BTreeSet<_> = saved.keys().chain(recorded.keys()).collect();
+    for name in names {
+        let now = current(name);
+        let underlying = match saved.get(name) {
+            Some(old) if now.as_deref() != Some(old.set.as_str()) => continue,
+            Some(old) => old.previous.clone(),
+            None => now.clone(),
+        };
+        let target = match recorded.get(name) {
+            Some(value) => {
+                let previous = underlying;
+                next.insert(
+                    name.clone(),
+                    Saved {
+                        set: value.clone(),
+                        previous,
+                    },
+                );
+                Some(value.clone())
+            }
+            None => underlying,
+        };
+        if target != now {
+            changes.push((name.clone(), target));
+        }
+    }
+    let state = match (next == saved, next.is_empty()) {
+        (true, _) => None,
+        (false, true) => Some(None),
+        (false, false) => serde_json::to_string(&next).ok().map(Some),
+    };
+    (changes, state)
 }
 
 pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
@@ -181,13 +245,27 @@ fn changes(
     cwd: Option<&Path>,
     base: Option<&Path>,
 ) -> Changes {
+    changes_with(previous, path, cwd, base, &|name| std::env::var(name).ok())
+}
+
+/// `current` reads the shell's environment.
+fn changes_with(
+    previous: Option<State>,
+    path: &str,
+    cwd: Option<&Path>,
+    base: Option<&Path>,
+    current: &dyn Fn(&str) -> Option<String>,
+) -> Changes {
+    let saved = current(ENV_STATE);
     let Some(root) = cwd.and_then(find_root) else {
         // Outside every repository: remove only what the hook added.
-        return previous.map_or_else(Changes::default, |previous| Changes {
+        let mut left = previous.map_or_else(Changes::default, |previous| Changes {
             path: previous.bin.map(|bin| remove(path, &bin)),
             state: Some(None),
-            notice: None,
+            ..Default::default()
         });
+        (left.env, left.env_state) = env_changes(saved.as_deref(), &BTreeMap::new(), current);
+        return left;
     };
     let id = digest(root.as_os_str().as_encoded_bytes());
     let trust = base
@@ -211,30 +289,41 @@ fn changes(
         return Changes::default();
     }
 
-    // Setup records trusted roots only on Unix so far, so `turbo setup` cannot
-    // help elsewhere: stay off rather than print a notice. Without turbo.lock
-    // only this user's `turbo setup --no-lock` record opts a clone in, so an
-    // unrecorded lockless clone stays off quietly too.
+    // Setup records trusted roots on Unix and native Windows x64 (#14659), so
+    // `turbo setup` cannot help elsewhere: stay off rather than print a
+    // notice. Without turbo.lock only this user's `turbo setup --no-lock`
+    // record opts a clone in, so an unrecorded lockless clone stays off
+    // quietly too.
     let locked = fs::symlink_metadata(root.join("turbo.lock")).is_ok();
-    let (status, bin, reason) = if !cfg!(unix) || !enabled(&root) {
+    let recordable = cfg!(any(unix, all(windows, target_arch = "x86_64")));
+    let mut recorded_env = BTreeMap::new();
+    let (status, bin, reason) = if !recordable || !enabled(&root) {
         (Status::Off, None, None)
     } else {
         match trust.and_then(|trust| trust.recorded().map_err(|e| e.to_string())) {
-            Ok(Some(recorded)) => match recorded.bin.into_os_string().into_string() {
-                Ok(bin) if !bin.contains(SEPARATOR) => {
-                    let status = if recorded.stale {
-                        Status::Stale
-                    } else {
-                        Status::Active
-                    };
-                    (status, Some(bin), None)
+            Ok(Some(recorded)) => {
+                let env: Option<BTreeMap<_, _>> = recorded
+                    .env
+                    .into_iter()
+                    .map(|(name, value)| value.into_string().ok().map(|value| (name, value)))
+                    .collect();
+                match (recorded.bin.into_os_string().into_string(), env) {
+                    (Ok(bin), Some(env)) if !bin.contains(SEPARATOR) => {
+                        let status = if recorded.stale {
+                            Status::Stale
+                        } else {
+                            Status::Active
+                        };
+                        recorded_env = env;
+                        (status, Some(bin), None)
+                    }
+                    _ => (
+                        Status::Missing,
+                        None,
+                        Some("its path cannot be added to PATH".to_owned()),
+                    ),
                 }
-                _ => (
-                    Status::Missing,
-                    None,
-                    Some("its path cannot be added to PATH".to_owned()),
-                ),
-            },
+            }
             _ if !locked => (Status::Off, None, None),
             Ok(None) => (Status::Missing, None, None),
             Err(reason) => (Status::Missing, None, Some(reason)),
@@ -259,9 +348,12 @@ fn changes(
         status,
         bin,
     };
+    let (env, env_state) = env_changes(saved.as_deref(), &recorded_env, current);
     Changes {
         path,
         state: Some(Some(state.encode())),
+        env,
+        env_state,
         notice,
     }
 }
@@ -371,33 +463,47 @@ fn remove(path: &str, bin: &str) -> String {
 
 fn render(shell: HookShell, changes: &Changes) -> String {
     let mut out = String::new();
-    let mut set = |name: &str, value: &str| {
-        let value = quote(shell, value);
-        let _ = match shell {
-            HookShell::Bash | HookShell::Zsh => writeln!(out, "export {name}={value};"),
+    let mut apply = |name: &str, value: Option<&str>| {
+        let _ = match (shell, value.map(|value| quote(shell, value))) {
+            (HookShell::Bash | HookShell::Zsh, Some(value)) => {
+                writeln!(out, "export {name}={value};")
+            }
             // fish splits PATH on `:` like the environment does.
-            HookShell::Fish => writeln!(out, "set -gx {name} {value};"),
-            HookShell::PowerShell => writeln!(out, "$env:{name} = {value}"),
+            (HookShell::Fish, Some(value)) => writeln!(out, "set -gx {name} {value};"),
+            (HookShell::PowerShell, Some(value)) => writeln!(out, "$env:{name} = {value}"),
+            (HookShell::Bash | HookShell::Zsh, None) => writeln!(out, "unset {name};"),
+            (HookShell::Fish, None) => writeln!(out, "set -e {name};"),
+            (HookShell::PowerShell, None) => writeln!(
+                out,
+                "Remove-Item -LiteralPath Env:{name} -ErrorAction SilentlyContinue"
+            ),
         };
     };
     if let Some(path) = &changes.path {
-        set("PATH", path);
+        apply("PATH", Some(path));
     }
-    match &changes.state {
-        Some(Some(state)) => set(STATE, state),
-        Some(None) => {
-            let _ = match shell {
-                HookShell::Bash | HookShell::Zsh => writeln!(out, "unset {STATE};"),
-                HookShell::Fish => writeln!(out, "set -e {STATE};"),
-                HookShell::PowerShell => writeln!(
-                    out,
-                    "Remove-Item -LiteralPath Env:{STATE} -ErrorAction SilentlyContinue"
-                ),
-            };
-        }
-        None => {}
+    for (name, value) in &changes.env {
+        apply(name, value.as_deref());
+    }
+    if let Some(state) = &changes.env_state {
+        apply(ENV_STATE, state.as_deref());
+    }
+    if let Some(state) = &changes.state {
+        apply(STATE, state.as_deref());
     }
     out
+}
+
+/// The PATH and variables the hook applies on entering `cwd`, for native
+/// Windows setup journeys.
+#[cfg(all(test, windows))]
+pub(crate) fn entering_for_tests(
+    cwd: &Path,
+    base: &Path,
+    path: &str,
+) -> (Option<String>, EnvChanges) {
+    let changes = changes_with(None, path, Some(cwd), Some(base), &|_| None);
+    (changes.path, changes.env)
 }
 
 fn quote(shell: HookShell, value: &str) -> String {
@@ -446,7 +552,7 @@ mod tests {
         let changes = Changes {
             path: Some(r"/it's\here".into()),
             state: Some(None),
-            notice: None,
+            ..Default::default()
         };
         assert_eq!(
             render(HookShell::Bash, &changes),
@@ -472,6 +578,84 @@ mod tests {
         assert_eq!(
             render(HookShell::PowerShell, &state),
             "$env:__TURBO_HOOK_STATE = '1;x'\n"
+        );
+    }
+
+    #[test]
+    fn variables_are_set_then_restored_exactly_and_user_edits_win() {
+        use std::{cell::RefCell, collections::HashMap};
+        let owned = |pairs: &[(&str, &str)]| -> Vec<(String, String)> {
+            pairs
+                .iter()
+                .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+                .collect()
+        };
+        let before: HashMap<_, _> = owned(&[("CARGO_HOME", r"C:\Users\me\.cargo")])
+            .into_iter()
+            .collect();
+        let shell = RefCell::new(before.clone());
+        let recorded: BTreeMap<_, _> =
+            owned(&[("CARGO_HOME", r"C:\repo\cargo"), ("RUSTUP_HOME", r"C:\r")])
+                .into_iter()
+                .collect();
+        // Apply one round of changes to the shell, as `eval` would.
+        let step = |recorded: &BTreeMap<String, String>| {
+            let current = |name: &str| shell.borrow().get(name).cloned();
+            let (env, state) = env_changes(current(ENV_STATE).as_deref(), recorded, &current);
+            let mut shell = shell.borrow_mut();
+            let state = state.map(|state| (ENV_STATE.to_owned(), state));
+            for (name, value) in env.iter().cloned().chain(state) {
+                match value {
+                    Some(value) => shell.insert(name, value),
+                    None => shell.remove(&name),
+                };
+            }
+            env
+        };
+        assert_eq!(step(&recorded).len(), 2);
+        assert_eq!(shell.borrow()["CARGO_HOME"], r"C:\repo\cargo");
+        // Unchanged values need no output.
+        assert!(step(&recorded).is_empty());
+        // Leaving restores the previous value and removes what was unset.
+        step(&BTreeMap::new());
+        assert_eq!(*shell.borrow(), before);
+        // A variable the user changed inside stays theirs on leaving.
+        step(&recorded);
+        shell
+            .borrow_mut()
+            .insert("RUSTUP_HOME".into(), r"D:\mine".into());
+        step(&BTreeMap::new());
+        assert_eq!(shell.borrow()["RUSTUP_HOME"], r"D:\mine");
+        assert_eq!(shell.borrow()["CARGO_HOME"], r"C:\Users\me\.cargo");
+        assert!(!shell.borrow().contains_key(ENV_STATE));
+        // Without recorded or saved variables there is nothing to do.
+        let none = |_: &str| None;
+        assert_eq!(env_changes(None, &BTreeMap::new(), &none), (vec![], None));
+    }
+
+    #[test]
+    fn variables_render_and_unset_in_every_shell() {
+        let changes = Changes {
+            env: vec![
+                ("RUSTUP_HOME".into(), Some("C:\\r".into())),
+                ("X".into(), None),
+            ],
+            env_state: Some(None),
+            ..Default::default()
+        };
+        assert_eq!(
+            render(HookShell::PowerShell, &changes),
+            "$env:RUSTUP_HOME = 'C:\\r'\nRemove-Item -LiteralPath Env:X -ErrorAction \
+             SilentlyContinue\nRemove-Item -LiteralPath Env:__TURBO_HOOK_ENV -ErrorAction \
+             SilentlyContinue\n"
+        );
+        assert_eq!(
+            render(HookShell::Bash, &changes),
+            "export RUSTUP_HOME='C:\\r';\nunset X;\nunset __TURBO_HOOK_ENV;\n"
+        );
+        assert_eq!(
+            render(HookShell::Fish, &changes),
+            "set -gx RUSTUP_HOME 'C:\\\\r';\nset -e X;\nset -e __TURBO_HOOK_ENV;\n"
         );
     }
 

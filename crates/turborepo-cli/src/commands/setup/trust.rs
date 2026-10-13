@@ -65,6 +65,8 @@ pub(crate) struct Recorded {
     /// turbo.lock changed since setup recorded this installation, including a
     /// lock added after `turbo setup --no-lock`.
     pub(crate) stale: bool,
+    /// Variables the recorded tools need beside PATH (Windows Rust proxies).
+    pub(crate) env: std::collections::BTreeMap<String, std::ffi::OsString>,
 }
 
 fn unsafe_state() -> io::Error {
@@ -383,8 +385,15 @@ impl TrustStore {
             return Ok(None);
         }
         let lock = read(&self.root.join("turbo.lock"), false)?;
+        let installation = &record.installation;
+        let env = turborepo_setup::activation::hook_env(
+            &self.root,
+            &installation.bin,
+            &installation.tools,
+        );
         Ok(Some(Recorded {
             stale: !record.resolves(lock.as_deref()),
+            env,
             bin: record.installation.bin,
         }))
     }
