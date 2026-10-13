@@ -555,32 +555,56 @@ impl ActivationPlan {
     }
 }
 
+/// Every variable [`hook_env`] may export, sorted. The shell hook restores only
+/// these from its saved state, so a tampered state cannot unset or overwrite
+/// any other variable.
+pub const HOOK_ENV: [&str; 6] = [
+    "CARGO_HOME",
+    "GOROOT",
+    "GOTOOLCHAIN",
+    "RUSTUP_AUTO_INSTALL",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+];
+
 /// What the shell hook exports beside PATH for a trusted installation at
 /// `root`, derived from its recorded `bin` and tools without reading the
-/// Store. Windows Rust exports are rustup proxies, which need the variables
-/// managed run sets; Unix exports run the toolchain directly, so the hook
-/// keeps editing only PATH there.
+/// Store, with the values managed run sets. Only Windows needs them: Rust
+/// exports there are rustup proxies, and `go.exe` is a hard link that finds
+/// its tree only through GOROOT. Unix exports run the toolchain directly, so
+/// the hook keeps editing only PATH there.
 pub fn hook_env(root: &Path, bin: &Path, tools: &[Tool]) -> BTreeMap<String, OsString> {
     let mut env = BTreeMap::new();
+    let Some(generation) = bin.parent().filter(|_| cfg!(windows)) else {
+        return env;
+    };
     let rust = tools.iter().find(|tool| tool.id == "rust");
-    let Some((rust, generation)) = rust.zip(bin.parent()).filter(|_| cfg!(windows)) else {
-        return env;
-    };
-    let Some(host) = crate::rustup::host(&rust.platform) else {
-        return env;
-    };
-    let home = generation.join("tools").join("rust");
-    let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
-    #[cfg(windows)]
-    let (home, cargo_home) = (
-        dunce::simplified(&home).to_path_buf(),
-        dunce::simplified(&cargo_home).to_path_buf(),
-    );
-    env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
-    env.insert("RUSTUP_HOME".into(), home.into_os_string());
-    let toolchain = format!("{}-{host}", rust.version);
-    env.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
-    env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
+    let rust = rust.and_then(|rust| Some((rust, crate::rustup::host(&rust.platform)?)));
+    if let Some((rust, host)) = rust {
+        let home = generation.join("tools").join("rust");
+        let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
+        #[cfg(windows)]
+        let (home, cargo_home) = (
+            dunce::simplified(&home).to_path_buf(),
+            dunce::simplified(&cargo_home).to_path_buf(),
+        );
+        env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+        env.insert("RUSTUP_HOME".into(), home.into_os_string());
+        let toolchain = format!("{}-{host}", rust.version);
+        env.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
+        env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
+    }
+    if tools.iter().any(|tool| tool.id == "go") {
+        // As managed run sets them: GOTOOLCHAIN=local, and GOROOT at the
+        // Store's `tools/go` beside `bin`, in the ordinary spelling.
+        for (key, value) in crate::go_provision::RUNTIME_ENV {
+            env.insert(key.to_owned(), OsString::from(value));
+        }
+        let goroot = generation.join("tools").join("go");
+        #[cfg(windows)]
+        let goroot = dunce::simplified(&goroot).to_path_buf();
+        env.insert("GOROOT".to_owned(), goroot.into_os_string());
+    }
     env
 }
 

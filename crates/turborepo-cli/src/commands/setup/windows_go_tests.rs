@@ -181,30 +181,34 @@ fn powershell_hook_activates_go_like_managed_run_and_restores_on_leaving() {
     let (web, home) = (f.owned.root().join("apps/web/src"), f.owned.home());
     // This shell points GOROOT at another Go and has no GOTOOLCHAIN.
     let shell = |name: &str| (name == "GOROOT").then(|| r"C:\Go".to_owned());
-    let (entered, state) = hook(None, r"C:\Windows", &web, home, shell);
-    let state = state.unwrap();
+    let (entered, state, saved) = hook(None, r"C:\Windows", &web, home, shell);
+    let (state, saved) = (state.unwrap(), saved.unwrap());
     assert_eq!(
         entered,
         format!(
             "$env:PATH = '{inside}'\n$env:GOROOT = '{}'\n$env:GOTOOLCHAIN = \
-             'local'\n$env:__TURBO_HOOK_STATE = '{state}'\n",
+             'local'\n$env:__TURBO_HOOK_ENV = '{saved}'\n$env:__TURBO_HOOK_STATE = '{state}'\n",
             env["GOROOT"]
         )
     );
     // The next prompt changes nothing; leaving restores both exactly.
-    let active = |name: &str| env.get(name).cloned();
+    let active = |name: &str| match name {
+        "__TURBO_HOOK_ENV" => Some(saved.clone()),
+        _ => env.get(name).cloned(),
+    };
     assert_eq!(
         hook(Some(state.as_str()), &inside, &web, home, active),
-        (String::new(), None)
+        (String::new(), None, None)
     );
-    let (left, cleared) = hook(Some(state.as_str()), &inside, home, home, active);
+    let (left, cleared, unsaved) = hook(Some(state.as_str()), &inside, home, home, active);
     assert_eq!(
         left,
         "$env:PATH = 'C:\\Windows'\n$env:GOROOT = 'C:\\Go'\nRemove-Item -LiteralPath \
          Env:GOTOOLCHAIN -ErrorAction SilentlyContinue\nRemove-Item -LiteralPath \
+         Env:__TURBO_HOOK_ENV -ErrorAction SilentlyContinue\nRemove-Item -LiteralPath \
          Env:__TURBO_HOOK_STATE -ErrorAction SilentlyContinue\n"
     );
-    assert_eq!(cleared, None);
+    assert_eq!((cleared, unsaved), (None, None));
 }
 
 #[test]

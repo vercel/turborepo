@@ -197,8 +197,14 @@ fn env_changes(
     recorded: &BTreeMap<String, String>,
     current: &dyn Fn(&str) -> Option<String>,
 ) -> (EnvChanges, Option<Option<String>>) {
+    // Only variables the hook can set are restored, so a tampered state cannot
+    // unset or overwrite any other variable.
     let saved: BTreeMap<String, Saved> = saved
-        .and_then(|saved| serde_json::from_str(saved).ok())
+        .and_then(|saved| serde_json::from_str::<BTreeMap<String, Saved>>(saved).ok())
+        .filter(|saved| {
+            (saved.keys())
+                .all(|name| turborepo_setup::activation::HOOK_ENV.contains(&name.as_str()))
+        })
         .unwrap_or_default();
     let mut changes = Vec::new();
     let mut next = BTreeMap::new();
@@ -947,6 +953,42 @@ mod tests {
         // Without recorded or saved variables there is nothing to do.
         let none = |_: &str| None;
         assert_eq!(env_changes(None, &BTreeMap::new(), &none), (vec![], None));
+        // A state naming any variable the hook never sets is ignored whole.
+        let tampered =
+            r#"{"PATH":{"set":"x","previous":null},"GOROOT":{"set":"y","previous":null}}"#;
+        let both = |name: &str| (name == "PATH" || name == "GOROOT").then(|| "x".to_owned());
+        assert_eq!(
+            env_changes(Some(tampered), &BTreeMap::new(), &both),
+            (vec![], None)
+        );
+    }
+
+    #[test]
+    fn only_windows_go_and_rust_activations_export_runtime_variables() {
+        use turborepo_setup::activation::{HOOK_ENV, hook_env};
+        let tool = |id: &str| turborepo_tool_install::Tool {
+            id: id.into(),
+            version: "1.90.0".into(),
+            platform: "windows-x64".into(),
+            artifact_sha256: "a".repeat(64),
+            executables: BTreeMap::new(),
+        };
+        let root = Path::new(r"C:\repo");
+        let bin = root.join(r".turbo\tools\generation-a\bin");
+        assert!(hook_env(root, &bin, &[tool("node"), tool("pnpm")]).is_empty());
+        let env = hook_env(root, &bin, &[tool("node"), tool("go"), tool("rust")]);
+        if !cfg!(windows) {
+            assert!(env.is_empty());
+            return;
+        }
+        let names: Vec<_> = env.keys().map(String::as_str).collect();
+        assert_eq!(names, HOOK_ENV);
+        let tools = root.join(r".turbo\tools\generation-a\tools");
+        assert_eq!(env["GOROOT"], tools.join("go").into_os_string());
+        assert_eq!(env["GOTOOLCHAIN"], "local");
+        assert_eq!(env["RUSTUP_HOME"], tools.join("rust").into_os_string());
+        assert_eq!(env["RUSTUP_TOOLCHAIN"], "1.90.0-x86_64-pc-windows-msvc");
+        assert_eq!(env["RUSTUP_AUTO_INSTALL"], "0");
     }
 
     #[test]
