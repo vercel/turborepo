@@ -174,7 +174,7 @@ async fn mirrors_serve_official_release_paths_beneath_their_base() {
     let archive = zip(&format!("bun-{target}/bun"), SCRIPT.as_bytes());
     let routes = routes(&[(&name, archive)], "/mirror");
     let server = LoopbackServer::new(routes, |_| {}).unwrap();
-    let fixture = crate::test_support::OwnedSetupFixture::new().unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
     let base = format!("{}/mirror/", server.origin());
     let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
     let transport = BunTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
