@@ -16,6 +16,19 @@ const WRITER: &str = "writer";
 const STAGED: &str = "staged";
 const TARGET: &str = "turbo.lock";
 
+/// Setup shells out to Git for ignore and worktree checks. Explain a missing
+/// executable instead of surfacing a bare "No such file or directory".
+pub fn git_spawn_error(error: io::Error) -> io::Error {
+    if error.kind() != io::ErrorKind::NotFound {
+        return error;
+    }
+    io::Error::new(
+        io::ErrorKind::NotFound,
+        "could not run `git`: it was not found on PATH. turbo setup uses Git to confirm that \
+         .turbo/ is ignored; install Git or add it to PATH, then retry",
+    )
+}
+
 struct Directory {
     file: File,
     #[cfg(windows)]
@@ -253,7 +266,8 @@ impl WriterStorage {
             .env_remove("GIT_INDEX_FILE")
             .args(["check-ignore", "--"])
             .args(paths)
-            .output()?;
+            .output()
+            .map_err(git_spawn_error)?;
         if !output.status.success()
             || output.stdout != format!("{}\n{}\n", paths[0], paths[1]).as_bytes()
         {
