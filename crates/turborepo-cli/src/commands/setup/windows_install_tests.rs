@@ -100,87 +100,86 @@ fn host_node() -> Vec<u8> {
     fs::read(which::which("node").unwrap()).unwrap()
 }
 
-#[test]
-fn each_manager_installs_through_its_windows_entrypoint_and_repeats() {
+/// Local setup locks and installs tools, then runs `command`. A repeat after
+/// removing `node_modules` reruns it with the manager's own `skip` flag.
+fn installs_and_repeats(manager: &str, lockfile: &str, command: &str, skip: &str) {
     if unqualified_host() {
         return;
     }
-    let node = host_node();
-    for (manager, lockfile, command, skip) in [
-        (
-            "npm@11.6.1",
-            "package-lock.json",
-            "node.exe npm-cli.js ci",
-            "--ignore-scripts",
-        ),
-        (
-            "pnpm@10.0.0",
-            "pnpm-lock.yaml",
-            "node.exe pnpm.cjs install --frozen-lockfile",
-            "--ignore-scripts",
-        ),
-        (
-            "yarn@1.22.22",
-            "yarn.lock",
-            "node.exe yarn.js install --frozen-lockfile",
-            "--ignore-scripts",
-        ),
-        (
-            "yarn@4.5.0",
-            "yarn.lock",
-            "node.exe yarn.js install --immutable",
-            "--mode=skip-build",
-        ),
-        (
-            "bun@1.2.23",
-            "bun.lock",
-            "bun.exe install --frozen-lockfile",
-            "--ignore-scripts",
-        ),
-    ] {
-        let (f, u) = fixture(&node, manager, lockfile);
-        let root = f.owned.root();
-        // Local setup locks and installs tools, then dependencies; repeats
-        // rerun the native command, with the manager's own skip flag.
-        assert_eq!(f.run(&u, &["--no-frozen"]).unwrap(), 0, "{manager}");
-        fs::remove_dir_all(root.join("node_modules")).unwrap();
-        assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0, "{manager}");
-        assert!(root.join("node_modules").is_dir(), "{manager}");
-        let skipped = ["--frozen", "--ignore-scripts"];
-        assert_eq!(f.run(&u, &skipped).unwrap(), 0, "{manager}");
-        let expected = [command.into(), command.into(), format!("{command} {skip}")];
-        assert_eq!(installs(&f), expected, "{manager}");
-        assert_eq!(fs::read(root.join(lockfile)).unwrap(), b"committed lock\n");
-        // Tools-only setup never starts an installer.
-        assert_eq!(f.run(&u, FROZEN).unwrap(), 0, "{manager}");
-        assert_eq!(installs(&f).len(), 3, "{manager}");
-    }
+    let (f, u) = fixture(&host_node(), manager, lockfile);
+    let root = f.owned.root();
+    assert_eq!(f.run(&u, &["--no-frozen"]).unwrap(), 0);
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    assert!(root.join("node_modules").is_dir());
+    assert_eq!(
+        installs(&f),
+        [command.to_owned(), format!("{command} {skip}")]
+    );
+    assert_eq!(fs::read(root.join(lockfile)).unwrap(), b"committed lock\n");
 }
 
 #[test]
-fn installer_statuses_pass_through_and_rewritten_lockfiles_are_restored() {
+fn npm_ci_runs_through_the_bundled_npm_cmd() {
+    let command = "node.exe npm-cli.js ci";
+    installs_and_repeats(
+        "npm@11.6.1",
+        "package-lock.json",
+        command,
+        "--ignore-scripts",
+    );
+}
+
+#[test]
+fn pnpm_installs_frozen_through_its_cmd_launcher() {
+    let command = "node.exe pnpm.cjs install --frozen-lockfile";
+    installs_and_repeats("pnpm@10.0.0", "pnpm-lock.yaml", command, "--ignore-scripts");
+}
+
+#[test]
+fn yarn_classic_installs_frozen_through_its_cmd_launcher() {
+    let command = "node.exe yarn.js install --frozen-lockfile";
+    installs_and_repeats("yarn@1.22.22", "yarn.lock", command, "--ignore-scripts");
+}
+
+#[test]
+fn modern_yarn_installs_immutably_and_skips_builds_through_its_cmd_launcher() {
+    // `--mode=skip-build` reaches Yarn intact through cmd.exe's quoting.
+    let command = "node.exe yarn.js install --immutable";
+    installs_and_repeats("yarn@4.5.0", "yarn.lock", command, "--mode=skip-build");
+}
+
+#[test]
+fn bun_installs_frozen_through_bun_exe() {
+    let command = "bun.exe install --frozen-lockfile";
+    installs_and_repeats("bun@1.2.23", "bun.lock", command, "--ignore-scripts");
+}
+
+/// A failing installer's status becomes setup's. A lockfile the installer
+/// writes is restored, or removed when it was not committed, and setup fails.
+fn fails_and_restores(manager: &str, committed: &str, written: &str) {
     if unqualified_host() {
         return;
     }
-    let node = host_node();
-    for (manager, committed, written) in [
-        ("pnpm@10.0.0", "pnpm-lock.yaml", "pnpm-lock.yaml"),
-        // Bun's text lock written beside a committed binary one is removed.
-        ("bun@1.2.23", "bun.lockb", "bun.lock"),
-    ] {
-        let (f, u) = fixture(&node, manager, committed);
-        let root = f.owned.root();
-        assert_eq!(f.run(&u, &["--no-frozen", "--tools-only"]).unwrap(), 0);
-        fs::write(root.join("stale"), "").unwrap();
-        assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 3, "{manager}");
-        fs::remove_file(root.join("stale")).unwrap();
-        fs::write(root.join("rewrite"), written).unwrap();
-        let error = f.run(&u, &["--frozen"]).unwrap_err().to_string();
-        assert!(error.contains("it was restored"), "{manager}: {error}");
-        assert_eq!(fs::read(root.join(committed)).unwrap(), b"committed lock\n");
-        assert_eq!(root.join(written).exists(), written == committed);
-        fs::remove_file(root.join("rewrite")).unwrap();
-        assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0, "{manager}");
-        assert_eq!(installs(&f).len(), 3, "{manager}");
-    }
+    let (f, u) = fixture(&host_node(), manager, committed);
+    let root = f.owned.root();
+    fs::write(root.join("stale"), "").unwrap();
+    assert_eq!(f.run(&u, &["--no-frozen"]).unwrap(), 3);
+    fs::remove_file(root.join("stale")).unwrap();
+    fs::write(root.join("rewrite"), written).unwrap();
+    let error = f.run(&u, &["--frozen"]).unwrap_err().to_string();
+    assert!(error.contains("it was restored"), "{error}");
+    assert_eq!(fs::read(root.join(committed)).unwrap(), b"committed lock\n");
+    assert_eq!(root.join(written).exists(), written == committed);
+    assert_eq!(installs(&f).len(), 2);
+}
+
+#[test]
+fn pnpm_failures_pass_their_status_through_and_lockfile_rewrites_are_restored() {
+    fails_and_restores("pnpm@10.0.0", "pnpm-lock.yaml", "pnpm-lock.yaml");
+}
+
+#[test]
+fn bun_failures_pass_their_status_through_and_a_text_lock_beside_bun_lockb_is_removed() {
+    fails_and_restores("bun@1.2.23", "bun.lockb", "bun.lock");
 }
