@@ -21,6 +21,7 @@ mod cleanup;
 mod dacl;
 mod dependencies;
 pub(crate) mod effective;
+mod installer;
 mod lock_diagnostics;
 mod no_lock;
 mod offline;

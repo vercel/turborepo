@@ -111,7 +111,9 @@ impl Frozen {
 
     /// Runs `program` (the managed executable) in `root` with `env` over the
     /// inherited environment, so native registry credentials and settings
-    /// still apply. stdin is closed and output goes to the terminal. Returns
+    /// still apply. stdin is closed and output goes to the terminal. `wait`
+    /// starts the command and waits for it, so the caller owns process and
+    /// console policy (`Command::status` keeps the plain behavior). Returns
     /// the manager's exit status after checking every protected lockfile.
     pub fn run(
         self,
@@ -119,6 +121,7 @@ impl Frozen {
         args: &[&str],
         root: &Path,
         env: &BTreeMap<String, OsString>,
+        wait: impl FnOnce(&mut Command) -> io::Result<ExitStatus>,
     ) -> Result<ExitStatus, Error> {
         let mut protected = Vec::new();
         for name in self.lockfiles {
@@ -126,12 +129,13 @@ impl Frozen {
             let before = read(&path)?;
             protected.push((*name, path, before));
         }
-        let status = Command::new(program)
-            .current_dir(root)
-            .args(args)
-            .envs(env)
-            .stdin(Stdio::null())
-            .status();
+        let status = wait(
+            Command::new(program)
+                .current_dir(root)
+                .args(args)
+                .envs(env)
+                .stdin(Stdio::null()),
+        );
         let mut changed = Vec::new();
         for (name, path, before) in &protected {
             if read(path)? != *before {

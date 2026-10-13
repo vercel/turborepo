@@ -27,6 +27,9 @@ use std::{
 };
 
 pub use command::Command;
+/// Kill-on-close process tree containment, shared with setup's installers.
+#[cfg(windows)]
+pub use job_object::JobObject;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 use turborepo_task_id::TaskId;
