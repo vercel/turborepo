@@ -265,7 +265,12 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 flags.push("--frozen");
             }
             2 => fs::write(f.owned.root().join("turbo.lock"), "invalid").unwrap(),
-            3 => fs::write(f.owned.root().join("apps/web/.npmrc"), "").unwrap(),
+            // A fetch setting: #14740 accepts layout-only project npmrc.
+            3 => fs::write(
+                f.owned.root().join("apps/web/.npmrc"),
+                "registry=https://private.invalid/\n",
+            )
+            .unwrap(),
             4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
             5 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");
