@@ -54,7 +54,7 @@ describe("create-turbo", () => {
     expect(agents).toContain("<!-- BEGIN:turborepo-agent-rules -->");
     expect(agents).toContain("# This is NOT the Turborepo you know");
     expect(agents).toContain("docs/README.md");
-    expect(agents).toContain('"agentGuidance": false');
+    expect(agents).toContain('"agentGuidance": true');
   });
 
   it.each<{ packageManager: PackageManager }>([

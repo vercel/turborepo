@@ -346,14 +346,14 @@ mod test {
     }
 
     #[test]
-    fn test_agent_guidance_defaults_to_enabled() {
+    fn test_agent_guidance_defaults_to_disabled() {
         let turbo_json = RawRootTurboJson::parse("{}", "turbo.json")
             .unwrap()
             .try_into()
             .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
 
-        assert!(config.agent_guidance());
+        assert!(!config.agent_guidance());
     }
 
     #[test_case("turbo.json", r#"{"agentGuidance": false}"#)]
