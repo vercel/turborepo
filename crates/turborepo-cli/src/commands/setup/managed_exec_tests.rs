@@ -1,6 +1,5 @@
-use std::{ffi::OsString, path::Path, sync::Arc};
+use std::{ffi::OsString, path::Path};
 
-use shared_child::SharedChild;
 use turbopath::AbsoluteSystemPathBuf;
 
 use super::*;
@@ -12,8 +11,8 @@ use crate::commands::{
 const NODE_RUNTIME: &str =
     "#!/bin/sh\npwd > exec-result\nprintf '%s\\n' \"$0\" \"$@\" >> exec-result\nexit 3\n";
 
-fn launch(mut command: std::process::Command) -> std::io::Result<Arc<SharedChild>> {
-    SharedChild::spawn(&mut command).map(Arc::new)
+fn launch(mut command: std::process::Command) -> std::io::Result<std::process::ExitStatus> {
+    command.status()
 }
 
 #[test]
