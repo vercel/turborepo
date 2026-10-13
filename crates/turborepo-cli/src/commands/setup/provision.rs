@@ -1029,7 +1029,7 @@ pub(super) fn run(
         (Some(plan), Some(rustup)) => {
             let scratch = tempfile::Builder::new()
                 .prefix(".rustup-")
-                .tempdir_in(root.join(".turbo/tools"))?;
+                .tempdir_in(root.join(".turbo").join("tools"))?;
             let rustup =
                 rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
             plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?

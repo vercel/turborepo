@@ -55,14 +55,24 @@ pub struct RustupTransport {
     // Mirror and test transports change only the origin; lock provenance
     // remains official. The private rustup downloads from the same origin.
     origin: String,
+    /// Fixture-only arguments placed before rustup's own.
+    #[cfg(any(test, feature = "test-support"))]
+    launcher: Vec<std::ffi::OsString>,
 }
 
 impl RustupTransport {
+    fn new(client: DownloadClient, origin: String) -> Self {
+        Self {
+            client,
+            origin,
+            #[cfg(any(test, feature = "test-support"))]
+            launcher: Vec::new(),
+        }
+    }
+
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
-        Ok(Self {
-            client: DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?,
-            origin: ORIGIN.into(),
-        })
+        let client = DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?;
+        Ok(Self::new(client, ORIGIN.into()))
     }
 
     /// Send the official rustup and `dist` paths to a validated mirror base,
@@ -72,20 +82,27 @@ impl RustupTransport {
         _policy: &crate::source_policy::OfficialSourcePolicy,
         mirror: &crate::mirror::Mirror,
     ) -> Result<Self, Error> {
-        Ok(Self {
-            client: mirror.client()?,
-            origin: mirror.base().into(),
-        })
+        Ok(Self::new(mirror.client()?, mirror.base().into()))
     }
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only, no env
     /// override.
     #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
-        Ok(Self {
-            client: DownloadClient::loopback_http_for_tests(origin)?,
-            origin: origin.trim_end_matches('/').into(),
-        })
+        let client = DownloadClient::loopback_http_for_tests(origin)?;
+        Ok(Self::new(client, origin.trim_end_matches('/').into()))
+    }
+
+    /// Fixture-only: start every private rustup as `<rustup> <launcher>
+    /// <rustup arguments>`, so a stand-in executable (such as a copy of
+    /// `cmd.exe` given `/d /c <script>`) can play a scripted rustup.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_launcher_for_tests(
+        mut self,
+        launcher: impl IntoIterator<Item = impl Into<std::ffi::OsString>>,
+    ) -> Self {
+        self.launcher = launcher.into_iter().map(Into::into).collect();
+        self
     }
 
     pub(crate) async fn read(&self, path: &str, limit: usize) -> Result<Vec<u8>, Error> {
@@ -339,6 +356,8 @@ impl PrivateHomes {
     pub fn command(&self, rustup: &Path, transport: &RustupTransport) -> Command {
         let origin = &transport.origin;
         let mut command = Command::new(rustup);
+        #[cfg(any(test, feature = "test-support"))]
+        command.args(&transport.launcher);
         // Under a canonical `\\?\` store, rustup gets the ordinary spelling
         // unless only the verbatim one is exact.
         #[cfg(windows)]

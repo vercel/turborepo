@@ -476,6 +476,17 @@ impl ActivationPlan {
                 }
                 _ => {}
             }
+            // On Windows every Rust export is a rustup proxy that reads these:
+            // give them the PATH entry's ordinary spelling, and never let a
+            // proxy auto-install into the selected generation.
+            #[cfg(windows)]
+            let (home, cargo_home) = (
+                dunce::simplified(&home).to_path_buf(),
+                dunce::simplified(&cargo_home).to_path_buf(),
+            );
+            if cfg!(windows) {
+                runtime_env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+            }
             runtime_env.insert("RUSTUP_HOME".into(), home.into_os_string());
             runtime_env.insert("RUSTUP_TOOLCHAIN".into(), rust.toolchain().into());
             runtime_env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
