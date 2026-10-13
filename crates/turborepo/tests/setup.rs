@@ -432,15 +432,26 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--__test-run"],
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        // Plain setup provisions like --tools-only, so it reaches the same gate.
-        let supported = !words.iter().any(|word| {
-            matches!(
-                *word,
-                "--plan" | "--check" | "--offline" | "--no-lock" | "--__test-run"
-            )
-        });
+        // Plain setup and --check act like --tools-only (#14650): plain --check
+        // reaches the same lock gate as --check --tools-only below.
+        if words.contains(&"--check") {
+            check_failure(
+                root,
+                &words,
+                false,
+                if QUALIFIED {
+                    "managed activation requires turbo.lock"
+                } else {
+                    UNQUALIFIED
+                },
+            );
+            continue;
+        }
+        let supported = !words
+            .iter()
+            .any(|word| matches!(*word, "--plan" | "--offline" | "--no-lock" | "--__test-run"));
         // #14518 admits --offline, which needs a lock first, and #14486 admits
-        // --no-lock, whose native baseline covers only Node and pnpm.
+        // --no-lock, which needs a Node declaration (#14701).
         let offline = words.contains(&"--offline");
         let no_lock = words.contains(&"--no-lock");
         // A Cargo workspace without a root rust-toolchain file declares no tool.
@@ -452,7 +463,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             false,
             match (supported, QUALIFIED) {
                 (_, true) if offline => "offline setup requires turbo.lock",
-                (_, true) if no_lock => "invalid or unsupported native resolution record",
+                (_, true) if no_lock => "--no-lock needs a Node declaration",
                 (false, _) => PENDING,
                 (true, true) if words.contains(&"--frozen") => "frozen mode requires turbo.lock",
                 (true, true) if words.contains(&"--force") => {
@@ -489,13 +500,14 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             UNQUALIFIED
         },
     );
-    // #14486 admits CI --no-lock; its native baseline rejects a Rust-only repo.
+    // #14486 admits CI --no-lock; #14701 names the missing Node declaration in a
+    // Rust-only repo.
     failure(
         root,
         &["setup", "--no-lock"],
         true,
         if QUALIFIED {
-            "invalid or unsupported native resolution record"
+            "--no-lock needs a Node declaration"
         } else {
             UNQUALIFIED
         },
@@ -520,8 +532,8 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 let text = failure(root, words, false, "failed to parse Cargo.toml");
                 assert_diagnostic_path(&text, &root.join("Cargo.toml"));
                 assert!(!text.contains(PENDING), "{text}");
-            } else if words.len() == 1 {
-                // Plain setup reaches JS provisioning without parsing Cargo.
+            } else if !words.contains(&"--plan") {
+                // Plain setup and check reach JS tools without parsing Cargo.
                 // (#14653's Node-required message names experimentalCargoWorkspaces.)
                 let (code, text) = invoke(root, words, false);
                 assert_eq!(code, 1, "{text}");
@@ -910,8 +922,11 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         assert!(text.contains(expected), "{expected}: {text}");
     }
     let lock = fs::read_to_string(root.join("turbo.lock")).unwrap();
-    assert!(
-        lock.contains(r#""installation":{"kind":"verify-system","executables":["node"]}"#),
+    // turbo.lock is indented JSON (#14738), so compare the parsed installation.
+    let parsed: serde_json::Value = serde_json::from_str(&lock).unwrap();
+    assert_eq!(
+        parsed["tools"]["node"]["installation"],
+        serde_json::json!({"kind": "verify-system", "executables": ["node"]}),
         "{lock}"
     );
     assert!(!root.join(".turbo/tools").exists());
@@ -979,9 +994,62 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             assert!(text.contains(line), "{text}");
         }
     }
-    // Locked dependencies still need dependency setup, unless the CLI skips it.
+    // Locked dependencies are still skipped until dependency installers exist:
+    // plain --check checks the same tools (#14650) and never claims dependency
+    // readiness.
     write(root, "turbo.json", &config("locked"));
-    failure(root, &["setup", "--check"], false, PENDING);
+    let (code, text) = invoke(root, &["setup", "--check"], false);
+    assert_eq!(code, 1, "{text}");
+    assert!(!diagnostic_contains(&text, PENDING), "{text}");
+    if cfg!(all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    )) && !external_system_policy_blocked(code, &text)
+    {
+        assert!(
+            diagnostic_contains(&text, "managed activation requires turbo.lock"),
+            "{text}"
+        );
+        assert!(
+            text.contains("dependencies locked (turbo.json setup policy)"),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    let layout = "auto-install-peers = true\nhoist-pattern[]=react\nresolution-mode=highest\n";
+    write(root, ".npmrc", layout);
+    let words = ["setup", "--check", "--tools-only"];
+    // The policy passed, so check reaches its lock requirement.
+    check_failure(
+        root,
+        &words,
+        false,
+        "managed activation requires turbo.lock",
+    );
+    write(
+        root,
+        ".npmrc",
+        &format!("{layout}registry=https://registry.npmjs.org/\n"),
+    );
+    check_failure(
+        root,
+        &words,
+        false,
+        "official-only setup rejects line 4 of the Repository .npmrc",
+    );
 }
 
 #[test]
@@ -1471,8 +1539,22 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         return;
     };
     repo.seed();
-    for outcome in ["installed from the shared download cache", "reused"] {
-        let recovery::Run { status, text } = repo.run(None, &["setup", "--frozen"]);
+    // Plain --check checks the same tools and never claims dependency readiness.
+    let installation = "dependency installation is not supported yet";
+    for (mode, outcome, skipped) in [
+        (
+            "--frozen",
+            "installed from the shared download cache",
+            installation,
+        ),
+        ("--frozen", "reused", installation),
+        (
+            "--check",
+            "ready",
+            "dependency checks are not supported yet",
+        ),
+    ] {
+        let recovery::Run { status, text } = repo.run(None, &["setup", mode]);
         let code = status.code().unwrap();
         if external_system_policy_blocked(code, &text) {
             return;
@@ -1484,7 +1566,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
             "{text}"
         );
         assert!(
-            text.contains("Dependencies skipped (dependency installation is not supported yet)"),
+            text.contains(&format!("Dependencies skipped ({skipped})")),
             "{text}"
         );
     }
@@ -1918,7 +2000,7 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
         root,
         &["setup", "--plan", "--tools-only"],
         true,
-        "official-only setup rejects Repository configuration",
+        "official-only setup rejects line 1 of the Repository .npmrc",
     );
     assert!(!root.join(".turbo").exists());
 }

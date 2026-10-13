@@ -478,6 +478,86 @@ pub(super) fn lock_report(
     lines.join("\n")
 }
 
+/// Declarations lock resolution can start from. Setup and `--plan` share this
+/// gate and [`resolve`], so a plan proposes exactly what setup would publish;
+/// ecosystems that join resolution extend these, never one caller.
+pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
+    let declared = snapshot.declarations();
+    // Package managers other than Bun run on the managed Node.
+    let js_manager = ["npm", "pnpm", "yarn"]
+        .iter()
+        .any(|id| declared.contains_key(*id));
+    if !declared.contains_key("node")
+        && (js_manager
+            || !["rustup", "uv", "go", "bun"]
+                .iter()
+                .any(|id| declared.contains_key(*id)))
+    {
+        return Err(Error::Unsupported(
+            if snapshot.ecosystems().python && !js_manager {
+                "a native Node or uv declaration is required"
+            } else {
+                "a native Node declaration is required (or a root rust-toolchain file with \
+                 experimentalCargoWorkspaces)"
+            },
+        ));
+    }
+    Ok(())
+}
+
+/// The one candidate resolver behind setup's lock publication and `--plan`'s
+/// proposal. Callers run their own checks before calling it. `snapshot` is the
+/// caller's captured snapshot, which Go's completion reads after the request
+/// moves into native resolution.
+pub(super) fn resolve(
+    runtime: &tokio::runtime::Runtime,
+    request: turborepo_setup::lock::reconcile::Resolution<'_>,
+    sources: &Transports,
+    snapshot: &Snapshot,
+) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
+    use turborepo_setup::lock::reconcile;
+    let failed = |e: &dyn std::fmt::Display| reconcile::Error::Resolution(e.to_string());
+    // Each ecosystem resolves only its own changed declarations;
+    // reconcile still checks every unaffected selection's bytes.
+    let go = request.version_ids().contains("go");
+    let rust = turborepo_setup::rust_resolution::resolve_request(&request, &sources.rustup);
+    let mut tools = runtime.block_on(rust).map_err(|e| failed(&e))?;
+    // JavaScript plus, with Python workspaces, uv and CPython.
+    let declared = request.snapshot().declarations();
+    if ["node", "npm", "pnpm", "yarn", "bun", "uv", "python"]
+        .iter()
+        .any(|id| declared.contains_key(*id))
+    {
+        let native = runtime
+            .block_on(turborepo_setup::native_resolution::resolve(
+                request,
+                turborepo_setup::native_resolution::Transports {
+                    node: &sources.node,
+                    registry: &sources.registry,
+                    bun: &sources.bun,
+                    uv: &sources.uv,
+                    python: &sources.python,
+                    platform: platform().map_err(|e| failed(&e))?,
+                },
+            ))
+            .map_err(|e| failed(&e))?;
+        tools.extend(native.tools().clone());
+    }
+    let cohort = turborepo_setup::lock::Lock::new(turborepo_setup::lock::Document {
+        schema_version: turborepo_setup::lock::SCHEMA_VERSION,
+        tools,
+    })?;
+    // Go composes onto the other ecosystems' cohort.
+    runtime
+        .block_on(turborepo_setup::go_resolution::complete(
+            snapshot,
+            go,
+            cohort,
+            &sources.go,
+        ))
+        .map_err(|e| failed(&e))
+}
+
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
@@ -509,26 +589,8 @@ pub(super) fn run(
             ));
         }
     }
-    let declared = snapshot.declarations();
-    // Package managers other than Bun run on the managed Node.
-    let js_manager = ["npm", "pnpm", "yarn"]
-        .iter()
-        .any(|id| declared.contains_key(*id));
-    if write
-        && !declared.contains_key("node")
-        && (js_manager
-            || !["rustup", "uv", "go", "bun"]
-                .iter()
-                .any(|id| declared.contains_key(*id)))
-    {
-        return Err(Error::Unsupported(
-            if snapshot.ecosystems().python && !js_manager {
-                "a native Node or uv declaration is required"
-            } else {
-                "a native Node declaration is required (or a root rust-toolchain file with \
-                 experimentalCargoWorkspaces)"
-            },
-        ));
+    if write {
+        resolvable(&snapshot)?;
     }
     // Ordinary setup validates matching pins before its no-op writer. Explicit
     // refresh may repair invalid native selections within this supported cohort;
@@ -591,49 +653,8 @@ pub(super) fn run(
             resolution_mode,
             false,
             |request| {
-                let failed =
-                    |e: &dyn std::fmt::Display| reconcile::Error::Resolution(e.to_string());
-                check().map_err(|e| failed(&e))?;
-                // Each ecosystem resolves only its own changed declarations;
-                // reconcile still checks every unaffected selection's bytes.
-                let go = request.version_ids().contains("go");
-                let rust =
-                    turborepo_setup::rust_resolution::resolve_request(&request, &sources.rustup);
-                let mut tools = runtime.block_on(rust).map_err(|e| failed(&e))?;
-                // JavaScript plus, with Python workspaces, uv and CPython.
-                let declared = request.snapshot().declarations();
-                if ["node", "npm", "pnpm", "yarn", "bun", "uv", "python"]
-                    .iter()
-                    .any(|id| declared.contains_key(*id))
-                {
-                    let native = runtime
-                        .block_on(turborepo_setup::native_resolution::resolve(
-                            request,
-                            turborepo_setup::native_resolution::Transports {
-                                node: &sources.node,
-                                registry: &sources.registry,
-                                bun: &sources.bun,
-                                uv: &sources.uv,
-                                python: &sources.python,
-                                platform: platform().map_err(|e| failed(&e))?,
-                            },
-                        ))
-                        .map_err(|e| failed(&e))?;
-                    tools.extend(native.tools().clone());
-                }
-                let cohort = turborepo_setup::lock::Lock::new(turborepo_setup::lock::Document {
-                    schema_version: turborepo_setup::lock::SCHEMA_VERSION,
-                    tools,
-                })?;
-                // Go composes onto the other ecosystems' cohort.
-                runtime
-                    .block_on(turborepo_setup::go_resolution::complete(
-                        &snapshot,
-                        go,
-                        cohort,
-                        &sources.go,
-                    ))
-                    .map_err(|e| failed(&e))
+                check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
+                resolve(&runtime, request, &sources, &snapshot)
             },
             |candidate| {
                 plans(&snapshot, candidate)
