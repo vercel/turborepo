@@ -100,7 +100,24 @@ pub(crate) fn parse_release_from(
     if bytes.len() > MAX_METADATA_BYTES {
         return Err(RegistryMetadataError::TooLarge);
     }
-    let (name, version) = validate_selection(manager, exact_version)?;
+    let (name, _) = validate_selection(manager, exact_version)?;
+    parse_package_from(bytes, manager, name, exact_version, authored, mirror)
+}
+
+/// Like `parse_release_from`, for an adapter-owned registry package name such
+/// as pnpm's `@pnpm/exe.<target>` platform binaries.
+pub(crate) fn parse_package_from(
+    bytes: &[u8],
+    manager: Manager,
+    name: &str,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+    mirror: Option<&str>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
+    if bytes.len() > MAX_METADATA_BYTES {
+        return Err(RegistryMetadataError::TooLarge);
+    }
+    let (_, version) = validate_selection(manager, exact_version)?;
     // Typed deserialization rejects duplicate security-relevant fields; ignore
     // unrelated upstream enrichment within the bounded complete JSON document.
     let mut deserializer = serde_json::Deserializer::from_slice(bytes);

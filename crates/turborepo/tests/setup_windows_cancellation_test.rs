@@ -153,6 +153,11 @@ fn command(launcher: &ProcessLauncher, launch: Launch, root: &Path, proxy: &str)
     };
     let mut command = launcher.command(entry, root);
     let home = root.parent().unwrap().join("home");
+    // Setup keeps its trust records under the user's Local AppData (#14494,
+    // #14659). The known-folder lookup expands `%USERPROFILE%` and requires
+    // the folder to exist, so give each test its own isolated one.
+    let local = home.join("AppData").join("Local");
+    std::fs::create_dir_all(&local).unwrap();
     command.env_clear().args(["setup", "--tools-only"]);
     for key in ["PATH", "SystemRoot", "SystemDrive", "windir", "TEMP", "TMP"] {
         if let Some(value) = std::env::var_os(key) {
@@ -173,6 +178,7 @@ fn command(launcher: &ProcessLauncher, launch: Launch, root: &Path, proxy: &str)
     command
         .env("USERPROFILE", &home)
         .env("APPDATA", home.join("AppData"))
+        .env("LOCALAPPDATA", &local)
         .env("TURBO_CONFIG_DIR_PATH", &home)
         .env("VERCEL_CONFIG_DIR_PATH", &home)
         .env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0")

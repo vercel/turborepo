@@ -69,6 +69,10 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         Error::Native(_) => SetupFailure::Unsupported,
         Error::Ephemeral(_) => SetupFailure::Resolution,
         Error::NotImplemented => SetupFailure::Unsupported,
+        // #14701's --no-lock refusals: like "a native Node declaration is
+        // required", and an unsupported clone-local tool.
+        Error::NoLockNode => SetupFailure::Discovery,
+        Error::NoLockTool(_) => SetupFailure::Unsupported,
         Error::Unsupported(message) => match *message {
             "managed promotion requires macOS or GNU Linux"
             | "managed promotion requires macOS, GNU Linux or Windows x64"
