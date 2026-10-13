@@ -69,12 +69,12 @@ Version ranges like `24` or `stable` are convenient to write, but they resolve t
 
 ## Every task uses the managed tools
 
-In a repository with `turbo.lock`, `turbo run` runs every task with the managed tools, and includes their exact identities in each task's hash. If the tools are missing or out of date, `turbo run` stops before running anything and tells you to run `turbo setup`, instead of quietly using whatever is on your machine.
+In a repository with `turbo.lock`, `turbo run` and `turbo watch` run every task with the managed tools, and `turbo run` includes their exact identities in each task's hash. If the tools are missing or out of date, `turbo run` stops before running anything and tells you to run `turbo setup`, instead of quietly using whatever is on your machine.
 
 For everything else, there are two more ways to use the same tools:
 
 - **[`turbo exec`](/docs/reference/exec)** runs any command with them, such as `turbo exec -- pnpm add react`.
-- **[The shell hook](/docs/reference/hook)** puts them first on `PATH` while you're in the repository, in bash, zsh, fish, and PowerShell, and restores your `PATH` when you leave. The standalone installer adds it for you.
+- **[The shell hook](/docs/reference/hook)** puts them first on `PATH`, with the same variables your tasks get, while you're in the repository, in bash, zsh, fish, and PowerShell. It restores your own values when you leave. The standalone installer adds it for you.
 
 ## Ready for CI, Docker, and dependency bots
 

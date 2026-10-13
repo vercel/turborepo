@@ -192,3 +192,15 @@ To pin the `turbo` version used in a repository, add it as a `devDependency` at 
 </PackageManagerTabs>
 
 When you invoke the global binary from this repository, it uses the installed local version instead.
+
+On macOS and Linux, the global `turbo` replaces itself with the local `turbo`, so signals, Ctrl+C, and the exit code, including `128` plus the signal number when a signal stops it, are the local `turbo`'s. On Windows, the local `turbo` runs in a job object, so terminating the global `turbo` also terminates the local one and every process it started.
+
+<Callout type="info">
+  On macOS and Linux, `turbo run` starts each task in its own process group.
+  `SIGTERM` and Ctrl+C stop tasks, but killing `turbo` with `SIGKILL` leaves
+  them running, with or without a local `turbo`. If your global `turbo` comes
+  from the npm package, killing its Node.js launcher with `SIGKILL` also
+  leaves the native `turbo` running.
+</Callout>
+
+In a repository with [managed toolchains](/docs/core-concepts/managed-toolchains), the global `turbo` hands off only to a local version that supports the repository's managed tools. See [Repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo).

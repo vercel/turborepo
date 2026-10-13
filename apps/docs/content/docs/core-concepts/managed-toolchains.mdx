@@ -223,7 +223,7 @@ In a managed repository, [`turbo prune`](/docs/reference/prune) copies `turbo.lo
 
 ## How `turbo run` uses managed tools
 
-A repository is managed when its root contains `turbo.lock`. Without one, `turbo run` behaves exactly as before.
+A repository is managed when its root contains `turbo.lock`, or when [`turbo setup --no-lock`](/docs/reference/setup#--no-lock) installed tools for the clone. Otherwise, `turbo run` behaves exactly as before.
 
 In a managed repository, every `turbo run`:
 
@@ -233,6 +233,15 @@ In a managed repository, every `turbo run`:
 
 `turbo run` checks the installation again before each task starts. If the tools changed during the run, the task fails instead of starting.
 
+These checks don't re-read every installed file. When `turbo setup` installs tools, it records a stamp of each installed tree: a digest of its file metadata, bound to the digest of its contents. While the metadata matches the stamp, `turbo run`, `turbo exec`, and the shell hook trust the recorded contents digest. [`turbo setup --check`](/docs/reference/setup#--check) always re-reads every byte. On Windows, `turbo setup` records stamps only on NTFS and ReFS volumes, including Dev Drives. On other file systems, every check re-reads every file.
+
+### Other commands
+
+- **[`turbo watch`](/docs/reference/watch#managed-toolchains)** runs tasks with the managed tools, like `turbo run`. It checks them when it starts and before every rerun.
+- **`turbo ls`, `turbo query`, `turbo boundaries`, and `turbo devtools`** read your package graph without running tasks. With Cargo, Python, or Go workspaces enabled, building that graph runs `cargo`, `uv`, or `go`, so these commands use the managed tools too. If the tools are missing or out of date, they fail with the same `turbo setup` guidance. If `turbo setup` changes the tools while `turbo devtools` is running, it keeps the last graph and asks you to restart it. In repositories without those workspaces, building the graph runs no tools, so these commands don't check the installation.
+- **`turbo run` without tasks**, which lists your tasks, checks the installation like every `turbo run`.
+- **`turbo prune` and `turbo get-mfe-port`** don't use the managed tools. See [Limitations](#limitations).
+
 ### Caching
 
 Managed task hashes include an identity of the selected toolchain. It combines the locked downloads for the current platform with host details: operating system, architecture, C library family and version on Linux, kernel release, and CPU features. Installation paths aren't included, so moving a clone doesn't cause cache misses.
@@ -241,21 +250,23 @@ As a result, changing a locked tool invalidates task caches, and [Remote Cache](
 
 ### Repository-local `turbo`
 
-When you run the global `turbo` in a repository that installs `turbo` as a dependency, it normally [hands off to the local version](/docs/getting-started/installation#repository-installation). In a managed repository, it first asks the local `turbo` whether it supports the repository's `turbo.lock`. If it doesn't, the run fails with upgrade guidance:
+When you run the global `turbo` in a repository that installs `turbo` as a dependency, it [hands off to the local version](/docs/getting-started/installation#repository-installation). In a managed repository, it first validates the managed tools, then asks the local `turbo` what it supports. The local `turbo` must support the repository's `turbo.lock` schema, be built for the same platform as the global `turbo`, and support every kind of tool the repository uses, such as `pnpm`, `rust`, or `verify-system`. `turbo` compares these capabilities, never version numbers.
+
+If the local `turbo` falls short, the command fails before anything runs and names what's missing:
 
 ```txt title="Terminal"
-repository-local CLI at <path> cannot provide the required managed-run capability for turbo.lock schema 0
+  x repository-local turbo 2.11.7 at <path> cannot run turbo.lock schema 0
+  | (node, pnpm): it does not report managed-run support (capability query
+  | wrote unexpected stderr)
+  help: Upgrade the repository's turbo dependency to a version that supports
+        these managed tools, then reinstall dependencies. An installed
+        repository-local turbo is never replaced by the global CLI or
+        downloaded implicitly.
 ```
 
-`turbo` never replaces the repository's version with the global one, and it never downloads one. Upgrade the repository's `turbo`, or remove it from your dependencies and use the global binary.
+`turbo` never replaces the repository's version with the global one, and it never downloads one. Upgrade the repository's `turbo`, or remove it from your dependencies and use the global binary. For each reason, see [A repository-local `turbo` can't run managed tasks](/docs/reference/setup#a-repository-local-turbo-cant-run-managed-tasks).
 
-<Callout type="warn">
-  Handing off to a repository-local `turbo` in a managed repository works only
-  on macOS on Apple silicon today. On other platforms, a repository-local
-  `turbo` fails this check. Use the global `turbo` binary in managed
-  repositories. See [Managed toolchain
-  platforms](/docs/reference/managed-toolchain-platforms#repository-local-turbo).
-</Callout>
+Handing off works on macOS (Apple silicon and Intel), Linux (x64 and arm64), and Windows x64. See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms#repository-local-turbo).
 
 A repository-local `turbo` that you start directly, such as with `pnpm turbo` or `npx turbo`, skips the global binary. Versions without managed toolchain support don't read `turbo.lock`, so their tasks use the tools on your `PATH`.
 
@@ -263,7 +274,7 @@ A repository-local `turbo` that you start directly, such as with `pnpm turbo` or
 
 `turbo run` activates the managed tools only for the tasks it starts. For everything else, use one of these:
 
-- **The [shell hook](/docs/reference/hook)** puts the managed tools first on `PATH` while your bash, zsh, fish, or PowerShell session is inside the repository, and restores `PATH` when you leave. The standalone installers add it by default.
+- **The [shell hook](/docs/reference/hook)** puts the managed tools first on `PATH`, and sets the same variables that `turbo run` gives tasks, while your bash, zsh, fish, or PowerShell session is inside the repository. It restores your own values when you leave. The standalone installers add it by default.
 - **[`turbo exec -- <command>`](/docs/reference/exec)** runs one command with the managed tools. Use it in scripts, CI steps, `cmd.exe`, and processes started by other applications. See [when to use `turbo exec`](/docs/reference/hook#when-to-use-turbo-exec).
 
 When `turbo.lock` changes after `turbo setup`, for example after `git pull`, the shell hook keeps the previously installed tools active and asks you to run `turbo setup`. `turbo run` and `turbo exec` fail until you do.
@@ -317,14 +328,22 @@ To remove everything yourself, delete `.turbo/tools` in each clone and the share
 
 ## Upgrading from the experimental release
 
-Before this release, managed toolchains required `futureFlags.experimentalSetup` in `turbo.json`. That flag has been removed, and setting it is now an error. Remove it from your root `turbo.json` or `turbo.jsonc`. A root `turbo.lock` is all a repository needs.
+Before this release, managed toolchains required `futureFlags.experimentalSetup` in `turbo.json`. That flag has been removed. Setting it to any value, including `false`, is now an error, so commands that read `turbo.json`, such as `turbo run` and `turbo setup`, fail:
+
+```txt title="Terminal"
+  x Failed to parse turbo.json.
+  `->   x The `experimentalSetup` future flag was removed because `turbo
+        | setup` graduated to stable. Remove it from `futureFlags`.
+```
+
+Remove it from your root `turbo.json` or `turbo.jsonc`. A root `turbo.lock` is all a repository needs.
 
 ## Limitations
 
 - **Experimental languages.** Rust, Python, and Go setup need `experimentalCargoWorkspaces`, `experimentalPythonWorkspaces`, and `experimentalGoWorkspaces`, like the rest of Turborepo's support for those languages. See [Supported declarations](/docs/reference/setup#supported-declarations).
 - **Exact package manager versions.** npm, pnpm, Yarn, and Bun must be pinned to an exact version. Node.js, Rust, Python, uv, and Go can use ranges and channels.
 - **Platforms.** See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms) for what's supported on each operating system, including musl-based Linux distributions, such as Alpine, which can only use [`verify-system`](/docs/reference/setup-policy#verify-system).
-- **Repository-local `turbo`.** See [Repository-local `turbo`](#repository-local-turbo).
-- **`turbo watch`.** In a managed repository, [`turbo watch`](/docs/reference/watch) doesn't run tasks. Use `turbo run`.
+- **Repository-local `turbo`.** A `turbo` installed in `node_modules` must support the repository's managed tools, or the global `turbo` refuses to hand off to it. See [Repository-local `turbo`](#repository-local-turbo).
+- **`turbo prune` and `turbo get-mfe-port`.** With Cargo, Python, or Go workspaces enabled, these commands build the package graph with the `cargo`, `uv`, and `go` on your `PATH`, not the managed tools. Run them where those tools are installed, or with [`turbo exec`](/docs/reference/exec), such as `turbo exec -- turbo prune web`.
 - **One `turbo setup` per Docker `RUN` instruction.** Each `RUN` instruction that uses the managed tools must run `turbo setup` first. See [Docker](/docs/guides/tools/docker#managed-toolchains).
 - **Unauthenticated sources.** Tools download from their official sites or from [mirrors](/docs/reference/setup-policy#mirrors) that don't need credentials. Mirrors that require authentication aren't supported.

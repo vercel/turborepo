@@ -23,7 +23,7 @@ turbo exec -- node --version
 turbo exec -- pnpm install --frozen-lockfile
 ```
 
-`turbo exec` uses the same managed environment that [`turbo run`](/docs/reference/run) gives tasks: the tools that [`turbo setup`](/docs/reference/setup) installed come first on `PATH`, followed by your `PATH`, along with the variables those tools need, such as `CARGO_HOME`, `GOROOT`, or uv's `UV_PYTHON`. Tasks don't need `turbo exec`, because `turbo run` already uses the managed tools. Use `turbo exec` for scripts, CI steps, and other commands outside the task graph. For commands you type in an interactive shell, the [shell hook](/docs/reference/hook) puts the same tools on `PATH`.
+`turbo exec` uses the same managed environment that [`turbo run`](/docs/reference/run) gives tasks: the tools that [`turbo setup`](/docs/reference/setup) installed come first on `PATH`, followed by your `PATH`, along with the variables those tools need, such as `CARGO_HOME`, `GOROOT`, or uv's `UV_PYTHON`. Tasks don't need `turbo exec`, because `turbo run` already uses the managed tools. Use `turbo exec` for scripts, CI steps, and other commands outside the task graph. For commands you type in an interactive shell, the [shell hook](/docs/reference/hook) puts the same tools on `PATH` and sets the same variables.
 
 ## Arguments
 
@@ -57,9 +57,11 @@ To run a task named `exec`, use `turbo run exec`.
 
 On macOS and Linux, `turbo exec` replaces itself with the command once the environment is ready, the way a shell's `exec` does. Every signal, including `SIGKILL`, reaches the command directly, and a command that a signal stops exits with that signal, which shells report as `128` plus the signal number.
 
-When the global `turbo` hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo), the local `turbo` stays the command's parent. It forwards `SIGTERM` and `SIGHUP` to the command as `SIGTERM`, Ctrl+C in a terminal reaches the command once, and a signal death becomes exit code `128` plus the signal number. Killing that global `turbo` with `SIGKILL` can leave the command running.
+When the global `turbo` hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo), it replaces itself with the local `turbo`, which then replaces itself with the command. Only the command is left running, so signals, Ctrl+C, and exit codes behave exactly as they do without a handoff.
 
-On Windows, the command shares `turbo`'s console, so Ctrl+C reaches it directly. It runs in a job object: terminating `turbo exec` also terminates the command and every process it started. After the command exits on its own, processes it deliberately left running keep running. Exit codes, including `NTSTATUS` values, pass through unchanged.
+On Windows, the command shares `turbo`'s console, so Ctrl+C reaches it directly. It runs in a job object: terminating `turbo exec` also terminates the command and every process it started. After a handoff, terminating the global `turbo` terminates the local `turbo`, the command, and everything they started. After the command exits on its own, processes it deliberately left running keep running. Exit codes, including `NTSTATUS` values, pass through unchanged.
+
+If your global `turbo` comes from the npm package, a small Node.js launcher starts the native `turbo` binary. On macOS and Linux, killing that launcher with `SIGKILL` leaves the native `turbo` and the command running. Install the [standalone binary](/docs/getting-started/installation#global-installation) to avoid the launcher.
 
 ## Windows
 

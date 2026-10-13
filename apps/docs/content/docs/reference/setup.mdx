@@ -77,7 +77,7 @@ Requires [`futureFlags.experimentalCargoWorkspaces`](/docs/guides/tools/rust#ena
 | -------------------------------------------- | ------------------------------------------ |
 | `rust-toolchain.toml` or `rust-toolchain`    | `channel = "1.90.0"` or `channel = "stable"` |
 
-`turbo setup` installs rustup and the selected toolchain with the components and targets the file lists. Its rustup and Cargo homes are private to the clone: Cargo uses `.turbo/cargo-home` instead of `~/.cargo`, so it doesn't share your credentials or registry cache. `turbo.lock` records each component's `.tar.gz` and `.tar.xz` downloads.
+`turbo setup` installs rustup and the selected toolchain with the components and targets the file lists. Its rustup and Cargo homes are private to the clone: Cargo uses `.turbo/cargo-home` instead of `~/.cargo`, so it doesn't share your credentials or registry cache, and `cargo install` installs there too. `turbo run`, `turbo exec`, and the [shell hook](/docs/reference/hook) set `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, and `CARGO_HOME`, so `rustup` and `cargo` act on the managed toolchain. `turbo.lock` records each component's `.tar.gz` and `.tar.xz` downloads.
 
 ### Python
 
@@ -90,7 +90,7 @@ Requires [`futureFlags.experimentalPythonWorkspaces`](/docs/guides/tools/python#
 | uv     | `required-version` in `uv.toml`, or in the `[tool.uv]` table of `pyproject.toml`     | `">=0.8"`       |
 | Python | `.python-version`, or `requires-python` in the `[project]` table of `pyproject.toml` | `3.12`          |
 
-`turbo setup` installs uv and a verified CPython build, then points uv at it: `turbo run` and `turbo exec` set `UV_PYTHON_INSTALL_DIR`, `UV_PYTHON_DOWNLOADS=never`, `UV_PYTHON_PREFERENCE=only-managed`, and `UV_PYTHON`, so uv never downloads another Python.
+`turbo setup` installs uv and a verified CPython build, then points uv at it: `turbo run`, `turbo exec`, and the [shell hook](/docs/reference/hook) set `UV_PYTHON_INSTALL_DIR`, `UV_PYTHON_DOWNLOADS=never`, `UV_PYTHON_PREFERENCE=only-managed`, and `UV_PYTHON`, so uv never downloads another Python.
 
 ### Go
 
@@ -103,7 +103,7 @@ Requires [`futureFlags.experimentalGoWorkspaces`](/docs/guides/tools/go#enable-g
 | The `go` and `toolchain` directives in `go.work` | `go 1.22`, `toolchain go1.24.2`         |
 | The `go` and `toolchain` directives in `go.mod`  | `go 1.22`, `toolchain go1.24.2`         |
 
-A root `go.work` takes precedence over the root `go.mod`. A `toolchain` directive selects that exact release. Otherwise, `turbo setup` treats `go` as a minimum and resolves it the way Go's own toolchain switch does. `turbo run` and `turbo exec` set `GOROOT` and `GOTOOLCHAIN=local`, so Go never switches to another toolchain.
+A root `go.work` takes precedence over the root `go.mod`. A `toolchain` directive selects that exact release. Otherwise, `turbo setup` treats `go` as a minimum and resolves it the way Go's own toolchain switch does. `turbo run`, `turbo exec`, and the [shell hook](/docs/reference/hook) set `GOROOT` and `GOTOOLCHAIN=local`, so Go never switches to another toolchain.
 
 ### Version manager files
 
@@ -190,6 +190,8 @@ pnpm 10.18.0: lifecycle scripts skipped (--ignore-scripts); passing --ignore-scr
 
 Check the installed toolchains against `turbo.lock` and verify their files, without resolving, downloading, or writing anything.
 
+`--check` re-reads every byte of every installed file. The checks in `turbo run`, `turbo exec`, and the shell hook are faster because they trust the [stamps](/docs/core-concepts/managed-toolchains#how-turbo-run-uses-managed-tools) that `turbo setup` recorded at install time while the files' metadata is unchanged. Use `--check` to catch changes that metadata can't show.
+
 ```txt title="Terminal"
 javascript: tools managed (inferred); dependencies locked (inferred)
 node 24.21.0: ready
@@ -236,6 +238,8 @@ To resolve those versions, it reads release metadata and downloads the archives 
 ### `--force`
 
 Reinstall the versions in `turbo.lock` into a new installation. `turbo setup` reuses verified bytes from the [shared download cache](/docs/core-concepts/managed-toolchains#disk-use-and-cleanup) and downloads anything that isn't cached. `--force` never re-resolves versions or writes `turbo.lock`, and it requires an existing `turbo.lock` that matches your declarations. Use [`--update-lock`](#--update-lock) to change versions.
+
+On Windows, installations from earlier versions of `turbo` have no stamps, so every check re-reads all of their files until `turbo setup` replaces them. `--force` reinstalls them with stamps right away.
 
 ### `--frozen`
 
@@ -339,6 +343,26 @@ These combinations aren't supported yet. They exit with an error without changin
 - **Everything else is yours.** `turbo setup` doesn't install system libraries, services, databases, or credentials. Tasks that need them still need them after `turbo setup`.
 
 ## Troubleshooting
+
+### No root `turbo.json`
+
+```txt title="Terminal"
+  x `turbo setup` requires a root turbo.json or turbo.jsonc
+  help: Run turbo setup inside a Turborepo repository, or select it with
+        --cwd=<root>.
+```
+
+`turbo setup` didn't find a `turbo.json` or `turbo.jsonc` in the current directory or its parents, up to the root of the Git repository. Run it inside a Turborepo repository, or pass [`--cwd`](/docs/reference/run#--cwd-path).
+
+### `experimentalSetup` is rejected
+
+```txt title="Terminal"
+  x Failed to parse turbo.json.
+  `->   x The `experimentalSetup` future flag was removed because `turbo
+        | setup` graduated to stable. Remove it from `futureFlags`.
+```
+
+Remove `experimentalSetup` from `futureFlags` in your root `turbo.json`. See [Upgrading from the experimental release](/docs/core-concepts/managed-toolchains#upgrading-from-the-experimental-release).
 
 ### `.turbo` isn't ignored
 
@@ -447,10 +471,16 @@ managed setup validation failed: managed tools are not installed; run turbo setu
 ### A repository-local `turbo` can't run managed tasks
 
 ```txt title="Terminal"
-repository-local CLI at <path> cannot provide the required managed-run capability for turbo.lock schema 0
+repository-local turbo <version> at <path> cannot run turbo.lock schema 0 (node, pnpm): <reason>
 ```
 
-The repository has `turbo` installed in `node_modules`, and that version can't run managed tasks on this platform. See [Repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo).
+The repository has `turbo` installed in `node_modules`, and the global `turbo` won't hand off to it, because it can't run the repository's managed tools. Nothing ran. The message lists what the repository needs, then the reason. See [Repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo).
+
+| Reason                                                                   | Fix                                                                                                                   |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `it does not report managed-run support`                                 | The local version predates managed toolchains. Upgrade the repository's `turbo` dependency and reinstall dependencies. |
+| `turbo <version> lacks managed-run support for <features>`               | The local version doesn't support those tools, such as `go` or `verify-system`. Upgrade it and reinstall dependencies. |
+| `turbo <version> is built for <target>, but this host's turbo is built for <target>` | The installed `turbo` binary is for another architecture, usually because dependencies were installed with a Node.js built for another architecture, such as x64 Node.js under emulation on Apple silicon. Reinstall dependencies with a Node.js for this machine's native architecture. |
 
 ### Ambiguous setup roots
 

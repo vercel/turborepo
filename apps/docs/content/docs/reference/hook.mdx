@@ -11,7 +11,7 @@ related:
   - /docs/reference/exec
 ---
 
-Print a shell hook that puts your repository's [managed toolchains](/docs/core-concepts/managed-toolchains) first on `PATH` while your shell is inside the repository. Commands you type, such as `node` or `pnpm install`, then use the versions in `turbo.lock`.
+Print a shell hook that puts your repository's [managed toolchains](/docs/core-concepts/managed-toolchains) first on `PATH`, along with the variables they need, while your shell is inside the repository. Commands you type, such as `node`, `pnpm install`, or `cargo build`, then use the versions in `turbo.lock`.
 
 ```bash title="Terminal"
 turbo hook <shell>
@@ -62,11 +62,28 @@ $env:TURBO_NO_SHELL_HOOK = '1'; irm https://turborepo.dev/install.ps1 | iex
 Before each prompt, and after each directory change in zsh and fish, the hook runs `turbo` to check your current directory:
 
 1. It looks for the nearest `turbo.lock` in the current directory or its parents, stopping at the root of the Git repository. A repository nested inside another, such as a clone in a `vendor/` directory, never uses its parent's tools.
-2. If `turbo setup` installed tools for this clone, the hook puts their directory first on `PATH`.
+2. If `turbo setup` installed tools for this clone, the hook puts their directory first on `PATH` and sets the same variables that `turbo run` and `turbo exec` set for those tools:
 
-When you leave the repository, the hook removes that one entry and leaves the rest of `PATH`, including changes you made in the meantime, exactly as it was. Switching directly to another managed repository swaps one repository's tools for the other's.
+| Toolchain | Variables                                                                                    |
+| --------- | -------------------------------------------------------------------------------------------- |
+| Rust      | `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, and `CARGO_HOME`, plus `RUSTUP_AUTO_INSTALL=0` on Windows |
+| Go        | `GOROOT` and `GOTOOLCHAIN=local`                                                             |
+| uv        | `UV_PYTHON_DOWNLOADS=never` and `UV_PYTHON_INSTALL_DIR`                                      |
+| Python    | `UV_PYTHON_PREFERENCE=only-managed` and `UV_PYTHON`                                          |
 
-On macOS and Linux, the hook only changes `PATH` and an internal `__TURBO_HOOK_STATE` variable that remembers what it added. Variables that `turbo run` and `turbo exec` also set, such as `CARGO_HOME` for Rust and the `UV_PYTHON*` variables for uv, aren't set in your shell. Use `turbo exec` for commands that need them, such as `turbo exec -- cargo build`. On Windows, the hook also sets the Rust and Go variables. See [Windows](#windows).
+Node.js, npm, pnpm, Yarn, and Bun need no variables, so in a JavaScript-only repository the hook only changes `PATH`.
+
+Commands at your prompt then behave like tasks. `rustup` and `cargo` use the managed toolchain, and `cargo install` installs into the clone's `.turbo/cargo-home` instead of `~/.cargo`. The hook doesn't add `.turbo/cargo-home/bin` to `PATH`. `go` never switches to another toolchain, and uv uses the managed Python.
+
+### Leaving and switching repositories
+
+When the hook enters a repository, it saves the value each of these variables had, including whether it was empty or unset:
+
+- **Leaving the repository** restores each variable that still holds the hook's value, and removes the one `PATH` entry the hook added. The rest of `PATH`, including changes you made in the meantime, stays exactly as it was.
+- **A variable you change inside the repository** is yours from then on. The hook doesn't set it again while you stay, and doesn't restore it when you leave.
+- **Switching directly to another managed repository** leaves the first repository, then enters the second.
+
+The hook keeps this state in two internal variables, `__TURBO_HOOK_STATE` and `__TURBO_HOOK_ENV`. Don't set or change them.
 
 The hook never downloads or installs tools, never writes `turbo.lock`, and never hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo). In a repository whose tools all use [`verify-system`](/docs/reference/setup-policy#verify-system), it has nothing to activate and leaves `PATH` unchanged.
 
@@ -76,7 +93,7 @@ The hook activates only binaries that `turbo setup` installed and recorded for y
 
 ### Out-of-date and missing tools
 
-When `turbo.lock` changes after `turbo setup` ran, for example after `git pull`, the hook keeps the previously installed tools active and prints:
+When `turbo.lock` changes after `turbo setup` ran, for example after `git pull`, the hook keeps the previously installed tools and their variables active and prints:
 
 ```txt title="Terminal"
 turbo: turbo.lock changed since `turbo setup`; keeping the previously installed tools active. Run `turbo setup` to update them.
@@ -102,7 +119,7 @@ If your global `turbo` comes from npm instead of the standalone binary, the npm 
 
 On Windows x64, the hook supports Windows PowerShell 5.1 and PowerShell 7. It doesn't support `cmd.exe` or Git Bash. `turbo hook bash`, `zsh`, and `fish` exit with an error on native Windows; use `turbo exec` in those shells.
 
-Besides `PATH`, the Windows hook sets the variables that the managed Rust and Go tools need: `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, `CARGO_HOME`, `RUSTUP_AUTO_INSTALL`, `GOROOT`, and `GOTOOLCHAIN`. It restores their previous values when you leave the repository, unless you changed them in the meantime.
+The Windows hook sets the same [variables](#what-the-hook-changes) as on macOS and Linux, plus `RUSTUP_AUTO_INSTALL=0`, which stops the managed rustup from installing other toolchains. It saves and restores them by the same [rules](#leaving-and-switching-repositories).
 
 Windows finds managed programs such as `pnpm.cmd` through `PATHEXT`. If your `PATHEXT` doesn't include the extensions the managed tools need, the hook activates nothing and prints:
 
@@ -129,7 +146,6 @@ Use `turbo exec` for:
 - **Scripts and CI steps.** Non-interactive shells don't draw prompts, so the hook never runs.
 - **`cmd.exe` and Git Bash on Windows.** They have no supported hook.
 - **GUI-launched processes.** Editors and other applications that start tools directly don't load your shell's startup files.
-- **Commands that need tool variables on macOS and Linux**, such as Cargo with the clone's private `CARGO_HOME`.
 - **Machines without the hook.** For example, when you installed `turbo` with `--no-shell-hook`.
 
 `turbo exec` uses the same tools as `turbo run`, and it fails instead of running out-of-date tools.

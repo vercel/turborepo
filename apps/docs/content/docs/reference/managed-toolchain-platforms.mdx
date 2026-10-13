@@ -91,7 +91,13 @@ Use `turbo` in WSL instead.
 
 ## Repository-local `turbo`
 
-In a managed repository, the global `turbo` hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo) only when that version reports managed toolchain support for the platform. Today, only builds of `turbo` for macOS on Apple silicon report it. On every other platform, managed `turbo run` and `turbo exec` fail while `turbo` is installed in `node_modules`. Use the global binary in managed repositories on those platforms.
+In a managed repository, the global `turbo` hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo) when that version supports the repository's `turbo.lock` schema and tools, and is built for the same platform. Handing off works on:
+
+- macOS, Apple silicon and Intel.
+- Linux x64 and arm64, with glibc. On musl hosts, such as Alpine, it works for repositories whose tools all use [`verify-system`](#musl-linux).
+- Windows x64.
+
+The check compares the lock schema, the platform, and the supported tools, never version numbers. If the local `turbo` was installed for another architecture, for example with x64 Node.js under emulation on Apple silicon, the command fails before running anything. Reinstall dependencies with a Node.js for the machine's native architecture. See [A repository-local `turbo` can't run managed tasks](/docs/reference/setup#a-repository-local-turbo-cant-run-managed-tasks).
 
 ## Pending qualification
 
@@ -101,4 +107,3 @@ These claims are pending. This page changes as each one passes the complete jour
 - **Linux arm64, glibc.**
 - **Windows x64:** Dependency installs, Yarn, Bun, Rust, uv and Python, Go, additional tools, and the PowerShell hook.
 - **musl Linux:** `verify-system` with `turbo run` and `turbo exec`, in CI on a musl host.
-- **Repository-local `turbo`** on platforms other than macOS on Apple silicon.

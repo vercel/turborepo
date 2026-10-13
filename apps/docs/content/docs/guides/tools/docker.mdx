@@ -326,10 +326,10 @@ pnpm 10.18.0: installed from the shared download cache
 
 <Callout type="warn">
   Run tasks with the global `turbo` instead of `pnpm turbo`. When `turbo` is
-  also installed in `node_modules`, the global `turbo` checks that version for
-  managed toolchain support on Linux before handing off to it, and fails with
-  `repository-local CLI at <path> cannot provide the required managed-run
-  capability`. See [Repository-local
+  also installed in `node_modules`, the global `turbo` hands off to it only if
+  that version supports the repository's managed tools. Otherwise, it fails
+  before running anything and asks you to upgrade the repository's `turbo`
+  dependency. See [Repository-local
   `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo).
 </Callout>
 
