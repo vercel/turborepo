@@ -983,8 +983,8 @@ fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
         (None, "{}", "a native Node declaration is required"),
         (
             Some("24.x"),
-            r#"{"packageManager":"npm@11.6.1"}"#,
-            "npm override provisioning",
+            r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#,
+            "invalid native setup declarations",
         ),
     ] {
         let temp = tempfile::tempdir().unwrap();

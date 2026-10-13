@@ -1,0 +1,710 @@
+//! Parser → discovery → npm cohort publication/preparation → read-only check.
+use sha2::Sha512;
+use turborepo_setup::lock::{Installation, Lock};
+
+use super::*;
+
+const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
+const FORCE: &[&str] = &["--tools-only", "--no-frozen", "--force"];
+const CHECK: &[&str] = &["--tools-only", "--check", "--offline"];
+
+struct NpmFixture {
+    f: Fixture,
+    npm: Vec<u8>,
+    version: String,
+}
+impl NpmFixture {
+    fn new(bundled: bool) -> Self {
+        let mut f = Fixture::new();
+        let version = if bundled { "11.6.1" } else { "11.0.0" };
+        let npm = Self::package(version);
+        let prefix = f
+            .node_path
+            .rsplit('/')
+            .next()
+            .unwrap()
+            .trim_end_matches(".tar.gz");
+        f.node = first_lock::bundled(prefix);
+        let parts = f.lock["tools"]["node"]["installation"]["artifacts"]
+            .as_object_mut()
+            .unwrap()
+            .values_mut()
+            .next()
+            .unwrap();
+        parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&f.node)));
+        if bundled {
+            parts["distribution"]["executables"] =
+                json!({"node":"bin/node","npm":"bin/npm","npx":"bin/npx"});
+            f.lock["tools"]["node"]["options"] = json!({"bundled-npm":[version]});
+        }
+        f.lock["tools"].as_object_mut().unwrap().remove("pnpm");
+        f.lock["tools"]["npm"] = json!({"adapter":"npm","version":version,"declarations":[],
+            "installation": if bundled { json!({"kind":"bundled","owner":"node"}) } else {
+                json!({"kind":"managed","artifacts":{"any":{"package":{
+                    "url":format!("https://registry.npmjs.org/npm/-/npm-{version}.tgz"),
+                    "sha256":format!("{:x}",Sha256::digest(&npm)),"format":"tar-gz","rootPrefix":"package",
+                    "executables":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}
+                }}}})
+            }
+        });
+        f.declare(
+            json!({"packageManager":format!("npm@{version}"),"scripts":{"build":"touch task-ran"}}),
+        );
+        let fixture = Self {
+            f,
+            npm,
+            version: version.into(),
+        };
+        fs::write(
+            fixture.f.owned.root().join("turbo.lock"),
+            fixture.lock().canonical_bytes().unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            fixture.f.owned.root().join("package-lock.json"),
+            "dependency lock sentinel",
+        )
+        .unwrap();
+        fixture
+    }
+    fn package(version: &str) -> Vec<u8> {
+        archive(
+            "package",
+            &[
+                (
+                    "package.json",
+                    &json!({"name":"npm","version":version,
+                "bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"},
+                "scripts":{"install":"touch hook-ran"}})
+                    .to_string(),
+                ),
+                ("bin/npm-cli.js", "throw new Error('never execute npm');"),
+                ("bin/npx-cli.js", "throw new Error('never execute npx');"),
+                ("node_modules/resource/data.json", "complete npm resource"),
+            ],
+        )
+    }
+    fn lock(&self) -> Lock {
+        Lock::parse(&fs::read(self.f.owned.root().join("turbo.lock")).unwrap()).unwrap()
+    }
+    fn routes(&self) -> Vec<(String, Vec<u8>)> {
+        let filename = self.f.node_path.rsplit('/').next().unwrap();
+        let file = match provision::platform().unwrap() {
+            turborepo_setup::lock::Platform::MacosArm64 => "osx-arm64-tar",
+            turborepo_setup::lock::Platform::MacosX64 => "osx-x64-tar",
+            turborepo_setup::lock::Platform::LinuxX64Gnu => "linux-x64",
+            _ => "linux-arm64",
+        };
+        vec![
+            (
+                "/dist/index.json".into(),
+                json!([{"version":"v24.0.0","npm":"11.6.1","lts":false,"files":[file]}])
+                    .to_string()
+                    .into_bytes(),
+            ),
+            (
+                "/dist/v24.0.0/SHASUMS256.txt".into(),
+                format!("{:x}  {filename}\n", Sha256::digest(&self.f.node)).into_bytes(),
+            ),
+            (self.f.node_path.clone(), self.f.node.clone()),
+            (
+                format!("/npm/{}", self.version),
+                json!({"name":"npm","version":self.version,"dist":{
+                    "tarball":format!("https://registry.npmjs.org/npm/-/npm-{}.tgz",self.version),
+                    "integrity":format!("sha512-{}", first_lock::base64(&Sha512::digest(&self.npm)))
+                }})
+                .to_string()
+                .into_bytes(),
+            ),
+            (format!("/npm/-/npm-{}.tgz", self.version), self.npm.clone()),
+        ]
+    }
+    fn upstream(&self) -> LoopbackServer {
+        LoopbackServer::new(self.routes(), |_| {}).unwrap()
+    }
+    fn proposed(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<String, Error> {
+        let mut report = None;
+        crate::cli::dispatch_setup(&self.f.args(flags), |args, setup_args| {
+            let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
+            validate_request(&request)?;
+            let discovery = root::Discovery::capture(args)?;
+            let sources = turborepo_setup::lock::Snapshot::capture(self.f.owned.root())?;
+            let transports = provision::Transports {
+                node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
+                    upstream.origin(),
+                )
+                .unwrap(),
+                pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(
+                    upstream.origin(),
+                )
+                .unwrap(),
+                registry:
+                    turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    )
+                    .unwrap(),
+            };
+            report = Some(plan::report(
+                &discovery,
+                sources,
+                &request,
+                Some(transports),
+                || {
+                    Ok(self
+                        .f
+                        .owned
+                        .policy_at(&self.f.owned.root().join("apps/web/src"))?)
+                },
+            )?);
+            Ok(0)
+        })
+        .unwrap()?;
+        Ok(report.unwrap())
+    }
+    fn untouched(&self) {
+        self.f.no_execution();
+        assert_eq!(
+            fs::read(self.f.owned.root().join("package-lock.json")).unwrap(),
+            b"dependency lock sentinel"
+        );
+    }
+}
+
+#[test]
+fn npm_proposed_refresh_reuses_independent_npm_when_resolutions_are_unchanged() {
+    let n = NpmFixture::new(false);
+    assert_eq!(n.f.run(&n.upstream(), LOCAL).unwrap(), 0);
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    let before = checks::snapshot(n.f.owned.root().parent().unwrap());
+    let u = n.upstream();
+    let report = n
+        .proposed(
+            &u,
+            &["--plan", "--tools-only", "--no-frozen", "--update-lock"],
+        )
+        .unwrap();
+    assert_eq!(
+        report.lines().next().unwrap(),
+        "Proposed tools-only plan (turbo.lock unchanged):"
+    );
+    for tool in ["node 24.0.0", "npm 11.0.0"] {
+        assert!(
+            report
+                .lines()
+                .any(|line| line == format!("{tool}: reuse (healthy installation)")),
+            "{report}"
+        );
+    }
+    assert!(!report.contains("Proposed turbo.lock changes:"), "{report}");
+    assert!(
+        report.ends_with(
+            "Tracked changes: none. Resolution read upstream metadata and verified archives; \
+             nothing was installed, and no probes or tasks run."
+        ),
+        "{report}"
+    );
+    assert_eq!(u.hits(), 4); // Node index/checksums and npm metadata/archive, not Node's archive.
+    assert!(!u.requests().contains(&n.f.node_path));
+    assert_eq!(checks::snapshot(n.f.owned.root().parent().unwrap()), before);
+    n.untouched();
+}
+
+#[test]
+fn npm_proposed_refresh_reuses_bundled_npm_when_resolutions_are_unchanged() {
+    let n = NpmFixture::new(true);
+    assert_eq!(n.f.run(&n.upstream(), LOCAL).unwrap(), 0);
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    let before = checks::snapshot(n.f.owned.root().parent().unwrap());
+    let u = n.upstream();
+    let report = n
+        .proposed(
+            &u,
+            &["--plan", "--tools-only", "--no-frozen", "--update-lock"],
+        )
+        .unwrap();
+    assert_eq!(
+        report.lines().next().unwrap(),
+        "Proposed tools-only plan (turbo.lock unchanged):"
+    );
+    for tool in ["node 24.0.0", "npm 11.6.1"] {
+        assert!(
+            report
+                .lines()
+                .any(|line| line == format!("{tool}: reuse (healthy installation)")),
+            "{report}"
+        );
+    }
+    assert!(!report.contains("Proposed turbo.lock changes:"), "{report}");
+    assert!(
+        report.ends_with(
+            "Tracked changes: none. Resolution read upstream metadata and verified archives; \
+             nothing was installed, and no probes or tasks run."
+        ),
+        "{report}"
+    );
+    assert_eq!(u.hits(), 2);
+    assert_eq!(
+        u.requests(),
+        vec![
+            "/dist/index.json".to_owned(),
+            "/dist/v24.0.0/SHASUMS256.txt".to_owned(),
+        ]
+    );
+    assert_eq!(checks::snapshot(n.f.owned.root().parent().unwrap()), before);
+    n.untouched();
+}
+
+#[test]
+fn npm_bundled_proposed_first_lock_reports_missing_tools_without_installing() {
+    let n = NpmFixture::new(true);
+    fs::remove_file(n.f.owned.root().join("turbo.lock")).unwrap();
+    let before = checks::snapshot(n.f.owned.root().parent().unwrap());
+    let u = n.upstream();
+    let report = n
+        .proposed(&u, &["--plan", "--tools-only", "--no-frozen"])
+        .unwrap();
+    assert_eq!(
+        report.lines().next().unwrap(),
+        "Proposed tools-only plan (turbo.lock would be created):"
+    );
+    for tool in ["node 24.0.0", "npm 11.6.1"] {
+        assert!(
+            report
+                .lines()
+                .any(|line| line == format!("{tool}: install (missing installation)")),
+            "{report}"
+        );
+    }
+    assert!(
+        report
+            .contains("Proposed turbo.lock changes:\n  node: locked 24.0.0\n  npm: locked 11.6.1"),
+        "{report}"
+    );
+    assert_eq!(u.hits(), 2); // Only Node index and checksums; npm belongs to Node.
+    assert!(u.requests().iter().all(|path| !path.starts_with("/npm/")));
+    assert_eq!(checks::snapshot(n.f.owned.root().parent().unwrap()), before);
+    assert!(!n.f.owned.root().join(".turbo").exists());
+    n.untouched();
+}
+
+#[test]
+fn npm_non_host_variants_fail_all_consumers_before_traffic_or_writes() {
+    for installed in [false, true] {
+        for case in 0..5 {
+            let mut n = NpmFixture::new(false);
+            if case == 3 {
+                n.f.declare(json!({"packageManager":format!(
+                    "npm@11.0.0+sha256.{:x}", Sha256::digest(&n.npm)
+                )}));
+            }
+            if installed {
+                n.f.run(&n.upstream(), FROZEN).unwrap();
+                assert_eq!(n.f.check(CHECK).unwrap(), 0);
+            }
+            let host = serde_json::to_value(provision::platform().unwrap())
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_owned();
+            let artifacts = &mut n.f.lock["tools"]["npm"]["installation"]["artifacts"];
+            let package = artifacts["any"].clone();
+            *artifacts = json!({host:package,"windows-arm64":package});
+            let package = &mut artifacts["windows-arm64"]["package"];
+            match case {
+                0 => package["url"] = json!("https://registry.npmjs.org/npm/-/npm-11.1.0.tgz"),
+                1 => package["rootPrefix"] = json!("wrong"),
+                2 => package["executables"]["npx"] = json!("bin/other-cli.js"),
+                3 => package["sha256"] = json!("0".repeat(64)),
+                _ => package["format"] = json!("zip"),
+            }
+            // Generic schema-valid, but not a valid portable native npm cohort.
+            let lock = Lock::parse(&n.f.lock.to_string().into_bytes()).unwrap();
+            fs::write(
+                n.f.owned.root().join("turbo.lock"),
+                lock.canonical_bytes().unwrap(),
+            )
+            .unwrap();
+            let before = publication_guards::state(n.f.owned.root().parent().unwrap());
+            let u = n.upstream();
+            for flags in [LOCAL, FROZEN, FORCE, CHECK] {
+                let result = if flags == CHECK {
+                    n.f.check(flags)
+                } else {
+                    n.f.run(&u, flags)
+                };
+                match result {
+                    Err(Error::Activation(turborepo_setup::activation::Error::InvalidLock))
+                        if flags == CHECK => {}
+                    Err(Error::Registry(turborepo_setup::npm_provision::Error::InvalidLock))
+                        if flags != CHECK => {}
+                    other => {
+                        panic!("installed={installed}, case={case}, flags={flags:?}: {other:?}")
+                    }
+                }
+                assert_eq!(u.hits(), 0);
+                assert_eq!(
+                    publication_guards::state(n.f.owned.root().parent().unwrap()),
+                    before
+                );
+            }
+            if !installed {
+                assert!(!n.f.owned.root().join(".turbo").exists());
+            }
+            n.untouched();
+        }
+    }
+}
+
+#[test]
+fn npm_local_first_lock_repeat_frozen_force_and_check_use_complete_host_cohort() {
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        let f = &n.f;
+        fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+        assert!(f.check(CHECK).is_err());
+        let u = n.upstream();
+        assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+        assert_eq!(u.hits(), if bundled { 3 } else { 7 });
+        if bundled {
+            assert!(u.requests().iter().all(|p| !p.starts_with("/npm/")));
+            assert!(matches!(
+                n.lock().tools()["npm"].installation,
+                Installation::Bundled { .. }
+            ));
+        } else {
+            assert!(matches!(
+                n.lock().tools()["npm"].installation,
+                Installation::Managed { .. }
+            ));
+        }
+        let before = publication_guards::state(f.owned.root());
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        for flags in [LOCAL, FROZEN] {
+            assert_eq!(f.run(&empty, flags).unwrap(), 0);
+            assert_eq!(publication_guards::state(f.owned.root()), before);
+        }
+        assert_eq!(f.check(CHECK).unwrap(), 0);
+        assert_eq!(empty.hits(), 0);
+        let current = turborepo_tool_install::Store::inspect(f.owned.root())
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.tools.len(), if bundled { 1 } else { 2 });
+        assert_eq!(current.tools[0].id, "node");
+        for name in ["npm", "npx"] {
+            assert!(current.bin.join(name).exists());
+            if !bundled {
+                let shim = fs::read_to_string(current.bin.join(name)).unwrap();
+                assert!(shim.contains("exec \"$tools/node/bin/node\""));
+                assert!(shim.contains(&format!("$tools/npm/bin/{name}-cli.js")));
+            }
+        }
+        assert_eq!(
+            fs::read(current.bin.join("../tools/node/resource")).unwrap(),
+            b"complete Node resource"
+        );
+        if !bundled {
+            assert_eq!(
+                fs::read(
+                    current
+                        .bin
+                        .join("../tools/npm/node_modules/resource/data.json")
+                )
+                .unwrap(),
+                b"complete npm resource"
+            );
+        }
+        let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+        let force = n.upstream();
+        assert_eq!(f.run(&force, FORCE).unwrap(), 0);
+        assert_eq!(force.hits(), if bundled { 1 } else { 3 });
+        assert!(
+            force
+                .requests()
+                .iter()
+                .all(|p| p != "/dist/index.json" && !p.ends_with("SHASUMS256.txt"))
+        );
+        assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+        assert_eq!(f.check(CHECK).unwrap(), 0);
+        n.untouched();
+    }
+}
+
+#[test]
+fn npm_changed_pin_preserves_node_then_removal_reconciles_both_exports() {
+    let mut n = NpmFixture::new(false);
+    n.f.run(&n.upstream(), FROZEN).unwrap();
+    let node = n.lock().tools()["node"].clone();
+    let old_lock = fs::read(n.f.owned.root().join("turbo.lock")).unwrap();
+    let old_manifest = n.f.manifest().unwrap();
+    n.version = "11.1.0".into();
+    n.npm = NpmFixture::package(&n.version);
+    fs::write(
+        n.f.owned.root().join("package.json"),
+        r#"{"packageManager":"npm@11.1.0"}"#,
+    )
+    .unwrap();
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    assert!(n.f.run(&empty, FROZEN).is_err());
+    assert!(n.f.check(CHECK).is_err());
+    assert_eq!(empty.hits(), 0);
+    assert_eq!(n.f.manifest().unwrap(), old_manifest);
+    assert_eq!(
+        fs::read(n.f.owned.root().join("turbo.lock")).unwrap(),
+        old_lock
+    );
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, LOCAL).unwrap(), 0);
+    assert_eq!(u.hits(), 4);
+    assert!(u.requests().iter().all(|p| p.starts_with("/npm/")));
+    assert_eq!(n.lock().tools()["node"], node);
+    assert_eq!(n.lock().tools()["npm"].version, "11.1.0");
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    fs::write(n.f.owned.root().join("package.json"), "{}").unwrap();
+    assert_eq!(n.f.run(&empty, LOCAL).unwrap(), 0);
+    assert_eq!(empty.hits(), 0);
+    let current = turborepo_tool_install::Store::inspect(n.f.owned.root())
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.tools.len(), 1);
+    for name in ["npm", "npx"] {
+        assert!(!current.bin.join(name).exists());
+    }
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    n.untouched();
+}
+
+#[test]
+fn npm_bundled_to_independent_then_pnpm_switch_reconciles_executable_owners() {
+    let mut n = NpmFixture::new(true);
+    n.f.run(&n.upstream(), FROZEN).unwrap();
+    let before = n.lock().tools()["node"].clone();
+    n.version = "11.0.0".into();
+    n.npm = NpmFixture::package(&n.version);
+    fs::write(
+        n.f.owned.root().join("package.json"),
+        r#"{"packageManager":"npm@11.0.0"}"#,
+    )
+    .unwrap();
+    let u = n.upstream();
+    n.f.run(&u, LOCAL).unwrap();
+    assert_eq!(u.hits(), 5); // Ownership changes restage the exact same Node artifact.
+    let after = n.lock().tools()["node"].clone();
+    assert_eq!(after.version, before.version);
+    let (Installation::Managed { artifacts: old }, Installation::Managed { artifacts: new }) =
+        (&before.installation, &after.installation)
+    else {
+        panic!("expected managed Node")
+    };
+    for (platform, parts) in old {
+        assert_eq!(
+            parts["distribution"].sha256,
+            new[platform]["distribution"].sha256
+        );
+        assert_eq!(parts["distribution"].url, new[platform]["distribution"].url);
+        assert_eq!(new[platform]["distribution"].executables.len(), 1);
+    }
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    fs::write(
+        n.f.owned.root().join("package.json"),
+        r#"{"packageManager":"pnpm@10.0.0"}"#,
+    )
+    .unwrap();
+    let pnpm = Upstream::new(&n.f, false, None);
+    assert_eq!(n.f.run(&pnpm, LOCAL).unwrap(), 0);
+    assert_eq!(pnpm.hits(), 4);
+    assert_eq!(n.lock().tools()["node"], after);
+    assert!(!n.lock().tools().contains_key("npm"));
+    let current = turborepo_tool_install::Store::inspect(n.f.owned.root())
+        .unwrap()
+        .unwrap();
+    for name in ["npm", "npx"] {
+        assert!(!current.bin.join(name).exists());
+    }
+    for name in ["pnpm", "pnpx"] {
+        assert!(current.bin.join(name).exists());
+    }
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    n.untouched();
+}
+
+#[test]
+fn npm_failed_integrity_or_late_drift_never_publishes_a_partial_generation() {
+    for case in 0..4 {
+        let n = NpmFixture::new(false);
+        let f = &n.f;
+        f.run(&n.upstream(), FROZEN).unwrap();
+        let before = f.manifest().unwrap();
+        let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+        let mut routes = n.routes();
+        if case == 0 {
+            routes.last_mut().unwrap().1 = b"corrupt".to_vec();
+        }
+        if case == 1 {
+            // Internally valid registry SHA-512, but not the committed SHA-256.
+            let changed = archive("package", &[("package.json", "changed bytes")]);
+            let metadata = &mut routes[3].1;
+            let mut value: Value = serde_json::from_slice(metadata).unwrap();
+            value["dist"]["integrity"] = json!(format!(
+                "sha512-{}",
+                first_lock::base64(&Sha512::digest(&changed))
+            ));
+            *metadata = value.to_string().into_bytes();
+            routes.last_mut().unwrap().1 = changed;
+        }
+        let root = f.owned.root().to_owned();
+        let u = LoopbackServer::new(routes, move |p| {
+            if p.ends_with(".tgz") {
+                match case {
+                    2 => fs::write(root.join("package.json"), "{}").unwrap(),
+                    3 => fs::write(
+                        root.join("apps/web/.npmrc"),
+                        "registry=https://private.invalid",
+                    )
+                    .unwrap(),
+                    _ => {}
+                }
+            }
+        })
+        .unwrap();
+        assert!(f.run(&u, FORCE).is_err(), "case {case}");
+        assert_eq!(u.hits(), 3);
+        assert_eq!(f.manifest().unwrap(), before);
+        assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+        assert_eq!(
+            turborepo_tool_install::Store::inspect(f.owned.root())
+                .unwrap()
+                .unwrap()
+                .tools
+                .len(),
+            2
+        );
+        n.untouched();
+    }
+}
+
+#[test]
+fn npm_authored_constraints_are_checked_before_traffic_and_bind_reuse() {
+    for case in 0..4 {
+        let mut n = NpmFixture::new(case == 3);
+        let version = n.version.clone();
+        n.f.declare(json!({"packageManager":format!("npm@{version}"),"devEngines":{"packageManager":{
+            "name":"npm","version":format!("{version}+{}.{}", if case == 0 { "sha1" } else { "sha256" }, "0".repeat(if case == 0 { 40 } else { 64 }))
+        }}}));
+        if case == 2 {
+            n.f.declare(
+                json!({"packageManager":format!("npm@{version}"),"devEngines":{"packageManager":[
+                    {"name":"npm","version":version},
+                    {"name":"npm","version":format!("{version}+sha512.{}","0".repeat(128))}
+                ]}}),
+            );
+        }
+        let u = n.upstream();
+        assert!(n.f.run(&u, FROZEN).is_err());
+        assert_eq!(u.hits(), 0);
+        assert!(!n.f.owned.root().join(".turbo").exists());
+        n.untouched();
+    }
+    let mut n = NpmFixture::new(false);
+    n.f.run(&n.upstream(), FROZEN).unwrap();
+    let before = n.f.manifest().unwrap();
+    n.f.declare(
+        json!({"packageManager":"npm@11.0.0","devEngines":{"packageManager":{
+            "name":"npm","version":format!("11.0.0+sha512.{}","0".repeat(128))
+        }}}),
+    );
+    let u = n.upstream();
+    assert!(n.f.run(&u, FROZEN).is_err());
+    assert_eq!(u.hits(), 1); // Node reused; authored SHA-512 fails registry preflight.
+    assert_eq!(n.f.manifest().unwrap(), before);
+    assert!(n.f.check(CHECK).is_err());
+    n.untouched();
+}
+
+#[test]
+fn npm_valid_authored_pins_provision_registry_bytes_even_when_bundled_version_matches() {
+    for matching in [false, true] {
+        for dev in [false, true] {
+            let mut n = NpmFixture::new(false);
+            if matching {
+                n.version = "11.6.1".into();
+                n.npm = NpmFixture::package(&n.version);
+            }
+            let request = if dev {
+                format!("{}+sha512.{:x}", n.version, Sha512::digest(&n.npm))
+            } else {
+                format!("{}+sha256.{:x}", n.version, Sha256::digest(&n.npm))
+            };
+            fs::write(
+                n.f.owned.root().join("package.json"),
+                if dev {
+                    json!({"devEngines":{"packageManager":{"name":"npm","version":request}}})
+                } else {
+                    json!({"packageManager":format!("npm@{request}")})
+                }
+                .to_string(),
+            )
+            .unwrap();
+            fs::remove_file(n.f.owned.root().join("turbo.lock")).unwrap();
+            let u = n.upstream();
+            assert_eq!(n.f.run(&u, LOCAL).unwrap(), 0);
+            assert_eq!(u.hits(), 7);
+            assert!(matches!(
+                n.lock().tools()["npm"].installation,
+                Installation::Managed { .. }
+            ));
+            let before = publication_guards::state(n.f.owned.root());
+            let empty = LoopbackServer::new([], |_| {}).unwrap();
+            assert_eq!(n.f.run(&empty, FROZEN).unwrap(), 0);
+            assert_eq!(empty.hits(), 0);
+            assert_eq!(publication_guards::state(n.f.owned.root()), before);
+            assert_eq!(n.f.check(CHECK).unwrap(), 0);
+            n.untouched();
+        }
+    }
+}
+
+#[test]
+fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drift() {
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        n.f.run(&n.upstream(), FROZEN).unwrap();
+        let sources = turborepo_setup::lock::Snapshot::capture(n.f.owned.root()).unwrap();
+        let writer = sources.guard().unwrap();
+        let store = turborepo_tool_install::Store::open(n.f.owned.root()).unwrap();
+        std::thread::scope(|scope| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let f = &n.f;
+            let check = scope.spawn(move || tx.send(f.check(CHECK)).unwrap());
+            let result = rx.recv_timeout(std::time::Duration::from_secs(5));
+            drop(store);
+            drop(writer);
+            check.join().unwrap();
+            assert_eq!(result.unwrap().unwrap(), 0);
+        });
+        let current = turborepo_tool_install::Store::inspect(n.f.owned.root())
+            .unwrap()
+            .unwrap();
+        let resource = if bundled {
+            "../tools/node/lib/node_modules/npm/package.json"
+        } else {
+            "../tools/npm/node_modules/resource/data.json"
+        };
+        fs::write(current.bin.join(resource), "damage").unwrap();
+        let error = n.f.check(CHECK).unwrap_err().to_string();
+        assert!(error.contains("turbo setup"), "{error}");
+        n.f.run(&n.upstream(), FROZEN).unwrap(); // Normal setup repairs installation drift.
+        assert_eq!(n.f.check(CHECK).unwrap(), 0);
+        fs::write(
+            n.f.owned.root().join("package.json"),
+            r#"{"packageManager":"npm@11.2.0"}"#,
+        )
+        .unwrap();
+        assert!(
+            n.f.check(CHECK)
+                .unwrap_err()
+                .to_string()
+                .contains("turbo setup")
+        );
+        n.untouched();
+    }
+}

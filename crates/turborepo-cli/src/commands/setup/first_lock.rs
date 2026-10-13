@@ -84,7 +84,7 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
         untouched(&f);
     }
 }
-fn bundled(prefix: &str) -> Vec<u8> {
+pub(super) fn bundled(prefix: &str) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in [
         ("bin/node", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
@@ -124,7 +124,7 @@ fn bundled(prefix: &str) -> Vec<u8> {
     gzip.write_all(&tar.into_inner().unwrap()).unwrap();
     gzip.finish().unwrap()
 }
-fn base64(bytes: &[u8]) -> String {
+pub(super) fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = String::new();
     for chunk in bytes.chunks(3) {
@@ -321,7 +321,7 @@ fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
         let u = LoopbackServer::new([], |_| {}).unwrap();
         match case {
             0 => fs::remove_file(f.owned.root().join(".nvmrc")).unwrap(),
-            1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.6.1"}"#).unwrap(),
+            1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.x"}"#).unwrap(),
             2 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.x"}"#).unwrap(),
             3 => fs::write(f.owned.root().join(".npmrc"), "").unwrap(),
             4 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),

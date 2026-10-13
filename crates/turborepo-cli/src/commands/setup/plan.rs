@@ -114,9 +114,10 @@ fn propose(
         },
         || check().map_err(io::Error::other),
     )?;
-    let provision::Plans { node, pnpm } = provision::plans(&sources, &outcome.lock)?;
+    let provision::Plans { node, pnpm, npm } = provision::plans(&sources, &outcome.lock)?;
     let mut desired = vec![node.inventory_tool().clone()];
     desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(npm.as_ref().map(|plan| plan.inventory_tool().clone()));
     // Same per-tool reuse as setup's preparation; inspection never writes.
     let (installed, damaged) = match Store::inspect(root) {
         Ok(current) => (current.map(|c| c.tools).unwrap_or_default(), false),
@@ -134,7 +135,13 @@ fn propose(
         None => "Proposed tools-only plan (turbo.lock unchanged):".into(),
     }];
     for (id, tool) in outcome.lock.tools() {
-        let inventory = desired.iter().find(|inventory| &inventory.id == id);
+        let inventory_id = match &tool.installation {
+            Installation::Bundled { owner } => owner,
+            _ => id,
+        };
+        let inventory = desired
+            .iter()
+            .find(|inventory| &inventory.id == inventory_id);
         // A tool bound to a changed Node is re-staged even if its bytes exist.
         let action = if damaged {
             "repair (damaged installation)"
