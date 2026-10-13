@@ -467,6 +467,11 @@ impl ActivationPlan {
             let root = current
                 .tool_tree(go.inventory_tool())
                 .ok_or(Error::StaleInventory)?;
+            // Windows exports `go.exe` as a hard link, which cannot find this
+            // tree from its own path, so GOROOT is required there. Like `bin`,
+            // use the ordinary spelling Go and its tools print and compare.
+            #[cfg(windows)]
+            let root = dunce::simplified(&root).to_path_buf();
             runtime_env.insert("GOROOT".to_owned(), root.into_os_string());
         }
         sources.ensure_current()?;
