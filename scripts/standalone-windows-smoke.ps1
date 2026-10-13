@@ -262,8 +262,10 @@ console.log(`managed-probe ${node}|${process.version}|${process.arch}|${first}|$
   if ($bin -ne $recorded) { Fail "run activated $bin, but setup recorded $recorded" }
 
   # Repeats reuse the installation without network, including frozen CI.
-  $result = Assert-Succeeds $repo @('setup') -Offline
-  if (-not (Test-Contains $result.Text 'Dependencies skipped')) { Fail "setup did not report skipped dependencies: $($result.Text)" }
+  # Locked dependency installs are not qualified on Windows yet, so this smoke
+  # stays tools-only.
+  $result = Assert-Succeeds $repo @('setup', '--tools-only') -Offline
+  if (-not (Test-Contains $result.Text 'Dependencies skipped (--tools-only)')) { Fail "setup did not skip dependencies: $($result.Text)" }
   $null = Assert-Succeeds $repo @('setup', '--tools-only') @{ CI = '1' } -Offline
   $null = Assert-Succeeds $repo @('setup', '--tools-only', '--offline') -Offline
   $null = Assert-Succeeds $repo @('setup', '--check', '--tools-only', '--offline') -Offline

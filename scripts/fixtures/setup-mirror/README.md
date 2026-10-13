@@ -1,9 +1,10 @@
 # Loopback setup mirror certificates
 
-`scripts/setup-fixture-mirror.mjs` serves the release smokes' fixture Node.js
-and pnpm artifacts over HTTPS at `127.0.0.1`. The smokes point
-`TURBO_SETUP_NODE_MIRROR` and `TURBO_SETUP_NPM_REGISTRY` at it and trust
-`ca.pem` through `SSL_CERT_FILE` for turbo only. The private key is
+`scripts/setup-fixture-mirror.mjs` serves the release smokes' fixture Node.js,
+pnpm, Rust, uv, Python, Go, and additional-tool artifacts over HTTPS at
+`127.0.0.1`. The smokes point `TURBO_SETUP_NPM_REGISTRY` and the
+`TURBO_SETUP_*_MIRROR` variables at it and trust `ca.pem` through
+`SSL_CERT_FILE` for turbo only. The private key is
 intentionally public test data. Never trust this CA outside the smokes. The CA
 signing key was not retained.
 

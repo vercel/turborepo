@@ -567,9 +567,12 @@ jobs:
           if-no-files-found: error
 
   # Installs each packaged archive as users get it (signed and notarized on
-  # macOS) on a native host with no Node.js or JS package manager on turbo's
-  # PATH, then runs managed setup, plain turbo run, and turbo exec against a
-  # loopback fixture mirror. Nothing is downloaded from a vendor.
+  # macOS) on a native host with no Node.js, JS package manager, Rust, uv,
+  # Python, or Go on turbo's PATH, then runs managed setup, plain turbo run,
+  # and turbo exec against a loopback fixture mirror. On Linux and macOS the
+  # journey covers Node.js and pnpm, Rust, uv and Python, Go, an additional
+  # tool, locked dependencies, and the installer's bash and zsh hooks; Windows
+  # x64 covers Node.js and pnpm. Nothing is downloaded from a vendor.
   standalone-smoke:
     name: "Smoke-test Standalone Archives (${{ matrix.settings.name }})"
     needs: [stage, standalone-archives]
@@ -613,6 +616,11 @@ jobs:
         with:
           name: standalone-turbo-${{ needs.stage.outputs.version }}
           path: standalone-artifacts
+
+      # The journey starts bash and zsh with the installer's shell hook.
+      - name: Install zsh
+        if: runner.os == 'Linux'
+        run: command -v zsh || { sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh; }
 
       - name: Smoke-test the standalone install, managed setup, run, and exec
         if: runner.os != 'Windows'

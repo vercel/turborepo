@@ -1,7 +1,8 @@
 #!/bin/sh
 # Release smoke for a packaged Linux or macOS standalone turbo. It installs the
-# archive with the POSIX installer from staged release assets while Node.js and
-# JavaScript package managers are absent from PATH, then checks that setup
+# archive with the POSIX installer from staged release assets while Node.js,
+# JavaScript package managers, Rust, uv, Python, and Go are absent from PATH,
+# lets the installer add its bash and zsh shell hooks, then checks that setup
 # selects this host's artifacts (GNU ones on a glibc host) and runs the managed
 # setup journey (standalone-setup-journey.sh) against a loopback fixture
 # mirror. On macOS, with TURBO_SMOKE_SIGNING_IDENTIFIER set, the installed copy
@@ -11,7 +12,8 @@
 #
 # Usage: scripts/standalone-posix-smoke.sh <version> [standalone-artifacts]
 # The fixture mirror runs on the runner's Node.js, outside turbo's PATH. The
-# musl step needs sudo, unshare, and chroot.
+# journey needs bash and zsh, and the musl step needs sudo, unshare, and
+# chroot.
 set -eu
 # Setup rejects group- or world-writable repositories; match a CI checkout.
 umask 022
@@ -97,23 +99,25 @@ hermetic() {
     HTTP_PROXY="$closed" HTTPS_PROXY="$closed" ALL_PROXY="$closed" NO_PROXY= "$@"
 }
 # shellcheck disable=SC2016 # The hermetic shell expands $tool.
-found=$(hermetic /bin/sh -c 'for tool in node npm npx pnpm yarn corepack bun turbo; do
+found=$(hermetic /bin/sh -c 'for tool in node npm npx pnpm yarn corepack bun turbo cargo rustc rustup uv python python3 go; do
   if command -v "$tool" >/dev/null 2>&1; then printf "%s " "$tool"; fi
 done')
 [ -z "$found" ] || fail "found $found on the smoke PATH"
 
+# install_from <assets> [VARIABLE=value...]
 install_from() {
-  hermetic SMOKE_ASSETS="$1" \
+  from=$1
+  shift
+  hermetic SMOKE_ASSETS="$from" \
     SMOKE_RELEASE_URL="https://github.com/vercel/turborepo/releases/download/v$version" \
-    TURBO_VERSION="$version" TURBO_INSTALL_DIR="$work/install" TURBO_NO_MODIFY_PATH=1 \
-    /bin/sh "$installer"
+    TURBO_VERSION="$version" TURBO_INSTALL_DIR="$work/install" "$@" /bin/sh "$installer"
 }
 
 # Integrity: the packaged archive with appended bytes must not install.
 mkdir "$work/tampered"
 cp "$assets/SHA256SUMS" "$work/tampered/"
 { cat "$assets/$archive"; printf 'tampered'; } >"$work/tampered/$archive"
-if output=$(install_from "$work/tampered" 2>&1); then
+if output=$(install_from "$work/tampered" TURBO_NO_MODIFY_PATH=1 2>&1); then
   fail "installed a tampered $archive"
 fi
 contains "$output" "SHA-256 verification failed for $archive" ||
@@ -121,10 +125,25 @@ contains "$output" "SHA-256 verification failed for $archive" ||
 [ ! -e "$work/install" ] || fail 'a tampered archive changed the install directory'
 
 turbo=$work/install/turbo
-output=$(install_from "$assets" 2>&1) || fail "install failed: $output"
+output=$(install_from "$assets" TURBO_NO_MODIFY_PATH=1 2>&1) || fail "install failed: $output"
 contains "$output" "Installed turbo $version at $turbo" || fail "unexpected install output: $output"
 reported=$(hermetic "$turbo" --version) || fail 'turbo --version failed'
 [ "$reported" = "$version" ] || fail "turbo --version reported $reported, expected $version"
+
+# By default the installer adds PATH and the shell hook to the user's shell
+# profiles; the journey starts bash and zsh with these.
+profiles=$work/profiles
+mkdir "$profiles"
+for shell in bash zsh; do
+  shell_path=$(command -v "$shell") || fail "the runner is missing $shell"
+  output=$(install_from "$assets" HOME="$profiles" SHELL="$shell_path" 2>&1) ||
+    fail "install for $shell failed: $output"
+  contains "$output" "Added the turbo shell hook to your $shell profile" ||
+    fail "the installer did not add the $shell hook: $output"
+done
+for profile in .bashrc .zshrc; do
+  grep -Fq "$turbo' hook" "$profiles/$profile" || fail "$profile has no turbo hook: $(cat "$profiles/$profile")"
+done
 
 # Packaging and installation keep the signed, notarized bytes intact.
 if [ -n "${TURBO_SMOKE_SIGNING_IDENTIFIER:-}" ]; then
@@ -162,7 +181,7 @@ check 'managed installation is missing; run turbo setup'
 
 # Managed setup and plain turbo run with this host's artifacts.
 mirror_node=$(command -v node) || fail 'the fixture mirror needs Node.js on the runner'
-sh "$(dirname "$0")/standalone-setup-journey.sh" "$turbo" "$mirror_node"
+sh "$(dirname "$0")/standalone-setup-journey.sh" "$turbo" "$mirror_node" "$profiles"
 if [ "$(uname -s)" = Darwin ]; then
   printf 'Standalone smoke passed for turbo %s (%s).\n' "$version" "$target"
   exit 0
