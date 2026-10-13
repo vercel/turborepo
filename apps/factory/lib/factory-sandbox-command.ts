@@ -29,6 +29,7 @@ export function factorySandboxCommand(snapshotId: string): string {
   return [
     command,
     '--env "GH_TOKEN=$(gh auth token)"',
+    // oxlint-disable-next-line no-template-curly-in-string -- Shell parameter expansion, not a JS template.
     '--env "AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY:?Set AI_GATEWAY_API_KEY locally first}"'
   ].join(" ");
 }
