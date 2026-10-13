@@ -2613,6 +2613,55 @@ mod tests {
     }
 
     #[test]
+    fn multi_language_guide_workspace_resolves_local_dependencies() {
+        if !go_available() {
+            return;
+        }
+
+        let guide = include_str!("../../../apps/docs/content/docs/guides/multi-language.mdx")
+            .replace("\r\n", "\n");
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = resolution_root(&tempdir);
+        for path in [
+            "go.work",
+            "apps/api/go.mod",
+            "packages/lib/go.mod",
+            "apps/api/main.go",
+            "packages/lib/lib.go",
+        ] {
+            let marker = format!(" title=\"./{path}\"\n");
+            let (_, block) = guide.split_once(&marker).expect("documented Go file");
+            let (contents, _) = block.split_once("\n```").expect("closed code block");
+            let file = tempdir.path().join(path);
+            fs::create_dir_all(file.parent().unwrap()).unwrap();
+            fs::write(file, contents).unwrap();
+        }
+
+        let workspace = discover_workspace(&root).expect("documented Go workspace resolves");
+        let api = workspace
+            .modules
+            .iter()
+            .find(|module| module.module_path == "example.com/acme/api")
+            .expect("documented API module");
+        assert_eq!(
+            api.relationships,
+            vec![Relationship::internal("lib", DependencyKind::Production)]
+        );
+
+        let output = run_go(
+            &root,
+            &["test", "./apps/api/...", "./packages/lib/..."],
+            "go test documented workspace",
+        )
+        .unwrap();
+        assert!(
+            output.status.success(),
+            "documented Go tests failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    #[test]
     fn models_internal_relationships() {
         if !go_available() {
             return;

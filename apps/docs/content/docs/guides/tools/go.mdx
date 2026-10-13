@@ -44,6 +44,8 @@ The repository root must contain:
 - A `go.mod` with a module path in every member
 - Current `go.sum` and `go.work.sum` files when the resolved graph requires them
 
+The workspace must resolve both `go list -mod=readonly -m -json all` and `go mod graph`. Turborepo uses Go's resolved module graph to track dependencies and invalidate cached results.
+
 ```text title="./go.work"
 go 1.22
 
@@ -52,6 +54,14 @@ use (
   ./packages/lib
 )
 ```
+
+Go tests can succeed using local workspace members even when the full module graph cannot resolve an unpublished version in a `require` directive. If the API requires `example.com/acme/lib v0.0.0`, add a version-specific replacement to the root `go.work`:
+
+```text title="./go.work"
+replace example.com/acme/lib v0.0.0 => ./packages/lib
+```
+
+This resolves that version locally without publishing the library. See the [multi-language guide](/docs/guides/multi-language#add-the-go-workspace) for a complete example.
 
 ## Package names
 

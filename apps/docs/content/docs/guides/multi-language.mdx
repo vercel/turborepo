@@ -111,7 +111,11 @@ use (
   ./apps/api
   ./packages/lib
 )
+
+replace example.com/acme/lib v0.0.0 => ./packages/lib
 ```
+
+The replacement resolves the library's unpublished `v0.0.0` version from its local directory. Go tests can use a workspace member without this replacement, but Turborepo also needs the full module graph for dependency tracking and caching. See [Go prerequisites](/docs/guides/tools/go#prerequisites).
 
 Declare the full Go module paths in `go.mod`. Turborepo derives the package names `lib` and `api` from these paths:
 
