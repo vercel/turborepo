@@ -53,7 +53,7 @@ impl NativeRecord {
         }
         let (_, manager) = provenance(snapshot.declarations())?;
         if let Some(manager) = manager {
-            validated(crate::js_resolution::exact_pnpm(&manager))?;
+            validated(crate::js_resolution::exact_manager(&manager))?;
             if manager
                 .package_manager
                 .iter()
