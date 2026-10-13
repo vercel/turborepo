@@ -244,7 +244,8 @@ const script = (name, body) => Buffer.from(`#!/bin/sh\n${logCall(name)}${body}`)
 const cpu = { x64: "x86_64", arm64: "aarch64" }[process.arch];
 const triple = os === "darwin" ? `${cpu}-apple-darwin` : `${cpu}-unknown-linux-gnu`;
 
-// Rust: rustup 1.29.1 and the stable channel at 1.99.0 (static.rust-lang.org).
+// Rust: rustup 1.29.1 and the stable channel at 1.99.0 (static.rust-lang.org),
+// whose components rustup pins as gzip and xz tarballs.
 function rust() {
   const release = "1.99.0";
   const date = "2026-10-01";
@@ -252,10 +253,11 @@ function rust() {
     `manifest-version = "2"\ndate = "${date}"\n[profiles]\n` +
     `minimal = ["rustc", "cargo", "rust-std"]\n[pkg.rust]\nversion = "${release} (b9 ${date})"\n`;
   for (const part of ["rustc", "cargo", "rust-std"]) {
-    const url = `https://static.rust-lang.org/dist/${date}/${part}-${release}-${triple}.tar.gz`;
+    const url = `https://static.rust-lang.org/dist/${date}/${part}-${release}-${triple}.tar`;
     manifest +=
-      `[pkg.${part}]\nversion = "${release}"\n[pkg.${part}.target.${triple}]\n` +
-      `available = true\nurl = "${url}"\nhash = "${sha256(url)}"\n`;
+      `[pkg.${part}]\nversion = "${release}"\n[pkg.${part}.target.${triple}]\navailable = true\n` +
+      `url = "${url}.gz"\nhash = "${sha256(`${url}.gz`)}"\n` +
+      `xz_url = "${url}.xz"\nxz_hash = "${sha256(`${url}.xz`)}"\n`;
   }
   const cargo = script(
     "cargo",

@@ -212,6 +212,10 @@ elf.writeBigUInt64LE(BigInt(interp.length), 104);
 elf.writeBigUInt64LE(1n, 112);
 require("node:fs").writeFileSync(file, Buffer.concat([elf, interp]), { mode: 0o755 });
 ' "$root/bin/sh" "$machine" "/lib/$loader"
+# turbo reads the musl release from that loader, which embeds it like this.
+mkdir "$root/lib"
+musl_arch=${loader#ld-musl-}
+printf 'musl libc (%s)\nVersion %%s\n\0001.2.5\000' "${musl_arch%.so.1}" >"$root/lib/$loader"
 cp "$turbo" "$root/turbo"
 cp -R "$repo" "$root/repo"
 if output=$(sudo env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin HOME=/tmp TURBO_TELEMETRY_DISABLED=1 \
