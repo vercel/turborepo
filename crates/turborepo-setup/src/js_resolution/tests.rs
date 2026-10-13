@@ -15,7 +15,7 @@ use super::*;
 use crate::{
     NodeArtifact, bundled_npm,
     lock::{
-        Snapshot,
+        Platform, Snapshot,
         reconcile::{self, Mode},
     },
     node::lock_target,

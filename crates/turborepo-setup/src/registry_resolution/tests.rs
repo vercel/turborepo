@@ -104,8 +104,11 @@ fn paths(package: &Value) -> Vec<String> {
         .collect()
 }
 fn metadata(name: &str, bytes: &[u8]) -> Value {
-    json!({"name":name,"version":"10.0.0","dist":{
-        "tarball":format!("https://registry.npmjs.org/{name}/-/{name}-10.0.0.tgz"),
+    metadata_for(name, "10.0.0", bytes)
+}
+fn metadata_for(name: &str, version: &str, bytes: &[u8]) -> Value {
+    json!({"name":name,"version":version,"dist":{
+        "tarball":format!("https://registry.npmjs.org/{name}/-/{name}-{version}.tgz"),
         "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(bytes))),
         "shasum":"not a fallback","sha256":"00".repeat(32)}})
 }
@@ -361,6 +364,109 @@ async fn package_identity_complete_bins_and_required_regular_files() {
                     .await
                     .is_err()
             );
+        }
+    }
+}
+
+#[tokio::test]
+async fn pnpm_11_locks_its_published_module_bins() {
+    // pnpm 11's real layout: `.mjs` entry points, `pn`/`pnx` aliases, and the
+    // old `.cjs` files kept only as Corepack shims.
+    let bins = json!({"pn":"bin/pnpm.mjs","pnpm":"bin/pnpm.mjs","pnpx":"bin/pnpx.mjs",
+        "pnx":"bin/pnpx.mjs"});
+    let pkg = json!({"name":"pnpm","version":"11.28.2","type":"module","bin":bins,
+        "engines":{"node":">=22.13"}});
+    let files = ["pnpm.cjs", "pnpx.cjs", "pnpm.mjs", "pnpx.mjs"].map(|f| format!("bin/{f}"));
+    let mut all = files.to_vec();
+    all.push("dist/pnpm.mjs".into());
+    let bytes = archive(&pkg, &all);
+    let document = metadata_for("pnpm", "11.28.2", &bytes);
+    let registry = fixture("pnpm", document.clone(), bytes).await;
+    let selected = registry
+        .transport
+        .resolve_exact(Manager::Pnpm, "11.28.2", None)
+        .await
+        .unwrap();
+    let expected: BTreeMap<String, String> = serde_json::from_value(bins).unwrap();
+    assert_eq!(selected.artifact().executables, expected);
+    // The pnpm 10 pair is not a pnpm 11 layout, even though its files exist.
+    let mut legacy = pkg.clone();
+    legacy["bin"] = json!({"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"});
+    let bytes = archive(&legacy, &files);
+    let registry = fixture("pnpm", metadata_for("pnpm", "11.28.2", &bytes), bytes).await;
+    assert!(matches!(
+        registry
+            .transport
+            .resolve_exact(Manager::Pnpm, "11.28.2", None)
+            .await,
+        Err(Error::InvalidPackage)
+    ));
+}
+
+#[tokio::test]
+async fn native_pnpm_locks_every_node_platform_binary_beside_the_pinned_wrapper() {
+    use crate::{
+        lock::Platform,
+        node_resolution::PLATFORMS,
+        registry_provision::{locked_parts, native_fixture as fx},
+        source_policy::test_support::LoopbackServer,
+    };
+    let (wrapper, natives) = (fx::wrapper(&[]), fx::natives());
+    let server = LoopbackServer::new(fx::routes(&wrapper, &natives), |_| {}).unwrap();
+    let transport = RegistryTransport::loopback_http_for_tests(server.origin()).unwrap();
+    let pin = CorepackIntegrity {
+        algorithm: "sha512",
+        digest: format!("{:x}", Sha512::digest(&wrapper)),
+    };
+    let selected = transport
+        .resolve_exact(Manager::Pnpm, fx::VERSION, Some(&pin))
+        .await
+        .unwrap();
+    selected.verify_authored(Some(&pin)).unwrap();
+    let artifacts = selected.into_artifacts();
+    assert!(artifacts.keys().eq(PLATFORMS.iter()));
+    for (platform, bytes) in &natives {
+        let parts = &artifacts[platform];
+        let (package, native) = locked_parts(Manager::Pnpm, fx::VERSION, *platform, parts).unwrap();
+        assert_eq!(package.sha256, format!("{:x}", Sha256::digest(&wrapper)));
+        assert!(package.executables.is_empty());
+        let native = native.unwrap();
+        assert_eq!(native.sha256, format!("{:x}", Sha256::digest(bytes)));
+        let windows = matches!(platform, Platform::WindowsX64 | Platform::WindowsArm64);
+        let binary = if windows { "pnpm.exe" } else { "pnpm" };
+        assert!(native.executables.values().all(|path| path == binary));
+        assert!(
+            native
+                .executables
+                .keys()
+                .eq(["pn", "pnpm", "pnpx", "pnx"].iter())
+        );
+    }
+    // Another release's platform package, one without its binary, or a wrapper
+    // that ships its own binary never locks.
+    let mut other = natives.clone();
+    let package = r#"{"name":"@pnpm/exe.linux-x64","version":"12.0.0"}"#;
+    other[2].1 = fx::tgz(&[
+        ("package.json", package, 0o644),
+        ("pnpm", fx::BINARY, 0o755),
+    ]);
+    let mut missing = natives.clone();
+    missing[0].1 = fx::native(natives[0].0, false);
+    let shadow = fx::wrapper(&[("pnpm-native", fx::BINARY, 0o755)]);
+    for (wrapper, natives, layout) in [
+        (&wrapper, &other, false),
+        (&wrapper, &missing, true),
+        (&shadow, &natives, false),
+    ] {
+        let server = LoopbackServer::new(fx::routes(wrapper, natives), |_| {}).unwrap();
+        let transport = RegistryTransport::loopback_http_for_tests(server.origin()).unwrap();
+        match transport
+            .resolve_exact(Manager::Pnpm, fx::VERSION, None)
+            .await
+        {
+            Err(Error::Archive(turborepo_archive::Error::LayoutMismatch)) => assert!(layout),
+            Err(Error::InvalidPackage) => assert!(!layout),
+            other => panic!("unexpected resolution: {other:?}"),
         }
     }
 }
