@@ -532,10 +532,9 @@ function runTurboChild(env, useCtrlCPipe) {
   };
 
   const handleSigterm = () => {
-    // Forward every request: native turbo force kills tasks on a second
-    // SIGTERM. `child.killed` turns true after the first forward, so it must
-    // not gate this. Killing an exited child is a no-op.
-    child.kill("SIGTERM");
+    if (!child.killed) {
+      child.kill("SIGTERM");
+    }
   };
 
   const cleanup = () => {

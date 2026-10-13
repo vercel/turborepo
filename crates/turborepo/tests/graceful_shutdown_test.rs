@@ -1657,11 +1657,9 @@ process.exit(Number(process.env.PARITY_EXIT));
         fn second_stop_request_force_kills_without_orphans() {
             let launcher = ProcessLauncher::new();
             for terminal in [Terminal::Pipes, Terminal::Pty] {
-                for (first, second) in [
-                    (Stop::CtrlC, Stop::CtrlC),
-                    (Stop::Term, Stop::Term),
-                    (Stop::CtrlC, Stop::Term),
-                ] {
+                // SIGTERM then SIGTERM is not a parity case: see
+                // `npm_wrapper_does_not_escalate_repeated_sigterm`.
+                for (first, second) in [(Stop::CtrlC, Stop::CtrlC), (Stop::CtrlC, Stop::Term)] {
                     for entry in ENTRIES {
                         eprintln!("case: {entry:?} {terminal:?} {first:?}+{second:?}");
                         // Never released: the second request, not the timeout,
@@ -1690,6 +1688,42 @@ process.exit(Number(process.env.PARITY_EXIT));
                         tree.assert_gone(entrypoint);
                     }
                 }
+            }
+        }
+
+        /// Escalation through the npm wrapper is not supported: the wrapper
+        /// forwards only the first SIGTERM to native turbo, so a second one
+        /// does not force kill. This pins that behavior so changing it
+        /// is deliberate, and checks the run still finishes its
+        /// graceful cleanup without orphans.
+        #[test]
+        fn npm_wrapper_does_not_escalate_repeated_sigterm() {
+            let launcher = ProcessLauncher::new();
+            for terminal in [Terminal::Pipes, Terminal::Pty] {
+                eprintln!("case: {terminal:?}");
+                let (_tempdir, root, mut run, tree) =
+                    start_blocked(&launcher, Entrypoint::NpmWrapper, terminal);
+                let app = root.join("apps/app-a");
+                let release = ReleaseGuard::new(&root);
+                let entrypoint = run.pid();
+                run.stop(Stop::Term);
+                run.wait_for(&app.join("cleanup.started"));
+                run.assert_running("before the second SIGTERM");
+                run.stop(Stop::Term);
+                thread::sleep(Duration::from_millis(500));
+                run.assert_running("after the second SIGTERM");
+                assert!(!app.join("descendant.release").exists());
+                drop(release);
+                let outcome = run.finish(EXIT_TIMEOUT);
+                let output = &outcome.output;
+                let context = format!("{terminal:?}\n{output}");
+                assert_eq!(outcome.code, 0, "{context}");
+                assert!(app.join("descendant.release").exists(), "{context}");
+                assert!(
+                    !output.contains("Force killed") && !output.contains("timed out"),
+                    "{context}"
+                );
+                tree.assert_gone(entrypoint);
             }
         }
 
