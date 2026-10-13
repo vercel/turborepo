@@ -81,22 +81,36 @@ enum Status {
     Unsupported,
 }
 
-/// `1;<root id>;<stamp>;<status>;<bin>`. The bin is last because it may
-/// contain `;`.
-#[derive(Debug, Default, PartialEq, Eq)]
+/// Runtime variables the hook may set beside PATH (see `runtime`).
+const RUNTIME: [&str; 2] = ["GOROOT", "GOTOOLCHAIN"];
+
+/// Runtime variables by name, with a value or `None` for unset.
+type Vars = Vec<(String, Option<String>)>;
+
+/// `1;<root id>;<stamp>;<status>;<bin>`, or with runtime variables
+/// `2;<root id>;<stamp>;<status>;<saved>;<bin>`. The bin is last because it
+/// may contain `;`.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct State {
     root: String,
     stamp: String,
     status: Status,
+    /// Each runtime variable the hook set, with its value from before the
+    /// hook first set it (`None` when it was unset). Encoded as `,`-separated
+    /// `NAME` or `NAME=<hex>` entries.
+    saved: Vars,
     bin: Option<String>,
 }
 
 impl State {
     fn parse(value: &str) -> Option<Self> {
-        let mut fields = value.splitn(5, ';');
-        if fields.next()? != "1" {
-            return None;
-        }
+        let (version, rest) = value.split_once(';')?;
+        let saved = match version {
+            "1" => false,
+            "2" => true,
+            _ => return None,
+        };
+        let mut fields = rest.splitn(if saved { 5 } else { 4 }, ';');
         let root = fields.next()?.to_owned();
         let stamp = fields.next()?.to_owned();
         let status = match fields.next()? {
@@ -107,11 +121,26 @@ impl State {
             "unsupported" => Status::Unsupported,
             _ => return None,
         };
+        let saved = match saved {
+            true => fields
+                .next()?
+                .split(',')
+                .map(|entry| {
+                    let (name, value) = match entry.split_once('=') {
+                        Some((name, hex)) => (name, Some(unhex(hex)?)),
+                        None => (entry, None),
+                    };
+                    RUNTIME.contains(&name).then(|| (name.to_owned(), value))
+                })
+                .collect::<Option<_>>()?,
+            false => Vec::new(),
+        };
         let bin = Some(fields.next()?).filter(|bin| !bin.is_empty());
         Some(Self {
             root,
             stamp,
             status,
+            saved,
             bin: bin.map(str::to_owned),
         })
     }
@@ -125,13 +154,99 @@ impl State {
             Status::Unsupported => "unsupported",
         };
         let bin = self.bin.as_deref().unwrap_or_default();
-        format!("1;{};{};{status};{bin}", self.root, self.stamp)
+        let (root, stamp) = (&self.root, &self.stamp);
+        if self.saved.is_empty() {
+            return format!("1;{root};{stamp};{status};{bin}");
+        }
+        let saved: Vec<_> = self
+            .saved
+            .iter()
+            .map(|(name, value)| match value {
+                Some(value) => format!("{name}={}", hex(value)),
+                None => name.clone(),
+            })
+            .collect();
+        format!("2;{root};{stamp};{status};{};{bin}", saved.join(","))
     }
+}
+
+fn hex(value: &str) -> String {
+    value.bytes().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn unhex(hex: &str) -> Option<String> {
+    if !hex.len().is_multiple_of(2) || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let bytes = (0..hex.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).ok())
+        .collect::<Option<Vec<_>>>()?;
+    String::from_utf8(bytes).ok()
+}
+
+/// What the hook sets beside PATH for a recorded installation. Windows exports
+/// `go.exe` as a hard link that finds its tree only through GOROOT, so it gets
+/// the activation's GOROOT (the Store's `tools/go` beside `bin`) and
+/// GOTOOLCHAIN, as `turbo run` and `turbo exec` do. Unix exports are symlinks
+/// that find their own tree, and their hook output is unchanged.
+fn runtime(bin: &str, go: bool) -> Vec<(&'static str, String)> {
+    let goroot = Path::new(bin).parent().and_then(|generation| {
+        generation
+            .join("tools")
+            .join("go")
+            .to_str()
+            .map(str::to_owned)
+    });
+    match goroot {
+        Some(goroot) if cfg!(windows) && go => std::iter::once(("GOROOT", goroot))
+            .chain(
+                turborepo_setup::go_provision::RUNTIME_ENV
+                    .iter()
+                    .map(|(name, value)| (*name, (*value).to_owned())),
+            )
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Runtime variable edits from the previous activation to `wanted`, and what
+/// to restore later. Like PATH edits, a variable the user changed since the
+/// hook set it is left alone.
+fn runtime_changes(
+    previous: Option<&State>,
+    wanted: &[(&'static str, String)],
+    vars: &impl Fn(&str) -> Option<String>,
+) -> (Vars, Vars) {
+    let saved = previous.map_or(&[][..], |previous| &previous.saved[..]);
+    let set = previous
+        .and_then(|previous| previous.bin.as_deref())
+        .map(|bin| runtime(bin, true))
+        .unwrap_or_default();
+    let ours = |name: &str| set.iter().find(|(n, _)| *n == name).map(|(_, v)| v.clone());
+    let mut edits = Vec::new();
+    for (name, before) in saved {
+        if !wanted.iter().any(|(n, _)| *n == name.as_str()) && vars(name) == ours(name) {
+            edits.push((name.clone(), before.clone()));
+        }
+    }
+    let mut keep = Vec::new();
+    for (name, value) in wanted {
+        let before = saved.iter().find(|(n, _)| n.as_str() == *name);
+        if before.is_none() || ours(name).as_ref() != Some(value) {
+            edits.push((name.to_string(), Some(value.clone())));
+        }
+        let before = before.map_or_else(|| vars(name), |(_, before)| before.clone());
+        keep.push((name.to_string(), before));
+    }
+    (edits, keep)
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Changes {
     path: Option<String>,
+    /// Runtime variables to set, or unset when `None`.
+    env: Vars,
     /// `Some(None)` unsets the state.
     state: Option<Option<String>>,
     notice: Option<String>,
@@ -204,6 +319,7 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
                 Ok(Some(turborepo_platform::Libc::Musl { .. }))
             )
         };
+        let vars = |name: &str| std::env::var(name).ok();
         let changes = changes(
             previous,
             &path,
@@ -211,6 +327,7 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
             base.as_deref(),
             &host,
             musl,
+            vars,
         );
         if let Some(notice) = &changes.notice {
             let _ = writeln!(std::io::stderr(), "turbo: {notice}");
@@ -249,11 +366,13 @@ fn changes(
     base: Option<&Path>,
     host: &Host,
     musl: impl FnOnce() -> bool,
+    vars: impl Fn(&str) -> Option<String>,
 ) -> Changes {
     let Some(root) = cwd.and_then(find_root) else {
         // Outside every repository: remove only what the hook added.
         return previous.map_or_else(Changes::default, |previous| Changes {
-            path: previous.bin.map(|bin| remove(path, &bin)),
+            path: previous.bin.as_deref().map(|bin| remove(path, bin)),
+            env: runtime_changes(Some(&previous), &[], &vars).0,
             state: Some(None),
             notice: None,
         });
@@ -288,14 +407,14 @@ fn changes(
     // user's `turbo setup --no-lock` record opts a clone in, so an unrecorded
     // lockless clone stays off quietly too.
     let locked = fs::symlink_metadata(root.join("turbo.lock")).is_ok();
-    let (status, bin, reason) = if !cfg!(any(unix, windows))
+    let (status, bin, go, reason) = if !cfg!(any(unix, windows))
         || !host.qualified
         || !enabled(&root)
         || (locked && external(&root))
     {
         // Like `turbo run`, verify-system tools stay on the caller's PATH and
         // need no setup record: there is nothing to activate.
-        (Status::Off, None, None)
+        (Status::Off, None, false, None)
     } else if musl() {
         // Like `turbo run`, musl hosts never activate managed artifacts.
         let status = if locked {
@@ -303,13 +422,14 @@ fn changes(
         } else {
             Status::Off
         };
-        (status, None, None)
+        (status, None, false, None)
     } else {
         match trust.and_then(|trust| trust.recorded().map_err(|e| e.to_string())) {
             Ok(Some(recorded)) => match path_entry(recorded.bin) {
                 None => (
                     Status::Missing,
                     None,
+                    false,
                     Some(Reason::Setup("its path cannot be added to PATH".to_owned())),
                 ),
                 Some(bin) => match host
@@ -317,14 +437,14 @@ fn changes(
                     .as_deref()
                     .and_then(|pathext| unresolvable(&recorded.targets, pathext))
                 {
-                    Some(types) => (Status::Missing, None, Some(Reason::Pathext(types))),
-                    None if recorded.stale => (Status::Stale, Some(bin), None),
-                    None => (Status::Active, Some(bin), None),
+                    Some(types) => (Status::Missing, None, false, Some(Reason::Pathext(types))),
+                    None if recorded.stale => (Status::Stale, Some(bin), recorded.go, None),
+                    None => (Status::Active, Some(bin), recorded.go, None),
                 },
             },
-            _ if !locked => (Status::Off, None, None),
-            Ok(None) => (Status::Missing, None, None),
-            Err(reason) => (Status::Missing, None, Some(Reason::Setup(reason))),
+            _ if !locked => (Status::Off, None, false, None),
+            Ok(None) => (Status::Missing, None, false, None),
+            Err(reason) => (Status::Missing, None, false, Some(Reason::Setup(reason))),
         }
     };
 
@@ -340,17 +460,45 @@ fn changes(
     let notice = entered_or_changed
         .then(|| notice(status, reason.as_ref()))
         .flatten();
+    let wanted = bin.as_deref().map_or_else(Vec::new, |bin| runtime(bin, go));
+    let (env, saved) = runtime_changes(previous.as_ref(), &wanted, &vars);
     let state = State {
         root: id,
         stamp: finish(&stamp, bin.as_deref()),
         status,
+        saved,
         bin,
     };
     Changes {
         path,
+        env,
         state: Some(Some(state.encode())),
         notice,
     }
+}
+
+/// One prompt's PowerShell export and the state it leaves, for setup's native
+/// Windows fixtures.
+#[cfg(all(test, windows))]
+pub(crate) fn powershell_for_tests(
+    state: Option<&str>,
+    path: &str,
+    cwd: &Path,
+    base: &Path,
+    vars: impl Fn(&str) -> Option<String>,
+) -> (String, Option<String>) {
+    let previous = state.and_then(State::parse);
+    // A Windows x64 host whose PATHEXT lists every export type. Native Windows
+    // hosts are never musl.
+    let host = Host {
+        qualified: true,
+        pathext: Some(".COM;.EXE;.BAT;.CMD".to_owned()),
+    };
+    let changes = changes(previous, path, Some(cwd), Some(base), &host, || false, vars);
+    (
+        render(HookShell::PowerShell, &changes),
+        changes.state.flatten(),
+    )
 }
 
 fn notice(status: Status, reason: Option<&Reason>) -> Option<String> {
@@ -527,31 +675,30 @@ fn remove(path: &str, bin: &str) -> String {
 
 fn render(shell: HookShell, changes: &Changes) -> String {
     let mut out = String::new();
-    let mut set = |name: &str, value: &str| {
-        let value = quote(shell, value);
-        let _ = match shell {
-            HookShell::Bash | HookShell::Zsh => writeln!(out, "export {name}={value};"),
+    let mut set = |name: &str, value: Option<&str>| {
+        let _ = match (shell, value.map(|value| quote(shell, value))) {
+            (HookShell::Bash | HookShell::Zsh, Some(value)) => {
+                writeln!(out, "export {name}={value};")
+            }
             // fish splits PATH on `:` like the environment does.
-            HookShell::Fish => writeln!(out, "set -gx {name} {value};"),
-            HookShell::PowerShell => writeln!(out, "$env:{name} = {value}"),
+            (HookShell::Fish, Some(value)) => writeln!(out, "set -gx {name} {value};"),
+            (HookShell::PowerShell, Some(value)) => writeln!(out, "$env:{name} = {value}"),
+            (HookShell::Bash | HookShell::Zsh, None) => writeln!(out, "unset {name};"),
+            (HookShell::Fish, None) => writeln!(out, "set -e {name};"),
+            (HookShell::PowerShell, None) => writeln!(
+                out,
+                "Remove-Item -LiteralPath Env:{name} -ErrorAction SilentlyContinue"
+            ),
         };
     };
     if let Some(path) = &changes.path {
-        set("PATH", path);
+        set("PATH", Some(path));
     }
-    match &changes.state {
-        Some(Some(state)) => set(STATE, state),
-        Some(None) => {
-            let _ = match shell {
-                HookShell::Bash | HookShell::Zsh => writeln!(out, "unset {STATE};"),
-                HookShell::Fish => writeln!(out, "set -e {STATE};"),
-                HookShell::PowerShell => writeln!(
-                    out,
-                    "Remove-Item -LiteralPath Env:{STATE} -ErrorAction SilentlyContinue"
-                ),
-            };
-        }
-        None => {}
+    for (name, value) in &changes.env {
+        set(name, value.as_deref());
+    }
+    if let Some(state) = &changes.state {
+        set(STATE, state.as_deref());
     }
     out
 }
@@ -587,7 +734,8 @@ mod tests {
         path.replace(':', &SEPARATOR.to_string())
     }
 
-    /// A qualified host without PATHEXT, like every Unix host.
+    /// A qualified host without PATHEXT, like every Unix host, in a shell
+    /// that has none of the runtime variables set.
     fn changes(
         previous: Option<State>,
         path: &str,
@@ -599,7 +747,7 @@ mod tests {
             qualified: true,
             pathext: None,
         };
-        super::changes(previous, path, cwd, base, &host, musl)
+        super::changes(previous, path, cwd, base, &host, musl, |_| None)
     }
 
     #[test]
@@ -652,7 +800,7 @@ mod tests {
         let changes = Changes {
             path: Some(r"/it's\here".into()),
             state: Some(None),
-            notice: None,
+            ..Default::default()
         };
         assert_eq!(
             render(HookShell::Bash, &changes),
@@ -679,17 +827,47 @@ mod tests {
             render(HookShell::PowerShell, &state),
             "$env:__TURBO_HOOK_STATE = '1;x'\n"
         );
+        // Runtime variables sit between PATH and the state; `None` unsets.
+        let env = Changes {
+            env: vec![
+                ("GOROOT".into(), Some(r"C:\it's".into())),
+                ("GOTOOLCHAIN".into(), None),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            render(HookShell::PowerShell, &env),
+            "$env:GOROOT = 'C:\\it''s'\nRemove-Item -LiteralPath Env:GOTOOLCHAIN -ErrorAction \
+             SilentlyContinue\n"
+        );
+        assert_eq!(
+            render(HookShell::Zsh, &env),
+            "export GOROOT='C:\\it'\\''s';\nunset GOTOOLCHAIN;\n"
+        );
     }
 
     #[test]
     fn state_round_trips_and_rejects_unknown_formats() {
-        let state = State {
+        let mut state = State {
             root: "abc".into(),
             stamp: "def".into(),
             status: Status::Stale,
+            saved: Vec::new(),
             bin: Some("/repo;x/bin".into()),
         };
+        // Without runtime variables the state keeps its first format.
+        assert!(state.encode().starts_with("1;"));
+        assert_eq!(State::parse(&state.encode()), Some(state.clone()));
+        state.saved = vec![
+            ("GOROOT".into(), Some(r"C:\Go;x,y=z".into())),
+            ("GOTOOLCHAIN".into(), None),
+        ];
+        assert!(state.encode().starts_with("2;"));
         assert_eq!(State::parse(&state.encode()), Some(state));
+        // Only known variables with valid saved values are restored.
+        for saved in ["PATH", "GOROOT=4", "GOROOT=+f", "GOROOT=zz", "GOROOT=ff"] {
+            assert_eq!(State::parse(&format!("2;a;b;active;{saved};/bin")), None);
+        }
         assert_eq!(State::parse("2;a;b;active;/bin"), None);
         assert_eq!(State::parse("1;a;b;bogus;"), None);
     }
@@ -858,9 +1036,15 @@ mod tests {
             qualified: false,
             pathext: None,
         };
-        let off = super::changes(None, "/usr/bin", Some(&web), Some(&home), &refused, || {
-            false
-        });
+        let off = super::changes(
+            None,
+            "/usr/bin",
+            Some(&web),
+            Some(&home),
+            &refused,
+            || false,
+            |_| None,
+        );
         assert!(off.path.is_none() && off.notice.is_none());
         assert!(off.state.unwrap().unwrap().contains(";off;"));
         // A lock added later is another resolution: tools stay, with a notice.
@@ -890,6 +1074,78 @@ mod tests {
         assert_eq!(
             changes(None, "/usr/bin", Some(temp.path()), None, || false),
             Changes::default()
+        );
+    }
+
+    #[test]
+    fn only_windows_go_activations_set_runtime_variables() {
+        let bin = r"C:\repo\.turbo\tools\generation-a\bin";
+        let goroot = r"C:\repo\.turbo\tools\generation-a\tools\go".to_owned();
+        assert!(runtime(bin, false).is_empty());
+        if !cfg!(windows) {
+            assert!(runtime(bin, true).is_empty());
+            return;
+        }
+        let wanted = runtime(bin, true);
+        assert_eq!(
+            wanted,
+            [
+                ("GOROOT", goroot.clone()),
+                ("GOTOOLCHAIN", "local".to_owned())
+            ]
+        );
+        let s = |value: &str| Some(value.to_owned());
+        // Entering saves the shell's values, set or not, then sets both.
+        let shell = |name: &str| (name == "GOROOT").then(|| r"C:\Go".to_owned());
+        let (edits, saved) = runtime_changes(None, &wanted, &shell);
+        assert_eq!(
+            edits,
+            [
+                ("GOROOT".to_owned(), s(&goroot)),
+                ("GOTOOLCHAIN".to_owned(), s("local"))
+            ]
+        );
+        assert_eq!(
+            saved,
+            [
+                ("GOROOT".to_owned(), s(r"C:\Go")),
+                ("GOTOOLCHAIN".to_owned(), None)
+            ]
+        );
+        let state = State {
+            bin: Some(bin.into()),
+            saved,
+            ..Default::default()
+        };
+        // An unchanged activation keeps the user's own edit inside the repo,
+        // and leaving restores only what still holds the hook's value.
+        let edited = |name: &str| {
+            s(if name == "GOROOT" {
+                r"D:\mine"
+            } else {
+                "local"
+            })
+        };
+        let (edits, kept) = runtime_changes(Some(&state), &wanted, &edited);
+        assert!(edits.is_empty());
+        assert_eq!(kept, state.saved);
+        let (edits, kept) = runtime_changes(Some(&state), &[], &edited);
+        assert_eq!(edits, [("GOTOOLCHAIN".to_owned(), None)]);
+        assert!(kept.is_empty());
+        let activated = |name: &str| {
+            s(if name == "GOROOT" {
+                goroot.as_str()
+            } else {
+                "local"
+            })
+        };
+        let (edits, _) = runtime_changes(Some(&state), &[], &activated);
+        assert_eq!(
+            edits,
+            [
+                ("GOROOT".to_owned(), s(r"C:\Go")),
+                ("GOTOOLCHAIN".to_owned(), None)
+            ]
         );
     }
 }

@@ -62,6 +62,9 @@ pub(crate) struct TrustStore {
 /// Setup-recorded tools for the interactive shell hook only.
 pub(crate) struct Recorded {
     pub(crate) bin: PathBuf,
+    /// The installation includes managed Go, whose Windows export needs
+    /// GOROOT.
+    pub(crate) go: bool,
     /// turbo.lock changed since setup recorded this installation, including a
     /// lock added after `turbo setup --no-lock`.
     pub(crate) stale: bool,
@@ -391,6 +394,7 @@ impl TrustStore {
             .collect();
         Ok(Some(Recorded {
             stale: !record.resolves(lock.as_deref()),
+            go: record.installation.tools.iter().any(|tool| tool.id == "go"),
             bin: record.installation.bin,
             targets,
         }))
