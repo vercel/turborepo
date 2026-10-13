@@ -522,7 +522,8 @@ impl ActivationPlan {
 }
 
 /// The uv launchers' settings, for uv processes that do not start through
-/// them, plus the locked interpreter as uv's request. Uses uv's download key
+/// them (every Windows uv: its `.exe` exports have no launcher), plus the
+/// locked interpreter as uv's request. Uses uv's download key
 /// rather than a path: a path request makes `uv pip` install into the managed
 /// interpreter itself instead of the project's virtual environment.
 fn uv_env(
@@ -535,11 +536,13 @@ fn uv_env(
         return Ok(env);
     }
     let generation = current.bin.parent().ok_or(Error::StaleInventory)?;
+    let python_dir = generation.join("tools").join("python");
+    // Like the bin directory, give uv and the virtual environments it creates
+    // the ordinary spelling rather than a verbatim `\\?\` path.
+    #[cfg(windows)]
+    let python_dir = dunce::simplified(&python_dir).to_path_buf();
     env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
-    env.insert(
-        "UV_PYTHON_INSTALL_DIR".into(),
-        generation.join("tools").join("python").into_os_string(),
-    );
+    env.insert("UV_PYTHON_INSTALL_DIR".into(), python_dir.into_os_string());
     if let Some(python) = python {
         env.insert("UV_PYTHON_PREFERENCE".into(), "only-managed".into());
         env.insert("UV_PYTHON".into(), python.key().into());
