@@ -146,6 +146,7 @@ impl<'de> Deserialize<'de> for BerryResolutionMap {
 
 #[derive(Debug)]
 pub struct BerryLockfile {
+    // Lockfile metadata only: packages are moved into `locator_package`.
     data: LockfileData,
     resolutions: Map<Descriptor<'static>, Locator<'static>>,
     // A mapping from descriptors without protocols to a range with a protocol
@@ -246,23 +247,25 @@ impl BerryLockfile {
         let mut descriptor_locator = Map::new();
         let mut resolver = DescriptorResolver::default();
         let mut workspace_path_to_locator = HashMap::new();
-        for (key, package) in &lockfile.packages {
-            let locator = Locator::try_from(package.resolution.as_str())?;
+        // Packages move into `locator_package`, the only place they are read
+        // after construction; `data` keeps just the metadata. `lockfile()`
+        // rebuilds the on-disk package map from `locator_package` for encoding.
+        let LockfileData { metadata, packages } = lockfile;
+        for (key, package) in packages {
+            let locator = Locator::try_from(package.resolution.as_str())?.as_owned();
 
             if locator.patch_file().is_some() {
                 let original_locator = locator
                     .patched_locator()
-                    .ok_or_else(|| Error::PatchMissingOriginalLocator(locator.as_owned()))?;
-                patches.insert(original_locator.as_owned(), locator.as_owned());
+                    .ok_or_else(|| Error::PatchMissingOriginalLocator(locator.clone()))?;
+                patches.insert(original_locator.as_owned(), locator.clone());
             }
-
-            locator_package.insert(locator.as_owned(), package.clone());
 
             if let Some(path) = locator.reference.strip_prefix("workspace:") {
-                workspace_path_to_locator.insert(path.to_string(), locator.as_owned());
+                workspace_path_to_locator.insert(path.to_string(), locator.clone());
             }
 
-            for descriptor in Descriptor::from_lockfile_key(key) {
+            for descriptor in Descriptor::from_lockfile_key(&key) {
                 let descriptor = descriptor?;
                 if let Some(other) = resolver.insert(&descriptor) {
                     Err(Error::DescriptorCollision {
@@ -270,8 +273,10 @@ impl BerryLockfile {
                         other,
                     })?;
                 }
-                descriptor_locator.insert(descriptor.into_owned(), locator.as_owned());
+                descriptor_locator.insert(descriptor.into_owned(), locator.clone());
             }
+
+            locator_package.insert(locator, package);
         }
 
         let (overrides, catalogs, package_extensions) = if let Some(manifest) = manifest {
@@ -281,7 +286,10 @@ impl BerryLockfile {
         };
 
         let mut this = Self {
-            data: lockfile,
+            data: LockfileData {
+                metadata,
+                packages: Map::new(),
+            },
             resolutions: descriptor_locator,
             locator_package,
             resolver,
@@ -300,7 +308,9 @@ impl BerryLockfile {
     }
 
     fn populate_extensions(&mut self) -> Result<(), Error> {
-        let mut possible_extensions: HashSet<_> = self
+        // Only membership matters (the survivors feed the unordered
+        // `extensions` set), so a fast hash is safe here.
+        let mut possible_extensions: rustc_hash::FxHashSet<_> = self
             .resolutions
             .keys()
             .filter(|descriptor| matches!(descriptor.protocol(), Some("npm")))
