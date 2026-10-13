@@ -347,7 +347,12 @@ impl BoundariesResult {
 
     pub fn emit(&self, color_config: ColorConfig) {
         for diagnostic in &self.diagnostics {
-            eprintln!("{:?}", Report::new(diagnostic.clone()));
+            // Stderr is unbuffered and miette renders a report as many small
+            // fragments (often single characters), so formatting directly into
+            // stderr costs one write syscall per fragment. Render each report
+            // first and write it with a single call instead.
+            let rendered = format!("{:?}\n", Report::new(diagnostic.clone()));
+            eprint!("{rendered}");
         }
         let result_message = match self.diagnostics.len() {
             0 => color!(color_config, BOLD_GREEN, "no issues found"),
