@@ -13,7 +13,7 @@ script_provided_flags="\
 for flag in $user_provided_flags; do
   if [[ $flag == --target=* ]]; then
     target=${flag#*=}
-    rustup toolchain install nightly-2026-07-03 --target "$target"
+    rustup toolchain install nightly-2026-08-14 --target "$target"
 
     # Cross-compile Linux GNU targets with cargo-zigbuild.
     if [[ $target == x86_64-unknown-linux-gnu || $target == aarch64-unknown-linux-gnu ]]; then

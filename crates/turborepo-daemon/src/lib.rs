@@ -23,6 +23,7 @@
 #![allow(unused_features, reason = "impl_trait_in_assoc_type is actually used")]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
+#![allow(clippy::double_must_use, reason = "that comes from async_trait macro")]
 
 mod bump_timeout;
 mod bump_timeout_layer;
