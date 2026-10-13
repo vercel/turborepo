@@ -22,12 +22,28 @@ fn system32() -> PathBuf {
 
 // Stored entries from a DOS host, as in the official Windows archive.
 fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    zip_in(PREFIX, false, files)
+}
+
+/// Stored entries under `prefix`. With `unix`, a Unix host's archive like
+/// Bun's Windows release: a 0777 directory entry, then 0777 files.
+fn zip_in(prefix: &str, unix: bool, files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let le = |out: &mut Vec<u8>, value: usize, width: usize| {
         out.extend(&(value as u32).to_le_bytes()[..width]);
     };
+    let directory = (format!("{prefix}/"), &[][..], (0o40777 << 16) | 0x10);
+    let file_mode = if unix { 0o100777 << 16 } else { 0x20 }; // Or the archive bit.
+    let entries: Vec<(String, &[u8], usize)> = unix
+        .then_some(directory)
+        .into_iter()
+        .chain(
+            files
+                .iter()
+                .map(|(path, data)| (format!("{prefix}/{path}"), data.as_slice(), file_mode)),
+        )
+        .collect();
     let (mut local, mut central) = (Vec::new(), Vec::new());
-    for (path, data) in files {
-        let name = format!("{PREFIX}/{path}");
+    for (name, data, attributes) in &entries {
         let mut crc = flate2::Crc::new();
         crc.update(data);
         let offset = local.len();
@@ -35,7 +51,8 @@ fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
             let is_central = signature == 0x02014b50;
             le(out, signature, 4);
             if is_central {
-                le(out, 20, 2); // Made by DOS, version 2.0.
+                // Made by Unix or DOS, version 2.0.
+                le(out, if unix { 0x0314 } else { 20 }, 2);
             }
             for (value, width) in [(20, 2), (0, 2), (0, 2), (0, 4)] {
                 le(out, value, width); // Version, flags, stored, timestamp.
@@ -46,21 +63,21 @@ fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
             le(out, name.len(), 2);
             le(out, 0, 2);
             if is_central {
-                for (value, width) in [(0, 2), (0, 2), (0, 2), (0x20, 4), (offset, 4)] {
-                    le(out, value, width); // Comment, disk, internal, archive bit.
+                for (value, width) in [(0, 2), (0, 2), (0, 2), (*attributes, 4), (offset, 4)] {
+                    le(out, value, width); // Comment, disk, internal, external.
                 }
             }
             out.extend(name.as_bytes());
         }
-        local.extend(data);
+        local.extend(*data);
     }
     let (start, size) = (local.len(), central.len());
     local.extend(central);
     le(&mut local, 0x06054b50, 4);
     for (value, width) in [
         (0, 4),
-        (files.len(), 2),
-        (files.len(), 2),
+        (entries.len(), 2),
+        (entries.len(), 2),
         (size, 4),
         (start, 4),
     ] {
@@ -389,6 +406,8 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
 
 #[path = "windows_additional_tests.rs"]
 mod additional;
+#[path = "windows_bun_tests.rs"]
+mod bun;
 #[path = "windows_go_tests.rs"]
 mod go;
 #[path = "windows_yarn_tests.rs"]
