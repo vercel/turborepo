@@ -457,7 +457,7 @@ impl PreparedNode {
 }
 /// Hosts promote only their own artifact family: Unix trees on Unix and
 /// Windows x64 trees on native Windows.
-fn promotable(tool: &Tool) -> bool {
+pub(crate) fn promotable(tool: &Tool) -> bool {
     match tool.platform.strip_prefix("windows-") {
         Some(arch) => cfg!(windows) && arch == "x64",
         None => cfg!(unix),
