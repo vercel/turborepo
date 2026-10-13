@@ -97,6 +97,7 @@ fn official(platform: Platform, version: &str, sha256: &str) -> Result<Artifact,
         url: format!("{RELEASES}{}/bun-{target}.zip", release(version)?),
         sha256: sha256.into(),
         format: Format::Zip,
+        alternates: BTreeMap::new(),
         root_prefix: Some(format!("bun-{target}")),
         destination: None,
         executables: BTreeMap::from([

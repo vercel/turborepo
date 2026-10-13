@@ -133,6 +133,7 @@ pub fn resolve(
                     url: official.url(),
                     sha256: metadata.sha256().into(),
                     format: if windows { Format::Zip } else { Format::TarGz },
+                    alternates: BTreeMap::new(),
                     root_prefix: Some(prefix.into()),
                     destination: None,
                     executables,

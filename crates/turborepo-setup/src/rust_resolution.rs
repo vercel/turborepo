@@ -1,12 +1,14 @@
 //! Root rust-toolchain request + official channel manifest -> portable `rust`
 //! lock tool. Each host's parts are the component tarballs rustup installs for
-//! the profile, components and targets, pinned by the manifest's SHA-256. No
-//! installation, rustup execution or task execution.
+//! the profile, components and targets, gzip and xz copies each pinned by the
+//! manifest's SHA-256. No installation, rustup execution or task execution.
 
 use std::collections::BTreeMap;
 
 use crate::{
-    lock::{self, Artifact, Document, Format, Installation, Lock, Tool},
+    lock::{
+        self, Alternate, AlternateFormat, Artifact, Document, Format, Installation, Lock, Tool,
+    },
     rust_discovery::{Channel, Toolchain},
     rust_metadata::{self, Manifest},
     rustup,
@@ -177,6 +179,13 @@ pub fn resolve(toolchain: &Toolchain, manifest: &[u8]) -> Result<Tool, Error> {
                 url: tarball.url.into(),
                 sha256: tarball.sha256.into(),
                 format: Format::TarGz,
+                alternates: BTreeMap::from([(
+                    AlternateFormat::TarXz,
+                    Alternate {
+                        url: tarball.xz_url.into(),
+                        sha256: tarball.xz_sha256.into(),
+                    },
+                )]),
                 root_prefix: Some(format!("{}/{directory}", tarball.stem)),
                 destination: None,
                 executables: executables(package)

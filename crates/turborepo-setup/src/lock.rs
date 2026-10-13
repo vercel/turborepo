@@ -142,6 +142,14 @@ pub enum Format {
     Zip,
 }
 
+/// Formats turbo never extracts but a delegated installer may download
+/// instead of the primary archive.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum AlternateFormat {
+    TarXz,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Artifact {
@@ -149,6 +157,11 @@ pub struct Artifact {
     pub url: String,
     pub sha256: String,
     pub format: Format,
+    /// The same payload in other archive formats that a delegated installer
+    /// may fetch instead (rustup prefers `.tar.xz`), pinned like the primary.
+    /// Excluded from task-cache identity, which the primary digest fixes.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub alternates: BTreeMap<AlternateFormat, Alternate>,
     /// None means archive root. Binary payloads have no prefix.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_prefix: Option<String>,
@@ -159,6 +172,13 @@ pub struct Artifact {
     /// A binary has exactly one payload path. Components may expose no
     /// binaries.
     pub executables: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Alternate {
+    pub url: String,
+    pub sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -358,20 +378,19 @@ fn declarations(values: &[Declaration]) -> Result<(), Error> {
     }
     Ok(())
 }
-fn validate_artifact(value: &Artifact) -> Result<(), Error> {
+fn validate_source(source: &str, sha256: &str) -> Result<(), Error> {
     // Never echo source metadata in diagnostics. Query parameters can carry
     // secrets.
-    let authority = value
-        .url
+    let authority = source
         .strip_prefix("https://")
         .and_then(|rest| rest.split('/').next())
         .unwrap_or_default();
-    if value.url.len() > 4096 || authority.is_empty() || authority.contains('@') {
+    if source.len() > 4096 || authority.is_empty() || authority.contains('@') {
         return Err(Error::Invalid("invalid or credential-bearing artifact URL"));
     }
-    let url = Url::parse(&value.url).map_err(|_| Error::Invalid("invalid artifact URL"))?;
-    if !value.url.starts_with("https://")
-        || value.url.chars().any(|c| c.is_control() || c == '\\')
+    let url = Url::parse(source).map_err(|_| Error::Invalid("invalid artifact URL"))?;
+    if !source.starts_with("https://")
+        || source.chars().any(|c| c.is_control() || c == '\\')
         || url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
@@ -382,15 +401,24 @@ fn validate_artifact(value: &Artifact) -> Result<(), Error> {
             "artifact URL must be credential-free HTTPS without query or fragment",
         ));
     }
-    if value.sha256.len() != 64
-        || !value
-            .sha256
+    if sha256.len() != 64
+        || !sha256
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
     {
         return Err(Error::Invalid(
             "artifact requires a lowercase SHA-256 digest",
         ));
+    }
+    Ok(())
+}
+fn validate_artifact(value: &Artifact) -> Result<(), Error> {
+    validate_source(&value.url, &value.sha256)?;
+    if value.format == Format::Binary && !value.alternates.is_empty() {
+        return Err(Error::Invalid("binary payloads have no alternate formats"));
+    }
+    for alternate in value.alternates.values() {
+        validate_source(&alternate.url, &alternate.sha256)?;
     }
     if value
         .root_prefix

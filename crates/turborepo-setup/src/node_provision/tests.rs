@@ -424,6 +424,10 @@ fn adapter_rejects_nonofficial_metadata_and_unavailable_targets() {
         ("format", json!("zip")),
         ("destination", json!("other")),
         (
+            "alternates",
+            json!({"tar-xz":{"url":"https://evil.test/node.tar.xz","sha256":"a".repeat(64)}}),
+        ),
+        (
             "executables",
             json!({"node":"bin/node","corepack":"bin/corepack"}),
         ),
