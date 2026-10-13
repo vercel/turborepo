@@ -30,6 +30,7 @@ use std::{
 };
 
 use turborepo_setup::test_support::{LoopbackServer, OwnedSetupFixture};
+use turborepo_shim::TurboState;
 
 /// Language tools a managed run must never take from the host PATH.
 const HOST_TOOLS: &[&str] = &[
@@ -173,6 +174,33 @@ impl Journey {
                 assert!(text.contains(&format!("secret={secret}")), "{mode}: {text}");
             }
         }
+        // This build as a repository-local turbo covers every adapter's
+        // requirement: managed run hands off to it and the tools hold.
+        let scope = self
+            .root()
+            .join("node_modules")
+            .join(TurboState::scoped_platform_package_scope());
+        let package = scope.join(TurboState::scoped_platform_package_dir());
+        fs::create_dir_all(package.join("bin")).unwrap();
+        let version = include_str!("../../../version.txt").lines().next().unwrap();
+        fs::write(
+            package.join("package.json"),
+            format!(r#"{{"version":"{version}"}}"#),
+        )
+        .unwrap();
+        let (turbo, pin) = (env!("CARGO_BIN_EXE_turbo"), package.join("bin/turbo"));
+        fs::hard_link(turbo, &pin)
+            .or_else(|_| fs::copy(turbo, &pin).map(drop))
+            .unwrap();
+        let flags = ["--ui=stream", "--verbosity=2"];
+        let args: Vec<_> = ["run"].iter().chain(tasks).chain(&flags).copied().collect();
+        let (code, text) = self.turbo(nested, &args);
+        assert_eq!(code, 0, "pinned: {text}");
+        assert!(text.contains("Running local turbo binary in"), "{text}");
+        for line in expected {
+            assert!(text.contains(line), "pinned {line:?}: {text}");
+        }
+        fs::remove_dir_all(scope).unwrap();
     }
 
     /// Plain `turbo run` fails before any task with `guidance`.

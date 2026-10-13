@@ -1,6 +1,6 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 use std::time::{Duration, Instant};
 use std::{fs, path::PathBuf};
 
@@ -22,7 +22,7 @@ fn need() -> Requirement {
 }
 
 /// A prelaunch report for `target` (this host's when `None`).
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 fn prelaunch(schema: u32, target: Option<&str>, features: &str) -> String {
     let host = format!(
         "{}-{}",
@@ -62,7 +62,7 @@ fn absent_pin_requires_global_support() {
     assert!(select(&Requirement::new(1, ["node"]), &capable_global(), None).is_err());
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
 fn compatible_installed_peer_is_preserved_even_when_global_is_incomplete() {
     for report in [
@@ -92,7 +92,7 @@ fn compatible_installed_peer_is_preserved_even_when_global_is_incomplete() {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
 fn installed_incompatible_pin_is_never_replaced_even_by_a_complete_global() {
     let clone_local = Requirement::new(0, ["clone-local", "node", "pnpm"]);
@@ -135,7 +135,7 @@ fn installed_incompatible_pin_is_never_replaced_even_by_a_complete_global() {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
 fn unsupported_malformed_noisy_nonzero_and_oversized_queries_fail_closed() {
     for report in [
@@ -167,7 +167,7 @@ fn unsupported_malformed_noisy_nonzero_and_oversized_queries_fail_closed() {
     );
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
 fn blocked_query_is_bounded_and_its_native_process_is_reaped() {
     let (_temp, binary) = peer("hang");
@@ -215,7 +215,7 @@ fn native_self_case_meets_the_same_contract_as_copied_peers() {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
 fn probe_suppression_does_not_change_the_callers_environment() {
     let (_temp, binary) = peer("environment");
@@ -256,7 +256,7 @@ fn assert_gone(pid: i32) {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[test]
 fn exited_parent_does_not_leak_same_group_descendants_with_or_without_pipes() {
     for mode in ["held-pipes", "background"] {
@@ -269,11 +269,23 @@ fn exited_parent_does_not_leak_same_group_descendants_with_or_without_pipes() {
             assert!(matches!(result.unwrap(), Selection::Local(_)));
         }
         assert!(start.elapsed() < Duration::from_secs(10));
-        let pid = fs::read_to_string(binary.parent().unwrap().join("capability-descendant.pid"))
-            .unwrap()
-            .parse()
-            .unwrap();
-        assert_gone(pid);
+        let pid =
+            fs::read_to_string(binary.parent().unwrap().join("capability-descendant.pid")).unwrap();
+        #[cfg(unix)]
+        assert_gone(pid.parse().unwrap());
+        // The descendant runs the same image, which Windows refuses to remove
+        // while any process runs it; the query's job must have ended it.
+        #[cfg(windows)]
+        {
+            let start = Instant::now();
+            while let Err(error) = fs::remove_file(&binary) {
+                assert!(
+                    start.elapsed() < Duration::from_secs(3),
+                    "fixture process {pid} survived cleanup: {error}"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
     }
 }
 
@@ -304,7 +316,7 @@ fn escaped_descendant_cannot_block_the_deadline_or_reader_cleanup() {
     assert_gone(pid);
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 #[test]
 fn non_self_probe_fails_closed_until_platform_cleanup_is_qualified() {
     let (_temp, binary) = peer("hang");
