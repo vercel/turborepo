@@ -36,12 +36,40 @@ fn attempt(f: &Fixture, u: &LoopbackServer, flags: &[&str]) -> Result<i32, Error
     f.no_execution();
     result
 }
+/// A failed attempt with no traffic, probes, environment change or
+/// publication: the lock, the active manifest and user state are unchanged.
+/// Unlike `attempt`, setup's own lock files may appear under `.turbo`.
+fn rejected(f: &Fixture, u: &LoopbackServer, flags: &[&str]) -> Error {
+    let published = || {
+        (
+            fs::read(f.owned.root().join("turbo.lock")).ok(),
+            f.manifest(),
+            snapshot(f.owned.home()),
+        )
+    };
+    let before = published();
+    let environment: std::collections::BTreeMap<_, _> = std::env::vars_os().collect();
+    let hits = u.hits();
+    let error = f.run(u, flags).unwrap_err();
+    assert_eq!(published(), before);
+    assert_eq!(u.hits(), hits);
+    assert_eq!(
+        std::env::vars_os().collect::<std::collections::BTreeMap<_, _>>(),
+        environment
+    );
+    f.no_execution();
+    error
+}
 fn unavailable(f: &Fixture, u: &LoopbackServer) -> Error {
-    // Offline force has no other reinstall source than verified local bytes.
-    let forced = attempt(f, u, OFFLINE_FORCE).unwrap_err();
-    let error = attempt(f, u, OFFLINE).unwrap_err();
-    assert_eq!(forced.to_string(), error.to_string());
-    assert!(matches!(error, Error::Offline(_)), "{error}");
+    // What trusted reuse cannot authorize falls through to verified cached
+    // bytes (#14540), as offline --force always does. These fixtures have no
+    // cache, so both fail; only the plain report must name every artifact.
+    rejected(f, u, OFFLINE_FORCE);
+    let error = rejected(f, u, OFFLINE);
+    assert!(
+        matches!(error, Error::Offline(_) | Error::OfflineMissing(_)),
+        "{error}"
+    );
     let message = error.to_string();
     for fragment in [
         "node 24.0.0",
@@ -50,7 +78,6 @@ fn unavailable(f: &Fixture, u: &LoopbackServer) -> Error {
         "pnpm-10.0.0.tgz",
         "SHA-256",
         "without --offline",
-        "download-cache repair is not implemented",
     ] {
         assert!(message.contains(fragment), "{fragment}: {message}");
     }
@@ -75,9 +102,10 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         // Prove repeat doesn't recreate even an absent producer lock file.
         fs::remove_file(f.owned.root().join(".turbo/tools/transaction.lock")).unwrap();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
+        // Offline --force reinstalls from verified bytes (#14540's cache
+        // tests), so it is not a read-only repeat.
         for flags in [
             OFFLINE,
-            OFFLINE_FORCE,
             &["--tools-only", "--offline", "--frozen"],
             &["--tools-only", "--offline", "--no-frozen"],
         ] {
@@ -134,7 +162,9 @@ fn missing_and_damaged_installations_report_the_complete_unverified_artifact_set
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     let fresh = Fixture::new();
     unavailable(&fresh, &empty);
-    assert!(!fresh.owned.root().join(".turbo").exists());
+    // The cache path may create setup's lock files, but never an installation
+    // or user state.
+    assert!(fresh.manifest().is_none());
     assert!(!fresh.owned.home().join("turborepo").exists());
     for case in 0..5 {
         let f = installed();
@@ -175,6 +205,18 @@ fn missing_corrupt_unsafe_and_stale_external_evidence_never_becomes_offline_auth
         }
         // Readiness still succeeds: the rejection must be external provenance.
         assert!(ActivationPlan::inspect(f.owned.root(), check::context().unwrap()).is_ok());
+        if case == 5 {
+            // Same selections in new lock bytes: the stale record never
+            // authorizes read-only reuse, but setup's reuse rule (#14494, which
+            // ignores lock drift) lets the cache path (#14540) reuse the
+            // recorded installation and refresh the record, without traffic.
+            let hits = empty.hits();
+            assert_eq!(f.run(&empty, OFFLINE).unwrap(), 0);
+            assert_eq!(empty.hits(), hits);
+            f.no_execution();
+            assert_eq!(attempt(&f, &empty, OFFLINE).unwrap(), 0);
+            continue;
+        }
         unavailable(&f, &empty);
     }
 }
@@ -243,10 +285,11 @@ fn declaration_drift_missing_lock_and_unsupported_offline_controls_never_resolve
         attempt(&f, &empty, &["--check", "--tools-only", "--offline"]).unwrap(),
         0
     );
-    assert!(matches!(
-        attempt(&f, &empty, &["--plan", "--tools-only", "--offline"]),
-        Err(Error::NotImplemented)
-    ));
+    // #14571 implements read-only locked plans.
+    assert_eq!(
+        attempt(&f, &empty, &["--plan", "--tools-only", "--offline"]).unwrap(),
+        0
+    );
     assert_eq!(empty.hits(), 0);
 }
 
@@ -286,7 +329,18 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
             })
         }).unwrap();
         assert!(result.is_err(), "case {case}");
-        assert_eq!(called.get(), 2);
+        if case == 2 {
+            // Nothing is trusted once the record is gone, so plain offline falls
+            // through to the cache path (#14540), which rechecks inputs itself
+            // and has no cached bytes here.
+            assert!(
+                matches!(result, Err(Error::OfflineMissing(_))),
+                "{result:?}"
+            );
+            assert!(called.get() > 2);
+        } else {
+            assert_eq!(called.get(), 2);
+        }
         assert_eq!(
             snapshot(f.owned.root().parent().unwrap()),
             expected.into_inner().unwrap()
