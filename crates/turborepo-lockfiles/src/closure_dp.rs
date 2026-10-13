@@ -37,6 +37,7 @@ use std::{
     sync::Arc,
 };
 
+use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -49,6 +50,28 @@ const MAX_CHUNK_BYTES: usize = 64 * 1024 * 1024;
 /// Below this chunk width the per-pass graph traversal overhead dominates;
 /// prefer the legacy walk for absurdly large graphs instead.
 const MIN_CHUNK_BITS: usize = 1024;
+/// Minimum items per rayon task when resolution runs in parallel. Levels
+/// smaller than this run on the calling thread.
+const PARALLEL_MIN_LEN: usize = 32;
+
+/// Maps `items` in order, on rayon workers when `parallel` is set. Resolution
+/// for formats with cheap lookups (pnpm, npm, yarn1) is faster on the calling
+/// thread than the pool round-trips a parallel level costs.
+fn par_map<T: Sync, R: Send>(
+    items: &[T],
+    parallel: bool,
+    f: impl Fn(&T) -> R + Sync + Send,
+) -> Vec<R> {
+    if parallel {
+        items
+            .par_iter()
+            .with_min_len(PARALLEL_MIN_LEN)
+            .map(f)
+            .collect()
+    } else {
+        items.iter().map(f).collect()
+    }
+}
 
 /// Compute all workspace closures via the shared DP. Returns `Ok(None)`
 /// when the graph contains a workspace-sensitive edge (caller must use the
@@ -70,75 +93,149 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
     };
 
     // 1. Direct dependencies stay workspace-resolved, mirroring the legacy walk's
-    //    root handling (including `ignore_missing_packages`).
-    let mut roots: Vec<(&String, Vec<u32>)> = Vec::with_capacity(workspaces.len());
-    for (workspace, unresolved) in workspaces {
-        let mut root_ids = Vec::with_capacity(unresolved.len());
+    //    root handling (including `ignore_missing_packages`). Workspaces may
+    //    resolve in parallel; interning stays sequential.
+    let parallel = resolver.parallel();
+    let workspace_list: Vec<(&String, &BTreeMap<String, String>)> = workspaces.iter().collect();
+    let resolved_roots = par_map(&workspace_list, parallel, |&(workspace, unresolved)| {
+        let mut resolved = Vec::with_capacity(unresolved.len());
         for (name, specifier) in unresolved {
             match lockfile.resolve_package(workspace, name, specifier) {
-                Ok(Some(pkg)) => root_ids.push(intern(pkg, &mut packages)),
+                Ok(Some(pkg)) => resolved.push(pkg),
                 Ok(None) => {}
                 Err(Error::MissingWorkspace(_)) if ignore_missing_packages => {}
                 Err(e) => return Err(e),
             }
         }
-        roots.push((workspace, root_ids));
-    }
+        Ok((workspace, resolved))
+    })
+    .into_iter()
+    .collect::<Result<Vec<_>, Error>>()?;
+    let roots: Vec<(&String, Vec<u32>)> = resolved_roots
+        .into_iter()
+        .map(|(workspace, resolved)| {
+            let root_ids = resolved
+                .into_iter()
+                .map(|pkg| intern(pkg, &mut packages))
+                .collect();
+            (workspace, root_ids)
+        })
+        .collect();
 
-    // 2. Global graph: BFS from all roots, resolving each distinct (name, version)
-    //    edge once.
+    // 2. Global graph: level-synchronous BFS from all roots, resolving each
+    //    distinct (name, version) edge once. Each level fetches the frontier's
+    //    dependency maps and resolves its not-yet-seen edges (in parallel when the
+    //    resolver asks for it), then interns results and records adjacency
+    //    sequentially.
     let mut adjacency: Vec<Vec<u32>> = vec![Vec::new(); packages.len()];
-    let mut edge_memo: FxHashMap<(String, String), Option<u32>> = FxHashMap::default();
-    let mut stack: Vec<u32> = {
-        let mut seen = vec![false; packages.len()];
-        let mut stack = Vec::new();
-        for (_, root_ids) in &roots {
-            for &id in root_ids {
-                if !seen[id as usize] {
-                    seen[id as usize] = true;
-                    stack.push(id);
-                }
+    // `name\0version` -> target, probed through a reused key buffer so a
+    // lookup never allocates.
+    let mut edge_memo: FxHashMap<String, Option<u32>> = FxHashMap::default();
+    let mut key_buf = String::new();
+    // Nodes already expanded or queued for expansion.
+    let mut scheduled = vec![false; packages.len()];
+    let mut frontier: Vec<u32> = Vec::new();
+    for (_, root_ids) in &roots {
+        for &id in root_ids {
+            if !scheduled[id as usize] {
+                scheduled[id as usize] = true;
+                frontier.push(id);
             }
         }
-        stack
-    };
-    let mut expanded = vec![false; packages.len()];
-    while let Some(id) = stack.pop() {
-        if expanded[id as usize] {
-            continue;
-        }
-        expanded[id as usize] = true;
+    }
+    // Per-edge outcome of the memo probe: a known target, or an index into
+    // this level's pending (first-seen) edges.
+    enum EdgeRef {
+        Known(Option<u32>),
+        Pending(u32),
+    }
+    while !frontier.is_empty() {
+        let level_deps = par_map(&frontier, parallel, |&id| {
+            lockfile.all_dependencies(&packages[id as usize].key)
+        })
+        .into_iter()
+        .collect::<Result<Vec<_>, Error>>()?;
 
-        let Some(deps) = lockfile.all_dependencies(&packages[id as usize].key)? else {
-            continue;
-        };
-        for (name, version) in deps.as_ref() {
-            let target = match edge_memo.get(&(name.clone(), version.clone())) {
-                Some(cached) => *cached,
-                None => {
-                    let resolved = match resolver.resolve_edge(name, version)? {
-                        TransitiveEdgeResolution::Global(resolved) => resolved,
-                        TransitiveEdgeResolution::WorkspaceSensitive => return Ok(None),
-                    };
-                    let target = resolved.map(|pkg| {
-                        let id = intern(pkg, &mut packages);
-                        if id as usize >= adjacency.len() {
-                            adjacency.resize(id as usize + 1, Vec::new());
-                            expanded.resize(id as usize + 1, false);
+        let mut edge_refs: Vec<EdgeRef> = Vec::new();
+        let mut pending: Vec<(&str, &str)> = Vec::new();
+        {
+            let mut pending_index: FxHashMap<(&str, &str), u32> = FxHashMap::default();
+            for deps in level_deps.iter().flatten() {
+                for (name, version) in deps.as_ref() {
+                    key_buf.clear();
+                    key_buf.push_str(name);
+                    key_buf.push('\0');
+                    key_buf.push_str(version);
+                    let edge_ref = match edge_memo.get(key_buf.as_str()) {
+                        Some(&target) => EdgeRef::Known(target),
+                        None => {
+                            let edge = (name.as_str(), version.as_str());
+                            EdgeRef::Pending(*pending_index.entry(edge).or_insert_with(|| {
+                                pending.push(edge);
+                                (pending.len() - 1) as u32
+                            }))
                         }
-                        id
-                    });
-                    edge_memo.insert((name.clone(), version.clone()), target);
-                    target
-                }
-            };
-            if let Some(target) = target {
-                adjacency[id as usize].push(target);
-                if !expanded[target as usize] {
-                    stack.push(target);
+                    };
+                    edge_refs.push(edge_ref);
                 }
             }
         }
+
+        let outcomes = par_map(&pending, parallel, |&(name, version)| {
+            resolver.resolve_edge(name, version)
+        });
+        // A single workspace-sensitive edge invalidates the DP; prefer the
+        // fallback over any error so the legacy walk reports exactly what it
+        // always has.
+        if outcomes
+            .iter()
+            .any(|outcome| matches!(outcome, Ok(TransitiveEdgeResolution::WorkspaceSensitive)))
+        {
+            return Ok(None);
+        }
+        let mut pending_targets: Vec<Option<u32>> = Vec::with_capacity(pending.len());
+        for (&(name, version), outcome) in pending.iter().zip(outcomes) {
+            let target = match outcome? {
+                TransitiveEdgeResolution::Global(resolved) => {
+                    resolved.map(|pkg| intern(pkg, &mut packages))
+                }
+                TransitiveEdgeResolution::WorkspaceSensitive => return Ok(None),
+            };
+            let mut key = String::with_capacity(name.len() + version.len() + 1);
+            key.push_str(name);
+            key.push('\0');
+            key.push_str(version);
+            edge_memo.insert(key, target);
+            pending_targets.push(target);
+        }
+        if packages.len() > adjacency.len() {
+            adjacency.resize(packages.len(), Vec::new());
+            scheduled.resize(packages.len(), false);
+        }
+
+        let mut next = Vec::new();
+        let mut edge_refs = edge_refs.into_iter();
+        for (&id, deps) in frontier.iter().zip(&level_deps) {
+            let Some(deps) = deps else {
+                continue;
+            };
+            // `edge_refs` holds one entry per edge, in this same order.
+            for edge_ref in edge_refs.by_ref().take(deps.len()) {
+                let target = match edge_ref {
+                    EdgeRef::Known(target) => target,
+                    EdgeRef::Pending(index) => pending_targets[index as usize],
+                };
+                let Some(target) = target else {
+                    continue;
+                };
+                adjacency[id as usize].push(target);
+                if !scheduled[target as usize] {
+                    scheduled[target as usize] = true;
+                    next.push(target);
+                }
+            }
+        }
+        frontier = next;
     }
 
     let node_count = packages.len();
@@ -607,6 +704,218 @@ lodash@^4.0.0, lodash@^4.17.0:
         .collect();
 
         assert_dp_matches_legacy(&lockfile, workspaces);
+    }
+
+    fn berry_workspaces(
+        entries: &[(&str, &[(&str, &str)])],
+    ) -> HashMap<String, BTreeMap<String, String>> {
+        entries
+            .iter()
+            .map(|(workspace, deps)| {
+                (
+                    workspace.to_string(),
+                    deps.iter()
+                        .map(|(name, range)| (name.to_string(), range.to_string()))
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_berry_dp_matches_legacy_with_overrides_and_cycle() {
+        // Exercises an SCC, an unscoped override applied to a transitive edge
+        // (workspace-independent), and a parent-scoped override whose parent
+        // is an external package (never matches a workspace locator).
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    carrier: "npm:^1.0.0"
+    lodash: "npm:^4.0.0"
+  languageName: unknown
+  linkType: soft
+
+"b@workspace:packages/b":
+  version: 0.0.0-use.local
+  resolution: "b@workspace:packages/b"
+  dependencies:
+    lodash: "npm:^4.17.0"
+  languageName: unknown
+  linkType: soft
+
+"carrier@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "carrier@npm:1.0.0"
+  dependencies:
+    leaf: "npm:^1.0.0"
+    shared: "npm:^1.0.0"
+  checksum: 10c0-carrier
+  languageName: node
+  linkType: hard
+
+"cycle-a@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "cycle-a@npm:1.0.0"
+  dependencies:
+    cycle-b: "npm:^1.0.0"
+  checksum: 10c0-cycle-a
+  languageName: node
+  linkType: hard
+
+"cycle-b@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "cycle-b@npm:1.0.0"
+  dependencies:
+    cycle-a: "npm:^1.0.0"
+    shared: "npm:^1.0.0"
+  checksum: 10c0-cycle-b
+  languageName: node
+  linkType: hard
+
+"leaf@npm:2.0.0":
+  version: 2.0.0
+  resolution: "leaf@npm:2.0.0"
+  checksum: 10c0-leaf2
+  languageName: node
+  linkType: hard
+
+"leaf@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "leaf@npm:1.0.0"
+  checksum: 10c0-leaf1
+  languageName: node
+  linkType: hard
+
+"lodash@npm:^4.0.0, lodash@npm:^4.17.0":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  dependencies:
+    shared: "npm:^1.0.0"
+  checksum: 10c0-lodash
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"shared@npm:1.0.0, shared@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "shared@npm:1.0.0"
+  dependencies:
+    cycle-a: "npm:^1.0.0"
+  checksum: 10c0-shared
+  languageName: node
+  linkType: hard
+"#;
+        let manifest = crate::BerryManifest::with_resolutions([
+            ("carrier/leaf".to_string(), "2.0.0".to_string()),
+            ("shared".to_string(), "1.0.0".to_string()),
+        ]);
+        let lockfile = crate::BerryLockfile::load(yaml.as_bytes(), Some(manifest)).expect("parse");
+        let workspaces = berry_workspaces(&[
+            ("packages/a", &[("carrier", "^1.0.0"), ("lodash", "^4.0.0")]),
+            ("packages/b", &[("lodash", "^4.17.0")]),
+        ]);
+
+        let dp = assert_dp_matches_legacy(&lockfile, workspaces);
+        let a: Vec<&str> = dp["packages/a"]
+            .iter()
+            .map(|pkg| pkg.key.as_str())
+            .collect();
+        assert!(
+            a.contains(&"leaf@npm:2.0.0") && !a.contains(&"leaf@npm:1.0.0"),
+            "scoped override from an external parent must apply: {a:?}"
+        );
+    }
+
+    #[test]
+    fn test_berry_dp_falls_back_on_workspace_scoped_override() {
+        // `a/shared` overrides `shared` only when the depending package is
+        // workspace `a`. The legacy walk resolves transitive edges with the
+        // workspace's locator, so `carrier`'s `shared` edge resolves to 2.0.0
+        // for `a` but 1.0.0 for `b`. The DP must detect this and fall back.
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    carrier: "npm:^1.0.0"
+  languageName: unknown
+  linkType: soft
+
+"b@workspace:packages/b":
+  version: 0.0.0-use.local
+  resolution: "b@workspace:packages/b"
+  dependencies:
+    carrier: "npm:^1.0.0"
+  languageName: unknown
+  linkType: soft
+
+"carrier@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "carrier@npm:1.0.0"
+  dependencies:
+    shared: "npm:^1.0.0"
+  checksum: 10c0-carrier
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"shared@npm:2.0.0":
+  version: 2.0.0
+  resolution: "shared@npm:2.0.0"
+  checksum: 10c0-shared2
+  languageName: node
+  linkType: hard
+
+"shared@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "shared@npm:1.0.0"
+  checksum: 10c0-shared1
+  languageName: node
+  linkType: hard
+"#;
+        let manifest =
+            crate::BerryManifest::with_resolutions([("a/shared".to_string(), "2.0.0".to_string())]);
+        let lockfile = crate::BerryLockfile::load(yaml.as_bytes(), Some(manifest)).expect("parse");
+        let workspaces = berry_workspaces(&[
+            ("packages/a", &[("carrier", "^1.0.0")]),
+            ("packages/b", &[("carrier", "^1.0.0")]),
+        ]);
+
+        let resolver = crate::Lockfile::transitive_edge_resolver(&lockfile)
+            .expect("berry supports edge resolution");
+        let dp = all_transitive_closures_dp(&lockfile, resolver.as_ref(), &workspaces, false)
+            .expect("dp run");
+        assert!(
+            dp.is_none(),
+            "workspace-scoped override must force fallback"
+        );
+
+        let via_public =
+            crate::all_transitive_closures_sorted(&lockfile, workspaces.clone(), false)
+                .expect("public");
+        assert_matches_legacy(&lockfile, &workspaces, &via_public);
+        let keys =
+            |ws: &str| -> Vec<&str> { via_public[ws].iter().map(|pkg| pkg.key.as_str()).collect() };
+        assert!(keys("packages/a").contains(&"shared@npm:2.0.0"));
+        assert!(keys("packages/b").contains(&"shared@npm:1.0.0"));
     }
 
     #[test]
