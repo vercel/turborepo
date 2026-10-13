@@ -409,5 +409,7 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
 mod additional;
 #[path = "windows_bun_tests.rs"]
 mod bun;
+#[path = "windows_pnpm_tests.rs"]
+mod pnpm;
 #[path = "windows_yarn_tests.rs"]
 mod yarn;
