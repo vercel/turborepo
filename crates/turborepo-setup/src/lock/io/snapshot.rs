@@ -82,7 +82,7 @@ impl Snapshot {
         })
     }
 
-    pub(crate) fn root(&self) -> &Path {
+    pub(crate) fn repository_root(&self) -> &Path {
         &self.root
     }
 

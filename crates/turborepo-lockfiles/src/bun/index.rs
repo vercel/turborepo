@@ -42,63 +42,104 @@ pub struct PackageIndex {
 impl PackageIndex {
     /// Create a new package index from a packages map.
     pub fn new(packages: &super::Map<String, PackageEntry>) -> Self {
+        use rayon::prelude::*;
+
+        /// Per-entry index inputs. Computing them (the deep entry clone,
+        /// key/ident parsing, string interning) is independent per entry, so
+        /// it runs in parallel; the maps are filled sequentially below in
+        /// `packages` order, so every bucket's order is unchanged.
+        struct Prepared {
+            key_ref: StringRef,
+            entry: PackageEntry,
+            ident_ref: StringRef,
+            // (parent, name) for keys nested under a parent.
+            scoped: Option<(StringRef, StringRef)>,
+            secondary: Secondary,
+        }
+        enum Secondary {
+            None,
+            Bundled,
+            Nested(StringRef),
+        }
+
+        let entries: Vec<(&String, &PackageEntry)> = packages.iter().collect();
+        let prepared: Vec<Prepared> = entries
+            .par_iter()
+            .with_min_len(64)
+            .map(|&(key, entry)| {
+                // Index workspace-scoped packages
+                // Example: "workspace/package" -> ("workspace", "package")
+                let parsed_key = PackageKey::parse(key);
+                let scoped = parsed_key
+                    .parent()
+                    .map(|parent| (Arc::from(parent), Arc::from(parsed_key.name())));
+
+                // Index bundled dependencies and nested/aliased entries
+                let secondary = if key.contains('/') {
+                    let is_bundled = entry
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.other.get("bundled"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    if is_bundled {
+                        Secondary::Bundled
+                    } else {
+                        // Index non-bundled entries by their ident's package
+                        // name for find_matching_version's fallback search,
+                        // skipping workspace mappings the way that search does.
+                        let ident = PackageIdent::parse(&entry.ident);
+                        if ident.is_workspace() {
+                            Secondary::None
+                        } else {
+                            Secondary::Nested(Arc::from(ident.name()))
+                        }
+                    }
+                } else {
+                    Secondary::None
+                };
+
+                Prepared {
+                    key_ref: Arc::from(key.as_str()),
+                    entry: entry.clone(),
+                    ident_ref: Arc::from(entry.ident.as_str()),
+                    scoped,
+                    secondary,
+                }
+            })
+            .collect();
+
         let mut by_key = HashMap::with_capacity(packages.len());
         let mut by_ident: HashMap<StringRef, Vec<StringRef>> = HashMap::new();
         let mut workspace_scoped = HashMap::new();
         let mut bundled_deps = BTreeMap::new();
         let mut nested_by_name: HashMap<StringRef, Vec<StringRef>> = HashMap::new();
 
-        // First pass: populate by_key and by_ident
-        for (key, entry) in packages {
-            // Convert key to Arc<str> once
-            let key_ref: StringRef = Arc::from(key.as_str());
-
-            by_key.insert(Arc::clone(&key_ref), entry.clone());
-
-            // Index by ident - convert ident to Arc<str>
-            let ident_ref: StringRef = Arc::from(entry.ident.as_str());
+        for prepared in prepared {
+            let Prepared {
+                key_ref,
+                entry,
+                ident_ref,
+                scoped,
+                secondary,
+            } = prepared;
+            by_key.insert(Arc::clone(&key_ref), entry);
             by_ident
                 .entry(ident_ref)
                 .or_default()
                 .push(Arc::clone(&key_ref));
-
-            // Index workspace-scoped packages
-            // Example: "workspace/package" -> ("workspace", "package")
-            let parsed_key = PackageKey::parse(key);
-            if let Some(parent) = parsed_key.parent() {
-                let parent_ref: StringRef = Arc::from(parent);
-                let name_ref: StringRef = Arc::from(parsed_key.name());
-                workspace_scoped.insert((parent_ref, name_ref), Arc::clone(&key_ref));
+            if let Some((parent, name)) = &scoped {
+                workspace_scoped
+                    .insert((Arc::clone(parent), Arc::clone(name)), Arc::clone(&key_ref));
             }
-
-            // Index bundled dependencies and nested/aliased entries
-            if key.contains('/') {
-                let is_bundled = entry
-                    .info
-                    .as_ref()
-                    .and_then(|info| info.other.get("bundled"))
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-
-                let parsed_key = PackageKey::parse(key);
-                if is_bundled {
-                    if let Some(parent) = parsed_key.parent() {
-                        let parent_ref: StringRef = Arc::from(parent);
-                        let name_ref: StringRef = Arc::from(parsed_key.name());
-                        bundled_deps.insert((parent_ref, name_ref), Arc::clone(&key_ref));
-                    }
-                } else {
-                    // Index non-bundled entries by their ident's package name
-                    // for find_matching_version's fallback search, skipping
-                    // workspace mappings the way that search does.
-                    let ident = PackageIdent::parse(&entry.ident);
-                    if !ident.is_workspace() {
-                        nested_by_name
-                            .entry(Arc::from(ident.name()))
-                            .or_default()
-                            .push(Arc::clone(&key_ref));
+            match secondary {
+                Secondary::None => {}
+                Secondary::Bundled => {
+                    if let Some(scoped) = scoped {
+                        bundled_deps.insert(scoped, key_ref);
                     }
                 }
+                Secondary::Nested(name) => nested_by_name.entry(name).or_default().push(key_ref),
             }
         }
 

@@ -80,7 +80,7 @@ impl ActivationPlan {
     pub fn inspect_captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
         Self::qualify(&context)?;
         sources.ensure_current()?;
-        Self::from_sources(sources.root(), sources, context)
+        Self::from_sources(sources.repository_root(), sources, context)
     }
 
     fn qualify(context: &ExecutionContext) -> Result<(), Error> {
