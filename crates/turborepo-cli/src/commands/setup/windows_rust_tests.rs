@@ -303,7 +303,7 @@ fn the_shell_hook_activates_the_proxies_with_the_run_variables() {
     }
     let repo = Repo::new();
     repo.lock();
-    assert_eq!(repo.run(&repo.upstream(), FROZEN).unwrap(), 0);
+    assert_eq!(repo.ok(&repo.upstream(), FROZEN), 0);
     let (run, bin) = repo.overrides();
     let path = r"C:\Windows\System32";
     // A shell's working directory uses the ordinary spelling.
