@@ -122,6 +122,45 @@ impl NpmFixture {
     fn upstream(&self) -> LoopbackServer {
         LoopbackServer::new(self.routes(), |_| {}).unwrap()
     }
+    fn proposed(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<String, Error> {
+        let mut report = None;
+        crate::cli::dispatch_setup(&self.f.args(flags), |args, setup_args| {
+            let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
+            validate_request(&request)?;
+            let discovery = root::Discovery::capture(args)?;
+            let sources = turborepo_setup::lock::Snapshot::capture(self.f.owned.root())?;
+            let transports = provision::Transports {
+                node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
+                    upstream.origin(),
+                )
+                .unwrap(),
+                pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(
+                    upstream.origin(),
+                )
+                .unwrap(),
+                registry:
+                    turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    )
+                    .unwrap(),
+            };
+            report = Some(plan::report(
+                &discovery,
+                sources,
+                &request,
+                Some(transports),
+                || {
+                    Ok(self
+                        .f
+                        .owned
+                        .policy_at(&self.f.owned.root().join("apps/web/src"))?)
+                },
+            )?);
+            Ok(0)
+        })
+        .unwrap()?;
+        Ok(report.unwrap())
+    }
     fn untouched(&self) {
         self.f.no_execution();
         assert_eq!(
@@ -129,6 +168,123 @@ impl NpmFixture {
             b"dependency lock sentinel"
         );
     }
+}
+
+#[test]
+fn npm_proposed_refresh_reuses_independent_npm_when_resolutions_are_unchanged() {
+    let n = NpmFixture::new(false);
+    assert_eq!(n.f.run(&n.upstream(), LOCAL).unwrap(), 0);
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    let before = checks::snapshot(n.f.owned.root().parent().unwrap());
+    let u = n.upstream();
+    let report = n
+        .proposed(
+            &u,
+            &["--plan", "--tools-only", "--no-frozen", "--update-lock"],
+        )
+        .unwrap();
+    assert_eq!(
+        report.lines().next().unwrap(),
+        "Proposed tools-only plan (turbo.lock unchanged):"
+    );
+    for tool in ["node 24.0.0", "npm 11.0.0"] {
+        assert!(
+            report
+                .lines()
+                .any(|line| line == format!("{tool}: reuse (healthy installation)")),
+            "{report}"
+        );
+    }
+    assert!(!report.contains("Proposed turbo.lock changes:"), "{report}");
+    assert!(
+        report.ends_with(
+            "Tracked changes: none. Resolution read upstream metadata and verified archives; \
+             nothing was installed, and no probes or tasks run."
+        ),
+        "{report}"
+    );
+    assert_eq!(u.hits(), 4); // Node index/checksums and npm metadata/archive, not Node's archive.
+    assert!(!u.requests().contains(&n.f.node_path));
+    assert_eq!(checks::snapshot(n.f.owned.root().parent().unwrap()), before);
+    n.untouched();
+}
+
+#[test]
+fn npm_proposed_refresh_reuses_bundled_npm_when_resolutions_are_unchanged() {
+    let n = NpmFixture::new(true);
+    assert_eq!(n.f.run(&n.upstream(), LOCAL).unwrap(), 0);
+    assert_eq!(n.f.check(CHECK).unwrap(), 0);
+    let before = checks::snapshot(n.f.owned.root().parent().unwrap());
+    let u = n.upstream();
+    let report = n
+        .proposed(
+            &u,
+            &["--plan", "--tools-only", "--no-frozen", "--update-lock"],
+        )
+        .unwrap();
+    assert_eq!(
+        report.lines().next().unwrap(),
+        "Proposed tools-only plan (turbo.lock unchanged):"
+    );
+    for tool in ["node 24.0.0", "npm 11.6.1"] {
+        assert!(
+            report
+                .lines()
+                .any(|line| line == format!("{tool}: reuse (healthy installation)")),
+            "{report}"
+        );
+    }
+    assert!(!report.contains("Proposed turbo.lock changes:"), "{report}");
+    assert!(
+        report.ends_with(
+            "Tracked changes: none. Resolution read upstream metadata and verified archives; \
+             nothing was installed, and no probes or tasks run."
+        ),
+        "{report}"
+    );
+    assert_eq!(u.hits(), 2);
+    assert_eq!(
+        u.requests(),
+        vec![
+            "/dist/index.json".to_owned(),
+            "/dist/v24.0.0/SHASUMS256.txt".to_owned(),
+        ]
+    );
+    assert_eq!(checks::snapshot(n.f.owned.root().parent().unwrap()), before);
+    n.untouched();
+}
+
+#[test]
+fn npm_bundled_proposed_first_lock_reports_missing_tools_without_installing() {
+    let n = NpmFixture::new(true);
+    fs::remove_file(n.f.owned.root().join("turbo.lock")).unwrap();
+    let before = checks::snapshot(n.f.owned.root().parent().unwrap());
+    let u = n.upstream();
+    let report = n
+        .proposed(&u, &["--plan", "--tools-only", "--no-frozen"])
+        .unwrap();
+    assert_eq!(
+        report.lines().next().unwrap(),
+        "Proposed tools-only plan (turbo.lock would be created):"
+    );
+    for tool in ["node 24.0.0", "npm 11.6.1"] {
+        assert!(
+            report
+                .lines()
+                .any(|line| line == format!("{tool}: install (missing installation)")),
+            "{report}"
+        );
+    }
+    assert!(
+        report
+            .contains("Proposed turbo.lock changes:\n  node: locked 24.0.0\n  npm: locked 11.6.1"),
+        "{report}"
+    );
+    assert_eq!(u.hits(), 2); // Only Node index and checksums; npm belongs to Node.
+    assert!(u.requests().iter().all(|path| !path.starts_with("/npm/")));
+    assert_eq!(checks::snapshot(n.f.owned.root().parent().unwrap()), before);
+    assert!(!n.f.owned.root().join(".turbo").exists());
+    n.untouched();
 }
 
 #[test]
