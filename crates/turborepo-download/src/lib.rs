@@ -38,7 +38,11 @@
 
 use std::{error::Error as StdError, time::Duration};
 
-use reqwest::{Client, ClientBuilder, header::ACCEPT_ENCODING, redirect::Policy};
+use reqwest::{
+    Client, ClientBuilder,
+    header::{ACCEPT_ENCODING, LOCATION},
+    redirect::Policy,
+};
 use sha2::{Digest, Sha256, Sha512};
 use url::{Host, Origin, Url};
 
@@ -75,7 +79,7 @@ pub enum Error {
     TimedOut,
     #[error("download byte limit exceeded")]
     TooLarge,
-    #[error("download redirects are forbidden")]
+    #[error("download redirect is not to an approved origin or exceeds the hop limit")]
     RedirectRejected,
     #[error("download returned HTTP status {0}")]
     HttpStatus(u16),
@@ -277,11 +281,15 @@ impl VerifiedArtifact {
     }
 }
 
+/// Redirect hops a client with approved redirect targets will follow.
+const MAX_REDIRECTS: usize = 3;
+
 /// Reusable HTTP transport. Intentionally no `Debug` that could expose URLs.
 #[derive(Clone)]
 pub struct DownloadClient {
     client: Client,
     origins: Vec<ApprovedOrigin>,
+    redirects: Vec<ApprovedOrigin>,
 }
 
 impl DownloadClient {
@@ -350,7 +358,21 @@ impl DownloadClient {
         Ok(Self {
             client,
             origins: origins.into_iter().collect(),
+            redirects: Vec::new(),
         })
+    }
+
+    /// Follow at most three redirects, each only to one of these exactly
+    /// approved origins (for example a vendor's release CDN). Request origins
+    /// are not implicit redirect targets. Digests and limits still bind the
+    /// final response; approval never makes metadata trusted.
+    #[must_use]
+    pub fn with_redirect_origins(
+        mut self,
+        origins: impl IntoIterator<Item = ApprovedOrigin>,
+    ) -> Self {
+        self.redirects = origins.into_iter().collect();
+        self
     }
 
     /// Read bounded, unverified metadata. Consumers must parse and validate it;
@@ -407,18 +429,23 @@ impl DownloadClient {
             .checked_add(limits.timeout)
             .ok_or(Error::InvalidLimits)?;
         tokio::time::timeout_at(deadline, async {
-            let mut response = self
-                .client
-                .get(url)
-                .header(ACCEPT_ENCODING, "identity")
-                .timeout(limits.timeout)
-                .send()
-                .await
-                .map_err(http_error)?;
+            let (mut url, mut hops) = (url, 0);
+            let mut response = loop {
+                let response = self
+                    .client
+                    .get(url.clone())
+                    .header(ACCEPT_ENCODING, "identity")
+                    .timeout(limits.timeout)
+                    .send()
+                    .await
+                    .map_err(http_error)?;
+                if !response.status().is_redirection() {
+                    break response;
+                }
+                hops += 1;
+                url = self.redirect(&url, &response, hops)?;
+            };
             let status = response.status();
-            if status.is_redirection() {
-                return Err(Error::RedirectRejected);
-            }
             if status == reqwest::StatusCode::PROXY_AUTHENTICATION_REQUIRED {
                 return Err(Error::ProxyAuthenticationRequired);
             }
@@ -453,6 +480,26 @@ impl DownloadClient {
         })
         .await
         .map_err(|_| Error::TimedOut)?
+    }
+
+    fn redirect(
+        &self,
+        from: &Url,
+        response: &reqwest::Response,
+        hops: usize,
+    ) -> Result<Url, Error> {
+        let next = response
+            .headers()
+            .get(LOCATION)
+            .and_then(|location| location.to_str().ok())
+            .and_then(|location| from.join(location).ok())
+            .ok_or(Error::RedirectRejected)?;
+        // Joined targets obey the same credential and authority rules.
+        let next = parse_url(next.as_str()).map_err(|_| Error::RedirectRejected)?;
+        if hops > MAX_REDIRECTS || !self.redirects.iter().any(|o| o.0 == next.origin()) {
+            return Err(Error::RedirectRejected);
+        }
+        Ok(next)
     }
 }
 
