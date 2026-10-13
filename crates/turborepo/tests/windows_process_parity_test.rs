@@ -769,8 +769,14 @@ fn managed_exec_delivers_one_ctrl_c_and_leaves_no_orphans() {
 }
 
 /// Like `terminating_the_entrypoint_leaves_no_orphans` for `turbo run`.
+///
+/// #14757 (TURBO-6424) fixes this and asserts the same behavior in
+/// `commands::exec::windows_tests::terminating_exec_kills_the_command_tree_but_a_normal_exit_releases_it`,
+/// so this case stays ignored instead of duplicating it. Drop the `#[ignore]`
+/// once #14757 is in this branch's base to also cover the npm wrapper.
 #[test]
-#[ignore = "TURBO-6424: exec assigns its command no kill-on-close job object yet"]
+#[ignore = "TURBO-6424: covered by #14757's exec job object test; exec has no kill-on-close job \
+            object in this base"]
 fn managed_exec_terminated_entrypoint_leaves_no_orphans() {
     let launcher = ProcessLauncher::new();
     let Some(managed) = Managed::new(&launcher) else {
