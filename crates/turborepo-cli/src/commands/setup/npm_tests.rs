@@ -719,6 +719,34 @@ fn locked_npm_dependencies_install_with_managed_npm_and_repeat_safely() {
 }
 
 #[test]
+fn offline_npm_dependencies_install_from_the_npm_cache_without_traffic() {
+    // npm fails offline while `cold` exists, like a cache miss.
+    let n = installing("[ -f cold ] && exit 4\nmkdir -p node_modules");
+    let (root, lock) = (n.f.owned.root(), n.lock());
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    let hits = u.hits();
+    // An offline repeat reuses the trusted tools and runs npm offline.
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen", "--offline"]).unwrap(), 0);
+    assert!(root.join("node_modules").exists());
+    // A cache miss passes npm's status through; nothing is reported ready.
+    fs::write(root.join("cold"), "").unwrap();
+    assert_eq!(n.f.run(&u, &["--offline"]).unwrap(), 4);
+    assert_eq!(n.f.run(&u, &["--force", "--offline"]).unwrap(), 4);
+    assert_eq!(u.hits(), hits);
+    let offline = "ci --offline --no-update-notifier";
+    assert_eq!(n.args(), ["ci", offline, offline, offline]);
+    let plan = n.f.dependencies(&["--plan", "--offline"]).plan(root, &lock);
+    assert_eq!(
+        plan.unwrap()[0],
+        "javascript dependencies: npm ci --offline --no-update-notifier from package-lock.json \
+         with managed npm 11.6.1 (package-lock.json stays unchanged)"
+    );
+    n.no_tasks();
+}
+
+#[test]
 fn npm_plans_and_checks_report_the_install_and_policy_without_running_it() {
     let n = installing("touch hook-ran");
     let (root, lock) = (n.f.owned.root(), n.lock());
