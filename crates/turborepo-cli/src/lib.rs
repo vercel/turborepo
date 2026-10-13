@@ -24,7 +24,9 @@ mod shim;
 /// Cross-crate fixtures only; never reachable from a CLI flag or environment.
 #[cfg(feature = "test-support")]
 pub mod test_support {
-    pub use crate::commands::setup::{frozen_tools_for_tests, setup_for_tests};
+    pub use crate::commands::setup::{
+        frozen_tools_for_tests, record_trust_for_tests, setup_for_tests,
+    };
 }
 
 // Re-export daemon types from the new crate location
