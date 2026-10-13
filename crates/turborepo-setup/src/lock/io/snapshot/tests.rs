@@ -208,6 +208,27 @@ fn missing_to_present_and_unchanged_keep_exact_expectations() {
 }
 
 #[test]
+fn equivalent_compact_lock_stays_untouched_through_publication() {
+    let root = root();
+    let absent = Snapshot::capture(root.path()).unwrap();
+    let compact = serde_json::to_vec(candidate(&absent, "24.0.0").document()).unwrap();
+    write_file(root.path(), LOCK_NAME, &compact);
+    let present = Snapshot::capture(root.path()).unwrap();
+    let same = candidate(&present, "24.0.0");
+    assert_eq!(present.commit(&same).unwrap(), WriteOutcome::Unchanged);
+    let published = present.after_publication(&same).unwrap();
+    published.ensure_current().unwrap();
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), compact);
+    let next = candidate(&published, "25.0.0");
+    assert_eq!(published.commit(&next).unwrap(), WriteOutcome::Written);
+    assert_eq!(
+        fs::read(root.path().join(LOCK_NAME)).unwrap(),
+        next.canonical_bytes().unwrap()
+    );
+    no_stage(root.path());
+}
+
+#[test]
 fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
     for change in [
         "lock-whitespace",

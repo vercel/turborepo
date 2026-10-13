@@ -8,7 +8,7 @@ use std::{
 use super::{
     DeclarationMap, Ecosystems, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, MAX_TOOLCHAIN_BYTES,
     NATIVE, RUST_TOOLCHAIN_FILES, StorageError, WriteOutcome, WriterStorage, probe_native_with,
-    read_optional, rust_toolchain,
+    read_optional, records, rust_toolchain,
 };
 use crate::{
     go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT},
@@ -316,7 +316,11 @@ impl Snapshot {
             return Err(StorageError::Conflict);
         }
         let mut published = self.clone();
-        published.bytes = Some(candidate.canonical_bytes()?);
+        // An equivalent lock was left as is, so its exact bytes stay expected.
+        let bytes = candidate.canonical_bytes()?;
+        if !records(self.bytes.as_deref(), &bytes) {
+            published.bytes = Some(bytes);
+        }
         published.previous = Some(candidate.clone());
         published.guard()?;
         Ok(published)
@@ -380,7 +384,7 @@ impl Snapshot {
         if !self.matches(&guard)? {
             return Err(StorageError::Conflict);
         }
-        if self.bytes.as_deref() == Some(&bytes) {
+        if records(self.bytes.as_deref(), &bytes) {
             return Ok(WriteOutcome::Unchanged);
         }
         let mut conflict = false;
