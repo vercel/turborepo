@@ -48,6 +48,11 @@ pub enum Error {
     )]
     Configured(ConfigOwner),
     #[error(
+        "official-only setup rejects line {1} of the {0:?} .npmrc: only known install-layout \
+         settings are allowed there; remove it or wait for mirror/policy support"
+    )]
+    Setting(ConfigOwner, usize),
+    #[error(
         "cannot safely inspect {0:?} configuration (unreadable, non-file, link/reparse point or \
          invalid policy); no public traffic is allowed"
     )]
@@ -72,7 +77,11 @@ impl OfficialSourcePolicy {
     /// Bundled npmrc is also rejected because it can redirect npm's effective
     /// prefix, unless its only setting is an absolute `prefix` whose
     /// `etc/npmrc` is inspected here too (Homebrew's Node formulas write
-    /// exactly `prefix = $HOMEBREW_PREFIX`).
+    /// exactly `prefix = $HOMEBREW_PREFIX`). The only followed config link is
+    /// a linked keg's bundled npmrc in that prefix's own Cellar.
+    /// Project `.npmrc` files (the invocation directory and its ancestors)
+    /// pass only when every setting is on the non-fetching allowlist in
+    /// `npmrc`; user, system, and prefix npmrc files are rejected outright.
     /// Windows inspects npm's default global prefix, `%APPDATA%\npm`.
     /// NPM_CONFIG_* variables outside the wrapper allowlist, regardless of
     /// spelling/value, are rejected before filesystem inspection. Registry
@@ -316,6 +325,10 @@ enum Observation {
     Readable,
     /// Bundled npmrc whose only setting is this absolute `prefix`.
     BundledPrefix(PathBuf),
+    /// Project npmrc whose every setting is on the non-fetching allowlist.
+    NonFetching,
+    /// Project npmrc with a rejected setting on this 1-based line.
+    Setting(usize),
     PolicyAbsent,
     Unsafe,
 }
@@ -326,7 +339,9 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Observation::Missing,
         Err(_) => return Observation::Unsafe,
     };
-    if !metadata.is_file() || metadata.file_type().is_symlink() {
+    let bundled = owner != ConfigOwner::RootPolicy && path.ends_with(BUNDLED_NPMRC);
+    let linked = cfg!(unix) && bundled && metadata.file_type().is_symlink() && keg_npmrc(path);
+    if !(metadata.is_file() || linked) {
         return Observation::Unsafe;
     }
     #[cfg(windows)]
@@ -339,7 +354,10 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
     let Ok(mut file) = fs::File::open(path) else {
         return Observation::Unsafe;
     };
-    if owner != ConfigOwner::RootPolicy && path.ends_with(BUNDLED_NPMRC) {
+    if linked && !file.metadata().is_ok_and(|opened| opened.is_file()) {
+        return Observation::Unsafe;
+    }
+    if bundled {
         let mut bytes = Vec::new();
         return match file.take(BUNDLED_NPMRC_LIMIT + 1).read_to_end(&mut bytes) {
             Ok(_) => {
@@ -347,6 +365,15 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
             }
             Err(_) => Observation::Unsafe,
         };
+    }
+    if matches!(owner, ConfigOwner::Repository | ConfigOwner::Ancestor) {
+        let mut bytes = Vec::new();
+        if file.take(npmrc::LIMIT + 1).read_to_end(&mut bytes).is_err()
+            || bytes.len() as u64 > npmrc::LIMIT
+        {
+            return Observation::Unsafe;
+        }
+        return npmrc::rejected_line(&bytes).map_or(Observation::NonFetching, Observation::Setting);
     }
     if owner != ConfigOwner::RootPolicy {
         return if file.read(&mut [0u8; 1]).is_ok() {
@@ -375,6 +402,31 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
     } else {
         Observation::PolicyAbsent
     }
+}
+
+/// Homebrew's versioned `node@N` formulas are keg-only, and `brew link` creates
+/// real `lib/node_modules/**` directories with one symlink per file, so on
+/// GitHub's macOS images `<prefix>/lib/node_modules/npm/npmrc` links to the
+/// keg's `<prefix>/Cellar/<formula>/<version>/lib/node_modules/npm/npmrc`.
+/// Only a link that resolves to a regular file at exactly that place is
+/// followed; its contents still get the same single-`prefix` check.
+fn keg_npmrc(path: &Path) -> bool {
+    let depth = Path::new(BUNDLED_NPMRC).components().count();
+    let Some(prefix) = path.ancestors().nth(depth) else {
+        return false;
+    };
+    let (Ok(prefix), Ok(target)) = (fs::canonicalize(prefix), fs::canonicalize(path)) else {
+        return false;
+    };
+    let Ok(keg) = target.strip_prefix(prefix.join("Cellar")) else {
+        return false;
+    };
+    let mut parts = keg.components();
+    matches!(
+        (parts.next(), parts.next()),
+        (Some(Component::Normal(_)), Some(Component::Normal(_)))
+    ) && parts.as_path() == Path::new(BUNDLED_NPMRC)
+        && fs::metadata(&target).is_ok_and(|metadata| metadata.is_file())
 }
 
 /// Recognizes only the single `prefix = /absolute/path` line Homebrew writes.
@@ -431,11 +483,14 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
 // secrets.
 fn validate(owner: ConfigOwner, observation: Observation) -> Result<(), Error> {
     match observation {
-        Observation::Missing | Observation::PolicyAbsent => Ok(()),
+        Observation::Missing | Observation::PolicyAbsent | Observation::NonFetching => Ok(()),
         Observation::Readable | Observation::BundledPrefix(_) => Err(Error::Configured(owner)),
+        Observation::Setting(line) => Err(Error::Setting(owner, line)),
         Observation::Unsafe => Err(Error::Inspection(owner)),
     }
 }
+
+mod npmrc;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
