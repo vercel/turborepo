@@ -1,8 +1,10 @@
 //! Managed Rust on native Windows x64 through the real setup command. The
-//! served `rustup-init.exe` is a copy of `cmd.exe`, so setup really runs the
-//! staged, verified `rustup.exe`: the fixture launcher has it execute a batch
-//! stand-in that lays out the toolchain as rustup does. The exported proxies
-//! are copies of the same image, so they run through the activated PATH.
+//! served `rustup-init.exe` is a copy of `cmd.exe`. A copied `cmd.exe` image
+//! runs only bare internal commands on the CI hosts, so a fixture runner
+//! (System32's `cmd.exe` with a batch stand-in) receives the staged, verified
+//! `rustup.exe` path first, checks its bytes, and lays out the toolchain as
+//! rustup does. The exported proxies are copies of that image, run through
+//! the activated PATH with internal commands only.
 use std::{ffi::OsString, path::Path};
 
 use turborepo_setup::{rust_discovery::Toolchain, rustup_provision::RustupTransport};
@@ -58,7 +60,11 @@ impl Repo {
             "@echo off".to_owned(),
             format!("{trace} [%CMDCMDLINE%] [%CD%] [%RUSTUP_HOME%]"),
             format!(">>\"{out}\\rustup-calls\" echo %*"),
-            format!("set \"tc=%RUSTUP_HOME%\\toolchains\\%3-{HOST}\""),
+            // %1 is the staged rustup.exe: the verified installer's bytes.
+            "\"%SystemRoot%\\System32\\fc.exe\" /b \"%~1\" \"%SystemRoot%\\System32\\cmd.exe\" \
+             >nul || exit /b 9"
+                .to_owned(),
+            format!("set \"tc=%RUSTUP_HOME%\\toolchains\\%4-{HOST}\""),
             "mkdir \"%tc%\\bin\" \"%tc%\\lib\\rustlib\"".to_owned(),
             format!("{trace} mkdir %ERRORLEVEL%"),
             "for %%e in (cargo rustc rustdoc) do >\"%tc%\\bin\\%%e.exe\" echo %%e".to_owned(),
@@ -131,19 +137,11 @@ impl Repo {
         words.extend(flags.iter().map(OsString::from));
         let args = Args::parse_args(words).unwrap();
         let origin = upstream.origin();
-        // The staged rustup.exe (a cmd.exe image) hands the stand-in batch file
-        // to System32's cmd.exe: a copied cmd.exe image does not run batch
-        // files on the CI hosts, while internal commands and programs work.
         let script = self.outside.join("rustup.cmd");
-        let system = system32().join("cmd.exe");
-        let launcher = [
-            OsString::from("/d"),
-            "/c".into(),
-            system.into(),
-            "/d".into(),
-            "/c".into(),
-            script.into(),
-        ];
+        let runner = (
+            system32().join("cmd.exe"),
+            [OsString::from("/d"), "/c".into(), script.into()],
+        );
         crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(
                 args,
@@ -154,7 +152,7 @@ impl Repo {
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
                     rustup: RustupTransport::loopback_http_for_tests(origin)
                         .unwrap()
-                        .with_launcher_for_tests(launcher.clone()),
+                        .with_runner_for_tests(runner.0.clone(), runner.1.clone()),
                     uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin).unwrap(),
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
@@ -178,12 +176,16 @@ impl Repo {
         status.unwrap_or_else(|error| panic!("{error:?}\noutside={outside} cwd={cwd:?}\n{trace}"))
     }
 
+    /// Each install's rustup arguments, after checking it ran the staged image.
     fn calls(&self) -> Vec<String> {
-        fs::read_to_string(self.outside.join("rustup-calls"))
-            .unwrap_or_default()
-            .lines()
-            .map(str::to_owned)
-            .collect()
+        let calls = fs::read_to_string(self.outside.join("rustup-calls")).unwrap_or_default();
+        let staged = |line: &str| {
+            let (exe, args) = line.split_once(' ').unwrap();
+            assert!(exe.ends_with(r"\bin\rustup.exe"), "{line}");
+            assert!(exe.contains(r"\.turbo\tools\"), "{line}");
+            args.to_owned()
+        };
+        calls.lines().map(staged).collect()
     }
 
     fn manifest(&self) -> Option<Vec<u8>> {
