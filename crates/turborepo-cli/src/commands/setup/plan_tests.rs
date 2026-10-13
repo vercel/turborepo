@@ -255,8 +255,15 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
         let u = Upstream::new(&f, false, None);
         let mut flags = PLAN.to_vec();
         match case {
-            0 => fs::remove_file(f.owned.root().join("turbo.lock")).unwrap(),
-            1 => fs::write(f.owned.root().join(".nvmrc"), "26.x").unwrap(),
+            // Local plans propose these (below); frozen ones must fail.
+            0 => {
+                fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+                flags.push("--frozen");
+            }
+            1 => {
+                fs::write(f.owned.root().join(".nvmrc"), "26.x").unwrap();
+                flags.push("--frozen");
+            }
             2 => fs::write(f.owned.root().join("turbo.lock"), "invalid").unwrap(),
             3 => fs::write(f.owned.root().join("apps/web/.npmrc"), "").unwrap(),
             4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
@@ -275,7 +282,7 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
             )
             .unwrap(),
             9 => flags.push("--no-lock"),
-            10 => flags.extend(["--update-lock", "--no-frozen"]),
+            10 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
             11 => {
                 let artifacts = f.lock["tools"]["node"]["installation"]["artifacts"]
                     .as_object_mut()
@@ -296,7 +303,7 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
             assert!(
                 error
                     .to_string()
-                    .contains("proposed first-lock resolution plans are not implemented")
+                    .contains("frozen setup requires turbo.lock")
             );
         }
         if matches!(case, 9 | 10) {
@@ -307,6 +314,177 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
         assert!(!f.owned.root().join(".turbo").exists());
         f.no_execution();
     }
+}
+
+const PROPOSE: &[&str] = &["--plan", "--tools-only", "--no-frozen"];
+const SETUP: &[&str] = &["--tools-only", "--no-frozen"];
+
+fn loopback(u: &LoopbackServer) -> provision::Transports {
+    use turborepo_setup::{
+        node_provision::NodeTransport, pnpm_provision::PnpmTransport,
+        registry_resolution::RegistryTransport,
+    };
+    provision::Transports {
+        node: NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        pnpm: PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        registry: RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+    }
+}
+
+fn footer(change: Option<&str>) -> String {
+    format!(
+        "Dependencies skipped (--tools-only); dependency readiness was not checked.\nTracked \
+         changes: {}. Resolution read upstream metadata and verified archives; nothing was \
+         installed, and no probes or tasks run.",
+        change.map_or("none".into(), |change| format!(
+            "turbo.lock would be {change}; nothing was written"
+        ))
+    )
+}
+
+impl Fixture {
+    /// The real parser, request normalization and plan dispatch, captured.
+    fn proposed(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<String, Error> {
+        let mut report = None;
+        crate::cli::dispatch_setup(&self.args(flags), |args, setup_args| {
+            let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
+            validate_request(&request)?;
+            let discovery = root::Discovery::capture(args)?;
+            let sources = turborepo_setup::lock::Snapshot::capture(self.owned.root())?;
+            let transports = Some(loopback(upstream));
+            report = Some(plan::report(
+                &discovery,
+                sources,
+                &request,
+                transports,
+                || {
+                    Ok(self
+                        .owned
+                        .policy_at(&self.owned.root().join("apps/web/src"))?)
+                },
+            )?);
+            Ok(0)
+        })
+        .unwrap()?;
+        Ok(report.unwrap())
+    }
+
+    /// Byte-for-byte unchanged files around the repository and no execution.
+    fn readonly<T>(&self, plan: impl FnOnce() -> T) -> T {
+        let before = snapshot(self.owned.root().parent().unwrap());
+        let result = plan();
+        assert_eq!(snapshot(self.owned.root().parent().unwrap()), before);
+        self.no_execution();
+        result
+    }
+
+    /// Tool lines of the locked report for what setup actually wrote.
+    fn locked_tools(&self) -> String {
+        let report = self.plan_report(false).unwrap();
+        let lines: Vec<_> = report.lines().collect();
+        lines[1..lines.len() - 2].join("\n")
+    }
+}
+
+#[test]
+fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
+    let f = super::first_lock::fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let u = LoopbackServer::new(super::first_lock::routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    let created = f.readonly(|| f.proposed(&u, PROPOSE).unwrap());
+    assert_eq!(u.hits(), 4); // Node index and checksums, pnpm metadata and archive.
+    assert_eq!(f.readonly(|| f.run(&u, PROPOSE).unwrap()), 0);
+    assert!(!f.owned.root().join(".turbo").exists());
+    assert_eq!(f.run(&u, SETUP).unwrap(), 0);
+    let missing = "install (missing installation)";
+    let tools = f
+        .locked_tools()
+        .replace("reuse (healthy installation)", missing);
+    assert_eq!(
+        created,
+        format!(
+            "Proposed tools-only plan (turbo.lock would be created):\n{tools}\nProposed \
+             turbo.lock changes:\n  node: locked 24.0.0\n  pnpm: locked 10.0.0\n{}",
+            footer(Some("created"))
+        )
+    );
+
+    // Targeted drift: only pnpm resolves; the locked Node is reused untouched.
+    fs::write(
+        f.owned.root().join("package.json"),
+        r#"{"packageManager":"pnpm@10.1.0"}"#,
+    )
+    .unwrap();
+    let update = LoopbackServer::new(super::first_lock::routes(&f, "25.0.0", "10.1.0"), |p| {
+        assert!(!p.starts_with("/dist/"))
+    })
+    .unwrap();
+    let drifted = f.readonly(|| f.proposed(&update, PROPOSE).unwrap());
+    assert_eq!(update.hits(), 2);
+    assert_eq!(f.run(&update, SETUP).unwrap(), 0);
+    let stale = "install (not in current installation)";
+    let pnpm = "pnpm 10.1.0: reuse (healthy installation)";
+    let tools = f
+        .locked_tools()
+        .replace(pnpm, &format!("pnpm 10.1.0: {stale}"));
+    assert_eq!(
+        drifted,
+        format!(
+            "Proposed tools-only plan (turbo.lock would be updated):\n{tools}\nProposed \
+             turbo.lock changes:\n  pnpm: 10.0.0 -> 10.1.0\n{}",
+            footer(Some("updated"))
+        )
+    );
+
+    // Explicit refresh proposes the newer Node; a repeat proposes nothing.
+    let newer =
+        LoopbackServer::new(super::first_lock::routes(&f, "24.1.0", "10.1.0"), |_| {}).unwrap();
+    let mut refresh = PROPOSE.to_vec();
+    refresh.push("--update-lock");
+    let refreshed = f.readonly(|| f.proposed(&newer, &refresh).unwrap());
+    assert_eq!(newer.hits(), 4);
+    let mut write = SETUP.to_vec();
+    write.push("--update-lock");
+    assert_eq!(f.run(&newer, &write).unwrap(), 0);
+    // pnpm's managed launcher is bound to Node, so setup re-stages it too.
+    let tools = f
+        .locked_tools()
+        .replace("reuse (healthy installation)", stale);
+    assert_eq!(
+        refreshed,
+        format!(
+            "Proposed tools-only plan (turbo.lock would be updated):\n{tools}\nProposed \
+             turbo.lock changes:\n  node: 24.0.0 -> 24.1.0\n{}",
+            footer(Some("updated"))
+        )
+    );
+    let unchanged = f.readonly(|| f.proposed(&newer, &refresh).unwrap());
+    assert_eq!(
+        unchanged,
+        format!(
+            "Proposed tools-only plan (turbo.lock unchanged):\n{}\n{}",
+            f.locked_tools(),
+            footer(None)
+        )
+    );
+}
+
+#[test]
+fn proposed_plans_fail_offline_and_force_requires_a_lock_without_traffic() {
+    let f = super::first_lock::fresh();
+    let u = LoopbackServer::new([], |_| {}).unwrap();
+    for extra in [&["--offline"][..], &["--update-lock", "--offline"]] {
+        let mut flags = PROPOSE.to_vec();
+        flags.extend(extra);
+        let error = f.readonly(|| f.proposed(&u, &flags).unwrap_err());
+        assert!(error.to_string().contains("offline resolution"), "{error}");
+    }
+    let mut force = PROPOSE.to_vec();
+    force.push("--force");
+    let error = f.readonly(|| f.proposed(&u, &force).unwrap_err());
+    assert!(error.to_string().contains("requires turbo.lock"), "{error}");
+    assert_eq!(u.hits(), 0);
+    assert!(!f.owned.root().join(".turbo").exists());
 }
 
 #[test]

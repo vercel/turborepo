@@ -28,14 +28,14 @@ pub enum Error {
     FrozenUpdateLock,
     #[error(
         "this setup mode is not implemented; use local or frozen --tools-only provisioning, \
-         locked --plan --tools-only reports or --check --tools-only readiness checks"
+         --plan --tools-only reports or --check --tools-only readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run. \
-             First-lock/refresh plans and dependency checks are not implemented."
+             No tools, dependencies, or locks were changed and no tasks were run. Dependency \
+             plans and checks are not implemented."
         )
     )]
     NotImplemented,
@@ -167,7 +167,7 @@ fn run_with_policy(
         Mode::Plan => {
             println!(
                 "{}",
-                plan::inspect(&discovery, snapshot, request.force, preflight)?
+                plan::report(&discovery, snapshot, &request, transports, preflight)?
             );
             Ok(0)
         }
@@ -188,12 +188,13 @@ fn run_with_policy(
 }
 
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
-    if matches!(request.mode, Mode::Check | Mode::Plan)
-        && request.tools_only
-        && request.lock != LockMode::NoLock
-        && (request.mode == Mode::Plan || !request.force)
-        && !request.update_lock
-    {
+    // Plans report locked reinstalls or proposed resolution, never both.
+    let read_only = match request.mode {
+        Mode::Check => !request.force && !request.update_lock,
+        Mode::Plan => !(request.force && request.update_lock),
+        Mode::Provision => false,
+    };
+    if read_only && request.tools_only && request.lock != LockMode::NoLock {
         // CI/frozen/offline never change read-only modes into resolution or repair.
         return Ok(());
     }
@@ -297,6 +298,19 @@ mod tests {
                 assert!(!request.update_lock);
                 assert!(validate_request(&request).is_ok());
             }
+        }
+    }
+
+    #[test]
+    fn plans_admit_refresh_proposals_but_never_with_force() {
+        for ci in [false, true] {
+            let mut flags = vec!["--plan", "--tools-only", "--no-frozen", "--update-lock"];
+            assert!(validate_request(&request(&flags, ci).unwrap()).is_ok());
+            flags.push("--force");
+            assert!(matches!(
+                validate_request(&request(&flags, ci).unwrap()),
+                Err(Error::NotImplemented)
+            ));
         }
     }
 
