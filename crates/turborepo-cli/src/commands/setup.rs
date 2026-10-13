@@ -22,6 +22,8 @@ mod dacl;
 mod dependencies;
 pub(crate) mod effective;
 mod lock_diagnostics;
+#[cfg(windows)]
+mod msvc;
 mod no_lock;
 mod offline;
 mod plan;
@@ -401,6 +403,12 @@ fn run_reporting(
     // Report the effective decisions before any traffic or installation.
     for line in plan.report() {
         println!("{line}");
+    }
+    // Managed Rust's Windows linker is an external prerequisite: reported,
+    // never installed, and never a failure.
+    #[cfg(windows)]
+    if rust && snapshot.declarations().contains_key("rust") {
+        msvc::report();
     }
     if javascript == ToolPolicy::Skip && !rust && !python && !go {
         // Never silently ignore committed selections for a skipped toolchain.
