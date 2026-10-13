@@ -70,9 +70,10 @@ pub enum Error {
     #[diagnostic(
         code(turbo::setup::unclassified_libc),
         help(
-            "turbo reads the ELF interpreter of /bin/sh and the libc.so.6 beside a glibc loader \
-             without running them. Managed setup requires a glibc host with those files; \
-             otherwise install the tools yourself and use verify-system."
+            "turbo reads the ELF interpreter of /bin/sh, then the libc.so.6 beside a glibc loader \
+             or the release a musl loader embeds, without running them. Managed setup requires a \
+             glibc host with those files; otherwise install the tools yourself and use \
+             verify-system."
         )
     )]
     UnclassifiedLibc(turborepo_platform::LibcError),
@@ -596,7 +597,7 @@ mod tests {
             && provision::windows_host_machine() == Some(0x8664);
         let platform = provision::platform();
         assert_eq!(platform.is_ok(), (arch && host) || windows);
-        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl))) {
+        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl { .. }))) {
             assert!(matches!(platform, Err(Error::MuslHost)));
         }
         if cfg!(windows) && provision::windows_host_machine() == Some(0xAA64) {

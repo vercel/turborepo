@@ -862,7 +862,7 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
         (qualified_host() || cfg!(all(windows, target_arch = "x86_64"))) && !arm64_windows;
     let musl = matches!(
         turborepo_platform::host_libc(),
-        Ok(Some(turborepo_platform::Libc::Musl))
+        Ok(Some(turborepo_platform::Libc::Musl { .. }))
     );
     for ci in [false, true] {
         for extra in [

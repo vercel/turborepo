@@ -281,6 +281,8 @@ impl ManagedEnvironment for ManagedTools {
 /// Conservative native execution identity. No readiness-only/unprobed labels.
 /// These initial adapters are supported only on native macOS, glibc Linux and
 /// Windows x64. Windows arm64 is unqualified and never borrows x64 artifacts.
+/// musl Linux gets its own identity, and the activation plan qualifies it only
+/// for locks whose every tool is verify-system.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
     if !cfg!(any(
         target_os = "macos",
@@ -332,21 +334,18 @@ pub(crate) fn context() -> Result<ExecutionContext, String> {
 
 /// The host's C library, not the one turbo was built against: released Linux
 /// binaries are static musl builds, and they select glibc artifacts on glibc
-/// hosts exactly like setup does. The glibc release is the ABI label.
+/// hosts exactly like setup does. The glibc or musl release is the ABI label,
+/// so task caches never cross C libraries or their releases.
 fn host_libc(
     host: Result<Option<turborepo_platform::Libc>, turborepo_platform::LibcError>,
 ) -> Result<Libc, String> {
     match host {
         Ok(None) => Ok(Libc::None),
         Ok(Some(turborepo_platform::Libc::Glibc { version })) => Ok(Libc::Gnu { abi: version }),
-        Ok(Some(turborepo_platform::Libc::Musl)) => Err("managed tools are not supported on musl \
-                                                         Linux hosts such as Alpine; install the \
-                                                         repository's tools in the image and use \
-                                                         verify-system for them"
-            .into()),
+        Ok(Some(turborepo_platform::Libc::Musl { version })) => Ok(Libc::Musl { abi: version }),
         Err(error) => Err(format!(
             "cannot classify this Linux host's C library ({error}); managed run requires a glibc \
-             host, otherwise install the tools yourself and use verify-system"
+             host, or a musl host whose tools are all verify-system"
         )),
     }
 }
@@ -358,22 +357,27 @@ mod libc_tests {
     use super::{Libc, host_libc};
 
     #[test]
-    fn glibc_hosts_select_gnu_and_musl_or_unclassified_hosts_fail_closed() {
+    fn classified_hosts_select_their_libc_identity_and_unclassified_hosts_fail_closed() {
         let gnu = host_libc(Ok(Some(Host::Glibc {
             version: "2.39".into(),
         })));
         assert_eq!(gnu, Ok(Libc::Gnu { abi: "2.39".into() }));
         assert_eq!(host_libc(Ok(None)), Ok(Libc::None));
-        let musl = host_libc(Ok(Some(Host::Musl))).unwrap_err();
-        assert!(
-            musl.contains("musl") && musl.contains("verify-system"),
-            "{musl}"
+        // musl hosts get their own family; activation admits verify-system only.
+        let musl = host_libc(Ok(Some(Host::Musl {
+            version: "1.2.5".into(),
+        })));
+        assert_eq!(
+            musl,
+            Ok(Libc::Musl {
+                abi: "1.2.5".into()
+            })
         );
-        // The real host classification agrees with what setup qualifies.
+        // The real host classification agrees with the execution context.
         if cfg!(target_os = "linux") {
             let context = super::context();
             match turborepo_platform::host_libc() {
-                Ok(Some(Host::Glibc { .. })) => assert!(context.is_ok(), "{context:?}"),
+                Ok(Some(_)) => assert!(context.is_ok(), "{context:?}"),
                 _ => assert!(context.is_err()),
             }
         }
