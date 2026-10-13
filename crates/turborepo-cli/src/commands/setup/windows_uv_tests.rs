@@ -182,9 +182,9 @@ fn plain_setup_syncs_locked_uv_workspaces_through_the_managed_uv_exe() {
         fs::read(repo.owned.root().join("uv.lock")).unwrap(),
         UV_LOCK
     );
-    // where.exe as uv.exe rejects `sync --locked --all-packages`; setup
-    // reports uv's failure status instead of success.
-    let repo = Repo::new("where.exe");
+    // whoami.exe as uv.exe rejects `sync` as an invalid option; setup reports
+    // uv's failure status instead of success.
+    let repo = Repo::new("whoami.exe");
     fs::write(repo.owned.root().join("uv.lock"), UV_LOCK).unwrap();
     let code = repo.run(&["--frozen"]).unwrap();
     assert_ne!(code, 0);
