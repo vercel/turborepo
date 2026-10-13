@@ -3,12 +3,11 @@
 //! This module contains the main entry point for the shim, refactored to use
 //! injected traits instead of direct `crate::` imports from `turborepo-cli`.
 
-use std::{env, ffi::OsString, process, process::Stdio, sync::Arc, time::Duration};
+use std::{env, ffi::OsString, process, process::Stdio, time::Duration};
 
 use camino::Utf8PathBuf;
 use dunce::canonicalize as fs_canonicalize;
 use miette::Diagnostic;
-use shared_child::SharedChild;
 use thiserror::Error;
 use tracing::{debug, warn};
 use turbo_updater::{UpdateCheckConfig, display_update_check};
@@ -633,22 +632,9 @@ where
     S: ChildSpawner,
     V: VersionProvider,
 {
-    let child: Arc<SharedChild> = match runtime.child_spawner.spawn(command) {
-        Ok(child) => child,
-        Err(e) => return ShimResult::ShimError(err(e)),
-    };
-
-    // The child turbo process shares our process group and will receive
-    // SIGINT directly from the kernel when the user presses Ctrl+C.
-    // Ignore SIGINT in the shim *after* spawning so the child inherits
-    // the default disposition (and can register its own handler), while
-    // the shim stays alive to collect the child's exit status.
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_IGN);
-    }
-
-    let exit_status = match child.wait() {
+    // On Unix, turbo's spawner returns only if the other turbo cannot start:
+    // this process became it, so signals, Ctrl+C, and the status are its own.
+    let exit_status = match runtime.child_spawner.hand_off(command) {
         Ok(status) => status,
         Err(e) => return ShimResult::ShimError(err(e)),
     };
@@ -741,6 +727,8 @@ fn try_check_for_updates(
 
 #[cfg(test)]
 mod tests {
+    use std::process::ExitStatus;
+
     use turborepo_repository::inference::JavaScriptRoot;
 
     use super::*;
@@ -767,12 +755,12 @@ mod tests {
         }
         struct CheckedSpawner(std::path::PathBuf);
         impl ChildSpawner for CheckedSpawner {
-            fn spawn(&self, command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+            fn hand_off(&self, command: process::Command) -> std::io::Result<ExitStatus> {
                 assert_eq!(
                     std::path::Path::new(command.get_program()).canonicalize()?,
                     self.0.canonicalize()?
                 );
-                DefaultChildSpawner.spawn(command)
+                DefaultChildSpawner.hand_off(command)
             }
         }
         for case in 0..4 {
@@ -851,7 +839,7 @@ mod tests {
         type Envs = Vec<(std::ffi::OsString, Option<std::ffi::OsString>)>;
         struct Recording(std::sync::Mutex<Envs>);
         impl ChildSpawner for Recording {
-            fn spawn(&self, command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+            fn hand_off(&self, command: process::Command) -> std::io::Result<ExitStatus> {
                 *self.0.lock().unwrap() = command
                     .get_envs()
                     .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
@@ -968,7 +956,7 @@ mod tests {
     struct UnexpectedChildSpawner;
 
     impl ChildSpawner for UnexpectedChildSpawner {
-        fn spawn(&self, _command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+        fn hand_off(&self, _command: process::Command) -> std::io::Result<ExitStatus> {
             panic!("shim boundary tests must not spawn a child process")
         }
     }

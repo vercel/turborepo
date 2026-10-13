@@ -4,7 +4,7 @@
 //! of turbo based on the repository configuration. It supports:
 //!
 //! - Finding locally installed turbo in node_modules
-//! - Spawning the correct local turbo version as a child process
+//! - Handing off to the correct local turbo version
 //! - Falling back to the global turbo when no local version is found
 //! - Running update checks for new turbo versions
 //!
@@ -19,7 +19,7 @@ mod parser;
 pub mod run;
 mod turbo_state;
 
-use std::sync::Arc;
+use std::process::ExitStatus;
 
 // Re-exports
 pub use local_turbo_state::turbo_version_has_shim;
@@ -28,7 +28,6 @@ pub use run::{
     Error, GLOBAL_WARNING_ENV_VAR, INVOCATION_CWD_ENV_VAR, INVOCATION_DIR_ENV_VAR, ShimResult,
     ShimRuntime, run, run_with_args,
 };
-use shared_child::SharedChild;
 pub use turbo_state::TurboState;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::inference::RepoState;
@@ -91,33 +90,27 @@ pub trait TurboRunner: Send + Sync {
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error>;
 }
 
-/// Trait for spawning child processes with proper signal handling.
+/// Trait for handing an invocation off to another turbo, such as the
+/// repository's local CLI.
 ///
-/// This trait abstracts over the process spawning mechanism, allowing the shim
-/// to spawn child turbo processes while properly handling signals and cleanup.
-///
-/// The default implementation uses `shared_child` to spawn processes that can
-/// be waited on from multiple threads and properly handle signals.
+/// Killing the invoked turbo must kill the turbo it hands off to, and that
+/// turbo's exit status, including a signal death, is the invocation's own.
+/// turbo's own implementation, `turborepo_process::hand_off`, replaces this
+/// process with `command` on Unix and contains it in a job object on Windows.
 pub trait ChildSpawner: Send + Sync {
-    /// Spawn a child process from the given command.
-    ///
-    /// # Arguments
-    ///
-    /// * `command` - The command to spawn
-    ///
-    /// # Returns
-    ///
-    /// A shared handle to the spawned child process.
-    fn spawn(&self, command: std::process::Command) -> std::io::Result<Arc<SharedChild>>;
+    /// Runs `command` in this invocation's place and returns its exit status.
+    /// An implementation may replace this process with `command` (`execve`)
+    /// instead, returning only if `command` cannot start.
+    fn hand_off(&self, command: std::process::Command) -> std::io::Result<ExitStatus>;
 }
 
-/// Default implementation of `ChildSpawner` using `shared_child`.
+/// Runs `command` as a plain child process and waits for it.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct DefaultChildSpawner;
 
 impl ChildSpawner for DefaultChildSpawner {
-    fn spawn(&self, mut command: std::process::Command) -> std::io::Result<Arc<SharedChild>> {
-        SharedChild::spawn(&mut command).map(Arc::new)
+    fn hand_off(&self, mut command: std::process::Command) -> std::io::Result<ExitStatus> {
+        command.status()
     }
 }
 
