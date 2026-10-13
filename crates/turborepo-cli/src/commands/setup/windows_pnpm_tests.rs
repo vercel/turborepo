@@ -64,7 +64,10 @@ fn launcher(plan: &ActivationPlan, name: &str) -> String {
     fs::read_to_string(tools.join(path)).unwrap()
 }
 
-const EXPORTS: [&str; 5] = ["node.exe", "pn.cmd", "pnpm.cmd", "pnpx.cmd", "pnx.cmd"];
+/// Node and its bundled npm, then the four pnpm names.
+const EXPORTS: [&str; 7] = [
+    "node.exe", "npm.cmd", "npx.cmd", "pn.cmd", "pnpm.cmd", "pnpx.cmd", "pnx.cmd",
+];
 
 #[test]
 fn pnpm_11_runs_its_module_entry_points_on_the_managed_node() {
