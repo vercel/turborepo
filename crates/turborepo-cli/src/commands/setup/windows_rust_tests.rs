@@ -1,10 +1,9 @@
 //! Managed Rust on native Windows x64 through the real setup command. The
-//! served `rustup-init.exe` is a copy of `cmd.exe`. A copied `cmd.exe` image
-//! runs only bare internal commands on the CI hosts, so a fixture runner
+//! served `rustup-init.exe` is a copy of `cmd.exe`. A fixture runner
 //! (System32's `cmd.exe` with a batch stand-in) receives the staged, verified
-//! `rustup.exe` path first, checks its bytes, and lays out the toolchain as
-//! rustup does. The exported proxies are copies of that image, run through
-//! the activated PATH with internal commands only.
+//! `rustup.exe` path first, byte-checks it, and lays out the toolchain as
+//! rustup does. The published `rustup.exe` and its proxies are copies of that
+//! image, so the tests run them through the activated PATH.
 use std::{ffi::OsString, path::Path};
 
 use turborepo_setup::{rust_discovery::Toolchain, rustup_provision::RustupTransport};
