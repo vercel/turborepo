@@ -3,7 +3,7 @@ title: Setup policy
 description: Choose how the experimental `turbo setup` command prepares each toolchain with the root `setup` key.
 product: turborepo
 type: reference
-summary: Reference for the experimental root `setup` key in `turbo.json`, including tool and dependency modes, lifecycle-script policy, download mirrors, precedence with `turbo setup` flags, and `verify-system`.
+summary: Reference for the experimental root `setup` key in `turbo.json`, including tool and dependency modes, lifecycle-script policy, precedence with `turbo setup` flags, and `verify-system`.
 related:
   - /docs/reference/configuration
 ---
@@ -280,59 +280,6 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
   `non-JavaScript workspace setup`.
 </Callout>
 
-## Mirrors
-
-`mirrors` sets where `turbo setup` downloads from. Each value is a base URL that serves the same paths as the official source it replaces:
-
-| Key           | Replaces                     | Downloads                                         |
-| ------------- | ---------------------------- | ------------------------------------------------- |
-| `node`        | `https://nodejs.org/dist`    | Node.js release metadata and archives             |
-| `npmRegistry` | `https://registry.npmjs.org` | npm, pnpm, and Yarn package metadata and tarballs |
-
-```jsonc title="./turbo.json"
-{
-  "futureFlags": {
-    "experimentalSetup": true,
-  },
-  "setup": {
-    "dependencies": "skip",
-    "mirrors": {
-      "node": "https://mirror.example.com/nodejs/dist",
-      "npmRegistry": "https://mirror.example.com/npm",
-    },
-  },
-}
-```
-
-- Each value must be an absolute `https://` URL without credentials, a query, or a fragment. `turbo.json` is committed, so it must never contain a secret. Errors name the key and mask the value.
-- `turbo setup` sends no credentials to mirrors. Use a mirror that serves these downloads without authentication.
-- `turbo.lock` keeps the official URLs, and every download is verified against the digest in `turbo.lock`. A lock created through a mirror that serves the official bytes is identical to one created without it, so other machines can use the official sources or another mirror.
-- Bun, Rust, uv, Python, Go, and [additional tools](/docs/reference/additional-tools) still download from their official or declared URLs.
-- `--check`, `--offline`, and `turbo run` never download, so they never contact a mirror.
-
-<Callout type="warn">
-  When `turbo setup` creates or updates `turbo.lock` through a mirror, the
-  digests it records are the ones the mirror served. Later setups verify those
-  digests, but nothing checks them against the official source. Review
-  `turbo.lock` changes made through a mirror as carefully as any other change.
-</Callout>
-
-`turbo setup` doesn't read npm configuration. A `registry` in `.npmrc` doesn't configure a mirror, and an `.npmrc` file still stops `turbo setup`, even when its registry matches `npmRegistry`. See [npm configuration](/docs/reference/setup#official-only-setup-rejects-npm-configuration).
-
-### Environment overrides
-
-`TURBO_SETUP_NODE_MIRROR` and `TURBO_SETUP_NPM_REGISTRY` override `node` and `npmRegistry` for one invocation without changing `turbo.json`. They follow the same rules. For each mirror, `turbo setup` uses the first value it finds:
-
-1. The environment variable. Empty variables are ignored.
-2. The key in `setup.mirrors`.
-3. The official source.
-
-To use the official source despite a configured mirror, set the variable to the official URL:
-
-```bash title="Terminal"
-TURBO_SETUP_NODE_MIRROR=https://nodejs.org/dist turbo setup
-```
-
 ## Troubleshooting
 
 | Message                                                                                   | Fix                                                                                             |
@@ -345,7 +292,6 @@ TURBO_SETUP_NODE_MIRROR=https://nodejs.org/dist turbo setup
 | `unsupported setup request: non-JavaScript workspace setup`                               | Set `tools` to `skip` for Rust, Python, or Go.                                                  |
 | `turbo.lock selects tools that the setup policy skips`                                    | Remove the skip, or remove the tools from `turbo.lock`.                                         |
 | `official-only setup rejects ... configuration`                                           | An empty `"setup": {}` isn't accepted. Add a key or remove `setup`.                             |
-| `setup.mirrors.<key> must be an absolute HTTPS URL`                                       | Use an `https://` base URL without credentials, a query, or a fragment.                         |
 | `<tool> is not on PATH outside the repository`                                            | Install the tool, or use `managed` tools.                                                       |
 | `<tool> at <path> is <version>, but turbo.lock requires <version>`                        | Install the locked version, or run `turbo setup --update-lock` locally and commit `turbo.lock`. |
 | `installed <tool> <version> does not satisfy its native declaration`                      | Install a version that matches your declaration.                                                |
