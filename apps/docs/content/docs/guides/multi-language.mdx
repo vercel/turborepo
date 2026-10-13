@@ -1,9 +1,9 @@
 ---
 title: Multi-language support
-description: Combine package-manager and native language workspaces.
+description: Run other language toolchains alongside JavaScript packages.
 product: turborepo
 type: guide
-summary: Run JavaScript packages and experimental native Go modules in one task graph.
+summary: Use package scripts to build JavaScript and .NET projects in one task graph.
 prerequisites:
   - /docs/crafting-your-repository/structuring-a-repository
   - /docs/crafting-your-repository/configuring-tasks
@@ -14,35 +14,41 @@ related:
   - /docs/guides/migrating-from-nx
 ---
 
-Turborepo can combine package-manager workspaces with enabled native workspaces. Each workspace contributes its own package identities, dependency relationships, and tasks to the same Package Graph and Task Graph.
+Turborepo can run other language toolchains through scripts in `package.json`. Add a package for each independently cacheable project and declare its dependencies so Turborepo can order tasks and invalidate cached results.
 
-This example combines a JavaScript application with two Go modules:
+For experimental native workspace support, see the [Rust](/docs/guides/tools/rust), [Python](/docs/guides/tools/python), and [Go](/docs/guides/tools/go) guides. Those integrations discover projects and dependencies from their native workspace files.
+
+This example combines a JavaScript package with a .NET console application and a C# library. Start with [Turborepo installed](/docs/getting-started/installation) in your repository, and install the [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) so `dotnet` is available on `PATH`.
 
 ```text
 .
 ├── apps/api/
-│   ├── go.mod
-│   └── main.go
+│   ├── Api.csproj
+│   ├── Program.cs
+│   └── package.json
 ├── packages/
 │   ├── lib/
-│   │   ├── go.mod
-│   │   └── lib.go
+│   │   ├── Lib.csproj
+│   │   ├── Message.cs
+│   │   └── package.json
 │   └── web/
 │       └── package.json
-├── go.work
+├── .gitignore
+├── global.json
 ├── package.json
 └── turbo.json
 ```
 
-## Add the JavaScript workspace
+## Add the package-manager workspaces
 
-Include `packages/web` in the package-manager workspace:
+Include both the application and library directories. Their `package.json` files make the .NET projects visible to Turborepo:
 
 <PackageManagerTabs>
   <Tab value="pnpm">
 
 ```yaml title="./pnpm-workspace.yaml"
 packages:
+  - "apps/*"
   - "packages/*"
 ```
 
@@ -54,7 +60,8 @@ packages:
 
 ```json title="./package.json"
 {
-  "workspaces": ["packages/*"]
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
 }
 ```
 
@@ -66,7 +73,8 @@ packages:
 
 ```json title="./package.json"
 {
-  "workspaces": ["packages/*"]
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
 }
 ```
 
@@ -78,7 +86,8 @@ packages:
 
 ```json title="./package.json"
 {
-  "workspaces": ["packages/*"]
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
 }
 ```
 
@@ -87,7 +96,7 @@ packages:
   </Tab>
 </PackageManagerTabs>
 
-The JavaScript application has a normal package name and script:
+The JavaScript package has a normal package name and script:
 
 ```json title="./packages/web/package.json"
 {
@@ -100,92 +109,134 @@ The JavaScript application has a normal package name and script:
 }
 ```
 
-## Add the Go workspace
+## Add the .NET projects
 
-At the repository root, create a `go.work` that lists each Go module:
+Pin the .NET SDK at the repository root so machines sharing cached builds use the same compiler. Install the version specified here:
 
-```text title="./go.work"
-go 1.22
-
-use (
-  ./apps/api
-  ./packages/lib
-)
-```
-
-Declare the full Go module paths in `go.mod`. Turborepo derives the package names `lib` and `api` from these paths:
-
-```text title="./packages/lib/go.mod"
-module example.com/acme/lib
-
-go 1.22
-```
-
-```text title="./apps/api/go.mod"
-module example.com/acme/api
-
-go 1.22
-
-require example.com/acme/lib v0.0.0
-```
-
-For example, the API can import and call the library:
-
-```go title="./packages/lib/lib.go"
-package lib
-
-func Message() string {
-	return "API ready"
-}
-```
-
-```go title="./apps/api/main.go"
-package main
-
-import (
-	"fmt"
-
-	"example.com/acme/lib"
-)
-
-func main() {
-	fmt.Println(lib.Message())
-}
-```
-
-## Enable native Go tasks
-
-Enable native Go workspace support in the root `turbo.json`:
-
-```json title="./turbo.json"
+```json title="./global.json"
 {
-  "$schema": "https://turborepo.dev/schema.json",
-  "futureFlags": {
-    "experimentalGoWorkspaces": true
-  },
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"]
-    },
-    "test": {},
-    "lint": {}
+  "sdk": {
+    "version": "10.0.401",
+    "rollForward": "disable"
   }
 }
 ```
 
-Turborepo now discovers `web` from the package-manager workspace and `api` and `lib` from `go.work`. The Go modules do not need `package.json` files. A repository that contains only enabled native workspaces can also omit the root `package.json`; this mixed repository keeps one for its JavaScript workspace.
+Create the library project and its source file:
 
-Go package names use the last module-path component and preserve a trailing major-version suffix: `example.com/api` becomes `api`, while `example.com/api/v2` becomes `api/v2`. Names must be unique across the entire Package Graph: another Go module ending in `/api`, or a JavaScript package named `api`, would collide with this API. Full paths are not aliases, and package-name overrides are not supported. See [Go package names](/docs/guides/tools/go#package-names) for collision handling.
+```xml title="./packages/lib/Lib.csproj"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <DefaultItemExcludes>$(DefaultItemExcludes);node_modules/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
+```
 
-Run JavaScript scripts and built-in native Go tasks together, or select a Go package by its derived name:
+```csharp title="./packages/lib/Message.cs"
+namespace Acme.Lib;
+
+public static class Message
+{
+    public static string Text() => "API ready";
+}
+```
+
+The application uses a `ProjectReference` to resolve the library in .NET:
+
+```xml title="./apps/api/Api.csproj"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <DefaultItemExcludes>$(DefaultItemExcludes);node_modules/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../packages/lib/Lib.csproj" />
+  </ItemGroup>
+</Project>
+```
+
+```csharp title="./apps/api/Program.cs"
+System.Console.WriteLine(Acme.Lib.Message.Text());
+```
+
+## Connect the projects to Turborepo
+
+Add a `package.json` beside each `.csproj` with a script that invokes the [.NET CLI](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-build):
+
+```json title="./packages/lib/package.json"
+{
+  "name": "lib",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "dotnet build Lib.csproj --configuration Release"
+  }
+}
+```
+
+```json title="./apps/api/package.json"
+{
+  "name": "api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "dotnet build Api.csproj --configuration Release"
+  },
+  "dependencies": {
+    "lib": "workspace:*"
+  }
+}
+```
+
+For npm, use `"lib": "*"` instead of `"workspace:*"`. Run your package manager's install command from the repository root to link the workspaces and update its lockfile.
+
+Keep the `package.json` dependency in sync with the `ProjectReference`. .NET uses the project reference to compile the application, while Turborepo uses the package dependency to build `lib` before `api` and invalidate `api`'s cache when the library changes. Turborepo does not read `.csproj` references or manage NuGet dependencies.
+
+The `DefaultItemExcludes` entries keep .NET from compiling source files reached through workspace links in `node_modules`.
+
+## Configure tasks and caching
+
+Ignore generated files so they do not become inputs to subsequent builds:
+
+```text title="./.gitignore"
+node_modules/
+.turbo/
+bin/
+obj/
+```
+
+Configure the build task and cache the binaries produced by each .NET project:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "globalDependencies": ["global.json"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["bin/**"]
+    },
+    "web#build": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Output paths are relative to each package. The .NET builds write to `bin/Release/net10.0`; the JavaScript script only prints a message and has no files to cache. `obj/` contains intermediate and restore state and is not cached here. A build that needs it can recreate it through `dotnet build`'s implicit restore.
+
+Adding `global.json` to [`globalDependencies`](/docs/reference/configuration#globaldependencies) makes SDK version changes in that file invalidate cached tasks. Update the pinned version when upgrading the SDK; Turborepo does not detect the installed .NET SDK version automatically. If you add shared files such as `Directory.Build.props`, `Directory.Build.targets`, or `NuGet.Config`, include those in your task inputs or global dependencies too. Keep the build environment consistent between machines that share cached outputs.
+
+Run all builds, or select the .NET application:
 
 ```bash title="Terminal"
 turbo run build
-turbo run test --filter=api
-turbo run api#test
-turbo run lint
+turbo run build --filter=api
+dotnet apps/api/bin/Release/net10.0/Api.dll
 ```
 
-The API's `require example.com/acme/lib` declaration resolves the dependency on the package named `lib`, so `dependsOn: ["^build"]` orders their Go builds. Keep the full module paths in `go.mod` and Go imports; those paths remain dependency-resolution metadata rather than Turborepo graph identities. The synthetic `go-workspace` package depends on every Go member but does not provide built-in `test`, `lint`, or `format` tasks. Run those tasks without a filter to execute them in each member module. See the [Go guide](/docs/guides/tools/go) for the complete native task and caching behavior.
+The application prints `API ready`. A second unchanged `turbo run build` restores the cached results. Editing `packages/lib/Message.cs` causes both `lib` and its dependent `api` to rebuild, while `web` can still use its cache.
 
-For a language without native workspace support, add a `package.json` beside each independently cacheable project and invoke its toolchain from package scripts. Turborepo then uses the package-manager relationships rather than interpreting that language's dependency graph.
+.NET still handles project references during an actual build. The package dependency gives Turborepo the information it needs to schedule and cache those builds; it does not replace .NET's dependency resolution.
