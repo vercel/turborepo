@@ -41,7 +41,8 @@ pub async fn run(
     // remains refreshable through the normal filename watches.
     let config = resolve_configuration_from_args(&repo_root, &args)?;
     let watcher_paths = config.root_turbo_json_path.into_iter().collect();
-    let task_graph_builder = ProperTaskGraphBuilder::new(repo_root.clone(), args);
+    let mut task_graph_builder = ProperTaskGraphBuilder::new(repo_root.clone(), args);
+    task_graph_builder.activate_managed()?;
 
     // Create server with the task graph builder
     let server = DevtoolsServer::new_with_paths(
