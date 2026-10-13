@@ -96,7 +96,8 @@ fn bun_with_and_without_node_installs_the_baseline_build_and_repeats_without_tra
             .collect();
         names.sort();
         let expected: &[&str] = if node {
-            &["bun.exe", "bunx.exe", "node.exe"]
+            // With Node and its bundled npm, as on Unix.
+            &["bun.exe", "bunx.exe", "node.exe", "npm.cmd", "npx.cmd"]
         } else {
             &["bun.exe", "bunx.exe"]
         };
