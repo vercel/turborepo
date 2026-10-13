@@ -115,11 +115,13 @@ fn go_setup_then_plain_run_uses_the_locked_toolchain_without_host_go() {
     for probe in ["go work edit -json", "go env -json", "go version"] {
         assert!(calls.contains(probe), "{probe}: {calls}");
     }
+    journey.discovers_managed("go env -json");
 
     // A missing export is an installation repair; a changed declaration is a
     // lock update. Neither falls back to a host go nor downloads.
     fs::remove_file(bin.join("go")).unwrap();
     journey.fails("build", "run turbo setup to repair the installation");
+    journey.discovery_fails("run turbo setup to repair the installation", &[]);
     journey.setup("", &["--frozen", "--tools-only"]);
     let work = journey.root().join("go.work");
     fs::write(&work, "go 1.22\ntoolchain go1.23.4\n\nuse ./app\n").unwrap();
