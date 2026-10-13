@@ -114,7 +114,9 @@ impl Frozen {
     /// missing from the manager's cache instead of downloading it.
     pub fn offline(self, version: &Version, root: &Path) -> Offline {
         match self.manager {
-            Manager::Npm | Manager::Pnpm => Offline::Args(&["--offline"]),
+            // npm's update check bypasses its cache even with --offline.
+            Manager::Npm => Offline::Args(&["--offline", "--no-update-notifier"]),
+            Manager::Pnpm => Offline::Args(&["--offline"]),
             Manager::Yarn if version.major < 2 => Offline::Args(&["--offline"]),
             // Modern Yarn has no flag, but `enableNetwork: false` blocks every
             // request, with its global or project cache alike. A per-host
