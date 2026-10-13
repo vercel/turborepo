@@ -46,7 +46,7 @@ pub enum Error {
     FrozenUpdateLock,
     #[error(
         "this setup mode is not implemented; use local or frozen provisioning, --plan \
-         --tools-only reports or --check --tools-only readiness checks"
+         --tools-only reports or --check readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
@@ -86,6 +86,25 @@ pub enum Error {
          turbo setup --tools-only without --offline to download and verify them."
     )]
     OfflineMissing(String),
+    #[error("--no-lock needs a Node declaration in the repository root")]
+    #[diagnostic(
+        code(turbo::setup::no_lock_node),
+        help(
+            "Declare Node in .nvmrc, .node-version, or package.json (devEngines.runtime or \
+             engines.node). --no-lock provisions only Node and an optional exact pnpm. No tools, \
+             dependencies, or locks were changed."
+        )
+    )]
+    NoLockNode,
+    #[error(
+        "--no-lock provisions only Node and pnpm, but the repository declares {0}; clone-local \
+         setup for it is not supported yet"
+    )]
+    #[diagnostic(
+        code(turbo::setup::no_lock_tool),
+        help("No tools, dependencies, or locks were changed.")
+    )]
+    NoLockTool(String),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
@@ -419,7 +438,9 @@ fn run_reporting(
                 request.force,
             );
         }
-        (Mode::Check, _) => return check::run(&discovery, snapshot, preflight),
+        (Mode::Check, _) => {
+            return check::run(&discovery, snapshot, request.tools_only, preflight);
+        }
         (Mode::Plan, _) => {
             println!(
                 "{}",
@@ -427,16 +448,27 @@ fn run_reporting(
             );
             return Ok(0);
         }
+        // Plain offline setup first reuses the trusted installation without
+        // writes (#14518). What trusted reuse cannot authorize falls through to
+        // verified cached bytes (#14540), which install what is cached or list
+        // every missing artifact. Offline --force always takes the cache path.
         // Offline repeats and clone-local --no-lock report their own skipped
-        // dependencies. Offline --force always takes the cache-backed path.
+        // dependencies.
         (Mode::Provision, _) if request.offline && !request.force => {
-            return offline::run(
+            match offline::run(
                 &discovery,
-                snapshot,
+                &snapshot,
                 transports.as_ref(),
-                preflight,
+                &preflight,
                 request.force,
-            );
+            ) {
+                Err(Error::Offline(_))
+                    if offline::cache_may_repair(&discovery, transports.as_ref())? =>
+                {
+                    provision::run(&discovery, snapshot, &request, transports, preflight)?
+                }
+                result => return result,
+            }
         }
         (Mode::Provision, _) if request.lock == LockMode::NoLock => {
             return no_lock::run(&discovery, snapshot, transports, preflight);
@@ -550,14 +582,17 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
         Mode::Plan => !(request.force && request.update_lock),
         Mode::Provision => false,
     };
-    if read_only && tools_only && request.lock != LockMode::NoLock {
+    // Plain checks cover the same tools as --check --tools-only (#14650);
+    // plans still need the effective tools-only decision.
+    if read_only && (tools_only || request.mode == Mode::Check) && request.lock != LockMode::NoLock
+    {
         // CI/frozen/offline never change read-only modes into resolution or repair.
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
     // Write normalization. Combined force/refresh remains fail-closed. Until
-    // dependency installers exist, plain setup provisions exactly the tools
-    // --tools-only does and reports dependencies as skipped.
+    // dependency installers exist, plain setup provisions and checks exactly
+    // the tools --tools-only does and reports dependencies as skipped.
     if request.mode != Mode::Provision
         || (request.lock == LockMode::NoLock
             && (request.force || request.update_lock || request.offline))
@@ -672,13 +707,17 @@ mod tests {
     }
 
     #[test]
-    fn tools_only_check_accepts_ci_frozen_and_offline_without_resolution() {
+    fn checks_accept_ci_frozen_and_offline_without_resolution() {
         for ci in [false, true] {
             for flags in [
                 vec!["--check", "--tools-only"],
                 vec!["--check", "--tools-only", "--offline"],
                 vec!["--check", "--tools-only", "--frozen"],
                 vec!["--check", "--tools-only", "--no-frozen", "--offline"],
+                vec!["--check"],
+                vec!["--check", "--offline"],
+                vec!["--check", "--frozen"],
+                vec!["--check", "--no-frozen", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert_eq!(request.mode, Mode::Check);
@@ -782,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn plain_setup_provisions_like_tools_only_but_plan_and_dependency_checks_do_not() {
+    fn plain_setup_provisions_and_checks_like_tools_only_but_plan_does_not() {
         for ci in [false, true] {
             for flags in [
                 vec![],
@@ -796,17 +835,16 @@ mod tests {
                 assert!(validate_request(&request).is_ok(), "{flags:?}");
             }
         }
-        for (flags, mode) in [
-            (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
-            (vec!["--check"], Mode::Check),
-        ] {
-            let request = request(&flags, false).unwrap();
-            assert_eq!(request.mode, mode);
-            assert!(matches!(
-                validate_request(&request),
-                Err(Error::NotImplemented)
-            ));
-        }
+        // Plans still need --tools-only; plain --check does not (#14650).
+        let plan = request(&["--plan", "--force", "--update-lock"], false).unwrap();
+        assert_eq!(plan.mode, Mode::Plan);
+        assert!(matches!(
+            validate_request(&plan),
+            Err(Error::NotImplemented)
+        ));
+        let check = request(&["--check"], false).unwrap();
+        assert_eq!(check.mode, Mode::Check);
+        assert!(validate_request(&check).is_ok());
         // #14518 admits --offline and #14486 admits --no-lock.
         for flags in [vec!["--offline"], vec!["--no-lock"]] {
             let request = request(&flags, false).unwrap();

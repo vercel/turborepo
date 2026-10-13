@@ -46,14 +46,14 @@ fn extras(bytes: &[u8], central: bool) -> Result<(), Error> {
         seen |= bit;
         let data = Record::take(bytes, &mut offset, usize::from(field.u16(2)))?.0;
         let valid = match field.u16(0) {
-            0x5455 => data.first().is_some_and(|flags| {
+            // Extended timestamps: one 32-bit time per flag bit. Central copies
+            // usually keep only the modification time, but some writers
+            // (official Bun 1.2 and 1.3 archives) repeat every local time.
+            0x5455 => data.first().is_some_and(|&flags| {
+                let full = 1 + 4 * flags.count_ones() as usize;
                 flags & !7 == 0
-                    && data.len()
-                        == 1 + 4 * if central {
-                            u32::from(flags & 1)
-                        } else {
-                            flags.count_ones()
-                        } as usize
+                    && (data.len() == full
+                        || (central && data.len() == 1 + 4 * usize::from(flags & 1)))
             }),
             0x7875 => {
                 let mut at = 0;

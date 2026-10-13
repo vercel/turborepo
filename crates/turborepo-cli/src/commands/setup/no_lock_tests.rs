@@ -265,6 +265,31 @@ fn no_lock_unsupported_native_shape_fails_before_writer_or_nonlock_changes() {
     }
 }
 #[test]
+fn no_lock_names_a_missing_node_declaration_or_unsupported_tool_before_any_change() {
+    for (package, nvmrc, unsupported) in [
+        (json!({"packageManager":"pnpm@10.0.0"}), false, None),
+        (json!({}), false, None),
+        (json!({"packageManager":"npm@11.6.1"}), true, Some("npm")),
+    ] {
+        let f = fresh();
+        if !nvmrc {
+            fs::remove_file(f.owned.root().join(".nvmrc")).unwrap();
+        }
+        fs::write(f.owned.root().join("package.json"), package.to_string()).unwrap();
+        let u = LoopbackServer::new([], |_| {}).unwrap();
+        let before = publication_guards::state(f.owned.root());
+        let error = f.run(&u, NO_LOCK).unwrap_err();
+        match unsupported {
+            Some(tool) => assert!(matches!(&error, Error::NoLockTool(id) if id == tool)),
+            None => assert!(matches!(error, Error::NoLockNode), "{error}"),
+        }
+        assert_eq!(u.hits(), 0);
+        assert_eq!(publication_guards::state(f.owned.root()), before);
+        assert!(!f.owned.root().join(".turbo").exists());
+        untouched(&f);
+    }
+}
+#[test]
 fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_download() {
     for existing in [false, true] {
         for name in [
@@ -345,7 +370,12 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
                 0 => fs::write(staged.join("record.json"), "corrupt").unwrap(),
                 1 => fs::write(staged.join("tools/pnpm/dist/resource"), "corrupt").unwrap(),
                 2 => fs::write(f.owned.root().join("turbo.lock"), "{}").unwrap(),
-                3 => fs::write(f.owned.root().join("apps/web/.npmrc"), "").unwrap(),
+                // A fetch setting: #14740 accepts layout-only project npmrc.
+                3 => fs::write(
+                    f.owned.root().join("apps/web/.npmrc"),
+                    "registry=https://private.invalid/\n",
+                )
+                .unwrap(),
                 _ => fs::write(f.owned.root().join("pnpm-workspace.yaml"), "packages: []").unwrap(),
             }
         });
@@ -382,7 +412,12 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
                 })
             });
             rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            fs::write(root.join("apps/web/.npmrc"), "").unwrap();
+            // A fetch setting: #14740 accepts layout-only project npmrc.
+            fs::write(
+                root.join("apps/web/.npmrc"),
+                "registry=https://private.invalid/\n",
+            )
+            .unwrap();
             drop(guard);
             drop(store);
             assert!(pending.join().unwrap().is_err());

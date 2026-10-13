@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     bun_provision::BunTransport,
-    lock::{self, Document, Format, Installation, Lock, Platform, Tool, reconcile::Resolution},
+    lock::{self, Document, Installation, Lock, Tool, reconcile::Resolution},
     node_provision::{NodePlan, NodeTransport},
     package_manager::{self, Declaration, Manager},
     registry_resolution::RegistryTransport,
@@ -98,41 +98,32 @@ pub(crate) fn exact_manager(declaration: &Declaration) -> Result<String, Error> 
 // platform. Modern Yarn bundle pins are checked against bytes when prepared.
 pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
     let invalid = || Error::Registry(crate::registry_resolution::Error::InvalidLock);
-    let (name, version) =
+    let (_, version) =
         crate::registry_metadata::validate_selection(declaration.manager, &tool.version)
             .map_err(crate::registry_resolution::Error::from)?;
-    let (id, entry, alias) = match declaration.manager {
-        Manager::Npm => ("npm", "bin/npm-cli.js", ("npx", "bin/npx-cli.js")),
-        Manager::Yarn => ("yarn", "bin/yarn.js", ("yarnpkg", "bin/yarn.js")),
-        _ => ("pnpm", "bin/pnpm.cjs", ("pnpx", "bin/pnpx.cjs")),
+    let id = match declaration.manager {
+        Manager::Npm => "npm",
+        Manager::Yarn => "yarn",
+        _ => "pnpm",
     };
-    let tarball = crate::registry_metadata::tarball_path(name, &tool.version);
     let Installation::Managed { artifacts } = &tool.installation else {
         return Err(invalid());
     };
     if tool.adapter != id || !tool.options.is_empty() {
         return Err(invalid());
     }
-    for parts in artifacts.values() {
-        let artifact = parts.values().next().ok_or_else(invalid)?;
-        let paths = &artifact.executables;
-        if parts.len() != 1
-            || artifact.url != format!("https://registry.npmjs.org/{tarball}")
-            || artifact.format != Format::TarGz
-            || artifact.root_prefix.as_deref() != Some("package")
-            || artifact.destination.is_some()
-            || paths.get(id).map(String::as_str) != Some(entry)
-            || (declaration.manager == Manager::Npm && paths.len() != 2)
-            || paths
-                .iter()
-                .any(|(name, path)| ![(id, entry), alias].contains(&(name.as_str(), path.as_str())))
-        {
-            return Err(invalid());
-        }
+    for (platform, parts) in artifacts {
+        let (package, _) = crate::registry_provision::locked_parts(
+            declaration.manager,
+            &tool.version,
+            *platform,
+            parts,
+        )
+        .map_err(|_| invalid())?;
         if crate::registry_metadata::is_modern_yarn(declaration.manager, &version) {
             declaration.preflight_integrity(&version)?;
         } else {
-            declaration.locked_integrity(&version, &artifact.sha256)?;
+            declaration.locked_integrity(&version, &package.sha256)?;
         }
     }
     Ok(())
@@ -290,11 +281,9 @@ pub(crate) async fn resolve_tools(
                 let pin =
                     declaration.locked_integrity(selected.version(), selected.pinned_sha256())?;
                 selected.verify_authored(pin.as_ref())?;
+                // One `any` part, or native pnpm's per-platform parts.
                 Installation::Managed {
-                    artifacts: BTreeMap::from([(
-                        Platform::Any,
-                        BTreeMap::from([("package".into(), selected.into_artifact())]),
-                    )]),
+                    artifacts: selected.into_artifacts(),
                 }
             };
             Tool {
