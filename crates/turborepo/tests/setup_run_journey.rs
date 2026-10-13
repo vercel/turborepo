@@ -639,7 +639,8 @@ fn repository_local_cli_pins_after_global_setup() {
     for cwd in [&j.root, &j.web] {
         let outcome = j.turbo(cwd, &["run", "build"], &[]);
         outcome
-            .fails("repository-local CLI")
+            .fails("repository-local turbo 2.5.0")
+            .fails("does not report managed-run support")
             .fails("upgrade")
             .offline();
     }

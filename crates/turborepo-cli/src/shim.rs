@@ -59,11 +59,11 @@ impl TurboRunner for TurboCliRunner<'_> {
         cli::Args::is_setup_command(&words) || cli::Args::is_hook_command(&words)
     }
 
-    fn managed_run_schema(
+    fn managed_run_requirement(
         &self,
         root: &AbsoluteSystemPath,
         ui: ColorConfig,
-    ) -> Result<Option<u32>, Self::Error> {
+    ) -> Result<Option<turborepo_shim::capabilities::Requirement>, Self::Error> {
         // Without a root lock, or a `turbo setup --no-lock` selection in its
         // place, the repository is unmanaged: keep existing routing, including
         // a local CLI's own argument diagnostics. Unreadable inventory is left
@@ -92,9 +92,7 @@ impl TurboRunner for TurboCliRunner<'_> {
         if discovers && !crate::commands::managed::discovery_probes_tools(&base.opts.future_flags) {
             return Ok(None);
         }
-        crate::commands::managed::validate(&base)
-            .map(|managed| managed.then_some(0))
-            .map_err(Into::into)
+        crate::commands::managed::requirement(&base).map_err(Into::into)
     }
 
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {

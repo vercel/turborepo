@@ -197,6 +197,37 @@ fn production_exec_uses_the_clone_local_selection_and_drift_runs_nothing() {
         String::from_utf8_lossy(&output.stdout),
         "clone-local --version\n"
     );
+    // This build as a repository-local turbo activates clone-local
+    // selections, so exec hands off to it and keeps the selection.
+    let package = f
+        .root()
+        .join("node_modules/@turbo")
+        .join(turborepo_shim::TurboState::scoped_platform_package_dir());
+    fs::create_dir_all(package.join("bin")).unwrap();
+    let version = include_str!("../../../../version.txt")
+        .lines()
+        .next()
+        .unwrap();
+    fs::write(
+        package.join("package.json"),
+        format!(r#"{{"version":"{version}"}}"#),
+    )
+    .unwrap();
+    let (turbo_bin, pin) = (env!("CARGO_BIN_EXE_turbo"), package.join("bin/turbo"));
+    fs::hard_link(turbo_bin, &pin)
+        .or_else(|_| fs::copy(turbo_bin, &pin).map(drop))
+        .unwrap();
+    let verbose = ["--verbosity=2", "exec", "--", "node", "--version"];
+    let output = turbo(&f, "apps/web/src", &verbose).output().unwrap();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success() && stderr.contains("Running local turbo binary in"),
+        "{stderr}"
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "clone-local --version\n"
+    );
     // Strict like a lock: drift names the clone-local fix, never a commit.
     write(f.root(), ".nvmrc", "26.x");
     let output = turbo(&f, "apps/web/src", &exec).output().unwrap();
