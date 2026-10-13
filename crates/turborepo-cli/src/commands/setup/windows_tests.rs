@@ -409,6 +409,8 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
 mod additional;
 #[path = "windows_bun_tests.rs"]
 mod bun;
+#[path = "windows_go_tests.rs"]
+mod go;
 #[path = "windows_install_tests.rs"]
 mod install;
 #[path = "windows_pnpm_tests.rs"]

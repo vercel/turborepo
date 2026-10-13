@@ -218,7 +218,7 @@ async fn locks_must_match_the_official_layout_for_qualified_targets() {
             Err(Error::InvalidLock)
         ));
     }
-    // Windows archives are lockable but promotion stays unqualified.
+    // Windows trees promote only on native Windows x64 (see `zip_tests`).
     let windows = plan(document(Platform::WindowsX64, &bytes), Platform::WindowsX64).unwrap();
     let transport = GoTransport::loopback_http_for_tests("http://127.0.0.1:9").unwrap();
     let repo = tempfile::tempdir().unwrap();
