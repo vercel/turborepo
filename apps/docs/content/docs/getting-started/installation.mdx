@@ -89,12 +89,18 @@ curl -fsSL https://turborepo.dev/install | sh
 irm https://turborepo.dev/install.ps1 | iex
 ```
 
+On Windows arm64, the installer stops instead of installing the x64 build to run under emulation. Use `turbo` in WSL, or install it with your package manager.
+
   </Tab>
 </Tabs>
 
 <Callout type="info">
   See the [support policy](/docs/support-policy#platforms) for supported platforms.
 </Callout>
+
+On macOS and Linux, the installer adds `turbo` to `PATH` in your shell profile. When the installed version supports it, it also adds the [shell hook](/docs/reference/hook), which puts a repository's [managed toolchains](/docs/core-concepts/managed-toolchains) on `PATH` while you work in it and does nothing elsewhere. Pass `--no-shell-hook` (or set `TURBO_NO_SHELL_HOOK=1`) to skip the hook, or `--no-modify-path` (or `TURBO_NO_MODIFY_PATH=1`) to leave your shell profiles untouched.
+
+On Windows, the installer adds `turbo` to your user `PATH` and, when the installed version supports it, adds the hook to your PowerShell profile. Pass `-NoShellHook` (or set `TURBO_NO_SHELL_HOOK=1`) to skip the hook, or `-NoModifyPath` (or `TURBO_NO_MODIFY_PATH=1`) to change neither. See [the installer and opting out](/docs/reference/hook#the-installer-and-opting-out).
 
 <Callout type="info">
   The binaries are also available directly in the [GitHub release assets](https://github.com/vercel/turborepo/releases), starting with 2.11.5. To install an older version, use your package manager.
@@ -115,6 +121,24 @@ After installing `turbo`, you can run commands from your terminal. For example:
 #### Using global `turbo` in CI
 
 To use the global binary in CI, see [Constructing CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci).
+
+#### Uninstalling global `turbo`
+
+On macOS and Linux, run the installer with `--uninstall` (or set `TURBO_UNINSTALL=1`). If you installed with `--install-dir` or `TURBO_INSTALL_DIR`, pass the same directory.
+
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh -s -- --uninstall
+```
+
+Uninstalling removes only what the installer added: the `turbo` binary in the install directory, plus the lines it marked in your shell profiles with `# Turborepo standalone installer PATH` and `# Turborepo standalone installer shell hook`. If you haven't edited those lines, your profiles return to what they contained before you installed. Other `turbo` installations, symlinks, and lines you wrote yourself stay in place, and the installer reports what it removed and what it left.
+
+On Windows, run the installer with `-Uninstall` (or set `TURBO_UNINSTALL=1`). If you installed with `-InstallDirectory` or `TURBO_INSTALL_DIR`, pass the same directory.
+
+```powershell title="PowerShell"
+& ([scriptblock]::Create((irm https://turborepo.dev/install.ps1))) -Uninstall
+```
+
+Uninstalling removes only what the installer added: `turbo.exe` in the install directory, the directory and its user `PATH` entry once nothing else is in it, and the line marked `# Turborepo standalone installer shell hook` in your Windows PowerShell and PowerShell 7 profiles. If you haven't edited that line, your profiles return to what they contained before you installed. Other `turbo` installations, other files, and lines you wrote yourself stay in place, and the installer reports what it removed and what it left.
 
 ### Repository installation
 

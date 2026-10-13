@@ -1,0 +1,469 @@
+---
+title: setup
+description: API reference for the `turbo setup` command
+product: turborepo
+type: reference
+summary: All flags and behavior of `turbo setup`, which installs the toolchains a repository declares, records them in `turbo.lock`, and installs dependencies from committed lockfiles.
+prerequisites:
+  - /docs/core-concepts/managed-toolchains
+related:
+  - /docs/reference/run
+  - /docs/reference/setup-policy
+  - /docs/reference/exec
+  - /docs/reference/hook
+  - /docs/reference/managed-toolchain-platforms
+---
+
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
+Install the toolchains your repository declares, record their exact versions in [`turbo.lock`](/docs/core-concepts/managed-toolchains#turbolock), then install [dependencies](#dependencies) from your committed lockfiles.
+
+```bash title="Terminal"
+turbo setup [flags]
+```
+
+`turbo setup` never runs tasks. To learn how `turbo setup`, `turbo.lock`, and `turbo run` work together, see [Managed toolchains](/docs/core-concepts/managed-toolchains).
+
+You can run `turbo setup` from any directory in your repository. It walks up to the root `turbo.json` or `turbo.jsonc` without crossing a Git repository boundary. If two directories on the way each have a root configuration, it stops and asks you to choose one with [`--cwd`](/docs/reference/run#--cwd-path).
+
+## Requirements
+
+- A root `turbo.json` or `turbo.jsonc`.
+- A [supported platform](/docs/reference/managed-toolchain-platforms).
+- In a Git repository, `.turbo/` must be ignored and untracked. Add `/.turbo/` to your `.gitignore`. Outside a Git repository, such as in [pruned output](/docs/core-concepts/managed-toolchains#pruning), `turbo setup` skips this check.
+- At least one [supported declaration](#supported-declarations) at the repository root. npm, pnpm, and Yarn also need a Node.js declaration.
+- To install JavaScript dependencies, which `turbo setup` does by default, a package manager declared with `packageManager` or `devEngines.packageManager` and its committed lockfile. See [Dependencies](#dependencies).
+- No npm configuration that could redirect downloads. Configure [mirrors](/docs/reference/setup-policy#mirrors) instead. See [npm configuration is rejected](#npm-configuration-is-rejected).
+
+## Supported declarations
+
+`turbo setup` reads declarations from the repository root only.
+
+### Node.js
+
+| Source                                 | Example                                 |
+| -------------------------------------- | --------------------------------------- |
+| `devEngines.runtime` in `package.json` | `{ "name": "node", "version": "24.x" }` |
+| `.nvmrc`                               | `24`, `lts/*`, `lts/jod`, or `node`     |
+| `.node-version`                        | `24.11.0`                               |
+| `engines.node` in `package.json`       | `">=22"`                                |
+
+Every source accepts exact versions and npm-style ranges. Only `.nvmrc` accepts the `node`, `lts/*`, and `lts/<name>` aliases. If `devEngines.runtime` sets `onFail`, it must be `"error"`.
+
+When more than one source is present, `turbo setup` selects the newest release that satisfies all of them and records each source in `turbo.lock`. If `devEngines.runtime` is an array, the release must match at least one of its entries.
+
+### Package managers
+
+| Source                                        | Example                                    |
+| --------------------------------------------- | ------------------------------------------ |
+| `packageManager` in `package.json`            | `"pnpm@10.18.0"`                           |
+| `devEngines.packageManager` in `package.json` | `{ "name": "pnpm", "version": "10.18.0" }` |
+
+`turbo setup` installs npm, pnpm 9 through 12, Yarn 1 and later, and Bun. The package manager must be pinned to an exact version. `packageManager` can include a Corepack integrity suffix, such as `+sha512.<hex>`. If both fields are present, `packageManager` takes precedence and must satisfy `devEngines.packageManager`.
+
+- **npm.** Without a package manager pin, `turbo setup` provides the npm that ships with the selected Node.js release. A pinned npm, such as `"npm@11.6.1"`, is installed instead.
+- **pnpm and Yarn** run on the managed Node.js.
+- **Bun** doesn't need Node.js. On x64, `turbo setup` installs Bun's baseline build, which runs on every x64 CPU.
+
+Starting with pnpm 12, pnpm records its own version in `pnpm-lock.yaml` under `packageManagerDependencies` the first time you run it in a repository. That's pnpm's behavior. Commit the change.
+
+### Rust
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Requires [`futureFlags.experimentalCargoWorkspaces`](/docs/guides/tools/rust#enable-cargo-workspaces).
+
+| Source                                       | Example                                    |
+| -------------------------------------------- | ------------------------------------------ |
+| `rust-toolchain.toml` or `rust-toolchain`    | `channel = "1.90.0"` or `channel = "stable"` |
+
+`turbo setup` installs rustup and the selected toolchain with the components and targets the file lists. Its rustup and Cargo homes are private to the clone: Cargo uses `.turbo/cargo-home` instead of `~/.cargo`, so it doesn't share your credentials or registry cache. `turbo.lock` records each component's `.tar.gz` and `.tar.xz` downloads.
+
+### Python
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Requires [`futureFlags.experimentalPythonWorkspaces`](/docs/guides/tools/python#enable-uv-workspaces).
+
+| Tool   | Source                                                                               | Example         |
+| ------ | ------------------------------------------------------------------------------------ | --------------- |
+| uv     | `required-version` in `uv.toml`, or in the `[tool.uv]` table of `pyproject.toml`     | `">=0.8"`       |
+| Python | `.python-version`, or `requires-python` in the `[project]` table of `pyproject.toml` | `3.12`          |
+
+`turbo setup` installs uv and a verified CPython build, then points uv at it: `turbo run` and `turbo exec` set `UV_PYTHON_INSTALL_DIR`, `UV_PYTHON_DOWNLOADS=never`, `UV_PYTHON_PREFERENCE=only-managed`, and `UV_PYTHON`, so uv never downloads another Python.
+
+### Go
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Requires [`futureFlags.experimentalGoWorkspaces`](/docs/guides/tools/go#enable-go-workspaces).
+
+| Source                                           | Example                                 |
+| ------------------------------------------------ | --------------------------------------- |
+| The `go` and `toolchain` directives in `go.work` | `go 1.22`, `toolchain go1.24.2`         |
+| The `go` and `toolchain` directives in `go.mod`  | `go 1.22`, `toolchain go1.24.2`         |
+
+A root `go.work` takes precedence over the root `go.mod`. A `toolchain` directive selects that exact release. Otherwise, `turbo setup` treats `go` as a minimum and resolves it the way Go's own toolchain switch does. `turbo run` and `turbo exec` set `GOROOT` and `GOTOOLCHAIN=local`, so Go never switches to another toolchain.
+
+### Version manager files
+
+`turbo setup` never reads version manager files, such as `.tool-versions`, `mise.toml`, `.mise.toml`, or the `volta` field of `package.json`. When it finds one, it reports it as ignored:
+
+```txt title="Terminal"
+Ignored version manager declarations; turbo setup reads only native declarations:
+  .tool-versions (asdf/mise): nodejs 22.1.0 (native node declaration takes precedence), pnpm 9.0.0 (native pnpm declaration takes precedence)
+  mise.toml (mise): node 20 (native node declaration takes precedence)
+  package.json#volta (Volta): node 22.2.0 (native node declaration takes precedence)
+Declare versions turbo setup should manage in native files such as .nvmrc, .node-version, or package.json engines, devEngines, and packageManager.
+```
+
+### Additional tools
+
+To install a CLI that `turbo setup` has no built-in support for, such as `protoc`, declare it in [`setup.additionalTools`](/docs/reference/additional-tools).
+
+## Lock modes
+
+### Local mode
+
+Local mode is the default outside of CI. `turbo setup` creates `turbo.lock` if it doesn't exist. If a declaration changed or was removed, it re-resolves only the affected tool, updates `turbo.lock`, and prints the change. Requests that didn't change keep their locked versions, even when a newer matching release exists.
+
+Commit `turbo.lock` after it's created or updated.
+
+### Frozen mode
+
+Frozen mode installs exactly what `turbo.lock` records and never writes it. It fails if `turbo.lock` is missing or no longer matches your declarations, and names each changed declaration.
+
+`turbo setup` uses frozen mode when you pass [`--frozen`](#--frozen) or when `turbo` detects CI. `turbo` detects CI when any of these environment variables is set to a non-empty value, including `false`: `BUILD_ID`, `BUILD_NUMBER`, `CI`, `CI_APP_ID`, `CI_BUILD_ID`, `CI_BUILD_NUMBER`, `CI_NAME`, `CONTINUOUS_INTEGRATION`, `RUN_ID`, or `TEAMCITY_VERSION`.
+
+Pass [`--no-frozen`](#--no-frozen) to use local mode in CI.
+
+## Dependencies
+
+After installing tools, `turbo setup` installs each toolchain's dependencies when its [dependency policy](/docs/reference/setup-policy#dependencies) is `locked`, the default. It runs only the package manager's frozen install, with the managed package manager rather than one from your `PATH`, and with the managed tools first on `PATH`. A dependency install isn't a Turborepo task.
+
+| Package manager  | Command                           | Lockfile                                     |
+| ---------------- | --------------------------------- | -------------------------------------------- |
+| npm              | `npm ci`                          | `npm-shrinkwrap.json` or `package-lock.json` |
+| pnpm             | `pnpm install --frozen-lockfile`  | `pnpm-lock.yaml`                             |
+| Yarn 1           | `yarn install --frozen-lockfile`  | `yarn.lock`                                  |
+| Yarn 2 and later | `yarn install --immutable`        | `yarn.lock`                                  |
+| Bun              | `bun install --frozen-lockfile`   | `bun.lock` or `bun.lockb`                    |
+| uv (Python)      | `uv sync --locked --all-packages` | `uv.lock`                                    |
+| Cargo (Rust)     | `cargo fetch --locked`            | `Cargo.lock`                                 |
+| Go               | `go mod download`                 | `go.mod` and `go.sum`, read-only             |
+
+```txt title="Terminal"
+Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
+pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
+Permitted lifecycle scripts run package code that can start other commands. turbo setup runs no Turborepo tasks.
+...
+javascript dependencies: installed; pnpm-lock.yaml unchanged
+Dependencies: javascript installed. No Turborepo tasks run.
+```
+
+- **A package manager declaration is required.** JavaScript dependencies need `packageManager` or `devEngines.packageManager` in the root `package.json`. Without one, `turbo setup` fails and asks you to declare it, or to set `setup.javascript.dependencies` to `"skip"`.
+- **A lockfile is required.** A missing lockfile is an error, reported before anything is downloaded. `turbo setup` never creates or updates a lockfile. If a package manager changes one anyway, `turbo setup` restores it and fails.
+- **Lifecycle scripts follow your package manager.** Before each install, `turbo setup` prints the effective [lifecycle-script policy](/docs/reference/setup-policy#lifecyclescripts), including allowlists your repository commits. Pass [`--ignore-scripts`](#--ignore-scripts) to skip them for one run.
+- **Failures keep their exit code.** If the install fails, `turbo setup` exits with the package manager's exit code.
+- **Every run repeats the install.** An unchanged lockfile doesn't prove that installed dependencies are complete, so `turbo setup` never skips the install. Package managers make the repeat fast.
+- **Rust.** `cargo fetch` only downloads crates, into the clone's `.turbo/cargo-home`, and runs no build scripts.
+- **Python.** Skipping lifecycle scripts passes `--no-build` to uv, so packages without a compatible wheel fail to install.
+- **Go.** `turbo setup` restores `go.work`, `go.work.sum`, `go.mod`, and `go.sum` and fails if `go` changes them, which usually means missing checksums.
+- **`verify-system` tools.** [`verify-system`](/docs/reference/setup-policy#verify-system) setup never installs dependencies. Install them with the verified package manager, such as `pnpm install --frozen-lockfile`.
+
+## Options
+
+### `--tools-only`
+
+Install toolchains without installing dependencies. It overrides a `locked` dependency policy for one run.
+
+### `--ignore-scripts`
+
+Skip dependency lifecycle scripts for one run, with each package manager's own flag. See [`lifecycleScripts`](/docs/reference/setup-policy#lifecyclescripts).
+
+```txt title="Terminal"
+Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile --ignore-scripts (dependency installation, not a Turborepo task)
+pnpm 10.18.0: lifecycle scripts skipped (--ignore-scripts); passing --ignore-scripts to pnpm
+```
+
+### `--check`
+
+Check the installed toolchains against `turbo.lock` and verify their files, without resolving, downloading, or writing anything.
+
+```txt title="Terminal"
+javascript: tools managed (inferred); dependencies locked (inferred)
+node 24.21.0: ready
+pnpm 10.18.0: ready
+Managed tools use 218.9 MB in this clone's .turbo/tools.
+javascript dependencies: not checked; turbo setup reruns pnpm install --frozen-lockfile from pnpm-lock.yaml, because dependency readiness is not tracked
+  pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
+  Permitted lifecycle scripts run package code that can start other commands. turbo setup runs no Turborepo tasks.
+No tasks run.
+```
+
+The check exits with a non-zero code if `turbo.lock` is missing, your declarations changed, or the installation is missing or damaged. `--frozen`, `--no-frozen`, and `--offline` don't change a check. Installed dependencies aren't checked: the check reports the install that `turbo setup` would repeat, and fails if a required lockfile is missing.
+
+### `--plan`
+
+Report what `turbo setup` would do, including each dependency install command and its lifecycle-script policy, without installing, writing, or running anything.
+
+```txt title="Terminal"
+javascript: tools managed (inferred); dependencies locked (inferred)
+Locked plan (turbo.lock unchanged):
+node 24.21.0: reuse (healthy installation)
+  Declaration: .nvmrc (24)
+  Source: https://nodejs.org/dist/v24.21.0/node-v24.21.0-linux-x64.tar.gz
+  SHA-256: 6e1db87ef58b8819e5d5402eff1536491b18edd8eb7bee5ef7897876e88dc5ff
+pnpm 10.18.0: reuse (healthy installation)
+  Declaration: package.json#/packageManager (pnpm@10.18.0)
+  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.18.0.tgz
+  SHA-256: 3967a3efe2909df305fec4b833a304dfca17c380b6bb77672f4dac4f2cdd3788
+javascript dependencies: pnpm install --frozen-lockfile from pnpm-lock.yaml with managed pnpm 10.18.0 (pnpm-lock.yaml stays unchanged)
+  pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
+  Permitted lifecycle scripts run package code that can start other commands. turbo setup runs no Turborepo tasks.
+Tracked changes: none. No downloads, probes, or tasks run.
+```
+
+Each tool is marked `install`, `reuse`, or `reinstall`. When `turbo.lock` is missing or a declaration changed, the plan shows the lock changes it would make:
+
+```txt title="Terminal"
+Proposed turbo.lock changes:
+  node: 24.21.0 -> 22.23.3
+```
+
+To resolve those versions, it reads release metadata and downloads the archives to verify them, but installs nothing. Add [`--update-lock`](#--update-lock) to preview a refresh, or [`--force`](#--force) to preview reinstalls. `--offline` plans never contact the network and show the offline install commands.
+
+### `--force`
+
+Reinstall the versions in `turbo.lock` into a new installation. `turbo setup` reuses verified bytes from the [shared download cache](/docs/core-concepts/managed-toolchains#disk-use-and-cleanup) and downloads anything that isn't cached. `--force` never re-resolves versions or writes `turbo.lock`, and it requires an existing `turbo.lock` that matches your declarations. Use [`--update-lock`](#--update-lock) to change versions.
+
+### `--frozen`
+
+Use [frozen mode](#frozen-mode), even outside of CI.
+
+### `--no-frozen`
+
+Use [local mode](#local-mode), even in CI. `turbo setup` can then create or update `turbo.lock`.
+
+### `--update-lock`
+
+Re-resolve every declaration, including unchanged ranges and aliases like `24` or `lts/*`, to the newest matching release. `turbo setup` updates `turbo.lock`, prints the changes, and installs the new versions. [Additional tools](/docs/reference/additional-tools) are already exact, so they don't change.
+
+`--update-lock` is rejected in frozen mode. For an intentional update in CI, pass `--no-frozen --update-lock`.
+
+### `--no-lock`
+
+Install tools for this clone without creating or updating `turbo.lock`. `--no-lock` overrides the frozen mode inferred in CI. It can't install dependencies, so combine it with `--tools-only`.
+
+```txt title="Terminal"
+No turbo.lock written (--no-lock). Clone-local selections do not establish cross-machine reproducibility or frozen readiness.
+Dependencies skipped (--tools-only). No tasks run. turbo run uses these tools in this clone only.
+```
+
+`turbo run` and `turbo exec` use these tools in this clone, but another machine can resolve different versions. If `turbo.lock` exists, `--no-lock` fails when your declarations no longer match it.
+
+### `--offline`
+
+Never contact the network. Use it after an online `turbo setup` on the same machine has warmed the caches.
+
+- **Tools.** Plain `--offline` reuses installations that an earlier `turbo setup` installed and recorded for this clone. If there aren't any, it installs from the shared download cache. `--offline --force` reinstalls from the shared download cache. If anything isn't cached, `turbo setup` lists every missing artifact with its URL and digest, and installs nothing.
+- **Dependencies.** Each package manager runs in its own offline mode and fails on anything missing from its cache instead of downloading it.
+- **Resolution.** `--offline` can't resolve versions, so it requires an existing `turbo.lock` and can't be combined with `--update-lock`.
+
+```txt title="Terminal"
+node 24.21.0: reused (trusted installed bytes; offline)
+pnpm 10.18.0: reused (trusted installed bytes; offline)
+Installing javascript dependencies offline from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile --offline (dependency installation, not a Turborepo task)
+```
+
+| Package manager  | Offline command                                         |
+| ---------------- | ------------------------------------------------------- |
+| npm              | `npm ci --offline --no-update-notifier`                 |
+| pnpm             | `pnpm install --frozen-lockfile --offline`              |
+| Yarn 1           | `yarn install --frozen-lockfile --offline`              |
+| Yarn 2 and later | `YARN_ENABLE_NETWORK=0 yarn install --immutable`        |
+| Bun 1.4.1 and later | `bun install --frozen-lockfile --offline`            |
+| uv               | `uv sync --locked --all-packages --offline`             |
+| Cargo            | `cargo fetch --locked --offline`                        |
+| Go               | `GOPROXY=off go mod download`                           |
+
+Bun releases before 1.4.1 have no offline install mode. Yarn 2 and later can't stay offline when `.yarnrc.yml` enables the network for a host in `networkSettings`. In those cases, `turbo setup --offline` installs nothing and explains why:
+
+```txt title="Terminal"
+  x offline setup cannot keep these dependency installers off the network;
+  | nothing was installed:
+  |   javascript: Bun 1.2.23 has no offline install mode (`bun install
+  | --offline` needs Bun 1.4.1 or newer)
+```
+
+Add `--tools-only` to prepare only tools offline. If an offline dependency install fails because something isn't cached, `turbo setup` reports that dependencies aren't ready: run `turbo setup` online once, then retry.
+
+### Conflicting flags
+
+These flags can't be combined:
+
+| Flag            | Conflicts with                                    |
+| --------------- | ------------------------------------------------- |
+| `--plan`        | `--check`                                         |
+| `--check`       | `--plan`, `--force`, `--update-lock`, `--no-lock` |
+| `--frozen`      | `--no-frozen`, `--no-lock`, `--update-lock`       |
+| `--no-lock`     | `--frozen`, `--update-lock`, `--check`            |
+| `--update-lock` | `--frozen`, `--no-lock`, `--check`                |
+
+These combinations aren't supported yet. They exit with an error without changing anything:
+
+- `--force` with `--update-lock`, including with `--plan`.
+- `--offline` with `--update-lock`.
+- `--no-lock` with `--force` or `--offline`.
+- `--plan` in a repository whose tools use [`verify-system`](/docs/reference/setup-policy#verify-system).
+
+`turbo setup` also accepts global options like [`--cwd`](/docs/reference/run#--cwd-path).
+
+## Output
+
+`turbo setup` first prints the effective [setup policy](/docs/reference/setup-policy#output) for each toolchain. Then it reports changes to `turbo.lock` and one line per tool:
+
+- `installed`: The tool was downloaded, verified, and installed.
+- `installed from the shared download cache`: The tool was installed from verified bytes that an earlier setup on this machine downloaded.
+- `reused`: The existing installation already matched `turbo.lock`.
+- `ready`: With `--check`, the installation matches `turbo.lock`.
+- `verified at <path> (verify-system)`: With [`verify-system`](/docs/reference/setup-policy#verify-system), the tool on `PATH` matches `turbo.lock`.
+
+[Additional tools](/docs/reference/additional-tools) also print the URL they came from. Next, `turbo setup` reports [disk use](/docs/core-concepts/managed-toolchains#disk-use-and-cleanup): this clone's `.turbo/tools`, replaced installations it keeps for 7 days, and the shared download cache. Last, it installs and reports each toolchain's dependencies, and confirms that no tasks ran.
+
+## Network
+
+- **Official sources.** `turbo setup` downloads each tool from its official release site, or from the [mirrors](/docs/reference/setup-policy#mirrors) you configure, and verifies every download against `turbo.lock` before installing it.
+- **Proxies and certificates.** Downloads honor `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`.
+- **No credentials.** `turbo setup` never sends credentials, and neither `turbo.json` nor `turbo.lock` can contain them. Downloads that need authentication aren't supported.
+- **Everything else is yours.** `turbo setup` doesn't install system libraries, services, databases, or credentials. Tasks that need them still need them after `turbo setup`.
+
+## Troubleshooting
+
+### `.turbo` isn't ignored
+
+```txt title="Terminal"
+storage must be untracked and Git-ignored; add /.turbo/ to .gitignore
+```
+
+Add `/.turbo/` to your root `.gitignore`. If files under `.turbo/` are tracked, remove them from Git with `git rm -r --cached .turbo`. Outside a Git repository, `turbo setup` skips this check and prints `No Git repository found; skipped checking that .turbo/ is Git-ignored.`
+
+### A dependency lockfile is missing
+
+```txt title="Terminal"
+pnpm dependency setup requires a committed pnpm-lock.yaml at the repository root; run `pnpm install` locally, commit the lockfile, and retry
+```
+
+Create the lockfile with the managed package manager and commit it:
+
+```bash title="Terminal"
+turbo setup --tools-only
+turbo exec -- pnpm install
+```
+
+Or pass `--tools-only`, or set [`"dependencies": "skip"`](/docs/reference/setup-policy#dependencies). Nothing was changed.
+
+### No package manager is declared
+
+```txt title="Terminal"
+JavaScript dependency setup needs a package manager declared in the root package.json (packageManager or devEngines.packageManager); declare one, or set setup.javascript.dependencies to "skip" in turbo.json
+```
+
+Add `packageManager` to your root `package.json`, such as `"packageManager": "npm@11.6.1"`, or skip JavaScript dependencies with [setup policy](/docs/reference/setup-policy#dependencies).
+
+### npm configuration is rejected
+
+```txt title="Terminal"
+official-only setup rejects npm configuration environment overrides; remove them before retrying
+```
+
+`turbo setup` only downloads from official sources and the [mirrors](/docs/reference/setup-policy#mirrors) you configure. To guarantee that, it stops if anything else could redirect those downloads:
+
+- Any `NPM_CONFIG_*` environment variable, in any spelling, such as `NPM_CONFIG_REGISTRY` or `NPM_CONFIG_CAFILE`. The variables npm and pnpm set for the scripts they run, such as `npm_config_user_agent`, are allowed, and registry variables are allowed only when they point at the public npm registry. To trust a custom certificate authority, set `SSL_CERT_FILE` instead.
+- `COREPACK_NPM_REGISTRY`, `NODEJS_ORG_MIRROR`, `NVM_NODEJS_ORG_MIRROR`, or `DESTDIR`.
+- An `.npmrc` file, even an empty one, in your home directory, or a system npm configuration, such as `/etc/npmrc`. Homebrew's bundled npm configuration, which only sets `prefix`, is allowed.
+- An `.npmrc` file in the current directory or any of its parents, unless every setting in it only shapes how dependencies are laid out: `auto-install-peers`, `dedupe-direct-deps`, `engine-strict`, `hoist-pattern`, `link-workspace-packages`, `node-linker`, `public-hoist-pattern`, `resolution-mode`, `save-exact`, `shamefully-hoist`, or `strict-peer-dependencies`. Registries, credentials, proxies, and certificate settings are rejected, even at their default values.
+- An empty `setup` object in a `turbo.json` or `turbo.jsonc`.
+
+```txt title="Terminal"
+official-only setup rejects line 1 of the Repository .npmrc: only known install-layout settings are allowed there; remove it or wait for mirror/policy support
+```
+
+Remove them for the `turbo setup` invocation, then retry. `turbo run` isn't affected.
+
+### `turbo.lock` is missing in CI
+
+```txt title="Terminal"
+frozen mode requires turbo.lock
+```
+
+Run `turbo setup` locally and commit `turbo.lock`.
+
+### Declarations changed
+
+```txt title="Terminal"
+turbo.lock declarations changed: node: .nvmrc
+```
+
+A declaration, such as `.nvmrc` or `packageManager`, no longer matches `turbo.lock`. Frozen setup names each changed tool and its declaration. Run `turbo setup` locally and commit the updated `turbo.lock`. `turbo run` and `turbo exec` report the same problem as `tool declarations no longer match turbo.lock`, and `turbo setup --check` as `native declarations disagree with turbo.lock`.
+
+If a dependency bot changed the declaration, see [Updating turbo.lock with dependency bots](/docs/guides/updating-turbo-lock) to update `turbo.lock` in the same pull request.
+
+### `--update-lock` in CI
+
+```txt title="Terminal"
+--update-lock cannot be used in frozen mode (inferred in CI)
+```
+
+Pass `--no-frozen --update-lock` for an intentional update in CI.
+
+### The managed installation is missing, damaged, or out of date
+
+```txt title="Terminal"
+managed setup validation failed: managed tools are not installed; run turbo setup to repair the installation (turbo.lock is unchanged)
+```
+
+`turbo run` and `turbo exec` report this, or a similar message, when `.turbo/tools` is missing, doesn't match `turbo.lock`, has changed files, or wasn't installed by `turbo setup` for your user in this clone. Moving or copying a clone, or restoring `.turbo` from a cache, also requires `turbo setup` again. Run `turbo setup`; it reinstalls from the shared download cache when it can.
+
+| Message                                                     | Cause                                                                   |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `managed tools are not installed`                           | `turbo setup` hasn't installed tools in this clone.                     |
+| `managed tools do not match turbo.lock`                     | `turbo.lock` changed since `turbo setup`, for example after `git pull`. |
+| `managed tools are damaged or unsafe`                       | A file in `.turbo/tools` changed after installation.                    |
+| `managed tools have no matching trusted setup record`       | The clone moved, or `.turbo/tools` came from somewhere else.            |
+| `tool declarations no longer match turbo.lock`              | A declaration changed. See [Declarations changed](#declarations-changed). |
+
+### Unsupported declarations
+
+| Message                                                   | Fix                                                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `a native Node declaration is required`                   | Add a [Node.js declaration](#nodejs).                                     |
+| `conflicting or unavailable Node releases`                | Make your Node.js declarations agree on at least one release.             |
+| `unsupported native JS resolution: floating pnpm request` | Pin the package manager to an exact version.                              |
+| `invalid native setup declarations`                       | Check that declarations use [supported formats](#supported-declarations). |
+| `managed tools are not supported on musl Linux hosts`     | Use [`verify-system`](/docs/reference/setup-policy#verify-system).        |
+| `managed setup is not qualified for Windows arm64`        | Use WSL or a Windows x64 machine.                                         |
+
+### A repository-local `turbo` can't run managed tasks
+
+```txt title="Terminal"
+repository-local CLI at <path> cannot provide the required managed-run capability for turbo.lock schema 0
+```
+
+The repository has `turbo` installed in `node_modules`, and that version can't run managed tasks on this platform. See [Repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo).
+
+### Ambiguous setup roots
+
+```txt title="Terminal"
+ambiguous setup roots: /repo/out/full and /repo
+```
+
+The current directory is inside two repositories with root configurations, such as `turbo prune` output inside your repository. Select one with `--cwd`.
+
+### Unsupported `turbo.lock` schema
+
+```txt title="Terminal"
+unsupported turbo.lock schema version 1; upgrade turbo or regenerate this prelaunch lock
+```
+
+`turbo.lock` was written by a newer version of `turbo`. Upgrade `turbo`.
