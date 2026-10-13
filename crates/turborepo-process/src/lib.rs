@@ -64,6 +64,28 @@ pub fn spawn_child(
     Ok(shared_child)
 }
 
+/// Hands this process off to `command` (`turbo exec`'s program, or the turbo
+/// a global turbo defers to), so killing this process kills it too. This
+/// process becomes `command` (`execve`) and returns only if it cannot start:
+/// SIGKILL, every other signal, job control, and the exit status, including
+/// a signal death, reach or come from `command` as if it ran directly.
+#[cfg(unix)]
+pub fn hand_off(mut command: std::process::Command) -> io::Result<std::process::ExitStatus> {
+    use std::{io::Write, os::unix::process::CommandExt};
+    // Nothing buffered may be lost with the process image.
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+    Err(command.exec())
+}
+
+/// Hands this process off to `command`, so killing this process kills it too.
+/// Windows has no `execve`: `command` runs as a [`spawn_contained_child`], and
+/// its exit status, including an `NTSTATUS` value, is returned unchanged.
+#[cfg(windows)]
+pub fn hand_off(command: std::process::Command) -> io::Result<std::process::ExitStatus> {
+    spawn_contained_child(command)?.wait()
+}
+
 /// Starts `command` with its process tree tied to this process: terminating
 /// this process (CI cancellation, an IDE's stop button, `taskkill /F`) also
 /// terminates the program and every process it starts. Windows never

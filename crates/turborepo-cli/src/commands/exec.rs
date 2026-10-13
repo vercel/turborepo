@@ -76,21 +76,14 @@ pub fn run(
         return Err(Error::ManagedSetupRequired.into());
     };
     let cwd = invocation_cwd(args, |name| env::var_os(name))?;
-    Ok(spawn(tools.as_ref(), command, &cwd, launcher(args))?)
-}
-
-/// Killing `turbo exec` must kill the program it runs. On Unix, exec becomes
-/// the program, except in a local CLI that global turbo handed off to
-/// (`--skip-infer`). Global turbo reports that CLI's status and would turn a
-/// signal death into 2, so the CLI stays the parent and reports 128 + signal.
-fn launcher(args: &Args) -> fn(std::process::Command) -> io::Result<ExitStatus> {
-    #[cfg(unix)]
-    if !args.skip_infer {
-        return replace_process;
-    }
-    #[cfg(not(unix))]
-    let _ = args;
-    run_child
+    // Killing `turbo exec` must kill the program it runs. That holds in a
+    // local CLI too (`--skip-infer`): global turbo hands off the same way.
+    Ok(spawn(
+        tools.as_ref(),
+        command,
+        &cwd,
+        turborepo_process::hand_off,
+    )?)
 }
 
 /// The program runs in `--cwd`, else where the user invoked turbo. Global
@@ -141,41 +134,6 @@ pub(crate) fn spawn(
         source,
     })?;
     Ok(exit_code(status))
-}
-
-/// Replaces turbo with the program (`execve`) once its environment is ready.
-/// No turbo process is left to kill on its own: SIGKILL, every other signal,
-/// job control, and the exit status, including a signal death, reach or come
-/// from the program as if it ran directly. Returns only if it cannot start.
-#[cfg(unix)]
-fn replace_process(mut command: std::process::Command) -> io::Result<ExitStatus> {
-    use std::{io::Write, os::unix::process::CommandExt};
-    // Nothing buffered may be lost with the process image.
-    let _ = io::stdout().flush();
-    let _ = io::stderr().flush();
-    Err(command.exec())
-}
-
-/// Runs the program as a child: SIGTERM and SIGHUP reach it as SIGTERM, and
-/// Ctrl+C reaches it from the terminal exactly once.
-#[cfg(unix)]
-fn run_child(command: std::process::Command) -> io::Result<ExitStatus> {
-    let child = turborepo_process::spawn_child(command)?;
-    // Ignore SIGINT only after spawning, so the child keeps its disposition.
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_IGN);
-    }
-    child.wait()
-}
-
-/// Windows has no `execve`. The program shares turbo's console, which
-/// delivers Ctrl+C to it directly while turbo swallows the event and waits.
-/// It runs in a kill-on-close job object, so terminating turbo also
-/// terminates the program and everything it started. After the program exits
-/// on its own, whatever it deliberately left running survives, as on Unix.
-#[cfg(windows)]
-fn run_child(command: std::process::Command) -> io::Result<ExitStatus> {
-    turborepo_process::spawn_contained_child(command)?.wait()
 }
 
 /// A child's signal death becomes the shell's `128 + signal`, the status a
@@ -303,32 +261,6 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn sigterm_to_turbo_reaches_the_child_and_its_status_is_returned() {
-        let (temp, tools) = fixture(false);
-        tool(
-            &temp.path().join("managed"),
-            "serve",
-            "trap 'echo term >> signals; exit 5' TERM\n: > ready\nwhile :; do :; done",
-        );
-        let work = AbsoluteSystemPathBuf::try_from(temp.path().join("work")).unwrap();
-        let ready = work.as_std_path().join("ready");
-        let child = {
-            let work = work.clone();
-            std::thread::spawn(move || spawn(&tools, &[OsString::from("serve")], &work, run_child))
-        };
-        let started = std::time::Instant::now();
-        while !ready.exists() {
-            assert!(started.elapsed().as_secs() < 30, "child never started");
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
-        // Production signal handling is process-wide; nextest isolates tests.
-        unsafe { libc::kill(libc::getpid(), libc::SIGTERM) };
-        assert_eq!(child.join().unwrap().unwrap(), 5);
-        let signals = fs::read_to_string(work.as_std_path().join("signals")).unwrap();
-        assert_eq!(signals, "term\n");
-    }
-
     const HOST: &str = "TURBO_EXEC_TEST_REPLACE_HOST";
 
     /// Runs exec like the CLI does, in a process the test can signal.
@@ -340,73 +272,51 @@ mod tests {
             stale: false,
         };
         let work = AbsoluteSystemPathBuf::new(spec["work"].as_str().unwrap()).unwrap();
-        let words: Vec<String> = serde_json::from_value(spec["args"].clone()).unwrap();
-        let args = Args::parse_args(words.into_iter().map(OsString::from).collect()).unwrap();
-        let status = spawn(&tools, &[OsString::from("serve")], &work, launcher(&args)).unwrap();
+        let launch = turborepo_process::hand_off;
+        let status = spawn(&tools, &[OsString::from("serve")], &work, launch).unwrap();
         fs::write(work.as_std_path().join("status"), status.to_string()).unwrap();
     }
 
     /// SIGKILL to exec is SIGKILL to the program: exec became it. A local
-    /// CLI that global turbo handed off to stays the program's parent.
+    /// CLI that global turbo handed off to does the same, because global
+    /// turbo became that CLI.
     #[test]
-    fn exec_becomes_the_program_unless_handed_off() {
+    fn exec_becomes_the_program() {
         if let Ok(spec) = env::var(HOST) {
             return exec_host(&spec);
         }
-        for (flags, replaced) in [(&[][..], true), (&["--skip-infer"][..], false)] {
-            let (temp, tools) = fixture(false);
-            let body = "trap 'exit 5' TERM\necho $$ > ready\nwhile :; do :; done";
-            tool(&temp.path().join("managed"), "serve", body);
-            let work = temp.path().join("work");
-            let args: Vec<_> = ["turbo"]
-                .iter()
-                .chain(flags)
-                .chain(&["exec", "--", "serve"])
-                .collect();
-            let spec = serde_json::json!({ "path": tools.path, "work": work, "args": args });
-            let mut host = std::process::Command::new(env::current_exe().unwrap())
-                .args([
-                    "commands::exec::tests::exec_becomes_the_program_unless_handed_off",
-                    "--exact",
-                ])
-                .env(HOST, spec.to_string())
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .spawn()
-                .unwrap();
-            let ready = work.join("ready");
-            let started = std::time::Instant::now();
-            let pid: i32 = loop {
-                if let Some(pid) = fs::read_to_string(&ready)
-                    .ok()
-                    .and_then(|text| text.trim().parse().ok())
-                {
-                    break pid;
-                }
-                assert!(started.elapsed().as_secs() < 30, "{flags:?}: never started");
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            };
-            let host_pid = host.id() as i32;
-            if (pid == host_pid) != replaced {
-                unsafe { libc::kill(pid, libc::SIGKILL) };
-                let _ = host.kill();
-                panic!("{flags:?}: exec is {host_pid}, the program is {pid}");
+        let (temp, tools) = fixture(false);
+        let body = "trap 'exit 5' TERM\necho $$ > ready\nwhile :; do :; done";
+        tool(&temp.path().join("managed"), "serve", body);
+        let work = temp.path().join("work");
+        let spec = serde_json::json!({ "path": tools.path, "work": work });
+        let mut host = std::process::Command::new(env::current_exe().unwrap())
+            .args(["commands::exec::tests::exec_becomes_the_program", "--exact"])
+            .env(HOST, spec.to_string())
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let ready = work.join("ready");
+        let started = std::time::Instant::now();
+        let pid: i32 = loop {
+            if let Some(pid) = fs::read_to_string(&ready)
+                .ok()
+                .and_then(|text| text.trim().parse().ok())
+            {
+                break pid;
             }
-            let signal = if replaced {
-                libc::SIGKILL
-            } else {
-                libc::SIGTERM
-            };
-            unsafe { libc::kill(host_pid, signal) };
-            let status = host.wait().unwrap();
-            if replaced {
-                assert_eq!(status.signal(), Some(libc::SIGKILL));
-            } else {
-                assert!(status.success(), "{status:?}");
-                let code = fs::read_to_string(work.join("status")).unwrap();
-                assert_eq!(code, "5");
-            }
+            assert!(started.elapsed().as_secs() < 30, "never started");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        let host_pid = host.id() as i32;
+        if pid != host_pid {
+            unsafe { libc::kill(pid, libc::SIGKILL) };
+            let _ = host.kill();
+            panic!("exec is {host_pid}, the program is {pid}");
         }
+        unsafe { libc::kill(host_pid, libc::SIGKILL) };
+        assert_eq!(host.wait().unwrap().signal(), Some(libc::SIGKILL));
     }
 
     #[test]
@@ -677,7 +587,7 @@ fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
         let pids = work.as_std_path().join("pids.json");
         let exec = {
             let work = work.clone();
-            thread::spawn(move || spawn(&tools, &command, &work, run_child))
+            thread::spawn(move || spawn(&tools, &command, &work, turborepo_process::hand_off))
         };
         let access = PROCESS_SYNCHRONIZE | PROCESS_TERMINATE;
         let tree: Vec<_> = wait_for(&pids)
@@ -773,7 +683,7 @@ setInterval(() => process.argv[2] === 'exit' && fs.existsSync('release') && proc
 
     fn tree_host(spec: &str) {
         let (work, tools, command) = host_spec(spec);
-        let status = spawn(&tools, &command, &work, run_child).unwrap();
+        let status = spawn(&tools, &command, &work, turborepo_process::hand_off).unwrap();
         fs::write(work.as_std_path().join("status"), status.to_string()).unwrap();
     }
 

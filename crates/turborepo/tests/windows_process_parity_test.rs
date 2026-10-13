@@ -434,11 +434,14 @@ impl Run {
     }
 }
 
-/// Starts the blocked task and returns once it and its descendant run.
+/// Starts the blocked task and returns once it and its descendant run. With
+/// `handoff`, the repository installs `turbo`, so the entrypoint hands off to
+/// that local CLI.
 fn start(
     launcher: &ProcessLauncher,
     launch: Launch,
     terminal: Terminal,
+    handoff: bool,
     args: &[&str],
 ) -> (tempfile::TempDir, Run, Tree) {
     // CI runners can start tests with Ctrl+C ignored, a state every child
@@ -448,6 +451,9 @@ fn start(
     unsafe { SetConsoleCtrlHandler(None, 0) };
     let dir = tempfile::tempdir().unwrap();
     repo(dir.path());
+    if handoff {
+        ProcessLauncher::install_package(dir.path(), &launcher.standalone);
+    }
     let mut run = Run::spawn(launcher, launch, terminal, dir.path(), args);
     let pids = dir.path().join("pids.json");
     run.wait_for(&pids);
@@ -504,7 +510,7 @@ fn first_ctrl_c_waits_for_one_graceful_cleanup() {
     let launcher = ProcessLauncher::new();
     for (terminal, launch) in CASES {
         eprintln!("case: {launch:?} {terminal:?}");
-        let (dir, mut run, tree) = start(&launcher, launch, terminal, &["-vv"]);
+        let (dir, mut run, tree) = start(&launcher, launch, terminal, false, &["-vv"]);
         run.ctrl_c(&launcher);
         run.wait_for(&dir.path().join("interrupts"));
         // A duplicated delivery would reach the task twice or force kill it.
@@ -531,7 +537,7 @@ fn second_ctrl_c_force_kills_without_orphans() {
     let launcher = ProcessLauncher::new();
     for (terminal, launch) in CASES {
         eprintln!("case: {launch:?} {terminal:?}");
-        let (dir, mut run, tree) = start(&launcher, launch, terminal, &[]);
+        let (dir, mut run, tree) = start(&launcher, launch, terminal, false, &[]);
         run.ctrl_c(&launcher);
         run.wait_for(&dir.path().join("interrupts"));
         run.assert_running("before the second Ctrl+C");
@@ -549,19 +555,26 @@ fn second_ctrl_c_force_kills_without_orphans() {
 }
 
 /// Windows has no SIGTERM: a supervisor terminates the entrypoint process.
-/// Job objects must still take the whole task tree down with it.
+/// Job objects must still take the whole task tree down with it, including a
+/// repository-local CLI that the entrypoint handed off to.
 #[test]
 fn terminating_the_entrypoint_leaves_no_orphans() {
     let launcher = ProcessLauncher::new();
-    for launch in [Launch::Standalone, Launch::Wrapper] {
-        eprintln!("case: {launch:?}");
-        let (_dir, mut run, tree) = start(&launcher, launch, Terminal::Console, &[]);
-        let Run::Console(Some(process)) = &mut run else {
-            unreachable!()
-        };
-        process.child.kill().unwrap();
-        let outcome = run.finish();
-        assert_eq!(outcome.code, 1, "{launch:?}\n{}", outcome.output);
-        tree.assert_gone();
+    for handoff in [false, true] {
+        for launch in [Launch::Standalone, Launch::Wrapper] {
+            eprintln!("case: {launch:?} handoff={handoff}");
+            let (_dir, mut run, tree) =
+                start(&launcher, launch, Terminal::Console, handoff, &["-vv"]);
+            let Run::Console(Some(process)) = &mut run else {
+                unreachable!()
+            };
+            process.child.kill().unwrap();
+            let outcome = run.finish();
+            let context = format!("{launch:?} handoff={handoff}\n{}", outcome.output);
+            assert_eq!(outcome.code, 1, "{context}");
+            let handed_off = outcome.output.contains("Running local turbo binary in");
+            assert_eq!(handed_off, handoff, "{context}");
+            tree.assert_gone();
+        }
     }
 }
