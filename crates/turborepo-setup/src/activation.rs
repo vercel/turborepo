@@ -470,6 +470,17 @@ impl ActivationPlan {
                 }
                 _ => {}
             }
+            // On Windows every Rust export is a rustup proxy that reads these:
+            // give them the PATH entry's ordinary spelling, and never let a
+            // proxy auto-install into the selected generation.
+            #[cfg(windows)]
+            let (home, cargo_home) = (
+                dunce::simplified(&home).to_path_buf(),
+                dunce::simplified(&cargo_home).to_path_buf(),
+            );
+            if cfg!(windows) {
+                runtime_env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+            }
             runtime_env.insert("RUSTUP_HOME".into(), home.into_os_string());
             runtime_env.insert("RUSTUP_TOOLCHAIN".into(), rust.toolchain().into());
             runtime_env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
@@ -542,6 +553,35 @@ impl ActivationPlan {
         }
         Ok(std::env::join_paths(paths)?)
     }
+}
+
+/// What the shell hook exports beside PATH for a trusted installation at
+/// `root`, derived from its recorded `bin` and tools without reading the
+/// Store. Windows Rust exports are rustup proxies, which need the variables
+/// managed run sets; Unix exports run the toolchain directly, so the hook
+/// keeps editing only PATH there.
+pub fn hook_env(root: &Path, bin: &Path, tools: &[Tool]) -> BTreeMap<String, OsString> {
+    let mut env = BTreeMap::new();
+    let rust = tools.iter().find(|tool| tool.id == "rust");
+    let Some((rust, generation)) = rust.zip(bin.parent()).filter(|_| cfg!(windows)) else {
+        return env;
+    };
+    let Some(host) = crate::rustup::host(&rust.platform) else {
+        return env;
+    };
+    let home = generation.join("tools").join("rust");
+    let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
+    #[cfg(windows)]
+    let (home, cargo_home) = (
+        dunce::simplified(&home).to_path_buf(),
+        dunce::simplified(&cargo_home).to_path_buf(),
+    );
+    env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+    env.insert("RUSTUP_HOME".into(), home.into_os_string());
+    let toolchain = format!("{}-{host}", rust.version);
+    env.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
+    env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
+    env
 }
 
 /// The uv launchers' settings, for uv processes that do not start through

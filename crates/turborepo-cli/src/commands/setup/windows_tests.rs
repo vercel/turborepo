@@ -415,6 +415,8 @@ mod go;
 mod install;
 #[path = "windows_pnpm_tests.rs"]
 mod pnpm;
+#[path = "windows_rust_tests.rs"]
+mod rust;
 #[path = "windows_uv_tests.rs"]
 mod uv;
 #[path = "windows_yarn_tests.rs"]

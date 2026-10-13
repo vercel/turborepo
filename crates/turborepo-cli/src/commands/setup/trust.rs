@@ -68,6 +68,8 @@ pub(crate) struct Recorded {
     /// Each export's relative target. On Windows its extension is the export's
     /// PATHEXT type (`.exe` or `.cmd`).
     pub(crate) targets: Vec<String>,
+    /// Variables the recorded tools need beside PATH (Windows Rust proxies).
+    pub(crate) env: std::collections::BTreeMap<String, std::ffi::OsString>,
 }
 
 fn unsafe_state() -> io::Error {
@@ -389,8 +391,15 @@ impl TrustStore {
         let targets = (record.installation.tools.iter())
             .flat_map(|tool| tool.executables.values().cloned())
             .collect();
+        let installation = &record.installation;
+        let env = turborepo_setup::activation::hook_env(
+            &self.root,
+            &installation.bin,
+            &installation.tools,
+        );
         Ok(Some(Recorded {
             stale: !record.resolves(lock.as_deref()),
+            env,
             bin: record.installation.bin,
             targets,
         }))
