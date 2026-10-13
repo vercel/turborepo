@@ -9,7 +9,10 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
@@ -597,29 +600,32 @@ impl BoundariesChecker {
 
         let package_results: Vec<Result<BoundariesResult, Error>> = {
             let _span = info_span!("check_all_packages", count = packages_to_check.len()).entered();
+            // Packages are checked independently so Rayon can balance them
+            // across all workers. Progress is still reported per batch: the
+            // package that completes a batch (or the last package) advances
+            // the bar, so the final position is exactly the package count.
+            let total = packages_to_check.len();
+            let completed = AtomicUsize::new(0);
             turborepo_rayon_compat::block_in_place(|| {
                 packages_to_check
-                    .par_chunks(PROGRESS_UPDATE_BATCH_SIZE)
-                    .map(|packages| {
-                        let results = packages
-                            .iter()
-                            .map(|(package_name, package_name_source, package_directory)| {
-                                Self::check_package(
-                                    ctx,
-                                    package_name,
-                                    *package_name_source,
-                                    package_directory,
-                                    &rules_map,
-                                    &global_implicit_dependencies,
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        progress.inc(packages.len() as u64);
-                        results
+                    .par_iter()
+                    .map(|(package_name, package_name_source, package_directory)| {
+                        let result = Self::check_package(
+                            ctx,
+                            package_name,
+                            *package_name_source,
+                            package_directory,
+                            &rules_map,
+                            &global_implicit_dependencies,
+                        );
+                        let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                        if done.is_multiple_of(PROGRESS_UPDATE_BATCH_SIZE) {
+                            progress.inc(PROGRESS_UPDATE_BATCH_SIZE as u64);
+                        } else if done == total {
+                            progress.inc((total % PROGRESS_UPDATE_BATCH_SIZE) as u64);
+                        }
+                        result
                     })
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .flatten()
                     .collect()
             })
         };
