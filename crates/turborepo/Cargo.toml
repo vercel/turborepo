@@ -33,6 +33,14 @@ which = { workspace = true }
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
 libghostty-vt = { workspace = true }
 
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Console",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+] }
+
 [lints]
 workspace = true
 
