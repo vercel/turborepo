@@ -1,7 +1,7 @@
 //! Locked rustup adapter. Verified official installer bytes are staged as a
-//! repository-scoped multicall `rustup`; the installer itself never runs, so
-//! no shell profile, PATH, `~/.rustup` or `~/.cargo` can change. No Rust
-//! toolchain is installed here.
+//! repository-scoped multicall `rustup` (`rustup.exe` on Windows); the
+//! installer itself never runs, so no shell profile, PATH, registry key,
+//! `~/.rustup` or `~/.cargo` can change. No Rust toolchain is installed here.
 
 use std::{
     collections::BTreeMap,
@@ -32,8 +32,8 @@ pub enum Error {
     )]
     MissingTarget,
     #[error(
-        "managed rustup promotion is not qualified for Windows or musl; use a supported GNU \
-         Linux/macOS target or configure verify-system"
+        "managed rustup promotion is not qualified for this host, Windows arm64 or musl; use a \
+         supported macOS, GNU Linux or Windows x64 target or configure verify-system"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this rustup plan unchanged")]
@@ -153,7 +153,6 @@ impl RustupTransport {
 pub struct RustupPlan {
     tool: Tool,
     artifact: Artifact,
-    windows: bool,
 }
 
 impl RustupPlan {
@@ -193,7 +192,6 @@ impl RustupPlan {
                 executables,
             },
             artifact: artifact.clone(),
-            windows: rustup::windows(platform),
         })
     }
 
@@ -210,7 +208,7 @@ impl RustupPlan {
         transport: &RustupTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedRustup>, Error> {
-        if self.windows || !cfg!(unix) || self.tool.platform.ends_with("-musl") {
+        if !rustup::promotable(&self.tool.platform) {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.contains(&self.tool) {
@@ -340,9 +338,15 @@ impl PrivateHomes {
     pub fn command(&self, rustup: &Path, transport: &RustupTransport) -> Command {
         let origin = &transport.origin;
         let mut command = Command::new(rustup);
+        // Under a canonical `\\?\` store, rustup gets the ordinary spelling
+        // unless only the verbatim one is exact.
+        #[cfg(windows)]
+        let homes = [&self.rustup, &self.cargo].map(|home| dunce::simplified(home));
+        #[cfg(not(windows))]
+        let homes = [&self.rustup, &self.cargo].map(PathBuf::as_path);
         command
-            .env("RUSTUP_HOME", &self.rustup)
-            .env("CARGO_HOME", &self.cargo)
+            .env("RUSTUP_HOME", homes[0])
+            .env("CARGO_HOME", homes[1])
             .env("RUSTUP_DIST_SERVER", origin)
             .env("RUSTUP_UPDATE_ROOT", format!("{origin}/rustup"))
             .env("RUSTUP_AUTO_INSTALL", "0")
@@ -354,3 +358,6 @@ impl PrivateHomes {
 
 #[cfg(all(test, unix))]
 mod tests;
+
+#[cfg(all(test, windows))]
+mod windows_tests;
