@@ -34,16 +34,13 @@ fn user_state(home: &Path) -> PathBuf {
 
 /// A clone with its own Git boundary. `home` set-up repositories get a real
 /// installation plus the external record `turbo setup` publishes for it.
-fn repo(dir: &Path, flagged: bool, home: Option<&Path>) -> Option<String> {
+fn repo(dir: &Path, configured: bool, home: Option<&Path>) -> Option<String> {
     fs::create_dir_all(dir.join("apps/web")).unwrap();
     fs::set_permissions(dir, fs::Permissions::from_mode(0o755)).unwrap();
     fs::create_dir(dir.join(".git")).unwrap();
-    let flags = if flagged {
-        r#""futureFlags":{"experimentalSetup":true}"#
-    } else {
-        ""
-    };
-    fs::write(dir.join("turbo.json"), format!("{{{flags}}}")).unwrap();
+    if configured {
+        fs::write(dir.join("turbo.json"), "{}").unwrap();
+    }
     fs::write(dir.join("turbo.lock"), r#"{"schemaVersion":0,"tools":{}}"#).unwrap();
     let home = home?;
     let root = dir.canonicalize().unwrap();
@@ -145,7 +142,8 @@ fn journey(shell: &str) {
     let home = temp.path().join("home");
     let a = repo(&temp.path().join("a"), true, Some(&home)).unwrap();
     let b = repo(&temp.path().join("b"), true, Some(&home)).unwrap();
-    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
+    // Nested, configured, never set up: untrusted. Without a root config, a
+    // lock is ignored even if set up.
     repo(&temp.path().join("a/vendor/c"), true, None);
     repo(&temp.path().join("off"), false, Some(&home));
     fs::create_dir(temp.path().join("plain")).unwrap();

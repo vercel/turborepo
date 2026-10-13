@@ -1774,7 +1774,7 @@ impl RunBuilder {
             needs_all_packages,
         } = modes;
 
-        let managed_setup = scope::has_committed_setup_lock(&self.repo_root, scm, root_turbo_json);
+        let managed_setup = scope::has_committed_setup_lock(&self.repo_root, scm);
 
         // Task-level filter: resolve --filter and/or --affected against the task graph.
         if use_task_level_filter {

@@ -11,9 +11,7 @@ use turborepo_turbo_json::{DependencyPolicy, FutureFlags, SetupPolicy, ToolPolic
 /// same way, or its Rust, Python and Go selections would read as drift.
 pub(crate) fn ecosystems(flags: &FutureFlags, policy: &SetupPolicy) -> Ecosystems {
     let managed = |enabled: bool, id: ToolchainId| {
-        flags.experimental_setup
-            && enabled
-            && policy.toolchain(&id).tools.unwrap_or(ToolPolicy::Managed) == ToolPolicy::Managed
+        enabled && policy.toolchain(&id).tools.unwrap_or(ToolPolicy::Managed) == ToolPolicy::Managed
     };
     Ecosystems {
         rust: managed(flags.experimental_cargo_workspaces, ToolchainId::RUST),
@@ -237,17 +235,16 @@ mod tests {
                 ..every
             }
         );
-        // Flags gate even managed tools, and nothing applies without setup.
+        // Workspace flags gate even managed tools.
         let no_cargo = FutureFlags {
             experimental_cargo_workspaces: false,
             ..all
         };
         assert!(!ecosystems(&no_cargo, &policy("{}")).rust);
-        let disabled = FutureFlags {
-            experimental_setup: false,
-            ..all
-        };
-        assert_eq!(ecosystems(&disabled, &policy("{}")), Ecosystems::default());
+        assert_eq!(
+            ecosystems(&FutureFlags::default(), &policy("{}")),
+            Ecosystems::default()
+        );
     }
 
     #[test]

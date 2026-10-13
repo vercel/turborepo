@@ -119,7 +119,7 @@ impl Repo {
         use crate::commands::managed::{ManagedTools, context};
         let root = self.owned.root();
         let config = root.join("turbo.json");
-        let tools = ManagedTools::inspect(root, &config, true, self.owned.home(), context)
+        let tools = ManagedTools::inspect(root, &config, self.owned.home(), context)
             .unwrap()
             .unwrap();
         let env = tools.revalidate().unwrap();

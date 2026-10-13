@@ -110,7 +110,9 @@ fn owned_nested_config_workspace_and_git_drift_preserve_discovery_guard() -> Tes
         f.policy().err(),
         Some(PolicyError::Configured(ConfigOwner::RootPolicy))
     );
-    assert!(matches!(d.revalidate(), Err(Error::TurboJson(_))));
+    // A root policy edited after capture is drift, never adopted.
+    fs::write(f.root().join("turbo.json"), r#"{"setup":{"tools":"skip"}}"#)?;
+    assert!(!d.revalidate()?);
     Ok(())
 }
 

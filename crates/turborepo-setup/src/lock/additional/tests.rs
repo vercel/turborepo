@@ -224,7 +224,11 @@ fn foreign_or_ambiguous_entries_fail_closed() {
         Err(StorageError::Declarations)
     ));
     fs::remove_file(root.path().join("turbo.jsonc")).unwrap();
-    fs::write(root.path().join("turbo.json"), "{\"setup\": {}}").unwrap();
+    fs::write(
+        root.path().join("turbo.json"),
+        r#"{"setup": {"tools": "unknown"}}"#,
+    )
+    .unwrap();
     assert!(matches!(
         Snapshot::capture(root.path()),
         Err(StorageError::Declarations)

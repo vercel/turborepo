@@ -206,11 +206,6 @@ fn unprepared_exec_matches_across_entrypoints_without_running_writing_or_downloa
     proxy.set_nonblocking(true).unwrap();
     let proxy_url = format!("http://{}", proxy.local_addr().unwrap());
     for (config, lock, expected) in [
-        (
-            "{}",
-            false,
-            "`turbo exec` requires root futureFlags.experimentalSetup",
-        ),
         // The repository-local CLI receives this one through handoff.
         (ENABLED, false, "`turbo exec` requires managed setup"),
         // Validated before handoff; Windows has no managed activation yet.

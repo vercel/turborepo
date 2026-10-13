@@ -103,7 +103,7 @@ fn explicit_config_is_invocation_relative_not_cwd_relative() {
 }
 
 #[test]
-fn unsupported_custom_config_still_gates_but_cannot_be_guarded() {
+fn unsupported_custom_config_is_read_but_cannot_be_guarded() {
     let f = Fixture::new();
     f.root
         .join_component("custom.json")
@@ -236,7 +236,7 @@ fn new_nested_js_root_markers_preserve_root_diagnostics() {
 }
 
 #[test]
-fn new_ancestor_config_is_ambiguous_and_disabled_setup_has_no_eligible_sources() {
+fn new_ancestor_config_is_ambiguous_and_workspace_flags_alone_enable_sources() {
     let f = Fixture::new();
     let start = f.nested.join_component("src");
     start.create_dir_all().unwrap();
@@ -249,10 +249,10 @@ fn new_ancestor_config_is_ambiguous_and_disabled_setup_has_no_eligible_sources()
     f.root.join_component("turbo.json").create_with_contents(
         r#"{"futureFlags":{"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}}"#,
     ).unwrap();
-    let disabled = f.capture(".", None);
-    let policy = disabled.source_eligibility();
-    assert!(!policy.node() && !policy.cargo() && !policy.python() && !policy.go());
-    assert!(disabled.revalidate().unwrap());
+    let flagged = f.capture(".", None);
+    let policy = flagged.source_eligibility();
+    assert!(policy.node() && policy.cargo() && policy.python() && policy.go());
+    assert!(flagged.revalidate().unwrap());
 }
 
 #[test]
@@ -404,13 +404,10 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
         dispatch(&["--__test-run", "--root-turbo-json", custom.as_str()]),
         Err(setup::Error::NotImplemented)
     ));
-    f.root
-        .join_component("turbo.json")
-        .create_with_contents("{}")
-        .unwrap();
+    f.root.join_component("turbo.json").remove_file().unwrap();
     assert!(matches!(
         dispatch(&["--update-lock"]),
-        Err(setup::Error::Disabled)
+        Err(setup::Error::Root(Error::MissingConfig))
     ));
     f.root
         .join_component("turbo.json")

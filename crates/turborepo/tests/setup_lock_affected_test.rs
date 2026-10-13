@@ -86,12 +86,9 @@ fn assert_selection(dir: &Path, managed: bool, base: &str, head: &str) {
     } else {
         format!("--filter=[{base}...{head}]")
     };
-    // A flagged root lock makes `turbo run` managed. Without setup evidence it
-    // fails instead of using host tools; `turbo query` still reports selection.
-    let config: serde_json::Value =
-        serde_json::from_slice(&fs::read(dir.join("turbo.json")).unwrap()).unwrap();
-    let managed_run =
-        config["futureFlags"]["experimentalSetup"] == true && dir.join("turbo.lock").exists();
+    // A root lock makes `turbo run` managed. Without setup evidence it fails
+    // instead of using host tools; `turbo query` still reports selection.
+    let managed_run = dir.join("turbo.lock").exists();
     for args in [
         vec!["run", "build", "--affected", "--dry=json"],
         vec!["run", "build", &filter, "--dry=json"],
@@ -176,19 +173,15 @@ fn committed_setup_lock_changes_select_all_packages_in_both_modes() {
 }
 
 #[test]
-fn setup_lock_changes_preserve_unconfigured_repositories() {
-    for (enabled, committed_lock) in [(false, true), (false, false), (true, false)] {
-        for task_inputs in TASK_INPUT_MODES {
-            let temp = tempfile::tempdir().unwrap();
-            let dir = temp.path();
-            fixture(dir, enabled, task_inputs, committed_lock);
-            fs::write(dir.join("turbo.lock"), "local resolution\n").unwrap();
-            assert_selection(dir, false, "HEAD", "");
-            if !committed_lock {
-                git(dir, &["add", "turbo.lock"]);
-                assert_selection(dir, false, "HEAD", "");
-            }
-        }
+fn uncommitted_setup_lock_preserves_unmanaged_change_detection() {
+    for task_inputs in TASK_INPUT_MODES {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path();
+        fixture(dir, true, task_inputs, false);
+        fs::write(dir.join("turbo.lock"), "local resolution\n").unwrap();
+        assert_selection(dir, false, "HEAD", "");
+        git(dir, &["add", "turbo.lock"]);
+        assert_selection(dir, false, "HEAD", "");
     }
 }
 

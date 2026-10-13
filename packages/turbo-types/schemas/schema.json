@@ -191,7 +191,7 @@
       ]
     },
     "setup": {
-      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.",
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json.",
       "anyOf": [
         {
           "$ref": "#/definitions/SetupPolicy"
@@ -425,7 +425,7 @@
           "type": "boolean"
         },
         "experimentalSetup": {
-          "description": "Opt into experimental setup features that are still in progress.\n\nSetup invocation requires this flag; help is available without it. The `turbo.lock` format is unstable. Only parsing and help are implemented; provisioning, planning, and checking return a diagnostic. Setup does not interpret `turbo.lock` or change run or hash behavior.",
+          "description": "Deprecated: `turbo setup` graduated to stable, so this flag no longer changes anything. A root `turbo.lock` alone makes a repository managed.",
           "default": false,
           "type": "boolean"
         },
@@ -992,7 +992,7 @@
       }
     },
     "SetupPolicy": {
-      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
       "type": "object",
       "properties": {
         "additionalTools": {

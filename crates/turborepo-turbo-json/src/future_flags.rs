@@ -145,13 +145,8 @@ pub struct FutureFlags {
     #[serde(default)]
     #[schemars(skip)]
     pub experimental_task_command: bool,
-    /// Opt into experimental setup features that are still in progress.
-    ///
-    /// Setup invocation requires this flag; help is available without it.
-    /// The `turbo.lock` format is unstable. Only parsing and help are
-    /// implemented; provisioning, planning, and checking return a
-    /// diagnostic. Setup does not interpret `turbo.lock` or change run or
-    /// hash behavior.
+    /// Deprecated: `turbo setup` graduated to stable, so this flag no longer
+    /// changes anything. A root `turbo.lock` alone makes a repository managed.
     #[serde(default)]
     pub experimental_setup: bool,
 }

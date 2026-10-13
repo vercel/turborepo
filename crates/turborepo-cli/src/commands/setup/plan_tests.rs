@@ -280,7 +280,7 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 f.lock["tools"]["pnpm"]["version"] = json!("11.0.0");
                 f.save();
             }
-            7 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+            7 => fs::remove_file(f.owned.root().join("turbo.json")).unwrap(),
             8 => fs::write(
                 f.owned.root().join("turbo.json"),
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,

@@ -137,7 +137,7 @@ fn force_missing_stale_no_host_and_unsupported_locks_fail_before_mutation() {
             )
             .unwrap(),
             5 => fs::write(f.owned.root().join(".node-version"), "26.0.0").unwrap(),
-            6 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+            6 => fs::remove_file(f.owned.root().join("turbo.json")).unwrap(),
             7 => fs::write(
                 f.owned.root().join(".npmrc"),
                 "registry=https://private.invalid",

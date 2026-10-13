@@ -35,17 +35,15 @@ fn select_with(
     base: &crate::commands::CommandBase,
     external: bool,
 ) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
-    if !base.opts.future_flags.experimental_setup {
-        return Ok(None);
-    }
-    let user_base = dirs_next::data_local_dir().ok_or_else(|| {
-        turborepo_run::Error::ManagedTools("cannot locate setup user state directory".into())
-    })?;
+    // Every run checks for managed setup, so an unmanaged repository must not
+    // depend on the user state directory.
+    let user_base = || {
+        dirs_next::data_local_dir().ok_or_else(|| "cannot locate setup user state directory".into())
+    };
     ManagedTools::inspect_with(
         base.repo_root.as_std_path(),
         base.opts.repo_opts.root_turbo_json_path.as_std_path(),
-        true,
-        &user_base,
+        user_base,
         context,
         external,
     )
@@ -65,11 +63,10 @@ impl ManagedTools {
     pub(crate) fn inspect(
         root: &Path,
         config: &Path,
-        enabled: bool,
         user_base: &Path,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
     ) -> Result<Option<Arc<ManagedRun>>, String> {
-        Self::inspect_with(root, config, enabled, user_base, context, true)
+        Self::inspect_with(root, config, || Ok(user_base.to_owned()), context, true)
     }
 
     /// A root turbo.lock, or without one the sealed selection of this clone's
@@ -78,15 +75,10 @@ impl ManagedTools {
     fn inspect_with(
         root: &Path,
         config: &Path,
-        enabled: bool,
-        user_base: &Path,
+        user_base: impl FnOnce() -> Result<std::path::PathBuf, String>,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
         external: bool,
     ) -> Result<Option<Arc<ManagedRun>>, String> {
-        // A lock alone must never change unconfigured-repository behavior.
-        if !enabled {
-            return Ok(None);
-        }
         let clone_local = match std::fs::symlink_metadata(root.join("turbo.lock")) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 // Lock-only leftovers and ordinary repositories stay unmanaged.
@@ -115,19 +107,20 @@ impl ManagedTools {
                 "managed run requires a root turbo.json or turbo.jsonc; run turbo setup".into(),
             );
         }
+        let user_base = user_base()?;
         let ci = turborepo_ci::is_ci();
         let explain = |e: authorization::Error| guidance(&e, ci, clone_local);
         // `--no-lock` setup is Node/npm/pnpm only, so a clone-local selection
         // uses the default ecosystems; a lock uses exactly setup's.
         let authorization = if clone_local {
-            Authorization::inspect_clone_local(&canonical, user_base, context()?)
+            Authorization::inspect_clone_local(&canonical, &user_base, context()?)
         } else {
             // The root configuration holds setup policy and additional-tool
             // declarations; report its errors like other invalid declarations.
             let ecosystems = ecosystems(&canonical, config).map_err(|e| {
                 format!("tool declarations are invalid; fix them, then run turbo setup: {e}")
             })?;
-            Authorization::inspect(&canonical, user_base, context()?, ecosystems)
+            Authorization::inspect(&canonical, &user_base, context()?, ecosystems)
         }
         .map_err(explain)?;
         let (snapshot, tools) = authorization

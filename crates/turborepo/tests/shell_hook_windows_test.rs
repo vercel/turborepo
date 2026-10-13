@@ -40,15 +40,12 @@ impl Drop for Records {
 /// A clone with its own Git boundary. Repositories given `records` get a real
 /// Windows generation (an `.exe` hard link and a `.cmd` forwarder) plus the
 /// record `turbo setup` publishes for it, and return its PATH entry.
-fn repo(dir: &Path, flagged: bool, records: Option<&mut Records>) -> Option<String> {
+fn repo(dir: &Path, configured: bool, records: Option<&mut Records>) -> Option<String> {
     fs::create_dir_all(dir.join(r"apps\web")).unwrap();
     fs::create_dir(dir.join(".git")).unwrap();
-    let flags = if flagged {
-        r#""futureFlags":{"experimentalSetup":true}"#
-    } else {
-        ""
-    };
-    fs::write(dir.join("turbo.json"), format!("{{{flags}}}")).unwrap();
+    if configured {
+        fs::write(dir.join("turbo.json"), "{}").unwrap();
+    }
     fs::write(dir.join("turbo.lock"), r#"{"schemaVersion":0,"tools":{}}"#).unwrap();
     let records = records?;
     let root = dir.canonicalize().unwrap();
@@ -127,7 +124,8 @@ fn journey(shell: &str) {
     let mut records = Records::default();
     let a = repo(&temp.join("a"), true, Some(&mut records)).unwrap();
     let b = repo(&temp.join("b"), true, Some(&mut records)).unwrap();
-    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
+    // Nested, configured, never set up: untrusted. Without a root config, a
+    // lock is ignored even if set up.
     repo(&temp.join(r"a\vendor\c"), true, None);
     repo(&temp.join("off"), false, Some(&mut records));
     fs::create_dir(temp.join("plain")).unwrap();

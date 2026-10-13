@@ -2,8 +2,7 @@
 source: crates/turborepo-cli/src/cli/test.rs
 expression: "Args::render_help(get_subcommand(\"exec\"), false).unwrap()"
 ---
-EXPERIMENTAL: Run a command with the repository's managed tools (not yet
-implemented)
+Run a command with the repository's managed tools
 
 Usage: turbo exec <-- COMMAND>…
 

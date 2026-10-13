@@ -197,13 +197,8 @@ impl Repo {
     fn overrides(&self) -> (turborepo_run::EnvironmentVariableMap, PathBuf) {
         use crate::commands::managed::{ManagedTools, context};
         let root = self.owned.root();
-        let tools = ManagedTools::inspect(
-            root,
-            &root.join("turbo.json"),
-            true,
-            self.owned.home(),
-            context,
-        );
+        let tools =
+            ManagedTools::inspect(root, &root.join("turbo.json"), self.owned.home(), context);
         let env = tools.unwrap().unwrap().revalidate().unwrap();
         let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
         (env, bin)

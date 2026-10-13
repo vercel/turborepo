@@ -15,7 +15,7 @@ fn run_overrides(
 ) -> Result<(turborepo_run::EnvironmentVariableMap, PathBuf), String> {
     use crate::commands::managed::{ManagedTools, context};
     let root = owned.root();
-    let tools = ManagedTools::inspect(root, &root.join("turbo.json"), true, owned.home(), context)?
+    let tools = ManagedTools::inspect(root, &root.join("turbo.json"), owned.home(), context)?
         .ok_or("unmanaged")?;
     let env = tools.revalidate()?;
     let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
@@ -572,7 +572,7 @@ fn missing_stale_non_native_or_wrong_exact_lock_never_mutates() {
                 f.lock["tools"]["node"]["declarations"][0]["request"] = json!("26.0.0");
                 f.save();
             }
-            5 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+            5 => fs::remove_file(f.owned.root().join("turbo.json")).unwrap(),
             _ => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
         }
         assert!(f.run(&u, FROZEN).is_err(), "case {case}");
@@ -713,7 +713,7 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
         SetupDependencies::Skip,
     ));
     let ready = |downloaded_bytes, tools_installed, tools_reused| telemetry::Report {
-        gated: true,
+        discovered: true,
         request: provision,
         downloaded_bytes,
         tools_installed,
@@ -728,7 +728,7 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
         (
             Ok(0),
             telemetry::Report {
-                gated: true,
+                discovered: true,
                 request: Some((SetupMode::Check, SetupLock::Frozen, SetupDependencies::Skip)),
                 ..Default::default()
             }
@@ -747,11 +747,11 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
         run(FROZEN),
         (Err(SetupFailure::LockMissing), ready(0, 0, 0))
     );
-    // The gate decides whether anything is recorded at all.
-    fs::write(f.owned.root().join("turbo.json"), "{}").unwrap();
+    // Nothing is recorded outside a repository.
+    fs::remove_file(f.owned.root().join("turbo.json")).unwrap();
     assert_eq!(
         run(FROZEN),
-        (Err(SetupFailure::Request), telemetry::Report::default())
+        (Err(SetupFailure::Discovery), telemetry::Report::default())
     );
     f.no_execution();
 }

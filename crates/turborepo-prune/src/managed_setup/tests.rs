@@ -249,21 +249,11 @@ async fn native_and_additional_provenance_is_copied_without_adapter_allowlists()
 }
 
 #[tokio::test]
-async fn unconfigured_prune_ignores_locks_and_undeclared_version_files() -> TestResult {
-    for (flag, lock_exists, docker) in [
-        (false, true, false),
-        (false, true, true),
-        (true, false, false),
-        (true, false, true),
-    ] {
+async fn unconfigured_prune_ignores_undeclared_version_files() -> TestResult {
+    for docker in [false, true] {
         let temp = tempfile::tempdir()?;
-        let mut input = fixture(temp.path(), docker)?;
-        input.future_flags.experimental_setup = flag;
-        if lock_exists {
-            write(temp.path(), "turbo.lock", "not a lock")?;
-        } else {
-            fs::remove_file(temp.path().join("turbo.lock"))?;
-        }
+        let input = fixture(temp.path(), docker)?;
+        fs::remove_file(temp.path().join("turbo.lock"))?;
         prune(input, CommandEventBuilder::new("prune")).await?;
         for layout in if docker {
             vec!["out/full", "out/json"]

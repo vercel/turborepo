@@ -12,12 +12,10 @@ Commands:
   daemon        Runs the Turborepo background daemon
   devtools      Visualize your monorepo's package graph in the browser
   docs          Search the Turborepo documentation
-  exec          EXPERIMENTAL: Run a command with the repository's managed tools
-                (not yet implemented)
+  exec          Run a command with the repository's managed tools
   generate      Generate a new app / package [aliases: g, gen]
   get-mfe-port  Get the port assigned to the current microfrontend
-  hook          EXPERIMENTAL: Print a shell hook that activates managed tools at
-                the prompt
+  hook          Print a shell hook that activates managed tools at the prompt
   info          Print debugging information
   link          Link your local directory to a Vercel organization and enable
                 remote caching.
@@ -28,8 +26,7 @@ Commands:
   query         Query your monorepo using GraphQL. If no query is provided,
                 spins up a GraphQL server with GraphiQL.
   run           Run tasks across projects in your monorepo
-  setup         EXPERIMENTAL: Provision repository tools and dependencies (not
-                yet implemented)
+  setup         Provision repository tools and dependencies
   telemetry     Enable or disable anonymous telemetry
   unlink        Unlink the current directory from your Vercel organization and
                 disable Remote Caching

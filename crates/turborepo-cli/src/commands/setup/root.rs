@@ -15,6 +15,12 @@ pub(super) use discovery::Discovery;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[error("`turbo setup` requires a root turbo.json or turbo.jsonc")]
+    #[diagnostic(
+        code(turbo::setup::missing_config),
+        help("Run turbo setup inside a Turborepo repository, or select it with --cwd=<root>.")
+    )]
+    MissingConfig,
     #[error("ambiguous setup roots: {near} and {outer}")]
     #[diagnostic(
         code(turbo::setup::ambiguous_root),
@@ -117,7 +123,7 @@ fn infer(
         if !cwd.starts_with(root) {
             return Err(Error::Outside { cwd, config });
         }
-        let raw = RawTurboJson::read(&cwd, &config, true)?.unwrap_or_default();
+        let raw = RawTurboJson::read(&cwd, &config, true)?.ok_or(Error::MissingConfig)?;
         (root.to_owned(), raw, Some(config))
     } else {
         let mut selected: Option<(
@@ -141,52 +147,41 @@ fn infer(
                 break;
             }
         }
-        // Without root flags, non-JS markers are ignored. Keep the gate's
-        // actionable diagnostic for repositories that have not opted in.
-        selected.unwrap_or_else(|| {
-            let path = directories
-                .iter()
-                .find(|dir| dir.join_component("package.json").exists())
-                .unwrap_or(&cwd)
-                .clone();
-            (path, RawTurboJson::default(), None)
-        })
+        selected.ok_or(Error::MissingConfig)?
     };
     let flags = raw
         .future_flags
         .map(|flags| *flags.as_inner())
         .unwrap_or_default();
     let policy = SetupPolicy::from_raw(raw.setup.as_ref(), &flags)?;
-    if flags.experimental_setup {
-        let Ok(serde_json::Value::Object(serialized_flags)) = serde_json::to_value(flags) else {
-            unreachable!("FutureFlags serializes to a JSON object");
-        };
-        let registry = Registry::from_flags(&serialized_flags);
-        // Root recognition shares graph/inference diagnostics, but setup still
-        // rejects nested markers rather than borrowing another root's tools.
-        let root_workspaces = registry.probe(&path)?;
-        for dir in &directories {
-            if dir == &path {
-                break;
-            }
-            // An explicit config must not cross a nested Git boundary either.
-            if dir.join_component(".git").exists() {
+    let Ok(serde_json::Value::Object(serialized_flags)) = serde_json::to_value(flags) else {
+        unreachable!("FutureFlags serializes to a JSON object");
+    };
+    let registry = Registry::from_flags(&serialized_flags);
+    // Root recognition shares graph/inference diagnostics, but setup still
+    // rejects nested markers rather than borrowing another root's tools.
+    let root_workspaces = registry.probe(&path)?;
+    for dir in &directories {
+        if dir == &path {
+            break;
+        }
+        // An explicit config must not cross a nested Git boundary either.
+        if dir.join_component(".git").exists() {
+            return Err(Error::Nested {
+                marker: dir.join_component(".git"),
+                root: path,
+            });
+        }
+        if config.is_some() {
+            let nested_config = turborepo_config::resolve_turbo_config_path(dir)?;
+            if read_root_config(&cwd, &nested_config)?.is_some() {
                 return Err(Error::Nested {
-                    marker: dir.join_component(".git"),
+                    marker: nested_config,
                     root: path,
                 });
             }
-            if config.is_some() {
-                let nested_config = turborepo_config::resolve_turbo_config_path(dir)?;
-                if read_root_config(&cwd, &nested_config)?.is_some() {
-                    return Err(Error::Nested {
-                        marker: nested_config,
-                        root: path,
-                    });
-                }
-            }
-            check_nested_markers(dir, &path, &registry, &root_workspaces)?;
         }
+        check_nested_markers(dir, &path, &registry, &root_workspaces)?;
     }
     Ok(SetupRoot {
         path,

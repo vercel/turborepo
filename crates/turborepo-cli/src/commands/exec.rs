@@ -18,15 +18,6 @@ use crate::{
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("`turbo exec` requires root futureFlags.experimentalSetup to be true")]
-    #[diagnostic(
-        code(turbo::exec::disabled),
-        help(
-            "Set \"futureFlags\": {{\"experimentalSetup\": true}} in the root turbo.json or \
-             turbo.jsonc. No command was run. To run a task named exec, use `turbo run exec`."
-        )
-    )]
-    Disabled,
     #[error(
         "`turbo exec` requires managed setup, but the repository root has no turbo.lock or `turbo \
          setup --no-lock` tools"
@@ -69,9 +60,6 @@ pub fn run(
         get_version(),
         color_config,
     )?;
-    if !base.opts.future_flags.experimental_setup {
-        return Err(Error::Disabled.into());
-    }
     let Some(tools) = managed::select(&base)? else {
         return Err(Error::ManagedSetupRequired.into());
     };

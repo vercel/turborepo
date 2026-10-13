@@ -1,4 +1,5 @@
-//! `turbo exec` surface: gated, never runs the program, never writes files.
+//! `turbo exec` surface: never runs the program without activation, never
+//! writes files.
 #![cfg_attr(test, allow(clippy::expect_used))]
 
 use std::{
@@ -8,7 +9,6 @@ use std::{
 };
 
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
-const DISABLED: &str = "`turbo exec` requires root futureFlags.experimentalSetup";
 const REQUIRED: &str = "`turbo exec` requires managed setup";
 
 fn files(root: &Path) -> Vec<PathBuf> {
@@ -127,7 +127,7 @@ fn managed_exec_never_reaches_an_unvalidated_local_cli() {
 }
 
 #[test]
-fn exec_is_gated_and_never_runs_the_program_without_activation() {
+fn exec_never_runs_the_program_without_activation() {
     let temp = tempfile::tempdir().expect("tempdir");
     let root = temp.path();
     for dir in ["bin", "disabled", "enabled"] {
@@ -143,7 +143,8 @@ fn exec_is_gated_and_never_runs_the_program_without_activation() {
         if let Some(config) = config {
             fs::write(&disabled, config).expect("turbo.json");
         }
-        failure(root, "disabled", &["exec", "--", "probe"], DISABLED);
+        // No future flag is involved: without a lock there is no activation.
+        failure(root, "disabled", &["exec", "--", "probe"], REQUIRED);
     }
     fs::write(root.join("enabled/turbo.json"), ENABLED).expect("turbo.json");
     fs::write(root.join("custom.json"), ENABLED).expect("custom.json");
@@ -165,7 +166,7 @@ fn exec_is_gated_and_never_runs_the_program_without_activation() {
     ] {
         failure(root, "enabled", words, REQUIRED);
     }
-    // Existing global options select the gated root.
+    // Existing global options select the root.
     for words in [
         &["--cwd", "../enabled", "exec", "--", "probe"][..],
         &["exec", "--root-turbo-json=../custom.json", "--", "probe"],

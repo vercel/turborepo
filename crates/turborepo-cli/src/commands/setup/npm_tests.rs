@@ -596,7 +596,6 @@ fn npm_no_lock_provisions_bundled_or_registry_npm_that_turbo_run_activates() {
         let tools = crate::commands::managed::ManagedTools::inspect(
             root,
             &root.join("turbo.json"),
-            true,
             f.owned.home(),
             crate::commands::managed::context,
         )

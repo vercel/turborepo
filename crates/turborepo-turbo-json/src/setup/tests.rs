@@ -224,14 +224,12 @@ fn invalid_values_identify_their_source(setup: &str) {
     }
 }
 
-#[test_case("{}"; "flags omitted")]
-#[test_case(r#"{"experimentalSetup":false}"#; "flag disabled")]
-fn setup_requires_the_future_flag(flags: &str) {
-    let error = root(flags, r#"{"tools":"skip"}"#).unwrap_err();
-    assert!(
-        matches!(error, Error::SetupRequiresFlag { span: Some(_), .. }),
-        "{error:?}"
-    );
+#[test]
+fn setup_needs_no_future_flag() {
+    let raw = root("{}", r#"{"tools":"skip"}"#).unwrap();
+    let flags = raw.future_flags.clone().unwrap().into_inner();
+    let policy = SetupPolicy::from_raw(raw.setup.as_ref(), &flags).unwrap();
+    assert!(policy.is_configured());
 }
 
 #[test_case("rust", "experimentalCargoWorkspaces")]

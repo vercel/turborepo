@@ -111,7 +111,7 @@ pub fn filter_engine_to_tasks(
 /// Pre-resolved package selections preserve legacy selectors' package-graph
 /// and change-detection semantics when tags are used without filterUsingTasks.
 pub struct TaskSelectorContext<'a> {
-    /// Whether HEAD contains a setup lock and experimentalSetup is enabled.
+    /// Whether HEAD contains a root setup lock.
     pub managed_setup: bool,
     pub global_deps: &'a [String],
     pub package_has_tag: &'a dyn Fn(&PackageName, &str) -> bool,

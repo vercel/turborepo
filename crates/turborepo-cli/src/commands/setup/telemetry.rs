@@ -1,7 +1,7 @@
 //! Standard opt-out telemetry for setup outcomes. It starts only after the
-//! command finished and only when the experimental gate passed, on its own
-//! small runtime, so it can never block, fail, or change setup output or exit
-//! status. Events carry closed categories and counters only; see
+//! command finished and only when setup discovered a repository root, on its
+//! own small runtime, so it can never block, fail, or change setup output or
+//! exit status. Events carry closed categories and counters only; see
 //! `turborepo_telemetry::events::setup`.
 
 use std::time::Duration;
@@ -20,7 +20,7 @@ use super::{Error, LockMode, Mode, SetupRequest};
 /// lock entry, or argument.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub(super) struct Report {
-    pub(super) gated: bool,
+    pub(super) discovered: bool,
     pub(super) request: Option<(SetupMode, SetupLock, SetupDependencies)>,
     pub(super) downloaded_bytes: u64,
     pub(super) tools_installed: usize,
@@ -28,8 +28,8 @@ pub(super) struct Report {
 }
 
 impl Report {
-    pub fn gate_passed(&mut self) {
-        self.gated = true;
+    pub fn discovered(&mut self) {
+        self.discovered = true;
     }
 
     pub fn request(&mut self, request: &SetupRequest) {
@@ -57,7 +57,7 @@ impl Report {
 pub(super) fn failure(error: &Error) -> SetupFailure {
     use turborepo_setup::activation::Error as Activation;
     match error {
-        Error::Disabled | Error::FrozenUpdateLock => SetupFailure::Request,
+        Error::FrozenUpdateLock => SetupFailure::Request,
         Error::MuslHost | Error::UnclassifiedLibc(_) => SetupFailure::Platform,
         Error::LockDiagnostics(super::lock_diagnostics::Error::Missing) => {
             SetupFailure::LockMissing
@@ -137,9 +137,9 @@ pub(super) fn record(
     elapsed: Duration,
     color_config: ColorConfig,
 ) {
-    // Without the future flag, setup keeps its previous behavior: no notice,
-    // telemetry config, or traffic.
-    if !report.gated {
+    // Outside a repository, setup sends nothing: no notice, telemetry config,
+    // or traffic.
+    if !report.discovered {
         return;
     }
     let runtime = match tokio::runtime::Builder::new_multi_thread()

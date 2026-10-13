@@ -116,7 +116,7 @@ fn run_overrides(f: &Fixture) -> Result<turborepo_run::EnvironmentVariableMap, S
     use crate::commands::managed::{ManagedTools, context};
     let root = f.owned.root();
     let config = root.join("turbo.json");
-    ManagedTools::inspect(root, &config, true, f.owned.home(), context)?
+    ManagedTools::inspect(root, &config, f.owned.home(), context)?
         .ok_or("unmanaged")?
         .revalidate()
 }

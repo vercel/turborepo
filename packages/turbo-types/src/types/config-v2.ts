@@ -256,8 +256,7 @@ export interface RootSchema extends BaseSchema {
   futureFlags?: FutureFlags;
 
   /**
-   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
-   * and requires `futureFlags.experimentalSetup`.
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json.
    */
   setup?: SetupPolicy;
 }

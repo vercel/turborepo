@@ -12,8 +12,8 @@ use super::{Error, SetupRoot, infer};
 use crate::cli::Args;
 
 /// Policy eligibility only, not discovered declarations or shipping support.
-/// Node declarations are considered when setup is enabled. Non-JS markers and
-/// declarations are ignored unless their matching workspace flag is enabled.
+/// Node declarations are always considered. Non-JS markers and declarations
+/// are ignored unless their matching workspace flag is enabled.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::commands::setup) struct SourceEligibility {
     node: bool,
@@ -27,10 +27,10 @@ pub(in crate::commands::setup) struct SourceEligibility {
 impl SourceEligibility {
     fn from_flags(flags: FutureFlags) -> Self {
         Self {
-            node: flags.experimental_setup,
-            cargo: flags.experimental_setup && flags.experimental_cargo_workspaces,
-            python: flags.experimental_setup && flags.experimental_python_workspaces,
-            go: flags.experimental_setup && flags.experimental_go_workspaces,
+            node: true,
+            cargo: flags.experimental_cargo_workspaces,
+            python: flags.experimental_python_workspaces,
+            go: flags.experimental_go_workspaces,
         }
     }
 
@@ -112,7 +112,7 @@ pub(in crate::commands::setup) struct Discovery {
     root: SetupRoot,
     scope: ConfigScope,
     eligibility: SourceEligibility,
-    inputs: Option<markers::Inputs>,
+    inputs: markers::Inputs,
 }
 
 // Do not expose config contents, invocation paths, or policy in debug output.
@@ -141,11 +141,7 @@ impl Discovery {
         let root = infer(&cwd, explicit_cwd, config.as_deref())?;
         let scope = config_scope(&root, config.as_deref())?;
         let eligibility = SourceEligibility::from_flags(root.flags);
-        let inputs = if root.flags.experimental_setup {
-            Some(markers::capture(&cwd, root.flags)?)
-        } else {
-            None
-        };
+        let inputs = markers::capture(&cwd, root.flags)?;
         Ok(Self {
             cwd,
             explicit_cwd,
@@ -187,11 +183,12 @@ impl Discovery {
     /// drift.
     pub fn revalidate(&self) -> Result<bool, Error> {
         self.snapshot_root()?;
-        let current = infer(&self.cwd, self.explicit_cwd, self.config.as_deref())?;
-        let same_inputs = match &self.inputs {
-            Some(expected) => markers::capture(&self.cwd, self.root.flags)? == *expected,
-            None => true,
+        let current = match infer(&self.cwd, self.explicit_cwd, self.config.as_deref()) {
+            // No root from the same invocation is a changed identity.
+            Err(Error::MissingConfig) => return Ok(false),
+            current => current?,
         };
+        let same_inputs = markers::capture(&self.cwd, self.root.flags)? == self.inputs;
         Ok(same_inputs
             && config_scope(&current, self.config.as_deref())? == self.scope
             && SourceEligibility::from_flags(current.flags) == self.eligibility

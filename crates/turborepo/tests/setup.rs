@@ -15,7 +15,7 @@ mod no_lock;
 
 const PENDING: &str = "this setup mode is not implemented";
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
-const DISABLED: &str = "requires root futureFlags.experimentalSetup";
+const NO_CONFIG: &str = "requires a root turbo.json or turbo.jsonc";
 const UNQUALIFIED: &str = "managed promotion requires macOS, GNU Linux or Windows x64";
 const QUALIFIED: bool = cfg!(any(
     all(
@@ -348,34 +348,25 @@ fn standalone_help_needs_no_js_or_gate_and_does_not_parse_config() {
         ] {
             assert!(text.contains(flag), "missing {flag}: {text}");
         }
-        assert!(text.contains("not yet implemented"));
+        assert!(text.contains("Provision repository tools"), "{text}");
     }
 }
 
 #[test]
-fn standalone_gate_reads_only_the_selected_root_config() {
+fn standalone_setup_reads_only_the_selected_root_config() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.lock", "must not activate anything");
-    for config in [
-        None,
-        Some("{}"),
-        Some(r#"{"futureFlags":{"experimentalSetup":false}}"#),
-    ] {
-        if let Some(config) = config {
-            write(root, "turbo.json", config);
-        }
-        let text = failure(root, &["setup"], false, DISABLED);
-        assert!(text.contains("--cwd"), "{text}");
-        assert!(!diagnostic_contains(&text, PENDING), "{text}");
-    }
-    // jsonc and both existing global root selectors work without JS.
-    fs::remove_file(root.join("turbo.json")).unwrap();
-    let jsonc = "{ // gate\n\"futureFlags\": {\"experimentalSetup\": true},\n}";
-    write(root, "turbo.jsonc", jsonc);
-    write(root, "custom.json", ENABLED);
+    // Without a root configuration there is no repository to set up.
+    let text = failure(root, &["setup"], false, NO_CONFIG);
+    assert!(text.contains("--cwd"), "{text}");
+    assert!(!diagnostic_contains(&text, PENDING), "{text}");
+    // jsonc and both existing global root selectors work without JS or a
+    // future flag.
+    write(root, "turbo.jsonc", "{ // root\n\"tasks\": {},\n}");
+    write(root, "custom.json", "{}");
     fs::create_dir(root.join("selected-root")).unwrap();
-    write(root, "selected-root/turbo.json", ENABLED);
+    write(root, "selected-root/turbo.json", "{}");
     // #14518 admits --offline, which reads (and rejects) the invalid lock,
     // with or without dependencies.
     for words in [
@@ -753,7 +744,7 @@ fn git_boundaries_and_explicit_configs_do_not_borrow_outer_tools() {
     fs::create_dir_all(root.join("inner/src")).unwrap();
     // Worktree .git files are boundaries just like clone .git directories.
     write(root, "inner/.git", "gitdir: unrelated");
-    failure(root, &["setup", "--cwd=inner/src"], false, DISABLED);
+    failure(root, &["setup", "--cwd=inner/src"], false, NO_CONFIG);
     failure(
         root,
         &["setup", "--cwd=inner/src", "--root-turbo-json=turbo.json"],
@@ -787,7 +778,7 @@ fn malformed_or_duplicate_root_configs_are_not_silently_skipped() {
     let (code, text) = invoke(root, &["setup", "--cwd=src"], false);
     assert_eq!(code, 1);
     assert!(
-        !text.contains(DISABLED) && !text.contains(PENDING),
+        !text.contains(NO_CONFIG) && !text.contains(PENDING),
         "{text}"
     );
     assert_diagnostic_path(&text, &root.join("turbo.json"));
@@ -1784,7 +1775,7 @@ fn setup_telemetry_is_standard_opt_out_redacted_and_never_changes_the_result() {
     unchanged(code, &stderr);
     assert!(!stderr.contains(NOTICE) && !telemetry_events(&stdout).is_empty());
 
-    // Each standard opt-out, and setup without the future flag: the same local
+    // Each standard opt-out, and setup outside a repository: the same local
     // diagnostic with no notice, events, config, or connection.
     let disable = Command::new(env!("CARGO_BIN_EXE_turbo"))
         .env_clear()
@@ -1815,11 +1806,11 @@ fn setup_telemetry_is_standard_opt_out_redacted_and_never_changes_the_result() {
         assert!(!stderr.contains(NOTICE) && !stdout.contains("[telemetry") && !connected);
         assert_eq!(config.exists(), opt_out.is_none());
     }
-    write(&root, "turbo.json", "{}");
-    let config = temp.path().join("flagless");
+    fs::remove_file(root.join("turbo.json")).unwrap();
+    let config = temp.path().join("unconfigured");
     let (code, stdout, stderr, connected) = invoke_with_telemetry(&root, &config, &words, None);
     assert_eq!(code, 1);
-    assert!(diagnostic_contains(&stderr, DISABLED), "{stderr}");
+    assert!(diagnostic_contains(&stderr, NO_CONFIG), "{stderr}");
     assert!(!stderr.contains(NOTICE) && !stdout.contains("[telemetry") && !connected);
     assert!(!config.exists());
 }
@@ -2017,9 +2008,6 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
         true,
         "invalid turbo.lock JSON",
     );
-    write(root, "turbo.json", "{}");
-    failure(root, &["setup", "--plan", "--tools-only"], true, DISABLED);
-    write(root, "turbo.json", ENABLED);
     write(root, "turbo.lock", r#"{"schemaVersion":0,"tools":{}}"#);
     write(root, ".npmrc", "registry=https://private.invalid");
     check_failure(
@@ -2058,7 +2046,7 @@ fn profiling_and_malformed_setup_tails_do_not_write() {
             assert_eq!(code, expected, "{words:?}: {text}");
             if !words.contains(&"--help") && !words.iter().any(|word| word.starts_with("--heap=")) {
                 assert!(
-                    !text.contains(PENDING) && !text.contains(DISABLED),
+                    !text.contains(PENDING) && !text.contains(NO_CONFIG),
                     "{text}"
                 );
             }

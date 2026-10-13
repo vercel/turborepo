@@ -745,8 +745,8 @@ mod tests {
     }
 
     #[test]
-    fn test_experimental_setup_enables_setup_configuration() {
-        let json = r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#;
+    fn test_setup_configuration_needs_no_future_flag() {
+        let json = r#"{"setup":{}}"#;
         let raw = RawRootTurboJson::parse(json, "turbo.json").unwrap();
         assert!(RawTurboJson::try_from(raw).unwrap().setup.is_some());
     }
