@@ -109,11 +109,11 @@ fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>,
         return Ok(None);
     }
     let args = cli::Args::parse_args(words)?;
-    // Exec follows run's local CLI policy: validate before any handoff.
+    // Exec and watch follow run's local CLI policy: validate before any handoff.
     Ok((!args.version
         && matches!(
             args.command,
-            Some(cli::Command::Run { .. } | cli::Command::Exec { .. })
+            Some(cli::Command::Run { .. } | cli::Command::Exec { .. } | cli::Command::Watch { .. })
         ))
     .then_some(args))
 }
@@ -364,6 +364,17 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn managed_preflight_covers_every_task_running_command() {
+        for args in [
+            &["turbo", "run", "build"][..],
+            &["turbo", "watch", "build"],
+            &["turbo", "exec", "--", "node"],
+        ] {
+            assert!(managed_run_args(words(args)).unwrap().is_some(), "{args:?}");
+        }
     }
 
     #[test]

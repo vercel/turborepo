@@ -20,9 +20,10 @@ use std::{
     net::{TcpListener, TcpStream},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Child, Command},
     sync::{Arc, Mutex},
     thread,
+    time::{Duration, Instant},
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -331,6 +332,54 @@ impl Outcome {
     }
 }
 
+/// Bounds every `turbo watch` observation: a regression fails, never hangs.
+const WATCH_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// A running `turbo watch`, killed on drop.
+struct Watch {
+    child: Child,
+    log: PathBuf,
+}
+
+impl Watch {
+    fn output(&self) -> String {
+        fs::read_to_string(&self.log).unwrap()
+    }
+
+    /// Waits until the output has every expected line while watch runs on.
+    fn running_until(&mut self, expected: &[&str]) {
+        let deadline = Instant::now() + WATCH_TIMEOUT;
+        while !expected.iter().all(|line| self.output().contains(line)) {
+            assert!(
+                self.child.try_wait().unwrap().is_none(),
+                "{}",
+                self.output()
+            );
+            assert!(Instant::now() < deadline, "no task ran: {}", self.output());
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    /// The exit code, if watch stops on its own within `timeout`.
+    fn exits_within(&mut self, timeout: Duration) -> Option<i32> {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                return Some(status.code().unwrap_or(-1));
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        None
+    }
+}
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
 struct Journey {
     temp: tempfile::TempDir,
     root: PathBuf,
@@ -402,7 +451,37 @@ impl Journey {
 
     fn turbo(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Outcome {
         let seen = self.upstream.connects().len();
-        let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
+        let output = self.command(cwd, args, env).output().unwrap();
+        assert!(
+            !self.sentinel.exists(),
+            "host tool ran: {}",
+            fs::read_to_string(&self.sentinel).unwrap_or_default()
+        );
+        Outcome {
+            code: output.status.code().unwrap(),
+            text: common::combined_output(&output),
+            connects: self.upstream.connects()[seen..].to_vec(),
+        }
+    }
+
+    /// `turbo watch` from the root, its combined output in a file.
+    fn watch(&self, args: &[&str]) -> Watch {
+        let (file, log) = tempfile::NamedTempFile::new_in(self.temp.path())
+            .unwrap()
+            .keep()
+            .unwrap();
+        let child = self
+            .command(&self.root, args, &[])
+            .stdout(file.try_clone().unwrap())
+            .stderr(file)
+            .spawn()
+            .unwrap();
+        Watch { child, log }
+    }
+
+    fn command(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
+        command
             .env_clear()
             .current_dir(cwd)
             .args(args)
@@ -418,19 +497,8 @@ impl Journey {
             .env("NO_PROXY", "")
             .env("SSL_CERT_FILE", &self.ca)
             .env("JOURNEY_SECRET", "present")
-            .envs(env.iter().copied())
-            .output()
-            .unwrap();
-        assert!(
-            !self.sentinel.exists(),
-            "host tool ran: {}",
-            fs::read_to_string(&self.sentinel).unwrap_or_default()
-        );
-        Outcome {
-            code: output.status.code().unwrap(),
-            text: common::combined_output(&output),
-            connects: self.upstream.connects()[seen..].to_vec(),
-        }
+            .envs(env.iter().copied());
+        command
     }
 
     /// The same repository with a root `setup.mirrors` policy.
@@ -608,6 +676,54 @@ fn repository_local_cli_pins_after_global_setup() {
     j.turbo(&j.web, &["run", "build"], &[])
         .fails("turbo setup")
         .offline();
+}
+
+/// `turbo watch` activates managed tools exactly like `turbo run`: the initial
+/// run dispatches managed pnpm and Node, and declaration drift stops a rerun
+/// or startup with `turbo setup` guidance instead of idling silently.
+#[test]
+fn watch_uses_managed_tools_and_fails_on_drift() {
+    let j = Journey::new();
+    let first = j.turbo(&j.root, TOOLS_ONLY, &[]);
+    if first.host_policy_blocked() {
+        return;
+    }
+    first.succeeds();
+    let commit = |message: &str| {
+        common::git(&j.root, &["add", "."]);
+        common::git(&j.root, &["commit", "--quiet", "-m", message]);
+    };
+    common::git(&j.root, &["config", "user.email", "journey@example.com"]);
+    common::git(&j.root, &["config", "user.name", "journey"]);
+    commit("setup");
+    let seen = j.upstream.connects().len();
+    let args = ["watch", "build", "--ui=stream"];
+
+    let mut watch = j.watch(&args);
+    watch.running_until(&["fixture-pnpm 10.0.0 secret=filtered", "fixture-node 24.0.0"]);
+    fs::write(j.root.join(".nvmrc"), "24.1.0\n").unwrap();
+    // Any package change reruns; retry in case the watcher coalesces events.
+    let code = (0..3).find_map(|attempt| {
+        fs::write(j.web.join("index.js"), format!("{attempt}\n")).unwrap();
+        commit("change");
+        watch.exits_within(Duration::from_secs(20))
+    });
+    let text = watch.output();
+    assert!(code.is_some_and(|code| code != 0), "{text}");
+    assert!(contains(&text, "run turbo setup"), "{text}");
+    assert_eq!(text.matches("fixture-node").count(), 1, "{text}");
+
+    // With the drift in place, watch fails at startup before any task.
+    let mut watch = j.watch(&args);
+    let code = watch.exits_within(WATCH_TIMEOUT);
+    Outcome {
+        code: code.unwrap_or_else(|| panic!("watch idled: {}", watch.output())),
+        text: watch.output(),
+        connects: j.upstream.connects()[seen..].to_vec(),
+    }
+    .fails("run turbo setup")
+    .offline();
+    assert!(!j.sentinel.exists(), "a host tool ran");
 }
 
 /// TURBO-6404: root `setup.mirrors` routes downloads, an environment variable
