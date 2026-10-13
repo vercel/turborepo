@@ -385,3 +385,6 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
 
 #[path = "windows_additional_tests.rs"]
 mod additional;
+
+#[path = "windows_rust_tests.rs"]
+mod rust;
