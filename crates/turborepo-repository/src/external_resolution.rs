@@ -865,21 +865,78 @@ pub(crate) fn compare_resolution_data(
             return Ok(ExternalResolutionChanges::All);
         }
 
-        let previous: BTreeSet<_> = previous.identities().iter().collect();
-        let current: BTreeSet<_> = package.identities().iter().collect();
+        let (added, removed) =
+            sorted_identity_difference(package.identities(), previous.identities()).unwrap_or_else(
+                || set_identity_difference(package.identities(), previous.identities()),
+            );
         changes.push(PackageResolutionChange {
             package: package.package().to_string(),
-            added: current
-                .difference(&previous)
-                .map(|identity| (*identity).clone())
-                .collect(),
-            removed: previous
-                .difference(&current)
-                .map(|identity| (*identity).clone())
-                .collect(),
+            added,
+            removed,
         });
     }
     Ok(ExternalResolutionChanges::Packages(changes))
+}
+
+/// Returns `(current \ previous, previous \ current)` in ascending order.
+fn set_identity_difference(
+    current: &[ExternalPackageIdentity],
+    previous: &[ExternalPackageIdentity],
+) -> (Vec<ExternalPackageIdentity>, Vec<ExternalPackageIdentity>) {
+    let previous: BTreeSet<_> = previous.iter().collect();
+    let current: BTreeSet<_> = current.iter().collect();
+    (
+        current
+            .difference(&previous)
+            .map(|identity| (*identity).clone())
+            .collect(),
+        previous
+            .difference(&current)
+            .map(|identity| (*identity).clone())
+            .collect(),
+    )
+}
+
+/// Same result as [`set_identity_difference`] with one merge pass, or `None`
+/// if either list is not strictly increasing.
+///
+/// Identity lists are sorted and deduplicated when they are built
+/// ([`PackageResolution::shared_identity_list`]), so the merge gives the same
+/// result as set difference without building two ordered sets per package.
+fn sorted_identity_difference(
+    current: &[ExternalPackageIdentity],
+    previous: &[ExternalPackageIdentity],
+) -> Option<(Vec<ExternalPackageIdentity>, Vec<ExternalPackageIdentity>)> {
+    let strictly_increasing =
+        |identities: &[ExternalPackageIdentity]| identities.windows(2).all(|w| w[0] < w[1]);
+    if !strictly_increasing(current) || !strictly_increasing(previous) {
+        return None;
+    }
+
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let (mut current_index, mut previous_index) = (0, 0);
+    while let (Some(current_identity), Some(previous_identity)) =
+        (current.get(current_index), previous.get(previous_index))
+    {
+        match current_identity.cmp(previous_identity) {
+            std::cmp::Ordering::Less => {
+                added.push(current_identity.clone());
+                current_index += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                removed.push(previous_identity.clone());
+                previous_index += 1;
+            }
+            std::cmp::Ordering::Equal => {
+                current_index += 1;
+                previous_index += 1;
+            }
+        }
+    }
+    added.extend_from_slice(&current[current_index..]);
+    removed.extend_from_slice(&previous[previous_index..]);
+    Some((added, removed))
 }
 
 #[cfg(test)]
@@ -1280,5 +1337,53 @@ mod tests {
             Err(ExternalResolutionError::UnknownPackage { identity, .. })
                 if identity == "missing"
         ));
+    }
+
+    #[test]
+    fn sorted_identity_difference_matches_set_difference() {
+        fn ids(entries: &[(&str, &str, &str)]) -> Vec<ExternalPackageIdentity> {
+            entries
+                .iter()
+                .map(|(key, version, name)| {
+                    ExternalPackageIdentity::new(*key, *version).with_human_name(*name)
+                })
+                .collect()
+        }
+        fn display(list: &[ExternalPackageIdentity]) -> Vec<String> {
+            list.iter()
+                .map(|i| format!("{}@{} ({})", i.key(), i.version(), i.display_name()))
+                .collect()
+        }
+
+        let a = ids(&[
+            ("a", "1.0.0", "a"),
+            ("b", "1.0.0", "b"),
+            ("c", "2.0.0", "c"),
+        ]);
+        let b = ids(&[
+            ("a", "1.0.0", "a-previous"),
+            ("b", "1.0.1", "b"),
+            ("d", "1.0.0", "d"),
+        ]);
+        let empty = ids(&[]);
+        for (current, previous) in [
+            (&a, &b),
+            (&b, &a),
+            (&a, &a),
+            (&a, &empty),
+            (&empty, &b),
+            (&empty, &empty),
+        ] {
+            let (added, removed) =
+                sorted_identity_difference(current, previous).expect("sorted inputs");
+            let (expected_added, expected_removed) = set_identity_difference(current, previous);
+            assert_eq!(display(&added), display(&expected_added));
+            assert_eq!(display(&removed), display(&expected_removed));
+        }
+
+        let unsorted = ids(&[("b", "1.0.0", "b"), ("a", "1.0.0", "a")]);
+        let duplicated = ids(&[("a", "1.0.0", "a"), ("a", "1.0.0", "a")]);
+        assert!(sorted_identity_difference(&unsorted, &a).is_none());
+        assert!(sorted_identity_difference(&a, &duplicated).is_none());
     }
 }
