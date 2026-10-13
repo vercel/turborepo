@@ -50,6 +50,16 @@ pub(crate) fn windows(platform: Platform) -> bool {
     matches!(platform, Platform::WindowsX64 | Platform::WindowsArm64)
 }
 
+/// Hosts promote only their own family, by lock spelling: GNU Linux and macOS
+/// on Unix, x64 on Windows. Windows arm64 and musl stay locked but
+/// unpromoted; the caller still qualifies the host itself.
+pub(crate) fn promotable(spelling: &str) -> bool {
+    match spelling.strip_prefix("windows-") {
+        Some(arch) => cfg!(windows) && arch == "x64",
+        None => cfg!(unix) && !spelling.ends_with("-musl"),
+    }
+}
+
 pub(crate) fn installer_file(platform: Platform) -> &'static str {
     if windows(platform) {
         "rustup-init.exe"
@@ -160,6 +170,19 @@ mod tests {
         }
         assert_eq!(target(Platform::Any), None);
         assert_eq!(installer_url(&version, Platform::Any), None);
+    }
+
+    #[test]
+    fn only_the_hosts_own_family_is_promotable() {
+        for (spelling, promotable) in [
+            ("linux-x64-gnu", cfg!(unix)),
+            ("macos-arm64", cfg!(unix)),
+            ("linux-arm64-musl", false),
+            ("windows-x64", cfg!(windows)),
+            ("windows-arm64", false),
+        ] {
+            assert_eq!(super::promotable(spelling), promotable, "{spelling}");
+        }
     }
 
     #[test]
