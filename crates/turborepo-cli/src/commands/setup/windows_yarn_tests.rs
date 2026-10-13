@@ -71,7 +71,11 @@ fn yarn_classic_and_modern_lock_launch_the_managed_node_and_repeat_without_traff
             .map(|e| e.unwrap().file_name().into_string().unwrap())
             .collect();
         names.sort();
-        assert_eq!(names, ["node.exe", "yarn.cmd", "yarnpkg.cmd"]);
+        // Node's bundled npm is exported beside Yarn, as on Unix.
+        assert_eq!(
+            names,
+            ["node.exe", "npm.cmd", "npx.cmd", "yarn.cmd", "yarnpkg.cmd"]
+        );
         let tools = bin.join("../tools");
         assert_eq!(
             fs::read(tools.join("yarn/lib/resource")).unwrap(),
