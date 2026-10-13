@@ -26,7 +26,7 @@ use rayon::prelude::*;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
 use tracing::{debug_span, info_span};
-use turbo_trace::{ImportResult, ImportTraceType, ImportType, Tracer, find_imports};
+use turbo_trace::{ImportResult, ImportTraceType, ImportType, find_imports};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_log::Subsystem;
@@ -35,9 +35,8 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageGraphNodeKind, PackageName, PackageNode},
 };
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
-use unrs_resolver::Resolver;
 
-use crate::imports::DependencyLocations;
+use crate::imports::{DependencyLocations, PackageResolver};
 
 #[derive(Clone)]
 pub struct PackageScope<'a> {
@@ -759,8 +758,7 @@ impl BoundariesChecker {
 
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
-        let resolver =
-            Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
+        let resolver = PackageResolver::new(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
 
@@ -827,7 +825,7 @@ impl BoundariesChecker {
         package_root: &AbsoluteSystemPath,
         file_path: &AbsoluteSystemPath,
         dependency_locations: DependencyLocations<'_>,
-        resolver: &Resolver,
+        resolver: &PackageResolver,
     ) -> Result<(Vec<BoundariesDiagnostic>, Vec<String>), Error> {
         // Read the file once and share it across every diagnostic it
         // produces. Each emitted error keeps an Arc clone instead of a fresh
