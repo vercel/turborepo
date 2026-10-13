@@ -23,7 +23,7 @@ use std::{
 
 use turborepo_shim::TurboState;
 
-const CONFIG: &str = r#"{"futureFlags":{"experimentalSetup":true},"agentGuidance":false,
+const CONFIG: &str = r#"{"agentGuidance":false,
     "noUpdateNotifier":true,"tasks":{"build":{"cache":false}},
     "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#;
 

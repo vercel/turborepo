@@ -64,10 +64,9 @@ fn peer_requirement(snapshot: &ExecutionSnapshot) -> Requirement {
 /// before any discovery. JavaScript discovery runs no tool, so a
 /// JavaScript-only repository needs no managed selection.
 pub(crate) fn discovery_probes_tools(flags: &FutureFlags) -> bool {
-    flags.experimental_setup
-        && (flags.experimental_cargo_workspaces
-            || flags.experimental_python_workspaces
-            || flags.experimental_go_workspaces)
+    flags.experimental_cargo_workspaces
+        || flags.experimental_python_workspaces
+        || flags.experimental_go_workspaces
 }
 
 /// [`select`] for a command that discovers the repository without running
@@ -394,22 +393,17 @@ mod discovery_tests {
     use turborepo_turbo_json::FutureFlags;
 
     #[test]
-    fn only_setup_with_cargo_python_or_go_discovery_needs_managed_tools() {
-        let setup = FutureFlags {
-            experimental_setup: true,
-            ..Default::default()
-        };
-        assert!(!super::discovery_probes_tools(&setup));
+    fn only_cargo_python_or_go_discovery_needs_managed_tools() {
+        let javascript = FutureFlags::default();
+        assert!(!super::discovery_probes_tools(&javascript));
         for enable in [
             |f: &mut FutureFlags| f.experimental_cargo_workspaces = true,
             |f: &mut FutureFlags| f.experimental_python_workspaces = true,
             |f: &mut FutureFlags| f.experimental_go_workspaces = true,
         ] {
-            let mut flags = setup;
+            let mut flags = javascript;
             enable(&mut flags);
             assert!(super::discovery_probes_tools(&flags), "{flags:?}");
-            flags.experimental_setup = false;
-            assert!(!super::discovery_probes_tools(&flags), "{flags:?}");
         }
     }
 }
