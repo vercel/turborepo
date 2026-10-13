@@ -218,12 +218,18 @@ fn locked_selections_must_satisfy_declarations_and_official_shapes() {
         // A gzip-only lock predates xz pins and must be regenerated.
         |tool| part(tool).alternates.clear(),
         |tool| {
-            let xz = part(tool).alternates.get_mut(&Format::TarXz).unwrap();
+            let xz = part(tool)
+                .alternates
+                .get_mut(&AlternateFormat::TarXz)
+                .unwrap();
             xz.url = xz.url.replace("static.rust-lang.org", "mirror.test");
         },
         |tool| {
-            let xz = part(tool).alternates[&Format::TarXz].clone();
-            part(tool).alternates.insert(Format::Tar, xz);
+            let xz = part(tool)
+                .alternates
+                .get_mut(&AlternateFormat::TarXz)
+                .unwrap();
+            xz.url = xz.url.replace("/cargo-", "/rustc-");
         },
         |tool| part(tool).root_prefix = Some("cargo".into()),
         |tool| {

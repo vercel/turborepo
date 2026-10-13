@@ -6,7 +6,9 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    lock::{self, Alternate, Artifact, Document, Format, Installation, Lock, Tool},
+    lock::{
+        self, Alternate, AlternateFormat, Artifact, Document, Format, Installation, Lock, Tool,
+    },
     rust_discovery::{Channel, Toolchain},
     rust_metadata::{self, Manifest},
     rustup,
@@ -178,7 +180,7 @@ pub fn resolve(toolchain: &Toolchain, manifest: &[u8]) -> Result<Tool, Error> {
                 sha256: tarball.sha256.into(),
                 format: Format::TarGz,
                 alternates: BTreeMap::from([(
-                    Format::TarXz,
+                    AlternateFormat::TarXz,
                     Alternate {
                         url: tarball.xz_url.into(),
                         sha256: tarball.xz_sha256.into(),

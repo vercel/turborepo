@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 use turborepo_tool_install::{Store, Tool};
 
 use crate::{
-    lock::{self, Artifact, Format, Installation, Lock, Platform},
+    lock::{self, AlternateFormat, Artifact, Format, Installation, Lock, Platform},
     rust_discovery::{Channel, Toolchain},
     rust_metadata::{MAX_MANIFEST_BYTES, Manifest},
     rust_resolution::{executables, toolchain_name},
@@ -150,7 +150,7 @@ impl RustPlan {
                 || artifact.alternates.len() != 1
                 || artifact
                     .alternates
-                    .get(&Format::TarXz)
+                    .get(&AlternateFormat::TarXz)
                     .is_none_or(|xz| Some(&xz.url) != xz_url.as_ref())
                 || artifact.destination.is_some()
                 || artifact.root_prefix.as_deref() != Some(&format!("{stem}/{directory}"))
@@ -277,7 +277,7 @@ impl RustPlan {
             let tarball = manifest.tarball(package, target).ok_or(Error::Mismatch)?;
             let xz = artifact
                 .alternates
-                .get(&Format::TarXz)
+                .get(&AlternateFormat::TarXz)
                 .ok_or(Error::Mismatch)?;
             if tarball.zst
                 || (tarball.url, tarball.sha256) != (&*artifact.url, &*artifact.sha256)

@@ -50,7 +50,7 @@ fn stable_resolves_to_the_exact_release_with_default_profile_parts() {
     );
     assert!(std.executables.is_empty() && std.format == Format::TarGz);
     // rustup downloads the xz copy, so the lock pins it beside the gzip one.
-    let xz = &std.alternates[&Format::TarXz];
+    let xz = &std.alternates[&AlternateFormat::TarXz];
     assert_eq!(
         (std.alternates.len(), xz.url.as_str()),
         (1, std.url.replace(".tar.gz", ".tar.xz").as_str())
