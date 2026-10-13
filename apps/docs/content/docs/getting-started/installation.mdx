@@ -122,14 +122,6 @@ To use the global binary in CI, see [Constructing CI](/docs/crafting-your-reposi
 
 #### Uninstalling global `turbo`
 
-On macOS and Linux, run the installer with `--uninstall` (or set `TURBO_UNINSTALL=1`). If you installed with `--install-dir` or `TURBO_INSTALL_DIR`, pass the same directory.
-
-```sh title="Terminal"
-curl -fsSL https://turborepo.dev/install | sh -s -- --uninstall
-```
-
-Uninstalling removes only what the installer added: the `turbo` binary in the install directory, plus the lines it marked in your shell profiles with `# Turborepo standalone installer PATH` and `# Turborepo standalone installer shell hook`. If you haven't edited those lines, your profiles return to what they contained before you installed. Other `turbo` installations, symlinks, and lines you wrote yourself stay in place, and the installer reports what it removed and what it left.
-
 On Windows, run the installer with `-Uninstall` (or set `TURBO_UNINSTALL=1`). If you installed with `-InstallDirectory` or `TURBO_INSTALL_DIR`, pass the same directory.
 
 ```powershell title="PowerShell"
