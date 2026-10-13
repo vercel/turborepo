@@ -143,6 +143,9 @@ impl NpmFixture {
                         upstream.origin(),
                     )
                     .unwrap(),
+                uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(
+                    upstream.origin(),
+                ).unwrap(),
             };
             report = Some(plan::report(
                 &discovery,

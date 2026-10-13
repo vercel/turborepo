@@ -11,6 +11,7 @@ pub mod js_resolution;
 pub mod lifecycle;
 pub mod lock;
 pub mod native_baseline;
+pub mod native_resolution;
 pub mod node;
 pub mod node_discovery;
 pub mod node_metadata;

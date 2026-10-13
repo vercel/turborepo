@@ -16,7 +16,15 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 3] = ["node", "npm", "pnpm"];
+const NATIVE: [&str; 4] = ["node", "npm", "pnpm", "uv"];
+
+/// Non-JavaScript declarations a snapshot may capture. Callers derive these
+/// from root workspace flags; disabled ecosystems' files and declarations are
+/// ignored entirely. The default captures only Node and its package managers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ecosystems {
+    pub python: bool,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -26,6 +34,8 @@ pub enum StorageError {
     Io(#[from] io::Error),
     #[error("invalid native setup declarations")]
     Declarations,
+    #[error(transparent)]
+    Uv(#[from] crate::uv_discovery::UvDiscoveryError),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }
