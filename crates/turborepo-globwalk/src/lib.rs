@@ -477,6 +477,33 @@ pub fn is_glob_pattern(pattern: &str) -> bool {
     false
 }
 
+/// Returns the literal prefix of a relative glob of the shape
+/// `<plain-segment>/.../<plain-segment>/**`, e.g. `crates/foo/.turbo` for
+/// `crates/foo/.turbo/**`. Such a glob matches exactly the paths accepted by
+/// [`matches_literal_tree`], so callers can skip compiling it with wax.
+///
+/// Deliberately conservative: every segment must consist of bytes wax treats
+/// literally, and `.`/`..` segments are rejected. Always `None` on Windows,
+/// where wax matches literals case-insensitively.
+pub fn literal_tree_prefix(pattern: &str) -> Option<&str> {
+    if !PLAIN_EXCLUSIONS_SUPPORTED {
+        return None;
+    }
+    let prefix = pattern.strip_suffix("/**")?;
+    prefix
+        .split('/')
+        .all(|segment| plain_segment(segment) && segment != "." && segment != "..")
+        .then_some(prefix)
+}
+
+/// Whether `path` is matched by the glob `<prefix>/**`, where `prefix` came
+/// from [`literal_tree_prefix`]. Mirrors wax's encoding of a trailing tree
+/// wildcard (`(?:/?|/.*)$`, where `.` does not match a newline).
+pub fn matches_literal_tree(path: &str, prefix: &str) -> bool {
+    path.strip_prefix(prefix)
+        .is_some_and(|rest| rest.is_empty() || (rest.starts_with('/') && !rest.contains('\n')))
+}
+
 pub fn globwalk_with_settings(
     base_path: &AbsoluteSystemPath,
     include: &[ValidatedGlob],
@@ -567,8 +594,54 @@ struct CompiledGlobs {
     /// `<literal-prefix>/**` shapes; they never went through wax
     /// compilation.
     recursive_all: Vec<PathBuf>,
+    /// Exclusion patterns made only of plain segments (`<prefix>/**` trees
+    /// and literal paths); matched by path comparison instead of wax. They
+    /// are absent from `ex_patterns`/`ex_filter`.
+    plain_exclusions: Vec<PlainExclusion>,
     ex_patterns: Vec<Glob<'static>>,
     ex_filter: FilterAny,
+}
+
+/// An exclusion pattern classified from its raw string as a literal path or
+/// a `<literal-prefix>/**` tree. Exclusions are the dominant input shape for
+/// Cargo crates (`!../../crates/<dep>/.turbo/**` per path dependency), and
+/// compiling plus matching each one as a separate wax regex for every walked
+/// entry dwarfs the walk itself.
+#[derive(Clone, Debug)]
+struct PlainExclusion {
+    path: PathBuf,
+    /// `<path>/**`: matches `path` itself and everything beneath it.
+    /// Otherwise the pattern matches exactly `path`.
+    tree: bool,
+}
+
+impl PlainExclusion {
+    /// Mirrors wax's `is_match` for the classified pattern. Wax encodes a
+    /// trailing tree wildcard as `(?:/?|/.*)$` without the `s` flag, so a
+    /// remainder containing a newline does not match.
+    fn matches(&self, candidate: &Path) -> bool {
+        if self.tree {
+            candidate
+                .strip_prefix(&self.path)
+                .is_ok_and(|rest| !rest.as_os_str().as_encoded_bytes().contains(&b'\n'))
+        } else {
+            candidate == self.path
+        }
+    }
+
+    /// Whether this exclusion can match `root` or any path beneath it.
+    fn may_match_under(&self, root: &Path) -> bool {
+        self.path.starts_with(root) || (self.tree && root.starts_with(&self.path))
+    }
+}
+
+/// Wax matches literals case-insensitively by default on Windows, which the
+/// byte-wise comparisons of [`PlainExclusion`] and [`matches_literal_tree`]
+/// do not replicate; keep compiling exclusions with wax there.
+const PLAIN_EXCLUSIONS_SUPPORTED: bool = !cfg!(windows);
+
+fn excluded_by_plain(exclusions: &[PlainExclusion], candidate: &Path) -> bool {
+    exclusions.iter().any(|ex| ex.matches(candidate))
 }
 
 /// Repeated `<prefix>/**` patterns each walk the same tree only for the
@@ -827,7 +900,28 @@ fn compile_globs<S: AsRef<str>>(
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
 
-    let ex_patterns: Vec<Glob<'static>> = exclude_paths
+    // Plain-segment exclusions always compile and are matched exactly by
+    // path comparison (see `PlainExclusion::matches`), so skip wax for them.
+    let mut plain_exclusions = Vec::new();
+    let mut complex_exclusions = Vec::new();
+    for path in exclude_paths {
+        match classify_simple_pattern(&path) {
+            SimplePattern::RecursiveAll(prefix) if PLAIN_EXCLUSIONS_SUPPORTED => plain_exclusions
+                .push(PlainExclusion {
+                    path: prefix,
+                    tree: true,
+                }),
+            SimplePattern::Literal(literal) if PLAIN_EXCLUSIONS_SUPPORTED => {
+                plain_exclusions.push(PlainExclusion {
+                    path: literal,
+                    tree: false,
+                })
+            }
+            _ => complex_exclusions.push(path),
+        }
+    }
+
+    let ex_patterns: Vec<Glob<'static>> = complex_exclusions
         .into_iter()
         .map(glob_with_contextual_error)
         .collect::<Result<_, _>>()?;
@@ -868,6 +962,7 @@ fn compile_globs<S: AsRef<str>>(
         literal_paths,
         shallow_wildcards,
         recursive_all,
+        plain_exclusions,
         ex_patterns,
         ex_filter,
     })
@@ -1005,6 +1100,7 @@ fn walk_compiled_globs(
         .collect();
 
     let ex_patterns = &compiled.ex_patterns;
+    let plain_exclusions = &compiled.plain_exclusions;
     let shallow_results: Vec<AbsoluteSystemPathBuf> = shallow_candidates
         .par_iter()
         .filter_map(|candidate| {
@@ -1015,6 +1111,9 @@ fn walk_compiled_globs(
                 WalkType::All => true,
             };
             if !dominated {
+                return None;
+            }
+            if excluded_by_plain(plain_exclusions, candidate) {
                 return None;
             }
             // Check exclusion patterns. Exclusion globs are compiled from
@@ -1041,21 +1140,43 @@ fn walk_compiled_globs(
                 walk_type,
                 &compiled.base_path,
                 compiled.ex_filter.clone(),
+                plain_exclusions,
                 glob,
                 settings,
             )
         })
         .collect::<Result<HashSet<_>, _>>()?;
 
-    for prefix in &compiled.recursive_all {
-        walk_recursive_all(
-            prefix,
-            walk_type,
-            &compiled.base_path,
-            &compiled.ex_patterns,
-            settings,
-            &mut results,
-        )?;
+    // Each `<prefix>/**` subtree is walked independently (Cargo crates list
+    // one per path dependency), so walk them in parallel. Results are
+    // consumed in prefix order, so the first error reported is the same one
+    // a sequential walk would have stopped at.
+    let recursive_results: Vec<Result<Vec<AbsoluteSystemPathBuf>, WalkError>> = compiled
+        .recursive_all
+        .par_iter()
+        .map(|prefix| {
+            // Only exclusions that share a path with this subtree can match
+            // anything in it.
+            let relevant_exclusions: Vec<PlainExclusion> = plain_exclusions
+                .iter()
+                .filter(|ex| ex.may_match_under(prefix))
+                .cloned()
+                .collect();
+            let mut found = Vec::new();
+            walk_recursive_all(
+                prefix,
+                walk_type,
+                &compiled.base_path,
+                &relevant_exclusions,
+                &compiled.ex_patterns,
+                settings,
+                &mut found,
+            )?;
+            Ok(found)
+        })
+        .collect();
+    for found in recursive_results {
+        results.extend(found?);
     }
 
     results.extend(literal_results);
@@ -1081,11 +1202,15 @@ fn walk_recursive_all(
     prefix: &Path,
     walk_type: WalkType,
     walk_base: &Path,
+    plain_exclusions: &[PlainExclusion],
     ex_patterns: &[Glob<'static>],
     settings: Settings,
-    results: &mut HashSet<AbsoluteSystemPathBuf>,
+    results: &mut Vec<AbsoluteSystemPathBuf>,
 ) -> Result<(), WalkError> {
     let excluded = |path: &Path| -> bool {
+        if excluded_by_plain(plain_exclusions, path) {
+            return true;
+        }
         if ex_patterns.is_empty() {
             return false;
         }
@@ -1118,7 +1243,7 @@ fn walk_recursive_all(
             WalkType::All => true,
         };
         if wanted && !excluded(path) {
-            results.insert(AbsoluteSystemPathBuf::try_from(path)?);
+            results.push(AbsoluteSystemPathBuf::try_from(path)?);
         }
         Ok(())
     };
@@ -1172,6 +1297,7 @@ fn walk_glob(
     walk_type: WalkType,
     base_path_new: &Path,
     ex_filter: FilterAny,
+    plain_exclusions: &[PlainExclusion],
     glob: &Glob<'static>,
     settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
@@ -1187,10 +1313,22 @@ fn walk_glob(
         .walk_with_behavior(base_path_new, behavior)
         .not_any(ex_filter);
 
-    if settings.ignore_nested_packages {
+    if settings.ignore_nested_packages || !plain_exclusions.is_empty() {
         iter.filter_entry(|entry| {
             let path = entry.path();
-            if path.is_dir() && path != base_path_new && path.join("package.json").exists() {
+            // Pruning a matching directory discards exactly the entries
+            // `not_any` would have discarded: a `<prefix>/**` exclusion
+            // matches every path beneath it, and `add_trailing_double_star`
+            // only emits a literal exclusion together with its `<literal>/**`
+            // twin.
+            if excluded_by_plain(plain_exclusions, path) {
+                return Some(EntryResidue::Tree);
+            }
+            if settings.ignore_nested_packages
+                && path.is_dir()
+                && path != base_path_new
+                && path.join("package.json").exists()
+            {
                 return Some(EntryResidue::Tree);
             }
 
@@ -3237,5 +3375,160 @@ mod combine_test {
             ),
             vec!["src/a,b.ts", "src/inner/x.ts"]
         );
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(windows))]
+mod plain_exclusion_test {
+    use std::path::Path;
+
+    use wax::{Glob, Program};
+
+    use super::*;
+
+    const CANDIDATES: &[&str] = &[
+        "/repo/crates/a",
+        "/repo/crates/a/",
+        "/repo/crates/a/.turbo",
+        "/repo/crates/a/.turbo/",
+        "/repo/crates/a/.turbo/x",
+        "/repo/crates/a/.turbo/x/y.log",
+        "/repo/crates/a/.turbo/x\ny",
+        "/repo/crates/a/.turbox",
+        "/repo/crates/a/.turb",
+        "/repo/crates/ab",
+        "/repo/crates/a/b",
+        "/repo/crates",
+        "/repo/x y/@scope/pkg+1",
+        "/repo/x y/@scope/pkg+1/z",
+        "/repo/x y/@scope/pkg+12",
+        "/repo/X Y/@scope/pkg+1/z",
+    ];
+
+    #[test]
+    fn plain_exclusions_match_like_wax() {
+        let patterns = [
+            "/repo/crates/a/.turbo/**",
+            "/repo/crates/a/**",
+            "/repo/crates/a",
+            "/repo/crates/a/.turbo",
+            "/repo/x y/@scope/pkg+1/**",
+            "/repo/x y/@scope/pkg+1",
+        ];
+        for pattern in patterns {
+            let exclusion = match classify_simple_pattern(pattern) {
+                SimplePattern::RecursiveAll(path) => PlainExclusion { path, tree: true },
+                SimplePattern::Literal(path) => PlainExclusion { path, tree: false },
+                _ => panic!("{pattern} should classify as a plain exclusion"),
+            };
+            let glob = Glob::new(pattern).unwrap();
+            for candidate in CANDIDATES {
+                // Candidates never carry trailing slashes (they come from
+                // directory reads); `Path` equality would ignore them.
+                if candidate.ends_with('/') {
+                    continue;
+                }
+                assert_eq!(
+                    exclusion.matches(Path::new(candidate)),
+                    glob.is_match(*candidate),
+                    "{pattern} vs {candidate:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn literal_tree_prefix_matches_like_wax() {
+        for pattern in ["crates/a/.turbo/**", "crates/a/**", "x y/@scope/pkg+1/**"] {
+            let prefix = literal_tree_prefix(pattern).expect(pattern);
+            let glob = Glob::new(pattern).unwrap();
+            for candidate in CANDIDATES {
+                let relative = candidate.trim_start_matches("/repo/");
+                assert_eq!(
+                    matches_literal_tree(relative, prefix),
+                    glob.is_match(relative),
+                    "{pattern} vs {relative:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn literal_tree_prefix_rejects_non_plain_patterns() {
+        for pattern in [
+            "**",
+            "/**",
+            "crates/*/.turbo/**",
+            "crates/a/.turbo/**/x",
+            "crates/a/.turbo",
+            "crates/{a,b}/**",
+            "crates/a\\:b/**",
+            "crates//a/**",
+            "crates/./a/**",
+            "../crates/a/**",
+            "crates/[a]/**",
+        ] {
+            assert_eq!(literal_tree_prefix(pattern), None, "{pattern}");
+        }
+    }
+
+    /// Plain and wax-compiled exclusions must produce identical walk results
+    /// for every walker: recursive-all, shallow wildcards, and wax walks.
+    #[test]
+    fn plain_exclusions_walk_like_wax_exclusions() {
+        let tmp = tempfile::tempdir().unwrap();
+        for file in [
+            "crates/a/src/lib.rs",
+            "crates/a/.turbo/turbo-build.log",
+            "crates/a/.turbo/cache/x.json",
+            "crates/a/Cargo.toml",
+            "crates/b/src/lib.rs",
+            "crates/b/.turbo/turbo-build.log",
+            "crates/b/package.json",
+            "crates/c/package.json",
+        ] {
+            let path = tmp.path().join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "x").unwrap();
+        }
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let includes = [
+            "crates/a/**",
+            "crates/b/**",
+            "crates/*/package.json",
+            "crates/**/*.log",
+        ];
+        let exclusions = [
+            "crates/a/.turbo/**",
+            "crates/b/.turbo",
+            "crates/c/package.json",
+        ];
+        for walk_type in [WalkType::Files, WalkType::All] {
+            for include in includes {
+                let include = [ValidatedGlob::from_str(include).unwrap()];
+                let exclude: Vec<ValidatedGlob> = exclusions
+                    .iter()
+                    .map(|ex| ValidatedGlob::from_str(ex).unwrap())
+                    .collect();
+                let plain = globwalk(&root, &include, &exclude, walk_type).unwrap();
+                // Force every exclusion through wax by compiling it the way
+                // `compile_globs` did before plain exclusions existed.
+                let mut compiled =
+                    compile_globs(&root, &include, &exclude, Settings::default()).unwrap();
+                let (_, _, exclude_paths) =
+                    preprocess_paths_and_globs(&root, &include, &exclude).unwrap();
+                compiled.plain_exclusions.clear();
+                compiled.ex_patterns = exclude_paths
+                    .into_iter()
+                    .map(glob_with_contextual_error)
+                    .collect::<Result<_, _>>()
+                    .unwrap();
+                compiled.ex_filter = FilterAny::any(compiled.ex_patterns.clone()).unwrap();
+                let wax_only =
+                    walk_compiled_globs(&compiled, walk_type, Settings::default()).unwrap();
+                assert_eq!(plain, wax_only, "{include:?} {walk_type:?}");
+            }
+        }
     }
 }

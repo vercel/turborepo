@@ -18,6 +18,20 @@ pub struct FSCache {
     scm_state: LazyScmState,
 }
 
+/// Outcome of [`FSCache::lookup`].
+pub(crate) enum LocalLookup {
+    /// There is no archive for the hash.
+    Miss,
+    /// Every output recorded by the restore manifest is unchanged on disk, so
+    /// the archive need not be opened.
+    Unchanged(CacheHitMetadata, Vec<AnchoredSystemPathBuf>),
+    /// The archive must be extracted with [`FSCache::restore`], passing the
+    /// manifest so unchanged files can still be skipped.
+    Restore(Option<crate::cache_archive::RestoreManifest>),
+    /// The manifest is over the caller's size limit and was not read.
+    ManifestTooLarge,
+}
+
 /// Uniquifies temporary archive names for concurrent installs of distinct
 /// hashes within this process.
 static ARCHIVE_TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -94,6 +108,32 @@ impl FSCache {
         anchor: &AbsoluteSystemPath,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        match self.lookup(anchor, hash, u64::MAX)? {
+            LocalLookup::Miss => Ok(None),
+            LocalLookup::Unchanged(metadata, files) => Ok(Some((metadata, files))),
+            LocalLookup::Restore(previous_manifest) => {
+                self.restore(anchor, hash, previous_manifest)
+            }
+            // Unreachable with an unlimited manifest size, but restoring is
+            // always correct.
+            LocalLookup::ManifestTooLarge => self.restore(anchor, hash, None),
+        }
+    }
+
+    /// First step of [`Self::fetch`]. It only reads metadata: the archive's
+    /// existence, the restore manifest, one stat per recorded output, and the
+    /// archive's metadata sidecar. It never opens the archive.
+    ///
+    /// Returns [`LocalLookup::ManifestTooLarge`] without reading a manifest
+    /// larger than `max_manifest_bytes`, so callers can bound how much
+    /// checking they do in place.
+    #[tracing::instrument(skip_all)]
+    pub(crate) fn lookup(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        hash: &str,
+        max_manifest_bytes: u64,
+    ) -> Result<LocalLookup, CacheError> {
         let cache_path = self
             .cache_directory
             .join_component(&format!("{hash}.tar.zst"));
@@ -101,14 +141,18 @@ impl FSCache {
         // Check if the archive exists before doing any work.
         if !cache_path.as_path().exists() {
             self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
-            return Ok(None);
+            return Ok(LocalLookup::Miss);
         }
 
         let manifest_path = self
             .cache_directory
             .join_component(&format!("{hash}-manifest.json"));
 
-        let previous_manifest = crate::cache_archive::RestoreManifest::read(&manifest_path);
+        let Ok(previous_manifest) =
+            crate::cache_archive::RestoreManifest::read_at_most(&manifest_path, max_manifest_bytes)
+        else {
+            return Ok(LocalLookup::ManifestTooLarge);
+        };
 
         // Fast path: if a manifest exists and ALL files on disk still match,
         // skip opening/decompressing the tar entirely.
@@ -121,7 +165,7 @@ impl FSCache {
                     .join_component(&format!("{hash}-meta.json")),
             )?;
             self.log_fetch(analytics::CacheEvent::Hit, hash, meta.duration);
-            return Ok(Some((
+            return Ok(LocalLookup::Unchanged(
                 CacheHitMetadata {
                     time_saved: meta.duration,
                     source: CacheSource::Local,
@@ -129,12 +173,29 @@ impl FSCache {
                     dirty_hash: meta.dirty_hash,
                 },
                 file_list,
-            )));
+            ));
         }
 
-        // Slow path: decompress and extract the archive. Pass any existing
-        // manifest so that individual files still matching on disk can be
-        // skipped, avoiding unnecessary writes and filesystem notifications.
+        Ok(LocalLookup::Restore(previous_manifest))
+    }
+
+    /// Second step of [`Self::fetch`]: decompress and extract the archive.
+    /// `previous_manifest` lets individual files that still match on disk be
+    /// skipped, avoiding unnecessary writes and filesystem notifications.
+    #[tracing::instrument(skip_all)]
+    pub(crate) fn restore(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        hash: &str,
+        previous_manifest: Option<crate::cache_archive::RestoreManifest>,
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        let cache_path = self
+            .cache_directory
+            .join_component(&format!("{hash}.tar.zst"));
+        let manifest_path = self
+            .cache_directory
+            .join_component(&format!("{hash}-manifest.json"));
+
         let mut cache_reader = match CacheReader::open(&cache_path) {
             Ok(reader) => reader,
             Err(CacheError::IO(ref e, _)) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -1290,6 +1351,57 @@ mod test {
 
         // changing.txt should be restored to its original cached content.
         assert_eq!(changing_file.read_to_string()?, "original");
+
+        Ok(())
+    }
+
+    #[test]
+    fn lookup_reports_each_outcome() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let output = repo_root_path.join_component("output.txt");
+        output.create_with_contents("cached")?;
+        let files = vec![AnchoredSystemPathBuf::from_raw("output.txt")?];
+        let hash = "lookup_outcomes";
+
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        assert!(matches!(
+            cache.lookup(repo_root_path, hash, u64::MAX)?,
+            LocalLookup::Miss
+        ));
+
+        cache.put(repo_root_path, hash, &files, 50)?;
+        match cache.lookup(repo_root_path, hash, u64::MAX)? {
+            LocalLookup::Unchanged(metadata, restored) => {
+                assert_eq!(metadata.time_saved, 50);
+                assert_eq!(restored, files);
+            }
+            _ => panic!("unchanged outputs should not need a restore"),
+        }
+        assert!(matches!(
+            cache.lookup(repo_root_path, hash, 1)?,
+            LocalLookup::ManifestTooLarge
+        ));
+
+        // A changed output (different size) needs a restore, which keeps the
+        // manifest so unchanged files can still be skipped.
+        output.create_with_contents("changed")?;
+        let LocalLookup::Restore(Some(previous_manifest)) =
+            cache.lookup(repo_root_path, hash, u64::MAX)?
+        else {
+            panic!("a changed output should need a restore with the manifest");
+        };
+        let (metadata, restored) = cache
+            .restore(repo_root_path, hash, Some(previous_manifest))?
+            .expect("the archive exists");
+        assert_eq!(metadata.time_saved, 50);
+        assert_eq!(restored, files);
+        assert_eq!(output.read_to_string()?, "cached");
 
         Ok(())
     }

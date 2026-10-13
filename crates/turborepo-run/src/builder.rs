@@ -1073,6 +1073,15 @@ impl RunBuilder {
                     builder
                 };
                 let builder = graph_features.configure_with_plan(builder, &contributor_plan);
+                // A task run at the repository root with no package selection
+                // selects every package, so its first settlement pass loads
+                // every native owner: start their toolchain subprocesses now
+                // so they overlap inventory construction.
+                let loads_every_owner = !self.opts.run_opts.tasks.is_empty()
+                    && self.opts.scope_opts.filter_patterns.is_empty()
+                    && self.opts.scope_opts.affected_range.is_none()
+                    && self.opts.scope_opts.pkg_inference_root.is_none();
+                let builder = builder.with_contributor_prefetch(loads_every_owner);
 
                 let graph = builder
                     .build_lazy()

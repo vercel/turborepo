@@ -8,7 +8,7 @@ use std::{
     fs::{DirBuilder, FileType, Permissions},
     io,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex, PoisonError},
 };
 
 // `fs_err` preserves paths in the error messages unlike `std::fs`
@@ -272,22 +272,97 @@ fn owning_sources<'a>(
         .filter(move |ancestor| sources.contains(*ancestor))
 }
 
+/// Below this many files a source is copied on the calling thread; handing a
+/// handful of copies to the thread pool costs more than it saves.
+const PARALLEL_COPY_MIN_FILES: usize = 16;
+
 fn copy_entries(
     src: &AbsoluteSystemPath,
     dst: &AbsoluteSystemPath,
     entries: &[PlannedEntry],
 ) -> Result<(), Error> {
-    for entry in entries {
-        let target = dst.resolve(&entry.suffix);
-        match &entry.kind {
-            PlannedEntryKind::Directory(permissions) => make_dir_copy(&target, permissions)?,
-            PlannedEntryKind::File(file_type) => {
-                copy_file_with_type(src.resolve(&entry.suffix), *file_type, &target)?
+    let file_count = entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, PlannedEntryKind::File(_)))
+        .count();
+    if file_count < PARALLEL_COPY_MIN_FILES {
+        for entry in entries {
+            let target = dst.resolve(&entry.suffix);
+            match &entry.kind {
+                PlannedEntryKind::Directory(permissions) => make_dir_copy(&target, permissions)?,
+                PlannedEntryKind::File(file_type) => {
+                    copy_planned_file(&src.resolve(&entry.suffix), *file_type, &target)?
+                }
             }
         }
+        return Ok(());
     }
 
-    Ok(())
+    // Copying a file is dominated by per-file system calls rather than by
+    // bytes moved, and every copy is independent of the others. Directories
+    // are created in walk order, which visits a directory before anything
+    // inside it, so each file's parent exists by the time its copy is spawned.
+    let first_error: Mutex<Option<Error>> = Mutex::new(None);
+    rayon::scope(|scope| {
+        for entry in entries {
+            let target = dst.resolve(&entry.suffix);
+            match &entry.kind {
+                PlannedEntryKind::Directory(permissions) => {
+                    if let Err(error) = make_dir_copy(&target, permissions) {
+                        record_first_error(&first_error, error);
+                        return;
+                    }
+                }
+                PlannedEntryKind::File(file_type) => {
+                    let file_type = *file_type;
+                    let first_error = &first_error;
+                    scope.spawn(move |_| {
+                        if let Err(error) =
+                            copy_planned_file(&src.resolve(&entry.suffix), file_type, &target)
+                        {
+                            record_first_error(first_error, error);
+                        }
+                    });
+                }
+            }
+        }
+    });
+
+    match first_error
+        .into_inner()
+        .unwrap_or_else(PoisonError::into_inner)
+    {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+fn record_first_error(slot: &Mutex<Option<Error>>, error: Error) {
+    let mut slot = slot.lock().unwrap_or_else(PoisonError::into_inner);
+    if slot.is_none() {
+        *slot = Some(error);
+    }
+}
+
+/// Copy a file whose parent directory was already created from the plan.
+///
+/// The parent is only created here if the copy reports it missing, which
+/// saves the two `ensure_dir` system calls per file on the common path.
+fn copy_planned_file(
+    from: &AbsoluteSystemPath,
+    from_type: FileType,
+    to: &AbsoluteSystemPath,
+) -> Result<(), Error> {
+    if from_type.is_symlink() {
+        return copy_file_with_type(from, from_type, to);
+    }
+    match fs::copy(from.as_path(), to.as_path()) {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            copy_file_with_type(from, from_type, to)
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn make_dir_copy(

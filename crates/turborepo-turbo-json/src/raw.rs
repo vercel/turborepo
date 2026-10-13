@@ -459,7 +459,7 @@ pub struct RawTurboJson {
 
     /// Controls whether turbo maintains a root `AGENTS.md` block for AI agents.
     ///
-    /// Defaults to `true`. Set to `false` to opt out of future automatic
+    /// Defaults to `false`. Set to `true` to opt in to future automatic
     /// updates.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
