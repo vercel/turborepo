@@ -19,8 +19,12 @@ use turborepo_run::engine_loader::EngineTurboJsonLoader;
 use turborepo_run_opts::Opts;
 use turborepo_task_id::TaskName;
 use turborepo_turbo_json::TurboJsonReader;
+use turborepo_ui::ColorConfig;
 
-use crate::{Args, commands::CommandBase};
+use crate::{
+    Args,
+    commands::{CommandBase, managed},
+};
 
 /// Task graph builder that uses the proper `EngineBuilder` logic.
 ///
@@ -30,12 +34,55 @@ use crate::{Args, commands::CommandBase};
 pub struct ProperTaskGraphBuilder {
     repo_root: AbsoluteSystemPathBuf,
     args: Args,
+    /// The identity of the managed tools activated for turbo's probes.
+    managed: Option<String>,
 }
 
 impl ProperTaskGraphBuilder {
     /// Create a new proper task graph builder
     pub fn new(repo_root: AbsoluteSystemPathBuf, args: Args) -> Self {
-        Self { repo_root, args }
+        Self {
+            repo_root,
+            args,
+            managed: None,
+        }
+    }
+
+    /// Activates managed tools for turbo's own probes before the first build,
+    /// like `turbo run`. Invalid configuration is left to that build.
+    pub fn activate_managed(&mut self) -> Result<(), turborepo_run::Error> {
+        let Ok(opts) = self.resolve_opts() else {
+            return Ok(());
+        };
+        let managed = managed::activate_for_discovery(&self.base(opts))?;
+        self.managed = managed.map(|tools| tools.snapshot().fingerprint().to_owned());
+        Ok(())
+    }
+
+    /// Reselects managed tools for every build like a new command, so drift
+    /// fails with `turbo setup` guidance instead of probing other tools. The
+    /// probes were activated once at startup, so a different selection needs
+    /// a restart.
+    fn reselect_managed(&self, opts: &Opts) -> Result<(), TaskGraphError> {
+        let current = managed::select_for_discovery(&self.base(opts.clone()))
+            .map_err(|error| TaskGraphError::BuildError(error.to_string()))?;
+        if current.as_ref().map(|tools| tools.snapshot().fingerprint()) != self.managed.as_deref() {
+            return Err(TaskGraphError::BuildError(
+                "Managed tools changed after `turbo devtools` started. Restart `turbo devtools` \
+                 to use them."
+                    .into(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn base(&self, opts: Opts) -> CommandBase {
+        CommandBase::from_opts(
+            opts,
+            self.repo_root.clone(),
+            crate::get_version(),
+            ColorConfig::new(true),
+        )
     }
 
     fn resolve_opts(&self) -> Result<Opts, TaskGraphError> {
@@ -218,6 +265,7 @@ impl ProperTaskGraphBuilder {
 
     async fn build_graph_data(&self) -> Result<GraphData, TaskGraphError> {
         let opts = self.resolve_opts()?;
+        self.reselect_managed(&opts)?;
         let pkg_graph = self.build_package_graph(&opts).await?;
         let package_graph = package_graph_to_data(&pkg_graph);
         let task_graph = self.build_engine_task_graph(&pkg_graph, &opts)?;

@@ -20,7 +20,7 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let (run, _analytics) = RunBuilder::new(base.run_builder_input()?, None)?
+    let (run, _analytics) = RunBuilder::new(base.discovery_builder_input()?, None)?
         .do_not_validate_engine()
         .build(&handler, telemetry)
         .await?;
