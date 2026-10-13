@@ -41,6 +41,7 @@ fn lock(rustup: &[u8], manifest: &str, with_rustup: bool) -> Lock {
             url: rustup::installer_url(&version, platform).unwrap(),
             sha256: format!("{:x}", Sha256::digest(rustup)),
             format: Format::Binary,
+            alternates: BTreeMap::new(),
             root_prefix: None,
             destination: None,
             executables: BTreeMap::from([("rustup".into(), "bin/rustup.exe".into())]),
