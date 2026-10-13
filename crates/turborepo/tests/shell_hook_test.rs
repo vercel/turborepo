@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::{
+    collections::BTreeMap,
     fs,
     io::Write,
     os::unix::{
@@ -32,9 +33,29 @@ fn user_state(home: &Path) -> PathBuf {
     }
 }
 
+/// A recorded tool exporting `bin/<id>`. The hook reads Rust's host triple and
+/// uv's Python key from the record's platform, the same on every host.
+fn tool(id: &str) -> Tool {
+    let version = match id {
+        "go" => "1.23.0",
+        "python" => "3.12.12",
+        "rust" => "1.90.0",
+        "uv" => "0.9.0",
+        _ => "24.0.0",
+    };
+    Tool {
+        id: id.into(),
+        version: version.into(),
+        platform: "linux-x64-gnu".into(),
+        artifact_sha256: "a".repeat(64),
+        executables: [(id.into(), format!("bin/{id}"))].into(),
+    }
+}
+
 /// A clone with its own Git boundary. `home` set-up repositories get a real
-/// installation plus the external record `turbo setup` publishes for it.
-fn repo(dir: &Path, flagged: bool, home: Option<&Path>) -> Option<String> {
+/// installation of `tools` (sorted ids) plus the external record `turbo setup`
+/// publishes for it.
+fn repo(dir: &Path, flagged: bool, home: Option<&Path>, tools: &[&str]) -> Option<String> {
     fs::create_dir_all(dir.join("apps/web")).unwrap();
     fs::set_permissions(dir, fs::Permissions::from_mode(0o755)).unwrap();
     fs::create_dir(dir.join(".git")).unwrap();
@@ -47,19 +68,14 @@ fn repo(dir: &Path, flagged: bool, home: Option<&Path>) -> Option<String> {
     fs::write(dir.join("turbo.lock"), r#"{"schemaVersion":0,"tools":{}}"#).unwrap();
     let home = home?;
     let root = dir.canonicalize().unwrap();
-    let tool = Tool {
-        id: "node".into(),
-        version: "24.0.0".into(),
-        platform: "test".into(),
-        artifact_sha256: "a".repeat(64),
-        executables: [("node".into(), "bin/node".into())].into(),
-    };
+    let tools: Vec<_> = tools.iter().map(|id| tool(id)).collect();
     Store::open(&root)
         .unwrap()
-        .reconcile(&[tool], |_, tree| {
+        .reconcile(&tools, |tool, tree| {
+            let export = tree.join("bin").join(&tool.id);
             fs::create_dir_all(tree.join("bin"))?;
-            fs::write(tree.join("bin/node"), "#!/bin/sh\necho managed-node\n")?;
-            fs::set_permissions(tree.join("bin/node"), fs::Permissions::from_mode(0o755))?;
+            fs::write(&export, format!("#!/bin/sh\necho managed-{}\n", tool.id))?;
+            fs::set_permissions(&export, fs::Permissions::from_mode(0o755))?;
             Ok(())
         })
         .unwrap();
@@ -92,6 +108,9 @@ fn repo(dir: &Path, flagged: bool, home: Option<&Path>) -> Option<String> {
 enum Step {
     Cd(&'static str),
     Show(&'static str),
+    /// PATH and every runtime variable the hook manages.
+    Vars(&'static str),
+    Set(&'static str, &'static str),
     Node,
     TouchLock,
     RemoveTools,
@@ -124,6 +143,10 @@ fn line(shell: &str, step: &Step) -> String {
         Step::Cd(dir) => format!("cd {dir}"),
         Step::Show(key) if pwsh => format!("\"{key}=$env:PATH\""),
         Step::Show(key) => format!("echo \"{key}=$PATH\""),
+        Step::Vars(key) => format!("echo '@{key}'; /usr/bin/env"),
+        Step::Set(name, value) if pwsh => format!("$env:{name} = '{value}'"),
+        Step::Set(name, value) if shell == "fish" => format!("set -gx {name} {value}"),
+        Step::Set(name, value) => format!("export {name}={value}"),
         Step::Node if pwsh => "\"node=$(node)\"".into(),
         Step::Node if shell == "fish" => "echo \"node=\"(node)".into(),
         Step::Node => "echo \"node=$(node)\"".into(),
@@ -136,20 +159,20 @@ fn line(shell: &str, step: &Step) -> String {
     }
 }
 
-fn journey(shell: &str) {
+/// Runs `steps` in a real `shell` started in `<temp>/plain` with the user's
+/// own `vars`, firing the prompt hook after each step. None when the shell is
+/// not installed.
+fn session(
+    shell: &str,
+    temp: &Path,
+    vars: &[(&str, &str)],
+    steps: &[Step],
+) -> Option<(String, String)> {
     let Ok(program) = which::which(shell) else {
         eprintln!("skipping: {shell} is not installed");
-        return;
+        return None;
     };
-    let temp = tempfile::tempdir().unwrap();
-    let home = temp.path().join("home");
-    let a = repo(&temp.path().join("a"), true, Some(&home)).unwrap();
-    let b = repo(&temp.path().join("b"), true, Some(&home)).unwrap();
-    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
-    repo(&temp.path().join("a/vendor/c"), true, None);
-    repo(&temp.path().join("off"), false, Some(&home));
-    fs::create_dir(temp.path().join("plain")).unwrap();
-
+    let home = temp.join("home");
     let turbo = assert_cmd::cargo::cargo_bin("turbo");
     let turbo = turbo.display();
     // bash and zsh run real prompts. Without a terminal, fish and pwsh never
@@ -173,14 +196,15 @@ fn journey(shell: &str) {
         ),
     };
     let mut script = format!("{install}{prompt}\n");
-    for step in STEPS {
+    for step in steps {
         script.push_str(&format!("{}{prompt}\n", line(shell, step)));
     }
     script.push_str("exit\n");
     let mut child = Command::new(program)
         .args(args)
-        .current_dir(temp.path().join("plain"))
+        .current_dir(temp.join("plain"))
         .env_clear()
+        .envs(vars.iter().copied())
         .env("HOME", &home)
         .env("XDG_DATA_HOME", home.join("data"))
         .env("PATH", BASE_PATH)
@@ -200,8 +224,25 @@ fn journey(shell: &str) {
         .write_all(script.as_bytes())
         .unwrap();
     let output = child.wait_with_output().unwrap();
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    let stderr = String::from_utf8(output.stderr).unwrap();
+    Some((
+        String::from_utf8(output.stdout).unwrap(),
+        String::from_utf8(output.stderr).unwrap(),
+    ))
+}
+
+fn journey(shell: &str) {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("home");
+    let node = &["node"];
+    let a = repo(&temp.path().join("a"), true, Some(&home), node).unwrap();
+    let b = repo(&temp.path().join("b"), true, Some(&home), node).unwrap();
+    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
+    repo(&temp.path().join("a/vendor/c"), true, None, node);
+    repo(&temp.path().join("off"), false, Some(&home), node);
+    fs::create_dir(temp.path().join("plain")).unwrap();
+    let Some((stdout, stderr)) = session(shell, temp.path(), &[], STEPS) else {
+        return;
+    };
     let value = |key: &str| {
         stdout
             .lines()
@@ -245,4 +286,132 @@ fn fish_hook_activates_only_trusted_set_up_repositories() {
 #[test]
 fn powershell_hook_activates_only_trusted_set_up_repositories() {
     journey("pwsh");
+}
+
+// The user's own values; the rest start unset.
+const USER_VARS: &[(&str, &str)] = &[
+    ("GOROOT", "/mine/go"),
+    ("RUSTUP_TOOLCHAIN", "stable"),
+    ("UV_PYTHON", "3.11"),
+];
+
+const RUNTIME_STEPS: &[Step] = &[
+    Step::Vars("start"),
+    Step::Cd("../r"),
+    Step::Vars("r"),
+    Step::Set("GOTOOLCHAIN", "go1.99"),
+    // Each lock change re-evaluates the repository.
+    Step::TouchLock,
+    Step::Vars("stale"),
+    Step::TouchLock,
+    Step::Vars("again"),
+    Step::Cd("../s"),
+    Step::Vars("s"),
+    Step::RemoveTools,
+    Step::Vars("removed"),
+    Step::Cd("../plain"),
+    Step::Vars("end"),
+];
+
+/// What `Step::Vars(key)` printed, with whether the hook's variable state was
+/// set.
+fn printed(stdout: &str, key: &str) -> (BTreeMap<String, String>, bool) {
+    let marker = format!("@{key}");
+    let mut lines = stdout.lines().skip_while(|line| *line != marker);
+    assert!(lines.next().is_some(), "{key} missing\n{stdout}");
+    let mut vars: BTreeMap<_, _> = lines
+        .take_while(|line| !line.starts_with('@'))
+        .filter_map(|line| line.split_once('='))
+        .filter(|(name, _)| {
+            ["PATH", "__TURBO_HOOK_ENV"].contains(name)
+                || turborepo_setup::activation::HOOK_ENV.contains(name)
+        })
+        .map(|(name, value)| (name.to_owned(), value.to_owned()))
+        .collect();
+    let saved = vars.remove("__TURBO_HOOK_ENV").is_some();
+    (vars, saved)
+}
+
+fn runtime_journey(shell: &str) {
+    let temp = tempfile::tempdir().unwrap();
+    let home = temp.path().join("home");
+    let all = &["go", "node", "python", "rust", "uv"];
+    let r = repo(&temp.path().join("r"), true, Some(&home), all).unwrap();
+    let s = repo(&temp.path().join("s"), true, Some(&home), &["go"]).unwrap();
+    fs::create_dir(temp.path().join("plain")).unwrap();
+    let Some((stdout, stderr)) = session(shell, temp.path(), USER_VARS, RUNTIME_STEPS) else {
+        return;
+    };
+    let vars = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
+        let pairs = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()));
+        pairs.collect()
+    };
+    let (start, saved) = printed(&stdout, "start");
+    assert!(!saved);
+    let path = start["PATH"].clone();
+    let mut user = vars(USER_VARS);
+    user.insert("PATH".into(), path.clone());
+    assert_eq!(start, user, "{stderr}");
+
+    // Exactly what managed run sets for these tools, over the user's values.
+    let tree =
+        |bin: &str, id: &str| format!("{}/tools/{id}", Path::new(bin).parent().unwrap().display());
+    let root = temp.path().join("r").canonicalize().unwrap();
+    let cargo_home = format!("{}/.turbo/cargo-home", root.display());
+    let managed = vars(&[
+        ("PATH", &format!("{r}:{path}")),
+        ("CARGO_HOME", &cargo_home),
+        ("GOROOT", &tree(&r, "go")),
+        ("GOTOOLCHAIN", "local"),
+        ("RUSTUP_HOME", &tree(&r, "rust")),
+        ("RUSTUP_TOOLCHAIN", "1.90.0-x86_64-unknown-linux-gnu"),
+        ("UV_PYTHON", "cpython-3.12.12-linux-x86_64-gnu"),
+        ("UV_PYTHON_DOWNLOADS", "never"),
+        ("UV_PYTHON_INSTALL_DIR", &tree(&r, "python")),
+        ("UV_PYTHON_PREFERENCE", "only-managed"),
+    ]);
+    assert_eq!(printed(&stdout, "r"), (managed.clone(), true), "{stderr}");
+    // Stale tools keep their variables. The user's own GOTOOLCHAIN, set
+    // inside, survives every later evaluation of this repository.
+    let mut edited = managed;
+    edited.insert("GOTOOLCHAIN".into(), "go1.99".into());
+    assert_eq!(printed(&stdout, "stale"), (edited.clone(), true));
+    assert_eq!(printed(&stdout, "again"), (edited, true));
+
+    // Straight to another repository: r's variables are restored first.
+    let mut only_go = user.clone();
+    only_go.insert("PATH".into(), format!("{s}:{path}"));
+    only_go.insert("GOROOT".into(), tree(&s, "go"));
+    only_go.insert("GOTOOLCHAIN".into(), "local".into());
+    assert_eq!(printed(&stdout, "s"), (only_go, true), "{stderr}");
+    // Leaving every managed variable restores the shell exactly, keeping the
+    // value the user set inside.
+    user.insert("GOTOOLCHAIN".into(), "go1.99".into());
+    assert_eq!(printed(&stdout, "removed"), (user.clone(), false));
+    assert_eq!(printed(&stdout, "end"), (user, false));
+    assert_eq!(stderr.matches("turbo:").count(), 2, "{stderr}");
+    assert_eq!(stderr.matches("turbo.lock changed").count(), 1, "{stderr}");
+    assert_eq!(stderr.matches("not installed").count(), 1, "{stderr}");
+}
+
+#[test]
+fn bash_hook_sets_and_restores_runtime_variables() {
+    runtime_journey("bash");
+}
+
+#[test]
+fn zsh_hook_sets_and_restores_runtime_variables() {
+    runtime_journey("zsh");
+}
+
+#[test]
+fn fish_hook_sets_and_restores_runtime_variables() {
+    runtime_journey("fish");
+}
+
+#[test]
+fn powershell_hook_sets_and_restores_runtime_variables() {
+    runtime_journey("pwsh");
 }

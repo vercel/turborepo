@@ -183,18 +183,25 @@ fn name(shell: HookShell) -> &'static str {
     }
 }
 
+/// One variable the hook manages: the value it set and the one it replaced.
+/// `set` is None once the user changed the variable inside the repository.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct Saved {
-    set: String,
+    set: Option<String>,
     previous: Option<String>,
 }
 
 /// Apply `recorded` over what this hook set before (`saved`), given the
-/// shell's current values. A variable the user changed since is theirs: it is
-/// neither restored nor set again.
+/// shell's current values. Entering saves each value the hook replaces, set
+/// or unset, and leaving restores it while the variable still holds the
+/// hook's value. A variable the user changed inside the repository is theirs
+/// until the shell leaves it: never restored or set again, as with PATH
+/// entries. Moving straight to another repository (`!same_root`) is leaving,
+/// then entering.
 fn env_changes(
     saved: Option<&str>,
     recorded: &BTreeMap<String, String>,
+    same_root: bool,
     current: &dyn Fn(&str) -> Option<String>,
 ) -> (EnvChanges, Option<Option<String>>) {
     // Only variables the hook can set are restored, so a tampered state cannot
@@ -212,9 +219,16 @@ fn env_changes(
     for name in names {
         let now = current(name);
         let underlying = match saved.get(name) {
-            Some(old) if now.as_deref() != Some(old.set.as_str()) => continue,
-            Some(old) => old.previous.clone(),
-            None => now.clone(),
+            Some(old) if old.set.is_some() && old.set == now => old.previous.clone(),
+            Some(_) if same_root => {
+                let released = Saved {
+                    set: None,
+                    previous: None,
+                };
+                next.insert(name.clone(), released);
+                continue;
+            }
+            _ => now.clone(),
         };
         let target = match recorded.get(name) {
             Some(value) => {
@@ -222,7 +236,7 @@ fn env_changes(
                 next.insert(
                     name.clone(),
                     Saved {
-                        set: value.clone(),
+                        set: Some(value.clone()),
                         previous,
                     },
                 );
@@ -343,7 +357,8 @@ fn changes_with(
             state: Some(None),
             ..Default::default()
         });
-        (left.env, left.env_state) = env_changes(saved.as_deref(), &BTreeMap::new(), current);
+        (left.env, left.env_state) =
+            env_changes(saved.as_deref(), &BTreeMap::new(), false, current);
         return left;
     };
     let id = digest(root.as_os_str().as_encoded_bytes());
@@ -450,7 +465,8 @@ fn changes_with(
         status,
         bin,
     };
-    let (env, env_state) = env_changes(saved.as_deref(), &recorded_env, current);
+    let stayed = previous.is_some_and(|previous| previous.root == state.root);
+    let (env, env_state) = env_changes(saved.as_deref(), &recorded_env, stayed, current);
     Changes {
         path,
         state: Some(Some(state.encode())),
@@ -906,24 +922,29 @@ mod tests {
     #[test]
     fn variables_are_set_then_restored_exactly_and_user_edits_win() {
         use std::{cell::RefCell, collections::HashMap};
-        let owned = |pairs: &[(&str, &str)]| -> Vec<(String, String)> {
+        let vars = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
             pairs
                 .iter()
                 .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
                 .collect()
         };
-        let before: HashMap<_, _> = owned(&[("CARGO_HOME", r"C:\Users\me\.cargo")])
+        // Set, set but empty, and unset before entering.
+        let before: HashMap<_, _> = vars(&[("CARGO_HOME", "/me/.cargo"), ("GOROOT", "")])
             .into_iter()
             .collect();
         let shell = RefCell::new(before.clone());
-        let recorded: BTreeMap<_, _> =
-            owned(&[("CARGO_HOME", r"C:\repo\cargo"), ("RUSTUP_HOME", r"C:\r")])
-                .into_iter()
-                .collect();
-        // Apply one round of changes to the shell, as `eval` would.
-        let step = |recorded: &BTreeMap<String, String>| {
+        let a = vars(&[
+            ("CARGO_HOME", "/a/cargo"),
+            ("GOROOT", "/a/go"),
+            ("RUSTUP_HOME", "/a/rust"),
+        ]);
+        let b = vars(&[("GOROOT", "/b/go"), ("RUSTUP_HOME", "/b/rust")]);
+        let none = BTreeMap::new();
+        // Apply one prompt's changes to the shell, as `eval` would.
+        let step = |recorded: &BTreeMap<String, String>, stayed: bool| {
             let current = |name: &str| shell.borrow().get(name).cloned();
-            let (env, state) = env_changes(current(ENV_STATE).as_deref(), recorded, &current);
+            let saved = current(ENV_STATE);
+            let (env, state) = env_changes(saved.as_deref(), recorded, stayed, &current);
             let mut shell = shell.borrow_mut();
             let state = state.map(|state| (ENV_STATE.to_owned(), state));
             for (name, value) in env.iter().cloned().chain(state) {
@@ -934,61 +955,113 @@ mod tests {
             }
             env
         };
-        assert_eq!(step(&recorded).len(), 2);
-        assert_eq!(shell.borrow()["CARGO_HOME"], r"C:\repo\cargo");
+        let get = |name: &str| shell.borrow().get(name).cloned();
+        assert_eq!(step(&a, false).len(), 3);
+        assert_eq!(get("GOROOT").as_deref(), Some("/a/go"));
         // Unchanged values need no output.
-        assert!(step(&recorded).is_empty());
-        // Leaving restores the previous value and removes what was unset.
-        step(&BTreeMap::new());
+        assert!(step(&a, true).is_empty());
+        // Leaving restores each previous value and removes what was unset.
+        step(&none, false);
         assert_eq!(*shell.borrow(), before);
-        // A variable the user changed inside stays theirs on leaving.
-        step(&recorded);
+        // A variable the user changes inside stays theirs: no later prompt in
+        // the same repository sets it again.
+        step(&a, false);
         shell
             .borrow_mut()
-            .insert("RUSTUP_HOME".into(), r"D:\mine".into());
-        step(&BTreeMap::new());
-        assert_eq!(shell.borrow()["RUSTUP_HOME"], r"D:\mine");
-        assert_eq!(shell.borrow()["CARGO_HOME"], r"C:\Users\me\.cargo");
+            .insert("RUSTUP_HOME".into(), "/mine".into());
+        for _ in 0..2 {
+            assert!(step(&a, true).is_empty());
+        }
+        assert_eq!(get("RUSTUP_HOME").as_deref(), Some("/mine"));
+        // Moving straight to another repository is leaving, then entering.
+        step(&b, false);
+        assert_eq!(get("CARGO_HOME").as_deref(), Some("/me/.cargo"));
+        assert_eq!(get("GOROOT").as_deref(), Some("/b/go"));
+        assert_eq!(get("RUSTUP_HOME").as_deref(), Some("/b/rust"));
+        // Leaving that one restores the user's own value too.
+        step(&none, false);
         assert!(!shell.borrow().contains_key(ENV_STATE));
+        assert_eq!(shell.borrow_mut().remove("RUSTUP_HOME").unwrap(), "/mine");
+        assert_eq!(*shell.borrow(), before);
         // Without recorded or saved variables there is nothing to do.
         let none = |_: &str| None;
-        assert_eq!(env_changes(None, &BTreeMap::new(), &none), (vec![], None));
+        assert_eq!(
+            env_changes(None, &BTreeMap::new(), true, &none),
+            (vec![], None)
+        );
         // A state naming any variable the hook never sets is ignored whole.
         let tampered =
             r#"{"PATH":{"set":"x","previous":null},"GOROOT":{"set":"y","previous":null}}"#;
         let both = |name: &str| (name == "PATH" || name == "GOROOT").then(|| "x".to_owned());
         assert_eq!(
-            env_changes(Some(tampered), &BTreeMap::new(), &both),
+            env_changes(Some(tampered), &BTreeMap::new(), false, &both),
             (vec![], None)
         );
     }
 
     #[test]
-    fn only_windows_go_and_rust_activations_export_runtime_variables() {
-        use turborepo_setup::activation::{HOOK_ENV, hook_env};
-        let tool = |id: &str| turborepo_tool_install::Tool {
+    fn runtime_variables_cover_rust_go_and_uv_on_every_platform() {
+        use turborepo_setup::activation::{HOOK_ENV, runtime_env};
+        let windows = cfg!(windows);
+        let platform = if windows {
+            "windows-x64"
+        } else {
+            "linux-x64-gnu"
+        };
+        let tool = |id: &str, version: &str| turborepo_tool_install::Tool {
             id: id.into(),
-            version: "1.90.0".into(),
-            platform: "windows-x64".into(),
+            version: version.into(),
+            platform: platform.into(),
             artifact_sha256: "a".repeat(64),
             executables: BTreeMap::new(),
         };
-        let root = Path::new(r"C:\repo");
-        let bin = root.join(r".turbo\tools\generation-a\bin");
-        assert!(hook_env(root, &bin, &[tool("node"), tool("pnpm")]).is_empty());
-        let env = hook_env(root, &bin, &[tool("node"), tool("go"), tool("rust")]);
-        if !cfg!(windows) {
-            assert!(env.is_empty());
-            return;
-        }
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let generation = root.join(".turbo").join("tools").join("generation-a");
+        let bin = generation.join("bin");
+        let tools = [
+            tool("go", "1.23.0"),
+            tool("node", "24.0.0"),
+            tool("python", "3.12.12"),
+            tool("rust", "1.90.0"),
+            tool("uv", "0.9.0"),
+        ];
+        assert!(runtime_env(root, &bin, &tools[1..2]).unwrap().is_empty());
+        let env = runtime_env(root, &bin, &tools).unwrap();
         let names: Vec<_> = env.keys().map(String::as_str).collect();
-        assert_eq!(names, HOOK_ENV);
-        let tools = root.join(r".turbo\tools\generation-a\tools");
-        assert_eq!(env["GOROOT"], tools.join("go").into_os_string());
+        let expected: Vec<_> = (HOOK_ENV.into_iter())
+            .filter(|name| windows || *name != "RUSTUP_AUTO_INSTALL")
+            .collect();
+        assert_eq!(names, expected);
+        let tree = |id: &str| generation.join("tools").join(id).into_os_string();
+        let (host, key) = if windows {
+            (
+                "x86_64-pc-windows-msvc",
+                "cpython-3.12.12-windows-x86_64-none",
+            )
+        } else {
+            (
+                "x86_64-unknown-linux-gnu",
+                "cpython-3.12.12-linux-x86_64-gnu",
+            )
+        };
+        let cargo_home = root.join(".turbo").join("cargo-home");
+        assert_eq!(env["CARGO_HOME"], cargo_home.clone().into_os_string());
+        assert_eq!(env["GOROOT"], tree("go"));
         assert_eq!(env["GOTOOLCHAIN"], "local");
-        assert_eq!(env["RUSTUP_HOME"], tools.join("rust").into_os_string());
-        assert_eq!(env["RUSTUP_TOOLCHAIN"], "1.90.0-x86_64-pc-windows-msvc");
-        assert_eq!(env["RUSTUP_AUTO_INSTALL"], "0");
+        assert_eq!(env["RUSTUP_HOME"], tree("rust"));
+        assert_eq!(env["RUSTUP_TOOLCHAIN"], format!("1.90.0-{host}").as_str());
+        assert_eq!(env["UV_PYTHON"], key);
+        assert_eq!(env["UV_PYTHON_DOWNLOADS"], "never");
+        assert_eq!(env["UV_PYTHON_INSTALL_DIR"], tree("python"));
+        assert_eq!(env["UV_PYTHON_PREFERENCE"], "only-managed");
+        // uv without Python requests no interpreter.
+        let uv = runtime_env(root, &bin, &tools[4..]).unwrap();
+        assert!(uv.contains_key("UV_PYTHON_INSTALL_DIR") && !uv.contains_key("UV_PYTHON"));
+        // Like managed run, never a Cargo home that is not a plain directory.
+        fs::create_dir_all(root.join(".turbo")).unwrap();
+        fs::write(&cargo_home, "").unwrap();
+        assert!(runtime_env(root, &bin, &tools).is_err());
     }
 
     #[test]
