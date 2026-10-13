@@ -512,6 +512,9 @@ fn render(shell: HookShell, changes: &Changes) -> String {
 }
 
 fn quote(shell: HookShell, value: &str) -> String {
+    if shell == HookShell::PowerShell {
+        return powershell(value);
+    }
     let mut quoted = String::from("'");
     for c in value.chars() {
         match (shell, c) {
@@ -520,16 +523,47 @@ fn quote(shell: HookShell, value: &str) -> String {
                 quoted.push('\\');
                 quoted.push(c);
             }
-            // PowerShell also closes single quotes with typographic quotes.
-            (HookShell::PowerShell, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') => {
-                quoted.push(c);
-                quoted.push(c);
-            }
             _ => quoted.push(c),
         }
     }
     quoted.push('\'');
     quoted
+}
+
+/// PowerShell decodes a native command's output with
+/// `[Console]::OutputEncoding`, an OEM code page on most Windows consoles, so
+/// UTF-8 paths would come back corrupted. Print only printable ASCII: every
+/// other character becomes `[char]` UTF-16 units appended to single-quoted
+/// literals, which Windows PowerShell 5.1 and PowerShell 7 both evaluate. That
+/// also keeps the typographic quotes PowerShell treats as delimiters out of the
+/// literals.
+fn powershell(value: &str) -> String {
+    let mut parts = Vec::new();
+    let mut literal = String::from("'");
+    for c in value.chars() {
+        match c {
+            '\'' => literal.push_str("''"),
+            ' '..='~' => literal.push(c),
+            _ => {
+                // The first operand stays a string, so `+` concatenates.
+                if literal.len() > 1 || parts.is_empty() {
+                    parts.push(std::mem::take(&mut literal) + "'");
+                }
+                literal = String::from("'");
+                let mut units = [0; 2];
+                for unit in c.encode_utf16(&mut units) {
+                    parts.push(format!("[char]0x{unit:04X}"));
+                }
+            }
+        }
+    }
+    if parts.is_empty() {
+        return literal + "'";
+    }
+    if literal.len() > 1 {
+        parts.push(literal + "'");
+    }
+    format!("({})", parts.join(" + "))
 }
 
 #[cfg(test)]
@@ -621,10 +655,23 @@ mod tests {
             "$env:PATH = '/it''s\\here'\nRemove-Item -LiteralPath Env:__TURBO_HOOK_STATE \
              -ErrorAction SilentlyContinue\n"
         );
+        // Console code pages cannot corrupt PowerShell output: it is ASCII,
+        // and typographic quotes never appear inside a literal.
         assert_eq!(
             quote(HookShell::PowerShell, "a\u{2019}b"),
-            "'a\u{2019}\u{2019}b'"
+            "('a' + [char]0x2019 + 'b')"
         );
+        assert_eq!(
+            quote(HookShell::PowerShell, "\u{fc}\u{1F600}\t'"),
+            "('' + [char]0x00FC + [char]0xD83D + [char]0xDE00 + [char]0x0009 + '''')"
+        );
+        assert_eq!(quote(HookShell::PowerShell, ""), "''");
+        let unicode = Changes {
+            path: Some("C:\\J\u{fc}rgen\\bin;C:\\Windows".into()),
+            state: Some(Some("1;a;b;active;C:\\J\u{fc}rgen\\bin".into())),
+            notice: None,
+        };
+        assert!(render(HookShell::PowerShell, &unicode).is_ascii());
         let state = Changes {
             state: Some(Some("1;x".into())),
             ..Default::default()
