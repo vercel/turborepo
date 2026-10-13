@@ -315,7 +315,7 @@ pub fn list(uv: &Path) -> Result<Listing, Error> {
         .env("UV_PYTHON_INSTALL_DIR", scratch.path().join("python"))
         .stdin(Stdio::null())
         .stderr(Stdio::null());
-    // Windows processes need SYSTEMROOT, for example to start Winsock.
+    // Windows keeps SYSTEMROOT, which system components such as Winsock need.
     if cfg!(windows)
         && let Some(root) = std::env::var_os("SYSTEMROOT")
     {

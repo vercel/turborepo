@@ -291,8 +291,9 @@ fn compile_command(installation: &Path, interpreter: &str, stdlib: &str) -> Comm
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    // Windows processes need SYSTEMROOT: without it Winsock cannot start,
-    // and compileall's worker processes import `socket`.
+    // Windows keeps only SYSTEMROOT. It carries no user configuration, and
+    // system components fail without it: creating a socket raises
+    // WinError 10106.
     if cfg!(windows)
         && let Some(root) = std::env::var_os("SYSTEMROOT")
     {
