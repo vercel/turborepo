@@ -276,7 +276,10 @@ impl RustupPlan {
                 .reusable_tree(&self.tool, desired)?
                 .ok_or(Error::InventoryMismatch)?,
         };
-        Ok(tree.join(&self.tool.executables["rustup"]))
+        // Split components: Windows images must not carry a lock path's `/`
+        // (a `cmd.exe` image there cannot even run its own commands).
+        let path = self.tool.executables["rustup"].split('/');
+        Ok(path.fold(tree, |tree, part| tree.join(part)))
     }
 }
 

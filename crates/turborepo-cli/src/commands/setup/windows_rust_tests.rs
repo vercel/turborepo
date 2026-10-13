@@ -264,6 +264,8 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     let path = std::ffi::OsStr::new(&env["PATH"]);
     assert_eq!(exit_code(path, "cargo /d /c exit 7"), Some(7));
     assert_eq!(exit_code(path, "rustc /d /c exit 8"), Some(8));
+    // The published verified rustup.exe runs too.
+    assert_eq!(exit_code(path, "rustup /d /c exit 5"), Some(5));
 
     // Repeats and checks reuse everything without traffic or a rustup run.
     let manifest = repo.manifest();
