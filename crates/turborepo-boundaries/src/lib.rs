@@ -421,7 +421,12 @@ fn parse_with_comments(
 ) -> Option<(Vec<turbo_trace::ImportResult>, Vec<Comment>)> {
     let _span = debug_span!("parse_file", path = %file_path).entered();
     let allocator = oxc_allocator::Allocator::default();
-    let source_type = oxc_span::SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    let mut source_type =
+        oxc_span::SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    // JSX is also valid in JavaScript files without a .jsx extension.
+    if source_type.is_javascript() {
+        source_type = source_type.with_jsx(true);
+    }
     let ret = oxc_parser::Parser::new(&allocator, source, source_type).parse();
     if ret.panicked {
         return None;
@@ -878,6 +883,97 @@ impl BoundariesChecker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test_case::test_case("js" ; "javascript")]
+    #[test_case::test_case("jsx" ; "jsx")]
+    #[test_case::test_case("mjs" ; "javascript module")]
+    #[test_case::test_case("cjs" ; "commonjs")]
+    #[test_case::test_case("tsx" ; "typescript jsx")]
+    fn parses_jsx_imports_and_comments(extension: &str) {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPath::new(tmp.path().to_str().unwrap())
+            .unwrap()
+            .join_component(&format!("greeting.{extension}"));
+        let source = if extension == "cjs" {
+            "// @boundaries-ignore example\nconst { helper } = \
+             require('./helper.js');\nexports.Greeting = () => <div>{helper()}</div>;"
+        } else {
+            "// @boundaries-ignore example\nimport { helper } from './helper.js';\nexport const \
+             Greeting = () => <div>{helper()}</div>;"
+        };
+
+        let (imports, comments) = parse_with_comments(&path, source).unwrap();
+
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].specifier, "./helper.js");
+        assert_eq!(
+            BoundariesChecker::get_ignored_comment(&comments, source, imports[0].statement_span)
+                .as_deref(),
+            Some(" example")
+        );
+    }
+
+    #[test_case::test_case("./helper.js", false ; "local import")]
+    #[test_case::test_case("undeclared-dependency", true ; "undeclared dependency")]
+    fn check_boundaries_in_jsx_javascript(import: &str, expect_violation: bool) {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let package_name = PackageName::Other("app".into());
+        let package_directory = repo_root.join_components(&["packages", "app"]);
+        package_directory.create_dir_all().unwrap();
+        package_directory
+            .join_component("greeting.js")
+            .create_with_contents(format!(
+                "import {{ helper }} from '{import}';\nexport const Greeting = () => \
+                 <div>{{helper()}}</div>;"
+            ))
+            .unwrap();
+        package_directory
+            .join_component("helper.js")
+            .create_with_contents("export const helper = () => 'hi';")
+            .unwrap();
+
+        let graph = MockGraph::new(vec![package_name.clone()]);
+        let filtered = HashSet::from([package_name]);
+        let result = BoundariesChecker::check_boundaries(
+            &BoundariesContext {
+                repo_root,
+                pkg_dep_graph: &graph,
+                turbo_json_provider: &MockTurboJson,
+                root_boundaries_config: None,
+                filtered_pkgs: &filtered,
+            },
+            false,
+        )
+        .unwrap();
+
+        assert_eq!(result.files_checked, 2);
+        assert!(result.warnings.is_empty());
+        if expect_violation {
+            assert!(matches!(
+                result.diagnostics.as_slice(),
+                [BoundariesDiagnostic::PackageNotFound { name, .. }] if name == import
+            ));
+        } else {
+            assert!(result.diagnostics.is_empty());
+        }
+    }
+
+    #[test_case::test_case("ts" ; "typescript")]
+    #[test_case::test_case("mts" ; "typescript module")]
+    #[test_case::test_case("cts" ; "typescript commonjs")]
+    fn parses_typescript_angle_bracket_assertion(extension: &str) {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = AbsoluteSystemPath::new(tmp.path().to_str().unwrap())
+            .unwrap()
+            .join_component(&format!("index.{extension}"));
+        let source = "import { value } from './helper.js'; export const result = <number>value;";
+
+        let (imports, _) = parse_with_comments(&path, source).unwrap();
+
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].specifier, "./helper.js");
+    }
 
     #[test]
     fn finds_string_literal_dynamic_imports() {

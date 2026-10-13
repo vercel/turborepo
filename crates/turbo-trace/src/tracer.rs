@@ -151,7 +151,11 @@ pub fn parse_file(
     import_type: ImportTraceType,
     include_ast: bool,
 ) -> Result<(Vec<ImportResult>, Option<serde_json::Value>), String> {
-    let source_type = SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    let mut source_type = SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    // JSX is also valid in JavaScript files without a .jsx extension.
+    if source_type.is_javascript() {
+        source_type = source_type.with_jsx(true);
+    }
 
     let allocator = Allocator::default();
     let ret = Parser::new(&allocator, file_content, source_type).parse();
@@ -658,6 +662,49 @@ mod test {
     use test_case::test_case;
 
     use super::*;
+
+    #[test_case("js" ; "javascript")]
+    #[test_case("jsx" ; "jsx")]
+    #[test_case("mjs" ; "javascript module")]
+    #[test_case("cjs" ; "commonjs")]
+    #[test_case("tsx" ; "typescript jsx")]
+    #[tokio::test]
+    async fn trace_jsx_imports(extension: &str) {
+        let (_tmp, root) = canonical_tempdir();
+        let source = if extension == "cjs" {
+            "const { helper } = require('./helper.js');\nexports.Greeting = () => \
+             <div>{helper()}</div>;"
+        } else {
+            "import { helper } from './helper.js';\nexport const Greeting = () => \
+             <div>{helper()}</div>;"
+        };
+        let entry = write_source(&root, &format!("greeting.{extension}"), source);
+        let helper = write_source(&root, "helper.js", "export const helper = () => 'hi';");
+
+        let result = trace_root(&root, vec![entry]).trace(None).await;
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(result.files.len(), 2);
+        assert!(result.files.contains_key(absolute_path(&helper)));
+    }
+
+    #[test_case("ts" ; "typescript")]
+    #[test_case("mts" ; "typescript module")]
+    #[test_case("cts" ; "typescript commonjs")]
+    fn parse_typescript_angle_bracket_assertion(extension: &str) {
+        let (_tmp, root) = canonical_tempdir();
+        let file = root.join(format!("index.{extension}"));
+        let source = "import { value } from './helper.js'; export const result = <number>value;";
+        let (imports, ast) = parse_file(absolute_path(&file), source, ImportTraceType::All, true)
+            .unwrap_or_else(|error| panic!("failed to parse TypeScript: {error}"));
+
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].specifier, "./helper.js");
+        assert_eq!(
+            ast.unwrap()["body"][1]["declaration"]["declarations"][0]["init"]["type"],
+            "TSTypeAssertion"
+        );
+    }
 
     #[test]
     fn parallel_error_rendering_matches_serial_rendering() {
