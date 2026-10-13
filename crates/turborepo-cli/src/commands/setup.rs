@@ -441,6 +441,31 @@ fn run_with_policy(
     Ok(dependencies.install(root, ecosystems, trust_base)?)
 }
 
+/// Whether setup provisions for this host. On Windows only a confirmed x64
+/// machine qualifies: arm64 hosts, including x64 turbo under emulation, and
+/// unidentified hosts are refused.
+pub(crate) fn platform_supported() -> bool {
+    provision::platform().is_ok()
+}
+
+/// Records `root`'s current installation as trusted under `user_base`, or the
+/// real user state directory, exactly as setup publishes it, so binary tests
+/// can drive the shell hook. Returns the record's path. Fixture injection only.
+#[cfg(feature = "test-support")]
+pub fn record_trust_for_tests(
+    root: &std::path::Path,
+    user_base: Option<&std::path::Path>,
+) -> Result<std::path::PathBuf, String> {
+    let base = match user_base {
+        Some(base) => base.to_owned(),
+        None => dirs_next::data_local_dir().ok_or("cannot locate the user state directory")?,
+    };
+    let store = turborepo_tool_install::Store::open(root).map_err(|e| e.to_string())?;
+    let trust = trust::TrustStore::new(&base, root).map_err(|e| e.to_string())?;
+    trust.record(&store).map_err(|e| e.to_string())?;
+    Ok(trust.path())
+}
+
 /// `turbo setup --frozen --tools-only` against loopback fixture artifacts,
 /// publishing trust evidence under `user_base`, so binary tests can exercise
 /// real managed activation. Fixture injection only, like `run_with_policy`.
