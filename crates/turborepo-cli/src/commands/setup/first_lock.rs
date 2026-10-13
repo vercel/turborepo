@@ -300,6 +300,8 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     let initial = selected(&f);
     let manifest = f.manifest().unwrap();
     let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+    assert!(lock.starts_with(b"{\n  \"schemaVersion\": 0,\n  \"tools\": {\n    \"node\": {\n"));
+    assert!(lock.ends_with(b"\n  }\n}\n"));
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     assert_eq!(f.run(&empty, LOCAL).unwrap(), 0);
     assert_eq!(empty.hits(), 0); // Unchanged floating Node never refreshes.
@@ -376,7 +378,7 @@ fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
             0 => fs::remove_file(f.owned.root().join(".nvmrc")).unwrap(),
             1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.x"}"#).unwrap(),
             2 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.x"}"#).unwrap(),
-            3 => fs::write(f.owned.root().join(".npmrc"), "").unwrap(),
+            3 => fs::write(f.owned.root().join(".npmrc"), "registry=https://private.invalid").unwrap(),
             4 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
             5 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
             _ => {},
@@ -466,7 +468,12 @@ fn local_writer_wait_rechecks_policy_git_and_workspace() {
         std::thread::scope(|scope| {
             let pending = scope.spawn(|| f.run(&u, LOCAL));
             rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            fs::write(f.owned.root().join(name), "").unwrap();
+            let rejected = if name.ends_with(".npmrc") {
+                "registry=https://private.invalid"
+            } else {
+                ""
+            };
+            fs::write(f.owned.root().join(name), rejected).unwrap();
             drop(guard);
             assert!(pending.join().unwrap().is_err());
         });
@@ -557,7 +564,11 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
                         foreign["tools"]["node"]["version"] = json!("24.9.0");
                         fs::write(root.join("turbo.lock"), foreign.to_string()).unwrap();
                     }
-                    _ => fs::write(root.join("apps/web/.npmrc"), "").unwrap(),
+                    _ => fs::write(
+                        root.join("apps/web/.npmrc"),
+                        "registry=https://private.invalid",
+                    )
+                    .unwrap(),
                 }
             }
         })
