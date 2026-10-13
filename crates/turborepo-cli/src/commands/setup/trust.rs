@@ -65,6 +65,9 @@ pub(crate) struct Recorded {
     /// turbo.lock changed since setup recorded this installation, including a
     /// lock added after `turbo setup --no-lock`.
     pub(crate) stale: bool,
+    /// Each export's relative target. On Windows its extension is the export's
+    /// PATHEXT type (`.exe` or `.cmd`).
+    pub(crate) targets: Vec<String>,
 }
 
 fn unsafe_state() -> io::Error {
@@ -383,9 +386,13 @@ impl TrustStore {
             return Ok(None);
         }
         let lock = read(&self.root.join("turbo.lock"), false)?;
+        let targets = (record.installation.tools.iter())
+            .flat_map(|tool| tool.executables.values().cloned())
+            .collect();
         Ok(Some(Recorded {
             stale: !record.resolves(lock.as_deref()),
             bin: record.installation.bin,
+            targets,
         }))
     }
 
@@ -478,7 +485,7 @@ impl TrustStore {
         Ok(removed)
     }
 
-    fn record(&self, store: &Store) -> io::Result<()> {
+    pub(super) fn record(&self, store: &Store) -> io::Result<()> {
         self.load()?;
         let installation = self.installation(store)?.ok_or_else(unsafe_state)?;
         self.write_record(installation)

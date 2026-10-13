@@ -133,7 +133,56 @@ struct Changes {
     notice: Option<String>,
 }
 
+/// Why a recorded installation stays inactive.
+enum Reason {
+    /// Setup's own checks; `turbo setup` reports or repairs it.
+    Setup(String),
+    /// The shell's PATHEXT lacks these export types.
+    Pathext(String),
+}
+
+/// Host facts read once per prompt.
+struct Host {
+    /// Setup provisions here. Windows arm64 hosts never activate, even with a
+    /// record an older turbo left behind.
+    qualified: bool,
+    /// Windows shells find exports only through PATHEXT. None elsewhere.
+    pathext: Option<String>,
+}
+
+impl Host {
+    fn current() -> Self {
+        Self {
+            qualified: !cfg!(windows) || crate::commands::setup::platform_supported(),
+            pathext: cfg!(windows).then(|| std::env::var("PATHEXT").unwrap_or_default()),
+        }
+    }
+}
+
+fn name(shell: HookShell) -> &'static str {
+    match shell {
+        HookShell::Bash => "bash",
+        HookShell::Zsh => "zsh",
+        HookShell::Fish => "fish",
+        HookShell::PowerShell => "powershell",
+    }
+}
+
 pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
+    // These shells keep a POSIX PATH that this native binary would rewrite in
+    // Windows form, so on native Windows only PowerShell is supported.
+    if cfg!(windows) && shell != HookShell::PowerShell {
+        if export {
+            return 0;
+        }
+        let _ = writeln!(
+            std::io::stderr(),
+            "turbo: `turbo hook {}` is not supported on native Windows. Use `turbo hook \
+             powershell` in PowerShell, or `turbo exec -- <command>` in other shells.",
+            name(shell)
+        );
+        return 1;
+    }
     let output = if export {
         // Never rebuild a PATH this hook cannot represent exactly.
         let path = match std::env::var_os("PATH").map(|path| path.into_string()) {
@@ -144,7 +193,8 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
         let previous = std::env::var(STATE).ok().and_then(|s| State::parse(&s));
         let cwd = std::env::current_dir().ok();
         let base = dirs_next::data_local_dir();
-        let changes = changes(previous, &path, cwd.as_deref(), base.as_deref());
+        let host = Host::current();
+        let changes = changes(previous, &path, cwd.as_deref(), base.as_deref(), &host);
         if let Some(notice) = &changes.notice {
             let _ = writeln!(std::io::stderr(), "turbo: {notice}");
         }
@@ -180,6 +230,7 @@ fn changes(
     path: &str,
     cwd: Option<&Path>,
     base: Option<&Path>,
+    host: &Host,
 ) -> Changes {
     let Some(root) = cwd.and_then(find_root) else {
         // Outside every repository: remove only what the hook added.
@@ -206,38 +257,42 @@ fn changes(
     if let Ok(trust) = &trust {
         metadata(&mut stamp, &trust.path());
     }
+    if let Some(pathext) = &host.pathext {
+        stamp.extend(pathext.as_bytes());
+    }
     let same_root = previous.as_ref().filter(|previous| previous.root == id);
     if same_root.is_some_and(|same| same.stamp == finish(&stamp, same.bin.as_deref())) {
         return Changes::default();
     }
 
-    // Setup records trusted roots only on Unix so far, so `turbo setup` cannot
-    // help elsewhere: stay off rather than print a notice. Without turbo.lock
-    // only this user's `turbo setup --no-lock` record opts a clone in, so an
-    // unrecorded lockless clone stays off quietly too.
+    // Where setup refuses to provision (Windows arm64), `turbo setup` cannot
+    // help: stay off rather than print a notice. Without turbo.lock only this
+    // user's `turbo setup --no-lock` record opts a clone in, so an unrecorded
+    // lockless clone stays off quietly too.
     let locked = fs::symlink_metadata(root.join("turbo.lock")).is_ok();
-    let (status, bin, reason) = if !cfg!(unix) || !enabled(&root) {
+    let (status, bin, reason) = if !cfg!(any(unix, windows)) || !host.qualified || !enabled(&root) {
         (Status::Off, None, None)
     } else {
         match trust.and_then(|trust| trust.recorded().map_err(|e| e.to_string())) {
-            Ok(Some(recorded)) => match recorded.bin.into_os_string().into_string() {
-                Ok(bin) if !bin.contains(SEPARATOR) => {
-                    let status = if recorded.stale {
-                        Status::Stale
-                    } else {
-                        Status::Active
-                    };
-                    (status, Some(bin), None)
-                }
-                _ => (
+            Ok(Some(recorded)) => match path_entry(recorded.bin) {
+                None => (
                     Status::Missing,
                     None,
-                    Some("its path cannot be added to PATH".to_owned()),
+                    Some(Reason::Setup("its path cannot be added to PATH".to_owned())),
                 ),
+                Some(bin) => match host
+                    .pathext
+                    .as_deref()
+                    .and_then(|pathext| unresolvable(&recorded.targets, pathext))
+                {
+                    Some(types) => (Status::Missing, None, Some(Reason::Pathext(types))),
+                    None if recorded.stale => (Status::Stale, Some(bin), None),
+                    None => (Status::Active, Some(bin), None),
+                },
             },
             _ if !locked => (Status::Off, None, None),
             Ok(None) => (Status::Missing, None, None),
-            Err(reason) => (Status::Missing, None, Some(reason)),
+            Err(reason) => (Status::Missing, None, Some(Reason::Setup(reason))),
         }
     };
 
@@ -251,7 +306,7 @@ fn changes(
         .as_ref()
         .is_none_or(|p| p.root != id || p.status != status);
     let notice = entered_or_changed
-        .then(|| notice(status, reason.as_deref()))
+        .then(|| notice(status, reason.as_ref()))
         .flatten();
     let state = State {
         root: id,
@@ -266,7 +321,7 @@ fn changes(
     }
 }
 
-fn notice(status: Status, reason: Option<&str>) -> Option<String> {
+fn notice(status: Status, reason: Option<&Reason>) -> Option<String> {
     match (status, reason) {
         (Status::Stale, _) => Some(
             "turbo.lock changed since `turbo setup`; keeping the previously installed tools \
@@ -277,11 +332,53 @@ fn notice(status: Status, reason: Option<&str>) -> Option<String> {
             "this repository's managed tools are not installed. Run `turbo setup` to install them."
                 .to_owned(),
         ),
-        (Status::Missing, Some(reason)) => Some(format!(
+        (Status::Missing, Some(Reason::Setup(reason))) => Some(format!(
             "cannot activate this repository's managed tools ({reason}). Run `turbo setup`."
+        )),
+        (Status::Missing, Some(Reason::Pathext(types))) => Some(format!(
+            "this repository's managed tools need {types} in PATHEXT, so they are not active."
         )),
         (Status::Off | Status::Active, _) => None,
     }
+}
+
+/// The recorded bin as a PATH entry. Windows shells and `.cmd` forwarders
+/// need the ordinary spelling setup records, never a verbatim `\\?\` path.
+fn path_entry(bin: PathBuf) -> Option<String> {
+    use std::path::{Component, Prefix};
+    let verbatim = matches!(
+        bin.components().next(),
+        Some(Component::Prefix(prefix)) if matches!(
+            prefix.kind(),
+            Prefix::Verbatim(_) | Prefix::VerbatimUNC(..) | Prefix::VerbatimDisk(_)
+                | Prefix::DeviceNS(_)
+        )
+    );
+    let bin = bin.into_os_string().into_string().ok()?;
+    (!verbatim && !bin.contains(SEPARATOR)).then_some(bin)
+}
+
+/// The export types PATHEXT cannot resolve by bare name, if any. Windows
+/// exports are `.exe` hard links and `.cmd` forwarders. PowerShell, like
+/// cmd.exe, tries each PATHEXT entry in every PATH directory before the next,
+/// so a prepended bin wins once its types are listed. PowerShell splits on `;`
+/// without trimming and resolves nothing by bare name when PATHEXT is unset.
+fn unresolvable(targets: &[String], pathext: &str) -> Option<String> {
+    let listed: Vec<_> = pathext.split(';').filter(|e| !e.is_empty()).collect();
+    let mut missing: Vec<String> = Vec::new();
+    for target in targets {
+        let Some(extension) = Path::new(target).extension().and_then(|e| e.to_str()) else {
+            continue;
+        };
+        let extension = format!(".{}", extension.to_ascii_uppercase());
+        if !listed.iter().any(|e| e.eq_ignore_ascii_case(&extension))
+            && !missing.contains(&extension)
+        {
+            missing.push(extension);
+        }
+    }
+    missing.sort();
+    (!missing.is_empty()).then(|| missing.join(" and "))
 }
 
 /// The nearest `turbo.lock`, or the local inventory `turbo setup --no-lock`
@@ -334,7 +431,21 @@ fn metadata(stamp: &mut Vec<u8>, path: &Path) {
             stamp.extend(value.to_le_bytes());
         }
     }
-    #[cfg(not(unix))]
+    // NTFS file IDs need an open handle; times and size are enough for this
+    // cache key because setup writes a fresh file for every change.
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        for value in [
+            u64::from(metadata.file_attributes()),
+            metadata.creation_time(),
+            metadata.last_write_time(),
+            metadata.file_size(),
+        ] {
+            stamp.extend(value.to_le_bytes());
+        }
+    }
+    #[cfg(not(any(unix, windows)))]
     stamp.extend(format!("{:?}{:?}", metadata.len(), metadata.modified().ok()).as_bytes());
 }
 
@@ -429,6 +540,55 @@ mod tests {
     /// Writes test PATHs with `:` and converts them to the native separator.
     fn p(path: &str) -> String {
         path.replace(':', &SEPARATOR.to_string())
+    }
+
+    /// A qualified host without PATHEXT, like every Unix host.
+    fn changes(
+        previous: Option<State>,
+        path: &str,
+        cwd: Option<&Path>,
+        base: Option<&Path>,
+    ) -> Changes {
+        let host = Host {
+            qualified: true,
+            pathext: None,
+        };
+        super::changes(previous, path, cwd, base, &host)
+    }
+
+    #[test]
+    fn path_entries_use_the_plain_spelling() {
+        assert_eq!(path_entry("/repo/bin".into()).as_deref(), Some("/repo/bin"));
+        assert_eq!(path_entry(p("/a:/b").into()), None);
+        if cfg!(windows) {
+            assert_eq!(
+                path_entry(r"C:\repo\bin".into()).as_deref(),
+                Some(r"C:\repo\bin")
+            );
+            for verbatim in [
+                r"\\?\C:\repo\bin",
+                r"\\?\UNC\server\share\bin",
+                r"\\.\C:\bin",
+            ] {
+                assert_eq!(path_entry(verbatim.into()), None, "{verbatim}");
+            }
+        }
+    }
+
+    #[test]
+    fn pathext_must_list_every_export_type() {
+        let targets = ["node.exe", "npm.cmd", "launch/pnpm.cmd"].map(String::from);
+        for listed in [".COM;.EXE;.BAT;.CMD", ".exe;.cmd", ";.Cmd;;.EXE"] {
+            assert_eq!(unresolvable(&targets, listed), None, "{listed}");
+        }
+        assert_eq!(unresolvable(&targets, ".COM;.EXE").as_deref(), Some(".CMD"));
+        // PowerShell neither trims entries nor defaults an unset PATHEXT.
+        assert_eq!(
+            unresolvable(&targets, " .CMD; .EXE").as_deref(),
+            Some(".CMD and .EXE")
+        );
+        assert_eq!(unresolvable(&targets, "").as_deref(), Some(".CMD and .EXE"));
+        assert_eq!(unresolvable(&[], ""), None);
     }
 
     #[test]
@@ -600,6 +760,15 @@ mod tests {
         let active = changes(None, "/usr/bin", Some(&web), Some(&home));
         assert_eq!(active.path, Some(prepend("/usr/bin", bin)));
         assert!(active.notice.is_none());
+        // A host setup refuses, like Windows arm64, activates nothing, even with
+        // a record an older turbo left there.
+        let refused = Host {
+            qualified: false,
+            pathext: None,
+        };
+        let off = super::changes(None, "/usr/bin", Some(&web), Some(&home), &refused);
+        assert!(off.path.is_none() && off.notice.is_none());
+        assert!(off.state.unwrap().unwrap().contains(";off;"));
         // A lock added later is another resolution: tools stay, with a notice.
         fs::write(root.join("turbo.lock"), "{}").unwrap();
         let stale = changes(None, "/usr/bin", Some(&web), Some(&home));
