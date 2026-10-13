@@ -922,8 +922,11 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         assert!(text.contains(expected), "{expected}: {text}");
     }
     let lock = fs::read_to_string(root.join("turbo.lock")).unwrap();
-    assert!(
-        lock.contains(r#""installation":{"kind":"verify-system","executables":["node"]}"#),
+    // turbo.lock is indented JSON (#14738), so compare the parsed installation.
+    let parsed: serde_json::Value = serde_json::from_str(&lock).unwrap();
+    assert_eq!(
+        parsed["tools"]["node"]["installation"],
+        serde_json::json!({"kind": "verify-system", "executables": ["node"]}),
         "{lock}"
     );
     assert!(!root.join(".turbo/tools").exists());
@@ -1015,6 +1018,38 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             "{text}"
         );
     }
+}
+
+#[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    let layout = "auto-install-peers = true\nhoist-pattern[]=react\nresolution-mode=highest\n";
+    write(root, ".npmrc", layout);
+    let words = ["setup", "--check", "--tools-only"];
+    // The policy passed, so check reaches its lock requirement.
+    check_failure(
+        root,
+        &words,
+        false,
+        "managed activation requires turbo.lock",
+    );
+    write(
+        root,
+        ".npmrc",
+        &format!("{layout}registry=https://registry.npmjs.org/\n"),
+    );
+    check_failure(
+        root,
+        &words,
+        false,
+        "official-only setup rejects line 4 of the Repository .npmrc",
+    );
 }
 
 #[test]
@@ -1965,7 +2000,7 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
         root,
         &["setup", "--plan", "--tools-only"],
         true,
-        "official-only setup rejects Repository configuration",
+        "official-only setup rejects line 1 of the Repository .npmrc",
     );
     assert!(!root.join(".turbo").exists());
 }

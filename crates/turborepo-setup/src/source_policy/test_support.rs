@@ -213,17 +213,22 @@ mod tests {
             (root.join("turbo.json"), ConfigOwner::RootPolicy),
         ] {
             fs::create_dir_all(path.parent().ok_or("parent")?)?;
+            let project = matches!(owner, ConfigOwner::Repository | ConfigOwner::Ancestor);
             fs::write(
                 &path,
-                if owner == ConfigOwner::RootPolicy {
-                    "{\"setup\":{}}"
-                } else {
-                    ""
+                match owner {
+                    ConfigOwner::RootPolicy => "{\"setup\":{}}",
+                    _ if project => "registry=https://npm.example.test/",
+                    _ => "",
                 },
             )?;
             assert_eq!(
                 fixture.policy_at(&nested).err(),
-                Some(Error::Configured(owner))
+                Some(if project {
+                    Error::Setting(owner, 1)
+                } else {
+                    Error::Configured(owner)
+                })
             );
             fs::remove_file(path)?;
         }
