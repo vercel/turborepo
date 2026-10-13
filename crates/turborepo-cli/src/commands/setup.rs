@@ -1,5 +1,5 @@
-//! Native local/frozen/no-lock provisioning, read-only checks and tools-only plans.
-//! No execution.
+//! Native local/frozen/no-lock provisioning, read-only checks and tools-only
+//! plans. No execution.
 
 use miette::Diagnostic;
 use thiserror::Error;
