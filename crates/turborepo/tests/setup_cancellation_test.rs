@@ -74,10 +74,7 @@ fn fixture(root: &Path) {
     }}});
     fs::create_dir_all(root).unwrap();
     for (name, contents) in [
-        (
-            "turbo.json",
-            r#"{"futureFlags":{"experimentalSetup":true}}"#.to_owned(),
-        ),
+        ("turbo.json", "{}".to_owned()),
         (
             "package.json",
             r#"{"name":"fixture","private":true}"#.to_owned(),

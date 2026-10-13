@@ -122,7 +122,6 @@ fn query_needs_no_js_gate_or_valid_repository_files() {
     for config in [
         None,
         Some("{}"),
-        Some(r#"{"futureFlags":{"experimentalSetup":false}}"#),
         Some(r#"{"futureFlags":{"experimentalSetup":true}}"#),
         Some("invalid root configuration"),
     ] {

@@ -24,7 +24,8 @@ use common::process_launcher::{CapturedProcess, Entrypoint, ProcessLauncher};
 use portable_pty::{CommandBuilder, PtySize, native_pty_system};
 
 const TIMEOUT: Duration = Duration::from_secs(30);
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
 
 #[derive(Clone, Copy, Debug)]
 enum Launch {

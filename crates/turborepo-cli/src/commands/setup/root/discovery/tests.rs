@@ -5,7 +5,8 @@ use std::{ffi::OsString, fs};
 use super::*;
 use crate::{cli::Command, commands::setup};
 
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
 
 // Pure parser/discovery fixtures work on every platform. They do not provision
 // artifacts or imply host support. The locked CLI owns supported-host success
@@ -65,7 +66,6 @@ fn real_parser_captures_relative_and_absolute_invocation_once() {
         assert_eq!(d.cwd, f.nested);
         assert_eq!(d.root_path(), &*f.root);
         assert_eq!(d.snapshot_root().unwrap(), &*f.root);
-        assert!(d.flags().experimental_setup);
         assert!(d.source_eligibility().node());
         assert!(!d.source_eligibility().cargo());
         assert!(!d.source_eligibility().python());
@@ -110,7 +110,6 @@ fn unsupported_custom_config_is_read_but_cannot_be_guarded() {
         .create_with_contents(ENABLED)
         .unwrap();
     let d = f.capture("apps/web", Some("custom.json"));
-    assert!(d.flags().experimental_setup);
     assert!(matches!(d.snapshot_root(), Err(Error::UnsupportedConfig)));
     assert!(matches!(d.revalidate(), Err(Error::UnsupportedConfig)));
     assert_eq!(format!("{d:?}"), "Discovery { .. }");
@@ -125,7 +124,6 @@ fn unsupported_custom_config_is_read_but_cannot_be_guarded() {
 #[test]
 fn same_root_flag_and_eligibility_drift_is_not_a_root_only_check() {
     for flag in [
-        "experimentalSetup",
         "experimentalCargoWorkspaces",
         "experimentalPythonWorkspaces",
         "experimentalGoWorkspaces",
@@ -133,11 +131,7 @@ fn same_root_flag_and_eligibility_drift_is_not_a_root_only_check() {
     ] {
         let f = Fixture::new();
         let d = f.discovery();
-        let changed = if flag == "experimentalSetup" {
-            r#"{"futureFlags":{"experimentalSetup":false}}"#.to_owned()
-        } else {
-            format!(r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":true}}}}"#)
-        };
+        let changed = format!(r#"{{"futureFlags":{{"{flag}":true}}}}"#);
         f.root
             .join_component("turbo.json")
             .create_with_contents(&changed)
@@ -145,13 +139,7 @@ fn same_root_flag_and_eligibility_drift_is_not_a_root_only_check() {
         assert!(!d.revalidate().unwrap(), "{flag}");
         assert_eq!(infer(&f.nested, true, None).unwrap().path, f.root);
         // Expected state is immutable: don't adopt flags from the second read.
-        assert_eq!(
-            d.flags(),
-            FutureFlags {
-                experimental_setup: true,
-                ..Default::default()
-            }
-        );
+        assert_eq!(d.flags(), FutureFlags::default());
         assert!(!d.source_eligibility().cargo());
     }
 }
@@ -186,9 +174,7 @@ fn non_js_markers_and_version_files_are_ignored_until_their_flag_is_on() {
         assert!(d.revalidate().unwrap(), "inactive {marker}");
         f.root
             .join_component("turbo.json")
-            .create_with_contents(format!(
-                r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":true}}}}"#
-            ))
+            .create_with_contents(format!(r#"{{"futureFlags":{{"{flag}":true}}}}"#))
             .unwrap();
         assert!(
             matches!(d.revalidate(), Err(Error::Nested { .. })),

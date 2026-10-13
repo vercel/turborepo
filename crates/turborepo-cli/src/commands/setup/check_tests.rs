@@ -202,12 +202,8 @@ fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         match case {
-            0 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            1 => fs::write(
-                f.owned.root().join("turbo.json"),
-                r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
-            )
-            .unwrap(),
+            0 => fs::remove_file(f.owned.root().join("turbo.json")).unwrap(),
+            1 => fs::write(f.owned.root().join("turbo.json"), r#"{"setup":{"go":{}}}"#).unwrap(),
             2 => fs::write(
                 f.owned.root().join("apps/web/.npmrc"),
                 "registry=https://private.invalid",
@@ -219,7 +215,11 @@ fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
                 f.save();
             }
             5 => {
-                fs::write(f.owned.root().join("turbo.json"), r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#).unwrap();
+                fs::write(
+                    f.owned.root().join("turbo.json"),
+                    r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#,
+                )
+                .unwrap();
                 fs::write(f.owned.root().join("Cargo.toml"), "not probed").unwrap();
             }
             _ => {
@@ -267,7 +267,7 @@ fn check_revalidates_captured_discovery_sources_and_policy_before_success() {
                 calls.set(calls.get() + 1);
                 if calls.get() == 2 {
                     let (path, contents) = match case {
-                        0 => (f.owned.root().join("turbo.json"), "{}".into()),
+                        0 => (f.owned.root().join("turbo.json"), r#"{"tasks":{}}"#.into()),
                         1 => (f.owned.root().join("turbo.lock"), format!("{} ", f.lock)),
                         2 => (f.owned.root().join(".nvmrc"), "26.0.0".into()),
                         3 => (f.owned.root().join("apps/web/turbo.json"), ENABLED.into()),
@@ -280,10 +280,7 @@ fn check_revalidates_captured_discovery_sources_and_policy_before_success() {
                             "gitdir: /not-probed".into(),
                         ),
                         6 => (f.owned.home().join(".npmrc"), "".into()),
-                        7 => (
-                            f.owned.root().join("turbo.json"),
-                            r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#.into(),
-                        ),
+                        7 => (f.owned.root().join("turbo.json"), r#"{"setup":{}}"#.into()),
                         _ => (f.owned.root().join("package.json"), "{}".into()),
                     };
                     fs::write(path, contents).unwrap();

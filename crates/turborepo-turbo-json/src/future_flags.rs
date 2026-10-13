@@ -18,6 +18,7 @@
 //! Note: Future flags are only allowed in the root `turbo.json` and will cause
 //! an error if specified in workspace packages.
 
+use biome_deserialize::{DeserializableValue, DeserializationDiagnostic};
 use biome_deserialize_macros::Deserializable;
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -145,10 +146,32 @@ pub struct FutureFlags {
     #[serde(default)]
     #[schemars(skip)]
     pub experimental_task_command: bool,
-    /// Deprecated: `turbo setup` graduated to stable, so this flag no longer
-    /// changes anything. A root `turbo.lock` alone makes a repository managed.
-    #[serde(default)]
-    pub experimental_setup: bool,
+    /// Removed: `turbo setup` graduated to stable, and a root `turbo.lock`
+    /// alone makes a repository managed. Any value is an error.
+    #[serde(skip)]
+    #[schemars(skip)]
+    pub experimental_setup: Graduated,
+}
+
+/// Why a configuration that still sets `futureFlags.experimentalSetup` fails.
+pub const SETUP_GRADUATED: &str = "The `experimentalSetup` future flag was removed because `turbo \
+                                   setup` graduated to stable. Remove it from `futureFlags`.";
+
+/// A removed future flag whose feature graduated to stable. Rejecting every
+/// value makes a stale opt-in visible instead of silently ignored, and nothing
+/// can read it as a gate.
+#[derive(Default, Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Graduated;
+
+impl biome_deserialize::Deserializable for Graduated {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        _name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        diagnostics.push(DeserializationDiagnostic::new(SETUP_GRADUATED).with_range(value.range()));
+        None
+    }
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Deserializable
@@ -168,8 +191,7 @@ impl TS for FutureFlags {
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
-         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean }"
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -179,8 +201,7 @@ impl TS for FutureFlags {
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
-         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean }"
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean }"
             .to_string()
     }
 
@@ -191,7 +212,7 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
@@ -202,7 +223,7 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
+         experimentalTaskCommand?: boolean };"
             .to_string()
     }
 
@@ -218,14 +239,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn experimental_setup_is_optional_in_all_typescript_forms() {
+    fn graduated_setup_flag_is_absent_from_all_typescript_forms() {
         for typescript in [
             FutureFlags::inline(),
             FutureFlags::inline_flattened(),
             FutureFlags::decl(),
             FutureFlags::decl_concrete(),
         ] {
-            assert!(typescript.contains("experimentalSetup?: boolean"));
+            assert!(!typescript.contains("experimentalSetup"));
         }
     }
 }

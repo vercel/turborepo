@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256, Sha512};
 
 use super::*;
 
-const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalSetup":true},"agentGuidance":false,
+const TURBO_JSON: &str = r#"{"agentGuidance":false,
     "noUpdateNotifier":true,"tasks":{"build":{"cache":false}}}"#;
 /// Managed Node runs a JS entrypoint as a shell script, like setup's launchers.
 const NODE: &str = "#!/bin/sh\ncase \"$1\" in *.js) entry=$1; shift; exec /bin/sh \"$entry\" \

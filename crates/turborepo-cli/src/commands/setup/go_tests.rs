@@ -2,7 +2,7 @@
 //! path, gated on `experimentalGoWorkspaces`.
 use super::*;
 
-const GO: &str = r#"{"futureFlags":{"experimentalSetup":true,"experimentalGoWorkspaces":true}}"#;
+const GO: &str = r#"{"futureFlags":{"experimentalGoWorkspaces":true}}"#;
 const REFRESH: &[&str] = &["--no-frozen", "--update-lock", "--tools-only"];
 
 fn go_routes(versions: &[&str]) -> Vec<(String, Vec<u8>)> {

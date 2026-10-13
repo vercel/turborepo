@@ -6,7 +6,7 @@ use test_case::test_case;
 use super::*;
 use crate::{RawPackageTurboJson, RawRootTurboJson, RawTurboJson, TurboJson};
 
-const ALL_FLAGS: &str = r#"{"experimentalSetup":true,"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}"#;
+const ALL_FLAGS: &str = r#"{"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}"#;
 
 fn root(flags: &str, setup: &str) -> Result<RawTurboJson, Error> {
     let json = format!(r#"{{"futureFlags":{flags},"setup":{setup}}}"#);
@@ -237,7 +237,7 @@ fn setup_needs_no_future_flag() {
 #[test_case("go", "experimentalGoWorkspaces")]
 fn gated_toolchains_require_their_workspace_flag(key: &str, flag: &str) {
     let setup = format!(r#"{{"{key}":{{}}}}"#);
-    let error = root(r#"{"experimentalSetup":true}"#, &setup).unwrap_err();
+    let error = root("{}", &setup).unwrap_err();
     assert!(
         matches!(
             &error,

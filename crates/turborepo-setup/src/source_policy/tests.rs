@@ -362,10 +362,7 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
     for name in CONFIG_FILES {
         let fixture = Fixture::new()?;
         let path = fixture.root.join(name);
-        fs::write(
-            &path,
-            "{ // safe normal configuration\n \"futureFlags\": {\"experimentalSetup\":true}, }",
-        )?;
+        fs::write(&path, "{ // safe normal configuration\n \"tasks\": {}, }")?;
         assert!(fixture.check(&[]).is_ok());
         for contents in [
             "{\"setup\":{}}",

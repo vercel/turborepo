@@ -20,7 +20,7 @@ fn tool() -> Value {
 }
 
 fn config(root: &Path, file: &str, tools: &Value) {
-    let config = json!({"futureFlags": {"experimentalSetup": true},
+    let config = json!({
         "setup": {"additionalTools": tools}});
     fs::write(root.join(file), serde_json::to_vec_pretty(&config).unwrap()).unwrap();
 }

@@ -31,11 +31,7 @@ fn standalone_ci_missing_and_stale_locks_render_local_repair_guidance_without_wr
     for (lock, declaration) in [(false, "24.0.0"), (true, "24.x")] {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
-        fs::write(
-            root.join("turbo.json"),
-            r#"{"futureFlags":{"experimentalSetup":true}}"#,
-        )
-        .unwrap();
+        fs::write(root.join("turbo.json"), "{}").unwrap();
         fs::write(root.join(".nvmrc"), declaration).unwrap();
         if lock {
             // The stale declaration must be diagnosed before the executor

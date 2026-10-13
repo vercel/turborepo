@@ -367,7 +367,7 @@ impl Journey {
         for (name, contents) in [
             (
                 "turbo.json",
-                r#"{"futureFlags":{"experimentalSetup":true},"agentGuidance":false,"tasks":{"build":{"cache":false}}}"#,
+                r#"{"agentGuidance":false,"tasks":{"build":{"cache":false}}}"#,
             ),
             (".nvmrc", "24.0.0\n"),
             (".gitignore", "/.turbo/\nnode_modules/\n"),
@@ -437,7 +437,7 @@ impl Journey {
     fn mirrored(mirrors: &str) -> Self {
         let j = Self::new();
         let config = format!(
-            r#"{{"futureFlags":{{"experimentalSetup":true}},"agentGuidance":false,"setup":{{"mirrors":{mirrors}}},"tasks":{{"build":{{"cache":false}}}}}}"#
+            r#"{{"agentGuidance":false,"setup":{{"mirrors":{mirrors}}},"tasks":{{"build":{{"cache":false}}}}}}"#
         );
         fs::write(j.root.join("turbo.json"), config).unwrap();
         j

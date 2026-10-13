@@ -8,7 +8,8 @@ use std::{
     process::Command,
 };
 
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
 const REQUIRED: &str = "`turbo exec` requires managed setup";
 
 fn files(root: &Path) -> Vec<PathBuf> {
@@ -135,17 +136,21 @@ fn exec_never_runs_the_program_without_activation() {
     }
     probe(root);
     let disabled = root.join("disabled/turbo.json");
-    for config in [
-        None,
-        Some("{}"),
-        Some(r#"{"futureFlags":{"experimentalSetup":false}}"#),
-    ] {
+    for config in [None, Some("{}")] {
         if let Some(config) = config {
             fs::write(&disabled, config).expect("turbo.json");
         }
         // No future flag is involved: without a lock there is no activation.
         failure(root, "disabled", &["exec", "--", "probe"], REQUIRED);
     }
+    fs::write(&disabled, r#"{"futureFlags":{"experimentalSetup":true}}"#).expect("turbo.json");
+    failure(
+        root,
+        "disabled",
+        &["exec", "--", "probe"],
+        "graduated to stable",
+    );
+    fs::write(&disabled, "{}").expect("turbo.json");
     fs::write(root.join("enabled/turbo.json"), ENABLED).expect("turbo.json");
     fs::write(root.join("custom.json"), ENABLED).expect("custom.json");
 

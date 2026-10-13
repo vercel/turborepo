@@ -3,7 +3,9 @@ use serde_json::{Value, json};
 use test_case::test_case;
 
 use super::*;
-use crate::{RawPackageTurboJson, RawRootTurboJson, RawTurboJson, SetupPolicy, TurboJson};
+use crate::{
+    FutureFlags, RawPackageTurboJson, RawRootTurboJson, RawTurboJson, SetupPolicy, TurboJson,
+};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
@@ -24,11 +26,11 @@ fn tool() -> Value {
 }
 
 fn parse(tools: Value) -> Result<SetupPolicy, Error> {
-    let json = json!({"futureFlags": {"experimentalSetup": true},
+    let json = json!({
         "setup": {"additionalTools": tools}})
     .to_string();
     let raw: RawTurboJson = RawRootTurboJson::parse(&json, "turbo.json")?.try_into()?;
-    SetupPolicy::from_raw(raw.setup.as_ref(), &raw.future_flags.unwrap().into_inner())
+    SetupPolicy::from_raw(raw.setup.as_ref(), &FutureFlags::default())
 }
 
 fn with(mutate: impl FnOnce(&mut Value)) -> Result<SetupPolicy, Error> {
@@ -66,7 +68,7 @@ fn unknown_tools_are_declared_without_registration() {
     assert_eq!(windows.root_prefix, None);
 
     // Serialization round-trips the authored field names for `turbo prune`.
-    let json = json!({"futureFlags": {"experimentalSetup": true},
+    let json = json!({
         "setup": {"additionalTools": {"fixture": tool()}}})
     .to_string();
     let raw: RawTurboJson = RawRootTurboJson::parse(&json, "turbo.json")

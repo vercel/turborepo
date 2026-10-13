@@ -1074,11 +1074,7 @@ mod tests {
         let root = temp.path().join("repo");
         fs::create_dir_all(root.join(".git")).unwrap();
         let root = root.canonicalize().unwrap();
-        fs::write(
-            root.join("turbo.json"),
-            r#"{"futureFlags":{"experimentalSetup":true}}"#,
-        )
-        .unwrap();
+        fs::write(root.join("turbo.json"), "{}").unwrap();
         let node = |kind: &str| {
             let installation = match kind {
                 "verify-system" => r#"{"kind":"verify-system","executables":["node"]}"#,
@@ -1129,11 +1125,7 @@ mod tests {
         fs::create_dir_all(root.join("apps/web")).unwrap();
         let root = root.canonicalize().unwrap();
         let web = root.join("apps/web");
-        fs::write(
-            root.join("turbo.json"),
-            r#"{"futureFlags":{"experimentalSetup":true}}"#,
-        )
-        .unwrap();
+        fs::write(root.join("turbo.json"), "{}").unwrap();
         let tool = Tool {
             id: "node".into(),
             version: "24.0.0".into(),

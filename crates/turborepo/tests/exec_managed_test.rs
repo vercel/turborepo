@@ -59,7 +59,7 @@ impl Repo {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
         owned.init_git().unwrap();
-        let config = r#"{"futureFlags":{"experimentalSetup":true},"noUpdateNotifier":true,"agentGuidance":false}"#;
+        let config = r#"{"noUpdateNotifier":true,"agentGuidance":false}"#;
         fs::write(root.join("turbo.json"), config).unwrap();
         fs::write(root.join(".nvmrc"), "24.0.0\n").unwrap();
         let package = r#"{"name":"fixture","private":true,"packageManager":"pnpm@10.0.0"}"#;

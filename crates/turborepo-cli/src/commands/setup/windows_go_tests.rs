@@ -5,7 +5,7 @@ use turborepo_setup::{go_resolution::INDEX_PATH, test_support::stored_zip_entrie
 
 use super::*;
 
-const GO: &str = r#"{"futureFlags":{"experimentalSetup":true,"experimentalGoWorkspaces":true}}"#;
+const GO: &str = r#"{"futureFlags":{"experimentalGoWorkspaces":true}}"#;
 const ZIP: &str = "/go/go1.22.12.windows-amd64.zip";
 
 /// The official layout, including a UTF-8 named `go/test` fixture that setup

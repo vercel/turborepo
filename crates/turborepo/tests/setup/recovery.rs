@@ -480,7 +480,7 @@ fn killed_additional_tool_download_publishes_nothing_and_recovers_from_the_cache
     let artifact = serde_json::json!({
         "url": "https://downloads.example.test/fixture-1.2.3.tar.gz", "sha256": sha256(&tool),
         "format": "tar-gz", "rootPrefix": "fixture-1.2.3", "executables": {"fixture": "bin/fixture"}});
-    let config = serde_json::json!({"futureFlags": {"experimentalSetup": true}, "setup": {
+    let config = serde_json::json!({"setup": {
         "additionalTools": {"fixture": {"version": "1.2.3",
             "artifacts": {repo.platform: artifact.clone()}}}}});
     fs::write(repo.root.join("turbo.json"), config.to_string()).unwrap();

@@ -76,7 +76,7 @@ fn fixture(root: &std::path::Path, docker: bool) -> Result<PruneInput, Box<dyn s
     write(
         root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{},"unused#build":{}}}"#,
+        r#"{"tasks":{"build":{},"unused#build":{}}}"#,
     )?;
     write(root, ".nvmrc", "24\n")?;
     write(root, ".node-version", "24.0.0\n")?;
@@ -112,10 +112,7 @@ fn fixture(root: &std::path::Path, docker: bool) -> Result<PruneInput, Box<dyn s
         output_dir: "out".into(),
         use_gitignore: true,
         allow_missing_package_manager: false,
-        future_flags: FutureFlags {
-            experimental_setup: true,
-            ..Default::default()
-        },
+        future_flags: FutureFlags::default(),
     })
 }
 
@@ -143,7 +140,7 @@ async fn locked_js_sources_survive_pruned_manifests_in_all_layouts() -> TestResu
             assert_eq!(manifest["workspaces"], json!(["packages/app"]));
             let config: serde_json::Value =
                 serde_json::from_slice(&fs::read(output.join("turbo.json"))?)?;
-            assert_eq!(config["futureFlags"]["experimentalSetup"], true);
+            assert!(config["tasks"].get("build").is_some());
             assert!(config["tasks"].get("unused#build").is_none());
             assert!(!output.join("packages/unused").exists());
             assert_eq!(fs::read(output.join(".nvmrc"))?, b"24\n");
@@ -154,7 +151,7 @@ async fn locked_js_sources_survive_pruned_manifests_in_all_layouts() -> TestResu
 }
 
 #[tokio::test]
-async fn docker_install_layer_retains_jsonc_setup_opt_in() -> TestResult {
+async fn docker_install_layer_retains_jsonc_root_config() -> TestResult {
     let temp = tempfile::tempdir()?;
     let mut input = fixture(temp.path(), true)?;
     fs::rename(
@@ -167,7 +164,7 @@ async fn docker_install_layer_retains_jsonc_setup_opt_in() -> TestResult {
         let output = temp.path().join(layout);
         let config: serde_json::Value =
             serde_json::from_slice(&fs::read(output.join("turbo.jsonc"))?)?;
-        assert_eq!(config["futureFlags"]["experimentalSetup"], true);
+        assert!(config["tasks"].get("build").is_some());
         assert!(config["tasks"].get("unused#build").is_none());
         assert!(!output.join("turbo.json").exists());
     }

@@ -782,7 +782,7 @@ mod tests {
             root.join_component("package.json").create_with_contents(
                 br#"{"name":"fixture","packageManager":"pnpm@10.0.0","devDependencies":{"turbo":"2.0.0"}}"#).unwrap();
             root.join_component("turbo.json")
-                .create_with_contents(br#"{"futureFlags":{"experimentalSetup":true}}"#)
+                .create_with_contents(b"{}")
                 .unwrap();
             let package = root.join_components(&[
                 "node_modules",

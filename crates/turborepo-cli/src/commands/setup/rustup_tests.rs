@@ -8,8 +8,7 @@ use turborepo_setup::{
 
 use super::*;
 
-pub(super) const FLAGS: &str =
-    r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
+pub(super) const FLAGS: &str = r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#;
 const CHECK: &[&str] = &["--check", "--tools-only"];
 pub(super) const TOOLCHAIN: &str = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n";
 
@@ -274,7 +273,8 @@ fn managed_run_activates_locked_rust_in_cargo_repositories_by_policy() {
     assert_eq!(std::path::Path::new(&env["CARGO_HOME"]), cargo_home);
     // Like setup, a Rust skip policy ignores rust-toolchain.toml, so the locked
     // selection is drift rather than an activation.
-    let skip = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true},"setup":{"rust":{"tools":"skip"}}}"#;
+    let skip =
+        r#"{"futureFlags":{"experimentalCargoWorkspaces":true},"setup":{"rust":{"tools":"skip"}}}"#;
     fs::write(repo.owned.root().join("turbo.json"), skip).unwrap();
     let error = run_overrides(&repo.owned).unwrap_err();
     assert!(error.contains("no longer match turbo.lock"), "{error}");

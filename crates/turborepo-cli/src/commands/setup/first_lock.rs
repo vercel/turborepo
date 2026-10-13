@@ -416,7 +416,7 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
                 3 => fs::write(root.join("apps/web/.git"), "gitdir: /not-probed").unwrap(),
                 4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
                 5 => fs::write(root.join(".gitignore"), "").unwrap(),
-                6 => fs::write(root.join("turbo.json"), "{}").unwrap(),
+                6 => fs::write(root.join("turbo.json"), r#"{"tasks":{}}"#).unwrap(),
                 7 => {
                     let mut foreign: Value = serde_json::from_slice(
                         &fs::read(root.join(".turbo/setup-lock/staged")).unwrap(),
@@ -513,7 +513,7 @@ fn intentional_publication_retains_original_root_native_config_and_expected_lock
                         fs::write(root.join("turbo.lock"), foreign.to_string()).unwrap();
                     }
                     1 => fs::write(root.join(".nvmrc"), "26.x").unwrap(),
-                    2 => fs::write(root.join("turbo.json"), "{}").unwrap(),
+                    2 => fs::write(root.join("turbo.json"), r#"{"tasks":{}}"#).unwrap(),
                     _ => {
                         fs::rename(root, &old).unwrap();
                         fs::create_dir(root).unwrap();

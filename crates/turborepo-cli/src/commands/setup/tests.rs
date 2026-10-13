@@ -7,7 +7,8 @@ use turborepo_setup::test_support::{LoopbackServer, OwnedSetupFixture};
 
 use super::*;
 
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
 /// The overrides managed `turbo run` applies from the committed root config
 /// and the fixture's trusted setup record, plus the managed bin first on PATH.
 fn run_overrides(
@@ -22,8 +23,7 @@ fn run_overrides(
     Ok((env, bin))
 }
 /// For plain setup in fixtures whose Node cannot run pnpm.
-const SKIP_DEPENDENCIES: &str =
-    r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
+const SKIP_DEPENDENCIES: &str = r#"{"setup":{"javascript":{"dependencies":"skip"}}}"#;
 fn archive(root: &str, files: &[(&str, &str)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in files {
@@ -424,8 +424,7 @@ fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
 #[test]
 fn root_policy_and_cli_overrides_select_the_effective_setup() {
     let configure = |f: &Fixture, flags: &str, setup: &str| {
-        let json =
-            format!(r#"{{"futureFlags":{{"experimentalSetup":true{flags}}},"setup":{setup}}}"#);
+        let json = format!(r#"{{"futureFlags":{{{flags}}},"setup":{setup}}}"#);
         fs::write(f.owned.root().join("turbo.json"), json).unwrap();
     };
     // A repository-chosen tools-only setup needs no --tools-only.
@@ -451,7 +450,7 @@ fn root_policy_and_cli_overrides_select_the_effective_setup() {
     assert_eq!(u.hits(), 3);
 
     // Skipping an ecosystem without a setup adapter lets JavaScript proceed.
-    let cargo = r#","experimentalCargoWorkspaces":true"#;
+    let cargo = r#""experimentalCargoWorkspaces":true"#;
     let f = Fixture::new();
     configure(&f, cargo, r#"{"tools":"managed"}"#);
     let u = Upstream::new(&f, false, None);
@@ -540,7 +539,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         fs::write(
             f.owned.root().join(path),
             if path == "turbo.json" {
-                r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#
+                r#"{"setup":{}}"#
             } else {
                 "registry=https://private.invalid"
             },

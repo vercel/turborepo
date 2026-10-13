@@ -286,7 +286,7 @@ mod tests {
 
     fn native_fixture(root: &AbsoluteSystemPath, ecosystem: &str) -> &'static str {
         root.join_component("turbo.json").create_with_contents(
-            r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}}"#,
+            r#"{"futureFlags":{"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}}"#,
         ).unwrap();
         let member = root.join_component("member");
         member.join_component("src").create_dir_all().unwrap();
@@ -457,9 +457,7 @@ mod tests {
             .to_realpath()
             .unwrap();
         root.join_component("turbo.json")
-            .create_with_contents(
-                r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#,
-            )
+            .create_with_contents(r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#)
             .unwrap();
         root.join_component("Cargo.toml")
             .create_with_contents("[workspace]\nmembers = []\n")
@@ -468,7 +466,7 @@ mod tests {
         nested.create_dir_all().unwrap();
         let inferred = infer(&nested, false, None).unwrap();
         assert_eq!(inferred.path, root);
-        assert!(inferred.flags.experimental_setup && inferred.flags.experimental_cargo_workspaces);
+        assert!(inferred.flags.experimental_cargo_workspaces);
         assert!(
             !inferred.flags.experimental_python_workspaces
                 && !inferred.flags.experimental_go_workspaces
@@ -488,7 +486,7 @@ mod tests {
                 .to_realpath()
                 .unwrap();
             root.join_component("turbo.json").create_with_contents(
-                r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}}"#,
+                r#"{"futureFlags":{"experimentalCargoWorkspaces":true,"experimentalPythonWorkspaces":true,"experimentalGoWorkspaces":true}}"#,
             ).unwrap();
             let nested = root.join_component("nested");
             nested.create_dir_all().unwrap();
@@ -499,7 +497,7 @@ mod tests {
                 Err(Error::Nested { marker, root: selected }) if marker == path && selected == root
             ));
             root.join_component("turbo.json")
-                .create_with_contents(r#"{"futureFlags":{"experimentalSetup":true}}"#)
+                .create_with_contents("{}")
                 .unwrap();
             path.create_with_contents("[broken").unwrap();
             assert_eq!(infer(&nested, false, None).unwrap().path, root);
@@ -514,9 +512,9 @@ mod tests {
                 .unwrap()
                 .to_realpath()
                 .unwrap();
-            root.join_component("turbo.json").create_with_contents(
-                r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#,
-            ).unwrap();
+            root.join_component("turbo.json")
+                .create_with_contents(r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#)
+                .unwrap();
             let nested = root.join_component("nested");
             nested.create_dir_all().unwrap();
             let path = if nested_manifest { &nested } else { &root }.join_component("Cargo.toml");
@@ -560,7 +558,7 @@ mod tests {
         target.create_dir_all().unwrap();
         target
             .join_component("turbo.json")
-            .create_with_contents(r#"{"futureFlags":{"experimentalSetup":true}}"#)
+            .create_with_contents("{}")
             .unwrap();
         target.join_component("src").create_dir_all().unwrap();
         let neighbor = base.join_component("neighbor");

@@ -14,7 +14,8 @@ use std::{fs, io, net::TcpListener, path::Path, process::Command};
 mod no_lock;
 
 const PENDING: &str = "this setup mode is not implemented";
-const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+// Any root configuration enables setup; it needs no future flag.
+const ENABLED: &str = "{}";
 const NO_CONFIG: &str = "requires a root turbo.json or turbo.jsonc";
 const UNQUALIFIED: &str = "managed promotion requires macOS, GNU Linux or Windows x64";
 const QUALIFIED: bool = cfg!(any(
@@ -381,10 +382,10 @@ fn standalone_setup_reads_only_the_selected_root_config() {
     ] {
         failure(root, &words, false, PENDING);
     }
-    let invalid_gate = r#"{"futureFlags":{"experimentalSetup":"true"}}"#;
-    write(root, "custom.json", invalid_gate);
-    let (code, text) = invoke(root, &["setup", "--root-turbo-json=custom.json"], false);
-    assert_eq!(code, 1);
+    let removed = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+    write(root, "custom.json", removed);
+    let words = ["setup", "--root-turbo-json=custom.json"];
+    let text = failure(root, &words, false, "graduated to stable");
     assert!(!text.contains(PENDING), "{text}");
 }
 
@@ -400,7 +401,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     write(
         root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#,
+        r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#,
     );
     for flags in [
         vec![],
@@ -486,9 +487,7 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
         write(
             root,
             "turbo.json",
-            &format!(
-                r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":{enabled}}}}}"#
-            ),
+            &format!(r#"{{"futureFlags":{{"experimentalCargoWorkspaces":{enabled}}}}}"#),
         );
         for words in [&["setup"][..], &["setup", "--plan"], &["setup", "--check"]] {
             if enabled {
@@ -612,7 +611,7 @@ fn nested_non_js_roots_need_no_package_json_or_language_tools() {
         write(
             root,
             "turbo.jsonc",
-            &format!(r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":true}}}}"#),
+            &format!(r#"{{"futureFlags":{{"{flag}":true}}}}"#),
         );
         write(root, manifest, contents);
         fs::create_dir_all(root.join("packages/app/src")).unwrap();
@@ -679,7 +678,7 @@ fn nested_native_workspace_markers_follow_root_flags() {
             write(
                 root,
                 "turbo.json",
-                &format!(r#"{{"futureFlags":{{"experimentalSetup":true,"{flag}":{enabled}}}}}"#),
+                &format!(r#"{{"futureFlags":{{"{flag}":{enabled}}}}}"#),
             );
             if enabled {
                 let text = failure(
@@ -879,7 +878,7 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
     write(
         &root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{"cache":false}},
+        r#"{"tasks":{"build":{"cache":false}},
             "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#,
     );
     // Fake tools come first; the host PATH only supplies git.
@@ -966,7 +965,7 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
     write(root, "Cargo.toml", "[workspace]\nmembers = []\n");
     let config = |dependencies: &str| {
         format!(
-            r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":true}},
+            r#"{{"futureFlags":{{"experimentalCargoWorkspaces":true}},
                 "setup":{{"dependencies":"{dependencies}","rust":{{"tools":"skip"}}}}}}"#
         )
     };
@@ -1541,7 +1540,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     repo.seed();
     // pnpm installs need a pnpm-lock.yaml, so this repository skips them.
     // Plain --check checks the same tools and never claims dependency readiness.
-    let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
+    let policy = r#"{"setup":{"javascript":{"dependencies":"skip"}}}"#;
     fs::write(repo.root.join("turbo.json"), policy).unwrap();
     let installation = "turbo.json setup policy";
     for (mode, outcome, skipped) in [
@@ -2024,32 +2023,30 @@ fn profiling_and_malformed_setup_tails_do_not_write() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "profile.json", "existing profile");
-    for enabled in [false, true] {
-        write(root, "turbo.json", if enabled { ENABLED } else { "{}" });
-        for words in [
-            vec!["setup", "--heap=profile.json"],
-            vec!["setup", "--plan", "--heap=profile.json"],
-            vec!["setup", "--check", "--heap=profile.json"],
-            vec!["setup", "--help", "--heap=profile.json"],
-            vec!["setup", "--profile=profile.json"],
-            vec!["setup", "--anon-profile=profile.json"],
-            vec!["setup", "--plan", "--profile=profile.json"],
-            vec!["setup", "--check", "--anon-profile=profile.json"],
-            vec!["setup", "--help", "--profile=profile.json"],
-            vec!["setup", "--help", "--anon-profile=profile.json"],
-            vec!["setup", "--unknown"],
-            vec!["setup", "--force", "config"],
-            vec!["setup", "--", "echo"],
-        ] {
-            let (code, text) = invoke(root, &words, false);
-            let expected = if words.contains(&"--help") { 0 } else { 1 };
-            assert_eq!(code, expected, "{words:?}: {text}");
-            if !words.contains(&"--help") && !words.iter().any(|word| word.starts_with("--heap=")) {
-                assert!(
-                    !text.contains(PENDING) && !text.contains(NO_CONFIG),
-                    "{text}"
-                );
-            }
+    write(root, "turbo.json", ENABLED);
+    for words in [
+        vec!["setup", "--heap=profile.json"],
+        vec!["setup", "--plan", "--heap=profile.json"],
+        vec!["setup", "--check", "--heap=profile.json"],
+        vec!["setup", "--help", "--heap=profile.json"],
+        vec!["setup", "--profile=profile.json"],
+        vec!["setup", "--anon-profile=profile.json"],
+        vec!["setup", "--plan", "--profile=profile.json"],
+        vec!["setup", "--check", "--anon-profile=profile.json"],
+        vec!["setup", "--help", "--profile=profile.json"],
+        vec!["setup", "--help", "--anon-profile=profile.json"],
+        vec!["setup", "--unknown"],
+        vec!["setup", "--force", "config"],
+        vec!["setup", "--", "echo"],
+    ] {
+        let (code, text) = invoke(root, &words, false);
+        let expected = if words.contains(&"--help") { 0 } else { 1 };
+        assert_eq!(code, expected, "{words:?}: {text}");
+        if !words.contains(&"--help") && !words.iter().any(|word| word.starts_with("--heap=")) {
+            assert!(
+                !text.contains(PENDING) && !text.contains(NO_CONFIG),
+                "{text}"
+            );
         }
     }
 }
@@ -2065,7 +2062,7 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
     write(
         root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true}}"#,
+        r#"{"futureFlags":{"experimentalPythonWorkspaces":true}}"#,
     );
     write(
         root,

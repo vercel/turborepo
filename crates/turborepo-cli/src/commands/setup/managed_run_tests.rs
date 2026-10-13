@@ -40,8 +40,11 @@ fn runnable() -> Fixture {
         "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
     )
     .unwrap();
-    fs::write(f.owned.root().join("turbo.json"),
-        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{"cache":false}},"noUpdateNotifier":true}"#).unwrap();
+    fs::write(
+        f.owned.root().join("turbo.json"),
+        r#"{"tasks":{"build":{"cache":false}},"noUpdateNotifier":true}"#,
+    )
+    .unwrap();
     // Managed Node trap doubles as a harmless fixture runtime. pnpm's shim must
     // dispatch through THIS executable; no host language runtime is required.
     let prefix = f.lock["tools"]["node"]["installation"]["artifacts"]
@@ -279,7 +282,7 @@ fn exact_lock_root_gates_selection_without_ancestor_fallback_or_host_qualificati
         "[workspace]\nmembers = []\n",
     )
     .unwrap();
-    let cargo = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
+    let cargo = r#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#;
     fs::write(&config, cargo).unwrap();
     let error = select(&f).err().unwrap();
     assert!(error.contains("run turbo setup"), "{error}");

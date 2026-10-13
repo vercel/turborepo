@@ -121,11 +121,7 @@ fn git_only_path() -> tempfile::TempDir {
 fn missing_git_and_unusable_repositories_get_actionable_errors() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
-    fs::write(
-        root.join("turbo.json"),
-        r#"{"futureFlags":{"experimentalSetup":true}}"#,
-    )
-    .unwrap();
+    fs::write(root.join("turbo.json"), "{}").unwrap();
     fs::write(root.join(".nvmrc"), "24.x").unwrap();
     // A `.git` Git cannot use still marks a repository: the checks stay strict.
     fs::create_dir(root.join(".git")).unwrap();
@@ -161,10 +157,7 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     let source = temp.path().join("source");
     fs::create_dir_all(source.join("apps/web")).unwrap();
     for (name, contents) in [
-        (
-            "turbo.json",
-            r#"{"futureFlags":{"experimentalSetup":true}}"#,
-        ),
+        ("turbo.json", "{}"),
         (".nvmrc", "24.0.0"),
         (
             "package.json",

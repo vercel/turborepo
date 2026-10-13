@@ -161,9 +161,8 @@ mod tests {
     use super::*;
 
     fn policy(setup: &str) -> SetupPolicy {
-        let json = format!(
-            r#"{{"futureFlags":{{"experimentalSetup":true,"experimentalCargoWorkspaces":true}},"setup":{setup}}}"#
-        );
+        let json =
+            format!(r#"{{"futureFlags":{{"experimentalCargoWorkspaces":true}},"setup":{setup}}}"#);
         let raw: RawTurboJson = RawRootTurboJson::parse(&json, "turbo.json")
             .unwrap()
             .try_into()
@@ -208,7 +207,6 @@ mod tests {
     #[test]
     fn ecosystems_need_the_workspace_flag_and_managed_tools() {
         let all = FutureFlags {
-            experimental_setup: true,
             experimental_cargo_workspaces: true,
             experimental_python_workspaces: true,
             experimental_go_workspaces: true,

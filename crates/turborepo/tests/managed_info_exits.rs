@@ -5,8 +5,8 @@
 use std::{fs, io, net::TcpListener, time::Duration};
 
 #[test]
-fn help_and_version_succeed_without_setup_with_the_future_flag_on_or_off() {
-    for enabled in [false, true] {
+fn help_and_version_succeed_without_setup_in_a_managed_repository() {
+    for config in ["turbo.json", "turbo.jsonc"] {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
         fs::write(
@@ -15,9 +15,8 @@ fn help_and_version_succeed_without_setup_with_the_future_flag_on_or_off() {
         )
         .unwrap();
         fs::write(
-            root.join("turbo.json"),
+            root.join(config),
             serde_json::json!({
-                "futureFlags": {"experimentalSetup": enabled},
                 "noUpdateNotifier": true,
                 "agentGuidance": false,
                 "tasks": {"build": {}}
@@ -59,10 +58,7 @@ fn help_and_version_succeed_without_setup_with_the_future_flag_on_or_off() {
                 .env("NO_PROXY", "")
                 .output()
                 .unwrap();
-            assert!(
-                output.status.success(),
-                "enabled={enabled} {args:?}: {output:?}"
-            );
+            assert!(output.status.success(), "{config} {args:?}: {output:?}");
             assert!(!output.stdout.is_empty());
             assert!(!String::from_utf8_lossy(&output.stderr).contains("managed"));
             assert_eq!(fs::read(root.join("turbo.lock")).unwrap(), invalid_lock);
