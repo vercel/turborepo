@@ -9,7 +9,7 @@ use std::{
 
 use notify::Event;
 use radix_trie::{Trie, TrieCommon};
-use tokio::sync::{Mutex, broadcast, oneshot, watch};
+use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_config::{CONFIG_FILE, CONFIG_FILE_JSONC, resolve_turbo_config_path};
 use turborepo_daemon::{
@@ -149,8 +149,16 @@ impl Default for ChangedFiles {
     }
 }
 
-/// Accumulate file events between poll ticks. The trie coalesces repeated
-/// paths; a non-UTF-8 path conservatively requests full rediscovery.
+/// A batch of file changes closes once changes have been quiet for this long,
+/// so the events of one save (write, close, rename) are classified together.
+const CHANGE_SETTLE: std::time::Duration = std::time::Duration::from_millis(20);
+/// A batch never stays open longer than this, and consecutive batches start at
+/// least this far apart, so a long stream of changes is classified at the same
+/// cadence as a fixed 100ms poll.
+const CHANGE_BATCH_WINDOW: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Accumulate file events between classification batches. The trie coalesces
+/// repeated paths; a non-UTF-8 path conservatively requests full rediscovery.
 fn accumulate_changed_files(changed_files: &mut ChangedFiles, paths: Vec<std::path::PathBuf>) {
     if let ChangedFiles::Some(trie) = changed_files {
         for path in paths {
@@ -789,6 +797,10 @@ impl Subscriber {
             return;
         };
 
+        // Wakes the classification loop when changed files are pending, so an
+        // idle watcher waits for changes instead of polling for them.
+        let changes_pending = Notify::new();
+
         // This just processes the events and puts the changed files into a `Trie`.
         // Must be fast to avoid lagging the file events channel.
         let event_fut = async {
@@ -797,10 +809,12 @@ impl Subscriber {
                     Ok(Ok(Event { paths, .. })) => {
                         let changed_files = self.changed_files.lock().await;
                         accumulate_changed_files(&mut changed_files.borrow_mut(), paths);
+                        changes_pending.notify_one();
                     }
                     Ok(Err(err)) => {
                         tracing::error!("file event error: {:?}", err);
                         *self.changed_files.lock().await.borrow_mut() = ChangedFiles::All;
+                        changes_pending.notify_one();
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
                         tracing::warn!("file event lagged");
@@ -808,6 +822,7 @@ impl Subscriber {
                         // the file events, so
                         // we can catch up by declaring all files changed
                         *self.changed_files.lock().await.borrow_mut() = ChangedFiles::All;
+                        changes_pending.notify_one();
                     }
                     Err(broadcast::error::RecvError::Closed) => {
                         tracing::debug!("file event channel closed");
@@ -855,10 +870,26 @@ impl Subscriber {
             self.package_change_events_tx
                 .send(PackageChangeEvent::Rediscover)
                 .ok();
-            let mut interval = tokio::time::interval(std::time::Duration::from_millis(100));
+            let mut last_batch_at: Option<tokio::time::Instant> = None;
 
             loop {
-                interval.tick().await;
+                // Wait for a change, then let the batch settle: keep collecting
+                // while changes arrive within CHANGE_SETTLE of each other, for at
+                // most CHANGE_BATCH_WINDOW.
+                changes_pending.notified().await;
+                let close_by = tokio::time::Instant::now() + CHANGE_BATCH_WINDOW;
+                loop {
+                    let quiet_until = (tokio::time::Instant::now() + CHANGE_SETTLE).min(close_by);
+                    let more =
+                        tokio::time::timeout_at(quiet_until, changes_pending.notified()).await;
+                    if more.is_err() || tokio::time::Instant::now() >= close_by {
+                        break;
+                    }
+                }
+                // Consecutive batches start at least CHANGE_BATCH_WINDOW apart.
+                if let Some(last_batch_at) = last_batch_at {
+                    tokio::time::sleep_until(last_batch_at + CHANGE_BATCH_WINDOW).await;
+                }
                 let changed_files = {
                     let changed_files = self.changed_files.lock().await;
                     if changed_files.borrow().is_empty() {
@@ -867,6 +898,7 @@ impl Subscriber {
 
                     changed_files.take()
                 };
+                last_batch_at = Some(tokio::time::Instant::now());
 
                 let ChangedFiles::Some(trie) = changed_files else {
                     rediscover!(self, repo_state, change_mapper);

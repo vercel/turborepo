@@ -219,6 +219,15 @@ async fn run_with_ui(
         println!("Verbose logs written to {path}");
     }
 
+    // `turbo run` ends the process right after this returns (see
+    // `process_exit::exit`, which already skips stack-local destructors).
+    // Dropping the run here would walk the package graph, lockfile, engine,
+    // and repo index only to free memory the OS reclaims at exit. Nothing in
+    // `Run` relies on `Drop` for cleanup: child processes, the cache,
+    // analytics, and the UI are shut down explicitly above or by the signal
+    // handler.
+    std::mem::forget(run);
+
     result
 }
 

@@ -50,7 +50,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode
 pub use turborepo_run_cache::RunCache;
 use turborepo_run_context::RepoContext;
 use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
-use turborepo_run_summary::{ObservabilityHandle, RunTracker};
+use turborepo_run_summary::{ObservabilityHandle, RunTracker, ScmStatePrefetch};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_access::TaskAccess;
@@ -150,6 +150,9 @@ pub(crate) struct RunServices {
     pub(crate) run_cache: Arc<RunCache>,
     pub(crate) signal_handler: SignalHandler,
     pub(crate) repo_index: PendingRepoIndex,
+    /// The summary's SCM state, started during repo discovery for dry runs.
+    /// Taken by the first visitor; later visitors resolve it inline.
+    pub(crate) scm_state_prefetch: Arc<std::sync::Mutex<Option<ScmStatePrefetch>>>,
     pub(crate) observability_handle: Option<ObservabilityHandle>,
     // CLI and watch pass this in; keep it alive for the duration of the run
     // until query-server ownership and shutdown behavior are reviewed.
@@ -1062,6 +1065,16 @@ impl Run {
             tokio::sync::oneshot::Receiver<()>,
         )>,
     ) -> Result<i32, Error> {
+        // Dry runs start resolving the summary's SCM state (a git subprocess)
+        // during repo discovery. Hand it to the tracker so the summary
+        // doesn't spawn git after the visitor finishes.
+        let scm_state_prefetch = self
+            .services
+            .scm_state_prefetch
+            .lock()
+            .ok()
+            .and_then(|mut prefetch| prefetch.take());
+
         // Barrier for the untracked-file scan: file hashing below needs the
         // complete index. Nothing executes before this resolves, so hash
         // error semantics are unchanged from when `Run` construction waited.
@@ -1235,7 +1248,8 @@ impl Run {
             self.repo.version,
             Vendor::get_user(),
             self.services.observability_handle.clone(),
-        );
+        )
+        .with_scm_state_prefetch(scm_state_prefetch);
 
         drop(_setup_span);
 
