@@ -359,15 +359,136 @@ fn record_coverage_and_decoder_end_are_exact() {
     }
 }
 
+/// Official Bun 1.2.x/1.3.0 record layout: a stored directory, then a deflated
+/// file whose local header keeps its size beside a signed descriptor. Every
+/// record carries all three extended timestamps and 4-byte UID/GID, including
+/// central records; `central_times` overrides the central timestamp payload.
+fn bun_1_2(central_times: &[u8]) -> Vec<u8> {
+    let field = |id: u32, data: &[u8]| {
+        let mut field = vec![0; 4];
+        put(&mut field, 0, id, 2);
+        put(&mut field, 2, data.len() as u32, 2);
+        [field, data.to_vec()].concat()
+    };
+    let ids = field(0x7875, &[1, 4, 0, 0, 0, 0, 4, 0, 0, 0, 0]);
+    let times = [vec![7], [0x8f, 0xa4, 0xd7, 0x68].repeat(3)].concat();
+    let local_extra = [field(0x5455, &times), ids.clone()].concat();
+    let central_extra = [field(0x5455, central_times), ids].concat();
+    let (mut bytes, mut central) = (Vec::new(), Vec::new());
+    for (name, mode, data) in [
+        ("pkg/", 0o040755, b"".as_slice()),
+        ("pkg/bin/tool", 0o100755, b"tool"),
+    ] {
+        let file = !data.is_empty();
+        let mut encoder =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        encoder.write_all(data).unwrap();
+        let payload = if file {
+            encoder.finish().unwrap()
+        } else {
+            Vec::new()
+        };
+        let (offset, crc) = (bytes.len(), crc32fast::hash(data));
+        let (flags, method) = if file { (8, 8) } else { (0, 0) };
+        let mut header = [0; 30];
+        put(&mut header, 0, 0x04034b50, 4);
+        put(&mut header, 4, 20, 2);
+        put(&mut header, 6, flags, 2);
+        put(&mut header, 8, method, 2);
+        put(&mut header, 22, data.len() as u32, 4);
+        put(&mut header, 26, name.len() as u32, 2);
+        put(&mut header, 28, local_extra.len() as u32, 2);
+        bytes.extend([&header[..], name.as_bytes(), &local_extra, &payload].concat());
+        if file {
+            for value in [0x08074b50, crc, payload.len() as u32, data.len() as u32] {
+                bytes.extend(value.to_le_bytes());
+            }
+        }
+        let mut header = [0; 46];
+        for (at, value, width) in [
+            (0, 0x02014b50, 4),
+            (4, 0x0314, 2),
+            (6, 20, 2),
+            (8, flags, 2),
+            (10, method, 2),
+            (16, crc, 4),
+            (20, payload.len() as u32, 4),
+            (24, data.len() as u32, 4),
+            (28, name.len() as u32, 2),
+            (30, central_extra.len() as u32, 2),
+            (38, mode << 16, 4),
+            (42, offset as u32, 4),
+        ] {
+            put(&mut header, at, value, width);
+        }
+        central.extend([&header[..], name.as_bytes(), &central_extra].concat());
+    }
+    let mut footer = [0; 22];
+    put(&mut footer, 0, 0x06054b50, 4);
+    put(&mut footer, 8, 2, 2);
+    put(&mut footer, 10, 2, 2);
+    put(&mut footer, 12, central.len() as u32, 4);
+    put(&mut footer, 16, bytes.len() as u32, 4);
+    [bytes, central, footer.to_vec()].concat()
+}
+
+#[test]
+fn official_bun_1_2_central_records_may_repeat_every_extended_timestamp() {
+    let full = [vec![7], vec![0; 12]].concat();
+    for central_times in [full.clone(), vec![7, 0, 0, 0, 0]] {
+        let artifact = unpack(bun_1_2(&central_times), Zip, limits()).unwrap();
+        assert_eq!(
+            fs::read(artifact.root_path().join("bin/tool")).unwrap(),
+            b"tool"
+        );
+    }
+    // Neither a partial time list nor an unknown flag bit is accepted.
+    for central_times in [
+        vec![7, 0, 0, 0, 0, 0, 0, 0, 0],
+        [vec![15], vec![0; 16]].concat(),
+    ] {
+        rejected(bun_1_2(&central_times), Zip, limits(), InvalidArchive);
+    }
+    // Local records must still list exactly the times their flags announce.
+    let local = |len: u8| [vec![0x55, 0x54, len, 0, 7], vec![0; usize::from(len) - 1]].concat();
+    assert!(super::extras(&local(13), false).is_ok());
+    assert!(matches!(
+        super::extras(&local(5), false),
+        Err(InvalidArchive)
+    ));
+}
+
+#[test]
+fn unix_host_entries_ignore_dos_bit_0x4000_as_official_bun_archives_set_it() {
+    let mut bytes = valid(true, true);
+    let at = central(&bytes);
+    put(&mut bytes, at + 38, (0o100755 << 16) | 0x4000, 4);
+    assert!(unpack(bytes.clone(), Zip, limits()).is_ok());
+    // A DOS-host entry has no Unix mode, so the bit stays unsupported there.
+    put(&mut bytes, at + 4, 0x0014, 2);
+    put(&mut bytes, at + 38, 0x4000, 4);
+    rejected(bytes, Zip, limits(), UnsupportedEntry);
+}
+
 #[test]
 fn extras_are_bounded_validated_and_never_link_metadata() {
     assert!(matches!(
         super::extras(&[0x55, 0x54, 1, 0, 0, 0x55, 0x54, 1, 0, 0], false),
         Err(InvalidArchive)
     ));
+    // Old Info-ZIP Unix UID/GID appear only in local headers, at most once.
+    let ux = |len: u8| [vec![0x55, 0x58, len, 0], vec![0; usize::from(len)]].concat();
+    assert!(super::extras(&ux(12), false).is_ok());
+    assert!(matches!(super::extras(&ux(12), true), Err(InvalidArchive)));
+    assert!(matches!(
+        super::extras(&[ux(8), ux(8)].concat(), false),
+        Err(InvalidArchive)
+    ));
     for (id, payload, expected) in [
         (0x5455u16, vec![1, 0, 0, 0, 0], None),
         (0x7875, vec![1, 1, 0, 1, 0], None),
+        (0x5855, vec![0; 8], None),
+        (0x5855, vec![0; 10], Some(InvalidArchive)),
         (
             0x000a,
             [vec![0, 0, 0, 0, 1, 0, 24, 0], vec![0; 24]].concat(),

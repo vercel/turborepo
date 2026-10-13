@@ -37,6 +37,7 @@ fn extras(bytes: &[u8], central: bool) -> Result<(), Error> {
             0x5455 => 1,
             0x7875 => 2,
             0x000a => 4,
+            0x5855 => 8,
             _ => return Err(Error::UnsupportedEntry),
         };
         if seen & bit != 0 {
@@ -45,14 +46,14 @@ fn extras(bytes: &[u8], central: bool) -> Result<(), Error> {
         seen |= bit;
         let data = Record::take(bytes, &mut offset, usize::from(field.u16(2)))?.0;
         let valid = match field.u16(0) {
-            0x5455 => data.first().is_some_and(|flags| {
+            // Extended timestamps: one 32-bit time per flag bit. Central copies
+            // usually keep only the modification time, but some writers
+            // (official Bun 1.2 and 1.3 archives) repeat every local time.
+            0x5455 => data.first().is_some_and(|&flags| {
+                let full = 1 + 4 * flags.count_ones() as usize;
                 flags & !7 == 0
-                    && data.len()
-                        == 1 + 4 * if central {
-                            u32::from(flags & 1)
-                        } else {
-                            flags.count_ones()
-                        } as usize
+                    && (data.len() == full
+                        || (central && data.len() == 1 + 4 * usize::from(flags & 1)))
             }),
             0x7875 => {
                 let mut at = 0;
@@ -64,6 +65,9 @@ fn extras(bytes: &[u8], central: bool) -> Result<(), Error> {
             }
             // NTFS timestamps: reserved word, tag 1, three 64-bit times.
             0x000a => data.len() == 32 && data[..8] == [0, 0, 0, 0, 1, 0, 24, 0],
+            // Old Info-ZIP Unix ("UX", as in official Bun archives): access and
+            // modification times, plus optional UID/GID in local headers only.
+            0x5855 => data.len() == 8 || (!central && data.len() == 12),
             _ => false,
         };
         if !valid {
@@ -132,7 +136,11 @@ pub(super) fn extract_zip(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         Record::take(central, &mut index, usize::from(entry.u16(32)))?;
         let attributes = entry.u32(38);
         let host = entry.u16(4) >> 8;
-        if !matches!(host, 0 | 3) || attributes & 0xffff & !0x37 != 0 {
+        // Unix-host entries take their type and mode from the high word. Some
+        // writers, including official Bun archives, also set DOS bit 0x4000,
+        // which extraction never applies.
+        let dos = attributes & 0xffff & if host == 3 { !0x4000 } else { !0 };
+        if !matches!(host, 0 | 3) || dos & !0x37 != 0 {
             // DOS reparse/volume/device attributes and unknown hosts are unsafe.
             return Err(Error::UnsupportedEntry);
         }
