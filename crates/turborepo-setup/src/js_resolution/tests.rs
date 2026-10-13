@@ -480,6 +480,10 @@ fn preserved_payload_shapes_fail_before_either_transport() {
             ("format", json!("tar")),
             ("rootPrefix", json!("wrong")),
             ("destination", json!("nested")),
+            (
+                "alternates",
+                json!({"tar-xz":{"url":"https://example.invalid/a.tar.xz","sha256":"a".repeat(64)}}),
+            ),
             ("executables", json!({"other":"bin/other"})),
             ("system", json!({"kind":"verify-system","executables":[id]})),
         ] {

@@ -522,31 +522,44 @@ fn authored_integrity_errors_precede_inventory_reads_without_mutation() {
     }
 }
 
+fn linux(libc: Libc) -> ExecutionContext {
+    let host = HostPlatform::new(OperatingSystem::Linux, Architecture::X64);
+    ExecutionContext::new(
+        host,
+        libc,
+        "target".into(),
+        BTreeSet::from(["baseline".into()]),
+    )
+    .unwrap()
+}
+
+fn musl(abi: &str) -> ExecutionContext {
+    linux(Libc::Musl { abi: abi.into() })
+}
+
 #[test]
 fn unsupported_adapters_platforms_and_invalid_lock_metadata_are_distinct() {
     let repo = installed();
-    for (host, libc) in [
-        (
-            HostPlatform::new(OperatingSystem::Windows, Architecture::Arm64),
-            Libc::None,
-        ),
-        (
-            HostPlatform::new(OperatingSystem::Linux, Architecture::X64),
-            Libc::Musl { abi: "1.2".into() },
-        ),
-    ] {
-        let context = ExecutionContext::new(
-            host,
-            libc,
-            "target".into(),
-            BTreeSet::from(["baseline".into()]),
-        )
-        .unwrap();
-        assert!(matches!(
-            ActivationPlan::inspect(repo.path(), context),
-            Err(Error::UnsupportedPlatform)
-        ));
-    }
+    let windows_arm64 = ExecutionContext::new(
+        HostPlatform::new(OperatingSystem::Windows, Architecture::Arm64),
+        Libc::None,
+        "target".into(),
+        BTreeSet::from(["baseline".into()]),
+    )
+    .unwrap();
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), windows_arm64),
+        Err(Error::UnsupportedPlatform)
+    ));
+    // musl hosts never activate managed artifacts or clone-local generations.
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), musl("1.2.5")),
+        Err(Error::MuslHost)
+    ));
+    assert!(matches!(
+        ActivationPlan::inspect_clone_local(repo.path(), musl("1.2.5")),
+        Err(Error::MuslHost)
+    ));
     for change in 0..4 {
         let mut value = fixture();
         match change {
@@ -592,13 +605,30 @@ fn unsupported_adapters_platforms_and_invalid_lock_metadata_are_distinct() {
     assert_eq!(plan.path_prepend(), None);
     assert_eq!(plan.path(Some("/host/bin".as_ref())).unwrap(), "/host/bin");
     assert_eq!(plan.snapshot().tools().len(), 2);
+    // musl hosts qualify for verify-system tools alone, under an identity of
+    // their own: caches never cross C libraries or musl releases.
+    let gnu = ActivationPlan::inspect(repo.path(), linux(Libc::Gnu { abi: "2.39".into() }));
+    let fingerprints: BTreeSet<_> = [gnu.unwrap(), plan]
+        .into_iter()
+        .chain(["1.2.4", "1.2.5"].map(|abi| {
+            let on_musl = ActivationPlan::inspect(repo.path(), musl(abi)).unwrap();
+            assert_eq!(on_musl.external(), verify_system(&["node", "pnpm"]));
+            assert_eq!(on_musl.path_prepend(), None);
+            assert!(on_musl.tools().is_empty() && on_musl.runtime_env().is_empty());
+            on_musl
+        }))
+        .map(|plan| plan.snapshot().fingerprint().to_owned())
+        .collect();
+    assert_eq!(fingerprints.len(), 4);
     assert_eq!(state(repo.path()), before);
     // Locked versions still bind the native declarations.
     fs::write(repo.path().join(".nvmrc"), "26.0.0\n").unwrap();
-    assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
-        Err(Error::DeclarationDrift)
-    ));
+    for context in [context(), musl("1.2.5")] {
+        assert!(matches!(
+            ActivationPlan::inspect(repo.path(), context),
+            Err(Error::DeclarationDrift)
+        ));
+    }
 }
 
 fn verify_system(ids: &[&str]) -> Vec<External> {
@@ -636,6 +666,11 @@ fn verify_system_javascript_beside_managed_go_activates_only_go() {
     assert!(plan.path_prepend().unwrap().join("go").exists());
     assert!(plan.runtime_env().contains_key("GOROOT"));
     assert_eq!(plan.snapshot().tools().len(), 3);
+    // A managed tool beside verify-system ones still needs a glibc host.
+    assert!(matches!(
+        ActivationPlan::inspect_with(repo.path(), musl("1.2.5"), GO),
+        Err(Error::MuslHost)
+    ));
     // Managed package managers never run on a system Node.
     value["tools"]["pnpm"] = fixture()["tools"]["pnpm"].clone();
     fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();

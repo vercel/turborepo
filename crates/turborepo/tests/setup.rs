@@ -376,20 +376,14 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     write(root, "custom.json", ENABLED);
     fs::create_dir(root.join("selected-root")).unwrap();
     write(root, "selected-root/turbo.json", ENABLED);
-    // #14518 admits tools-only --offline, which reads (and rejects) the
-    // invalid lock; offline setup cannot install locked dependencies.
-    failure(
-        root,
-        &["setup", "--offline", "--tools-only"],
-        false,
-        "invalid turbo.lock JSON",
-    );
-    failure(
-        root,
+    // #14518 admits --offline, which reads (and rejects) the invalid lock,
+    // with or without dependencies.
+    for words in [
+        &["setup", "--offline", "--tools-only"][..],
         &["setup", "--offline"],
-        false,
-        "--offline cannot install locked dependencies",
-    );
+    ] {
+        failure(root, words, false, "invalid turbo.lock JSON");
+    }
     for words in [
         vec!["--root-turbo-json", "custom.json", "setup", "--__test-run"],
         vec!["--cwd=selected-root", "setup", "--__test-run"],
@@ -442,8 +436,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         let pending = words.contains(&"--__test-run")
             || (words.contains(&"--force") && words.contains(&"--update-lock"));
         // Locked dependencies need a declared package manager, checked before
-        // any download; offline repeats (#14518) and --no-lock (#14486)
-        // cannot install them.
+        // any download, offline too; --no-lock (#14486) cannot install them.
         let locked = !words.contains(&"--tools-only");
         let text = failure(
             root,
@@ -451,9 +444,6 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             false,
             match () {
                 _ if pending => PENDING,
-                _ if locked && words.contains(&"--offline") => {
-                    "--offline cannot install locked dependencies"
-                }
                 _ if locked && words.contains(&"--no-lock") => {
                     "--no-lock cannot install locked dependencies"
                 }
@@ -823,7 +813,7 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
         (qualified_host() || cfg!(all(windows, target_arch = "x86_64"))) && !arm64_windows;
     let musl = matches!(
         turborepo_platform::host_libc(),
-        Ok(Some(turborepo_platform::Libc::Musl))
+        Ok(Some(turborepo_platform::Libc::Musl { .. }))
     );
     for ci in [false, true] {
         for extra in [

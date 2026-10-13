@@ -22,12 +22,28 @@ fn system32() -> PathBuf {
 
 // Stored entries from a DOS host, as in the official Windows archive.
 fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    zip_in(PREFIX, false, files)
+}
+
+/// Stored entries under `prefix`. With `unix`, a Unix host's archive like
+/// Bun's Windows release: a 0777 directory entry, then 0777 files.
+fn zip_in(prefix: &str, unix: bool, files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let le = |out: &mut Vec<u8>, value: usize, width: usize| {
         out.extend(&(value as u32).to_le_bytes()[..width]);
     };
+    let directory = (format!("{prefix}/"), &[][..], (0o40777 << 16) | 0x10);
+    let file_mode = if unix { 0o100777 << 16 } else { 0x20 }; // Or the archive bit.
+    let entries: Vec<(String, &[u8], usize)> = unix
+        .then_some(directory)
+        .into_iter()
+        .chain(
+            files
+                .iter()
+                .map(|(path, data)| (format!("{prefix}/{path}"), data.as_slice(), file_mode)),
+        )
+        .collect();
     let (mut local, mut central) = (Vec::new(), Vec::new());
-    for (path, data) in files {
-        let name = format!("{PREFIX}/{path}");
+    for (name, data, attributes) in &entries {
         let mut crc = flate2::Crc::new();
         crc.update(data);
         let offset = local.len();
@@ -35,7 +51,8 @@ fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
             let is_central = signature == 0x02014b50;
             le(out, signature, 4);
             if is_central {
-                le(out, 20, 2); // Made by DOS, version 2.0.
+                // Made by Unix or DOS, version 2.0.
+                le(out, if unix { 0x0314 } else { 20 }, 2);
             }
             for (value, width) in [(20, 2), (0, 2), (0, 2), (0, 4)] {
                 le(out, value, width); // Version, flags, stored, timestamp.
@@ -46,21 +63,21 @@ fn zip(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
             le(out, name.len(), 2);
             le(out, 0, 2);
             if is_central {
-                for (value, width) in [(0, 2), (0, 2), (0, 2), (0x20, 4), (offset, 4)] {
-                    le(out, value, width); // Comment, disk, internal, archive bit.
+                for (value, width) in [(0, 2), (0, 2), (0, 2), (*attributes, 4), (offset, 4)] {
+                    le(out, value, width); // Comment, disk, internal, external.
                 }
             }
             out.extend(name.as_bytes());
         }
-        local.extend(data);
+        local.extend(*data);
     }
     let (start, size) = (local.len(), central.len());
     local.extend(central);
     le(&mut local, 0x06054b50, 4);
     for (value, width) in [
         (0, 4),
-        (files.len(), 2),
-        (files.len(), 2),
+        (entries.len(), 2),
+        (entries.len(), 2),
         (size, 4),
         (start, 4),
     ] {
@@ -83,6 +100,24 @@ fn tgz(files: &[(&str, &str)]) -> Vec<u8> {
     let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
     gzip.write_all(&tar.into_inner().unwrap()).unwrap();
     gzip.finish().unwrap()
+}
+
+/// The registry's `dist.integrity` value for these bytes.
+fn integrity(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut encoded = String::from("sha512-");
+    for chunk in Sha512::digest(bytes).chunks(3) {
+        let byte = |i: usize| u32::from(*chunk.get(i).unwrap_or(&0));
+        let n = (byte(0) << 16) | (byte(1) << 8) | byte(2);
+        for i in 0..4 {
+            encoded.push(if i > chunk.len() {
+                '='
+            } else {
+                ALPHABET[((n >> (18 - 6 * i)) & 63) as usize] as char
+            });
+        }
+    }
+    encoded
 }
 
 struct Fixture {
@@ -161,22 +196,9 @@ impl Fixture {
             let digest = Sha256::digest(other);
             sums.push_str(&format!("{digest:x}  node-v24.0.0-{other}\n"));
         }
-        const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let mut integrity = String::new();
-        for chunk in Sha512::digest(&self.pnpm).chunks(3) {
-            let byte = |i: usize| u32::from(*chunk.get(i).unwrap_or(&0));
-            let n = (byte(0) << 16) | (byte(1) << 8) | byte(2);
-            for i in 0..4 {
-                integrity.push(if i > chunk.len() {
-                    '='
-                } else {
-                    ALPHABET[((n >> (18 - 6 * i)) & 63) as usize] as char
-                });
-            }
-        }
         let metadata = json!({"name":"pnpm","version":"10.0.0","dist":{
             "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
-            "integrity":format!("sha512-{integrity}")}});
+            "integrity":integrity(&self.pnpm)}});
         LoopbackServer::new(
             [
                 ("/dist/index.json".into(), index.to_string().into_bytes()),
@@ -385,3 +407,17 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
 
 #[path = "windows_additional_tests.rs"]
 mod additional;
+#[path = "windows_bun_tests.rs"]
+mod bun;
+#[path = "windows_go_tests.rs"]
+mod go;
+#[path = "windows_install_tests.rs"]
+mod install;
+#[path = "windows_pnpm_tests.rs"]
+mod pnpm;
+#[path = "windows_rust_tests.rs"]
+mod rust;
+#[path = "windows_uv_tests.rs"]
+mod uv;
+#[path = "windows_yarn_tests.rs"]
+mod yarn;

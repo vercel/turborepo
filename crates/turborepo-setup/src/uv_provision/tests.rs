@@ -167,7 +167,7 @@ async fn mirrors_serve_the_official_archive_path_beneath_their_base() {
     let bytes = archive(platform, &["uv", "uvx"]);
     let path = format!("/mirror{}", &official(platform).url()[uv::ORIGIN.len()..]);
     let upstream = LoopbackServer::new([(path.clone(), bytes.clone())], |_| {}).unwrap();
-    let fixture = crate::test_support::OwnedSetupFixture::new().unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
     let base = format!("{}/mirror", upstream.origin());
     let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
     let transport = UvTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
@@ -218,7 +218,6 @@ fn plans_accept_only_official_layouts_on_qualified_targets() {
     for platform in [
         Platform::LinuxX64Musl,
         Platform::LinuxArm64Musl,
-        Platform::WindowsX64,
         Platform::WindowsArm64,
     ] {
         assert!(matches!(
@@ -260,6 +259,40 @@ fn plans_accept_only_official_layouts_on_qualified_targets() {
             Err(Error::InvalidLock)
         ));
     }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn windows_x64_exports_the_flat_zip_binaries_and_installs_only_on_windows() {
+    let platform = Platform::WindowsX64;
+    let bytes = crate::source_policy::test_support::stored_zip_entries(&[
+        ("uv.exe", &b"uv"[..]),
+        ("uvw.exe", b"uvw"),
+        ("uvx.exe", b"uvx"),
+    ]);
+    let (upstream, transport) = serve(platform, bytes.clone());
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    // No launcher: the Store exports the official binaries themselves.
+    assert_eq!(
+        plan.inventory_tool().executables,
+        BTreeMap::from([
+            ("uv".into(), "uv.exe".into()),
+            ("uvx".into(), "uvx.exe".into())
+        ])
+    );
+    assert_eq!(plan.inventory_tool().platform, "windows-x64");
+    // Lock creation on any host may verify and extract it for listing only.
+    let prepared = plan.download(&transport).await.unwrap();
+    assert!(prepared.binary().ends_with("uv.exe"));
+    assert_eq!(fs::read(prepared.binary()).unwrap(), b"uv");
+    assert_eq!(upstream.hits(), 1);
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    assert!(matches!(
+        install(&mut store, &plan, &transport, crate::Preparation::Fresh).await,
+        Err(Error::UnsupportedTarget)
+    ));
+    assert_eq!(upstream.hits(), 1);
+    assert!(store.current().unwrap().is_none());
 }
 
 #[tokio::test(flavor = "current_thread")]

@@ -73,6 +73,7 @@ pub(crate) fn official_artifact(
         url: format!("{ORIGIN}{RELEASES}{path}"),
         sha256,
         format: Format::TarGz,
+        alternates: BTreeMap::new(),
         root_prefix: Some("python".into()),
         // uv discovers managed interpreters by their key directory.
         destination: Some(key(version, platform)?),
@@ -294,7 +295,8 @@ pub fn resolve(
 /// configuration disabled and private scratch state.
 pub fn list(uv: &Path) -> Result<Listing, Error> {
     let scratch = tempfile::tempdir()?;
-    let output = Command::new(uv)
+    let mut command = Command::new(uv);
+    command
         .args([
             "python",
             "list",
@@ -312,8 +314,14 @@ pub fn list(uv: &Path) -> Result<Listing, Error> {
         .env("UV_CACHE_DIR", scratch.path().join("cache"))
         .env("UV_PYTHON_INSTALL_DIR", scratch.path().join("python"))
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()?;
+        .stderr(Stdio::null());
+    // Windows keeps SYSTEMROOT, which system components such as Winsock need.
+    if cfg!(windows)
+        && let Some(root) = std::env::var_os("SYSTEMROOT")
+    {
+        command.env("SYSTEMROOT", root);
+    }
+    let output = command.output()?;
     if !output.status.success() {
         return Err(Error::ListingFailed);
     }

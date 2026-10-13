@@ -21,7 +21,10 @@ mod cleanup;
 mod dacl;
 mod dependencies;
 pub(crate) mod effective;
+mod installer;
 mod lock_diagnostics;
+#[cfg(windows)]
+mod msvc;
 mod no_lock;
 mod offline;
 mod plan;
@@ -72,9 +75,10 @@ pub enum Error {
     #[diagnostic(
         code(turbo::setup::unclassified_libc),
         help(
-            "turbo reads the ELF interpreter of /bin/sh and the libc.so.6 beside a glibc loader \
-             without running them. Managed setup requires a glibc host with those files; \
-             otherwise install the tools yourself and use verify-system."
+            "turbo reads the ELF interpreter of /bin/sh, then the libc.so.6 beside a glibc loader \
+             or the release a musl loader embeds, without running them. Managed setup requires a \
+             glibc host with those files; otherwise install the tools yourself and use \
+             verify-system."
         )
     )]
     UnclassifiedLibc(turborepo_platform::LibcError),
@@ -402,6 +406,12 @@ fn run_reporting(
     for line in plan.report() {
         println!("{line}");
     }
+    // Managed Rust's Windows linker is an external prerequisite: reported,
+    // never installed, and never a failure.
+    #[cfg(windows)]
+    if rust && snapshot.declarations().contains_key("rust") {
+        msvc::report();
+    }
     if javascript == ToolPolicy::Skip && !rust && !python && !go {
         // Never silently ignore committed selections for a skipped toolchain.
         if snapshot
@@ -464,8 +474,9 @@ fn run_reporting(
         // writes (#14518). What trusted reuse cannot authorize falls through to
         // verified cached bytes (#14540), which install what is cached or list
         // every missing artifact. Offline --force always takes the cache path.
-        // Offline repeats and clone-local --no-lock run only when every
-        // dependency is skipped (`validate`).
+        // Either way, enabled dependencies then install offline from the
+        // native caches. Clone-local --no-lock runs only when every dependency
+        // is skipped (`validate`).
         (Mode::Provision, _) if request.offline && !request.force => {
             match offline::run(
                 &discovery,
@@ -474,12 +485,24 @@ fn run_reporting(
                 &preflight,
                 request.force,
             ) {
+                Ok(_) if dependencies.skipped() => {
+                    println!(
+                        "Dependencies skipped (--tools-only). No resolution, downloads, writes, \
+                         probes, or tasks run."
+                    );
+                    return Ok(0);
+                }
+                Ok(reused) => provision::Provisioned {
+                    downloaded_bytes: 0,
+                    installed: 0,
+                    reused,
+                },
                 Err(Error::Offline(_))
                     if offline::cache_may_repair(&discovery, transports.as_ref())? =>
                 {
                     provision::run(&discovery, snapshot, &request, transports, preflight)?
                 }
-                result => return result,
+                Err(error) => return Err(error),
             }
         }
         (Mode::Provision, _) if request.lock == LockMode::NoLock => {
@@ -494,6 +517,31 @@ fn run_reporting(
     report.tools_reused = provisioned.reused;
     let root = discovery.snapshot_root()?.as_std_path();
     Ok(dependencies.install(root, ecosystems, trust_base)?)
+}
+
+/// Whether setup provisions for this host. On Windows only a confirmed x64
+/// machine qualifies: arm64 hosts, including x64 turbo under emulation, and
+/// unidentified hosts are refused.
+pub(crate) fn platform_supported() -> bool {
+    provision::platform().is_ok()
+}
+
+/// Records `root`'s current installation as trusted under `user_base`, or the
+/// real user state directory, exactly as setup publishes it, so binary tests
+/// can drive the shell hook. Returns the record's path. Fixture injection only.
+#[cfg(feature = "test-support")]
+pub fn record_trust_for_tests(
+    root: &std::path::Path,
+    user_base: Option<&std::path::Path>,
+) -> Result<std::path::PathBuf, String> {
+    let base = match user_base {
+        Some(base) => base.to_owned(),
+        None => dirs_next::data_local_dir().ok_or("cannot locate the user state directory")?,
+    };
+    let store = turborepo_tool_install::Store::open(root).map_err(|e| e.to_string())?;
+    let trust = trust::TrustStore::new(&base, root).map_err(|e| e.to_string())?;
+    trust.record(&store).map_err(|e| e.to_string())?;
+    Ok(trust.path())
 }
 
 /// `turbo setup --frozen --tools-only` against loopback fixture artifacts,
@@ -600,14 +648,8 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     {
         return Err(Error::NotImplemented);
     }
-    // Installers run with the activation that turbo.lock records and contact
-    // package registries, so neither mode can install locked dependencies.
-    if !tools_only && request.offline {
-        return Err(Error::Unsupported(
-            "--offline cannot install locked dependencies yet; add --tools-only to prepare only \
-             tools offline",
-        ));
-    }
+    // Installers run with the activation that turbo.lock records. Offline,
+    // they use their native offline modes (`dependencies`).
     if !tools_only && request.lock == LockMode::NoLock {
         return Err(Error::Unsupported(
             "--no-lock cannot install locked dependencies, because installers run with the \
@@ -669,7 +711,7 @@ mod tests {
                 matches!(&platform, Err(e) if e.to_string().contains("not qualified for Windows arm64"))
             );
         }
-        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl))) {
+        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl { .. }))) {
             assert!(matches!(platform, Err(Error::MuslHost)));
         }
     }
@@ -846,6 +888,10 @@ mod tests {
                 vec!["--plan"],
                 vec!["--check"],
                 vec!["--check", "--offline"],
+                // Native offline installs (`dependencies`).
+                vec!["--offline"],
+                vec!["--frozen", "--offline"],
+                vec!["--force", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert!(!request.tools_only);
@@ -858,17 +904,15 @@ mod tests {
             validate_request(&plan),
             Err(Error::NotImplemented)
         ));
-        // Offline repeats (#14518) and --no-lock (#14486) cannot install
-        // locked dependencies; with dependencies skipped they still provision.
-        for flags in [vec!["--offline"], vec!["--no-lock"]] {
-            let request = request(&flags, false).unwrap();
-            assert_eq!(request.mode, Mode::Provision);
-            assert!(matches!(
-                validate_request(&request),
-                Err(Error::Unsupported(_))
-            ));
-            assert!(validate(&request, true).is_ok(), "{flags:?}");
-        }
+        // --no-lock (#14486) cannot install locked dependencies; with
+        // dependencies skipped it still provisions.
+        let no_lock = request(&["--no-lock"], false).unwrap();
+        assert_eq!(no_lock.mode, Mode::Provision);
+        assert!(matches!(
+            validate_request(&no_lock),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(validate(&no_lock, true).is_ok());
         let request =
             request(&["--force", "--offline", "--tools-only", "--no-lock"], true).unwrap();
         assert!(request.force && request.offline && request.tools_only);

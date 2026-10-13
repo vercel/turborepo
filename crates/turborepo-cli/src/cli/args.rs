@@ -1208,7 +1208,8 @@ pub enum Command {
     /// powershell | Out-String)` to $PROFILE. Inside a repository with root
     /// futureFlags.experimentalSetup, the hook puts the tools `turbo setup`
     /// installed first on PATH and removes them when you leave. It never
-    /// installs tools or updates turbo.lock.
+    /// installs tools or updates turbo.lock. On native Windows, only
+    /// PowerShell is supported.
     Hook {
         shell: HookShell,
         /// Print the shell changes for the current directory

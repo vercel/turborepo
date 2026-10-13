@@ -198,7 +198,7 @@ fn glibc_host(platform: Platform) -> Result<Platform, Error> {
     use turborepo_platform::Libc;
     match turborepo_platform::host_libc() {
         Ok(Some(Libc::Glibc { .. })) => Ok(platform),
-        Ok(Some(Libc::Musl)) => Err(Error::MuslHost),
+        Ok(Some(Libc::Musl { .. })) => Err(Error::MuslHost),
         Ok(None) => Err(Error::Unsupported(
             "managed promotion requires macOS or GNU Linux",
         )),
@@ -1037,7 +1037,7 @@ pub(super) fn run(
             // The verified installer is the only rustup this toolchain sees.
             let scratch = tempfile::Builder::new()
                 .prefix(".rustup-")
-                .tempdir_in(root.join(".turbo/tools"))?;
+                .tempdir_in(root.join(".turbo").join("tools"))?;
             let rustup =
                 rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
             plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?

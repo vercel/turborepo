@@ -184,16 +184,27 @@ fn failed_or_mismatched_installs_publish_nothing() {
     let desired = vec![plan.inventory_tool().clone()];
     let store = Store::open(repo.path()).unwrap();
     let manifest = fixture("1.99.0", "2026-10-01");
-    // A re-spun rustc tarball: same layout, different locked digest.
-    let mut respun = manifest.clone();
-    let at = respun.find("hash = \"").unwrap() + 8;
-    let digit = if &respun[at..=at] == "0" { "1" } else { "0" };
-    respun.replace_range(at..=at, digit);
+    // A re-spun rustc tarball (gzip or the xz copy rustup downloads): same
+    // layout, different locked digest, as a mirror's manifest could claim.
+    let respin = |key: &str| {
+        let mut respun = manifest.clone();
+        let at = respun.find(key).unwrap() + key.len();
+        let digit = if &respun[at..=at] == "0" { "1" } else { "0" };
+        respun.replace_range(at..=at, digit);
+        respun
+    };
+    let (gzip, xz) = (respin("\nhash = \""), respin("xz_hash = \""));
+    // rustup would download an unpinned zstd copy, or the gzip one only.
+    let zst = manifest.replacen("xz_url", "zst_url = \"https://x.test/a\"\nxz_url", 1);
+    let gzip_only = manifest.replacen("xz_url", "unused_url", 1);
     for (components, manifest, status) in [
         (&COMPONENTS[..], manifest.as_str(), 1),
         (&COMPONENTS[..4], manifest.as_str(), 0),
         (&COMPONENTS[..], fixture("1.99.1", "2026-10-01").as_str(), 0),
-        (&COMPONENTS[..], respun.as_str(), 0),
+        (&COMPONENTS[..], gzip.as_str(), 0),
+        (&COMPONENTS[..], xz.as_str(), 0),
+        (&COMPONENTS[..], zst.as_str(), 0),
+        (&COMPONENTS[..], gzip_only.as_str(), 0),
     ] {
         let fixtures = tempfile::tempdir().unwrap();
         let binary = rustup(fixtures.path(), components, manifest, status);
@@ -234,13 +245,29 @@ fn locked_selections_must_satisfy_declarations_and_official_shapes() {
             .get_mut("cargo")
             .unwrap()
     }
-    let mutations: [Mutation; 5] = [
+    let mutations: [Mutation; 8] = [
         |tool| tool.version = "stable".into(),
         |tool| tool.version = "1.99".into(),
         |tool| {
             part(tool).url = part(tool)
                 .url
                 .replace("static.rust-lang.org", "mirror.test")
+        },
+        // A gzip-only lock predates xz pins and must be regenerated.
+        |tool| part(tool).alternates.clear(),
+        |tool| {
+            let xz = part(tool)
+                .alternates
+                .get_mut(&AlternateFormat::TarXz)
+                .unwrap();
+            xz.url = xz.url.replace("static.rust-lang.org", "mirror.test");
+        },
+        |tool| {
+            let xz = part(tool)
+                .alternates
+                .get_mut(&AlternateFormat::TarXz)
+                .unwrap();
+            xz.url = xz.url.replace("/cargo-", "/rustc-");
         },
         |tool| part(tool).root_prefix = Some("cargo".into()),
         |tool| {

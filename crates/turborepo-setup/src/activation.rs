@@ -63,6 +63,12 @@ pub enum Error {
          Windows x64 target"
     )]
     UnsupportedPlatform,
+    /// musl hosts qualify only when every locked tool is verify-system.
+    #[error(
+        "managed tools are not supported on musl Linux hosts such as Alpine; install the \
+         repository's tools in the image and use verify-system for them"
+    )]
+    MuslHost,
     #[error(
         "invalid locked adapter metadata; run turbo setup locally and commit the repaired lock"
     )]
@@ -168,6 +174,10 @@ impl ActivationPlan {
     /// clone-local (see `ExecutionSnapshot::select_clone_local`).
     pub fn inspect_clone_local(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
         Self::qualify(&context)?;
+        // A clone-local selection is always an installed generation.
+        if context.musl() {
+            return Err(Error::MuslHost);
+        }
         let sources = Snapshot::capture(repo)?;
         if sources.previous_lock().is_some() {
             return Err(StorageError::Conflict.into());
@@ -204,7 +214,11 @@ impl ActivationPlan {
             Platform::MacosX64
             | Platform::MacosArm64
             | Platform::LinuxX64Gnu
-            | Platform::LinuxArm64Gnu => cfg!(unix),
+            | Platform::LinuxArm64Gnu
+            // No managed artifacts: `from_selection` then requires a lock
+            // whose every tool is verify-system.
+            | Platform::LinuxX64Musl
+            | Platform::LinuxArm64Musl => cfg!(unix),
             Platform::WindowsX64 => cfg!(windows),
             _ => false,
         };
@@ -234,6 +248,10 @@ impl ActivationPlan {
         context: ExecutionContext,
         verification: Verification,
     ) -> Result<Self, Error> {
+        // Before adapter checks, so musl users get the actionable reason.
+        if context.musl() && (recorded.is_some() || !lock.verify_system_only()) {
+            return Err(Error::MuslHost);
+        }
         let python = sources.ecosystems().python;
         let external: Vec<_> = lock
             .tools()
@@ -452,6 +470,17 @@ impl ActivationPlan {
                 }
                 _ => {}
             }
+            // On Windows every Rust export is a rustup proxy that reads these:
+            // give them the PATH entry's ordinary spelling, and never let a
+            // proxy auto-install into the selected generation.
+            #[cfg(windows)]
+            let (home, cargo_home) = (
+                dunce::simplified(&home).to_path_buf(),
+                dunce::simplified(&cargo_home).to_path_buf(),
+            );
+            if cfg!(windows) {
+                runtime_env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+            }
             runtime_env.insert("RUSTUP_HOME".into(), home.into_os_string());
             runtime_env.insert("RUSTUP_TOOLCHAIN".into(), rust.toolchain().into());
             runtime_env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
@@ -467,6 +496,11 @@ impl ActivationPlan {
             let root = current
                 .tool_tree(go.inventory_tool())
                 .ok_or(Error::StaleInventory)?;
+            // Windows exports `go.exe` as a hard link, which cannot find this
+            // tree from its own path, so GOROOT is required there. Like `bin`,
+            // use the ordinary spelling Go and its tools print and compare.
+            #[cfg(windows)]
+            let root = dunce::simplified(&root).to_path_buf();
             runtime_env.insert("GOROOT".to_owned(), root.into_os_string());
         }
         sources.ensure_current()?;
@@ -521,8 +555,62 @@ impl ActivationPlan {
     }
 }
 
+/// Every variable [`hook_env`] may export, sorted. The shell hook restores only
+/// these from its saved state, so a tampered state cannot unset or overwrite
+/// any other variable.
+pub const HOOK_ENV: [&str; 6] = [
+    "CARGO_HOME",
+    "GOROOT",
+    "GOTOOLCHAIN",
+    "RUSTUP_AUTO_INSTALL",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+];
+
+/// What the shell hook exports beside PATH for a trusted installation at
+/// `root`, derived from its recorded `bin` and tools without reading the
+/// Store, with the values managed run sets. Only Windows needs them: Rust
+/// exports there are rustup proxies, and `go.exe` is a hard link that finds
+/// its tree only through GOROOT. Unix exports run the toolchain directly, so
+/// the hook keeps editing only PATH there.
+pub fn hook_env(root: &Path, bin: &Path, tools: &[Tool]) -> BTreeMap<String, OsString> {
+    let mut env = BTreeMap::new();
+    let Some(generation) = bin.parent().filter(|_| cfg!(windows)) else {
+        return env;
+    };
+    let rust = tools.iter().find(|tool| tool.id == "rust");
+    let rust = rust.and_then(|rust| Some((rust, crate::rustup::host(&rust.platform)?)));
+    if let Some((rust, host)) = rust {
+        let home = generation.join("tools").join("rust");
+        let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
+        #[cfg(windows)]
+        let (home, cargo_home) = (
+            dunce::simplified(&home).to_path_buf(),
+            dunce::simplified(&cargo_home).to_path_buf(),
+        );
+        env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+        env.insert("RUSTUP_HOME".into(), home.into_os_string());
+        let toolchain = format!("{}-{host}", rust.version);
+        env.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
+        env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
+    }
+    if tools.iter().any(|tool| tool.id == "go") {
+        // As managed run sets them: GOTOOLCHAIN=local, and GOROOT at the
+        // Store's `tools/go` beside `bin`, in the ordinary spelling.
+        for (key, value) in crate::go_provision::RUNTIME_ENV {
+            env.insert(key.to_owned(), OsString::from(value));
+        }
+        let goroot = generation.join("tools").join("go");
+        #[cfg(windows)]
+        let goroot = dunce::simplified(&goroot).to_path_buf();
+        env.insert("GOROOT".to_owned(), goroot.into_os_string());
+    }
+    env
+}
+
 /// The uv launchers' settings, for uv processes that do not start through
-/// them, plus the locked interpreter as uv's request. Uses uv's download key
+/// them (every Windows uv: its `.exe` exports have no launcher), plus the
+/// locked interpreter as uv's request. Uses uv's download key
 /// rather than a path: a path request makes `uv pip` install into the managed
 /// interpreter itself instead of the project's virtual environment.
 fn uv_env(
@@ -535,11 +623,13 @@ fn uv_env(
         return Ok(env);
     }
     let generation = current.bin.parent().ok_or(Error::StaleInventory)?;
+    let python_dir = generation.join("tools").join("python");
+    // Like the bin directory, give uv and the virtual environments it creates
+    // the ordinary spelling rather than a verbatim `\\?\` path.
+    #[cfg(windows)]
+    let python_dir = dunce::simplified(&python_dir).to_path_buf();
     env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
-    env.insert(
-        "UV_PYTHON_INSTALL_DIR".into(),
-        generation.join("tools").join("python").into_os_string(),
-    );
+    env.insert("UV_PYTHON_INSTALL_DIR".into(), python_dir.into_os_string());
     if let Some(python) = python {
         env.insert("UV_PYTHON_PREFERENCE".into(), "only-managed".into());
         env.insert("UV_PYTHON".into(), python.key().into());

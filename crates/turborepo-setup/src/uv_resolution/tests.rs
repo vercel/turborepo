@@ -168,7 +168,7 @@ async fn mirrors_serve_the_official_index_and_release_paths_beneath_their_base()
     ];
     let bodies = [index(&["0.13.0"]), sums("0.13.0", &uv::PLATFORMS)];
     let upstream = LoopbackServer::new(paths.clone().into_iter().zip(bodies), |_| {}).unwrap();
-    let fixture = crate::test_support::OwnedSetupFixture::new().unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
     let base = format!("{}/mirror", upstream.origin());
     let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
     let transport = UvTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();

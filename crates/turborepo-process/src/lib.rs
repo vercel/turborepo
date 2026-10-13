@@ -27,6 +27,9 @@ use std::{
 };
 
 pub use command::Command;
+/// Kill-on-close process tree containment, shared with setup's installers.
+#[cfg(windows)]
+pub use job_object::JobObject;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 use turborepo_task_id::TaskId;
@@ -62,6 +65,68 @@ pub fn spawn_child(
     .map_err(io::Error::other)?;
 
     Ok(shared_child)
+}
+
+/// Starts `command` with its process tree tied to this process: terminating
+/// this process (CI cancellation, an IDE's stop button, `taskkill /F`) also
+/// terminates the program and every process it starts. Windows never
+/// cascades termination by itself. Ctrl+C is handled as in [`spawn_child`].
+///
+/// The program starts suspended, joins a kill-on-close job object, and only
+/// then runs, so even descendants it starts immediately are in the job. Like
+/// task jobs, this is best effort: a program that cannot join a job (for
+/// example under a parent job that forbids nesting) runs uncontained.
+#[cfg(windows)]
+pub fn spawn_contained_child(mut command: std::process::Command) -> io::Result<ContainedChild> {
+    use std::os::windows::{io::AsRawHandle, process::CommandExt};
+
+    // The child shares our console, which delivers Ctrl+C to it directly.
+    // Swallow the event so this process stays alive to report its status.
+    ctrlc::set_handler(|| {}).map_err(io::Error::other)?;
+    let job = job_object::JobObject::new()
+        .map_err(|err| debug!("failed to create a job object: {err}"))
+        .ok();
+    if job.is_some() {
+        command.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+    }
+    let mut child = command.spawn()?;
+    let job = match job {
+        Some(job) => match job.assign_suspended_process(child.as_raw_handle()) {
+            Ok(joined) => joined.then_some(job),
+            Err(err) => {
+                // Its threads could not be resumed, so the program never ran.
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(err);
+            }
+        },
+        None => None,
+    };
+    Ok(ContainedChild { child, job })
+}
+
+/// A program started by [`spawn_contained_child`].
+#[cfg(windows)]
+pub struct ContainedChild {
+    child: std::process::Child,
+    job: Option<job_object::JobObject>,
+}
+
+#[cfg(windows)]
+impl ContainedChild {
+    /// Waits for the program to exit on its own, then releases the job:
+    /// anything it deliberately left running (a daemon, an editor window)
+    /// outlives this process, as it would had the program run directly.
+    /// Only terminating this process while the program runs kills the tree.
+    pub fn wait(mut self) -> io::Result<std::process::ExitStatus> {
+        let status = self.child.wait()?;
+        if let Some(job) = &self.job
+            && let Err(err) = job.release_on_close()
+        {
+            debug!("failed to release the job object: {err}");
+        }
+        Ok(status)
+    }
 }
 
 /// A process manager that is responsible for spawning and managing child

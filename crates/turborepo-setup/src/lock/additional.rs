@@ -34,6 +34,7 @@ pub(super) fn project(file: &str, bytes: &[u8]) -> Option<BTreeMap<String, Tool>
                     ArtifactFormat::TarGz => Format::TarGz,
                     ArtifactFormat::Zip => Format::Zip,
                 },
+                alternates: BTreeMap::new(),
                 root_prefix: artifact.root_prefix.as_ref().map(|p| p.as_inner().clone()),
                 destination: None,
                 executables: artifact

@@ -15,6 +15,9 @@ use std::{
 
 const MAX_DIAGNOSTIC_BYTES: usize = 4096;
 
+/// Offline, no module source is allowed: only the existing module cache.
+pub const OFFLINE_ENV: &[(&str, &str)] = &[("GOPROXY", "off")];
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(
@@ -23,10 +26,10 @@ pub enum Error {
     )]
     MissingSums(String),
     #[error(
-        "offline Go module prefetch needs modules missing from the module cache; run turbo setup \
-         online first"
+        "offline Go module prefetch needs modules missing from the module cache (status {code}): \
+         {stderr}"
     )]
-    Offline,
+    Offline { code: i32, stderr: String },
     #[error("`go {command}` exited with status {code}: {stderr}")]
     Failed {
         command: &'static str,
@@ -50,7 +53,7 @@ pub struct Prefetch<'a> {
 
 impl Prefetch<'_> {
     pub fn run(&self) -> Result<(), Error> {
-        let root = self.root.canonicalize()?;
+        let root = canonical(self.root)?;
         // Capture root files before running anything that could change them.
         let mut protected = BTreeMap::new();
         for name in ["go.work", "go.work.sum", "go.mod", "go.sum"] {
@@ -66,7 +69,7 @@ impl Prefetch<'_> {
             for line in String::from_utf8_lossy(&output.stdout).lines() {
                 let module = PathBuf::from(line.trim());
                 if module.is_absolute() {
-                    let module = module.canonicalize()?;
+                    let module = canonical(&module)?;
                     snapshot(&mut protected, module.with_file_name("go.sum"))?;
                     snapshot(&mut protected, module)?;
                 }
@@ -111,7 +114,7 @@ impl Prefetch<'_> {
             process.env(key, value);
         }
         if self.offline {
-            process.env("GOPROXY", "off");
+            process.envs(OFFLINE_ENV.iter().copied());
         }
         let output = process.output()?;
         if output.status.success() {
@@ -122,19 +125,30 @@ impl Prefetch<'_> {
         while !stderr.is_char_boundary(start) {
             start += 1;
         }
-        let tail = &stderr[start..];
+        let tail = stderr[start..].trim().to_owned();
+        let code = output.status.code().unwrap_or(-1);
         Ok(Err(if stderr.contains("missing go.sum entry") {
             Error::MissingSums("go reported a missing go.sum entry".into())
         } else if self.offline && stderr.contains("GOPROXY=off") {
-            Error::Offline
+            Error::Offline { code, stderr: tail }
         } else {
             Error::Failed {
                 command,
-                code: output.status.code().unwrap_or(-1),
-                stderr: tail.trim().to_owned(),
+                code,
+                stderr: tail,
             }
         }))
     }
+}
+
+/// Windows canonical paths are verbatim (`\\?\C:\...`). go would run in and
+/// report that spelling while GOROOT and PATH use the ordinary one, so keep
+/// the ordinary spelling wherever it names the same path.
+fn canonical(path: &Path) -> io::Result<PathBuf> {
+    #[cfg(windows)]
+    return dunce::canonicalize(path);
+    #[cfg(not(windows))]
+    path.canonicalize()
 }
 
 fn read(path: &Path) -> io::Result<Option<Vec<u8>>> {
@@ -153,5 +167,5 @@ fn snapshot(files: &mut BTreeMap<PathBuf, Option<Vec<u8>>>, path: PathBuf) -> io
     Ok(())
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests;

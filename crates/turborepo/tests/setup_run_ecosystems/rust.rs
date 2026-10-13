@@ -49,11 +49,13 @@ fn manifest(version: &str) -> String {
             "https://static.rust-lang.org/dist/2026-10-01/{package}-{version}-{}.tar.gz",
             triple()
         );
+        let xz_url = url.replace(".tar.gz", ".tar.xz");
         text.push_str(&format!(
             "[pkg.{package}]\nversion = \"{version}\"\n[pkg.{package}.target.{}]\navailable = \
-             true\nurl = \"{url}\"\nhash = \"{:x}\"\n",
+             true\nurl = \"{url}\"\nhash = \"{:x}\"\nxz_url = \"{xz_url}\"\nxz_hash = \"{:x}\"\n",
             triple(),
-            Sha256::digest(&url)
+            Sha256::digest(&url),
+            Sha256::digest(&xz_url)
         ));
     }
     text

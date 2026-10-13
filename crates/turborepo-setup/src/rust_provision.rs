@@ -2,6 +2,13 @@
 //! installs the exact locked toolchain into fresh private homes; rustup's
 //! installed component set and manifest digests must then match the lock
 //! before the home is staged. No dependency fetch or task execution.
+//!
+//! Unix exports link the toolchain binaries. A Windows export is a hard link
+//! whose image path is the managed bin, where `rustc.exe` would find neither
+//! its `rustc_driver` DLL nor its sysroot, so every Windows export is instead
+//! rustup's own proxy: a copy of the verified rustup binary inside this tree,
+//! as `rustup-init` lays out `%CARGO_HOME%\bin`. Proxies select the toolchain
+//! from the `RUSTUP_HOME` and `RUSTUP_TOOLCHAIN` that activation sets.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,15 +22,18 @@ use sha2::{Digest, Sha256};
 use turborepo_tool_install::{Store, Tool};
 
 use crate::{
-    lock::{self, Artifact, Format, Installation, Lock, Platform},
+    lock::{self, AlternateFormat, Artifact, Format, Installation, Lock, Platform},
     rust_discovery::{Channel, Toolchain},
     rust_metadata::{MAX_MANIFEST_BYTES, Manifest},
     rust_resolution::{executables, toolchain_name},
     rustup,
-    rustup_provision::{PrivateHomes, RustupTransport},
+    rustup_provision::{self, PrivateHomes, RustupPlan, RustupTransport},
 };
 
 const DIST: &str = "https://static.rust-lang.org/dist/";
+/// The Windows proxy binary, relative to the tree that serves as RUSTUP_HOME.
+const PROXY: &str = "proxy/rustup.exe";
+const MAX_PROXY_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -35,8 +45,8 @@ pub enum Error {
     )]
     MissingTarget,
     #[error(
-        "managed Rust promotion is not qualified for Windows or musl; use a supported GNU \
-         Linux/macOS target or configure verify-system"
+        "managed Rust promotion is not qualified for this host, Windows arm64 or musl; use a \
+         supported macOS, GNU Linux or Windows x64 target or configure verify-system"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this Rust plan unchanged")]
@@ -92,6 +102,8 @@ pub struct RustPlan {
     profile: String,
     options: BTreeMap<String, Vec<String>>,
     parts: BTreeMap<String, Artifact>,
+    /// Windows only: the locked rustup installer digest every proxy copies.
+    proxy_sha256: Option<String>,
 }
 
 impl RustPlan {
@@ -142,7 +154,16 @@ impl RustPlan {
                 .iter()
                 .map(|name| ((*name).to_owned(), format!("bin/{name}{exe}")))
                 .collect();
+            let xz_url = artifact
+                .url
+                .strip_suffix(".tar.gz")
+                .map(|url| url.to_owned() + ".tar.xz");
             if artifact.format != Format::TarGz
+                || artifact.alternates.len() != 1
+                || artifact
+                    .alternates
+                    .get(&AlternateFormat::TarXz)
+                    .is_none_or(|xz| Some(&xz.url) != xz_url.as_ref())
                 || artifact.destination.is_some()
                 || artifact.root_prefix.as_deref() != Some(&format!("{stem}/{directory}"))
                 || artifact.executables != expected
@@ -154,7 +175,28 @@ impl RustPlan {
             return Err(Error::InvalidLock);
         }
         let toolchain = format!("toolchains/{}-{host}", rust.version);
-        let digest = serde_json::to_vec(parts).map_err(|_| Error::InvalidLock)?;
+        let mut digest = serde_json::to_vec(parts).map_err(|_| Error::InvalidLock)?;
+        // A Windows tree also holds the proxy, so its identity follows the
+        // locked rustup installer as well.
+        let proxy_sha256 = if rustup::windows(platform) {
+            let installer = RustupPlan::from_lock(lock, platform).map_err(|e| match e {
+                rustup_provision::Error::MissingTarget => Error::MissingTarget,
+                _ => Error::InvalidLock,
+            })?;
+            let sha256 = installer.inventory_tool().artifact_sha256.clone();
+            digest.extend(sha256.as_bytes());
+            Some(sha256)
+        } else {
+            None
+        };
+        let proxied = proxy_sha256.is_some();
+        let export = |path: &str| {
+            if proxied {
+                PROXY.to_owned()
+            } else {
+                format!("{toolchain}/{path}")
+            }
+        };
         Ok(Self {
             tool: Tool {
                 id: "rust".into(),
@@ -164,13 +206,14 @@ impl RustPlan {
                 executables: parts
                     .values()
                     .flat_map(|artifact| &artifact.executables)
-                    .map(|(name, path)| (name.clone(), format!("{toolchain}/{path}")))
+                    .map(|(name, path)| (name.clone(), export(path)))
                     .collect(),
             },
             host,
             profile,
             options: rust.options.clone(),
             parts: parts.clone(),
+            proxy_sha256,
         })
     }
 
@@ -196,10 +239,7 @@ impl RustPlan {
         transport: &RustupTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedRust>, Error> {
-        if self.tool.platform.starts_with("windows-")
-            || self.tool.platform.ends_with("-musl")
-            || !cfg!(unix)
-        {
+        if !rustup::promotable(&self.tool.platform) {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.contains(&self.tool) {
@@ -210,9 +250,10 @@ impl RustPlan {
         {
             return Ok(None);
         }
+        // Split components: `/` is not a separator under a `\\?\` root.
         let scratch = tempfile::Builder::new()
             .prefix(".rust-")
-            .tempdir_in(store.repository_root()?.join(".turbo/tools"))?;
+            .tempdir_in(store.repository_root()?.join(".turbo").join("tools"))?;
         let homes = PrivateHomes::create(scratch.path())?;
         let mut command = homes.command(rustup, transport);
         command
@@ -234,6 +275,9 @@ impl RustPlan {
             return Err(Error::Rustup(status));
         }
         self.verify(homes.rustup_home())?;
+        if let Some(sha256) = &self.proxy_sha256 {
+            stage_proxy(rustup, homes.rustup_home(), sha256)?;
+        }
         Ok(Some(PreparedRust {
             home: homes.rustup_home().to_owned(),
             _scratch: scratch,
@@ -242,11 +286,29 @@ impl RustPlan {
     }
 
     /// rustup verified every download against its manifest; bind that
-    /// manifest and the exact installed component set to the lock.
+    /// manifest and the exact installed component set to the lock. rustup
+    /// downloads the first published copy of zstd, xz and gzip, so the
+    /// installed manifest's xz and gzip pins must both be the locked ones and
+    /// it must not publish zstd, which turbo.lock never pins. A mirror's
+    /// manifest therefore cannot substitute any downloaded bytes.
     fn verify(&self, home: &Path) -> Result<(), Error> {
-        let rustlib = home
-            .join(format!("toolchains/{}-{}", self.tool.version, self.host))
-            .join("lib/rustlib");
+        // Split components: `/` is not a separator under a `\\?\` root.
+        let toolchain = home.join("toolchains").join(self.toolchain());
+        let rustlib = toolchain.join("lib").join("rustlib");
+        // Proxies run the locked binaries by path, so they must be installed;
+        // Unix exports link them and the Store checks them instead.
+        if self.proxy_sha256.is_some() {
+            let paths = self
+                .parts
+                .values()
+                .flat_map(|part| part.executables.values());
+            for path in paths {
+                let path = path.split('/').fold(toolchain.clone(), |p, c| p.join(c));
+                if !fs::symlink_metadata(path).is_ok_and(|m| m.is_file()) {
+                    return Err(Error::Mismatch);
+                }
+            }
+        }
         let read = |name: &str| -> Result<Vec<u8>, Error> {
             let mut bytes = Vec::new();
             fs::File::open(rustlib.join(name))?
@@ -264,7 +326,14 @@ impl RustPlan {
         for (name, artifact) in &self.parts {
             let (package, target) = split(name, self.host);
             let tarball = manifest.tarball(package, target).ok_or(Error::Mismatch)?;
-            if tarball.url != artifact.url || tarball.sha256 != artifact.sha256 {
+            let xz = artifact
+                .alternates
+                .get(&AlternateFormat::TarXz)
+                .ok_or(Error::Mismatch)?;
+            if tarball.zst
+                || (tarball.url, tarball.sha256) != (&*artifact.url, &*artifact.sha256)
+                || (tarball.xz_url, tarball.xz_sha256) != (&*xz.url, &*xz.sha256)
+            {
                 return Err(Error::Mismatch);
             }
             let qualified = tarball.stem.ends_with(&format!("-{target}"));
@@ -294,6 +363,28 @@ fn split<'a>(name: &'a str, host: &'a str) -> (&'a str, &'a str) {
         Some(target) => ("rust-std", target),
         None => (name, host),
     }
+}
+
+/// Copy the rustup that installed this toolchain into the home as its
+/// Windows proxy, rechecking the copied bytes against the locked installer.
+fn stage_proxy(rustup: &Path, home: &Path, sha256: &str) -> Result<(), Error> {
+    let mut bytes = Vec::new();
+    fs::File::open(rustup)?
+        .take(MAX_PROXY_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if hex::encode(Sha256::digest(&bytes)) != sha256 {
+        return Err(Error::Mismatch);
+    }
+    let (directory, file) = PROXY.split_once('/').ok_or(Error::InvalidLock)?;
+    let directory = home.join(directory);
+    fs::create_dir(&directory)?;
+    let mut proxy = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(directory.join(file))?;
+    // Store flushes the complete staged tree before publication.
+    io::Write::write_all(&mut proxy, &bytes)?;
+    Ok(())
 }
 
 /// A verified private RUSTUP_HOME holding only the locked toolchain.
@@ -327,3 +418,6 @@ impl PreparedRust {
 
 #[cfg(all(test, unix))]
 mod tests;
+
+#[cfg(all(test, windows))]
+mod windows_tests;

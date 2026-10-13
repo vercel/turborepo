@@ -20,26 +20,37 @@ fn put(out: &mut Vec<u8>, fields: &[(u64, usize)]) {
     }
 }
 /// One stored Unix-executable entry, like vendor release zips such as Bun.
-/// Adjacent zero fields (flags, method, times, comments) are packed.
 pub fn stored_zip(path: &str, data: &[u8]) -> Vec<u8> {
-    let (crc, size) = (u64::from(crc32(data)), data.len() as u64);
-    let name = path.len() as u64; // Name length followed by a zero extra length.
-    let mut zip = Vec::new();
-    put(&mut zip, &[(0x04034b50, 4), (20, 2), (0, 8), (crc, 4)]);
-    put(&mut zip, &[(size, 4), (size, 4), (name, 4)]);
-    zip.extend(path.as_bytes());
-    zip.extend(data);
-    let offset = zip.len() as u64;
-    put(
-        &mut zip,
-        &[(0x02014b50, 4), (0x0014_0314, 4), (0, 8), (crc, 4)],
-    );
-    put(&mut zip, &[(size, 4), (size, 4), (name, 4), (0, 6)]);
-    put(&mut zip, &[(0o100755 << 16, 4), (0, 4)]);
-    zip.extend(path.as_bytes());
-    let central = zip.len() as u64 - offset;
-    put(&mut zip, &[(0x06054b50, 4), (0, 4), (0x0001_0001, 4)]);
-    put(&mut zip, &[(central, 4), (offset, 4), (0, 2)]);
+    stored_zip_entries(&[(path, data)])
+}
+
+/// Stored Unix-executable entries, like vendor release zips such as Bun and
+/// Go. Non-ASCII names set the UTF-8 flag, as Go's `go/test` fixtures do.
+/// Adjacent zero fields (method, times, comments) are packed.
+pub fn stored_zip_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let (mut zip, mut central) = (Vec::new(), Vec::new());
+    for (path, data) in entries {
+        let (crc, size) = (u64::from(crc32(data)), data.len() as u64);
+        let name = path.len() as u64; // Name length followed by a zero extra length.
+        let flags = if path.is_ascii() { 0 } else { 0x800 };
+        let offset = zip.len() as u64;
+        put(&mut zip, &[(0x04034b50, 4), (20, 2), (flags, 2), (0, 6)]);
+        put(&mut zip, &[(crc, 4), (size, 4), (size, 4), (name, 4)]);
+        zip.extend(path.as_bytes());
+        zip.extend(*data);
+        put(
+            &mut central,
+            &[(0x02014b50, 4), (0x0014_0314, 4), (flags, 2)],
+        );
+        put(&mut central, &[(0, 6), (crc, 4), (size, 4), (size, 4)]);
+        put(&mut central, &[(name, 4), (0, 6), (0o100755 << 16, 4)]);
+        put(&mut central, &[(offset, 4)]);
+        central.extend(path.as_bytes());
+    }
+    let (offset, size, count) = (zip.len() as u64, central.len() as u64, entries.len() as u64);
+    zip.extend(central);
+    put(&mut zip, &[(0x06054b50, 4), (0, 4), (count, 2), (count, 2)]);
+    put(&mut zip, &[(size, 4), (offset, 4), (0, 2)]);
     zip
 }
 
