@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::ExecutionContext,
-    lock::{Ecosystems, Installation, Snapshot},
+    lock::{Ecosystems, Snapshot},
 };
 
 use super::trust::TrustStore;
@@ -175,11 +175,13 @@ impl Authorization {
         // activate nothing from the repository and keep no user state. A
         // clone-local selection is always an installed `--no-lock` generation.
         let installed = clone_local
-            || sources.previous_lock().is_some_and(|lock| {
-                lock.tools()
-                    .values()
-                    .any(|tool| !matches!(tool.installation, Installation::VerifySystem { .. }))
-            });
+            || sources
+                .previous_lock()
+                .is_some_and(|lock| !lock.verify_system_only());
+        // musl hosts never install tools: say so before reading user state.
+        if installed && context.musl() {
+            return Err(turborepo_setup::activation::Error::MuslHost.into());
+        }
         let trust = installed
             .then(|| TrustStore::new(user_state_base, &root))
             .transpose()?;

@@ -77,6 +77,8 @@ enum Status {
     Active,
     Stale,
     Missing,
+    /// A musl host, where managed tools never activate.
+    Unsupported,
 }
 
 /// `1;<root id>;<stamp>;<status>;<bin>`. The bin is last because it may
@@ -102,6 +104,7 @@ impl State {
             "active" => Status::Active,
             "stale" => Status::Stale,
             "missing" => Status::Missing,
+            "unsupported" => Status::Unsupported,
             _ => return None,
         };
         let bin = Some(fields.next()?).filter(|bin| !bin.is_empty());
@@ -119,6 +122,7 @@ impl State {
             Status::Active => "active",
             Status::Stale => "stale",
             Status::Missing => "missing",
+            Status::Unsupported => "unsupported",
         };
         let bin = self.bin.as_deref().unwrap_or_default();
         format!("1;{};{};{status};{bin}", self.root, self.stamp)
@@ -144,7 +148,13 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
         let previous = std::env::var(STATE).ok().and_then(|s| State::parse(&s));
         let cwd = std::env::current_dir().ok();
         let base = dirs_next::data_local_dir();
-        let changes = changes(previous, &path, cwd.as_deref(), base.as_deref());
+        let musl = || {
+            matches!(
+                turborepo_platform::host_libc(),
+                Ok(Some(turborepo_platform::Libc::Musl { .. }))
+            )
+        };
+        let changes = changes(previous, &path, cwd.as_deref(), base.as_deref(), musl);
         if let Some(notice) = &changes.notice {
             let _ = writeln!(std::io::stderr(), "turbo: {notice}");
         }
@@ -180,6 +190,7 @@ fn changes(
     path: &str,
     cwd: Option<&Path>,
     base: Option<&Path>,
+    musl: impl FnOnce() -> bool,
 ) -> Changes {
     let Some(root) = cwd.and_then(find_root) else {
         // Outside every repository: remove only what the hook added.
@@ -216,8 +227,18 @@ fn changes(
     // only this user's `turbo setup --no-lock` record opts a clone in, so an
     // unrecorded lockless clone stays off quietly too.
     let locked = fs::symlink_metadata(root.join("turbo.lock")).is_ok();
-    let (status, bin, reason) = if !cfg!(unix) || !enabled(&root) {
+    let (status, bin, reason) = if !cfg!(unix) || !enabled(&root) || (locked && external(&root)) {
+        // Like `turbo run`, verify-system tools stay on the caller's PATH and
+        // need no setup record: there is nothing to activate.
         (Status::Off, None, None)
+    } else if musl() {
+        // Like `turbo run`, musl hosts never activate managed artifacts.
+        let status = if locked {
+            Status::Unsupported
+        } else {
+            Status::Off
+        };
+        (status, None, None)
     } else {
         match trust.and_then(|trust| trust.recorded().map_err(|e| e.to_string())) {
             Ok(Some(recorded)) => match recorded.bin.into_os_string().into_string() {
@@ -280,8 +301,21 @@ fn notice(status: Status, reason: Option<&str>) -> Option<String> {
         (Status::Missing, Some(reason)) => Some(format!(
             "cannot activate this repository's managed tools ({reason}). Run `turbo setup`."
         )),
+        (Status::Unsupported, _) => Some(
+            "managed tools are not supported on musl Linux hosts such as Alpine, so none are \
+             active. Install the repository's tools in the image and use verify-system for them."
+                .to_owned(),
+        ),
         (Status::Off | Status::Active, _) => None,
     }
+}
+
+/// turbo.lock selects only verify-system tools. An unreadable lock is not.
+fn external(root: &Path) -> bool {
+    turborepo_setup::lock::Lock::read(root)
+        .ok()
+        .flatten()
+        .is_some_and(|lock| !lock.tools().is_empty() && lock.verify_system_only())
 }
 
 /// The nearest `turbo.lock`, or the local inventory `turbo setup --no-lock`
@@ -503,12 +537,12 @@ mod tests {
 
         let outer = outer.canonicalize().unwrap();
         fs::write(outer.join("turbo.json"), "{}").unwrap();
-        let off = changes(None, "/usr/bin", Some(&outer), Some(&home));
+        let off = changes(None, "/usr/bin", Some(&outer), Some(&home), || false);
         assert!(off.path.is_none() && off.notice.is_none());
         let off_state = State::parse(off.state.clone().unwrap().as_deref().unwrap());
         // Unchanged inputs take the fast path: no output at all.
         assert_eq!(
-            changes(off_state, "/usr/bin", Some(&outer), Some(&home)),
+            changes(off_state, "/usr/bin", Some(&outer), Some(&home), || false),
             Changes::default()
         );
 
@@ -517,15 +551,61 @@ mod tests {
             r#"{"futureFlags":{"experimentalSetup":true}}"#,
         )
         .unwrap();
-        let missing = changes(None, "/usr/bin", Some(&outer), Some(&home));
+        let missing = changes(None, "/usr/bin", Some(&outer), Some(&home), || false);
         assert!(missing.path.is_none());
         assert!(missing.notice.unwrap().contains("not installed"));
         let state = State::parse(missing.state.unwrap().as_deref().unwrap());
         assert_eq!(state.as_ref().unwrap().status, Status::Missing);
         assert_eq!(
-            changes(state, "/usr/bin", Some(&outer), Some(&home)),
+            changes(state, "/usr/bin", Some(&outer), Some(&home), || false),
             Changes::default()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn verify_system_locks_and_musl_hosts_never_activate_managed_tools() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let root = temp.path().join("repo");
+        fs::create_dir_all(root.join(".git")).unwrap();
+        let root = root.canonicalize().unwrap();
+        fs::write(
+            root.join("turbo.json"),
+            r#"{"futureFlags":{"experimentalSetup":true}}"#,
+        )
+        .unwrap();
+        let node = |kind: &str| {
+            let installation = match kind {
+                "verify-system" => r#"{"kind":"verify-system","executables":["node"]}"#,
+                _ => r#"{"kind":"managed","artifacts":{}}"#,
+            };
+            format!(
+                r#"{{"schemaVersion":0,"tools":{{"node":{{"adapter":"node","version":"24.0.0",
+                "declarations":[{{"file":".nvmrc","request":"24.0.0"}}],"installation":{installation}}}}}}}"#
+            )
+        };
+        let status = |changes: &Changes| {
+            State::parse(changes.state.clone().unwrap().as_deref().unwrap())
+                .unwrap()
+                .status
+        };
+        // verify-system tools need no setup record and stay on the caller's
+        // PATH, so no host is told to run `turbo setup`.
+        fs::write(root.join("turbo.lock"), node("verify-system")).unwrap();
+        for musl in [false, true] {
+            let off = changes(None, "/usr/bin", Some(&root), Some(&home), || musl);
+            assert!(off.path.is_none() && off.notice.is_none(), "{off:?}");
+            assert_eq!(status(&off), Status::Off);
+        }
+        // A lock that needs managed tools says why musl hosts activate none.
+        fs::write(root.join("turbo.lock"), node("managed")).unwrap();
+        let musl = changes(None, "/usr/bin", Some(&root), Some(&home), || true);
+        assert!(musl.path.is_none(), "{musl:?}");
+        assert!(musl.notice.as_deref().unwrap().contains("musl"), "{musl:?}");
+        assert_eq!(status(&musl), Status::Unsupported);
+        let glibc = changes(None, "/usr/bin", Some(&root), Some(&home), || false);
+        assert!(glibc.notice.unwrap().contains("not installed"));
     }
 
     #[cfg(unix)]
@@ -578,7 +658,7 @@ mod tests {
         drop(store);
         assert_eq!(find_root(&web).unwrap(), root);
         // Unlike a turbo.lock root, an unrecorded inventory is not an opt-in.
-        let off = changes(None, "/usr/bin", Some(&web), Some(&home));
+        let off = changes(None, "/usr/bin", Some(&web), Some(&home), || false);
         assert!(off.path.is_none() && off.notice.is_none());
 
         let current = Store::inspect(&root).unwrap().unwrap();
@@ -597,12 +677,12 @@ mod tests {
         fs::write(&path, record.to_string()).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
         let bin = current.bin.to_str().unwrap();
-        let active = changes(None, "/usr/bin", Some(&web), Some(&home));
+        let active = changes(None, "/usr/bin", Some(&web), Some(&home), || false);
         assert_eq!(active.path, Some(prepend("/usr/bin", bin)));
         assert!(active.notice.is_none());
         // A lock added later is another resolution: tools stay, with a notice.
         fs::write(root.join("turbo.lock"), "{}").unwrap();
-        let stale = changes(None, "/usr/bin", Some(&web), Some(&home));
+        let stale = changes(None, "/usr/bin", Some(&web), Some(&home), || false);
         assert_eq!(stale.path, Some(prepend("/usr/bin", bin)));
         assert!(stale.notice.unwrap().contains("turbo.lock changed"));
     }
@@ -620,11 +700,12 @@ mod tests {
             &p("/mine:/repo/bin:/usr/bin"),
             Some(temp.path()),
             None,
+            || false,
         );
         assert_eq!(left.path, Some(p("/mine:/usr/bin")));
         assert_eq!(left.state, Some(None));
         assert_eq!(
-            changes(None, "/usr/bin", Some(temp.path()), None),
+            changes(None, "/usr/bin", Some(temp.path()), None, || false),
             Changes::default()
         );
     }
