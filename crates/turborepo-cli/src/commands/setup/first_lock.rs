@@ -516,3 +516,28 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
         untouched(&f);
     }
 }
+#[test]
+fn local_older_corepack_sha224_pins_bind_the_downloaded_pnpm_bytes() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let r = routes(&f, "24.0.0", "10.0.0");
+    let pnpm = &r.iter().find(|(p, _)| p.ends_with(".tgz")).unwrap().1;
+    let good = format!("pnpm@10.0.0+sha224.{:x}", sha2::Sha224::digest(pnpm));
+    let u = LoopbackServer::new(r.clone(), |_| {}).unwrap();
+    let package = f.owned.root().join("package.json");
+    let wrong = format!("pnpm@10.0.0+sha224.{}", "0".repeat(56));
+    fs::write(&package, json!({ "packageManager": wrong }).to_string()).unwrap();
+    assert!(f.run(&u, LOCAL).is_err());
+    assert!(!f.owned.root().join("turbo.lock").exists());
+    fs::write(&package, json!({ "packageManager": good }).to_string()).unwrap();
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    assert_eq!(selected(&f).tools()["pnpm"].version, "10.0.0");
+    let manifest = f.manifest().unwrap();
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    for flags in [LOCAL, &["--check", "--tools-only"]] {
+        assert_eq!(f.run(&empty, flags).unwrap(), 0);
+    }
+    assert_eq!(empty.hits(), 0);
+    assert_eq!(f.manifest().unwrap(), manifest);
+    untouched(&f);
+}

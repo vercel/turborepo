@@ -58,28 +58,34 @@ fn exact_npm_and_pnpm_documents_retain_native_integrity() {
                         digest: SHA512.into()
                     }
                 );
-                assert!(artifact.additional_sha256.is_none());
+                assert!(artifact.byte_pin.is_none());
             }
         }
     }
 }
 
 #[test]
-fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
+fn authored_sha256_and_sha224_are_byte_pins_not_a_registry_or_weak_hash_fallback() {
     let value = document("pnpm", "9.15.9");
+    for (algorithm, digest) in [("sha256", SHA256), ("sha224", &SHA256[..56])] {
+        let pin = CorepackIntegrity {
+            algorithm,
+            digest: digest.to_uppercase(),
+        };
+        let artifact = parse(&value, Manager::Pnpm, "9.15.9", Some(&pin)).unwrap();
+        assert_eq!(
+            artifact.byte_pin,
+            Some(CorepackIntegrity {
+                algorithm,
+                digest: digest.into()
+            })
+        );
+        assert_eq!(artifact.integrity.digest, SHA512);
+    }
     let pin = CorepackIntegrity {
         algorithm: "sha256",
-        digest: SHA256.to_uppercase(),
+        digest: SHA256.into(),
     };
-    let artifact = parse(&value, Manager::Pnpm, "9.15.9", Some(&pin)).unwrap();
-    assert_eq!(
-        artifact.additional_sha256,
-        Some(CorepackIntegrity {
-            algorithm: "sha256",
-            digest: SHA256.into()
-        })
-    );
-    assert_eq!(artifact.integrity.digest, SHA512);
     let wrong = CorepackIntegrity {
         algorithm: "sha512",
         digest: "0".repeat(128),
@@ -88,7 +94,7 @@ fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
         parse(&value, Manager::Pnpm, "9.15.9", Some(&wrong)),
         Err(IntegrityConflict)
     );
-    for algorithm in ["sha1", "sha224", "sha384", "SHA512", "unknown"] {
+    for algorithm in ["sha1", "sha384", "SHA512", "unknown"] {
         let pin = CorepackIntegrity {
             algorithm,
             digest: SHA512.into(),
@@ -98,7 +104,7 @@ fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
             Err(InvalidIntegrity)
         );
     }
-    for (algorithm, length) in [("sha512", 128), ("sha256", 64)] {
+    for (algorithm, length) in [("sha512", 128), ("sha256", 64), ("sha224", 56)] {
         for digest in [
             "".into(),
             "0".repeat(length - 1),
