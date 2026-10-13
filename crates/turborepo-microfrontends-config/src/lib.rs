@@ -367,7 +367,10 @@ impl MicrofrontendsConfigs {
 fn microfrontend_packages(
     package_graph: &PackageGraph,
 ) -> impl Iterator<Item = (&str, PackageName, &turbopath::AnchoredSystemPath)> {
-    package_graph.node_views().filter_map(|(node, view)| {
+    // Borrow each node's name from the graph via a set lookup rather than a
+    // scan of every real package name per node (quadratic in package count).
+    let real_package_names: HashSet<&str> = package_graph.real_package_names().collect();
+    package_graph.node_views().filter_map(move |(node, view)| {
         if !view.is_package_json_scope() {
             return None;
         }
@@ -376,9 +379,7 @@ fn microfrontend_packages(
             turborepo_repository::package_graph::PackageNode::Workspace(PackageName::Root) => "//",
             turborepo_repository::package_graph::PackageNode::Workspace(PackageName::Other(
                 name,
-            )) => package_graph
-                .real_package_names()
-                .find(|candidate| **candidate == name)?,
+            )) => *real_package_names.get(name.as_str())?,
         };
         let package_name = match name {
             "//" => PackageName::Root,
