@@ -262,7 +262,7 @@ impl Policy {
     }
 }
 
-/// Whether the committed `.yarnrc.yml` sets `enableNetwork` for any host in
+/// Whether the committed `.yarnrc.yml` enables the network for any host in
 /// `networkSettings`. Modern Yarn prefers that over the global setting, so it
 /// could re-enable the network that offline setup disables. Read with the
 /// same bounds as lifecycle settings; a malformed file fails closed.
