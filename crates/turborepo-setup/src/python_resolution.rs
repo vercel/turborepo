@@ -2,8 +2,9 @@
 //! The managed uv's own download list decides which python-build-standalone
 //! build serves each target, so selections are ones that uv manages; each
 //! target binds the build's published SHA-256 from the Astral mirror. Listing
-//! runs the verified uv offline with configuration disabled. Nothing is
-//! installed and no system Python is consulted.
+//! runs the verified uv offline with configuration disabled and covers every
+//! platform and architecture, so the lock never depends on the host. Nothing
+//! is installed and no system Python is consulted.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -33,6 +34,8 @@ pub(crate) const RELEASES: &str = "/github/python-build-standalone/releases/down
 const GITHUB: &str = "https://github.com/astral-sh/python-build-standalone/releases/download/";
 
 /// Lock platforms with uv's `(os, arch, libc)` CPython download spellings.
+/// Every other listed architecture or CPU variant (`x86`, `x86_64_v3`,
+/// `armv7`, ...) is never recorded.
 const TARGETS: [(Platform, &str, &str, &str); 8] = [
     (Platform::MacosX64, "macos", "x86_64", "none"),
     (Platform::MacosArm64, "macos", "aarch64", "none"),
@@ -111,6 +114,11 @@ pub enum Error {
     Listing,
     #[error("the managed uv could not list Python downloads; run turbo setup to repair uv")]
     ListingFailed,
+    #[error(
+        "the locked uv lists Python downloads for one architecture only, so turbo.lock would not \
+         cover every platform; require uv 0.7.22 or newer"
+    )]
+    HostOnlyListing,
     #[error("invalid python-build-standalone SHA256SUMS")]
     Checksums,
     #[error("no CPython build known to the locked uv satisfies {file} = {request:?}")]
@@ -132,8 +140,9 @@ pub struct Listing(BTreeMap<Version, BTreeMap<Platform, String>>);
 
 impl Listing {
     /// Parse `uv python list --only-downloads --all-versions --all-platforms
-    /// --output-format json`. Other implementations, variants, prereleases
-    /// and unsupported targets are ignored; inconsistent CPython entries fail.
+    /// --all-arches --output-format json`, which is the same on every host.
+    /// Other implementations, variants, prereleases and unsupported targets
+    /// are ignored; inconsistent CPython entries fail.
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
         if bytes.len() > MAX_LISTING_BYTES {
             return Err(Error::Listing);
@@ -188,6 +197,13 @@ impl Listing {
             {
                 return Err(Error::Listing);
             }
+        }
+        // uv before 0.7.22 ignores `--all-arches` with `--only-downloads` and
+        // lists only builds the host can run, which never include both Linux
+        // architectures. Fail rather than lock Python for one architecture.
+        let listed = |platform: Platform| listing.values().any(|map| map.contains_key(&platform));
+        if !(listed(Platform::LinuxX64Gnu) && listed(Platform::LinuxArm64Gnu)) {
+            return Err(Error::HostOnlyListing);
         }
         Ok(Self(listing))
     }
@@ -285,6 +301,7 @@ pub fn list(uv: &Path) -> Result<Listing, Error> {
             "--only-downloads",
             "--all-versions",
             "--all-platforms",
+            "--all-arches",
             "--output-format",
             "json",
             "--offline",

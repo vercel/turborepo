@@ -64,6 +64,11 @@ fn config_owner_and_metadata_table() -> TestResult {
             validate(owner, Observation::Readable),
             Err(Error::Configured(owner))
         );
+        assert_eq!(validate(owner, Observation::NonFetching), Ok(()));
+        assert_eq!(
+            validate(owner, Observation::Setting(3)),
+            Err(Error::Setting(owner, 3))
+        );
     }
     for contents in [
         "",
@@ -71,6 +76,7 @@ fn config_owner_and_metadata_table() -> TestResult {
         "script-shell=private-secret",
         "//private-registry/:_authToken=private-secret",
     ] {
+        let project = if contents.is_empty() { None } else { Some(1) };
         for owner in [
             ConfigOwner::Repository,
             ConfigOwner::Ancestor,
@@ -92,11 +98,57 @@ fn config_owner_and_metadata_table() -> TestResult {
             };
             fs::create_dir_all(path.parent().ok_or("fixture parent")?)?;
             fs::write(&path, contents)?;
-            let error = fixture.check(&[]).err().ok_or("expected rejection")?;
-            assert_eq!(error, Error::Configured(owner));
-            assert!(!format!("{error} {error:?}").contains("private-secret"));
-            assert!(!format!("{error} {error:?}").contains(&path.display().to_string()));
+            let expected = match owner {
+                ConfigOwner::Repository | ConfigOwner::Ancestor => {
+                    project.map(|line| Error::Setting(owner, line))
+                }
+                _ => Some(Error::Configured(owner)),
+            };
+            let error = fixture.check(&[]).err();
+            assert_eq!(error, expected);
+            let text = format!(
+                "{error:?} {}",
+                error.as_ref().map(ToString::to_string).unwrap_or_default()
+            );
+            assert!(!text.contains("private-secret"));
+            assert!(!text.contains(&path.display().to_string()));
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn project_npmrc_passes_only_with_non_fetching_settings() -> TestResult {
+    let layout = "auto-install-peers = true\nhoist-pattern[]=react\n# \
+                  comment\nresolution-mode=highest\ndedupe-direct-deps=true\n";
+    for owner in [ConfigOwner::Repository, ConfigOwner::Ancestor] {
+        let fixture = Fixture::new()?;
+        let path = match owner {
+            ConfigOwner::Repository => fixture.root.join(".npmrc"),
+            _ => fixture
+                .root
+                .parent()
+                .ok_or("fixture parent")?
+                .join(".npmrc"),
+        };
+        fs::write(&path, layout)?;
+        assert_eq!(fixture.check(&[])?.registry(), PUBLIC_NPM_REGISTRY);
+        fs::write(
+            &path,
+            format!("{layout}@scope:registry=https://npm.example.test/\n"),
+        )?;
+        assert_eq!(fixture.check(&[]).err(), Some(Error::Setting(owner, 6)));
+        fs::write(&path, format!("{layout}save-exact=${{PRIVATE}}\n"))?;
+        assert_eq!(fixture.check(&[]).err(), Some(Error::Setting(owner, 6)));
+        fs::write(&path, vec![b'#'; usize::try_from(npmrc::LIMIT)? + 1])?;
+        assert_eq!(fixture.check(&[]).err(), Some(Error::Inspection(owner)));
+        // A non-fetching project file never relaxes the other layers.
+        fs::write(&path, layout)?;
+        fs::write(fixture.home.join(".npmrc"), layout)?;
+        assert_eq!(
+            fixture.check(&[]).err(),
+            Some(Error::Configured(ConfigOwner::User))
+        );
     }
     Ok(())
 }
@@ -251,7 +303,13 @@ fn wrapper_environments_pass_and_reported_locations_are_inspected() -> TestResul
         let config = custom.join(config);
         fs::create_dir_all(config.parent().ok_or("parent")?)?;
         fs::write(&config, "registry=https://private.invalid/")?;
-        assert_eq!(fixture.check(&env).err(), Some(Error::Configured(owner)));
+        // #14740 reports a project npmrc's first rejected setting by line.
+        let expected = if owner == ConfigOwner::Repository {
+            Error::Setting(owner, 1)
+        } else {
+            Error::Configured(owner)
+        };
+        assert_eq!(fixture.check(&env).err(), Some(expected));
         fs::remove_dir_all(&custom)?;
     }
     Ok(())
@@ -374,9 +432,10 @@ fn npmrc_matching_the_policy_registry_mirror_is_still_rejected() -> TestResult {
     )?;
     assert!(fixture.check(&[]).is_ok());
     fs::write(fixture.root.join(".npmrc"), format!("registry={mirror}/\n"))?;
+    // Still rejected; #14740 names the project npmrc's rejected line.
     assert_eq!(
         fixture.check(&[]).err(),
-        Some(Error::Configured(ConfigOwner::Repository))
+        Some(Error::Setting(ConfigOwner::Repository, 1))
     );
     Ok(())
 }
@@ -389,7 +448,7 @@ fn symlink_invocation_and_actual_node_prefix_are_inspected() -> TestResult {
     let shortcut = fixture.directory.path().join("shortcut");
     symlink(&fixture.root, &shortcut)?;
     let ancestor_config = fixture.root.parent().ok_or("fixture")?.join(".npmrc");
-    fs::write(&ancestor_config, b"")?;
+    fs::write(&ancestor_config, b"registry=https://npm.example.test/")?;
     assert_eq!(
         inspect_inputs(
             &shortcut,
@@ -400,7 +459,7 @@ fn symlink_invocation_and_actual_node_prefix_are_inspected() -> TestResult {
             Some(fixture.directory.path())
         )
         .err(),
-        Some(Error::Configured(ConfigOwner::Ancestor))
+        Some(Error::Setting(ConfigOwner::Ancestor, 1))
     );
     fs::remove_file(ancestor_config)?;
     let bundled = fixture
@@ -485,21 +544,22 @@ fn homebrew_bundled_prefix_is_allowed_only_while_its_global_config_is_inspected(
     use std::os::unix::fs::symlink;
     let fixture = Fixture::new()?;
     // GitHub's macOS images: `brew install node@22 && brew link --force`.
+    // Linking makes real `lib/node_modules/**` directories and links each file.
     let brew = fixture.directory.path().join("homebrew");
     let keg = brew.join("Cellar/node@22/22.0.0");
     for dir in [
         brew.join("bin"),
         keg.join("bin"),
-        brew.join("lib/node_modules"),
+        brew.join("lib/node_modules/npm"),
+        keg.join("lib/node_modules/npm"),
     ] {
         fs::create_dir_all(dir)?;
     }
     fs::write(keg.join("bin/node"), b"never execute this")?;
     symlink(keg.join("bin/node"), brew.join("bin/node"))?;
-    fs::create_dir_all(keg.join(BUNDLED_NPMRC).parent().ok_or("fixture")?)?;
     symlink(
-        keg.join("lib/node_modules/npm"),
-        brew.join("lib/node_modules/npm"),
+        "../../../Cellar/node@22/22.0.0/lib/node_modules/npm/npmrc",
+        brew.join(BUNDLED_NPMRC),
     )?;
     let check = |node: Option<&Path>| {
         inspect_inputs(
@@ -596,5 +656,56 @@ fn windows_global_npm_prefix_is_inspected_and_required() -> TestResult {
         assert_eq!(result.err(), Some(Error::Configured(ConfigOwner::System)));
         fs::remove_file(path)?;
     }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn only_a_linked_keg_npmrc_in_its_own_cellar_is_followed() -> TestResult {
+    use std::os::unix::fs::symlink;
+    let fixture = Fixture::new()?;
+    let brew = fixture.directory.path().join("homebrew");
+    let link = brew.join(BUNDLED_NPMRC);
+    let homebrew = format!("prefix = {}\n", brew.display());
+    let check = || {
+        inspect_inputs(
+            &fixture.root,
+            &fixture.home,
+            None,
+            &[],
+            vec![brew.join("etc/npmrc")],
+            Some(fixture.directory.path()),
+        )
+        .err()
+    };
+    let other = fixture.directory.path().join("other");
+    fs::create_dir_all(link.parent().ok_or("fixture")?)?;
+    for target in [
+        other.join(BUNDLED_NPMRC),
+        other.join("Cellar/node@22/22.0.0").join(BUNDLED_NPMRC),
+        brew.join("Cellar/node@22").join(BUNDLED_NPMRC),
+        brew.join("Cellar/node@22/22.0.0/libexec")
+            .join(BUNDLED_NPMRC),
+        brew.join("Cellar/node@22/22.0.0/npmrc"),
+    ] {
+        fs::create_dir_all(target.parent().ok_or("fixture")?)?;
+        fs::write(&target, &homebrew)?;
+        symlink(&target, &link)?;
+        let blocked = Some(Error::Inspection(ConfigOwner::System));
+        assert_eq!(check(), blocked, "{target:?}");
+        fs::remove_file(&link)?;
+    }
+    // A keg-shaped link must still resolve to a regular file.
+    let keg = brew.join("Cellar/node@22/22.0.0").join(BUNDLED_NPMRC);
+    symlink(&keg, &link)?;
+    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::System)));
+    fs::create_dir_all(&keg)?;
+    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::System)));
+    fs::remove_dir(&keg)?;
+    fs::write(&keg, &homebrew)?;
+    assert_eq!(check(), None);
+    // No other layer follows a link, even into a keg.
+    symlink(&keg, fixture.home.join(".npmrc"))?;
+    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::User)));
     Ok(())
 }

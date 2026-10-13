@@ -75,8 +75,10 @@ impl Lock {
             .transpose()
     }
 
-    /// Maps are ordered by the schema; provenance and system executable lists
-    /// are sets of locations/names, not resolution precedence.
+    /// Two-space indented JSON with a trailing newline, so lock updates are
+    /// reviewable line by line. Maps are ordered by the schema; provenance and
+    /// system executable lists are sets of locations/names, not resolution
+    /// precedence.
     pub fn canonical_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut document = self.document().clone();
         for tool in document.tools.values_mut() {
@@ -85,7 +87,7 @@ impl Lock {
                 executables.sort();
             }
         }
-        let mut bytes = serde_json::to_vec(&document).map_err(|_| Error::Json)?;
+        let mut bytes = serde_json::to_vec_pretty(&document).map_err(|_| Error::Json)?;
         bytes.push(b'\n');
         if bytes.len() > MAX_LOCK_BYTES {
             return Err(Error::TooLarge);
@@ -119,6 +121,19 @@ impl Lock {
         }
         Ok(locked == current)
     }
+}
+
+/// Existing bytes already record `canonical` when they parse to the same
+/// canonical lock. Compact or differently ordered locks from earlier writers
+/// stay untouched until a selection changes: formatting alone never rewrites
+/// a tracked lock.
+pub(super) fn records(existing: Option<&[u8]>, canonical: &[u8]) -> bool {
+    existing.is_some_and(|existing| {
+        existing == canonical
+            || Lock::parse(existing)
+                .and_then(|lock| lock.canonical_bytes())
+                .is_ok_and(|bytes| bytes == canonical)
+    })
 }
 
 // No following final-component links, including dangling links; nonblocking
@@ -321,7 +336,7 @@ fn write_with(
 ) -> Result<WriteOutcome, StorageError> {
     let bytes = lock.canonical_bytes()?;
     let mut guard = WriterStorage::acquire(root)?;
-    if guard.read_lock()?.as_deref() == Some(&bytes) {
+    if records(guard.read_lock()?.as_deref(), &bytes) {
         return Ok(WriteOutcome::Unchanged);
     }
     before_replace()?;

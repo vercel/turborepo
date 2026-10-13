@@ -336,6 +336,7 @@ fn authoritative_pnpm_keeps_wrong_manager_advisories_in_frozen_local_and_check()
             FROZEN,
             &["--tools-only", "--no-frozen"],
             &["--check", "--tools-only", "--offline"],
+            &["--check"],
         ] {
             assert_eq!(f.run(&u, flags).unwrap(), 0);
             assert_eq!(publication_guards::state(f.owned.root()), before);
@@ -445,6 +446,12 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
+        } else if flags == ["--check"] {
+            // Like --check --tools-only: nothing installed is an error, read-only.
+            let result = f.run(&u, &flags);
+            assert!(result.is_err() && !matches!(result, Err(Error::NotImplemented)));
+            assert_eq!(u.hits(), 0);
+            assert!(!f.owned.root().join(".turbo").exists());
         } else {
             let result = f.run(&u, &flags);
             // `--no-lock --offline` stays a pending combination (no offline

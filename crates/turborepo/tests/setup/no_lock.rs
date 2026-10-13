@@ -126,3 +126,27 @@ fn production_no_lock_ci_healthy_repeat_has_positive_pins_record_and_no_traffic(
     }
     eprintln!("Production no-lock Linux qualification: {positive}/4 positive, 0 blocked");
 }
+
+#[test]
+fn production_no_lock_without_node_names_the_missing_declaration() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(root, "package.json", r#"{"packageManager":"pnpm@10.0.0"}"#);
+    let words = ["setup", "--no-lock", "--tools-only"];
+    // The shared `invoke` helper adds a git-only `host-bin` PATH to the root on
+    // first use (#14639 composition), so snapshot after it exists.
+    failure(root, &words, true, "--no-lock needs a Node declaration");
+    let before = snapshot(root);
+    let text = failure(root, &words, true, "--no-lock needs a Node declaration");
+    assert!(
+        diagnostic_contains(&text, "Declare Node in .nvmrc"),
+        "{text}"
+    );
+    assert!(
+        !diagnostic_contains(&text, "native resolution record"),
+        "{text}"
+    );
+    assert_eq!(snapshot(root), before);
+    assert!(!root.join(".turbo").exists());
+}
