@@ -1,4 +1,4 @@
-//! Native local/frozen provisioning and read-only tools-only checks/plans.
+//! Native local/frozen/no-lock provisioning, read-only checks and tools-only plans.
 //! No execution.
 
 use miette::Diagnostic;
@@ -30,8 +30,8 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use local or frozen provisioning, --plan --tools-only \
-         reports or --check readiness checks"
+        "this setup mode is not implemented; use local or frozen provisioning, --plan \
+         --tools-only reports or --check readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
@@ -429,6 +429,7 @@ mod tests {
                 vec!["--frozen"],
                 vec!["--no-frozen"],
                 vec!["--force"],
+                vec!["--no-lock"],
                 vec!["--no-frozen", "--update-lock"],
             ] {
                 let request = request(&flags, ci).unwrap();
@@ -439,7 +440,7 @@ mod tests {
         for (flags, mode) in [
             (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
             (vec!["--offline"], Mode::Provision),
-            (vec!["--no-lock"], Mode::Provision),
+            (vec!["--no-lock", "--force"], Mode::Provision),
         ] {
             let request = request(&flags, false).unwrap();
             assert_eq!(request.mode, mode);

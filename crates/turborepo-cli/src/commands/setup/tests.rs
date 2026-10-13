@@ -324,12 +324,15 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         vec!["--frozen"],
         vec!["--plan", "--tools-only", "--no-lock"],
         vec!["--frozen", "--tools-only", "--offline"],
-        vec!["--no-lock"],
+        vec!["--no-lock", "--offline"],
         vec!["--frozen", "--offline"],
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        if flags == ["--no-frozen", "--tools-only"] || flags == ["--frozen"] {
+        if flags == ["--no-frozen", "--tools-only"]
+            || flags == ["--frozen"]
+            || flags == ["--no-lock"]
+        {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else if flags == ["--check"] {

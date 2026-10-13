@@ -367,7 +367,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         // Plain setup and --check act like --tools-only, so they reach the same gate.
         let supported = !words
             .iter()
-            .any(|word| matches!(*word, "--plan" | "--offline" | "--no-lock" | "--__test-run"));
+            .any(|word| matches!(*word, "--plan" | "--offline" | "--__test-run"));
         // A Cargo workspace without a root rust-toolchain file declares no tool.
         let text = if supported && words.contains(&"--check") {
             let (code, text) = invoke(root, &words, false);
@@ -389,6 +389,9 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
                 false,
                 match (supported, QUALIFIED) {
                     (false, _) => PENDING,
+                    (true, true) if words.contains(&"--no-lock") => {
+                        "invalid or unsupported native resolution record"
+                    }
                     (true, true) => "a native Node declaration is required",
                     (true, false) => UNQUALIFIED,
                 },
@@ -421,7 +424,16 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             UNQUALIFIED
         },
     );
-    failure(root, &["setup", "--no-lock"], true, PENDING);
+    failure(
+        root,
+        &["setup", "--no-lock"],
+        true,
+        if QUALIFIED {
+            "invalid or unsupported native resolution record"
+        } else {
+            UNQUALIFIED
+        },
+    );
 }
 
 #[test]

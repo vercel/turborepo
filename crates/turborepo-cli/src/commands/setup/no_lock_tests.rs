@@ -25,12 +25,17 @@ fn tracked(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
 }
 #[test]
 fn no_lock_ci_repeat_preserves_24_0_pin_generation_and_zero_advance_metadata() {
-    for legacy in [false, true] {
+    for (legacy, flags) in [
+        (false, NO_LOCK),
+        (true, NO_LOCK),
+        (false, &["--no-lock"][..]),
+        (true, &["--no-lock"][..]),
+    ] {
         let f = fresh();
         fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
         let before = tracked(&f);
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
-        assert_eq!(f.run(&u, NO_LOCK).unwrap(), 0); // Also run with actual CI=1.
+        assert_eq!(f.run(&u, flags).unwrap(), 0); // Also run with actual CI=1.
         assert_eq!(u.hits(), 7);
         let pinned = selection(&f);
         let independent = recovery(&f, &pinned);
@@ -40,7 +45,7 @@ fn no_lock_ci_repeat_preserves_24_0_pin_generation_and_zero_advance_metadata() {
         let generation = current(&f).bin;
         let manifest = f.manifest();
         let advanced = LoopbackServer::new(routes(&f, "24.1.0", "10.0.0"), |_| {}).unwrap();
-        assert_eq!(f.run(&advanced, NO_LOCK).unwrap(), 0);
+        assert_eq!(f.run(&advanced, flags).unwrap(), 0);
         assert_eq!(advanced.hits(), 0);
         assert_eq!(selection(&f), pinned);
         assert_eq!(selection(&f).tools()["node"].version, "24.0.0");
