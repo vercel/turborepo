@@ -88,11 +88,11 @@ impl NativeRecord {
         if let Some(manager) = &manager {
             let pnpm = &selection.tools()["pnpm"];
             if manager.manager != Manager::Pnpm
-                || validated(crate::js_resolution::exact_pnpm(manager))? != pnpm.version
+                || validated(crate::js_resolution::exact_manager(manager))? != pnpm.version
             {
                 return Err(Error::Invalid);
             }
-            validated(crate::js_resolution::validate_pnpm(pnpm, manager))?;
+            validated(crate::js_resolution::validate_registry(pnpm, manager))?;
             // SHA-512 cannot be proven from archive SHA-256 bookkeeping. Never
             // invent byte-verification evidence for an unsupported record.
             if manager
