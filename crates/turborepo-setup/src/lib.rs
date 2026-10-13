@@ -7,6 +7,7 @@ pub mod ephemeral_reconcile;
 pub mod execution_identity;
 pub mod go_discovery;
 pub mod js_resolution;
+pub mod lifecycle;
 pub mod lock;
 pub mod native_baseline;
 pub mod node;
