@@ -659,6 +659,34 @@ fn render(shell: HookShell, changes: &Changes) -> String {
     out
 }
 
+/// One prompt's PowerShell export, the state it leaves, and the variable state
+/// it leaves (`__TURBO_HOOK_ENV`), for setup's native Windows fixtures. `vars`
+/// is the shell's environment, including the hook's own variable state.
+#[cfg(all(test, windows))]
+pub(crate) fn powershell_for_tests(
+    state: Option<&str>,
+    path: &str,
+    cwd: &Path,
+    base: &Path,
+    vars: impl Fn(&str) -> Option<String>,
+) -> (String, Option<String>, Option<String>) {
+    let previous = state.and_then(State::parse);
+    let changes = changes_with(
+        previous,
+        path,
+        Some(cwd),
+        Some(base),
+        &Host::current(),
+        || false,
+        &vars,
+    );
+    (
+        render(HookShell::PowerShell, &changes),
+        changes.state.flatten(),
+        changes.env_state.flatten(),
+    )
+}
+
 /// The PATH and variables the hook applies on entering `cwd`, for native
 /// Windows setup journeys.
 #[cfg(all(test, windows))]
@@ -849,6 +877,23 @@ mod tests {
         assert_eq!(
             render(HookShell::PowerShell, &state),
             "$env:__TURBO_HOOK_STATE = '1;x'\n"
+        );
+        // Runtime variables sit between PATH and the state; `None` unsets.
+        let env = Changes {
+            env: vec![
+                ("GOROOT".into(), Some(r"C:\it's".into())),
+                ("GOTOOLCHAIN".into(), None),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(
+            render(HookShell::PowerShell, &env),
+            "$env:GOROOT = 'C:\\it''s'\nRemove-Item -LiteralPath Env:GOTOOLCHAIN -ErrorAction \
+             SilentlyContinue\n"
+        );
+        assert_eq!(
+            render(HookShell::Zsh, &env),
+            "export GOROOT='C:\\it'\\''s';\nunset GOTOOLCHAIN;\n"
         );
     }
 
