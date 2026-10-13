@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, ffi::OsString, mem, process, sync::Arc};
+use std::{collections::HashMap, env, ffi::OsString, mem, sync::Arc};
 
 use camino::Utf8Path;
 pub use error::Error;
@@ -21,7 +21,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, telemetry, unlink,
+        login, logout, ls, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
@@ -39,7 +39,7 @@ pub use args::{
     AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
     EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
     GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
-    QuerySubcommand, RunArgs, TelemetryCommand, Verbosity,
+    QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -47,7 +47,7 @@ fn exit_with_heap_profile(code: i32) -> ! {
     #[cfg(feature = "heap-dhat")]
     crate::heap_profile::finish_global();
 
-    process::exit(code);
+    crate::process_exit::exit(code);
 }
 
 // Global turbo sets this environment variable to its cwd so that local
@@ -254,6 +254,11 @@ fn maintain_agent_guidance(repo_root: &AbsoluteSystemPath, args: &Args, has_repo
         Ok(agent_guidance::MaintenanceStatus::Locked) => {
             warn!("Skipped AGENTS.md update because another turbo invocation is updating it");
         }
+        Ok(agent_guidance::MaintenanceStatus::OutsideRepository) => {
+            warn!(
+                "Skipped AGENTS.md update because it is a symlink to a path outside the repository"
+            );
+        }
         Err(error) => {
             warn!(
                 "Could not update AGENTS.md: {error}; continuing without changing the command \
@@ -302,6 +307,42 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
     }
 }
 
+// Shared by real dispatch and owned CLI fixtures, never a user-facing override.
+pub(crate) fn dispatch_setup(
+    args: &Args,
+    execute: impl FnOnce(&Args, &SetupArgs) -> Result<i32, setup::Error>,
+) -> Option<Result<i32, setup::Error>> {
+    match args.command.as_ref()? {
+        Command::Setup { setup_args } => Some(execute(args, setup_args)),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn setup_dispatch_delegates_only_setup_before_worker_bootstrap()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::ffi::OsString;
+    for words in [
+        vec!["turbo", "setup", "--frozen", "--tools-only"],
+        vec!["turbo", "run", "build"],
+    ] {
+        let args = Args::parse_args(words.into_iter().map(OsString::from).collect())?;
+        let result = dispatch_setup(&args, |_, request| {
+            assert!(request.frozen && request.tools_only);
+            Err(setup::Error::NotImplemented)
+        });
+        assert_eq!(
+            result.is_some(),
+            matches!(args.command, Some(Command::Setup { .. }))
+        );
+        if let Some(result) = result {
+            assert!(matches!(result, Err(setup::Error::NotImplemented)));
+        }
+    }
+    Ok(())
+}
+
 /// Runs the CLI by parsing arguments with usage-rs, then either calling Rust
 /// code directly or returning a payload for the Go code to use.
 ///
@@ -334,6 +375,12 @@ pub fn run(
         let _span = tracing::info_span!("cli_arg_parsing").entered();
         Args::new(env::args_os().collect())
     };
+
+    // Setup must not bootstrap task configuration, telemetry, agent guidance,
+    // HTTP clients, or worker runtimes. Help already exited during parsing.
+    if let Some(result) = dispatch_setup(&cli_args, setup::run) {
+        return result.map_err(Into::into);
+    }
 
     // Initialize rayon's global pool before the tokio runtime so we
     // control thread count and avoid lazy initialization during a hot path.
@@ -460,6 +507,7 @@ async fn run_main(
     };
 
     let cli_result = match command {
+        Command::Setup { .. } => unreachable!("setup is dispatched before runtime startup"),
         Command::Bin => {
             CommandEventBuilder::new("bin")
                 .with_parent(&root_telemetry)

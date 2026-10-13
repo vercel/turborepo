@@ -35,6 +35,7 @@ pub fn resolve_affected_tasks(
     scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
+    managed_setup: bool,
 ) -> Result<HashSet<TaskId<'static>>, crate::Error> {
     let selector = TargetSelector {
         git_range: Some(GitRange {
@@ -55,6 +56,7 @@ pub fn resolve_affected_tasks(
         repo_root,
         None,
         &TaskSelectorContext {
+            managed_setup,
             global_deps,
             package_has_tag: &|_, _| false,
             package_selections: &HashMap::new(),
@@ -109,6 +111,8 @@ pub fn filter_engine_to_tasks(
 /// Pre-resolved package selections preserve legacy selectors' package-graph
 /// and change-detection semantics when tags are used without filterUsingTasks.
 pub struct TaskSelectorContext<'a> {
+    /// Whether HEAD contains a setup lock and experimentalSetup is enabled.
+    pub managed_setup: bool,
     pub global_deps: &'a [String],
     pub package_has_tag: &'a dyn Fn(&PackageName, &str) -> bool,
     pub package_selections: &'a HashMap<String, HashSet<PackageName>>,
@@ -131,6 +135,7 @@ pub fn filter_engine_to_tasks_with_inclusions(
         scm,
         repo_root,
         &TaskSelectorContext {
+            managed_setup: false,
             global_deps,
             package_has_tag: &|_, _| false,
             package_selections: &HashMap::new(),
@@ -311,6 +316,7 @@ fn resolve_base_tasks(
         scm,
         repo_root,
         context.global_deps,
+        context.managed_setup,
     )?;
 
     let mut tasks = match (tasks_from_packages, tasks_from_git_range) {
@@ -408,6 +414,7 @@ fn resolve_git_range(
     scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     global_deps: &[String],
+    managed_setup: bool,
 ) -> Result<Option<HashSet<TaskId<'static>>>, crate::Error> {
     let git_range = match &selector.git_range {
         Some(range) => range,
@@ -418,11 +425,12 @@ fn resolve_git_range(
 
     match changed_files {
         Ok(files) => {
-            let affected = crate::task_change_detector::affected_task_ids(
+            let affected = crate::task_change_detector::affected_task_ids_with_managed_setup(
                 engine,
                 pkg_dep_graph,
                 &files,
                 global_deps,
+                managed_setup,
             );
             Ok(Some(affected))
         }
@@ -473,11 +481,12 @@ fn resolve_match_dependencies(
 
     match changed_files {
         Ok(files) => {
-            let affected = crate::task_change_detector::affected_task_ids(
+            let affected = crate::task_change_detector::affected_task_ids_with_managed_setup(
                 engine,
                 pkg_dep_graph,
                 &files,
                 context.global_deps,
+                context.managed_setup,
             );
             // Intersection: task must be in the candidate set AND affected
             Ok(candidate_tasks.intersection(&affected).cloned().collect())
@@ -883,6 +892,7 @@ mod tests {
         let edges = [(web.clone(), lib.clone()), (api_test.clone(), api.clone())];
         let detector = fixed_changed_files(&[]);
         let context = super::TaskSelectorContext {
+            managed_setup: false,
             global_deps: &[],
             package_has_tag: &|package, label| {
                 package == &PackageName::from("web") && label == "ci"
@@ -963,6 +973,7 @@ mod tests {
         let edges = [(web.clone(), lib.clone())];
         let detector = fixed_changed_files(&["packages/lib/src/index.ts"]);
         let context = super::TaskSelectorContext {
+            managed_setup: false,
             global_deps: &[],
             package_has_tag: &|_, _| false,
             package_selections: &HashMap::new(),
@@ -1022,6 +1033,7 @@ mod tests {
             &detector,
             root,
             &[],
+            false,
         )
         .unwrap();
 
@@ -1394,6 +1406,7 @@ mod tests {
             root,
             None,
             &super::TaskSelectorContext {
+                managed_setup: false,
                 global_deps: &[],
                 package_has_tag: &|_, _| false,
                 package_selections: &HashMap::new(),
@@ -1441,6 +1454,7 @@ mod tests {
             root,
             None,
             &super::TaskSelectorContext {
+                managed_setup: false,
                 global_deps: &[],
                 package_has_tag: &|_, _| false,
                 package_selections: &HashMap::new(),
@@ -1582,6 +1596,7 @@ mod tests {
             root,
             None,
             &super::TaskSelectorContext {
+                managed_setup: false,
                 global_deps: &[],
                 package_has_tag: &|_, _| false,
                 package_selections: &HashMap::new(),
@@ -1959,6 +1974,7 @@ mod tests {
             root,
             None,
             &super::TaskSelectorContext {
+                managed_setup: false,
                 global_deps: &[],
                 package_has_tag: &|_, _| false,
                 package_selections: &HashMap::new(),
@@ -2010,6 +2026,7 @@ mod tests {
             root,
             None,
             &super::TaskSelectorContext {
+                managed_setup: false,
                 global_deps: &[],
                 package_has_tag: &|_, _| false,
                 package_selections: &HashMap::new(),

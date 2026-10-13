@@ -114,39 +114,6 @@ impl PackageWatcher {
         })
     }
 
-    #[cfg(test)]
-    #[expect(
-        clippy::result_large_err,
-        reason = "test hook returns the same package discovery error"
-    )]
-    fn new_with_discovery_hook(
-        root: AbsoluteSystemPathBuf,
-        source: impl Into<WatchSource>,
-        cookie_writer: CookieWriter,
-        allow_no_package_manager: bool,
-        hook: DiscoveryHook,
-    ) -> Result<Self, package_manager::Error> {
-        let source = source.into();
-        let (exit_tx, exit_rx) = oneshot::channel();
-        let repository_ignore = source
-            .repository_ignore()
-            .unwrap_or_else(|| crate::RepositoryIgnore::new(root.as_std_path()));
-        let mut subscriber = Subscriber::new(
-            root,
-            cookie_writer,
-            allow_no_package_manager,
-            repository_ignore,
-        )?;
-        subscriber.discovery_hook = Some(hook);
-        let package_discovery_lazy = subscriber.package_discovery();
-        let handle = tokio::spawn(subscriber.watch(exit_rx, source));
-        Ok(Self {
-            _exit_tx: exit_tx,
-            _handle: handle,
-            package_discovery_lazy,
-        })
-    }
-
     pub fn watch_discovery(&self) -> watch::Receiver<Option<DiscoveryData>> {
         self.package_discovery_lazy.watch()
     }
@@ -794,141 +761,132 @@ mod test {
             atomic::{AtomicUsize, Ordering},
         };
 
+        use tokio::sync::{mpsc, oneshot};
+
+        use super::{PackageState, State, Subscriber};
+        use crate::WatchSource;
+
         let tmp = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
             .unwrap()
             .to_realpath()
             .unwrap();
-        repo_root
-            .join_component("package.json")
-            .create_with_contents(r#"{"name":"root","packageManager":"npm@10.0.0"}"#)
-            .unwrap();
-
         let calls = Arc::new(AtomicUsize::new(0));
         let in_flight = Arc::new(AtomicUsize::new(0));
         let max_in_flight = Arc::new(AtomicUsize::new(0));
-        let gate = Arc::new(tokio::sync::Notify::new());
+        let (started_tx, mut started_rx) = mpsc::unbounded_channel();
 
         let hook = {
             let calls = calls.clone();
             let in_flight = in_flight.clone();
             let max_in_flight = max_in_flight.clone();
-            let gate = gate.clone();
             Arc::new(move |_, _| {
                 let calls = calls.clone();
                 let in_flight = in_flight.clone();
                 let max_in_flight = max_in_flight.clone();
-                let gate = gate.clone();
+                let started_tx = started_tx.clone();
                 Box::pin(async move {
-                    let call = calls.fetch_add(1, Ordering::SeqCst);
+                    let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
                     let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
                     max_in_flight.fetch_max(now, Ordering::SeqCst);
-                    // Only the first discovery is gated, so the coalesced
-                    // follow-up is free to complete.
-                    if call == 0 {
-                        gate.notified().await;
-                    }
+                    let (release_tx, release_rx) = oneshot::channel::<()>();
+                    started_tx.send((call, release_tx)).unwrap();
+                    release_rx.await.unwrap();
                     in_flight.fetch_sub(1, Ordering::SeqCst);
-                    super::PackageState::NoPackageManager("fake discovery".to_string())
+                    PackageState::NoPackageManager(format!("scan-{call}"))
                 })
-                    as std::pin::Pin<
-                        Box<dyn std::future::Future<Output = super::PackageState> + Send>,
-                    >
+                    as std::pin::Pin<Box<dyn std::future::Future<Output = PackageState> + Send>>
             })
         };
 
-        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
-        let recv = watcher.watch();
+        // Drive the production handlers directly. Native watchers can deliver
+        // one burst across several scans, so filesystem sleeps cannot establish
+        // that every invalidation arrived during the gated discovery.
+        let (_file_event_tx, source) = WatchSource::channel();
         let cookie_writer = CookieWriter::new(
-            watcher.cookie_dir(),
-            Duration::from_millis(100),
-            recv.clone(),
+            &repo_root.join_component("cookies"),
+            Duration::from_secs(5),
+            source,
         );
-
-        let package_watcher = PackageWatcher::new_with_discovery_hook(
+        let mut subscriber = Subscriber::new(
             repo_root.clone(),
-            recv,
             cookie_writer,
             false,
-            hook,
+            crate::RepositoryIgnore::new(repo_root.as_std_path()),
         )
         .unwrap();
+        subscriber.discovery_hook = Some(hook);
+        // Observe publication without discover_packages(), which writes cookie
+        // files and can itself trigger additional invalidations while pending.
+        let published = subscriber.package_discovery_tx.subscribe();
+        let (package_state_tx, mut package_state_rx) = mpsc::channel(256);
+        let (version, debouncer) = subscriber.queue_rediscovery(true, package_state_tx.clone());
+        let mut state = State::Pending {
+            version,
+            debouncer,
+            rerun_after_current: false,
+        };
 
-        // Wait for the initial discovery to be in flight (its debounce has
-        // already fired by the time the fake is entered).
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-        while calls.load(Ordering::SeqCst) < 1 || in_flight.load(Ordering::SeqCst) < 1 {
-            assert!(
-                tokio::time::Instant::now() < deadline,
-                "discovery never started"
-            );
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-
-        // Deliver a burst of root package.json invalidations while the scan
-        // is running.
-        for i in 0..20 {
-            repo_root
-                .join_component("package.json")
-                .create_with_contents(format!(
-                    r#"{{"name":"root","packageManager":"npm@10.0.0","version":"0.0.{i}"}}"#
-                ))
-                .unwrap();
-        }
-        // Give the watcher a moment to process the burst.
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        gate.notify_waiters();
-
-        // Fresh state must eventually be published (as an InvalidState error,
-        // since the fake reports no package manager).
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-        loop {
-            match package_watcher.discover_packages().await {
-                Some(_) => break,
-                None => {
-                    assert!(
-                        tokio::time::Instant::now() < deadline,
-                        "fresh state was never published"
-                    );
-                    tokio::time::sleep(Duration::from_millis(10)).await;
-                }
+        // Timeouts only guard deadlocks; channel handshakes establish ordering.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let (call, release_first) = started_rx.recv().await.unwrap();
+            assert_eq!(call, 1);
+            let event = notify::Event {
+                kind: notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                    notify::event::DataChange::Content,
+                )),
+                paths: vec![repo_root.join_component("package.json").into()],
+                attrs: Default::default(),
+            };
+            for _ in 0..20 {
+                subscriber
+                    .handle_file_event(&mut state, &event, &package_state_tx)
+                    .await;
             }
-        }
+            assert!(matches!(
+                &state,
+                State::Pending {
+                    version: pending_version,
+                    rerun_after_current: true,
+                    ..
+                } if *pending_version == version
+            ));
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            assert_eq!(in_flight.load(Ordering::SeqCst), 1);
+            assert!(published.borrow().is_none());
 
-        // Wait for quiescence before asserting: file events from the burst
-        // are delivered asynchronously, and one may still be in flight when
-        // the coalesced follow-up runs.
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-        let mut last_calls = 0;
-        let mut stable_since = tokio::time::Instant::now();
-        loop {
-            let current = calls.load(Ordering::SeqCst);
-            if current != last_calls || in_flight.load(Ordering::SeqCst) > 0 {
-                last_calls = current;
-                stable_since = tokio::time::Instant::now();
-            } else if stable_since.elapsed() > Duration::from_millis(300) {
-                break;
-            }
+            release_first.send(()).unwrap();
+            let first = package_state_rx.recv().await.unwrap();
+            subscriber.handle_discovery_result(first, &mut state, &package_state_tx);
+            assert!(published.borrow().is_none(), "stale state was published");
             assert!(
-                tokio::time::Instant::now() < deadline,
-                "discoveries never settled"
+                !published.has_changed().unwrap(),
+                "stale state was briefly published"
             );
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
 
-        // The burst must not produce a pile-up proportional to its size: one
-        // in-flight discovery, one coalesced follow-up, and at most one extra
-        // scan if a straggler event lands while the follow-up runs.
-        let total = calls.load(Ordering::SeqCst);
-        assert!(
-            total <= 3,
-            "20 invalidations must coalesce into at most 3 scans, got {total}"
-        );
-        assert_eq!(
-            max_in_flight.load(Ordering::SeqCst),
-            1,
-            "discoveries overlapped"
-        );
+            let (call, release_second) = started_rx.recv().await.unwrap();
+            assert_eq!(call, 2);
+            assert_eq!(calls.load(Ordering::SeqCst), 2);
+            assert_eq!(in_flight.load(Ordering::SeqCst), 1);
+            assert_eq!(
+                max_in_flight.load(Ordering::SeqCst),
+                1,
+                "discoveries overlapped"
+            );
+            release_second.send(()).unwrap();
+            let second = package_state_rx.recv().await.unwrap();
+            subscriber.handle_discovery_result(second, &mut state, &package_state_tx);
+
+            assert!(matches!(state, State::Ready(_)));
+            assert!(
+                matches!(published.borrow().as_ref(), Some(Err(message)) if message == "scan-2")
+            );
+            assert_eq!(calls.load(Ordering::SeqCst), 2);
+            assert_eq!(in_flight.load(Ordering::SeqCst), 0);
+            assert_eq!(subscriber.next_version.load(Ordering::SeqCst), 2);
+        })
+        .await
+        .expect("gated discoveries should complete");
     }
 
     #[test]

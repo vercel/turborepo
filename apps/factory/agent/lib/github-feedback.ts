@@ -22,7 +22,7 @@ export function hasGitHubInvocation(body: string, botName: string): boolean {
 /**
  * Factory PR feedback runs without an invocation token, so this is deliberately
  * fail-closed: only human collaborators with write access can dispatch turns,
- * and only on PRs backed by a Factory-owned agents/* branch.
+ * and only on PR review threads in vercel/turborepo with a known head branch.
  */
 export function isTrustedFactoryPullRequestFeedback(
   candidate: FactoryPullRequestFeedbackCandidate
@@ -35,7 +35,7 @@ export function isTrustedFactoryPullRequestFeedback(
     candidate.pullRequestNumber !== null &&
     candidate.senderType !== "Bot" &&
     typeof candidate.branch === "string" &&
-    /^agents\/[A-Za-z0-9._/-]+$/.test(candidate.branch) &&
+    candidate.branch.length > 0 &&
     typeof candidate.permission === "string" &&
     WRITE_PERMISSIONS.has(candidate.permission)
   );

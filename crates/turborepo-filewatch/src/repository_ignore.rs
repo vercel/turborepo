@@ -306,25 +306,7 @@ impl Snapshot {
             self.add_directory_matcher(&path, &mut loaded);
         }
 
-        // Discover all descendants without applying ignore/ripgrep pruning.
-        // Whether a discovered file is reachable is handled by ancestor checks
-        // in is_relevant, matching Git's ignored-directory rule.
-        let mut walk = ignore::WalkBuilder::new(root);
-        walk.hidden(false)
-            .parents(false)
-            .require_git(false)
-            .ignore(false)
-            .git_ignore(false)
-            .git_exclude(false)
-            .git_global(false)
-            .filter_entry(|entry| entry.file_name() != ".git");
-        for entry in walk.build().filter_map(Result::ok).filter(|entry| {
-            entry.file_type().is_some_and(|kind| kind.is_file())
-                && entry.file_name() == ".gitignore"
-        }) {
-            self.add_directory_matcher(entry.path(), &mut loaded);
-        }
-
+        // is_ignored also reads these, and the walk below needs them.
         self.info_exclude = context
             .info_exclude
             .as_deref()
@@ -333,6 +315,38 @@ impl Snapshot {
             .global_exclude
             .as_deref()
             .and_then(|path| build_matcher(&context.worktree_root, path));
+
+        // Discover nested .gitignore files, but do not descend into ignored
+        // directories. Git never reads a .gitignore below an ignored
+        // directory, and is_relevant stops at the first ignored ancestor, so
+        // matchers there would never be consulted. Skipping them keeps start-up
+        // independent of what is inside directories like node_modules.
+        let mut directories = vec![root.to_path_buf()];
+        while let Some(directory) = directories.pop() {
+            let Ok(entries) = fs::read_dir(&directory) else {
+                continue;
+            };
+            let mut children = Vec::new();
+            for entry in entries.filter_map(Result::ok) {
+                let Ok(kind) = entry.file_type() else {
+                    continue;
+                };
+                if kind.is_dir() {
+                    if entry.file_name() != ".git" {
+                        children.push(entry.path());
+                    }
+                } else if kind.is_file() && entry.file_name() == ".gitignore" {
+                    self.add_directory_matcher(&entry.path(), &mut loaded);
+                }
+            }
+            // The directory's own .gitignore is loaded above, before its
+            // children are checked against it.
+            directories.extend(
+                children
+                    .into_iter()
+                    .filter(|child| !self.is_ignored(child, root, true)),
+            );
+        }
     }
 
     fn add_directory_matcher(&mut self, path: &Path, loaded: &mut HashSet<PathBuf>) {
@@ -620,6 +634,55 @@ mod tests {
                 .any(|path| path == &fs::canonicalize(worktree.join(".gitignore")).unwrap())
         );
         assert!(model.should_refresh(&normalized_global));
+    }
+
+    #[test]
+    fn does_not_load_ignore_files_below_ignored_directories() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        for directory in [
+            "ignored/nested",
+            "excluded",
+            "partial/kept",
+            "partial/dropped",
+        ] {
+            fs::create_dir_all(root.join(directory)).unwrap();
+        }
+        git(&root, &["init", "-q"]);
+        fs::write(
+            root.join(".gitignore"),
+            "ignored/\npartial/*\n!partial/kept/\n",
+        )
+        .unwrap();
+        fs::write(root.join(".git/info/exclude"), "excluded/\n").unwrap();
+        // Git never reads these, so they cannot re-include anything.
+        fs::write(root.join("ignored/.gitignore"), "!*\n").unwrap();
+        fs::write(root.join("ignored/nested/.gitignore"), "!*\n").unwrap();
+        fs::write(root.join("excluded/.gitignore"), "!*\n").unwrap();
+        fs::write(root.join("partial/dropped/.gitignore"), "!*\n").unwrap();
+        fs::write(root.join("partial/kept/.gitignore"), "*.tmp\n").unwrap();
+
+        let model = RepositoryIgnore::new(&root);
+        let root = fs::canonicalize(&root).unwrap();
+        let loaded = model
+            .state
+            .read()
+            .unwrap()
+            .snapshot
+            .matchers
+            .keys()
+            .cloned()
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            loaded,
+            HashSet::from([root.clone(), root.join("partial/kept")])
+        );
+
+        assert!(!model.is_relevant(&root.join("ignored/nested/value.txt"), false));
+        assert!(!model.is_relevant(&root.join("excluded/value.txt"), false));
+        assert!(!model.is_relevant(&root.join("partial/dropped/value.txt"), false));
+        assert!(!model.is_relevant(&root.join("partial/kept/value.tmp"), false));
+        assert!(model.is_relevant(&root.join("partial/kept/value.txt"), false));
     }
 
     #[test]

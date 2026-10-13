@@ -4,7 +4,7 @@ use libghostty_vt::{
     fmt::{Format, Formatter, FormatterOptions},
     screen::TrackedGridRef,
     selection::{FormatOptions, Selection},
-    terminal::{Options as TerminalOptions, Point, PointCoordinate, ScrollViewport},
+    terminal::{Point, PointCoordinate, ScrollViewport},
 };
 
 use crate::{Error, Result};
@@ -26,11 +26,16 @@ pub struct Parser {
 
 impl Parser {
     pub fn try_new(rows: u16, cols: u16, scrollback_len: usize) -> Result<Self> {
-        let terminal = Terminal::new(TerminalOptions {
-            cols,
-            rows,
-            max_scrollback: scrollback_len,
-        })?;
+        let mut terminal = Terminal::new(cols, rows)?;
+        if scrollback_len == 0 {
+            // A zero byte cap disables history; a zero line cap still retains
+            // history at page granularity, so it is not equivalent.
+            terminal.set_scrollback_max_bytes(Some(0))?;
+        } else {
+            // Preserve the caller's line limit without replacing Ghostty's
+            // default byte cap or interpreting the line count as bytes.
+            terminal.set_scrollback_max_lines(Some(scrollback_len))?;
+        }
         let render_state = RenderState::new()?;
 
         Ok(Self {
@@ -246,6 +251,48 @@ mod tests {
         let output = String::from_utf8_lossy(&formatted);
         assert!(output.contains("hello"));
         assert!(output.contains("world"));
+    }
+
+    #[test]
+    fn zero_scrollback_disables_history() {
+        let mut parser = Parser::try_new(2, 20, 0).expect("parser");
+        assert_eq!(parser.size().expect("size"), (2, 20));
+        assert_eq!(parser.max_scrollback(), 0);
+        assert_eq!(
+            parser.terminal.scrollback_max_bytes().expect("byte cap"),
+            Some(0)
+        );
+
+        parser.process(b"discarded\r\nvisible\r\nlast");
+        parser.scroll_to_top().expect("scroll to top");
+        let formatted = parser.format_screen_vt().expect("format screen");
+        let output = String::from_utf8_lossy(&formatted);
+        assert!(!output.contains("discarded"));
+        assert!(output.contains("visible"));
+        assert!(output.contains("last"));
+    }
+
+    #[test]
+    fn positive_scrollback_sets_line_limit_and_preserves_default_byte_cap() {
+        let default_terminal = Terminal::new(40, 2).expect("default terminal");
+        let default_byte_cap = default_terminal
+            .scrollback_max_bytes()
+            .expect("default byte cap");
+        let mut parser = Parser::try_new(2, 40, 100).expect("parser");
+        assert_eq!(parser.max_scrollback(), 100);
+        assert_eq!(
+            parser.terminal.scrollback_max_lines().expect("line cap"),
+            Some(100)
+        );
+        assert_eq!(
+            parser.terminal.scrollback_max_bytes().expect("byte cap"),
+            default_byte_cap
+        );
+
+        parser.process(b"retained\r\nnext\r\nlast");
+        parser.scroll_to_top().expect("scroll to top");
+        let formatted = parser.format_screen_vt().expect("format screen");
+        assert!(String::from_utf8_lossy(&formatted).contains("retained"));
     }
 
     #[test]

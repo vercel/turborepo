@@ -21,7 +21,13 @@ use crate::package_graph::{
 
 mod package;
 
-const DEFAULT_GLOBAL_DEPS: &[&str] = ["turbo.json", "turbo.jsonc"].as_slice();
+const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
+
+/// Managed toolchain resolution affects every package and task, even when
+/// configured global dependency globs exclude the lockfile.
+pub fn is_default_global_file(file: &str, managed_setup: bool) -> bool {
+    DEFAULT_GLOBAL_DEPS.contains(&file) || (managed_setup && file == "turbo.lock")
+}
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -117,6 +123,7 @@ pub struct ChangeMapper<'a, PD> {
 
     ignore_patterns: Vec<String>,
     package_detector: PD,
+    managed_setup: bool,
 }
 
 impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
@@ -129,15 +136,22 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             pkg_graph,
             ignore_patterns,
             package_detector,
+            managed_setup: false,
         }
     }
 
-    fn default_global_file_changed(
-        changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Option<&AnchoredSystemPathBuf> {
+    pub fn with_managed_setup(mut self, managed_setup: bool) -> Self {
+        self.managed_setup = managed_setup;
+        self
+    }
+
+    fn default_global_file_changed<'b>(
+        &self,
+        changed_files: &'b HashSet<AnchoredSystemPathBuf>,
+    ) -> Option<&'b AnchoredSystemPathBuf> {
         changed_files
             .iter()
-            .find(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
+            .find(|f| is_default_global_file(f.as_str(), self.managed_setup))
     }
 
     pub fn changed_packages(
@@ -145,7 +159,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_contents: LockfileContents,
     ) -> Result<PackageChanges, ChangeMapError> {
-        if let Some(file) = Self::default_global_file_changed(&changed_files) {
+        if let Some(file) = self.default_global_file_changed(&changed_files) {
             debug!("global file changed");
             return Ok(PackageChanges::All(
                 AllPackageChangeReason::DefaultGlobalFileChanged {
@@ -409,6 +423,39 @@ mod test {
             changes,
             PackageChanges::All(AllPackageChangeReason::ConservativeFallback)
         );
+    }
+
+    #[tokio::test]
+    async fn managed_setup_lock_is_a_default_global_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_single_package_mode(true)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await
+            .unwrap();
+        let file = AnchoredSystemPathBuf::from_raw("turbo.lock").unwrap();
+        for managed_setup in [false, true] {
+            let detector =
+                GlobalDepsPackageChangeMapper::new(&graph, ["!turbo.lock"].into_iter()).unwrap();
+            let mapper = ChangeMapper::new(&graph, vec!["turbo.lock".to_string()], detector)
+                .with_managed_setup(managed_setup);
+            let changes = mapper
+                .changed_packages(HashSet::from([file.clone()]), LockfileContents::Unchanged)
+                .unwrap();
+            assert_eq!(
+                changes,
+                if managed_setup {
+                    PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged {
+                        file: file.clone(),
+                    })
+                } else {
+                    PackageChanges::Some(HashMap::new())
+                }
+            );
+        }
+        assert!(!is_default_global_file("packages/a/turbo.lock", true));
     }
 
     #[test]

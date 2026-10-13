@@ -332,7 +332,7 @@
           "type": "boolean"
         },
         "experimentalSetup": {
-          "description": "Opt into experimental setup features that are still in progress.\n\nAll future setup surfaces must require this flag. The `turbo.lock` format is unstable. This parser-only foundation ships no setup commands and does not interpret `turbo.lock` or change run or hash behavior.",
+          "description": "Opt into experimental setup features that are still in progress.\n\nSetup invocation requires this flag; help is available without it. The `turbo.lock` format is unstable. Only parsing and help are implemented; provisioning, planning, and checking return a diagnostic. Setup does not interpret `turbo.lock` or change run or hash behavior.",
           "default": false,
           "type": "boolean"
         },

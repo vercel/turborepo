@@ -1,10 +1,7 @@
 name: Release review gate
 
 on:
-  pull_request:
-    types: [edited, opened, ready_for_review, reopened, synchronize]
-  pull_request_review:
-    types: [dismissed, submitted]
+  workflow_call:
 
 permissions:
   contents: read

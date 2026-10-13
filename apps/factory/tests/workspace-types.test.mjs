@@ -222,6 +222,7 @@ test("image previews reject executable or mismatched image URLs", () => {
     "https://example.com/image.png"
   );
   for (const url of [
+    // oxlint-disable-next-line no-script-url -- Intentionally test rejection of executable URLs.
     "javascript:alert(1)",
     "data:text/html;base64,AAAA",
     "data:image/svg+xml;base64,AAAA",
@@ -257,6 +258,7 @@ test("resumed Eve transcripts retain image URLs and confirm the matching image t
   };
   const messages = reducer.reduce(
     reducer.initial(),
+    // oxlint-disable-next-line unicorn/prefer-structured-clone -- Exercise JSON transcript persistence, not just cloning.
     JSON.parse(JSON.stringify(event))
   ).messages;
   const projectedImage = messages[0].parts[1];

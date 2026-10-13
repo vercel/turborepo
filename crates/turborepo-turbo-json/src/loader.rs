@@ -13,12 +13,9 @@ use turborepo_fixed_map::FixedMap;
 use turborepo_repository::package_graph::PackageName;
 use turborepo_task_id::TaskName;
 use turborepo_types::EnvMode;
+pub use turborepo_types::{CONFIG_FILE, CONFIG_FILE_JSONC};
 
 use crate::{Error, FutureFlags, Pipeline, RawTaskDefinition, TurboJson};
-
-/// Configuration file names
-pub const CONFIG_FILE: &str = "turbo.json";
-pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 
 /// Path to the config file that will be used to store the trace results
 /// (relative to repo root)

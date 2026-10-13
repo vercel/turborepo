@@ -11,10 +11,10 @@ import { CONVENTIONAL_TITLE_PATTERN } from "../lib/pull-request.js";
 const inputSchema = z.object({
   branchName: z
     .string()
-    .regex(/^agents\/[A-Za-z0-9._/-]+$/, "Branch must start with agents/")
+    .min(1)
     .optional()
     .describe(
-      "Branch for an interactive run. Automated runs derive an idempotent daily branch."
+      "Git branch name for an interactive run, with no required prefix. Automated runs derive an idempotent daily branch."
     ),
   body: z.string().default(""),
   title: z
@@ -31,7 +31,7 @@ const inputSchema = z.object({
 
 export default defineTool({
   description:
-    "Create a draft vercel/turborepo pull request or update its existing agents/* branch from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates. An interactive run publishes every change in the checkout and needs an agents/* branch and a Conventional Commit title from the caller.",
+    "Create a draft vercel/turborepo pull request or update its existing branch from validated sandbox changes. Automated example and performance runs enforce their own scope and evidence gates. An interactive run publishes every change in the checkout and needs a branch name and a Conventional Commit title from the caller.",
   inputSchema,
   approval: ({ session, toolInput }) =>
     isAppPrincipal(session.auth.current) ||

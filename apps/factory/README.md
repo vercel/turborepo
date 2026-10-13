@@ -28,12 +28,15 @@ with a threaded rationale and get an investigation report only. Only
 high-confidence issues proceed to a focused fix, validation, and a draft
 `agents/issue-*` pull request.
 
-The channel also follows Factory-created pull requests whose head is an
-`agents/*` branch. Timeline and inline review comments from collaborators with
-write access start a turn without requiring an `@mention`. The turn checks out
-the current PR head, replies in the same GitHub thread, and can publish validated
+Factory can create and update pull requests using any Git branch name; no
+prefix is required. Automated runs still derive their daily branch names.
+
+The channel also follows pull requests in `vercel/turborepo` regardless of their
+branch names. Timeline and inline review comments from collaborators with write
+access start a turn without requiring an `@mention`. The turn checks out the
+current PR head, replies in the same GitHub thread, and can publish validated
 feedback changes back to that exact branch. Bot, external-user, non-PR, and
-non-Factory-branch comments fail closed and are ignored.
+other-repository comments do not automatically start feedback turns.
 
 Workspace records live as private `factory-workspaces/v1/<id>.json` Blob
 objects. Mutation routes require an exact same-origin request and action header;

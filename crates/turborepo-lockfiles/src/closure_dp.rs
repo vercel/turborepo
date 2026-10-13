@@ -382,13 +382,21 @@ mod tests {
     fn assert_dp_matches_legacy<L: Lockfile>(
         lockfile: &L,
         workspaces: HashMap<String, BTreeMap<String, String>>,
+    ) -> SortedClosures {
+        let resolver = crate::Lockfile::transitive_edge_resolver(lockfile)
+            .expect("lockfile supports edge resolution");
+        let dp = all_transitive_closures_dp(lockfile, resolver.as_ref(), &workspaces, false)
+            .expect("dp closure")
+            .expect("dp unexpectedly fell back for a uniform lockfile");
+        assert_matches_legacy(lockfile, &workspaces, &dp);
+        dp
+    }
+
+    fn assert_matches_legacy<L: Lockfile>(
+        lockfile: &L,
+        workspaces: &HashMap<String, BTreeMap<String, String>>,
+        closures: &SortedClosures,
     ) {
-        let via_dp = {
-            let resolver = crate::Lockfile::transitive_edge_resolver(lockfile)
-                .expect("lockfile supports edge resolution");
-            all_transitive_closures_dp(lockfile, resolver.as_ref(), &workspaces, false)
-                .expect("dp closure")
-        };
         let legacy: HashMap<String, HashSet<Package>> = workspaces
             .iter()
             .map(|(ws, deps)| {
@@ -397,25 +405,23 @@ mod tests {
                 (ws.clone(), closure)
             })
             .collect();
-        match via_dp {
-            Some(dp) => {
-                let dp_as_sets: HashMap<String, HashSet<Package>> = dp
-                    .iter()
-                    .map(|(ws, closure)| {
-                        assert!(
-                            closure.is_sorted_by(|a, b| a <= b),
-                            "dp closure for {ws} must be sorted by (key, version)"
-                        );
-                        (
-                            ws.clone(),
-                            closure.iter().map(|pkg| (**pkg).clone()).collect(),
-                        )
-                    })
-                    .collect();
-                assert_eq!(dp_as_sets, legacy, "dp result must match the legacy walk");
-            }
-            None => panic!("dp unexpectedly fell back for a uniform lockfile"),
-        }
+        let as_sets: HashMap<String, HashSet<Package>> = closures
+            .iter()
+            .map(|(ws, closure)| {
+                assert!(
+                    closure.windows(2).all(|pair| pair[0] < pair[1]),
+                    "closure for {ws} must be sorted and duplicate-free"
+                );
+                (
+                    ws.clone(),
+                    closure.iter().map(|pkg| (**pkg).clone()).collect(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            as_sets, legacy,
+            "result must match the independent legacy walks"
+        );
     }
 
     fn workspaces_of(lockfile: &PnpmLockfile) -> HashMap<String, BTreeMap<String, String>> {
@@ -423,14 +429,79 @@ mod tests {
     }
 
     #[test]
-    fn test_dp_matches_legacy_on_repo_lockfile() {
+    fn test_public_closures_match_legacy_on_repo_lockfile() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let lockfile_path = std::path::Path::new(manifest_dir)
             .join("../..")
             .join("pnpm-lock.yaml");
         let bytes = std::fs::read(&lockfile_path).expect("repo lockfile readable");
         let lockfile = PnpmLockfile::from_bytes(&bytes).expect("parse");
-        assert_dp_matches_legacy(&lockfile, workspaces_of(&lockfile));
+        let workspaces = workspaces_of(&lockfile);
+        // Repository updates can introduce workspace-sensitive edges. Either
+        // path must retain exact parity; uniform fixtures below require the DP.
+        let closures = crate::all_transitive_closures_sorted(&lockfile, workspaces.clone(), false)
+            .expect("public closures");
+        assert_matches_legacy(&lockfile, &workspaces, &closures);
+    }
+
+    #[test]
+    fn test_pnpm_dp_matches_legacy_and_shares_packages_on_uniform_fixture() {
+        // Shared dependencies and an SCC exercise the fast path independently
+        // of dependency updates to the repository's own lockfile.
+        let yaml = r#"lockfileVersion: '9.0'
+importers:
+  apps/web:
+    dependencies:
+      carrier:
+        specifier: ^1.0.0
+        version: 1.0.0
+  apps/docs:
+    dependencies:
+      shared:
+        specifier: ^1.0.0
+        version: 1.0.0
+packages:
+  carrier@1.0.0:
+    resolution: {integrity: sha512-carrier}
+  shared@1.0.0:
+    resolution: {integrity: sha512-shared}
+  cycle-a@1.0.0:
+    resolution: {integrity: sha512-a}
+  cycle-b@1.0.0:
+    resolution: {integrity: sha512-b}
+snapshots:
+  carrier@1.0.0:
+    dependencies:
+      shared: 1.0.0
+  shared@1.0.0:
+    dependencies:
+      cycle-a: 1.0.0
+  cycle-a@1.0.0:
+    dependencies:
+      cycle-b: 1.0.0
+  cycle-b@1.0.0:
+    dependencies:
+      cycle-a: 1.0.0
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).expect("parse");
+        let dp = assert_dp_matches_legacy(&lockfile, workspaces_of(&lockfile));
+        let mut seen = HashMap::new();
+        let mut shared_count = 0;
+        for closure in dp.values() {
+            for package in closure {
+                if let Some(previous) = seen.insert(package.as_ref(), package) {
+                    assert!(
+                        Arc::ptr_eq(previous, package),
+                        "shared identities must reuse Arc"
+                    );
+                    shared_count += 1;
+                }
+            }
+        }
+        assert_eq!(
+            shared_count, 3,
+            "both workspaces must share the dependency SCC"
+        );
     }
 
     #[test]

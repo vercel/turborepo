@@ -1,4 +1,8 @@
-use std::{any::Any, borrow::Cow, collections::BTreeMap};
+use std::{
+    any::Any,
+    borrow::Cow,
+    collections::{BTreeMap, BTreeSet},
+};
 
 use rustc_hash::FxHashMap;
 use semver::Version;
@@ -270,6 +274,13 @@ struct LockfileSettings {
     dedupe_peers: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     peers_suffix_max_length: Option<u32>,
+    // Catch-all for settings we don't model with dedicated fields. pnpm
+    // compares every key in this block against the active config, so with
+    // `lockfile.includeResolutionSettings` (autoDedupe, dedupePeerDependents,
+    // ...) dropping any of them makes `pnpm install --frozen-lockfile` on the
+    // pruned output fail with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+    #[serde(flatten)]
+    other: Map<String, serde_yaml_ng::Value>,
 }
 
 impl PnpmLockfile {
@@ -624,6 +635,57 @@ impl PnpmLockfile {
         }
     }
 
+    /// Catalog snapshots describe resolved importer references, not the full
+    /// workspace catalog configuration. Retaining snapshots for removed
+    /// importers makes frozen installs fail when pnpm prunes that
+    /// configuration.
+    fn prune_catalogs(
+        &self,
+        importers: &BTreeMap<String, ProjectSnapshot>,
+    ) -> Option<Map<String, Map<String, Dependency>>> {
+        let catalogs = self.catalogs.as_ref()?;
+        let mut referenced = BTreeSet::new();
+        for importer in importers.values() {
+            let DependencyInfo::V6 {
+                dependencies,
+                optional_dependencies,
+                dev_dependencies,
+            } = &importer.dependencies
+            else {
+                continue;
+            };
+            for (name, dependency) in dependencies
+                .iter()
+                .flatten()
+                .chain(optional_dependencies.iter().flatten())
+                .chain(dev_dependencies.iter().flatten())
+            {
+                if let Some(catalog) = dependency.specifier.strip_prefix("catalog:") {
+                    let catalog = catalog.trim();
+                    let catalog = if catalog.is_empty() {
+                        "default"
+                    } else {
+                        catalog
+                    };
+                    referenced.insert((catalog, name.as_str()));
+                }
+            }
+        }
+
+        let pruned: Map<_, _> = catalogs
+            .iter()
+            .filter_map(|(catalog, entries)| {
+                let entries: Map<_, _> = entries
+                    .iter()
+                    .filter(|(name, _)| referenced.contains(&(catalog.as_str(), name.as_str())))
+                    .map(|(name, entry)| (name.clone(), entry.clone()))
+                    .collect();
+                (!entries.is_empty()).then(|| (catalog.clone(), entries))
+            })
+            .collect();
+        (!pruned.is_empty()).then_some(pruned)
+    }
+
     fn prune_patches(
         &self,
         patches: &Map<String, PatchFile>,
@@ -973,6 +1035,7 @@ impl crate::Lockfile for PnpmLockfile {
             .map(|patches| self.prune_patches(patches, &pruned_packages))
             .transpose()?;
 
+        let catalogs = self.prune_catalogs(&importers);
         let mut pruned = Self {
             leading_documents: self.leading_documents.clone(),
             importers,
@@ -998,7 +1061,7 @@ impl crate::Lockfile for PnpmLockfile {
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
-            catalogs: self.catalogs.clone(),
+            catalogs,
         };
         // The pruned lockfile must be queryable like a parsed one
         // (has_package/all_dependencies consult the index).
@@ -1279,6 +1342,73 @@ mod tests {
 
     use super::*;
     use crate::Lockfile;
+
+    #[test]
+    fn test_subgraph_prunes_catalog_snapshots_by_importer_reference() {
+        let yaml = r#"lockfileVersion: '9.0'
+catalogs:
+  default:
+    root-dep: {specifier: 'workspace:*', version: 'workspace:*'}
+    shared: {specifier: 'workspace:*', version: 'workspace:*'}
+    removed: {specifier: 'workspace:*', version: 'workspace:*'}
+  tools:
+    shared: {specifier: 'workspace:*', version: 'workspace:*'}
+    optional: {specifier: 'workspace:*', version: 'workspace:*'}
+    removed: {specifier: 'workspace:*', version: 'workspace:*'}
+  unused:
+    shared: {specifier: 'workspace:*', version: 'workspace:*'}
+importers:
+  .:
+    devDependencies:
+      root-dep: {specifier: 'catalog:default', version: 'link:packages/root-dep'}
+  apps/keep:
+    dependencies:
+      shared: {specifier: 'catalog:', version: 'link:../../packages/shared'}
+    devDependencies:
+      shared: {specifier: 'catalog:tools', version: 'link:../../packages/shared'}
+    optionalDependencies:
+      optional: {specifier: 'catalog:tools', version: 'link:../../packages/optional'}
+      removed: {specifier: 'workspace:*', version: 'link:../../packages/removed'}
+  apps/remove:
+    dependencies:
+      removed: {specifier: 'catalog:', version: 'link:../../packages/removed'}
+    devDependencies:
+      removed: {specifier: 'catalog:tools', version: 'link:../../packages/removed'}
+      shared: {specifier: 'catalog:unused', version: 'link:../../packages/shared'}
+"#;
+        // Catalogs can resolve to workspace links with no package snapshots.
+        // The same package can also use different catalogs in different groups.
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        let pruned = lockfile.subgraph(&["apps/keep".into()], &[]).unwrap();
+        let pruned = PnpmLockfile::from_bytes(&pruned.encode().unwrap()).unwrap();
+        let mut expected = lockfile.catalogs.clone().unwrap();
+        expected.get_mut("default").unwrap().remove("removed");
+        expected.get_mut("tools").unwrap().remove("removed");
+        expected.remove("unused");
+        assert_eq!(pruned.catalogs, Some(expected));
+        assert!(!pruned.importers.contains_key("apps/remove"));
+    }
+
+    #[test]
+    fn test_subgraph_omits_unused_catalogs() {
+        let yaml = r#"lockfileVersion: '9.0'
+catalogs:
+  default:
+    removed: {specifier: 'workspace:*', version: 'workspace:*'}
+importers:
+  .: {}
+  apps/keep: {}
+  apps/remove:
+    dependencies:
+      removed: {specifier: 'catalog:', version: 'link:../../packages/removed'}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        let pruned = lockfile.subgraph(&["apps/keep".into()], &[]).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let pruned = PnpmLockfile::from_bytes(&encoded).unwrap();
+        assert_eq!(pruned.catalogs, None);
+        assert!(!std::str::from_utf8(&encoded).unwrap().contains("catalogs:"));
+    }
 
     #[test]
     fn test_parses_pnpm_v6_single_project_lockfile() {
@@ -3135,6 +3265,86 @@ snapshots:
         );
         assert_eq!(pruned_settings.auto_install_peers, Some(false));
         assert_eq!(pruned_settings.exclude_links_from_lockfile, Some(false));
+    }
+
+    #[test]
+    fn test_lockfile_settings_preserve_resolution_settings() {
+        // pnpm's `lockfile.includeResolutionSettings` writes additional keys
+        // into the settings block. Every one of them must survive prune.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoDedupe: true
+  autoInstallPeers: true
+  dedupeInjectedDeps: true
+  dedupePeerDependents: true
+  excludeLinksFromLockfile: false
+  linkWorkspacePackages: false
+
+importers:
+
+  .:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+  apps/web:
+    dependencies:
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ghi}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  lodash@4.17.21: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+        assert_eq!(
+            lockfile,
+            PnpmLockfile::from_bytes_via_serde(yaml.as_bytes()).unwrap()
+        );
+
+        let pruned = lockfile
+            .subgraph(&["apps/web".to_string()], &["lodash@4.17.21".to_string()])
+            .unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned.encode().unwrap()).unwrap();
+        let settings = pruned_lockfile
+            .settings
+            .as_ref()
+            .expect("pruned lockfile should have settings");
+
+        assert_eq!(settings.auto_install_peers, Some(true));
+        assert_eq!(settings.exclude_links_from_lockfile, Some(false));
+        for (key, expected) in [
+            ("autoDedupe", true),
+            ("dedupeInjectedDeps", true),
+            ("dedupePeerDependents", true),
+            ("linkWorkspacePackages", false),
+        ] {
+            assert_eq!(
+                settings.other.get(key),
+                Some(&serde_yaml_ng::Value::Bool(expected)),
+                "{key} must survive prune round-trip"
+            );
+        }
     }
 
     #[test]

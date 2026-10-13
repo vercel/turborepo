@@ -19,14 +19,14 @@ This Turborepo includes the following packages/apps:
 - `docs`: a [Next.js](https://nextjs.org/) app
 - `web`: another [Next.js](https://nextjs.org/) app
 - `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
+- `@repo/eslint-config`: shared flat ESLint configurations for Next.js and React packages
 - `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
 ### Utilities
 
-This Turborepo has some additional tools already setup for you:
+This Turborepo has some additional tools already set up for you:
 
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
@@ -36,7 +36,7 @@ This Turborepo has some additional tools already setup for you:
 
 To build all apps and packages, run the following command:
 
-```
+```sh
 cd my-turborepo
 yarn build
 ```
@@ -45,7 +45,7 @@ yarn build
 
 To develop all apps and packages, run the following command:
 
-```
+```sh
 cd my-turborepo
 yarn dev
 ```
@@ -59,17 +59,17 @@ Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/do
 
 By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
 
-```
+```sh
 cd my-turborepo
-npx turbo login
+yarn turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
 Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
-```
-npx turbo link
+```sh
+yarn turbo link
 ```
 
 ## Useful Links

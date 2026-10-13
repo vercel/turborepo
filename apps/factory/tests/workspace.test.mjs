@@ -187,7 +187,7 @@ test("Start work puts the workspace composer before scheduled jobs", () => {
   );
   const composer = page.indexOf("<WorkspaceComposer ");
   const schedules = page.indexOf('aria-labelledby="manual-schedules-title"');
-  assert.ok(composer >= 0 && schedules > composer);
+  assert.ok(composer !== -1 && schedules > composer);
 });
 
 test("mobile form text prevents focus zoom without restricting browser zoom", () => {

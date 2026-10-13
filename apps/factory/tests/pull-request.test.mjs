@@ -16,13 +16,13 @@ test("builds draft pull requests", () => {
     buildDraftPullRequest({
       title: "chore: Update Turborepo examples",
       body: "Maintenance update",
-      head: "agents/examples-update",
+      head: "feature/examples-update",
       base: "main"
     }),
     {
       title: "chore: Update Turborepo examples",
       body: "Maintenance update",
-      head: "agents/examples-update",
+      head: "feature/examples-update",
       base: "main",
       draft: true
     }
@@ -39,7 +39,7 @@ test("formats pull request Slack notifications with a bold linked title", () => 
   );
 });
 
-test("recognizes merged Factory pull requests", () => {
+test("recognizes merged pull requests regardless of branch naming", () => {
   const raw = {
     pull_request: {
       merged: true,
@@ -53,15 +53,22 @@ test("recognizes merged Factory pull requests", () => {
     url: "https://github.com/vercel/turborepo/pull/123"
   });
   assert.equal(mergedFactoryPullRequest("opened", raw), null);
-  assert.equal(
-    mergedFactoryPullRequest("closed", {
-      pull_request: {
-        ...raw.pull_request,
-        head: { ref: "user/not-factory" }
-      }
-    }),
-    null
-  );
+  for (const branch of ["fix-cache", "feature/fix-cache", "修复/缓存"]) {
+    assert.deepEqual(
+      mergedFactoryPullRequest("closed", {
+        pull_request: { ...raw.pull_request, head: { ref: branch } }
+      }),
+      { title: raw.pull_request.title, url: raw.pull_request.html_url }
+    );
+  }
+  for (const head of [undefined, {}, { ref: "" }, { ref: 123 }]) {
+    assert.equal(
+      mergedFactoryPullRequest("closed", {
+        pull_request: { ...raw.pull_request, head }
+      }),
+      null
+    );
+  }
   assert.equal(
     mergedFactoryPullRequest("closed", {
       pull_request: { ...raw.pull_request, merged: false }
@@ -79,12 +86,12 @@ test("recognizes merged Factory pull requests", () => {
 
 test("builds force-with-lease branch updates", () => {
   assert.deepEqual(
-    buildBranchRefUpdate("agents/update", "expected-head", "new-head"),
+    buildBranchRefUpdate("maintainer/cache#123", "expected-head", "new-head"),
     {
       afterOid: "new-head",
       beforeOid: "expected-head",
       force: true,
-      name: "refs/heads/agents/update"
+      name: "refs/heads/maintainer/cache#123"
     }
   );
 });
@@ -93,7 +100,7 @@ test("updates a branch with an atomic expected-head lease", async () => {
   let request;
   await updateBranchRefWithLease(
     {
-      branchName: "agents/update",
+      branchName: "maintainer/cache#123",
       expectedSha: "expected-head",
       newSha: "new-head",
       repositoryId: "repository-id",
@@ -120,7 +127,7 @@ test("updates a branch with an atomic expected-head lease", async () => {
           afterOid: "new-head",
           beforeOid: "expected-head",
           force: true,
-          name: "refs/heads/agents/update"
+          name: "refs/heads/maintainer/cache#123"
         }
       ]
     }
@@ -129,7 +136,7 @@ test("updates a branch with an atomic expected-head lease", async () => {
 
 test("rejects concurrent branch updates and malformed GraphQL success", async () => {
   const input = {
-    branchName: "agents/update",
+    branchName: "maintainer/cache#123",
     expectedSha: "expected-head",
     newSha: "new-head",
     repositoryId: "repository-id",

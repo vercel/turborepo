@@ -31,6 +31,17 @@ use turbopath::{
 use turborepo_errors::Spanned;
 use turborepo_task_id::{TaskId, TaskName};
 
+/// Configuration file names.
+pub const CONFIG_FILE: &str = "turbo.json";
+pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
+/// All supported configuration file names, in JSON then JSONC order.
+pub const CONFIG_FILES: [&str; 2] = [CONFIG_FILE, CONFIG_FILE_JSONC];
+
+#[test]
+fn config_files_preserve_names_and_order() {
+    assert_eq!(CONFIG_FILES, ["turbo.json", "turbo.jsonc"]);
+}
+
 /// Turborepo's Environment Modes allow you to control which environment
 /// variables are available to a task at runtime.
 ///

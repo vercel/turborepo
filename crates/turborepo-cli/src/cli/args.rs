@@ -640,6 +640,19 @@ pub(super) fn unwrap_flag_help(help: &str) -> String {
 }
 
 impl Args {
+    /// Route setup before validating its tail or inferring a repository.
+    /// The command grammar consumes global values and distinguishes task names.
+    pub(crate) fn is_setup_command(words: &[OsString]) -> bool {
+        let argv: Vec<_> = words.iter().skip(1).map(OsString::as_os_str).collect();
+        let mut parser = usage::Parser::new(Self::command(), &argv);
+        while let Some(Ok(event)) = parser.next_event() {
+            if let usage::Event::Command(command) = event {
+                return command.name == "setup";
+            }
+        }
+        false
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
         if os_args.len() == 1 {
@@ -775,6 +788,7 @@ impl Args {
             "--summarize",
         ];
         let trailing_config = words.last().is_some_and(|word| word == "config")
+            && !Self::is_setup_command(&words)
             && words[1..words.len() - 1].iter().any(|word| {
                 word.to_str().is_some_and(|word| {
                     let flag = word.split_once('=').map_or(word, |(flag, _)| flag);
@@ -808,6 +822,26 @@ impl Args {
         let refs: Vec<&std::ffi::OsStr> = words.iter().map(OsString::as_os_str).collect();
         let mut args = Args::try_parse_from(&refs)
             .map_err(|error| Args::render_failure(&refs[1..], &error))?;
+        if matches!(args.command, Some(Command::Setup { .. })) {
+            for word in &words {
+                if let Some((flag, _)) = word.to_str().and_then(|word| word.split_once('='))
+                    && [
+                        "--plan",
+                        "--check",
+                        "--force",
+                        "--frozen",
+                        "--no-frozen",
+                        "--offline",
+                        "--tools-only",
+                        "--no-lock",
+                        "--update-lock",
+                    ]
+                    .contains(&flag)
+                {
+                    return Err(format!("error: unexpected value for switch '{flag}'"));
+                }
+            }
+        }
         if trailing_config {
             let Some(Command::Run {
                 mut execution_args,
@@ -1061,6 +1095,38 @@ impl Args {
     }
 }
 
+/// Controls for repository provisioning, deliberately separate from task args.
+#[derive(UsageArgs, Clone, Debug, Default, PartialEq)]
+pub struct SetupArgs {
+    /// Report the proposed setup without writing or installing
+    #[usage(long, conflicts = "check")]
+    pub plan: bool,
+    /// Check installed state without writing, resolving, or downloading
+    #[usage(long, conflicts("force", "update_lock", "no_lock"))]
+    pub check: bool,
+    /// Reinstall selected versions without refreshing resolution
+    #[usage(long)]
+    pub force: bool,
+    /// Require an existing, current turbo.lock (the default in CI)
+    #[usage(long, conflicts("no_frozen", "no_lock", "update_lock"))]
+    pub frozen: bool,
+    /// Allow lock creation or updates, including in CI
+    #[usage(long)]
+    pub no_frozen: bool,
+    /// Use cached artifacts only; never make HTTP requests
+    #[usage(long)]
+    pub offline: bool,
+    /// Skip dependency installation
+    #[usage(long)]
+    pub tools_only: bool,
+    /// Provision without writing turbo.lock; overrides CI-inferred frozen mode
+    #[usage(long, conflicts = "update_lock")]
+    pub no_lock: bool,
+    /// Refresh floating requests and provision repository-policy-selected tools
+    #[usage(long)]
+    pub update_lock: bool,
+}
+
 /// Defines the subcommandsds for CLI
 #[derive(Subcommands, Clone, Debug, PartialEq)]
 pub enum Command {
@@ -1216,6 +1282,15 @@ pub enum Command {
         /// Respect `.gitignore` when copying files to <OUT-DIR>
         #[usage(long, default_missing = "true", num_args = 0..=1, require_equals = true)]
         use_gitignore: Option<bool>,
+    },
+
+    /// EXPERIMENTAL: Provision repository tools and dependencies (not yet
+    /// implemented)
+    ///
+    /// Requires root futureFlags.experimentalSetup. Never runs tasks.
+    Setup {
+        #[usage(flatten)]
+        setup_args: SetupArgs,
     },
 
     /// Run tasks across projects in your monorepo

@@ -1027,6 +1027,8 @@ fn parse_settings(events: &mut Events) -> FResult<LockfileSettings> {
     let mut inject_workspace_packages = None;
     let mut dedupe_peers = None;
     let mut peers_suffix_max_length = None;
+    // Mirrors the serde flatten catch-all on `LockfileSettings`.
+    let mut other = Map::new();
     while !events.at_mapping_end()? {
         let key = events.string_borrowed()?;
         match key.as_ref() {
@@ -1062,7 +1064,12 @@ fn parse_settings(events: &mut Events) -> FResult<LockfileSettings> {
                     value.parse::<u32>().map_err(|_| Unsupported::here())?,
                 )?;
             }
-            _ => events.skip_node()?,
+            _ => {
+                let value = parse_value(events)?;
+                if other.insert(key.into_owned(), value).is_some() {
+                    return Err(Unsupported::here());
+                }
+            }
         }
     }
     Ok(LockfileSettings {
@@ -1071,6 +1078,7 @@ fn parse_settings(events: &mut Events) -> FResult<LockfileSettings> {
         inject_workspace_packages,
         dedupe_peers,
         peers_suffix_max_length,
+        other,
     })
 }
 

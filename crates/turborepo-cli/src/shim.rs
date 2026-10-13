@@ -54,6 +54,10 @@ impl<'a> TurboCliRunner<'a> {
 impl TurboRunner for TurboCliRunner<'_> {
     type Error = cli::Error;
 
+    fn is_global_command(&self) -> bool {
+        cli::Args::is_setup_command(&std::env::args_os().collect::<Vec<_>>())
+    }
+
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
         cli::run(repo_state, self.subscriber, ui, self.query_server.clone())
     }
@@ -219,13 +223,15 @@ pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> R
     // Parse args to get verbosity and color config for the subscriber
     let args = ShimArgs::parse().map_err(turborepo_shim::Error::from)?;
 
+    // Setup must not write profiles, even for help or rejected task-only flags.
+    let is_setup = cli::Args::is_setup_command(&std::env::args_os().collect::<Vec<_>>());
     #[cfg(feature = "heap-dhat")]
-    if let Some(heap_profile_file) = args.heap_profile_file() {
+    if !is_setup && let Some(heap_profile_file) = args.heap_profile_file() {
         crate::heap_profile::start_global(heap_profile_file);
     }
 
     #[cfg(not(feature = "heap-dhat"))]
-    if args.heap_profile_file().is_some() {
+    if !is_setup && args.heap_profile_file().is_some() {
         eprintln!("turbo: --heap requires a binary built with the heap-dhat feature");
     }
 
@@ -234,7 +240,7 @@ pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> R
 
     // Enable chrome tracing as early as possible so that repo inference,
     // config resolution, and CLI parsing are all captured in profiles.
-    if let Some((ref file_path, include_args)) = args.profile_file_and_include_args() {
+    if !is_setup && let Some((ref file_path, include_args)) = args.profile_file_and_include_args() {
         let _ = subscriber.enable_chrome_tracing(file_path, include_args);
     }
 

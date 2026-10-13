@@ -10,7 +10,10 @@
 use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
-use turborepo_repository::{global_deps::GlobalDepsMatcher, package_graph::PackageGraph};
+use turborepo_repository::{
+    change_mapper::is_default_global_file, global_deps::GlobalDepsMatcher,
+    package_graph::PackageGraph,
+};
 use turborepo_task_id::TaskId;
 
 use crate::Engine;
@@ -68,14 +71,6 @@ pub fn filter_existing_changed_files(
         .collect()
 }
 
-/// Root-level files that always trigger a full rebuild when changed.
-///
-/// - `package.json`: workspace topology or root dependency changes
-/// - `turbo.json`/`turbo.jsonc`: task definitions, global deps, pipelines
-///
-/// Lockfile changes are detected separately via the package manager.
-const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
-
 /// Determines which tasks are directly affected by the given set of changed
 /// files. Does NOT expand to transitive dependents or dependencies. Callers
 /// must use the closure appropriate to their mode: `retain_affected_tasks` for
@@ -108,7 +103,20 @@ pub fn affected_task_ids(
     changed_files: &HashSet<AnchoredSystemPathBuf>,
     global_deps: &[String],
 ) -> HashSet<TaskId<'static>> {
-    if is_global_change(changed_files, global_deps, pkg_dep_graph) {
+    affected_task_ids_with_managed_setup(engine, pkg_dep_graph, changed_files, global_deps, false)
+}
+
+/// Like `affected_task_ids`, with committed managed toolchain resolution
+/// treated as a default global file, independently of task inputs and
+/// configured globs.
+pub fn affected_task_ids_with_managed_setup(
+    engine: &Engine,
+    pkg_dep_graph: &PackageGraph,
+    changed_files: &HashSet<AnchoredSystemPathBuf>,
+    global_deps: &[String],
+    managed_setup: bool,
+) -> HashSet<TaskId<'static>> {
+    if is_global_change(changed_files, global_deps, pkg_dep_graph, managed_setup) {
         return engine.task_ids().cloned().collect();
     }
 
@@ -138,6 +146,7 @@ fn is_global_change(
     changed_files: &HashSet<AnchoredSystemPathBuf>,
     global_deps: &[String],
     pkg_dep_graph: &PackageGraph,
+    managed_setup: bool,
 ) -> bool {
     let lockfile_name = pkg_dep_graph.package_manager().map(|pm| pm.lockfile_name());
     let global_deps_matcher = GlobalDepsMatcher::new_ignoring_invalid(
@@ -158,7 +167,7 @@ fn is_global_change(
     for file in changed_files {
         let file_str = file.as_str();
 
-        if DEFAULT_GLOBAL_DEPS.contains(&file_str) {
+        if is_default_global_file(file_str, managed_setup) {
             return true;
         }
 
@@ -285,6 +294,40 @@ mod tests {
 
     fn default_def() -> TaskDefinition {
         TaskDefinition::default()
+    }
+
+    #[tokio::test]
+    async fn managed_setup_lock_is_global_independently_of_inputs_and_globs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let graph = make_pkg_graph(root, &["a", "b"]).await;
+        let tasks = [
+            (TaskId::new("a", "build"), default_def()),
+            (TaskId::new("b", "build"), default_def()),
+        ];
+        let engine = make_engine(&tasks, &[]);
+        let global_deps = vec!["!turbo.lock".to_string()];
+        for managed_setup in [false, true] {
+            let affected = affected_task_ids_with_managed_setup(
+                &engine,
+                &graph,
+                &changed(&["turbo.lock"]),
+                &global_deps,
+                managed_setup,
+            );
+            assert_eq!(affected.len(), if managed_setup { 2 } else { 0 });
+            assert!(
+                affected_task_ids_with_managed_setup(
+                    &engine,
+                    &graph,
+                    &changed(&["packages/a/turbo.lock"]),
+                    &global_deps,
+                    managed_setup,
+                )
+                .iter()
+                .all(|task| task.package() != "b")
+            );
+        }
     }
 
     #[tokio::test]

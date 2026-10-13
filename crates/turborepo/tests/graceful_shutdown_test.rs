@@ -17,13 +17,20 @@ mod unix {
 
     use nix::{
         sys::signal::{self, Signal},
-        unistd::{Pid, getpgid},
+        unistd::Pid,
     };
     use portable_pty::{CommandBuilder, PtySize, native_pty_system};
     use serde_json::{Value, json};
     use tempfile::TempDir;
 
-    use crate::common::{self, setup};
+    use crate::common::{
+        self,
+        process::{
+            unix::{TaskTreeGuard, wait_for_process_gone},
+            wait_for_process_exit,
+        },
+        setup,
+    };
 
     const START_TIMEOUT: Duration = Duration::from_secs(15);
     const EXIT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -140,44 +147,6 @@ mod unix {
     impl Drop for ReleaseGuard {
         fn drop(&mut self) {
             let _ = fs::write(&self.path, b"");
-        }
-    }
-
-    /// Kills the task's own process group if the test fails before the run
-    /// reaches its normal teardown. Turborepo gives each task its own group, so
-    /// one group kill terminates the task and any looping descendants that
-    /// would otherwise keep turbo's inherited output pipes open on the panic
-    /// path. The kill only terminates those processes; it does not reap them.
-    /// The resolved group is checked against our own so a misresolved pgid can
-    /// never signal the test runner.
-    struct TaskTreeGuard {
-        pgid: Option<i32>,
-    }
-
-    impl TaskTreeGuard {
-        /// Resolve the task child's process group after its PID is readable.
-        /// A missing, non-positive, or own-group pgid is discarded.
-        fn new(task_pid: i32) -> Self {
-            let own_group = getpgid(None).map(Pid::as_raw).unwrap_or(0);
-            let pgid = getpgid(Some(Pid::from_raw(task_pid)))
-                .ok()
-                .map(Pid::as_raw)
-                .filter(|pgid| *pgid > 0 && *pgid != own_group);
-            Self { pgid }
-        }
-
-        /// Stop the panic-path kill once the task tree has drained, so a
-        /// recycled process group is never signaled after normal teardown.
-        fn disarm(&mut self) {
-            self.pgid = None;
-        }
-    }
-
-    impl Drop for TaskTreeGuard {
-        fn drop(&mut self) {
-            if let Some(pgid) = self.pgid.take() {
-                let _ = signal::kill(Pid::from_raw(-pgid), Signal::SIGKILL);
-            }
         }
     }
 
@@ -565,18 +534,6 @@ done
         }
     }
 
-    fn wait_for_process_exit(child: &mut Child, timeout: Duration) -> std::process::ExitStatus {
-        let start = Instant::now();
-        loop {
-            match child.try_wait() {
-                Ok(Some(status)) => return status,
-                Ok(None) if start.elapsed() <= timeout => thread::sleep(Duration::from_millis(100)),
-                Ok(None) => panic!("timed out waiting for child exit"),
-                Err(err) => panic!("failed waiting for child exit: {err}"),
-            }
-        }
-    }
-
     fn send_signal(pid: i32, signal_kind: Signal) {
         signal::kill(Pid::from_raw(pid), signal_kind).expect("failed to send signal");
     }
@@ -584,42 +541,6 @@ done
     fn send_signal_to_process_group(process_group_id: i32, signal_kind: Signal) {
         signal::kill(Pid::from_raw(-process_group_id), signal_kind)
             .expect("failed to send signal to process group");
-    }
-
-    fn process_exists(pid: i32) -> bool {
-        let exists = Command::new("kill")
-            .arg("-0")
-            .arg(pid.to_string())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false);
-
-        if !exists {
-            return false;
-        }
-
-        #[cfg(target_os = "linux")]
-        if fs::read_to_string(format!("/proc/{pid}/stat")).is_ok_and(|stat| {
-            stat.rsplit_once(") ")
-                .is_some_and(|(_, fields)| fields.starts_with('Z'))
-        }) {
-            // Container init processes do not always reap killed descendants promptly.
-            return false;
-        }
-
-        true
-    }
-
-    fn wait_for_process_gone(pid: i32, timeout: Duration) {
-        let start = Instant::now();
-        while process_exists(pid) {
-            if start.elapsed() > timeout {
-                panic!("timed out waiting for process {pid} to exit");
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
     }
 
     fn normalize_output(text: &str) -> String {

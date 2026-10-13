@@ -68,12 +68,18 @@
       ]
     },
     "turborepo-crates#format": {
+      "cache": true,
       "command": ["cargo", "fmt", "--check"]
     },
     // Match the stricter cargo alias used by the Rust lint CI job.
     "turborepo-crates#lint": {
       "cache": false,
       "command": ["cargo", "lint"]
+    },
+    // Preserve the all-features coverage of cargo-deny-action.
+    "turborepo-crates#check:licenses": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/deny.toml"],
+      "command": ["cargo", "deny", "--all-features", "check", "licenses"]
     },
 
     // docs lint task runs fumadocs-mdx
@@ -83,6 +89,9 @@
         "//#lint",
         "//#format",
         "//#check:toml",
+        "turborepo-crates#format",
+        "turborepo-crates#lint",
+        "turborepo-crates#check:licenses",
         "docs#lint",
         "docs#check-types",
         "docs#check-links",
