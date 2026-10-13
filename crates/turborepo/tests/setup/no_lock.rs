@@ -133,8 +133,9 @@ fn production_no_lock_without_node_names_the_missing_declaration() {
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
     write(root, "package.json", r#"{"packageManager":"pnpm@10.0.0"}"#);
-    let before = snapshot(root);
     let words = ["setup", "--no-lock", "--tools-only"];
+    // The helper prepares its git-only PATH before snapshotting the fixture,
+    // then asserts the command leaves every file and directory unchanged.
     let text = failure(root, &words, true, "--no-lock needs a Node declaration");
     assert!(
         diagnostic_contains(&text, "Declare Node in .nvmrc"),
@@ -144,6 +145,5 @@ fn production_no_lock_without_node_names_the_missing_declaration() {
         !diagnostic_contains(&text, "native resolution record"),
         "{text}"
     );
-    assert_eq!(snapshot(root), before);
     assert!(!root.join(".turbo").exists());
 }
