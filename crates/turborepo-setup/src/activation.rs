@@ -63,6 +63,12 @@ pub enum Error {
          Windows x64 target"
     )]
     UnsupportedPlatform,
+    /// musl hosts qualify only when every locked tool is verify-system.
+    #[error(
+        "managed tools are not supported on musl Linux hosts such as Alpine; install the \
+         repository's tools in the image and use verify-system for them"
+    )]
+    MuslHost,
     #[error(
         "invalid locked adapter metadata; run turbo setup locally and commit the repaired lock"
     )]
@@ -168,6 +174,10 @@ impl ActivationPlan {
     /// clone-local (see `ExecutionSnapshot::select_clone_local`).
     pub fn inspect_clone_local(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
         Self::qualify(&context)?;
+        // A clone-local selection is always an installed generation.
+        if context.musl() {
+            return Err(Error::MuslHost);
+        }
         let sources = Snapshot::capture(repo)?;
         if sources.previous_lock().is_some() {
             return Err(StorageError::Conflict.into());
@@ -204,7 +214,11 @@ impl ActivationPlan {
             Platform::MacosX64
             | Platform::MacosArm64
             | Platform::LinuxX64Gnu
-            | Platform::LinuxArm64Gnu => cfg!(unix),
+            | Platform::LinuxArm64Gnu
+            // No managed artifacts: `from_selection` then requires a lock
+            // whose every tool is verify-system.
+            | Platform::LinuxX64Musl
+            | Platform::LinuxArm64Musl => cfg!(unix),
             Platform::WindowsX64 => cfg!(windows),
             _ => false,
         };
@@ -234,6 +248,10 @@ impl ActivationPlan {
         context: ExecutionContext,
         verification: Verification,
     ) -> Result<Self, Error> {
+        // Before adapter checks, so musl users get the actionable reason.
+        if context.musl() && (recorded.is_some() || !lock.verify_system_only()) {
+            return Err(Error::MuslHost);
+        }
         let python = sources.ecosystems().python;
         let external: Vec<_> = lock
             .tools()

@@ -321,6 +321,14 @@ impl Lock {
     pub fn tools(&self) -> &BTreeMap<String, Tool> {
         &self.0.tools
     }
+
+    /// Every selection is verify-system: nothing is installed, recorded or
+    /// activated from the repository. True for an empty lock.
+    pub fn verify_system_only(&self) -> bool {
+        self.tools()
+            .values()
+            .all(|tool| matches!(tool.installation, Installation::VerifySystem { .. }))
+    }
 }
 
 fn identifier(value: &str) -> bool {
