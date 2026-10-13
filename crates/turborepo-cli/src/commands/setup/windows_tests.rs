@@ -412,6 +412,8 @@ mod bun;
 mod go;
 #[path = "windows_pnpm_tests.rs"]
 mod pnpm;
+#[path = "windows_uv_tests.rs"]
+mod uv;
 #[path = "windows_yarn_tests.rs"]
 mod yarn;
 
