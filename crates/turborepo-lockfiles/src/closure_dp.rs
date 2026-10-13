@@ -249,17 +249,18 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
     }
 
     // Rank permutation: position of each package id under (key, version)
-    // ordering (`Package`'s derived `Ord`). Closure members are emitted in id
-    // order per chunk; a final u32 sort by rank yields the canonical sorted
-    // closure without comparing strings per element.
-    let rank: Vec<u32> = {
+    // ordering (`Package`'s derived `Ord`). Bitset positions are ranks, not
+    // ids, so enumerating a closure's set bits (chunks ascend, bits ascend
+    // within a chunk) yields its members already in canonical sorted order:
+    // no per-workspace sort, and no string comparisons per element.
+    let (order, rank): (Vec<u32>, Vec<u32>) = {
         let mut order: Vec<u32> = (0..node_count as u32).collect();
         order.sort_unstable_by(|&a, &b| packages[a as usize].cmp(&packages[b as usize]));
         let mut rank = vec![0u32; node_count];
         for (pos, &id) in order.iter().enumerate() {
             rank[id as usize] = pos as u32;
         }
-        rank
+        (order, rank)
     };
 
     // 3. SCC condensation. Tarjan emits SCCs successors-first, so a later SCC's
@@ -310,7 +311,7 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
         return Ok(None);
     }
 
-    let mut member_ids: HashMap<String, Vec<u32>> = workspace_root_sccs
+    let mut result: SortedClosures = workspace_root_sccs
         .iter()
         .map(|(ws, _)| ((*ws).clone(), Vec::new()))
         .collect();
@@ -331,9 +332,9 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
             let (done, current) = closures.split_at_mut(scc_idx * words_per_chunk);
             let row = &mut current[..words_per_chunk];
             for &member in members {
-                let member = member as usize;
-                if (chunk_start..chunk_end).contains(&member) {
-                    let bit = member - chunk_start;
+                let position = rank[member as usize] as usize;
+                if (chunk_start..chunk_end).contains(&position) {
+                    let bit = position - chunk_start;
                     row[bit / 64] |= 1u64 << (bit % 64);
                 }
             }
@@ -356,35 +357,27 @@ pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
                     *dst |= src;
                 }
             }
-            // Inserted for every workspace when `member_ids` was built; a
-            // miss is unreachable but must not panic under the workspace
-            // lint policy.
-            let Some(ids) = member_ids.get_mut(*workspace) else {
+            // Inserted for every workspace when `result` was built; a miss is
+            // unreachable but must not panic under the workspace lint policy.
+            let Some(closure) = result.get_mut(*workspace) else {
                 continue;
             };
+            let members: u32 = accumulator.iter().map(|word| word.count_ones()).sum();
+            closure.reserve(members as usize);
+            // Bits are rank positions and chunks ascend, so members are
+            // appended in canonical (key, version) order.
             for (word_idx, &word) in accumulator.iter().enumerate() {
                 let mut word = word;
                 while word != 0 {
                     let bit = word.trailing_zeros() as usize;
                     word &= word - 1;
-                    let id = chunk_start + word_idx * 64 + bit;
-                    ids.push(id as u32);
+                    let position = chunk_start + word_idx * 64 + bit;
+                    let id = order[position];
+                    closure.push(Arc::clone(&packages[id as usize]));
                 }
             }
         }
     }
-
-    let result: SortedClosures = member_ids
-        .into_iter()
-        .map(|(ws, mut ids)| {
-            ids.sort_unstable_by_key(|&id| rank[id as usize]);
-            let closure = ids
-                .into_iter()
-                .map(|id| Arc::clone(&packages[id as usize]))
-                .collect();
-            (ws, closure)
-        })
-        .collect();
 
     Ok(Some(result))
 }
