@@ -15,10 +15,10 @@ import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
 
 <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-Install the toolchains your repository declares, record their exact versions in [`turbo.lock`](/docs/core-concepts/managed-toolchains#turbolock), then install [dependencies](#dependencies) from your committed lockfiles.
+Install the toolchains your repository declares and record their exact versions in [`turbo.lock`](/docs/core-concepts/managed-toolchains#turbolock).
 
 ```bash title="Terminal"
-turbo setup
+turbo setup --tools-only
 ```
 
 `turbo setup` never runs tasks. To learn how `turbo setup`, `turbo.lock`, and `turbo run` work together, see [Managed toolchains](/docs/core-concepts/managed-toolchains).
@@ -26,7 +26,9 @@ turbo setup
 <Callout type="warn">
   `turbo setup` is experimental and requires
   [`futureFlags.experimentalSetup`](/docs/reference/configuration#experimentalsetup).
-  Modes that aren't implemented exit with an error without changing anything.
+  In this release, `--tools-only` is required, and `--plan`, `--no-lock`, and
+  `--offline` aren't implemented. Modes that aren't implemented exit with an
+  error without changing anything.
 </Callout>
 
 You can run `turbo setup` from any directory in your repository. It walks up to the root `turbo.json` or `turbo.jsonc` without crossing a Git repository boundary. If nested directories each have a root configuration, select one with [`--cwd`](/docs/reference/run#--cwd-path).
@@ -58,7 +60,7 @@ When more than one source is present, `turbo setup` selects the newest release t
 
 ### npm
 
-`turbo setup` provides the npm that ships with the selected Node.js release. A `packageManager` or `devEngines.packageManager` field can pin npm, such as `"npm@11.6.1"`. If the pin differs from the bundled npm, `turbo setup` installs the pinned version.
+`turbo setup` provides the npm that ships with the selected Node.js release. A `packageManager` field that pins npm, such as `"npm@11.6.1"`, isn't supported yet.
 
 ### pnpm
 
@@ -87,47 +89,15 @@ Frozen mode installs exactly what `turbo.lock` records and never writes it. It f
 
 Pass [`--no-frozen`](#--no-frozen) to use local mode in CI.
 
-## Dependencies
-
-After installing tools, `turbo setup` installs each toolchain's dependencies when its [dependency policy](/docs/reference/setup-policy#dependencies) is `locked`, the default. It runs only the package manager's frozen install, using the managed package manager rather than one from your `PATH`, with the managed tools first on `PATH`. A dependency install isn't a Turborepo task.
-
-| Package manager  | Command                          | Lockfile                                     |
-| ---------------- | -------------------------------- | -------------------------------------------- |
-| npm              | `npm ci`                         | `npm-shrinkwrap.json` or `package-lock.json` |
-| pnpm             | `pnpm install --frozen-lockfile` | `pnpm-lock.yaml`                             |
-| Yarn 1           | `yarn install --frozen-lockfile` | `yarn.lock`                                  |
-| Yarn 2 and later | `yarn install --immutable`       | `yarn.lock`                                  |
-
-- The package manager must be declared with `packageManager` or `devEngines.packageManager` in the root `package.json`.
-- A missing lockfile is an error, reported before anything is downloaded. `turbo setup` never creates or updates a lockfile. If a package manager changes one anyway, `turbo setup` restores it and fails.
-- Before each install, `turbo setup` prints the effective [lifecycle-script policy](/docs/reference/setup-policy#lifecyclescripts). Pass `--ignore-scripts` to skip lifecycle scripts for one run.
-- If the install fails, `turbo setup` exits with the package manager's exit code.
-- Every run repeats the install. An unchanged lockfile doesn't prove that installed dependencies are complete, so `turbo setup` never skips the install because of it.
-- Package managers that aren't listed, and Rust, Python, and Go dependencies, aren't installed yet. `turbo setup` reports them as skipped.
-
-```txt title="Terminal"
-Installing javascript dependencies from package-lock.json with managed npm 11.6.1: npm ci (dependency installation, not a Turborepo task)
-npm 11.6.1: native npm policy; project scripts run; dependency scripts run
-Permitted lifecycle scripts run package code that can start other commands. turbo setup runs no Turborepo tasks.
-javascript dependencies: installed; package-lock.json unchanged
-Dependencies: javascript installed. No Turborepo tasks run.
-```
-
-`--offline` and `--no-lock` can't install dependencies yet. Add `--tools-only` to install only tools.
-
 ## Options
 
 ### `--tools-only`
 
-Install toolchains without installing dependencies. It overrides a `locked` dependency policy for one run.
-
-### `--ignore-scripts`
-
-Skip dependency lifecycle scripts for one run, with each package manager's own flag. See [`lifecycleScripts`](/docs/reference/setup-policy#lifecyclescripts).
+Install toolchains without installing dependencies. Required in this release, because dependency installation isn't implemented yet.
 
 ### `--check`
 
-Check the installed toolchains against `turbo.lock` without resolving, downloading, or writing anything.
+Check the installed toolchains against `turbo.lock` without resolving, downloading, or writing anything. Requires `--tools-only`.
 
 ```txt title="Terminal"
 node 24.21.0: ready
@@ -135,7 +105,7 @@ pnpm 10.18.0: ready
 Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run.
 ```
 
-The check exits with a non-zero code if `turbo.lock` is missing, your declarations changed, or the installation is missing or damaged. `--frozen`, `--no-frozen`, and `--offline` don't change a check. Installed dependencies aren't checked: the check reports the install that `turbo setup` would repeat, and fails if a required lockfile is missing.
+The check exits with a non-zero code if `turbo.lock` is missing, your declarations changed, or the installation is missing or damaged. `--frozen`, `--no-frozen`, and `--offline` don't change a check.
 
 ### `--force`
 
@@ -157,7 +127,7 @@ Re-resolve every declaration, including unchanged ranges and aliases like `24` o
 
 ### `--plan`
 
-Report what `turbo setup` would install, including each dependency install command and its lifecycle-script policy, without changing anything.
+Not implemented yet. `turbo setup --plan` exits with an error without changing anything.
 
 ### `--no-lock`
 
@@ -189,7 +159,7 @@ These flags can't be combined:
 - `reused`: The existing installation already matched `turbo.lock`.
 - `ready`: With `--check`, the installation matches `turbo.lock`.
 
-It then reports each toolchain's dependencies as installed or skipped, and that no tasks ran.
+It always reports that dependencies were skipped and that no tasks ran.
 
 ## Troubleshooting
 
@@ -201,13 +171,13 @@ It then reports each toolchain's dependencies as installed or skipped, and that 
 
 Enable [`futureFlags.experimentalSetup`](/docs/reference/configuration#experimentalsetup) in the root `turbo.json` or `turbo.jsonc`, or select the intended repository with `--cwd`.
 
-### A dependency lockfile is missing
+### This setup mode is not implemented
 
 ```txt title="Terminal"
-npm dependency setup requires a committed npm-shrinkwrap.json or package-lock.json at the repository root
+this setup mode is not implemented; use local or frozen --tools-only provisioning or --check --tools-only readiness checks
 ```
 
-Run `npm install` locally and commit the lockfile, or pass `--tools-only`. Nothing was changed.
+Add `--tools-only`, and remove `--plan`, `--no-lock`, and `--offline`. Nothing was changed.
 
 ### `.turbo` isn't ignored
 
