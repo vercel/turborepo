@@ -131,14 +131,21 @@ impl Platform {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Format {
     Binary,
     Tar,
     TarGz,
-    TarXz,
     Zip,
+}
+
+/// Formats turbo never extracts but a delegated installer may download
+/// instead of the primary archive.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum AlternateFormat {
+    TarXz,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -148,11 +155,11 @@ pub struct Artifact {
     pub url: String,
     pub sha256: String,
     pub format: Format,
-    /// The same payload in other archive formats that an installer may fetch
-    /// instead (rustup prefers `.tar.xz`), pinned like the primary. Excluded
-    /// from task-cache identity, which the primary digest already fixes.
+    /// The same payload in other archive formats that a delegated installer
+    /// may fetch instead (rustup prefers `.tar.xz`), pinned like the primary.
+    /// Excluded from task-cache identity, which the primary digest fixes.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub alternates: BTreeMap<Format, Alternate>,
+    pub alternates: BTreeMap<AlternateFormat, Alternate>,
     /// None means archive root. Binary payloads have no prefix.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub root_prefix: Option<String>,
@@ -388,12 +395,10 @@ fn validate_source(source: &str, sha256: &str) -> Result<(), Error> {
 }
 fn validate_artifact(value: &Artifact) -> Result<(), Error> {
     validate_source(&value.url, &value.sha256)?;
-    for (format, alternate) in &value.alternates {
-        if [value.format, Format::Binary].contains(format) || value.format == Format::Binary {
-            return Err(Error::Invalid(
-                "alternates must be other archive formats of the same payload",
-            ));
-        }
+    if value.format == Format::Binary && !value.alternates.is_empty() {
+        return Err(Error::Invalid("binary payloads have no alternate formats"));
+    }
+    for alternate in value.alternates.values() {
         validate_source(&alternate.url, &alternate.sha256)?;
     }
     if value
