@@ -211,10 +211,59 @@ async fn tampered_builds_never_publish() {
     assert!(store.current().unwrap().is_none());
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn windows_x64_plans_export_batch_launchers_and_install_only_on_windows() {
+    let platform = Platform::WindowsX64;
+    let bytes = good();
+    let upstream =
+        LoopbackServer::new([(format!("{RELEASES}{PATH}"), bytes.clone())], |_| {}).unwrap();
+    let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    assert_eq!(plan.key(), "cpython-3.12.12-windows-x86_64-none");
+    let (name, launcher) = plan.inventory_tool().executables.first_key_value().unwrap();
+    assert_eq!(plan.inventory_tool().executables.len(), 1);
+    assert_eq!(name, "python");
+    assert!(launcher.starts_with(".launch-") && launcher.ends_with("/python.cmd"));
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    assert!(matches!(
+        install(&mut store, &plan, &transport).await,
+        Err(Error::UnsupportedTarget)
+    ));
+    assert_eq!(upstream.hits(), 0);
+}
+
+#[test]
+fn bytecode_compiles_the_stdlib_in_place_with_an_empty_environment() {
+    let bytes = good();
+    let platform = Platform::LinuxX64Gnu;
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    let command = compile_command(Path::new("/install"), &plan.interpreter, &plan.stdlib);
+    assert_eq!(command.get_program(), "/install/bin/python3.12");
+    assert_eq!(
+        command.get_args().collect::<Vec<_>>(),
+        [
+            "-I",
+            "-B",
+            "-m",
+            "compileall",
+            "-q",
+            "-f",
+            "-j",
+            "0",
+            "--invalidation-mode",
+            "unchecked-hash",
+            "lib/python3.12"
+        ]
+    );
+    assert_eq!(command.get_current_dir(), Some(Path::new("/install")));
+    assert_eq!(command.get_envs().count(), 0);
+}
+
 #[test]
 fn plans_accept_only_official_builds_on_qualified_targets() {
     let bytes = good();
-    for platform in [Platform::LinuxX64Musl, Platform::WindowsX64] {
+    for platform in [Platform::LinuxX64Musl, Platform::WindowsArm64] {
         assert!(matches!(
             plan(document(platform, &bytes), platform),
             Err(Error::UnsupportedTarget)

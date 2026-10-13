@@ -295,7 +295,8 @@ pub fn resolve(
 /// configuration disabled and private scratch state.
 pub fn list(uv: &Path) -> Result<Listing, Error> {
     let scratch = tempfile::tempdir()?;
-    let output = Command::new(uv)
+    let mut command = Command::new(uv);
+    command
         .args([
             "python",
             "list",
@@ -313,8 +314,14 @@ pub fn list(uv: &Path) -> Result<Listing, Error> {
         .env("UV_CACHE_DIR", scratch.path().join("cache"))
         .env("UV_PYTHON_INSTALL_DIR", scratch.path().join("python"))
         .stdin(Stdio::null())
-        .stderr(Stdio::null())
-        .output()?;
+        .stderr(Stdio::null());
+    // Windows processes need SYSTEMROOT, for example to start Winsock.
+    if cfg!(windows)
+        && let Some(root) = std::env::var_os("SYSTEMROOT")
+    {
+        command.env("SYSTEMROOT", root);
+    }
+    let output = command.output()?;
     if !output.status.success() {
         return Err(Error::ListingFailed);
     }
