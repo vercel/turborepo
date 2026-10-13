@@ -869,7 +869,7 @@ impl BunLockfile {
                     // Bun resolution walks up from the dependent's key, so an
                     // entry in an ancestor scope also satisfies the dependency.
                     let ancestor_satisfies = || {
-                        let mut scope = PackageKey::parse(&key).parent();
+                        let mut scope = PackageKey::parse(key).parent();
                         while let Some(parent) = scope {
                             if let Some(entry) =
                                 pruned_data.packages.get(&format!("{parent}/{dep_name}"))
