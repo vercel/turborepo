@@ -103,3 +103,45 @@ async fn unapproved_malformed_or_unbounded_redirects_are_rejected() -> TestResul
     assert_eq!(target.hits() + other.hits(), 0);
     Ok(())
 }
+
+#[tokio::test]
+async fn https_redirect_mode_keeps_the_hop_limit_and_loopback_fixtures_on_loopback() -> TestResult {
+    let digest = || ExpectedSha256::from_hex(ABC_SHA256);
+    let target = Fixture::new(OK, "", Duration::ZERO).await?;
+    let source = Fixture::new(&redirect(302, &target.url()), "", Duration::ZERO).await?;
+    let client = source.client()?.with_https_redirects();
+    let artifact = client
+        .download_verified(&source.url(), digest()?, limits(3)?)
+        .await?;
+    assert_eq!(artifact.as_bytes(), b"abc");
+    let looping = Fixture::new(&redirect(307, "/again"), "", Duration::ZERO).await?;
+    assert_eq!(
+        looping
+            .client()?
+            .with_https_redirects()
+            .download_verified(&looping.url(), digest()?, limits(3)?)
+            .await
+            .err(),
+        Some(Error::RedirectRejected)
+    );
+    assert_eq!(looping.hits(), 1 + MAX_REDIRECTS);
+    // An HTTP fixture request may never leave literal loopback addresses.
+    let port = Url::parse(&target.origin)?.port().ok_or("fixture port")?;
+    let source = Fixture::new(
+        &redirect(302, &format!("http://localhost:{port}/artifact")),
+        "",
+        Duration::ZERO,
+    )
+    .await?;
+    assert_eq!(
+        source
+            .client()?
+            .with_https_redirects()
+            .download_verified(&source.url(), digest()?, limits(3)?)
+            .await
+            .err(),
+        Some(Error::RedirectRejected)
+    );
+    assert_eq!(target.hits(), 1);
+    Ok(())
+}

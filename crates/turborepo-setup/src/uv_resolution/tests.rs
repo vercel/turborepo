@@ -159,3 +159,27 @@ async fn transport_reads_only_the_index_and_selected_checksums() {
     // A release missing its checksum file fails instead of trusting the index.
     assert!(transport.resolve(&requirement(">=0.13")).await.is_err());
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn mirrors_serve_the_official_index_and_release_paths_beneath_their_base() {
+    let paths = [
+        format!("/mirror{}", uv::INDEX_PATH),
+        "/mirror/github/uv/releases/download/0.13.0/sha256.sum".into(),
+    ];
+    let bodies = [index(&["0.13.0"]), sums("0.13.0", &uv::PLATFORMS)];
+    let upstream = LoopbackServer::new(paths.clone().into_iter().zip(bodies), |_| {}).unwrap();
+    let fixture = crate::test_support::OwnedSetupFixture::new().unwrap();
+    let base = format!("{}/mirror", upstream.origin());
+    let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
+    let transport = UvTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
+    let tool = transport.resolve(&requirement(">=0.13")).await.unwrap();
+    assert_eq!(upstream.requests(), paths);
+    let Installation::Managed { artifacts } = &tool.installation else {
+        panic!("expected managed uv");
+    };
+    assert!(
+        artifacts
+            .values()
+            .all(|parts| parts["distribution"].url.starts_with(uv::ORIGIN))
+    );
+}

@@ -212,7 +212,10 @@ fn changes(
     }
 
     // Setup records trusted roots only on Unix so far, so `turbo setup` cannot
-    // help elsewhere: stay off rather than print a notice.
+    // help elsewhere: stay off rather than print a notice. Without turbo.lock
+    // only this user's `turbo setup --no-lock` record opts a clone in, so an
+    // unrecorded lockless clone stays off quietly too.
+    let locked = fs::symlink_metadata(root.join("turbo.lock")).is_ok();
     let (status, bin, reason) = if !cfg!(unix) || !enabled(&root) {
         (Status::Off, None, None)
     } else {
@@ -232,6 +235,7 @@ fn changes(
                     Some("its path cannot be added to PATH".to_owned()),
                 ),
             },
+            _ if !locked => (Status::Off, None, None),
             Ok(None) => (Status::Missing, None, None),
             Err(reason) => (Status::Missing, None, Some(reason)),
         }
@@ -280,11 +284,15 @@ fn notice(status: Status, reason: Option<&str>) -> Option<String> {
     }
 }
 
-/// The nearest `turbo.lock` marks the repository. Like setup discovery, a
-/// nested clone never borrows an enclosing repository's tools.
+/// The nearest `turbo.lock`, or the local inventory `turbo setup --no-lock`
+/// leaves instead, marks the repository. Like setup discovery, a nested clone
+/// never borrows an enclosing repository's tools.
 fn find_root(cwd: &Path) -> Option<PathBuf> {
     for dir in cwd.ancestors() {
-        if fs::symlink_metadata(dir.join("turbo.lock")).is_ok() {
+        let inventory = dir.join(".turbo").join("tools").join("manifest.json");
+        if fs::symlink_metadata(dir.join("turbo.lock")).is_ok()
+            || fs::symlink_metadata(inventory).is_ok()
+        {
             return Some(dir.to_owned());
         }
         if fs::symlink_metadata(dir.join(".git")).is_ok() {
@@ -518,6 +526,85 @@ mod tests {
             changes(state, "/usr/bin", Some(&outer), Some(&home)),
             Changes::default()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lockless_clones_activate_only_a_recorded_no_lock_installation() {
+        use std::os::unix::{
+            ffi::OsStrExt,
+            fs::{MetadataExt, PermissionsExt},
+        };
+
+        use turborepo_tool_install::{Record, Store, Tool};
+        let sha = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path().join("home");
+        let root = temp.path().join("repo");
+        fs::create_dir_all(root.join(".git")).unwrap();
+        fs::create_dir_all(root.join("apps/web")).unwrap();
+        let root = root.canonicalize().unwrap();
+        let web = root.join("apps/web");
+        fs::write(
+            root.join("turbo.json"),
+            r#"{"futureFlags":{"experimentalSetup":true}}"#,
+        )
+        .unwrap();
+        let tool = Tool {
+            id: "node".into(),
+            version: "24.0.0".into(),
+            platform: "test".into(),
+            artifact_sha256: "a".repeat(64),
+            executables: [("node".into(), "bin/node".into())].into(),
+        };
+        let selection = br#"{"schemaVersion":0,"tools":{}}"#.to_vec();
+        let mut store = Store::open(&root).unwrap();
+        let expected = store.generation().unwrap();
+        store
+            .reconcile_recorded_checked(
+                &[tool],
+                &Record::new(selection.clone()).unwrap(),
+                &expected,
+                false,
+                |_, tree| {
+                    fs::create_dir_all(tree.join("bin"))?;
+                    fs::write(tree.join("bin/node"), "#!/bin/sh\n")?;
+                    fs::set_permissions(tree.join("bin/node"), fs::Permissions::from_mode(0o755))?;
+                    Ok(())
+                },
+                || Ok(()),
+            )
+            .unwrap();
+        drop(store);
+        assert_eq!(find_root(&web).unwrap(), root);
+        // Unlike a turbo.lock root, an unrecorded inventory is not an opt-in.
+        let off = changes(None, "/usr/bin", Some(&web), Some(&home));
+        assert!(off.path.is_none() && off.notice.is_none());
+
+        let current = Store::inspect(&root).unwrap().unwrap();
+        let identity = fs::metadata(&root).unwrap();
+        let record = serde_json::json!({"schema": 1, "installation": {
+            "root": root, "device": identity.dev(), "inode": identity.ino(),
+            "manifest_sha256": sha(&fs::read(root.join(".turbo/tools/manifest.json")).unwrap()),
+            "bin": current.bin, "tools": current.tools, "selection_sha256": sha(&selection),
+        }});
+        let records = home.join("turborepo/setup-roots");
+        fs::create_dir_all(&records).unwrap();
+        for dir in [home.clone(), home.join("turborepo"), records.clone()] {
+            fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        let path = records.join(format!("{}.json", sha(root.as_os_str().as_bytes())));
+        fs::write(&path, record.to_string()).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        let bin = current.bin.to_str().unwrap();
+        let active = changes(None, "/usr/bin", Some(&web), Some(&home));
+        assert_eq!(active.path, Some(prepend("/usr/bin", bin)));
+        assert!(active.notice.is_none());
+        // A lock added later is another resolution: tools stay, with a notice.
+        fs::write(root.join("turbo.lock"), "{}").unwrap();
+        let stale = changes(None, "/usr/bin", Some(&web), Some(&home));
+        assert_eq!(stale.path, Some(prepend("/usr/bin", bin)));
+        assert!(stale.notice.unwrap().contains("turbo.lock changed"));
     }
 
     #[test]

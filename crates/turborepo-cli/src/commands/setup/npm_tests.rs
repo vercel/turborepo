@@ -552,3 +552,268 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
         n.untouched();
     }
 }
+
+const NO_LOCK: &[&str] = &["--no-lock", "--tools-only"];
+fn selection(f: &Fixture) -> Lock {
+    let current = turborepo_tool_install::Store::inspect(f.owned.root())
+        .unwrap()
+        .unwrap();
+    Lock::parse(current.record.unwrap().bytes()).unwrap()
+}
+
+#[test]
+fn npm_no_lock_provisions_bundled_or_registry_npm_that_turbo_run_activates() {
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        let f = &n.f;
+        let root = f.owned.root();
+        fs::remove_file(root.join("turbo.lock")).unwrap();
+        let u = n.upstream();
+        assert_eq!(f.run(&u, NO_LOCK).unwrap(), 0);
+        assert_eq!(u.hits(), if bundled { 3 } else { 7 });
+        assert!(!root.join("turbo.lock").exists());
+        let pinned = selection(f);
+        let npm = &pinned.tools()["npm"];
+        assert_eq!(npm.version, n.version);
+        assert_eq!(
+            matches!(npm.installation, Installation::Bundled { .. }),
+            bundled
+        );
+        let current = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.tools.len(), if bundled { 1 } else { 2 });
+        // Healthy repeats keep pins and generation without traffic.
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        assert_eq!(f.run(&empty, NO_LOCK).unwrap(), 0);
+        assert_eq!(empty.hits(), 0);
+        assert_eq!(selection(f), pinned);
+        let repeat = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(repeat.bin, current.bin);
+        // Plain turbo run puts the same clone-local npm first on PATH.
+        let tools = crate::commands::managed::ManagedTools::inspect(
+            root,
+            &root.join("turbo.json"),
+            true,
+            f.owned.home(),
+            crate::commands::managed::context,
+        )
+        .unwrap()
+        .unwrap();
+        let overrides = tools.revalidate().unwrap();
+        let first = std::env::split_paths(std::ffi::OsStr::new(&overrides["PATH"]))
+            .next()
+            .unwrap();
+        for name in ["node", "npm", "npx"] {
+            assert!(first.join(name).is_file(), "{name}");
+        }
+        n.untouched();
+    }
+}
+
+#[test]
+fn npm_no_lock_pin_change_reconciles_owners_without_a_lock() {
+    let mut n = NpmFixture::new(true);
+    let root = n.f.owned.root().to_owned();
+    fs::remove_file(root.join("turbo.lock")).unwrap();
+    n.f.run(&n.upstream(), NO_LOCK).unwrap();
+    let before = selection(&n.f).tools()["node"].clone();
+    n.version = "11.0.0".into();
+    n.npm = NpmFixture::package(&n.version);
+    fs::write(
+        root.join("package.json"),
+        r#"{"packageManager":"npm@11.0.0"}"#,
+    )
+    .unwrap();
+    let u = n.upstream();
+    n.f.run(&u, NO_LOCK).unwrap();
+    assert_eq!(u.hits(), 5); // Ownership changes restage the exact same Node artifact.
+    assert!(!root.join("turbo.lock").exists());
+    let after = selection(&n.f);
+    assert_eq!(after.tools()["node"].version, before.version);
+    assert!(matches!(
+        after.tools()["npm"].installation,
+        Installation::Managed { .. }
+    ));
+    let current = turborepo_tool_install::Store::inspect(&root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.tools.len(), 2);
+    for name in ["npm", "npx"] {
+        let shim = fs::read_to_string(current.bin.join(name)).unwrap();
+        assert!(shim.contains(&format!("$tools/npm/bin/{name}-cli.js")));
+    }
+    n.untouched();
+}
+
+/// Bundled npm whose CLI records its arguments and first PATH entry, then
+/// runs `body` in the repository.
+fn installing(body: &str) -> NpmFixture {
+    let mut n = NpmFixture::new(true);
+    let prefix = n.f.node_path.rsplit('/').next().unwrap();
+    let cli =
+        format!("#!/bin/sh\necho \"$*\" >> npm-args\necho \"${{PATH%%:*}}\" > npm-path\n{body}\n");
+    n.f.node = first_lock::bundled_with(prefix.trim_end_matches(".tar.gz"), &cli);
+    let artifacts = &mut n.f.lock["tools"]["node"]["installation"]["artifacts"];
+    let parts = artifacts
+        .as_object_mut()
+        .unwrap()
+        .values_mut()
+        .next()
+        .unwrap();
+    parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&n.f.node)));
+    let lock = Lock::parse(n.f.lock.to_string().as_bytes()).unwrap();
+    fs::write(
+        n.f.owned.root().join("turbo.lock"),
+        lock.canonical_bytes().unwrap(),
+    )
+    .unwrap();
+    n
+}
+
+impl NpmFixture {
+    fn args(&self) -> Vec<String> {
+        let args = fs::read_to_string(self.f.owned.root().join("npm-args"));
+        args.unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+    fn no_tasks(&self) {
+        for path in ["task-ran", "hook-ran", "probe-ran"] {
+            assert!(!self.f.owned.root().join(path).exists(), "{path}");
+        }
+        assert_eq!(
+            fs::read(self.f.owned.root().join("package-lock.json")).unwrap(),
+            b"dependency lock sentinel"
+        );
+    }
+}
+
+#[test]
+fn locked_npm_dependencies_install_with_managed_npm_and_repeat_safely() {
+    let n = installing("mkdir -p node_modules && touch node_modules/.installed");
+    let root = n.f.owned.root();
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(n.args(), ["ci"]);
+    // The managed bin directory comes first, and it is the one exporting npm.
+    let path = fs::read_to_string(root.join("npm-path")).unwrap();
+    assert!(
+        std::path::Path::new(path.trim()).join("npm").exists(),
+        "{path}"
+    );
+    assert!(path.contains(".turbo"), "{path}");
+    assert!(root.join("node_modules/.installed").exists());
+    // A repeat reruns npm ci, so removed dependencies are repaired.
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert!(root.join("node_modules/.installed").exists());
+    assert_eq!(n.args(), ["ci", "ci"]);
+    // Checks never run the installer.
+    assert_eq!(n.f.run(&u, &["--check"]).unwrap(), 0);
+    assert_eq!(n.args().len(), 2);
+    n.no_tasks();
+}
+
+#[test]
+fn npm_plans_and_checks_report_the_install_and_policy_without_running_it() {
+    let n = installing("touch hook-ran");
+    let (root, lock) = (n.f.owned.root(), n.lock());
+    let disclosure = "  Permitted lifecycle scripts run package code that can start other \
+                      commands. turbo setup runs no Turborepo tasks.";
+    assert_eq!(
+        n.f.dependencies(&["--plan"]).plan(root, &lock).unwrap(),
+        [
+            "javascript dependencies: npm ci from package-lock.json with managed npm 11.6.1 \
+             (package-lock.json stays unchanged)",
+            "  npm 11.6.1: native npm policy; project scripts run; dependency scripts run",
+            disclosure,
+        ]
+    );
+    let check = n.f.dependencies(&["--check"]).check(root, &lock).unwrap();
+    assert_eq!(
+        check[0],
+        "javascript dependencies: not checked; turbo setup reruns npm ci from package-lock.json, \
+         because dependency readiness is not tracked"
+    );
+    assert_eq!(check.last().unwrap(), "No tasks run.");
+    let skipped = n.f.dependencies(&["--plan", "--ignore-scripts"]);
+    assert_eq!(
+        skipped.plan(root, &lock).unwrap()[1..],
+        [
+            "  npm 11.6.1: lifecycle scripts skipped (--ignore-scripts); passing --ignore-scripts \
+             to npm"
+        ]
+    );
+    assert_eq!(
+        n.f.dependencies(&["--plan", "--tools-only"])
+            .plan(root, &lock)
+            .unwrap(),
+        ["Dependencies skipped (--tools-only); dependency readiness was not checked."]
+    );
+    // Plans and checks run end to end without running npm.
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--plan"]).unwrap(), 0);
+    assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(n.f.run(&u, &["--check"]).unwrap(), 0);
+    assert!(n.args().is_empty());
+    n.no_tasks();
+}
+
+#[test]
+fn npm_lifecycle_skip_controls_pass_ignore_scripts_and_tools_only_skips_npm() {
+    let n = installing("");
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
+    assert!(n.args().is_empty());
+    assert_eq!(n.f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    let skip = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"lifecycleScripts":"skip"}}"#;
+    fs::write(n.f.owned.root().join("turbo.json"), skip).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    fs::write(n.f.owned.root().join("turbo.json"), ENABLED).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(
+        n.args(),
+        ["ci --ignore-scripts", "ci --ignore-scripts", "ci"]
+    );
+    n.no_tasks();
+}
+
+#[test]
+fn missing_stale_and_rewritten_npm_locks_fail_readably_and_stay_unchanged() {
+    let n = installing("");
+    let root = n.f.owned.root();
+    fs::remove_file(root.join("package-lock.json")).unwrap();
+    let u = n.upstream();
+    let error = n.f.run(&u, &["--frozen"]).unwrap_err().to_string();
+    assert!(
+        error.contains("requires a committed npm-shrinkwrap.json or package-lock.json"),
+        "{error}"
+    );
+    // Checked before any download or storage, and never created.
+    assert_eq!(u.hits(), 0);
+    assert!(!root.join(".turbo").exists() && !root.join("package-lock.json").exists());
+
+    // npm ci's failure status passes through; the next run recovers.
+    let n = installing("[ -f stale ] && exit 3\nmkdir -p node_modules");
+    let u = n.upstream();
+    fs::write(n.f.owned.root().join("stale"), "").unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 3);
+    fs::remove_file(n.f.owned.root().join("stale")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert!(n.f.owned.root().join("node_modules").exists());
+    n.no_tasks();
+
+    // A lockfile the manager rewrites is restored, and setup fails.
+    let n = installing("echo rewritten > package-lock.json");
+    let error = n.f.run(&n.upstream(), &["--frozen"]).unwrap_err();
+    let error = error.to_string();
+    assert!(
+        error.contains("`npm ci` changed the committed package-lock.json"),
+        "{error}"
+    );
+    n.no_tasks();
+}

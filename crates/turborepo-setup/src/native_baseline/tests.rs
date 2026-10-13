@@ -148,13 +148,16 @@ fn strict_decode_rejects_noncanonical_unknown_duplicate_schema_and_oversized_rec
     let text = String::from_utf8(bytes.clone()).unwrap();
     let mut unknown = serde_json::to_value(lock.document()).unwrap();
     unknown["tools"]["node"]["extra"] = json!(true);
-    let schema = "\"schemaVersion\":0";
+    // Canonical records are indented (#14738).
+    let schema = "\"schemaVersion\": 0";
+    assert!(text.contains(schema), "{text}");
     let cases = [
-        text.replace(schema, "\"schemaVersion\":1").into_bytes(),
+        text.replace(schema, "\"schemaVersion\": 1").into_bytes(),
         text.replace(schema, &format!("{schema},{schema}"))
             .into_bytes(),
         serde_json::to_vec(&unknown).unwrap(),
-        serde_json::to_vec_pretty(lock.document()).unwrap(),
+        // The compact encoding of earlier writers is no longer canonical.
+        [serde_json::to_vec(lock.document()).unwrap(), b"\n".to_vec()].concat(),
         bytes[..bytes.len() - 1].to_vec(),
         [b" ".as_slice(), &bytes].concat(),
         [bytes.as_slice(), b"{}"].concat(),

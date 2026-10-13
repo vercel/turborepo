@@ -27,6 +27,7 @@ use turborepo_setup::{
     yarn_provision::YarnPlan,
 };
 use turborepo_tool_install::Store;
+use turborepo_turbo_json::SetupMirrors;
 
 use super::Error;
 
@@ -52,15 +53,18 @@ pub(super) struct Transports {
     pub python: PythonTransport,
     pub go: GoTransport,
     pub bun: BunTransport,
-    /// Fixture override; otherwise built from the locked artifact origins.
+    /// A mirror or fixture; otherwise built from the locked artifact origins.
+    /// Either way it uses `cache`, and offline setup makes it cache-only.
     pub artifact: Option<ArtifactTransport>,
 }
 impl Transports {
-    pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
+    /// Official sources, unless `TURBO_SETUP_*` variables or the root
+    /// `setup.mirrors` policy select a mirror, in that order.
+    pub fn official(policy: &OfficialSourcePolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
         // Verified archive bytes are shared through the user's cache directory;
         // extraction and activation stay in each repository's .turbo/tools.
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
-        Self::configured(policy, &Mirrors::from_env()?, cache)
+        Self::configured(policy, &Mirrors::configured(mirrors)?, cache)
     }
 
     pub fn configured(
@@ -76,6 +80,27 @@ impl Transports {
             Some(mirror) => NodeTransport::mirrored(policy, mirror)?,
             None => NodeTransport::official(policy)?,
         };
+        let bun = match &mirrors.bun {
+            Some(mirror) => BunTransport::mirrored(policy, mirror)?,
+            None => BunTransport::official(policy)?,
+        };
+        let uv = match &mirrors.uv {
+            Some(mirror) => UvTransport::mirrored(policy, mirror)?,
+            None => UvTransport::official(policy)?,
+        };
+        let python = match &mirrors.python {
+            Some(mirror) => PythonTransport::mirrored(policy, mirror)?,
+            None => PythonTransport::official(policy)?,
+        };
+        let go = match &mirrors.go {
+            Some(mirror) => GoTransport::mirrored(policy, mirror)?,
+            None => GoTransport::official(policy)?,
+        };
+        // Also the private rustup's distribution server.
+        let rustup = match &mirrors.rust {
+            Some(mirror) => RustupTransport::mirrored(policy, mirror)?,
+            None => RustupTransport::official(policy)?,
+        };
         Ok(Self {
             node: node.with_cache(cache.clone()),
             pnpm: registry()?.with_cache(cache.clone()),
@@ -83,12 +108,17 @@ impl Transports {
             #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
             cache,
-            rustup: RustupTransport::official(policy)?,
-            uv: UvTransport::official(policy)?,
-            python: PythonTransport::official(policy)?,
-            go: GoTransport::official(policy)?,
-            bun: BunTransport::official(policy)?,
-            artifact: None,
+            rustup,
+            uv,
+            python,
+            go,
+            bun,
+            // Otherwise built from the locked artifact origins.
+            artifact: mirrors
+                .artifact
+                .as_ref()
+                .map(|mirror| ArtifactTransport::mirrored(policy, mirror))
+                .transpose()?,
         })
     }
 
@@ -475,6 +505,85 @@ pub(super) fn lock_report(
     lines.join("\n")
 }
 
+/// Declarations lock resolution can start from. Setup and `--plan` share this
+/// gate and [`resolve`], so a plan proposes exactly what setup would publish;
+/// ecosystems that join resolution extend these, never one caller.
+pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
+    let declared = snapshot.declarations();
+    // Package managers other than Bun run on the managed Node.
+    let js_manager = ["npm", "pnpm", "yarn"]
+        .iter()
+        .any(|id| declared.contains_key(*id));
+    if !declared.contains_key("node")
+        && (js_manager
+            || !["rustup", "uv", "go", "bun"]
+                .iter()
+                .any(|id| declared.contains_key(*id)))
+    {
+        return Err(Error::Unsupported(
+            if snapshot.ecosystems().python && !js_manager {
+                "a native Node or uv declaration is required"
+            } else {
+                "a native Node declaration is required (or a root rust-toolchain file with \
+                 experimentalCargoWorkspaces)"
+            },
+        ));
+    }
+    Ok(())
+}
+
+/// The one candidate resolver behind setup's lock publication and `--plan`'s
+/// proposal. Callers run their own checks before calling it.
+pub(super) fn resolve(
+    runtime: &tokio::runtime::Runtime,
+    snapshot: &Snapshot,
+    request: turborepo_setup::lock::reconcile::Resolution<'_>,
+    sources: &Transports,
+) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
+    let failed = |e: &dyn std::fmt::Display| {
+        turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
+    };
+    // Each ecosystem resolves only its own changed declarations;
+    // reconcile still checks every unaffected selection's bytes.
+    let go = request.version_ids().contains("go");
+    let rust = turborepo_setup::rust_resolution::resolve_request(&request, &sources.rustup);
+    let mut tools = runtime.block_on(rust).map_err(|e| failed(&e))?;
+    // JavaScript plus, with Python workspaces, uv and CPython.
+    let declared = request.snapshot().declarations();
+    if ["node", "npm", "pnpm", "yarn", "bun", "uv", "python"]
+        .iter()
+        .any(|id| declared.contains_key(*id))
+    {
+        let native = runtime
+            .block_on(turborepo_setup::native_resolution::resolve(
+                request,
+                turborepo_setup::native_resolution::Transports {
+                    node: &sources.node,
+                    registry: &sources.registry,
+                    bun: &sources.bun,
+                    uv: &sources.uv,
+                    python: &sources.python,
+                    platform: platform().map_err(|e| failed(&e))?,
+                },
+            ))
+            .map_err(|e| failed(&e))?;
+        tools.extend(native.tools().clone());
+    }
+    let cohort = turborepo_setup::lock::Lock::new(turborepo_setup::lock::Document {
+        schema_version: turborepo_setup::lock::SCHEMA_VERSION,
+        tools,
+    })?;
+    // Go composes onto the other ecosystems' cohort.
+    runtime
+        .block_on(turborepo_setup::go_resolution::complete(
+            snapshot,
+            go,
+            cohort,
+            &sources.go,
+        ))
+        .map_err(|e| failed(&e))
+}
+
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
@@ -506,26 +615,8 @@ pub(super) fn run(
             ));
         }
     }
-    let declared = snapshot.declarations();
-    // Package managers other than Bun run on the managed Node.
-    let js_manager = ["npm", "pnpm", "yarn"]
-        .iter()
-        .any(|id| declared.contains_key(*id));
-    if write
-        && !declared.contains_key("node")
-        && (js_manager
-            || !["rustup", "uv", "go", "bun"]
-                .iter()
-                .any(|id| declared.contains_key(*id)))
-    {
-        return Err(Error::Unsupported(
-            if snapshot.ecosystems().python && !js_manager {
-                "a native Node or uv declaration is required"
-            } else {
-                "a native Node declaration is required (or a root rust-toolchain file with \
-                 experimentalCargoWorkspaces)"
-            },
-        ));
+    if write {
+        resolvable(&snapshot)?;
     }
     // Ordinary setup validates matching pins before its no-op writer. Explicit
     // refresh may repair invalid native selections within this supported cohort;
@@ -579,7 +670,7 @@ pub(super) fn run(
         let sources = transports
             .take()
             .map(Ok)
-            .unwrap_or_else(|| Transports::official(&policy))?;
+            .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -588,49 +679,8 @@ pub(super) fn run(
             resolution_mode,
             false,
             |request| {
-                let failed =
-                    |e: &dyn std::fmt::Display| reconcile::Error::Resolution(e.to_string());
-                check().map_err(|e| failed(&e))?;
-                // Each ecosystem resolves only its own changed declarations;
-                // reconcile still checks every unaffected selection's bytes.
-                let go = request.version_ids().contains("go");
-                let rust =
-                    turborepo_setup::rust_resolution::resolve_request(&request, &sources.rustup);
-                let mut tools = runtime.block_on(rust).map_err(|e| failed(&e))?;
-                // JavaScript plus, with Python workspaces, uv and CPython.
-                let declared = request.snapshot().declarations();
-                if ["node", "npm", "pnpm", "yarn", "bun", "uv", "python"]
-                    .iter()
-                    .any(|id| declared.contains_key(*id))
-                {
-                    let native = runtime
-                        .block_on(turborepo_setup::native_resolution::resolve(
-                            request,
-                            turborepo_setup::native_resolution::Transports {
-                                node: &sources.node,
-                                registry: &sources.registry,
-                                bun: &sources.bun,
-                                uv: &sources.uv,
-                                python: &sources.python,
-                                platform: platform().map_err(|e| failed(&e))?,
-                            },
-                        ))
-                        .map_err(|e| failed(&e))?;
-                    tools.extend(native.tools().clone());
-                }
-                let cohort = turborepo_setup::lock::Lock::new(turborepo_setup::lock::Document {
-                    schema_version: turborepo_setup::lock::SCHEMA_VERSION,
-                    tools,
-                })?;
-                // Go composes onto the other ecosystems' cohort.
-                runtime
-                    .block_on(turborepo_setup::go_resolution::complete(
-                        &snapshot,
-                        go,
-                        cohort,
-                        &sources.go,
-                    ))
-                    .map_err(|e| failed(&e))
+                check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
+                resolve(&runtime, &snapshot, request, &sources)
             },
             |candidate| {
                 plans(&snapshot, candidate)
@@ -680,11 +730,10 @@ pub(super) fn run(
         bun,
         artifacts,
     } = plans(&snapshot, lock)?;
-    // Offline transports exist for Node and the npm registry only; rustup, uv,
-    // CPython, Go, Bun and additional tool downloads have no offline mode yet.
+    // Offline transports exist for Node, the npm registry and additional
+    // tools only; rustup, uv, CPython, Go and Bun have no offline mode yet.
     if offline
-        && (!artifacts.is_empty()
-            || rustup.is_some()
+        && (rustup.is_some()
             || rust.is_some()
             || uv.is_some()
             || python.is_some()
@@ -692,7 +741,7 @@ pub(super) fn run(
             || bun.is_some())
     {
         return Err(Error::Unsupported(
-            "offline setup for managed Bun, Rust, uv, Python, Go or additional tools",
+            "offline setup for managed Bun, Rust, uv, Python or Go",
         ));
     }
     let trust = match trust {
@@ -714,15 +763,30 @@ pub(super) fn run(
         .chain(artifacts.iter().map(ArtifactPlan::inventory_tool))
         .cloned()
         .collect();
+    // Activation rejects the same shadowing, so never install a cohort that
+    // `turbo run` would refuse.
+    let declared: Vec<_> = artifacts.iter().map(ArtifactPlan::inventory_tool).collect();
+    turborepo_setup::artifact_provision::check_exports(
+        desired.iter().filter(|tool| !declared.contains(tool)),
+        declared.iter().copied(),
+    )?;
     let policy = preflight()?;
     let mut transports = transports
         .map(Ok)
-        .unwrap_or_else(|| Transports::official(&policy))?;
+        .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
     let artifact_transport = match transports.artifact.take() {
         Some(transport) => Some(transport),
         None if artifacts.is_empty() => None,
         None => Some(ArtifactTransport::new(&policy, &artifacts)?),
-    };
+    }
+    .map(|transport| {
+        let transport = transport.with_cache(transports.cache.clone());
+        if offline {
+            transport.offline()
+        } else {
+            transport
+        }
+    });
     let transports = if offline {
         transports.offline()
     } else {
@@ -926,13 +990,35 @@ pub(super) fn run(
         };
         let mut prepared = Vec::new();
         if let Some(transport) = &artifact_transport {
+            use turborepo_setup::artifact_provision::Error::Offline;
             for plan in &artifacts {
                 preflight()?;
                 revalidate(discovery)?;
                 snapshot.check_guard(&guard)?;
+                let tool = plan.inventory_tool();
+                // Same offline rules as Node: collect misses, and let a forced
+                // reinstall reuse the recorded tree when nothing is cached.
                 prepared.push(
-                    plan.prepare(&store, &desired, transport, preparation)
-                        .await?,
+                    match plan.prepare(&store, &desired, transport, preparation).await {
+                        Err(Offline) if force && recorded => {
+                            match plan.prepare(&store, &desired, transport, IfNeeded).await {
+                                Ok(None) => {
+                                    reused.push(tool.clone());
+                                    None
+                                }
+                                Err(Offline) => {
+                                    missing.push(tool.id.as_str());
+                                    None
+                                }
+                                result => result?,
+                            }
+                        }
+                        Err(Offline) => {
+                            missing.push(tool.id.as_str());
+                            None
+                        }
+                        result => result?,
+                    },
                 );
             }
         }
@@ -954,7 +1040,7 @@ pub(super) fn run(
                 .tempdir_in(root.join(".turbo/tools"))?;
             let rustup =
                 rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
-            plan.prepare(&store, &desired, &rustup, preparation)?
+            plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?
         }
         _ => None,
     };
@@ -1040,7 +1126,12 @@ pub(super) fn run(
                 .map_or(0, |npm| npm.downloaded_bytes())
             + prepared_yarn
                 .as_ref()
-                .map_or(0, |yarn| yarn.downloaded_bytes()),
+                .map_or(0, |yarn| yarn.downloaded_bytes())
+            + prepared_artifacts
+                .iter()
+                .flatten()
+                .map(|artifact| artifact.downloaded_bytes())
+                .sum::<u64>(),
         ..Provisioned::default()
     };
     for tool in &desired {
@@ -1048,9 +1139,8 @@ pub(super) fn run(
             .map(|(plan, _)| format!(" ({})", plan.source()))
             .unwrap_or_default();
         let from_cache = match tool.id.as_str() {
-            _ if additional(tool).is_some() => {
-                additional(tool).and_then(|(_, prepared)| prepared.map(|_| false))
-            }
+            _ if additional(tool).is_some() => additional(tool)
+                .and_then(|(_, prepared)| prepared.map(|prepared| prepared.from_cache())),
             "node" => prepared_node.as_ref().map(|node| node.from_cache()),
             "pnpm" => prepared_pnpm.as_ref().map(|pnpm| pnpm.from_cache()),
             "npm" => prepared_npm.as_ref().map(|npm| npm.from_cache()),

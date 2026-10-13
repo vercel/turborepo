@@ -1,4 +1,7 @@
-//! Fail-closed official-only precursor, not mirror/configuration support.
+//! Fail-closed source preflight: npm configuration never redirects setup
+//! downloads. Only root `setup.mirrors` and the `TURBO_SETUP_*` mirror
+//! variables do, so any npmrc, including a committed one whose registry equals
+//! a configured mirror, is still rejected rather than parsed.
 //! No subprocesses or network. Call before constructing either transport and
 //! before mutation. Recheck if discovery/environment changes before traffic.
 
@@ -43,10 +46,16 @@ pub enum Error {
     #[error("official-only source preflight is not qualified on this host")]
     UnsupportedHost,
     #[error(
-        "official-only setup rejects {0:?} configuration, including empty npmrc files; remove it \
-         or wait for mirror/policy support"
+        "official-only setup rejects {0:?} configuration, including empty npmrc files; remove it, \
+         and configure download mirrors with setup.mirrors or TURBO_SETUP_NODE_MIRROR and \
+         TURBO_SETUP_NPM_REGISTRY instead"
     )]
     Configured(ConfigOwner),
+    #[error(
+        "official-only setup rejects line {1} of the {0:?} .npmrc: only known install-layout \
+         settings are allowed there; remove it or wait for mirror/policy support"
+    )]
+    Setting(ConfigOwner, usize),
     #[error(
         "cannot safely inspect {0:?} configuration (unreadable, non-file, link/reparse point or \
          invalid policy); no public traffic is allowed"
@@ -74,6 +83,9 @@ impl OfficialSourcePolicy {
     /// `etc/npmrc` is inspected here too (Homebrew's Node formulas write
     /// exactly `prefix = $HOMEBREW_PREFIX`). The only followed config link is
     /// a linked keg's bundled npmrc in that prefix's own Cellar.
+    /// Project `.npmrc` files (the invocation directory and its ancestors)
+    /// pass only when every setting is on the non-fetching allowlist in
+    /// `npmrc`; user, system, and prefix npmrc files are rejected outright.
     /// Windows inspects npm's default global prefix, `%APPDATA%\npm`.
     /// NPM_CONFIG_* variables outside the wrapper allowlist, regardless of
     /// spelling/value, are rejected before filesystem inspection. Registry
@@ -317,6 +329,10 @@ enum Observation {
     Readable,
     /// Bundled npmrc whose only setting is this absolute `prefix`.
     BundledPrefix(PathBuf),
+    /// Project npmrc whose every setting is on the non-fetching allowlist.
+    NonFetching,
+    /// Project npmrc with a rejected setting on this 1-based line.
+    Setting(usize),
     PolicyAbsent,
     Unsafe,
 }
@@ -353,6 +369,15 @@ fn observe(path: &Path, owner: ConfigOwner) -> Observation {
             }
             Err(_) => Observation::Unsafe,
         };
+    }
+    if matches!(owner, ConfigOwner::Repository | ConfigOwner::Ancestor) {
+        let mut bytes = Vec::new();
+        if file.take(npmrc::LIMIT + 1).read_to_end(&mut bytes).is_err()
+            || bytes.len() as u64 > npmrc::LIMIT
+        {
+            return Observation::Unsafe;
+        }
+        return npmrc::rejected_line(&bytes).map_or(Observation::NonFetching, Observation::Setting);
     }
     if owner != ConfigOwner::RootPolicy {
         return if file.read(&mut [0u8; 1]).is_ok() {
@@ -437,24 +462,31 @@ fn bundled_prefix(bytes: &[u8]) -> Option<PathBuf> {
     .then(|| prefix.to_path_buf())
 }
 
-/// Setup applies these root policy keys, and none configures download
-/// sources. Any other shape, including an empty policy, is not applied yet.
+/// Setup applies these root policy keys. Only `mirrors` configures download
+/// sources, and setup routes those through validated transports. Any other
+/// shape, including an empty policy, is not applied yet.
 fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
     use jsonc_parser::ast::Value;
     const VALUES: [&str; 3] = ["tools", "dependencies", "lifecycleScripts"];
     const TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
+    const MIRRORS: [&str; 7] = ["node", "npmRegistry", "bun", "uv", "python", "go", "rust"];
+    let strings = |keys: &[&str], value: &Value| {
+        matches!(value, Value::Object(object) if object.properties.iter().all(|p| {
+            keys.contains(&p.name.as_str()) && matches!(p.value, Value::StringLit(_))
+        }))
+    };
     let value =
         |name: &str, value: &Value| VALUES.contains(&name) && matches!(value, Value::StringLit(_));
-    let toolchain = |name: &str, toolchain: &Value| {
-        TOOLCHAINS.contains(&name)
-            && matches!(toolchain, Value::Object(object)
-                if object.properties.iter().all(|p| value(p.name.as_str(), &p.value)))
-    };
+    let toolchain =
+        |name: &str, toolchain: &Value| TOOLCHAINS.contains(&name) && strings(&VALUES, toolchain);
     matches!(setup, Value::Object(object) if !object.properties.is_empty()
     && object.properties.iter().all(|p| {
         let name = p.name.as_str();
         // `additionalTools` declares tools no built-in adapter manages.
-        value(name, &p.value) || toolchain(name, &p.value) || name == "additionalTools"
+        value(name, &p.value)
+            || toolchain(name, &p.value)
+            || name == "additionalTools"
+            || (name == "mirrors" && strings(&MIRRORS, &p.value))
     }))
 }
 
@@ -462,11 +494,14 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
 // secrets.
 fn validate(owner: ConfigOwner, observation: Observation) -> Result<(), Error> {
     match observation {
-        Observation::Missing | Observation::PolicyAbsent => Ok(()),
+        Observation::Missing | Observation::PolicyAbsent | Observation::NonFetching => Ok(()),
         Observation::Readable | Observation::BundledPrefix(_) => Err(Error::Configured(owner)),
+        Observation::Setting(line) => Err(Error::Setting(owner, line)),
         Observation::Unsafe => Err(Error::Inspection(owner)),
     }
 }
+
+mod npmrc;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;

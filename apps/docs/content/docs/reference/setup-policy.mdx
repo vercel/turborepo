@@ -3,9 +3,11 @@ title: Setup policy
 description: Choose how the experimental `turbo setup` command prepares each toolchain with the root `setup` key.
 product: turborepo
 type: reference
-summary: Reference for the experimental root `setup` key in `turbo.json`, including tool and dependency modes, lifecycle-script policy, precedence with `turbo setup` flags, and `verify-system`.
+summary: Reference for the experimental root `setup` key in `turbo.json`, including tool and dependency modes, lifecycle-script policy, download mirrors, precedence with `turbo setup` flags, and `verify-system`.
 related:
   - /docs/reference/configuration
+  - /docs/reference/setup
+  - /docs/reference/additional-tools
 ---
 
 import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
@@ -28,10 +30,9 @@ The root `setup` key in `turbo.json` or `turbo.jsonc` sets repository-wide defau
 
 <Callout type="warn">
   The `setup` key is experimental and can change in any release. In this
-  release, `turbo setup` prepares only the JavaScript toolchain (Node.js, the
-  npm that ships with it, and pnpm) and doesn't install dependencies, so
-  dependencies must be skipped. [`lifecycleScripts`](#lifecyclescripts) is
-  accepted but has no effect until dependency installation arrives.
+  release, `turbo setup` installs dependencies only with the package managers
+  listed in [Dependencies](/docs/reference/setup#dependencies). It reports
+  dependencies for other package managers and toolchains as skipped.
 </Callout>
 
 ## Requirements
@@ -79,11 +80,7 @@ How `turbo setup` prepares a toolchain's dependencies:
 - `locked`: Install dependencies from the committed lockfile without changing it. This is the default.
 - `skip`: Don't install dependencies.
 
-<Callout type="info">
-  Dependency installation isn't implemented yet. Until it is, `locked` makes
-  `turbo setup` exit with `this setup mode is not implemented` without changing
-  anything. Set `"dependencies": "skip"` or pass `--tools-only`.
-</Callout>
+With `locked`, a missing lockfile is an error, and `turbo setup` never creates or rewrites one. See [Dependencies](/docs/reference/setup#dependencies) for the commands it runs.
 
 `"dependencies": "locked"` can't be combined with `"tools": "skip"` for the same toolchain, because dependency installation needs a managed or verified tool.
 
@@ -94,7 +91,7 @@ Whether package managers may run dependency lifecycle scripts, such as `postinst
 - `native`: Keep each package manager's own defaults and the settings committed to your repository, such as allowlists of packages that may run build scripts. `turbo setup` never enables scripts that the package manager or your repository blocks. This is the default.
 - `skip`: Pass the package manager's own flag for skipping scripts. If a package manager has no such flag, setup fails instead of claiming the scripts were skipped.
 
-`turbo setup` doesn't install dependencies yet, so this key, and the [`--ignore-scripts`](#cli-overrides) flag, don't change anything today. When dependency installation arrives, `skip` maps to these flags:
+`turbo setup` prints the effective policy before each install. `skip`, and the [`--ignore-scripts`](#cli-overrides) flag, map to these flags:
 
 | Package manager           | Flag passed                       |
 | ------------------------- | --------------------------------- |
@@ -165,7 +162,7 @@ A line appears for `rust`, `python`, or `go` only when its workspace flag is ena
 
 ## Tools-only repositories
 
-Set `"dependencies": "skip"` to make tools-only setup the repository default. Plain `turbo setup` and `turbo setup --check` then work without `--tools-only`, locally and in CI:
+Set `"dependencies": "skip"` to make tools-only setup the repository default. [`turbo setup --plan`](/docs/reference/setup#--plan) and [`turbo setup --check`](/docs/reference/setup#--check) then work without `--tools-only`, locally and in CI:
 
 ```jsonc title="./turbo.json"
 {
@@ -189,7 +186,9 @@ node: locked 24.21.0
 pnpm: locked 10.18.0
 node 24.21.0: installed
 pnpm 10.18.0: installed
-Dependencies skipped. No tasks run; managed activation is not enabled.
+Managed tools use 218.9 MB in this clone's .turbo/tools.
+Shared download cache: 62.3 MB.
+Dependencies skipped (dependency installation is not supported yet). No tasks run.
 ```
 
 Install dependencies the way your repository does today. `--tools-only` still works, and it also overrides `"dependencies": "locked"` for one invocation.
@@ -265,6 +264,12 @@ A `turbo.lock` created under one mode isn't trusted under the other, so plain an
 - Only Node.js and pnpm. A `packageManager` that pins npm, Yarn, or Bun isn't supported, and neither is a Corepack integrity suffix, such as `pnpm@10.28.0+sha512.<hex>`.
 - npm isn't verified separately from Node.js.
 - A repository can't mix managed and `verify-system` tools.
+- `turbo setup --plan` isn't implemented for `verify-system` tools.
+- `turbo run` and [`turbo exec`](/docs/reference/exec) fail in a repository whose `turbo.lock` records `verify-system` tools, even though `turbo setup` says tasks use the verified tools on `PATH`. On musl hosts, they also fail because managed runs aren't supported there. See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms#musl-linux).
+
+```txt title="Terminal"
+managed setup validation failed: turbo.lock selects verify-system tools, which come from PATH rather than a managed installation; run turbo setup --check to verify them
+```
 
 ## Skipping toolchains
 
@@ -275,10 +280,90 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
 <Callout type="info">
   When `experimentalCargoWorkspaces`, `experimentalPythonWorkspaces`, or
   `experimentalGoWorkspaces` is enabled, `turbo setup` considers that toolchain
-  part of the repository. Setup can't prepare Rust, Python, or Go yet, so set
-  that toolchain's `tools` to `skip`. Otherwise, `turbo setup` exits with
-  `non-JavaScript workspace setup`.
+  part of the repository and installs its [managed
+  tools](/docs/reference/setup#other-toolchains). Rust, Python, and Go support
+  `managed` and `skip`, not `verify-system`. Managed Rust, Python, or Go tools
+  also need managed `javascript` tools when the repository has JavaScript
+  declarations.
 </Callout>
+
+## Mirrors
+
+`mirrors` sets where `turbo setup` downloads from. Each value is a base URL that serves the same paths as the official source it replaces:
+
+| Key           | Replaces                                     | Downloads                                           |
+| ------------- | -------------------------------------------- | --------------------------------------------------- |
+| `node`        | `https://nodejs.org/dist`                    | Node.js release metadata and archives               |
+| `npmRegistry` | `https://registry.npmjs.org`                 | npm, pnpm, and Yarn package metadata and tarballs   |
+| `bun`         | `https://github.com`                         | Bun release checksums and archives                  |
+| `uv`          | `https://releases.astral.sh`                 | uv's version index and release archives             |
+| `python`      | `https://releases.astral.sh`                 | CPython build checksums and archives                |
+| `go`          | `https://go.dev` and `https://dl.google.com` | Go's release index and archives                     |
+| `rust`        | `https://static.rust-lang.org`               | rustup, Rust channel manifests, and Rust components |
+
+`bun`, `uv`, `python`, `go`, and `rust` replace only the official host, so the mirror serves the official paths beneath its base. For example, with `"bun": "https://mirror.example.com/github"`, `turbo setup` downloads Bun 1.2.23's checksums from `https://mirror.example.com/github/oven-sh/bun/releases/download/bun-v1.2.23/SHASUMS256.txt`. Mirrors must serve these files themselves rather than redirect to another host.
+
+Go publishes from two hosts, so one `go` mirror serves both of their paths. With `"go": "https://mirror.example.com/golang"`:
+
+| Official URL                                           | Mirror URL                                                         |
+| ------------------------------------------------------ | ------------------------------------------------------------------ |
+| `https://go.dev/dl/?mode=json&include=all`             | `https://mirror.example.com/golang/dl/?mode=json&include=all`      |
+| `https://dl.google.com/go/go1.24.2.linux-amd64.tar.gz` | `https://mirror.example.com/golang/go/go1.24.2.linux-amd64.tar.gz` |
+
+Some public Go mirrors serve the release index but redirect archive downloads back to `dl.google.com`. They don't work as a `go` mirror.
+
+`rust` works like rustup's `RUSTUP_DIST_SERVER`. `turbo setup` downloads rustup itself from the mirror and runs its private rustup with `RUSTUP_DIST_SERVER` set to the mirror and `RUSTUP_UPDATE_ROOT` set to its `/rustup` path, so Rust components download from the mirror too. Serve the official channel manifests unchanged. rustup checks each component against the channel manifest, and `turbo setup` checks that manifest's `.tar.gz` URLs and digests against `turbo.lock` before installing the toolchain.
+
+<Callout type="warn">
+  rustup downloads the `.tar.xz` copies of Rust components, and `turbo.lock`
+  records only the `.tar.gz` digests. Through a `rust` mirror, those copies are
+  verified against the channel manifest the mirror serves, not directly against
+  `turbo.lock`. Use a Rust mirror you trust.
+</Callout>
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalSetup": true,
+  },
+  "setup": {
+    "dependencies": "skip",
+    "mirrors": {
+      "node": "https://mirror.example.com/nodejs/dist",
+      "npmRegistry": "https://mirror.example.com/npm",
+    },
+  },
+}
+```
+
+- Each value must be an absolute `https://` URL without credentials, a query, or a fragment. `turbo.json` is committed, so it must never contain a secret. Errors name the key and mask the value.
+- `turbo setup` sends no credentials to mirrors. Use a mirror that serves these downloads without authentication.
+- `turbo.lock` keeps the official URLs, and every download is verified against the digest in `turbo.lock`, except Rust components, as described above. A lock created through a mirror that serves the official bytes is identical to one created without it, so other machines can use the official sources or another mirror.
+- [Additional tools](/docs/reference/additional-tools) still download from their declared URLs.
+- `--check`, `--offline`, and `turbo run` never download, so they never contact a mirror.
+
+<Callout type="warn">
+  When `turbo setup` creates or updates `turbo.lock` through a mirror, the
+  digests it records are the ones the mirror served. Later setups verify those
+  digests, but nothing checks them against the official source. Review
+  `turbo.lock` changes made through a mirror as carefully as any other change.
+</Callout>
+
+`turbo setup` doesn't read npm configuration. A `registry` in `.npmrc` doesn't configure a mirror, and an `.npmrc` file still stops `turbo setup`, even when its registry matches `npmRegistry`. See [npm configuration](/docs/reference/setup#official-only-setup-rejects-npm-configuration).
+
+### Environment overrides
+
+`TURBO_SETUP_NODE_MIRROR`, `TURBO_SETUP_NPM_REGISTRY`, `TURBO_SETUP_BUN_MIRROR`, `TURBO_SETUP_UV_MIRROR`, `TURBO_SETUP_PYTHON_MIRROR`, `TURBO_SETUP_GO_MIRROR`, and `TURBO_SETUP_RUST_MIRROR` override `node`, `npmRegistry`, `bun`, `uv`, `python`, `go`, and `rust` for one invocation without changing `turbo.json`. They follow the same rules. For each mirror, `turbo setup` uses the first value it finds:
+
+1. The environment variable. Empty variables are ignored.
+2. The key in `setup.mirrors`.
+3. The official source.
+
+To use the official source despite a configured mirror, set the variable to the official URL:
+
+```bash title="Terminal"
+TURBO_SETUP_NODE_MIRROR=https://nodejs.org/dist turbo setup
+```
 
 ## Troubleshooting
 
@@ -288,10 +373,12 @@ If you skip `javascript` while `turbo.lock` still records tools, `turbo setup` f
 | `The "setup" key can only be used in the root turbo.json.`                                | Move `setup` to the root `turbo.json`.                                                          |
 | `The "<toolchain>" setup policy requires`                                                 | Enable the named workspace flag, or remove the toolchain key.                                   |
 | `Setup dependencies cannot be "locked" when tools are "skip".`                            | Set `tools` to `managed` or `verify-system`, or set `dependencies` to `skip`.                   |
-| `this setup mode is not implemented`                                                      | Set `"dependencies": "skip"` or pass `--tools-only`.                                            |
-| `unsupported setup request: non-JavaScript workspace setup`                               | Set `tools` to `skip` for Rust, Python, or Go.                                                  |
+| `dependency setup requires a committed <lockfile>`                                        | Commit the lockfile, set `"dependencies": "skip"`, or pass `--tools-only`.                      |
+| `verify-system tools for Rust, Python or Go workspaces`                                   | Set `tools` to `managed` or `skip` for Rust, Python, and Go.                                    |
+| `managed Rust, Python or Go tools with a skip or verify-system JavaScript tools policy`   | Use `managed` `javascript` tools, or skip Rust, Python, and Go.                                 |
 | `turbo.lock selects tools that the setup policy skips`                                    | Remove the skip, or remove the tools from `turbo.lock`.                                         |
 | `official-only setup rejects ... configuration`                                           | An empty `"setup": {}` isn't accepted. Add a key or remove `setup`.                             |
+| `setup.mirrors.<key> must be an absolute HTTPS URL`                                       | Use an `https://` base URL without credentials, a query, or a fragment.                         |
 | `<tool> is not on PATH outside the repository`                                            | Install the tool, or use `managed` tools.                                                       |
 | `<tool> at <path> is <version>, but turbo.lock requires <version>`                        | Install the locked version, or run `turbo setup --update-lock` locally and commit `turbo.lock`. |
 | `installed <tool> <version> does not satisfy its native declaration`                      | Install a version that matches your declaration.                                                |

@@ -8,6 +8,22 @@ use turborepo_setup::test_support::{LoopbackServer, OwnedSetupFixture};
 use super::*;
 
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+/// The overrides managed `turbo run` applies from the committed root config
+/// and the fixture's trusted setup record, plus the managed bin first on PATH.
+fn run_overrides(
+    owned: &OwnedSetupFixture,
+) -> Result<(turborepo_run::EnvironmentVariableMap, PathBuf), String> {
+    use crate::commands::managed::{ManagedTools, context};
+    let root = owned.root();
+    let tools = ManagedTools::inspect(root, &root.join("turbo.json"), true, owned.home(), context)?
+        .ok_or("unmanaged")?;
+    let env = tools.revalidate()?;
+    let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
+    Ok((env, bin))
+}
+/// For plain setup in fixtures whose Node cannot run pnpm.
+const SKIP_DEPENDENCIES: &str =
+    r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
 fn archive(root: &str, files: &[(&str, &str)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in files {
@@ -174,6 +190,36 @@ impl Fixture {
         })
         .unwrap()
     }
+    /// A managed Node that appends the arguments after its script (the
+    /// package manager's CLI) to `record`, then runs `body` in its cwd.
+    fn record_node(&mut self, record: &str, body: &str) {
+        let prefix = self.node_path.rsplit('/').next().unwrap();
+        let prefix = prefix.trim_end_matches(".tar.gz").to_owned();
+        let node = format!("#!/bin/sh\nshift\necho \"$*\" >> {record}\n{body}\n");
+        self.node = archive(&prefix, &[("bin/node", &node), ("resource", "node")]);
+        let artifacts = &mut self.lock["tools"]["node"]["installation"]["artifacts"];
+        let parts = artifacts
+            .as_object_mut()
+            .unwrap()
+            .values_mut()
+            .next()
+            .unwrap();
+        parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&self.node)));
+        self.save();
+    }
+    /// The effective dependency setup that `flags` select, without running it.
+    fn dependencies(&self, flags: &[&str]) -> dependencies::Dependencies {
+        let args = self.args(flags);
+        let Some(crate::cli::Command::Setup { setup_args }) = &args.command else {
+            unreachable!("setup words");
+        };
+        let request = SetupRequest::new(setup_args, false).unwrap();
+        let discovery = root::Discovery::capture(&args).unwrap();
+        let javascript = [turborepo_repository::toolchain::ToolchainId::JAVASCRIPT];
+        let plan = effective::Plan::new(discovery.policy(), javascript, request.tools_only);
+        let snapshot = turborepo_setup::lock::Snapshot::capture(self.owned.root()).unwrap();
+        dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request).unwrap()
+    }
     fn manifest(&self) -> Option<Vec<u8>> {
         fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
     }
@@ -259,6 +305,8 @@ mod native_plain_run;
 mod npm;
 #[path = "offline_tests.rs"]
 mod offline_repeat;
+#[path = "pnpm_install_tests.rs"]
+mod pnpm_install;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[path = "rustup_tests.rs"]
@@ -329,6 +377,8 @@ fn authoritative_pnpm_keeps_wrong_manager_advisories_in_frozen_local_and_check()
             snapshot.previous_lock().unwrap().canonical_bytes().unwrap(),
         )
         .unwrap();
+        // Plain --check needs the lockfile pnpm would install from.
+        fs::write(f.owned.root().join("pnpm-lock.yaml"), "").unwrap();
         let u = Upstream::new(&f, false, None);
         assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
         let before = publication_guards::state(f.owned.root());
@@ -391,11 +441,14 @@ fn root_policy_and_cli_overrides_select_the_effective_setup() {
     let f = Fixture::new();
     configure(&f, "", r#"{"dependencies":"locked"}"#);
     let u = Upstream::new(&f, false, None);
-    // Plain setup provisions tools and reports dependencies skipped (#14650;
-    // ledger), so locked dependencies no longer make plain --frozen pending.
-    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
-    assert_eq!(u.hits(), 3);
+    // Locked pnpm dependencies need pnpm-lock.yaml before any download.
+    assert!(matches!(
+        f.run(&u, &["--frozen"]),
+        Err(Error::Dependencies(_))
+    ));
+    assert_eq!(u.hits(), 0);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
 
     // Skipping an ecosystem without a setup adapter lets JavaScript proceed.
     let cargo = r#","experimentalCargoWorkspaces":true"#;
@@ -439,11 +492,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        // #14486 provisions plain --no-lock without writing a lock.
-        if flags == ["--no-frozen", "--tools-only"]
-            || flags == ["--frozen"]
-            || flags == ["--no-lock"]
-        {
+        if flags == ["--no-frozen", "--tools-only"] {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else if flags == ["--check"] {
@@ -454,16 +503,30 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert!(!f.owned.root().join(".turbo").exists());
         } else {
             let result = f.run(&u, &flags);
-            // `--no-lock --offline` stays a pending combination (no offline
-            // transport for --no-lock).
-            if flags.contains(&"--offline") && !flags.contains(&"--no-lock") {
-                // Nothing trusted (#14518) or cached (#14540): every artifact
-                // is listed and nothing is installed, though the cache path
-                // may create setup's lock files.
-                assert!(matches!(result, Err(Error::OfflineMissing(_))));
-                assert!(f.manifest().is_none());
-            } else {
-                assert!(matches!(result, Err(Error::NotImplemented)));
+            match flags.as_slice() {
+                // Plain setup and plans need the fixture's missing pnpm-lock.yaml.
+                ["--plan"] | ["--frozen"] => {
+                    assert!(matches!(result, Err(Error::Dependencies(_))));
+                }
+                // Neither can install locked dependencies (#14486, #14518).
+                ["--no-lock"] | ["--frozen", "--offline"] => {
+                    assert!(matches!(result, Err(Error::Unsupported(_))));
+                }
+                // `--no-lock --offline` stays a pending combination (no
+                // offline transport for --no-lock).
+                _ if flags.contains(&"--offline") && !flags.contains(&"--no-lock") => {
+                    // Nothing trusted (#14518) or cached (#14540): every
+                    // artifact is listed and nothing is installed, though the
+                    // cache path may create setup's lock files.
+                    assert!(matches!(result, Err(Error::OfflineMissing(_))));
+                    assert!(f.manifest().is_none());
+                }
+                _ => assert!(matches!(result, Err(Error::NotImplemented))),
+            }
+            let cache_path = flags.contains(&"--tools-only")
+                && flags.contains(&"--offline")
+                && !flags.contains(&"--no-lock");
+            if !cache_path {
                 assert!(!f.owned.root().join(".turbo").exists());
             }
             assert_eq!(u.hits(), 0);

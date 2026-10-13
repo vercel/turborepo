@@ -492,6 +492,20 @@ impl Run {
             .emit();
         }
 
+        // Honest about tools turbo did not install, such as verify-system ones.
+        for notice in self
+            .execution
+            .managed_environment
+            .iter()
+            .flat_map(|tools| tools.notices())
+        {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• Using {notice}"),
+            )
+            .emit();
+        }
+
         let (base_msg, is_warning) = remote_cache_status_message(
             self.execution.remote_cache_status,
             &self.execution.opts.api_client_opts.api_url,

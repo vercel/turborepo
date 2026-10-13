@@ -44,7 +44,7 @@ turbo run
 
 ### Managed toolchains <ExperimentalBadge>Experimental</ExperimentalBadge>
 
-In a repository with [managed toolchains](/docs/core-concepts/managed-toolchains), `turbo run` uses the Node.js and pnpm versions that [`turbo setup`](/docs/reference/setup) installed for every task, in both strict and loose [environment modes](#--env-mode-option). It never installs tools itself. If the installation is missing or out of date, `turbo run` fails before running any tasks and tells you to run `turbo setup`.
+In a repository with [managed toolchains](/docs/core-concepts/managed-toolchains), `turbo run` uses the Node.js and package manager versions that [`turbo setup`](/docs/reference/setup) installed for every task, in both strict and loose [environment modes](#--env-mode-option). It never installs tools itself. If the installation is missing or out of date, `turbo run` fails before running any tasks and tells you to run `turbo setup`. To run other commands with the same tools, use [`turbo exec`](/docs/reference/exec).
 
 ## Options
 

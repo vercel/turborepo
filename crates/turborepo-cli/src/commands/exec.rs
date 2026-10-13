@@ -28,12 +28,15 @@ pub enum Error {
         )
     )]
     Disabled,
-    #[error("`turbo exec` requires managed setup, but the repository root has no turbo.lock")]
+    #[error(
+        "`turbo exec` requires managed setup, but the repository root has no turbo.lock or `turbo \
+         setup --no-lock` tools"
+    )]
     #[diagnostic(
         code(turbo::exec::managed_setup_required),
         help(
-            "Run `turbo setup` first. No command was run. `turbo exec` never falls back to tools \
-             on the host PATH."
+            "Run `turbo setup` (or `turbo setup --no-lock` for this clone only) first. No command \
+             was run. `turbo exec` never falls back to tools on the host PATH."
         )
     )]
     ManagedSetupRequired,
@@ -148,7 +151,7 @@ fn launch(command: std::process::Command) -> io::Result<Arc<SharedChild>> {
 /// A signal death becomes the shell's `128 + signal`, so in-process exec and
 /// local CLI handoff report the same status. Windows exit codes, including
 /// NTSTATUS values such as `STATUS_CONTROL_C_EXIT`, pass through unchanged.
-fn exit_code(status: ExitStatus) -> i32 {
+pub(crate) fn exit_code(status: ExitStatus) -> i32 {
     #[cfg(unix)]
     if let Some(signal) = std::os::unix::process::ExitStatusExt::signal(&status) {
         return 128 + signal;

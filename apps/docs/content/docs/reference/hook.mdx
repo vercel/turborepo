@@ -27,13 +27,14 @@ turbo hook <shell>
   The shell hook is experimental. It only activates tools in repositories that
   enable
   [`futureFlags.experimentalSetup`](/docs/reference/configuration#experimentalsetup)
-  and only on the platforms that managed toolchains support (macOS and Linux
-  with glibc). Everywhere else, it doesn't activate anything.
+  and only on macOS and Linux with glibc. On Windows and other platforms, it
+  doesn't activate anything yet. See [Managed toolchain
+  platforms](/docs/reference/managed-toolchain-platforms).
 </Callout>
 
 ## Installing the hook
 
-The [standalone installer](/docs/getting-started/installation#global-installation) for macOS and Linux adds the hook for you. To add it yourself, put the line for your shell at the end of its startup file:
+The [standalone installers](/docs/getting-started/installation#global-installation) add the hook for you. To add it yourself, put the line for your shell at the end of its startup file:
 
 | Shell      | File                         | Line                                                  |
 | ---------- | ---------------------------- | ----------------------------------------------------- |
@@ -60,7 +61,14 @@ curl -fsSL https://turborepo.dev/install | sh -s -- --no-modify-path
 curl -fsSL https://turborepo.dev/install | TURBO_NO_MODIFY_PATH=1 sh
 ```
 
-The Windows installer doesn't add the hook yet.
+On Windows, `irm https://turborepo.dev/install.ps1 | iex` adds the hook to your PowerShell profile (`$PROFILE.CurrentUserAllHosts`) with the same marker, when the installed version of `turbo` supports it. It skips the hook in GitHub Actions and when the PowerShell execution policy is `Restricted` or `AllSigned`, because those policies don't run profile scripts. On Windows, the hook doesn't activate tools yet. To skip it, use any of these:
+
+```powershell title="PowerShell"
+& ([scriptblock]::Create((irm https://turborepo.dev/install.ps1))) -NoShellHook
+$env:TURBO_NO_SHELL_HOOK = '1'; irm https://turborepo.dev/install.ps1 | iex
+# Skips both PATH and the hook: the installer changes neither.
+& ([scriptblock]::Create((irm https://turborepo.dev/install.ps1))) -NoModifyPath
+```
 
 ## What the hook changes
 
@@ -98,11 +106,11 @@ If your global `turbo` comes from npm instead of the standalone binary, the npm 
 
 ## Removing the hook
 
-Delete the hook line from your shell's startup file. If the installer added it, it's the line that ends with `# Turborepo standalone installer shell hook`. Then open a new shell. Shells that are already open keep the hook until they exit.
+Delete the hook line from your shell's startup file. If the installer added it, it's the line that ends with `# Turborepo standalone installer shell hook`. [Uninstalling global `turbo`](/docs/getting-started/installation#uninstalling-global-turbo) with the installer also removes that line. Then open a new shell. Shells that are already open keep the hook until they exit.
 
 ## When to use `turbo exec`
 
-The hook only affects interactive shells that load it. To run a single command with the managed tools anywhere else, use `turbo exec`:
+The hook only affects interactive shells that load it. To run a single command with the managed tools anywhere else, use [`turbo exec`](/docs/reference/exec):
 
 ```bash title="Terminal"
 turbo exec -- pnpm install

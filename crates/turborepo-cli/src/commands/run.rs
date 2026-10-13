@@ -57,6 +57,9 @@ pub async fn run(
     verbosity: u8,
 ) -> Result<i32, run::Error> {
     let managed = managed::select(&base)?;
+    if let Some(tools) = &managed {
+        managed::activate_probes(tools)?;
+    }
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 

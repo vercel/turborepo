@@ -376,16 +376,23 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     write(root, "custom.json", ENABLED);
     fs::create_dir(root.join("selected-root")).unwrap();
     write(root, "selected-root/turbo.json", ENABLED);
-    // #14518 admits --offline, which reads (and rejects) the invalid lock.
+    // #14518 admits tools-only --offline, which reads (and rejects) the
+    // invalid lock; offline setup cannot install locked dependencies.
+    failure(
+        root,
+        &["setup", "--offline", "--tools-only"],
+        false,
+        "invalid turbo.lock JSON",
+    );
     failure(
         root,
         &["setup", "--offline"],
         false,
-        "invalid turbo.lock JSON",
+        "--offline cannot install locked dependencies",
     );
     for words in [
-        vec!["--root-turbo-json", "custom.json", "setup", "--plan"],
-        vec!["--cwd=selected-root", "setup", "--plan"],
+        vec!["--root-turbo-json", "custom.json", "setup", "--__test-run"],
+        vec!["--cwd=selected-root", "setup", "--__test-run"],
     ] {
         failure(root, &words, false, PENDING);
     }
@@ -432,48 +439,32 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--__test-run"],
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        // Plain setup and --check act like --tools-only (#14650): plain --check
-        // reaches the same lock gate as --check --tools-only below.
-        if words.contains(&"--check") {
-            check_failure(
-                root,
-                &words,
-                false,
-                if QUALIFIED {
-                    "managed activation requires turbo.lock"
-                } else {
-                    UNQUALIFIED
-                },
-            );
-            continue;
-        }
-        let supported = !words
-            .iter()
-            .any(|word| matches!(*word, "--plan" | "--offline" | "--no-lock" | "--__test-run"));
-        // #14518 admits --offline, which needs a lock first, and #14486 admits
-        // --no-lock, which needs a Node declaration (#14701).
-        let offline = words.contains(&"--offline");
-        let no_lock = words.contains(&"--no-lock");
-        // A Cargo workspace without a root rust-toolchain file declares no tool.
-        // Frozen (#14492) and forced (#14540) setup need turbo.lock before
-        // they look for a Node declaration.
+        let pending = words.contains(&"--__test-run")
+            || (words.contains(&"--force") && words.contains(&"--update-lock"));
+        // Locked dependencies need a declared package manager, checked before
+        // any download; offline repeats (#14518) and --no-lock (#14486)
+        // cannot install them.
+        let locked = !words.contains(&"--tools-only");
         let text = failure(
             root,
             &words,
             false,
-            match (supported, QUALIFIED) {
-                (_, true) if offline => "offline setup requires turbo.lock",
-                (_, true) if no_lock => "--no-lock needs a Node declaration",
-                (false, _) => PENDING,
-                (true, true) if words.contains(&"--frozen") => "frozen mode requires turbo.lock",
-                (true, true) if words.contains(&"--force") => {
-                    "locked provisioning requires turbo.lock"
+            match () {
+                _ if pending => PENDING,
+                _ if locked && words.contains(&"--offline") => {
+                    "--offline cannot install locked dependencies"
                 }
-                (true, true) => "a native Node declaration is required",
-                (true, false) => UNQUALIFIED,
+                _ if locked && words.contains(&"--no-lock") => {
+                    "--no-lock cannot install locked dependencies"
+                }
+                _ if locked => "needs a package manager declared in the root package.json",
+                // A Cargo workspace without a root rust-toolchain file
+                // declares no tool.
+                _ if QUALIFIED => "a native Node declaration is required",
+                _ => UNQUALIFIED,
             },
         );
-        if !supported && !offline && !no_lock {
+        if pending {
             assert!(text.contains("no tasks were run"), "{text}");
         }
         assert!(!text.contains("test run successful"), "{text}");
@@ -494,23 +485,14 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         root,
         &["setup", "--update-lock", "--no-frozen"],
         true,
-        if QUALIFIED {
-            "a native Node declaration is required"
-        } else {
-            UNQUALIFIED
-        },
+        "needs a package manager declared in the root package.json",
     );
-    // #14486 admits CI --no-lock; #14701 names the missing Node declaration in a
-    // Rust-only repo.
+    // #14486 admits CI --no-lock, but only without locked dependencies.
     failure(
         root,
         &["setup", "--no-lock"],
         true,
-        if QUALIFIED {
-            "--no-lock needs a Node declaration"
-        } else {
-            UNQUALIFIED
-        },
+        "--no-lock cannot install locked dependencies",
     );
 }
 
@@ -532,14 +514,15 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 let text = failure(root, words, false, "failed to parse Cargo.toml");
                 assert_diagnostic_path(&text, &root.join("Cargo.toml"));
                 assert!(!text.contains(PENDING), "{text}");
-            } else if !words.contains(&"--plan") {
-                // Plain setup and check reach JS tools without parsing Cargo.
+            } else {
+                // Setup, plans and checks reach JS setup without parsing Cargo.
                 // (#14653's Node-required message names experimentalCargoWorkspaces.)
                 let (code, text) = invoke(root, words, false);
                 assert_eq!(code, 1, "{text}");
-                assert!(!text.contains("Cargo.toml"), "{text}");
-            } else {
-                failure(root, words, false, PENDING);
+                assert!(
+                    !text.contains("Cargo.toml") && !text.contains(PENDING),
+                    "{text}"
+                );
             }
         }
     }
@@ -576,11 +559,11 @@ fn diagnostic_assertions_preserve_wrapped_sentences_and_filenames() {
 }
 
 fn inferred(root: &Path, words: &[&str], expected: &Path) {
-    // A pending mode stops right after root discovery is logged.
+    // A test run stops right after root discovery is logged.
     let words: Vec<_> = words
         .iter()
         .copied()
-        .chain(["--plan", "--verbosity=2"])
+        .chain(["--__test-run", "--verbosity=2"])
         .collect();
     let text = failure(root, &words, true, PENDING);
     let expected = canonical_path(expected);
@@ -888,7 +871,22 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
     };
     tool("node", "v24.0.0");
-    tool("pnpm", "10.0.0");
+    let pnpm =
+        "#!/bin/sh\ncase \"$1\" in --version) echo 10.0.0;; *) echo \"system-pnpm $*\";; esac\n";
+    fs::write(bin.join("pnpm"), pnpm).unwrap();
+    fs::set_permissions(bin.join("pnpm"), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::create_dir_all(root.join("apps/web")).unwrap();
+    write(&root, "pnpm-workspace.yaml", "packages: ['apps/*']\n");
+    write(
+        &root,
+        "pnpm-lock.yaml",
+        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
+    );
+    write(
+        &root,
+        "apps/web/package.json",
+        r#"{"name":"web","scripts":{"build":"build"}}"#,
+    );
     let git = Command::new("git")
         .args(["init", "-q"])
         .current_dir(&root)
@@ -900,7 +898,7 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
     write(
         &root,
         "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true},
+        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{"cache":false}},
             "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#,
     );
     // Fake tools come first; the host PATH only supplies git.
@@ -922,8 +920,11 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         assert!(text.contains(expected), "{expected}: {text}");
     }
     let lock = fs::read_to_string(root.join("turbo.lock")).unwrap();
-    assert!(
-        lock.contains(r#""installation":{"kind":"verify-system","executables":["node"]}"#),
+    // turbo.lock is indented JSON (#14738), so compare the parsed installation.
+    let parsed: serde_json::Value = serde_json::from_str(&lock).unwrap();
+    assert_eq!(
+        parsed["tools"]["node"]["installation"],
+        serde_json::json!({"kind": "verify-system", "executables": ["node"]}),
         "{lock}"
     );
     assert!(!root.join(".turbo/tools").exists());
@@ -934,7 +935,28 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
         assert_eq!(code, 0, "{text}");
         assert!(text.contains("node 24.0.0:"), "{text}");
     }
+    // Plain `turbo run` uses the verified tools from PATH and says so, in
+    // strict and loose modes, instead of failing as a missing installation.
+    for mode in ["--env-mode=strict", "--env-mode=loose"] {
+        let words = ["run", "build", mode, "--ui=stream"];
+        let (code, text) = invoke_on_path(&root, &words, false, &path, false);
+        assert_eq!(code, 0, "{text}");
+        for expected in [
+            "Using node 24.0.0 from PATH",
+            "Using pnpm 10.0.0 from PATH",
+            "system-pnpm run build",
+        ] {
+            assert!(text.contains(expected), "{expected}: {text}");
+        }
+    }
+    assert!(!root.join(".turbo/tools").exists());
     tool("node", "v24.1.0");
+    // A changed system tool never runs under the locked identity.
+    let words = ["run", "build", "--ui=stream"];
+    let (code, text) = invoke_on_path(&root, &words, false, &path, false);
+    assert_eq!(code, 1, "{text}");
+    assert!(diagnostic_contains(&text, "requires 24.0.0"), "{text}");
+    assert!(!text.contains("system-pnpm run"), "{text}");
     for words in [
         ["setup", "--frozen"],
         ["setup", "--check"],
@@ -991,9 +1013,9 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             assert!(text.contains(line), "{text}");
         }
     }
-    // Locked dependencies are still skipped until dependency installers exist:
-    // plain --check checks the same tools (#14650) and never claims dependency
-    // readiness.
+    // Without a root package.json, locked JavaScript dependencies have nothing
+    // to install: plain --check checks the same tools (#14650) and never
+    // claims dependency readiness.
     write(root, "turbo.json", &config("locked"));
     let (code, text) = invoke(root, &["setup", "--check"], false);
     assert_eq!(code, 1, "{text}");
@@ -1015,6 +1037,38 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             "{text}"
         );
     }
+}
+
+#[test]
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    let layout = "auto-install-peers = true\nhoist-pattern[]=react\nresolution-mode=highest\n";
+    write(root, ".npmrc", layout);
+    let words = ["setup", "--check", "--tools-only"];
+    // The policy passed, so check reaches its lock requirement.
+    check_failure(
+        root,
+        &words,
+        false,
+        "managed activation requires turbo.lock",
+    );
+    write(
+        root,
+        ".npmrc",
+        &format!("{layout}registry=https://registry.npmjs.org/\n"),
+    );
+    check_failure(
+        root,
+        &words,
+        false,
+        "official-only setup rejects line 4 of the Repository .npmrc",
+    );
 }
 
 #[test]
@@ -1504,8 +1558,11 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         return;
     };
     repo.seed();
+    // pnpm installs need a pnpm-lock.yaml, so this repository skips them.
     // Plain --check checks the same tools and never claims dependency readiness.
-    let installation = "dependency installation is not supported yet";
+    let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
+    fs::write(repo.root.join("turbo.json"), policy).unwrap();
+    let installation = "turbo.json setup policy";
     for (mode, outcome, skipped) in [
         (
             "--frozen",
@@ -1513,11 +1570,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
             installation,
         ),
         ("--frozen", "reused", installation),
-        (
-            "--check",
-            "ready",
-            "dependency checks are not supported yet",
-        ),
+        ("--check", "ready", installation),
     ] {
         let recovery::Run { status, text } = repo.run(None, &["setup", mode]);
         let code = status.code().unwrap();
@@ -1536,6 +1589,24 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         );
     }
     assert!(!repo.root.join("probe-ran").exists() && !repo.root.join("node_modules").exists());
+}
+
+#[test]
+fn locked_npm_dependencies_require_a_committed_lock_before_any_work() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(root, ".nvmrc", "24.0.0");
+    write(root, "package.json", r#"{"packageManager":"npm@11.6.1"}"#);
+    let expected =
+        "npm dependency setup requires a committed npm-shrinkwrap.json or package-lock.json";
+    for ci in [false, true] {
+        for words in [&["setup"][..], &["setup", "--plan"], &["setup", "--check"]] {
+            failure(root, words, ci, expected);
+        }
+    }
+    // A missing lockfile is never permission to create one, or to install.
+    assert!(!root.join("package-lock.json").exists() && !root.join(".turbo").exists());
 }
 
 #[test]
@@ -1965,7 +2036,7 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
         root,
         &["setup", "--plan", "--tools-only"],
         true,
-        "official-only setup rejects Repository configuration",
+        "official-only setup rejects line 1 of the Repository .npmrc",
     );
     assert!(!root.join(".turbo").exists());
 }

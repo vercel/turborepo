@@ -145,6 +145,9 @@ impl Fixture {
     }
     // Official metadata routes: only the win-x64 archive is ever served.
     fn upstream(&self) -> LoopbackServer {
+        self.upstream_with([])
+    }
+    fn upstream_with(&self, extra: impl IntoIterator<Item = (String, Vec<u8>)>) -> LoopbackServer {
         let index = json!([{"version":"v24.0.0","npm":"11.6.1","lts":"Krypton",
             "files":["osx-x64-tar","osx-arm64-tar","linux-x64","linux-arm64","win-x64-zip","win-arm64-zip"]}]);
         let mut sums = format!("{:x}  {PREFIX}.zip\n", Sha256::digest(&self.node));
@@ -181,7 +184,9 @@ impl Fixture {
                 (NODE_ZIP.into(), self.node.clone()),
                 ("/pnpm/10.0.0".into(), metadata.to_string().into_bytes()),
                 ("/pnpm/-/pnpm-10.0.0.tgz".into(), self.pnpm.clone()),
-            ],
+            ]
+            .into_iter()
+            .chain(extra),
             |_| {},
         )
         .unwrap()
@@ -207,7 +212,7 @@ impl Fixture {
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
                     bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
-                    artifact: None,
+                    artifact: Some(turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(origin).unwrap()),
                 }),
                 || Ok(self.owned.policy_at(&self.owned.root().join("apps/web/src"))?),
             )
@@ -270,7 +275,7 @@ fn frozen_setup_installs_pathext_exports_that_activate_and_repeat_reuses() {
         [NODE_ZIP, "/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"]
     );
     let plan = f.plan();
-    let bin = plan.path_prepend().to_path_buf();
+    let bin = plan.path_prepend().unwrap().to_path_buf();
     let mut names: Vec<_> = fs::read_dir(&bin)
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -366,7 +371,7 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
     assert!(!f.owned.root().join(".turbo/setup-lock/staged").exists());
 
     // A damaged selected export is repaired by a complete new generation.
-    let bin = f.plan().path_prepend().to_path_buf();
+    let bin = f.plan().path_prepend().unwrap().to_path_buf();
     fs::remove_file(bin.join("pnpm.cmd")).unwrap();
     assert!(f.run(&u, CHECK).is_err());
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
@@ -377,3 +382,6 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
     assert_eq!(exit_code(&path, "pnpm /d /c exit 3"), Some(3));
     f.no_execution();
 }
+
+#[path = "windows_additional_tests.rs"]
+mod additional;

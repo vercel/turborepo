@@ -29,14 +29,29 @@ struct Installation {
     manifest_sha256: String,
     bin: PathBuf,
     tools: Vec<Tool>,
+    /// The `--no-lock` inventory identity: digest of the sealed clone-local
+    /// selection this generation records. Absent for lock-only generations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    selection_sha256: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Record {
     schema: u32,
-    lock_sha256: String,
+    /// The turbo.lock digest. Absent only for a `--no-lock` installation in a
+    /// root without turbo.lock, which its selection digest identifies instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    lock_sha256: Option<String>,
     installation: Installation,
+}
+
+impl Record {
+    /// The resolution this record was published for: the current turbo.lock
+    /// digest, or no lock at all for a clone-local selection.
+    fn resolves(&self, lock: Option<&[u8]>) -> bool {
+        lock.map(hash) == self.lock_sha256
+    }
 }
 
 pub(crate) struct TrustStore {
@@ -47,7 +62,8 @@ pub(crate) struct TrustStore {
 /// Setup-recorded tools for the interactive shell hook only.
 pub(crate) struct Recorded {
     pub(crate) bin: PathBuf,
-    /// turbo.lock changed since setup recorded this installation.
+    /// turbo.lock changed since setup recorded this installation, including a
+    /// lock added after `turbo setup --no-lock`.
     pub(crate) stale: bool,
 }
 
@@ -292,9 +308,10 @@ impl TrustStore {
             return Ok(None);
         };
         // Corrupt/old records are not authority; a fresh setup can replace them.
-        Ok(serde_json::from_slice::<Record>(&bytes)
-            .ok()
-            .filter(|r| r.schema == 1))
+        // A lockless record must name the clone-local selection it trusts.
+        Ok(serde_json::from_slice::<Record>(&bytes).ok().filter(|r| {
+            r.schema == 1 && (r.lock_sha256.is_some() || r.installation.selection_sha256.is_some())
+        }))
     }
 
     pub(super) fn preflight(&self) -> io::Result<()> {
@@ -333,6 +350,7 @@ impl TrustStore {
             // cmd.exe cannot resolve `%~dp0..` under `\\?\`. No-op on Unix.
             bin: dunce::simplified(&current.bin).to_path_buf(),
             tools: current.tools,
+            selection_sha256: current.record.map(|record| hash(record.bytes())),
         }))
     }
 
@@ -366,14 +384,16 @@ impl TrustStore {
         }
         let lock = read(&self.root.join("turbo.lock"), false)?;
         Ok(Some(Recorded {
-            stale: lock.is_none_or(|lock| hash(&lock) != record.lock_sha256),
+            stale: !record.resolves(lock.as_deref()),
             bin: record.installation.bin,
         }))
     }
 
     /// Strict read-only consumer check, unlike setup reuse. The supplied plan
     /// must already validate native declarations and be revalidated before use.
-    /// Never opens a writable Store or creates missing user state.
+    /// A committed turbo.lock authorizes only a record for its exact digest;
+    /// without one, only a `--no-lock` record for the installed clone-local
+    /// selection. Never opens a writable Store or creates missing user state.
     pub(super) fn authorizes(
         &self,
         plan: &turborepo_setup::activation::ActivationPlan,
@@ -381,18 +401,16 @@ impl TrustStore {
         let Some(record) = self.load()? else {
             return Ok(false);
         };
-        let Some(lock) = read(&self.root.join("turbo.lock"), false)? else {
-            return Ok(false);
-        };
-        if hash(&lock) != record.lock_sha256 {
+        let lock = read(&self.root.join("turbo.lock"), false)?;
+        if !record.resolves(lock.as_deref()) {
             return Ok(false);
         }
         let installation =
             self.inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))?;
         Ok(installation.as_ref() == Some(&record.installation)
-            && record.installation.bin == plan.path_prepend()
+            && plan.path_prepend() == Some(record.installation.bin.as_path())
             && record.installation.tools == plan.tools()
-            && read(&self.root.join("turbo.lock"), false)?.as_deref() == Some(lock.as_slice())
+            && read(&self.root.join("turbo.lock"), false)? == lock
             && self.load()?.is_some_and(|after| {
                 after.lock_sha256 == record.lock_sha256 && after.installation == record.installation
             }))
@@ -467,18 +485,21 @@ impl TrustStore {
     }
 
     fn write_record(&self, installation: Installation) -> io::Result<()> {
-        let Some(lock) = read(&self.root.join("turbo.lock"), false)? else {
-            // Ephemeral setup succeeds without creating or retaining locked-run
-            // authority. A future committed lock requires setup again.
+        let lock = read(&self.root.join("turbo.lock"), false)?;
+        // Without turbo.lock, only a generation carrying its sealed `--no-lock`
+        // selection is recorded, identified by that selection. Any other
+        // lockless setup succeeds without creating or retaining run authority.
+        // Either way, a later committed lock requires setup again.
+        if lock.is_none() && installation.selection_sha256.is_none() {
             return match fs::remove_file(self.path()) {
                 Ok(()) => File::open(&self.directory)?.sync_all(),
                 Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
                 Err(error) => Err(error),
             };
-        };
+        }
         let bytes = serde_json::to_vec(&Record {
             schema: 1,
-            lock_sha256: hash(&lock),
+            lock_sha256: lock.as_deref().map(hash),
             installation,
         })
         .map_err(io::Error::other)?;

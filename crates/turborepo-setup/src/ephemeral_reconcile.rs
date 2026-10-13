@@ -11,6 +11,8 @@ use crate::{
     },
     native_baseline::{Baseline, NativeRecord},
     node_provision::NodePlan,
+    npm_provision::NpmPlan,
+    package_manager::Manager,
     pnpm_provision::PnpmPlan,
 };
 
@@ -55,6 +57,8 @@ pub struct Staged {
     native: NativeRecord,
     node: NodePlan,
     pnpm: Option<PnpmPlan>,
+    /// Only an independently provisioned npm; Node-bundled npm has no tool.
+    npm: Option<NpmPlan>,
     desired: Vec<Tool>,
 }
 
@@ -117,20 +121,31 @@ pub fn stage(
     )?;
     let native = NativeRecord::from_snapshot(snapshot, &candidate.lock)?;
     let node = NodePlan::from_lock(native.selection(), platform)?;
-    let pnpm = native
-        .package_manager()
-        .map(|manager| PnpmPlan::from_declaration(native.selection(), platform, &node, manager))
-        .transpose()?;
-    let mut desired = vec![node.inventory_tool().clone()];
-    if let Some(pnpm) = &pnpm {
-        desired.push(pnpm.inventory_tool().clone());
+    let (mut pnpm, mut npm) = (None, None);
+    match native.package_manager() {
+        Some(manager) if manager.manager == Manager::Npm => {
+            npm = NpmPlan::from_declaration(native.selection(), platform, &node, manager)?;
+        }
+        Some(manager) => {
+            pnpm = Some(PnpmPlan::from_declaration(
+                native.selection(),
+                platform,
+                &node,
+                manager,
+            )?);
+        }
+        None => {}
     }
+    let mut desired = vec![node.inventory_tool().clone()];
+    desired.extend(npm.iter().map(NpmPlan::inventory_tool).cloned());
+    desired.extend(pnpm.iter().map(PnpmPlan::inventory_tool).cloned());
     let staged = Staged {
         snapshot: snapshot.clone(),
         generation,
         native,
         node,
         pnpm,
+        npm,
         desired,
     };
     staged.check(snapshot, store)?;
@@ -149,6 +164,9 @@ impl Staged {
     }
     pub fn pnpm_plan(&self) -> Option<&PnpmPlan> {
         self.pnpm.as_ref()
+    }
+    pub fn npm_plan(&self) -> Option<&NpmPlan> {
+        self.npm.as_ref()
     }
 
     /// Recheck after caller-owned waits/preparation, never recapture source
@@ -206,7 +224,7 @@ impl Staged {
                         .verify_bundled_npm(tree)
                         .map_err(io::Error::other)?;
                 } else {
-                    verify_pnpm(tree, tool).map_err(io::Error::other)?;
+                    verify_manager(tree, tool)?;
                 }
                 Ok(())
             },
@@ -220,12 +238,20 @@ impl Staged {
     }
 }
 
-fn verify_pnpm(tree: &Path, tool: &Tool) -> io::Result<()> {
+/// The installed pnpm or npm package is exactly the selected manager with its
+/// official executable layout, as setup staged it.
+pub(crate) fn verify_manager(tree: &Path, tool: &Tool) -> io::Result<()> {
     use std::io::Read;
+    let bins: &[(&str, &str)] = match tool.id.as_str() {
+        "pnpm" => &[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")],
+        "npm" => &[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")],
+        _ => return Err(io::Error::other("unsupported package manager")),
+    };
+    let invalid = || io::Error::other(format!("invalid {} package", tool.id));
     let path = tree.join("package.json");
     let metadata = std::fs::symlink_metadata(&path)?;
     if !metadata.is_file() || metadata.file_type().is_symlink() {
-        return Err(io::Error::other("invalid pnpm package"));
+        return Err(invalid());
     }
     let mut bytes = Vec::new();
     std::fs::File::open(path)?
@@ -233,22 +259,22 @@ fn verify_pnpm(tree: &Path, tool: &Tool) -> io::Result<()> {
         .read_to_end(&mut bytes)?;
     let crate::node_discovery::UniqueJson(package) = serde_json::from_slice(&bytes)?;
     if bytes.len() > crate::registry_metadata::MAX_METADATA_BYTES
-        || package.get("name").and_then(|v| v.as_str()) != Some("pnpm")
+        || package.get("name").and_then(|v| v.as_str()) != Some(tool.id.as_str())
         || package.get("version").and_then(|v| v.as_str()) != Some(tool.version.as_str())
         || package
             .get("bin")
             .and_then(|v| v.as_object())
             .is_none_or(|bin| {
-                bin.get("pnpm").and_then(|v| v.as_str()) != Some("bin/pnpm.cjs")
+                bin.get(bins[0].0).and_then(|v| v.as_str()) != Some(bins[0].1)
                     || tool.executables.keys().any(|name| !bin.contains_key(name))
-                    || bin.iter().any(|(name, path)| match name.as_str() {
-                        "pnpm" => path.as_str() != Some("bin/pnpm.cjs"),
-                        "pnpx" => path.as_str() != Some("bin/pnpx.cjs"),
-                        _ => true,
+                    || bin.iter().any(|(name, path)| {
+                        !bins.iter().any(|&(known, expected)| {
+                            known == name.as_str() && path.as_str() == Some(expected)
+                        })
                     })
             })
     {
-        return Err(io::Error::other("invalid pnpm package"));
+        return Err(invalid());
     }
     Ok(())
 }

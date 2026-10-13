@@ -5,7 +5,7 @@
 //! repository managed. Root `tools`, `dependencies`, and `lifecycleScripts`
 //! apply to every toolchain; a key named by a canonical toolchain ID overrides
 //! them for that toolchain. `additionalTools` declares tools that no built-in
-//! adapter manages.
+//! adapter manages, and `mirrors` names where setup downloads from.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -16,12 +16,16 @@ use ts_rs::TS;
 use turborepo_errors::{Spanned, WithMetadata};
 use turborepo_repository::toolchain::ToolchainId;
 
-pub use self::additional_tools::{
-    ArtifactFormat, ArtifactPlatform, RawAdditionalTool, RawAdditionalToolArtifact,
+pub use self::{
+    additional_tools::{
+        ArtifactFormat, ArtifactPlatform, RawAdditionalTool, RawAdditionalToolArtifact,
+    },
+    mirrors::{RawSetupMirrors, SetupMirrors, mirror_url},
 };
 use crate::{error::Error, future_flags::FutureFlags};
 
 mod additional_tools;
+mod mirrors;
 
 /// How `turbo setup` prepares a toolchain's tools. `managed` provisions the
 /// locked version for this repository. `verify-system` uses an installed tool
@@ -119,6 +123,10 @@ pub struct RawSetupPolicy {
     /// scripts.
     #[serde(rename = "additionalTools", skip_serializing_if = "Option::is_none")]
     pub additional_tools: Option<BTreeMap<String, Spanned<RawAdditionalTool>>>,
+    /// Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps
+    /// the official URLs, and environment variables override these values.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mirrors: Option<Spanned<RawSetupMirrors>>,
 }
 
 /// Repository-configured setup values for one toolchain. `None` means the
@@ -136,6 +144,7 @@ pub struct SetupPolicy {
     defaults: ToolchainSetupPolicy,
     overrides: BTreeMap<ToolchainId, ToolchainSetupPolicy>,
     additional_tools: BTreeMap<String, RawAdditionalTool>,
+    mirrors: SetupMirrors,
 }
 
 impl SetupPolicy {
@@ -193,6 +202,7 @@ impl SetupPolicy {
             defaults,
             overrides,
             additional_tools: additional_tools::validate(raw.additional_tools.as_ref())?,
+            mirrors: mirrors::validate(raw.mirrors.as_ref())?,
         })
     }
 
@@ -219,9 +229,15 @@ impl SetupPolicy {
         &self.additional_tools
     }
 
+    /// Validated `setup.mirrors` bases.
+    pub fn mirrors(&self) -> &SetupMirrors {
+        &self.mirrors
+    }
+
     /// Whether the repository configured any setup value.
     pub fn is_configured(&self) -> bool {
         !self.additional_tools.is_empty()
+            || self.mirrors != SetupMirrors::default()
             || self.defaults != ToolchainSetupPolicy::default()
             || self
                 .overrides
@@ -301,6 +317,10 @@ impl WithMetadata for RawSetupPolicy {
             tool.add_text(text.clone());
             tool.value.add_text(text.clone());
         }
+        if let Some(mirrors) = &mut self.mirrors {
+            mirrors.add_text(text.clone());
+            mirrors.value.add_text(text);
+        }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -318,6 +338,10 @@ impl WithMetadata for RawSetupPolicy {
         {
             tool.add_path(path.clone());
             tool.value.add_path(path.clone());
+        }
+        if let Some(mirrors) = &mut self.mirrors {
+            mirrors.add_path(path.clone());
+            mirrors.value.add_path(path);
         }
     }
 }

@@ -577,7 +577,7 @@ When enabled, Turborepo will honor the `experimentalObservability.otel` configur
 
 Default: `false`
 
-Enable the experimental [`turbo setup`](/docs/reference/setup) command and [managed toolchains](/docs/core-concepts/managed-toolchains) in `turbo run`.
+Enable the experimental [`turbo setup`](/docs/reference/setup) command and [managed toolchains](/docs/core-concepts/managed-toolchains) in `turbo run`, [`turbo exec`](/docs/reference/exec), and the [shell hook](/docs/reference/hook).
 
 ```jsonc title="./turbo.json"
 {
@@ -664,7 +664,7 @@ When enabled, existing top-level keys are moved under `global` with these rename
 }
 ```
 
-Repository defaults for the experimental `turbo setup` command, such as tools-only setup, skipping a toolchain, or verifying installed tools instead of downloading them. Requires `futureFlags.experimentalSetup` and is only allowed in the root `turbo.json`.
+Repository defaults for the experimental `turbo setup` command, such as tools-only setup, skipping a toolchain, verifying installed tools instead of downloading them, or downloading from mirrors. Requires `futureFlags.experimentalSetup` and is only allowed in the root `turbo.json`.
 
 [Visit the Setup policy reference to learn more](/docs/reference/setup-policy).
 

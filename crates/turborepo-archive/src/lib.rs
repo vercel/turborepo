@@ -117,6 +117,10 @@ impl Limits {
 /// All entries must belong to this single root directory. Required file paths
 /// are relative to the root, exact/case-sensitive, and must be regular files.
 /// A nonempty required-files list is mandatory; other files within root are OK.
+/// An empty root accepts an archive whose entries sit at its top level, such
+/// as protoc's release zips. Those entries are staged below a synthetic root
+/// directory, so link containment and every path rule stay the same; a `./`
+/// or absolute entry is still rejected.
 pub struct Layout<'a> {
     pub root: &'a str,
     pub required_files: &'a [&'a str],
@@ -207,7 +211,22 @@ fn extract_inner(
     if artifact.as_bytes().len() > limits.bytes {
         return Err(Error::LimitExceeded);
     }
-    let root = portable_path(layout.root.as_bytes(), false, limits)?;
+    let rootless = layout.root.is_empty();
+    // The synthetic directory does not spend the caller's budgets.
+    let limits = if rootless {
+        Limits {
+            bytes: limits.bytes,
+            entries: limits.entries + 1,
+            path_bytes: limits.path_bytes + SYNTHETIC_ROOT.len() + 1,
+            depth: limits.depth + 1,
+        }
+    } else {
+        limits
+    };
+    let root = match rootless {
+        true => SYNTHETIC_ROOT.to_owned(),
+        false => portable_path(layout.root.as_bytes(), false, limits)?,
+    };
     if root.contains('/') || layout.required_files.is_empty() {
         return Err(Error::LayoutMismatch);
     }
@@ -242,6 +261,7 @@ fn extract_inner(
     let mut tree = Tree {
         staging,
         root,
+        rootless,
         nodes: BTreeMap::new(),
         limits,
         bytes: 0,
@@ -334,9 +354,14 @@ struct Node {
     explicit: bool,
     link: Option<String>,
 }
+/// Staging directory for the entries of an archive without a top-level one.
+const SYNTHETIC_ROOT: &str = "root";
+
 struct Tree {
     staging: TempDir,
     root: String,
+    /// Entry names are relative to the synthetic `root`, not below their own.
+    rootless: bool,
     nodes: BTreeMap<String, Node>,
     limits: Limits,
     bytes: usize,
@@ -349,7 +374,8 @@ impl Tree {
     /// Whether a raw entry name lies inside an excluded subtree. Excluded
     /// entries are skipped, so only traversal-free containment matters here.
     fn excluded(&self, raw: &[u8]) -> bool {
-        let Ok(path) = std::str::from_utf8(raw) else {
+        let raw = self.rooted(raw);
+        let Ok(path) = std::str::from_utf8(&raw) else {
             return false;
         };
         let path = path.strip_suffix('/').unwrap_or(path);
@@ -358,6 +384,16 @@ impl Tree {
                 path.strip_prefix(dir.as_str())
                     .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
             })
+    }
+
+    /// A raw entry name below the staging root. Raw bytes are prefixed, never
+    /// normalized, so `./`, absolute, and traversal names stay rejected.
+    fn rooted<'a>(&self, raw: &'a [u8]) -> std::borrow::Cow<'a, [u8]> {
+        if self.rootless {
+            [SYNTHETIC_ROOT.as_bytes(), b"/", raw].concat().into()
+        } else {
+            raw.into()
+        }
     }
 
     /// Case-insensitive keys make case-only aliases conflict, except strictly
@@ -389,7 +425,8 @@ impl Tree {
         link: Option<&[u8]>,
         reader: impl Read,
     ) -> Result<(), Error> {
-        let path = portable_path(raw, directory, self.limits)?;
+        let raw = self.rooted(raw);
+        let path = portable_path(&raw, directory, self.limits)?;
         if path != self.root && !path.starts_with(&format!("{}/", self.root)) {
             return Err(Error::LayoutMismatch);
         }

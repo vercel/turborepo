@@ -7,6 +7,11 @@ const RELEASE: &str = "/oven-sh/bun/releases/download/bun-v1.2.23";
 
 /// A canonical Bun lock for this host and its loopback release.
 fn bun() -> (Fixture, LoopbackServer) {
+    bun_with("#!/bin/sh\nexit 93\n")
+}
+
+/// `bun()` whose managed Bun binary is `script`.
+fn bun_with(script: &str) -> (Fixture, LoopbackServer) {
     let mut f = Fixture::new();
     let platform = provision::platform().unwrap();
     let target = match platform {
@@ -15,8 +20,8 @@ fn bun() -> (Fixture, LoopbackServer) {
         Platform::LinuxX64Gnu => "linux-x64-baseline",
         _ => "linux-aarch64",
     };
-    // Exits 93 when run: proves the shims execute this verified binary.
-    let archive = stored_zip(&format!("bun-{target}/bun"), b"#!/bin/sh\nexit 93\n");
+    // `bun()`'s exits 93 when run: proves the shims execute this binary.
+    let archive = stored_zip(&format!("bun-{target}/bun"), script.as_bytes());
     let path = format!("{RELEASE}/bun-{target}.zip");
     let key = serde_json::to_value(platform).unwrap();
     let key = key.as_str().unwrap();
@@ -95,4 +100,71 @@ fn bun_check_failures_are_readonly_and_actionable() {
         (f, u)
     };
     super::checks::assert_manager_check_failures(installed, "bun", "yarn@4.5.0");
+}
+
+/// A managed Bun that records its arguments, then runs `body`.
+fn installing(body: &str) -> (Fixture, LoopbackServer) {
+    bun_with(&format!("#!/bin/sh\necho \"$*\" >> bun-args\n{body}\n"))
+}
+
+fn bun_args(f: &Fixture) -> Vec<String> {
+    let args = fs::read_to_string(f.owned.root().join("bun-args")).unwrap_or_default();
+    args.lines().map(str::to_owned).collect()
+}
+
+#[test]
+fn locked_bun_dependencies_install_frozen_and_repeat_safely() {
+    let (f, u) = installing("mkdir -p node_modules");
+    let root = f.owned.root();
+    fs::write(root.join("bun.lock"), "{}\n").unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    // A repeat reinstalls removed dependencies, and Bun's own flag skips
+    // scripts; tools-only setup never runs Bun.
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    assert!(root.join("node_modules").exists());
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(
+        bun_args(&f),
+        [
+            "install --frozen-lockfile",
+            "install --frozen-lockfile --ignore-scripts"
+        ]
+    );
+    assert_eq!(fs::read(root.join("bun.lock")).unwrap(), b"{}\n");
+    let lock = fs::read(root.join("turbo.lock")).unwrap();
+    let lock = turborepo_setup::lock::Lock::parse(&lock).unwrap();
+    let plan = f.dependencies(&["--plan"]).plan(root, &lock).unwrap();
+    assert_eq!(
+        plan[1],
+        "  bun 1.2.23: native bun policy; project scripts run; dependency scripts run only for \
+         trusted packages"
+    );
+    assert!(!root.join("task-ran").exists() && !root.join("hook-ran").exists());
+}
+
+#[test]
+fn bun_failures_missing_locks_and_lock_migrations_are_actionable() {
+    // Bun's refusal of a stale lock passes its exit status through.
+    let (f, u) = installing("[ -f stale ] && exit 1\ntrue");
+    fs::write(f.owned.root().join("bun.lockb"), "binary").unwrap();
+    fs::write(f.owned.root().join("stale"), "").unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 1);
+    fs::remove_file(f.owned.root().join("stale")).unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+
+    // A text lock written beside the committed binary one is removed.
+    let (f, u) = installing("echo '{}' > bun.lock");
+    fs::write(f.owned.root().join("bun.lockb"), "binary").unwrap();
+    let error = f.run(&u, &["--frozen"]).unwrap_err().to_string();
+    assert!(error.contains("changed the committed bun.lock"), "{error}");
+    assert!(!f.owned.root().join("bun.lock").exists());
+
+    let (f, u) = bun();
+    let error = f.run(&u, &["--frozen"]).unwrap_err().to_string();
+    assert!(
+        error.contains("bun dependency setup requires a committed bun.lock or bun.lockb"),
+        "{error}"
+    );
+    assert_eq!(u.hits(), 0);
 }

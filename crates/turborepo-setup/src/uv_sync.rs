@@ -5,12 +5,13 @@
 //! pins the repo-managed interpreter. Repeating a sync is safe; it is not a
 //! promised no-op.
 //!
-//! Callers run this only when dependency setup is enabled (never with
-//! `--tools-only`), after disclosing [`UvSync::disclosure`]. It is not yet
-//! wired into `turbo setup`: that needs the root dependency policy
-//! (TURBO-6216) and native lifecycle reporting (TURBO-6230).
+//! `turbo setup` runs this only when Python dependency setup is enabled
+//! (never with `--tools-only`), after reporting the effective lifecycle
+//! policy, with the managed activation environment.
 
 use std::{
+    collections::BTreeMap,
+    ffi::OsString,
     fs, io,
     path::Path,
     process::{Command, Stdio},
@@ -48,6 +49,9 @@ pub struct UvSync<'a> {
     /// Use only uv's cache; never contact package indexes.
     pub offline: bool,
     pub builds: Builds,
+    /// Set over the inherited environment, such as the managed activation's
+    /// `PATH` and uv variables.
+    pub env: &'a BTreeMap<String, OsString>,
 }
 
 impl UvSync<'_> {
@@ -89,6 +93,7 @@ impl UvSync<'_> {
         let status = Command::new(self.uv)
             .current_dir(&root)
             .args(self.args())
+            .envs(self.env)
             .stdin(Stdio::null())
             .status();
         let changed = fs::read(&lock).ok().as_deref() != Some(&before[..]);
