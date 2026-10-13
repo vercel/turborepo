@@ -152,7 +152,10 @@ fn offline_modes_follow_each_manager_and_locked_version() {
         Frozen::new(manager).unwrap().offline(&version, &f.root())
     };
     let flag = Offline::Args(&["--offline"]);
-    assert_eq!(offline(Manager::Npm, "11.6.1"), flag);
+    assert_eq!(
+        offline(Manager::Npm, "11.6.1"),
+        Offline::Args(&["--offline", "--no-update-notifier"])
+    );
     assert_eq!(offline(Manager::Pnpm, "10.18.0"), flag);
     assert_eq!(offline(Manager::Yarn, "1.22.22"), flag);
     assert_eq!(offline(Manager::Bun, "1.4.1"), flag);

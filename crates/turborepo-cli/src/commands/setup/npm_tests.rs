@@ -640,15 +640,13 @@ fn offline_npm_dependencies_install_from_the_npm_cache_without_traffic() {
     assert_eq!(n.f.run(&u, &["--offline"]).unwrap(), 4);
     assert_eq!(n.f.run(&u, &["--force", "--offline"]).unwrap(), 4);
     assert_eq!(u.hits(), hits);
-    assert_eq!(
-        n.args(),
-        ["ci", "ci --offline", "ci --offline", "ci --offline"]
-    );
+    let offline = "ci --offline --no-update-notifier";
+    assert_eq!(n.args(), ["ci", offline, offline, offline]);
     let plan = n.f.dependencies(&["--plan", "--offline"]).plan(root, &lock);
     assert_eq!(
         plan.unwrap()[0],
-        "javascript dependencies: npm ci --offline from package-lock.json with managed npm 11.6.1 \
-         (package-lock.json stays unchanged)"
+        "javascript dependencies: npm ci --offline --no-update-notifier from package-lock.json \
+         with managed npm 11.6.1 (package-lock.json stays unchanged)"
     );
     n.no_tasks();
 }
