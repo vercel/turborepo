@@ -7,7 +7,7 @@ use std::{
 
 use super::{
     DeclarationMap, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, NATIVE, StorageError, WriteOutcome,
-    WriterStorage, probe_native_with, read_optional,
+    WriterStorage, probe_native_with, read_optional, records,
 };
 
 const SOURCES: [(&str, usize); 3] = [
@@ -185,7 +185,11 @@ impl Snapshot {
             return Err(StorageError::Conflict);
         }
         let mut published = self.clone();
-        published.bytes = Some(candidate.canonical_bytes()?);
+        // An equivalent lock was left as is, so its exact bytes stay expected.
+        let bytes = candidate.canonical_bytes()?;
+        if !records(self.bytes.as_deref(), &bytes) {
+            published.bytes = Some(bytes);
+        }
         published.previous = Some(candidate.clone());
         published.guard()?;
         Ok(published)
@@ -237,7 +241,7 @@ impl Snapshot {
         if !self.matches(&guard)? {
             return Err(StorageError::Conflict);
         }
-        if self.bytes.as_deref() == Some(&bytes) {
+        if records(self.bytes.as_deref(), &bytes) {
             return Ok(WriteOutcome::Unchanged);
         }
         let mut conflict = false;

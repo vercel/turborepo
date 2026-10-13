@@ -150,6 +150,53 @@ fn identical_write_does_not_touch_existing_file_and_changed_write_is_readable() 
 }
 
 #[test]
+fn writes_indented_json_and_leaves_an_equivalent_compact_lock_untouched() {
+    let golden = r#"{
+  "schemaVersion": 0,
+  "tools": {
+    "node": {
+      "adapter": "node",
+      "version": "24.0.0",
+      "declarations": [
+        {
+          "file": ".nvmrc",
+          "request": "lts/*"
+        }
+      ],
+      "installation": {
+        "kind": "verify-system",
+        "executables": [
+          "node"
+        ]
+      }
+    }
+  }
+}
+"#;
+    assert_eq!(
+        fixture("24.0.0").canonical_bytes().unwrap(),
+        golden.as_bytes()
+    );
+    let root = writer_root();
+    let compact = serde_json::to_vec(fixture("24.0.0").document()).unwrap();
+    fs::write(root.path().join(LOCK_NAME), &compact).unwrap();
+    assert_eq!(Lock::read(root.path()).unwrap().unwrap(), fixture("24.0.0"));
+    assert_eq!(
+        write(root.path(), &fixture("24.0.0")).unwrap(),
+        WriteOutcome::Unchanged
+    );
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), compact);
+    assert_eq!(
+        write(root.path(), &fixture("25.0.0")).unwrap(),
+        WriteOutcome::Written
+    );
+    assert_eq!(
+        fs::read(root.path().join(LOCK_NAME)).unwrap(),
+        golden.replace("24.0.0", "25.0.0").as_bytes()
+    );
+}
+
+#[test]
 fn publication_failure_preserves_previous_bytes_and_ignored_state() {
     let root = writer_root();
     write(root.path(), &fixture("24.0.0")).unwrap();
