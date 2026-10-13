@@ -1,5 +1,6 @@
 //! Native Windows x64 Go through the real CLI path: the official zip layout,
-//! `.exe` exports, a portable lock, and offline repeats. Local fixtures only.
+//! `.exe` exports, a portable lock, offline repeats, and the managed run and
+//! exec environment. Local fixtures only.
 use turborepo_setup::{go_resolution::INDEX_PATH, test_support::stored_zip_entries};
 
 use super::*;
@@ -105,6 +106,64 @@ fn go_zip_installs_exe_exports_locks_every_target_and_repeats_offline() {
     assert_eq!(offline.hits(), 0);
     assert_eq!(f.manifest(), manifest);
     f.no_execution();
+}
+
+/// The overrides managed `turbo run`, `turbo exec` and turbo's own Go probes
+/// receive after revalidation.
+fn run_overrides(f: &Fixture) -> Result<turborepo_run::EnvironmentVariableMap, String> {
+    use turborepo_run::ManagedEnvironment;
+
+    use crate::commands::managed::{ManagedTools, context};
+    let root = f.owned.root();
+    let config = root.join("turbo.json");
+    ManagedTools::inspect(root, &config, true, f.owned.home(), context)?
+        .ok_or("unmanaged")?
+        .revalidate()
+}
+
+#[test]
+fn managed_run_and_exec_pin_a_plain_goroot_and_the_local_toolchain() {
+    if unqualified_host() {
+        return;
+    }
+    let f = go_only();
+    let u = go_upstream(&go_zip());
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    let env = run_overrides(&f).unwrap();
+    assert_eq!(env["GOTOOLCHAIN"], "local");
+    let path = std::ffi::OsString::from(&env["PATH"]);
+    let bin = std::env::split_paths(&path).next().unwrap();
+    // The hard-linked go.exe finds its tree only through GOROOT, which keeps
+    // the ordinary spelling Go prints and compares, like the PATH entry.
+    let goroot = PathBuf::from(&env["GOROOT"]);
+    for spelling in [&goroot, &bin] {
+        assert!(
+            !spelling.to_string_lossy().starts_with(r"\\?\"),
+            "{spelling:?}"
+        );
+    }
+    assert!(same_file::is_same_file(goroot.join("bin/go.exe"), bin.join("go.exe")).unwrap());
+    assert!(goroot.join("src/go.mod").is_file());
+    // PATHEXT resolves the bare `go` that tasks and probes spawn to the export.
+    let go = which::which_in("go", Some(&path), f.owned.root()).unwrap();
+    assert!(same_file::is_same_file(go, bin.join("go.exe")).unwrap());
+    // cmd.exe stands in for go.exe; the line exits 7 only with both variables.
+    // `raw_arg` keeps the quotes cmd.exe parses itself.
+    use std::os::windows::process::CommandExt;
+    let check =
+        r#"/d /c go /d /c if "%GOTOOLCHAIN%"=="local" if exist "%GOROOT%\src\go.mod" exit 7"#;
+    let status = Command::new(system32().join("cmd.exe"))
+        .raw_arg(check)
+        .envs(env.iter())
+        .env("PATHEXT", ".COM;.EXE;.BAT;.CMD")
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(7));
+
+    // Without the workspace flag, go.work is unread and the selection drifts.
+    fs::write(f.owned.root().join("turbo.json"), ENABLED).unwrap();
+    let error = run_overrides(&f).unwrap_err();
+    assert!(error.contains("no longer match turbo.lock"), "{error}");
 }
 
 #[test]
