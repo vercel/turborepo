@@ -216,17 +216,10 @@ fn probe(binary: &Path, timeout: Duration) -> Result<Capabilities, &'static str>
             let _ = sender.send((is_stdout, read.map(|_| bytes)));
         });
     }
-    let deadline = Instant::now() + timeout;
-    let mut output = None;
-    for _ in 0..2 {
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        let (is_stdout, bytes) = match receiver.recv_timeout(remaining) {
-            Ok((is_stdout, Ok(bytes))) => (is_stdout, bytes),
-            Ok((_, Err(_))) | Err(RecvTimeoutError::Disconnected) => {
-                return Err("capability output read failed");
-            }
-            Err(RecvTimeoutError::Timeout) => return Err("capability query timed out"),
-        };
+    let record = |(is_stdout, read): (bool, std::io::Result<Vec<u8>>),
+                  output: &mut Option<Vec<u8>>|
+     -> Result<(), &'static str> {
+        let bytes = read.map_err(|_| "capability output read failed")?;
         if is_stdout && bytes.len() > MAX_RESPONSE_BYTES {
             return Err("capability response exceeded its byte limit");
         }
@@ -234,10 +227,19 @@ fn probe(binary: &Path, timeout: Duration) -> Result<Capabilities, &'static str>
             return Err("capability query wrote unexpected stderr");
         }
         if is_stdout {
-            output = Some(bytes);
+            *output = Some(bytes);
         }
-    }
+        Ok(())
+    };
+    let deadline = Instant::now() + timeout;
+    let (mut output, mut received) = (None, 0);
+    // Descendants inherit the pipes even with null stdio, so the query ends
+    // when its root exits: ending the job then closes every inherited copy.
     let status = loop {
+        while let Ok(message) = receiver.try_recv() {
+            record(message, &mut output)?;
+            received += 1;
+        }
         match query.child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
@@ -247,6 +249,19 @@ fn probe(binary: &Path, timeout: Duration) -> Result<Capabilities, &'static str>
     };
     if !status.success() {
         return Err("capability query exited unsuccessfully");
+    }
+    query
+        .job
+        .terminate()
+        .map_err(|_| "capability query could not be contained")?;
+    while received < 2 {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match receiver.recv_timeout(remaining.max(Duration::from_millis(250))) {
+            Ok(message) => record(message, &mut output)?,
+            Err(RecvTimeoutError::Timeout) => return Err("capability query timed out"),
+            Err(RecvTimeoutError::Disconnected) => return Err("capability output read failed"),
+        }
+        received += 1;
     }
     Capabilities::parse(&output.ok_or("capability output read failed")?)
         .map_err(|_| "capability response is malformed or uses an unsupported ABI")

@@ -98,6 +98,10 @@ impl Repo {
 
     fn turbo(&self, args: &[&str]) -> (i32, String) {
         let home = self.root.parent().unwrap().join("home");
+        // Windows resolves the user state directory from these profile folders.
+        let (local, roaming) = (home.join("AppData/Local"), home.join("AppData/Roaming"));
+        fs::create_dir_all(&local).unwrap();
+        fs::create_dir_all(&roaming).unwrap();
         let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
         command
             .env_clear()
@@ -106,6 +110,8 @@ impl Repo {
             .env("PATH", &self.path)
             .env("HOME", &home)
             .env("USERPROFILE", &home)
+            .env("LOCALAPPDATA", &local)
+            .env("APPDATA", &roaming)
             .env("XDG_DATA_HOME", home.join("data"))
             .env("TURBO_CONFIG_DIR_PATH", home.join("config"))
             .env("TURBO_TELEMETRY_DISABLED", "1")
