@@ -363,6 +363,7 @@ fn registry_artifact(url: String, bytes: &VerifiedArtifact, mappings: Mappings) 
         url,
         sha256: bytes.sha256_hex(),
         format: Format::TarGz,
+        alternates: BTreeMap::new(),
         root_prefix: Some("package".into()),
         destination: None,
         executables: mappings
@@ -396,6 +397,7 @@ pub(crate) fn locked_parts<'a>(
             && artifact.format == Format::TarGz
             && artifact.root_prefix.as_deref() == Some("package")
             && artifact.destination.is_none()
+            && artifact.alternates.is_empty()
     };
     let (package, native) = if native_release(manager, &parsed) {
         let (binary_package, _) = native_package(platform).ok_or(Error::UnsupportedTarget)?;

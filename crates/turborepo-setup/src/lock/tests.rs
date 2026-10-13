@@ -174,6 +174,44 @@ fn transport_digest_and_layout_are_strict_without_secret_diagnostics() {
     part["format"] = json!("binary");
     part.as_object_mut().unwrap().remove("rootPrefix");
     assert!(parse(&binary).is_ok());
+
+    // Alternate formats of the same payload obey the primary's source rules.
+    let xz = "https://downloads.example.test/tool.tar.xz";
+    let mut value = fixture();
+    value.pointer_mut(pointer).unwrap()["alternates"] =
+        json!({"tar-xz":{"url":xz, "sha256":"b".repeat(64)}});
+    let lock = parse(&value).unwrap();
+    let bytes = serde_json::to_vec(lock.document()).unwrap();
+    assert_eq!(Lock::parse(&bytes).unwrap(), lock);
+    for (format, url, digest) in [
+        ("tar-gz", xz, "b".repeat(64)),
+        ("binary", xz, "b".repeat(64)),
+        ("tar-zst", xz, "b".repeat(64)),
+        (
+            "tar-xz",
+            "https://user:secret@example.test/tool.tar.xz",
+            "b".repeat(64),
+        ),
+        (
+            "tar-xz",
+            "https://example.test/tool.tar.xz?token=secret",
+            "b".repeat(64),
+        ),
+        ("tar-xz", xz, "B".repeat(64)),
+    ] {
+        let mut value = fixture();
+        value.pointer_mut(pointer).unwrap()["alternates"] =
+            json!({format:{"url":url, "sha256":digest}});
+        let error = parse(&value).unwrap_err();
+        assert!(!format!("{error:?} {error}").contains("secret"));
+    }
+    reject(|v| {
+        v.pointer_mut(pointer).unwrap()["alternates"] =
+            json!({"tar-xz":{"url":xz, "sha256":"b".repeat(64), "unknown":true}})
+    });
+    binary.pointer_mut(pointer).unwrap()["alternates"] =
+        json!({"tar-xz":{"url":xz, "sha256":"b".repeat(64)}});
+    assert!(parse(&binary).is_err());
 }
 
 #[test]

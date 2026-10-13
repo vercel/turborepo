@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
+use sha2::{Digest, Sha256};
+
 use super::*;
 use crate::{
     lock::Platform, rust_metadata::tests::fixture, source_policy::test_support::LoopbackServer,
@@ -47,6 +49,13 @@ fn stable_resolves_to_the_exact_release_with_default_profile_parts() {
         Some("rust-std-1.99.0-x86_64-unknown-linux-gnu/rust-std-x86_64-unknown-linux-gnu")
     );
     assert!(std.executables.is_empty() && std.format == Format::TarGz);
+    // rustup downloads the xz copy, so the lock pins it beside the gzip one.
+    let xz = &std.alternates[&AlternateFormat::TarXz];
+    assert_eq!(
+        (std.alternates.len(), xz.url.as_str()),
+        (1, std.url.replace(".tar.gz", ".tar.xz").as_str())
+    );
+    assert_eq!(xz.sha256, format!("{:x}", Sha256::digest(&xz.url)));
     let clippy = &parts(&tool, Platform::MacosArm64)["clippy-preview"];
     assert_eq!(
         clippy.root_prefix.as_deref(),

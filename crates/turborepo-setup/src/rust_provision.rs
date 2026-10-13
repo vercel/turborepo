@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 use turborepo_tool_install::{Store, Tool};
 
 use crate::{
-    lock::{self, Artifact, Format, Installation, Lock, Platform},
+    lock::{self, AlternateFormat, Artifact, Format, Installation, Lock, Platform},
     rust_discovery::{Channel, Toolchain},
     rust_metadata::{MAX_MANIFEST_BYTES, Manifest},
     rust_resolution::{executables, toolchain_name},
@@ -142,7 +142,16 @@ impl RustPlan {
                 .iter()
                 .map(|name| ((*name).to_owned(), format!("bin/{name}{exe}")))
                 .collect();
+            let xz_url = artifact
+                .url
+                .strip_suffix(".tar.gz")
+                .map(|url| url.to_owned() + ".tar.xz");
             if artifact.format != Format::TarGz
+                || artifact.alternates.len() != 1
+                || artifact
+                    .alternates
+                    .get(&AlternateFormat::TarXz)
+                    .is_none_or(|xz| Some(&xz.url) != xz_url.as_ref())
                 || artifact.destination.is_some()
                 || artifact.root_prefix.as_deref() != Some(&format!("{stem}/{directory}"))
                 || artifact.executables != expected
@@ -240,7 +249,11 @@ impl RustPlan {
     }
 
     /// rustup verified every download against its manifest; bind that
-    /// manifest and the exact installed component set to the lock.
+    /// manifest and the exact installed component set to the lock. rustup
+    /// downloads the first published copy of zstd, xz and gzip, so the
+    /// installed manifest's xz and gzip pins must both be the locked ones and
+    /// it must not publish zstd, which turbo.lock never pins. A mirror's
+    /// manifest therefore cannot substitute any downloaded bytes.
     fn verify(&self, home: &Path) -> Result<(), Error> {
         let rustlib = home
             .join(format!("toolchains/{}-{}", self.tool.version, self.host))
@@ -262,7 +275,14 @@ impl RustPlan {
         for (name, artifact) in &self.parts {
             let (package, target) = split(name, self.host);
             let tarball = manifest.tarball(package, target).ok_or(Error::Mismatch)?;
-            if tarball.url != artifact.url || tarball.sha256 != artifact.sha256 {
+            let xz = artifact
+                .alternates
+                .get(&AlternateFormat::TarXz)
+                .ok_or(Error::Mismatch)?;
+            if tarball.zst
+                || (tarball.url, tarball.sha256) != (&*artifact.url, &*artifact.sha256)
+                || (tarball.xz_url, tarball.xz_sha256) != (&*xz.url, &*xz.sha256)
+            {
                 return Err(Error::Mismatch);
             }
             let qualified = tarball.stem.ends_with(&format!("-{target}"));
