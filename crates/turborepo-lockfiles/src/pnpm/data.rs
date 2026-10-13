@@ -49,17 +49,21 @@ pub struct PnpmLockfile {
     package_extensions_checksum: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     patched_dependencies: Option<Map<String, PatchFile>>,
-    // pnpm 6 single-project lockfiles store the project snapshot at the root
-    // instead of under `importers["."]`. These fields are normalized into an
-    // importer immediately after parsing.
+    // Single-project lockfiles (a repo without workspaces, or every workspace
+    // under `shared-workspace-lockfile=false`) store the project snapshot at
+    // the root instead of under `importers["."]`. Lockfile 5.x (pnpm 6 and 7)
+    // writes resolved versions as strings next to a `specifiers` map;
+    // lockfile 6.0 (pnpm 8) writes `{specifier, version}` entries like an
+    // importer. Lockfile 9.0 always writes `importers`. These fields are
+    // normalized into an importer immediately after parsing.
     #[serde(default, skip_serializing)]
     specifiers: Option<Map<String, String>>,
     #[serde(default, skip_serializing)]
-    dependencies: Option<Map<String, String>>,
+    dependencies: Option<Map<String, RootDependency>>,
     #[serde(default, rename = "optionalDependencies", skip_serializing)]
-    optional_dependencies: Option<Map<String, String>>,
+    optional_dependencies: Option<Map<String, RootDependency>>,
     #[serde(default, rename = "devDependencies", skip_serializing)]
-    dev_dependencies: Option<Map<String, String>>,
+    dev_dependencies: Option<Map<String, RootDependency>>,
     #[serde(default, rename = "dependenciesMeta", skip_serializing)]
     root_dependencies_meta: Option<Map<String, DependenciesMeta>>,
     #[serde(default)]
@@ -178,6 +182,42 @@ pub enum DependencyInfo {
 pub struct Dependency {
     specifier: String,
     version: String,
+}
+
+/// One entry of a root-level dependency section in a single-project
+/// lockfile. Lockfile 5.x stores the resolved version as a string, lockfile
+/// 6.0 stores `{specifier, version}`.
+#[derive(Debug, Deserialize, PartialEq, Eq, Clone)]
+#[serde(untagged)]
+enum RootDependency {
+    Version(String),
+    Full(Dependency),
+}
+
+/// Convert one root dependency section of a single-project lockfile into the
+/// importer representation for its version. `pick` accepts the entry shape
+/// the version writes; any other shape is a hand-edited or corrupt file.
+fn root_section<T>(
+    section: &'static str,
+    entries: Option<Map<String, RootDependency>>,
+    version: &str,
+    pick: impl Fn(RootDependency) -> Option<T>,
+) -> Result<Option<Map<String, T>>, Error> {
+    entries
+        .map(|entries| {
+            entries
+                .into_iter()
+                .map(|(name, entry)| match pick(entry) {
+                    Some(value) => Ok((name, value)),
+                    None => Err(Error::RootDependencyShape {
+                        section,
+                        name,
+                        version: version.to_owned(),
+                    }),
+                })
+                .collect()
+        })
+        .transpose()
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -316,22 +356,22 @@ impl PnpmLockfile {
 
             let mut this: Self = Self::deserialize(document)?;
             this.leading_documents = leading_documents;
-            this.normalize_single_project_lockfile();
+            this.normalize_single_project_lockfile()?;
             this.cached_version = this.compute_version();
             this.build_dependency_index();
             return Ok(this);
         }
 
         let mut this: Self = serde_yaml_ng::from_slice(bytes)?;
-        this.normalize_single_project_lockfile();
+        this.normalize_single_project_lockfile()?;
         this.cached_version = this.compute_version();
         this.build_dependency_index();
         Ok(this)
     }
 
-    fn normalize_single_project_lockfile(&mut self) {
+    fn normalize_single_project_lockfile(&mut self) -> Result<(), Error> {
         if !self.importers.is_empty() {
-            return;
+            return Ok(());
         }
 
         let has_root_project = self.specifiers.is_some()
@@ -340,22 +380,72 @@ impl PnpmLockfile {
             || self.dev_dependencies.is_some()
             || self.root_dependencies_meta.is_some();
         if !has_root_project {
-            return;
+            return Ok(());
         }
+
+        let version = &self.lockfile_version.version;
+        let dependencies = if self.is_v6() {
+            let full = |entry| match entry {
+                RootDependency::Full(dependency) => Some(dependency),
+                RootDependency::Version(_) => None,
+            };
+            DependencyInfo::V6 {
+                dependencies: root_section(
+                    "dependencies",
+                    self.dependencies.take(),
+                    version,
+                    full,
+                )?,
+                optional_dependencies: root_section(
+                    "optionalDependencies",
+                    self.optional_dependencies.take(),
+                    version,
+                    full,
+                )?,
+                dev_dependencies: root_section(
+                    "devDependencies",
+                    self.dev_dependencies.take(),
+                    version,
+                    full,
+                )?,
+            }
+        } else {
+            let resolved = |entry| match entry {
+                RootDependency::Version(version) => Some(version),
+                RootDependency::Full(_) => None,
+            };
+            DependencyInfo::PreV6 {
+                specifiers: self.specifiers.take(),
+                dependencies: root_section(
+                    "dependencies",
+                    self.dependencies.take(),
+                    version,
+                    resolved,
+                )?,
+                optional_dependencies: root_section(
+                    "optionalDependencies",
+                    self.optional_dependencies.take(),
+                    version,
+                    resolved,
+                )?,
+                dev_dependencies: root_section(
+                    "devDependencies",
+                    self.dev_dependencies.take(),
+                    version,
+                    resolved,
+                )?,
+            }
+        };
 
         self.importers.insert(
             ".".to_string(),
             ProjectSnapshot {
-                dependencies: DependencyInfo::PreV6 {
-                    specifiers: self.specifiers.take(),
-                    dependencies: self.dependencies.take(),
-                    optional_dependencies: self.optional_dependencies.take(),
-                    dev_dependencies: self.dev_dependencies.take(),
-                },
+                dependencies,
                 dependencies_meta: self.root_dependencies_meta.take(),
                 publish_directory: None,
             },
         );
+        Ok(())
     }
 
     /// Merge per-workspace lockfiles into this lockfile.
@@ -1436,6 +1526,134 @@ packages:
         let encoded = std::str::from_utf8(&encoded).unwrap();
         assert!(encoded.contains("importers:"));
         assert!(!encoded.starts_with("specifiers:"));
+    }
+
+    // pnpm 8 writes this shape for a repo without workspaces and for every
+    // workspace under `shared-workspace-lockfile=false`.
+    const LOCKFILE_V6_SINGLE_PROJECT_WEB: &str = r#"lockfileVersion: '6.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+dependencies:
+  is-odd:
+    specifier: 3.0.1
+    version: 3.0.1
+  ui:
+    specifier: workspace:*
+    version: link:../../packages/ui
+
+packages:
+
+  /is-number@6.0.0:
+    resolution: {integrity: sha512-aaa}
+    engines: {node: '>=0.10.0'}
+    dev: false
+
+  /is-odd@3.0.1:
+    resolution: {integrity: sha512-bbb}
+    engines: {node: '>=4'}
+    dependencies:
+      is-number: 6.0.0
+    dev: false
+"#;
+
+    const LOCKFILE_V6_SINGLE_PROJECT_ROOT: &str = r#"lockfileVersion: '6.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+devDependencies:
+  left-pad:
+    specifier: 1.3.0
+    version: 1.3.0
+
+packages:
+
+  /left-pad@1.3.0:
+    resolution: {integrity: sha512-ccc}
+    dev: true
+"#;
+
+    #[test]
+    fn test_parses_lockfile_v6_single_project_lockfile() {
+        let lockfile = PnpmLockfile::from_bytes(LOCKFILE_V6_SINGLE_PROJECT_WEB.as_bytes()).unwrap();
+        let root = lockfile.importers.get(".").unwrap();
+        assert_eq!(
+            root.dependencies.find_resolution("is-odd"),
+            Some(("3.0.1", "3.0.1"))
+        );
+        assert_eq!(
+            root.dependencies.find_resolution("ui"),
+            Some(("workspace:*", "link:../../packages/ui"))
+        );
+        assert_eq!(
+            lockfile.resolve_package(".", "is-odd", "3.0.1").unwrap(),
+            Some(crate::Package {
+                key: "/is-odd@3.0.1".into(),
+                version: "3.0.1".into()
+            })
+        );
+
+        let encoded = lockfile.encode().unwrap();
+        let encoded = std::str::from_utf8(&encoded).unwrap();
+        assert!(encoded.contains("importers:"));
+        assert!(!encoded.contains("\ndependencies:\n"));
+        let reparsed = PnpmLockfile::from_bytes(encoded.as_bytes()).unwrap();
+        assert_eq!(reparsed.importers, lockfile.importers);
+    }
+
+    #[test]
+    fn test_merge_per_workspace_lockfiles_lockfile_v6() {
+        let mut lockfile =
+            PnpmLockfile::from_bytes(LOCKFILE_V6_SINGLE_PROJECT_ROOT.as_bytes()).unwrap();
+        lockfile
+            .merge_per_workspace_lockfiles(&[(
+                "apps/web",
+                LOCKFILE_V6_SINGLE_PROJECT_WEB.as_bytes(),
+            )])
+            .unwrap();
+
+        assert_eq!(
+            lockfile.importers.keys().collect::<Vec<_>>(),
+            vec![".", "apps/web"]
+        );
+        assert_eq!(
+            lockfile.resolve_package(".", "left-pad", "1.3.0").unwrap(),
+            Some(crate::Package {
+                key: "/left-pad@1.3.0".into(),
+                version: "1.3.0".into()
+            })
+        );
+        assert_eq!(
+            lockfile
+                .resolve_package("apps/web", "is-odd", "3.0.1")
+                .unwrap(),
+            Some(crate::Package {
+                key: "/is-odd@3.0.1".into(),
+                version: "3.0.1".into()
+            })
+        );
+        let packages = lockfile.packages.as_ref().unwrap();
+        assert!(packages.contains_key("/is-number@6.0.0"));
+        assert!(packages.contains_key("/left-pad@1.3.0"));
+
+        let encoded = lockfile.encode().unwrap();
+        let reparsed = PnpmLockfile::from_bytes(&encoded).unwrap();
+        assert_eq!(reparsed.importers, lockfile.importers);
+    }
+
+    #[test]
+    fn test_rejects_single_project_root_entries_of_the_wrong_shape() {
+        let yaml = r#"lockfileVersion: '6.0'
+
+dependencies:
+  is-odd: 3.0.1
+"#;
+        let err = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap_err();
+        assert!(err.to_string().contains("`dependencies.is-odd`"), "{err}");
     }
 
     #[test]
