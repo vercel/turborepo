@@ -55,9 +55,9 @@ pub struct RustupTransport {
     // Mirror and test transports change only the origin; lock provenance
     // remains official. The private rustup downloads from the same origin.
     origin: String,
-    /// Fixture-only arguments placed before rustup's own.
+    /// Fixture-only stand-in runner and its leading arguments.
     #[cfg(any(test, feature = "test-support"))]
-    launcher: Vec<std::ffi::OsString>,
+    runner: Option<(PathBuf, Vec<std::ffi::OsString>)>,
 }
 
 impl RustupTransport {
@@ -66,7 +66,7 @@ impl RustupTransport {
             client,
             origin,
             #[cfg(any(test, feature = "test-support"))]
-            launcher: Vec::new(),
+            runner: None,
         }
     }
 
@@ -93,15 +93,16 @@ impl RustupTransport {
         Ok(Self::new(client, origin.trim_end_matches('/').into()))
     }
 
-    /// Fixture-only: start every private rustup as `<rustup> <launcher>
-    /// <rustup arguments>`, so a stand-in executable (such as a copy of
-    /// `cmd.exe` given `/d /c <script>`) can play a scripted rustup.
+    /// Fixture-only: run every private rustup as `<program> <args> <staged
+    /// rustup> <rustup arguments>`, so a stand-in can check the staged binary
+    /// and play rustup where the fixture image cannot.
     #[cfg(any(test, feature = "test-support"))]
-    pub fn with_launcher_for_tests(
+    pub fn with_runner_for_tests(
         mut self,
-        launcher: impl IntoIterator<Item = impl Into<std::ffi::OsString>>,
+        program: impl Into<PathBuf>,
+        args: impl IntoIterator<Item = impl Into<std::ffi::OsString>>,
     ) -> Self {
-        self.launcher = launcher.into_iter().map(Into::into).collect();
+        self.runner = Some((program.into(), args.into_iter().map(Into::into).collect()));
         self
     }
 
@@ -363,9 +364,17 @@ impl PrivateHomes {
         );
         #[cfg(not(windows))]
         let homes = [&self.rustup, &self.cargo].map(PathBuf::as_path);
-        let mut command = Command::new(rustup);
         #[cfg(any(test, feature = "test-support"))]
-        command.args(&transport.launcher);
+        let mut command = match &transport.runner {
+            Some((program, args)) => {
+                let mut command = Command::new(program);
+                command.args(args).arg(rustup);
+                command
+            }
+            None => Command::new(rustup),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
+        let mut command = Command::new(rustup);
         command
             .env("RUSTUP_HOME", homes[0])
             .env("CARGO_HOME", homes[1])
