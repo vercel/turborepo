@@ -164,6 +164,13 @@ fn run_with_policy(
     }
     let snapshot =
         turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
+    // Never silently: version-manager files are reported, not read as requests.
+    if let Some(report) = turborepo_setup::version_managers::report(
+        &snapshot.ignored_declarations(),
+        snapshot.declarations(),
+    ) {
+        eprintln!("{report}");
+    }
     match request.mode {
         Mode::Check => check::run(&discovery, snapshot, preflight),
         Mode::Plan => {
