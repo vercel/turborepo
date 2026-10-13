@@ -88,8 +88,9 @@ fn journey(shell: &str) {
     assert!(state.starts_with("1;") && state.contains(status), "{on}");
     assert_eq!(value("off"), start);
     assert_eq!(value("end"), format!("{start}|"));
-    let notice = "turbo: this repository's managed tools are not installed";
-    assert_eq!(stderr.matches(notice).count(), usize::from(x64), "{stderr}");
+    // One "not installed" (or unreadable user state) notice on entering.
+    let notices = stderr.matches("this repository's managed tools").count();
+    assert_eq!(notices, usize::from(x64), "{stderr}");
 }
 
 #[test]
