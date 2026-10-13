@@ -1,6 +1,7 @@
-//! Windows PowerShell 5.1 and PowerShell 7 prompts on native Windows. Setup
-//! records no trusted roots on Windows yet, so the hook must stay off and keep
-//! PATH exactly as the shell started.
+//! Windows PowerShell 5.1 and PowerShell 7 prompts on native Windows. A
+//! flagged repository whose tools `turbo setup` never recorded activates
+//! nothing: on x64 the hook says to run setup, as on Unix, while arm64 builds,
+//! which setup refuses, stay off. PATH stays exactly as the shell started.
 #![cfg(windows)]
 #![allow(clippy::unwrap_used)]
 
@@ -82,11 +83,17 @@ fn journey(shell: &str) {
     let on = value("on");
     let (path, state) = on.split_once('|').unwrap();
     assert_eq!(path, start);
-    // The hook ran and recorded the repository as off.
-    assert!(state.starts_with("1;") && state.contains(";off;"), "{on}");
+    // The hook ran and recorded the repository's status.
+    let (status, notices) = match cfg!(target_arch = "x86_64") {
+        true => (";missing;", 1),
+        false => (";off;", 0),
+    };
+    assert!(state.starts_with("1;") && state.contains(status), "{on}");
     assert_eq!(value("off"), start);
     assert_eq!(value("end"), format!("{start}|"));
-    assert!(!stderr.contains("turbo:"), "{stderr}");
+    // One notice on entering. Windows PowerShell 5.1 may wrap it in an error
+    // record that repeats a truncated copy, so match the untruncated phrase.
+    assert_eq!(stderr.matches("not installed").count(), notices, "{stderr}");
 }
 
 #[test]
