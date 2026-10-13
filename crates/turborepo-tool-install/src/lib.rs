@@ -25,6 +25,8 @@ use std::{
 };
 
 mod repair;
+#[cfg(windows)]
+mod windows_stat;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -95,6 +97,13 @@ pub enum Verification {
     /// write, replacement, chmod or added or removed entry changes the stamp;
     /// only a same-size in-place write within the same filesystem timestamp
     /// tick as the stamped state, or forged stamps, can go unseen.
+    ///
+    /// Windows stamps NTFS and ReFS trees only (`windows_stat`): each file's
+    /// volume and file ID, link count, attributes, last-write time and change
+    /// time take the place of mode, inode, mtime and ctime. A write changes
+    /// the stamp by the time its handle closes. Unlike ctime, a change time
+    /// can be set back, or its updates suspended on a handle, but only by a
+    /// writer deliberately hiding its write.
     Stamped,
 }
 
@@ -136,7 +145,7 @@ impl Stamps {
     fn fresh(&self, installed: &Installed, tree: &Path) -> Result<bool, Error> {
         match self.tools.get(&installed.tool.id) {
             Some(stamp) if stamp.tree_sha256 == installed.tree_sha256 => {
-                Ok(tree_digest(tree, TreeDigest::Stat)? == stamp.stat_sha256)
+                Ok(stat_digest(tree)?.is_some_and(|stat| stat == stamp.stat_sha256))
             }
             _ => Ok(false),
         }
@@ -792,23 +801,21 @@ impl Store {
             } else {
                 stage_tool(&tool, &tree)?;
             }
+            // Windows `.exe` exports are hard links, which change their
+            // target's link count and change time, so they precede its stamp.
+            if cfg!(windows) {
+                export(&tree, &bin, &tool)?;
+            }
             // Stamp before hashing: a change while hashing can only leave a
             // stale stamp, never one vouching for bytes that were not hashed.
-            // Stat stamps (#14653) are Unix-only; other platforms (#14584,
-            // #14591) publish none, so stamped checks hash in full there.
-            let stat_sha256 = if cfg!(unix) {
-                Some(tree_digest(&tree, TreeDigest::Stat)?)
-            } else {
-                None
-            };
+            let stat_sha256 = stat_digest(&tree)?;
             let tree_sha256 = tree_hash(&tree)?;
             // A stamped health check did not re-read the reused source tree.
             if reused.is_some_and(|(_, entry)| entry.tree_sha256 != tree_sha256) {
                 return Err(Error::InvalidInventory);
             }
-            check_executables(&tree, &tool)?;
-            for (name, path) in &tool.executables {
-                make_shim(&tree, &bin, &tool.id, name, path)?;
+            if !cfg!(windows) {
+                export(&tree, &bin, &tool)?;
             }
             if let Some(stat_sha256) = stat_sha256 {
                 stamps.tools.insert(
@@ -1237,6 +1244,15 @@ fn make_shim(tree: &Path, bin: &Path, id: &str, name: &str, path: &str) -> Resul
     }
 }
 
+/// Check a staged tree's executables, then export them into `bin`.
+fn export(tree: &Path, bin: &Path, tool: &Tool) -> Result<(), Error> {
+    check_executables(tree, tool)?;
+    for (name, path) in &tool.executables {
+        make_shim(tree, bin, &tool.id, name, path)?;
+    }
+    Ok(())
+}
+
 fn check_shim(shim: &Path, tree: &Path, id: &str, path: &str) -> Result<(), Error> {
     let metadata = fs::symlink_metadata(shim)?;
     #[cfg(windows)]
@@ -1325,12 +1341,27 @@ fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
 enum TreeDigest {
     /// File bytes: the recorded tree hash.
     Bytes,
-    /// File inode, mtime and ctime instead of bytes: a publication stamp.
+    /// File inode, mtime and ctime (Windows: `windows_stat`) instead of
+    /// bytes: a publication stamp.
     Stat,
 }
 
 fn tree_hash(root: &Path) -> Result<String, Error> {
     tree_digest(root, TreeDigest::Bytes)
+}
+
+/// A tree's publication stamp, or `None` where its stats cannot vouch for
+/// its contents, so stamped checks hash it in full.
+fn stat_digest(root: &Path) -> Result<Option<String>, Error> {
+    #[cfg(windows)]
+    if !windows_stat::stampable(root)? {
+        return Ok(None);
+    }
+    if cfg!(any(unix, windows)) {
+        tree_digest(root, TreeDigest::Stat).map(Some)
+    } else {
+        Ok(None)
+    }
 }
 
 // Walk without following directory links. Accept only relative, existing
@@ -1349,7 +1380,17 @@ fn state_hash(root: &Path, healthy_links: bool) -> Result<String, Error> {
 fn digest_tree(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<String, Error> {
     real_directory(root)?;
     let mut hash = Sha256::new();
-    walk(root, &mut |path| {
+    descend(root, &mut |path| {
+        // A Windows stamp reads each entry's type and stats from one handle.
+        #[cfg(windows)]
+        let (m, stat) = match digest {
+            TreeDigest::Stat => {
+                let file = windows_stat::open(path)?;
+                (file.metadata()?, Some(file))
+            }
+            TreeDigest::Bytes => (fs::symlink_metadata(path)?, None),
+        };
+        #[cfg(not(windows))]
         let m = fs::symlink_metadata(path)?;
         let name = path
             .strip_prefix(root)
@@ -1400,7 +1441,11 @@ fn digest_tree(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<S
                         hash.update(time.to_le_bytes());
                     }
                 }
-                #[cfg(not(unix))]
+                #[cfg(windows)]
+                TreeDigest::Stat => {
+                    windows_stat::update(stat.as_ref().ok_or(Error::UnsafePath)?, &mut hash)?;
+                }
+                #[cfg(not(any(unix, windows)))]
                 TreeDigest::Stat => return Err(Error::UnsupportedPlatform),
             }
         } else if m.is_dir() {
@@ -1408,12 +1453,26 @@ fn digest_tree(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<S
         } else {
             return Err(Error::UnsafePath);
         }
-        Ok(())
+        // A Windows stamp's handle also decides descent. Other digests re-read
+        // the type, as `walk` does.
+        #[cfg(windows)]
+        if stat.is_some() {
+            return Ok(m.is_dir());
+        }
+        Ok(fs::symlink_metadata(path)?.is_dir())
     })?;
     Ok(hex::encode(hash.finalize()))
 }
 
 fn walk(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<(), Error>) -> Result<(), Error> {
+    descend(dir, &mut |path| {
+        visit(path)?;
+        Ok(fs::symlink_metadata(path)?.is_dir())
+    })
+}
+
+/// `walk`, entering each entry that `visit` reports as a real directory.
+fn descend(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<bool, Error>) -> Result<(), Error> {
     let mut entries = fs::read_dir(dir)?
         .map(|e| e.map(|e| e.path()))
         .collect::<Result<Vec<_>, _>>()?;
@@ -1424,9 +1483,8 @@ fn walk(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<(), Error>) -> Resul
             .and_then(|n| n.to_str())
             .ok_or(Error::UnsafePath)?;
         artifact_component(name)?;
-        visit(&path)?;
-        if fs::symlink_metadata(&path)?.is_dir() {
-            walk(&path, visit)?;
+        if visit(&path)? {
+            descend(&path, visit)?;
         }
     }
     Ok(())
