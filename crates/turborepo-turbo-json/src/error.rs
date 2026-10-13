@@ -380,6 +380,17 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
+    #[error(
+        "The \"setup\" key can only be used in the root turbo.json. Please remove it from Package \
+         Configurations."
+    )]
+    SetupInPackage {
+        #[label("setup key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
     #[error("The \"global\" key requires \"futureFlags.globalConfiguration\" to be enabled.")]
     #[diagnostic(help(
         "Add `\"futureFlags\": {{ \"globalConfiguration\": true }}` to your root turbo.json."
@@ -400,6 +411,42 @@ pub enum Error {
         key: &'static str,
         rename_hint: String,
         #[label("move this inside \"global\"")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    // ============================================================
+    // Setup policy errors
+    // ============================================================
+    #[error("The \"setup\" key requires \"futureFlags.experimentalSetup\" to be enabled.")]
+    #[diagnostic(help(
+        "Add `\"futureFlags\": {{ \"experimentalSetup\": true }}` to your root turbo.json."
+    ))]
+    SetupRequiresFlag {
+        #[label("\"setup\" key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("The {key:?} setup policy requires `futureFlags.{flag}`.")]
+    SetupToolchainRequiresFlag {
+        key: String,
+        flag: &'static str,
+        #[label("toolchain is not enabled")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("Setup dependencies cannot be \"locked\" when tools are \"skip\".")]
+    #[diagnostic(help(
+        "Dependency setup needs a managed or verified tool. Set `tools` to \"managed\" or \
+         \"verify-system\", or set `dependencies` to \"skip\"."
+    ))]
+    SetupLockedDependenciesWithSkippedTools {
+        #[label("locked dependencies with skipped tools")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,
