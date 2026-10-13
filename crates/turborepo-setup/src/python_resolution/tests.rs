@@ -8,10 +8,25 @@ use super::*;
 use crate::source_policy::test_support::LoopbackServer;
 
 const TAG: &str = "20260211";
-const TARGETS: [(&str, &str, &str, &str); 3] = [
+/// Every lock platform, as one `--all-arches` listing reports from any host.
+const TARGETS: [(&str, &str, &str, &str); 8] = [
     ("macos", "aarch64", "none", "aarch64-apple-darwin"),
     ("linux", "x86_64", "gnu", "x86_64-unknown-linux-gnu"),
     ("windows", "x86_64", "none", "x86_64-pc-windows-msvc"),
+    ("macos", "x86_64", "none", "x86_64-apple-darwin"),
+    ("linux", "aarch64", "gnu", "aarch64-unknown-linux-gnu"),
+    ("linux", "x86_64", "musl", "x86_64-unknown-linux-musl"),
+    ("linux", "aarch64", "musl", "aarch64-unknown-linux-musl"),
+    ("windows", "aarch64", "none", "aarch64-pc-windows-msvc"),
+];
+/// More architectures and CPU variants uv 0.13 lists with `--all-arches`.
+const UNSUPPORTED: [(&str, &str, &str, &str); 6] = [
+    ("linux", "x86_64_v3", "gnu", "x86_64_v3-unknown-linux-gnu"),
+    ("linux", "x86", "gnu", "i686-unknown-linux-gnu"),
+    ("windows", "x86", "none", "i686-pc-windows-msvc"),
+    ("linux", "powerpc64le", "gnu", "ppc64le-unknown-linux-gnu"),
+    ("linux", "s390x", "gnu", "s390x-unknown-linux-gnu"),
+    ("linux", "riscv64gc", "gnu", "riscv64-unknown-linux-gnu"),
 ];
 
 fn requirement(request: &str) -> PythonRequirement {
@@ -42,6 +57,7 @@ fn listing_json() -> Value {
     let mut armv7 = entry("3.14.2", TARGETS[1]);
     armv7["arch"] = json!("armv7");
     entries.extend([freethreaded, pypy, prerelease, armv7]);
+    entries.extend(UNSUPPORTED.map(|target| entry("3.12.12", target)));
     Value::Array(entries)
 }
 fn listing() -> Listing {
@@ -116,6 +132,23 @@ fn inconsistent_listings_fail_closed() {
     assert!(targets.contains_key(&Platform::LinuxX64Gnu));
 }
 
+#[test]
+fn host_filtered_listings_fail_closed() {
+    // uv before 0.7.22 ignores `--all-arches` here: x86_64 hosts list only
+    // x86_64 builds; arm64 Macs list arm64 builds plus emulated Windows x64.
+    for (arch, emulated_os) in [("x86_64", None), ("aarch64", Some("windows"))] {
+        let host: Vec<_> = TARGETS
+            .into_iter()
+            .filter(|target| target.1 == arch || Some(target.0) == emulated_os)
+            .map(|target| entry("3.12.12", target))
+            .collect();
+        assert!(matches!(
+            Listing::parse(&serde_json::to_vec(&host).unwrap()),
+            Err(Error::HostOnlyListing)
+        ));
+    }
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn mirrors_serve_the_official_checksum_paths_beneath_their_base() {
     let path = format!("/mirror{RELEASES}{TAG}/SHA256SUMS");
@@ -157,7 +190,19 @@ async fn transport_binds_published_checksums_and_uv_keys() {
     let Installation::Managed { artifacts } = &tool.installation else {
         panic!("expected managed Python");
     };
-    assert_eq!(artifacts.len(), 3);
+    // Exactly the lock's platforms, never another architecture or CPU variant.
+    assert_eq!(
+        artifacts.keys().copied().collect::<Vec<_>>(),
+        super::TARGETS.map(|target| target.0)
+    );
+    for (platform, triple) in [
+        (Platform::LinuxX64Gnu, "x86_64-unknown-linux-gnu"),
+        (Platform::WindowsX64, "x86_64-pc-windows-msvc"),
+        (Platform::LinuxArm64Musl, "aarch64-unknown-linux-musl"),
+    ] {
+        let url = &artifacts[&platform]["distribution"].url;
+        assert!(url.ends_with(&format!("{TAG}-{triple}-install_only_stripped.tar.gz")));
+    }
     let mac = &artifacts[&Platform::MacosArm64]["distribution"];
     assert_eq!(
         mac.url,
@@ -208,8 +253,8 @@ fn listing_runs_the_managed_uv_offline_without_user_configuration() {
     let parts: Vec<_> = recorded.split('|').collect();
     assert_eq!(
         parts[0],
-        "python list --only-downloads --all-versions --all-platforms --output-format json \
-         --offline --no-config"
+        "python list --only-downloads --all-versions --all-platforms --all-arches --output-format \
+         json --offline --no-config"
     );
     assert!(!parts[1].is_empty() && !Path::new(parts[1]).exists());
     assert_eq!(parts[2], "");
