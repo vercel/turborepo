@@ -347,16 +347,18 @@ impl FSCache {
         let mut manifest = crate::cache_archive::RestoreManifest::new();
 
         for file in files {
-            cache_item.add_file(anchor, file)?;
-
-            let source_path = anchor.resolve(file);
+            // Record the manifest from what was archived instead of statting
+            // each output again.
+            let entry = cache_item.add_file(anchor, file)?;
             let unix_path = file.to_unix();
-            if let Ok(m) = source_path.symlink_metadata() {
-                if m.is_file() {
-                    let _ = manifest.record_file(unix_path.as_str().to_owned(), &source_path);
-                } else if m.is_dir() {
+            match entry {
+                crate::cache_archive::ArchivedEntry::File(m) => {
+                    let _ = manifest.record_file_metadata(unix_path.as_str().to_owned(), &m);
+                }
+                crate::cache_archive::ArchivedEntry::Directory => {
                     manifest.record_dir(unix_path.as_str().to_owned());
                 }
+                crate::cache_archive::ArchivedEntry::Other => {}
             }
         }
 
