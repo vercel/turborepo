@@ -159,6 +159,7 @@ impl NodePlan {
             || artifact.format != if windows { Format::Zip } else { Format::TarGz }
             || artifact.root_prefix.as_deref() != Some(root)
             || artifact.destination.is_some()
+            || !artifact.alternates.is_empty()
             || artifact.executables.get("node").map(String::as_str) != Some(node_path)
             || artifact.executables.iter().any(|(name, path)| {
                 let expected = match (name.as_str(), windows) {

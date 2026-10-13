@@ -77,6 +77,7 @@ fn validate_pnpm(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
+            || !artifact.alternates.is_empty()
             || paths.get("pnpm").map(String::as_str) != Some("bin/pnpm.cjs")
             || paths.iter().any(|(name, path)| match name.as_str() {
                 "pnpm" => path != "bin/pnpm.cjs",

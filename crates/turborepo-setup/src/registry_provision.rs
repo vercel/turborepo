@@ -84,6 +84,7 @@ impl RegistryTransport {
             url: release.tarball.clone(),
             sha256: bytes.sha256_hex(),
             format: Format::TarGz,
+            alternates: BTreeMap::new(),
             root_prefix: Some("package".into()),
             destination: None,
             executables,
@@ -258,6 +259,7 @@ impl RegistryPlan {
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
+            || !artifact.alternates.is_empty()
             || artifact.executables.get(name).map(String::as_str) != Some(mappings[0].1)
             || (manager == Manager::Npm && artifact.executables.len() != mappings.len())
             || artifact.executables.iter().any(|(name, path)| {
