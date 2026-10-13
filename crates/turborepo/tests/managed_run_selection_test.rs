@@ -264,7 +264,10 @@ fn exited_parent_does_not_leak_same_group_descendants_with_or_without_pipes() {
         let start = Instant::now();
         let result = select(&need(), &capable_global(), Some(&binary));
         if mode == "held-pipes" {
-            assert!(result.unwrap_err().to_string().contains("timed out"));
+            // Unix waits for the pipes to close; Windows ends the job, and
+            // with it the pipes, once the root exits without a report.
+            let error = result.unwrap_err().to_string();
+            assert!(cfg!(windows) || error.contains("timed out"), "{error}");
         } else {
             assert!(matches!(result.unwrap(), Selection::Local(_)));
         }
