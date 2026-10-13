@@ -15,6 +15,9 @@ use std::{
 
 const MAX_DIAGNOSTIC_BYTES: usize = 4096;
 
+/// Offline, no module source is allowed: only the existing module cache.
+pub const OFFLINE_ENV: &[(&str, &str)] = &[("GOPROXY", "off")];
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(
@@ -23,10 +26,10 @@ pub enum Error {
     )]
     MissingSums(String),
     #[error(
-        "offline Go module prefetch needs modules missing from the module cache; run turbo setup \
-         online first"
+        "offline Go module prefetch needs modules missing from the module cache (status {code}): \
+         {stderr}"
     )]
-    Offline,
+    Offline { code: i32, stderr: String },
     #[error("`go {command}` exited with status {code}: {stderr}")]
     Failed {
         command: &'static str,
@@ -111,7 +114,7 @@ impl Prefetch<'_> {
             process.env(key, value);
         }
         if self.offline {
-            process.env("GOPROXY", "off");
+            process.envs(OFFLINE_ENV.iter().copied());
         }
         let output = process.output()?;
         if output.status.success() {
@@ -122,16 +125,17 @@ impl Prefetch<'_> {
         while !stderr.is_char_boundary(start) {
             start += 1;
         }
-        let tail = &stderr[start..];
+        let tail = stderr[start..].trim().to_owned();
+        let code = output.status.code().unwrap_or(-1);
         Ok(Err(if stderr.contains("missing go.sum entry") {
             Error::MissingSums("go reported a missing go.sum entry".into())
         } else if self.offline && stderr.contains("GOPROXY=off") {
-            Error::Offline
+            Error::Offline { code, stderr: tail }
         } else {
             Error::Failed {
                 command,
-                code: output.status.code().unwrap_or(-1),
-                stderr: tail.trim().to_owned(),
+                code,
+                stderr: tail,
             }
         }))
     }

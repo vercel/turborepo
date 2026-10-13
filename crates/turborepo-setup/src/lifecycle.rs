@@ -262,6 +262,26 @@ impl Policy {
     }
 }
 
+/// Whether the committed `.yarnrc.yml` sets `enableNetwork` for any host in
+/// `networkSettings`. Modern Yarn prefers that over the global setting, so it
+/// could re-enable the network that offline setup disables. Read with the
+/// same bounds as lifecycle settings; a malformed file fails closed.
+pub fn yarn_host_network(root: &Path) -> Result<bool, Error> {
+    let mut found = Found {
+        root,
+        texts: BTreeMap::new(),
+        settings: Vec::new(),
+    };
+    found.yaml(".yarnrc.yml", "networkSettings", |hosts| {
+        hosts.as_mapping().is_some_and(|hosts| {
+            hosts.values().any(|host| {
+                host.get("enableNetwork")
+                    .is_some_and(|enabled| !enabled.is_null() && enabled.as_bool() != Some(false))
+            })
+        })
+    })
+}
+
 fn describe(scripts: Scripts) -> &'static str {
     match scripts {
         Scripts::Run => "run",

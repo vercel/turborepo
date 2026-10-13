@@ -404,16 +404,11 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     write(root, "custom.json", ENABLED);
     fs::create_dir(root.join("selected-root")).unwrap();
     write(root, "selected-root/turbo.json", ENABLED);
-    // #14518 admits tools-only --offline, which reads (and rejects) the
-    // invalid lock; offline setup cannot install locked dependencies.
-    failure(
-        root,
-        &["setup", "--offline"],
-        false,
-        "--offline cannot install locked dependencies",
-    );
+    // #14518 admits --offline, which reads (and rejects) the invalid lock,
+    // with or without dependencies.
     for words in [
         vec!["setup", "--offline", "--tools-only"],
+        vec!["setup", "--offline"],
         vec!["--root-turbo-json", "custom.json", "setup", "--__test-run"],
         vec!["--cwd=selected-root", "setup", "--__test-run"],
     ] {
@@ -470,8 +465,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         let pending = words.contains(&"--__test-run")
             || (words.contains(&"--force") && words.contains(&"--update-lock"));
         // Locked dependencies need a declared package manager, checked before
-        // any download; offline repeats (#14518) and --no-lock (#14486)
-        // cannot install them.
+        // any download, offline too; --no-lock (#14486) cannot install them.
         let locked = !words.contains(&"--tools-only");
         let text = failure(
             root,
@@ -479,9 +473,6 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
             false,
             match () {
                 _ if pending => PENDING,
-                _ if locked && words.contains(&"--offline") => {
-                    "--offline cannot install locked dependencies"
-                }
                 _ if locked && words.contains(&"--no-lock") => {
                     "--no-lock cannot install locked dependencies"
                 }

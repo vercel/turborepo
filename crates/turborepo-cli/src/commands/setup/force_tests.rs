@@ -213,8 +213,9 @@ fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
         let u = Upstream::new(&f, false, None);
         let result = f.run(&u, &flags);
         if flags.contains(&"--offline") && !flags.contains(&"--tools-only") {
-            // Offline setup cannot install locked dependencies yet.
-            assert!(matches!(result, Err(Error::Unsupported(_))));
+            // Offline dependency setup needs the fixture's missing
+            // pnpm-lock.yaml before anything else.
+            assert!(matches!(result, Err(Error::Dependencies(_))));
         } else if flags.contains(&"--offline") {
             // Nothing is installed, so offline force has no verified bytes.
             assert!(matches!(result, Err(Error::Offline(_))));

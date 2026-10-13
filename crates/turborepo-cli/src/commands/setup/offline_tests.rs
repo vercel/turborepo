@@ -75,7 +75,9 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         // Prove repeat doesn't recreate even an absent producer lock file.
         fs::remove_file(f.owned.root().join(".turbo/tools/transaction.lock")).unwrap();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
-        // Plain --offline cannot install locked dependencies (TURBO-6229).
+        // Plain --offline also installs locked dependencies, which this
+        // fixture's pnpm cannot run; dependency offline installs have their
+        // own tests.
         for flags in [
             OFFLINE,
             &["--tools-only", "--offline", "--frozen"],
@@ -120,8 +122,8 @@ fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_a
         let declaration = fs::read(f.owned.root().join("package.json")).unwrap();
         let environment: std::collections::BTreeMap<_, _> = std::env::vars_os().collect();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
-        // Repeated forced reinstalls; plain --offline --force cannot install
-        // locked dependencies (TURBO-6229).
+        // Repeated forced reinstalls; plain --offline --force would also
+        // install locked dependencies, which this fixture's pnpm cannot run.
         for _ in 0..2 {
             let before = f.manifest().unwrap();
             assert_eq!(f.run(&empty, OFFLINE_FORCE).unwrap(), 0);
