@@ -40,7 +40,7 @@ You can run `turbo setup` from any directory in your repository. It walks up to 
 - A [supported platform](/docs/reference/managed-toolchain-platforms).
 - In a Git repository, `.turbo/` must be ignored and untracked. Add `/.turbo/` to your `.gitignore`. Outside a Git repository, such as in [pruned output](/docs/core-concepts/managed-toolchains#pruning), `turbo setup` skips this check.
 - At least one [supported declaration](#supported-declarations) at the repository root. npm, pnpm, and Yarn also need a Node.js declaration.
-- No npm configuration. Configure download mirrors with [`setup.mirrors`](/docs/reference/setup-policy#mirrors) instead. See [troubleshooting](#official-only-setup-rejects-npm-configuration).
+- No npm configuration or mirror overrides. See [troubleshooting](#official-only-setup-rejects-npm-configuration).
 
 ## Supported declarations
 
@@ -312,7 +312,7 @@ Add `/.turbo/` to your root `.gitignore`. If files under `.turbo/` are tracked, 
 official-only setup rejects npm configuration environment overrides; remove them before retrying
 ```
 
-`turbo setup` only downloads from official sources and the [mirrors](/docs/reference/setup-policy#mirrors) you configure. To guarantee that, it stops if anything else could redirect those downloads:
+`turbo setup` only downloads from official sources. To guarantee that, it stops if anything could redirect those downloads:
 
 - Any `NPM_CONFIG_*` environment variable, except the ones npm and pnpm set for the scripts they run, such as `npm_config_user_agent`. Registry variables are only allowed when they point at the public npm registry.
 - `COREPACK_NPM_REGISTRY`, `NODEJS_ORG_MIRROR`, `NVM_NODEJS_ORG_MIRROR`, or `DESTDIR`.
