@@ -13,6 +13,10 @@ use super::{Child, ChildExit};
 
 const POST_EXIT_OUTPUT_DRAIN_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(100);
 
+/// Upper bound on the bytes forwarded to the output sink per read, for both
+/// piped and PTY output.
+const OUTPUT_CHUNK_BYTES: usize = 8 * 1024;
+
 pub(super) struct ChildIO {
     pub(super) stdin: Option<ChildInput>,
     pub(super) output: Option<ChildOutput>,
@@ -148,7 +152,7 @@ impl Child {
         // A channel keeps this from requiring `stdout_pipe` to be `Send`.
         let (byte_tx, mut byte_rx) = mpsc::channel(48);
         tokio::task::spawn_blocking(move || {
-            let mut buffer = [0; 1024];
+            let mut buffer = vec![0; OUTPUT_CHUNK_BYTES];
             let mut last_byte = None;
             loop {
                 match stdout_lines.read(&mut buffer) {
@@ -227,8 +231,6 @@ impl Child {
                 None => None,
             }
         }
-
-        const OUTPUT_CHUNK_BYTES: usize = 8 * 1024;
 
         let mut stdout_buffer = Vec::with_capacity(OUTPUT_CHUNK_BYTES);
         let mut stderr_buffer = Vec::with_capacity(OUTPUT_CHUNK_BYTES);

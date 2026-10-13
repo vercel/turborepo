@@ -9,7 +9,10 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
@@ -23,7 +26,7 @@ use rayon::prelude::*;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
 use tracing::{debug_span, info_span};
-use turbo_trace::{ImportResult, ImportTraceType, ImportType, Tracer, find_imports};
+use turbo_trace::{ImportResult, ImportTraceType, ImportType, find_imports};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_log::Subsystem;
@@ -32,9 +35,8 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageGraphNodeKind, PackageName, PackageNode},
 };
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
-use unrs_resolver::Resolver;
 
-use crate::imports::DependencyLocations;
+use crate::imports::{DependencyLocations, PackageResolver};
 
 #[derive(Clone)]
 pub struct PackageScope<'a> {
@@ -347,7 +349,12 @@ impl BoundariesResult {
 
     pub fn emit(&self, color_config: ColorConfig) {
         for diagnostic in &self.diagnostics {
-            eprintln!("{:?}", Report::new(diagnostic.clone()));
+            // Stderr is unbuffered and miette renders a report as many small
+            // fragments (often single characters), so formatting directly into
+            // stderr costs one write syscall per fragment. Render each report
+            // first and write it with a single call instead.
+            let rendered = format!("{:?}\n", Report::new(diagnostic.clone()));
+            eprint!("{rendered}");
         }
         let result_message = match self.diagnostics.len() {
             0 => color!(color_config, BOLD_GREEN, "no issues found"),
@@ -592,29 +599,32 @@ impl BoundariesChecker {
 
         let package_results: Vec<Result<BoundariesResult, Error>> = {
             let _span = info_span!("check_all_packages", count = packages_to_check.len()).entered();
+            // Packages are checked independently so Rayon can balance them
+            // across all workers. Progress is still reported per batch: the
+            // package that completes a batch (or the last package) advances
+            // the bar, so the final position is exactly the package count.
+            let total = packages_to_check.len();
+            let completed = AtomicUsize::new(0);
             turborepo_rayon_compat::block_in_place(|| {
                 packages_to_check
-                    .par_chunks(PROGRESS_UPDATE_BATCH_SIZE)
-                    .map(|packages| {
-                        let results = packages
-                            .iter()
-                            .map(|(package_name, package_name_source, package_directory)| {
-                                Self::check_package(
-                                    ctx,
-                                    package_name,
-                                    *package_name_source,
-                                    package_directory,
-                                    &rules_map,
-                                    &global_implicit_dependencies,
-                                )
-                            })
-                            .collect::<Vec<_>>();
-                        progress.inc(packages.len() as u64);
-                        results
+                    .par_iter()
+                    .map(|(package_name, package_name_source, package_directory)| {
+                        let result = Self::check_package(
+                            ctx,
+                            package_name,
+                            *package_name_source,
+                            package_directory,
+                            &rules_map,
+                            &global_implicit_dependencies,
+                        );
+                        let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                        if done.is_multiple_of(PROGRESS_UPDATE_BATCH_SIZE) {
+                            progress.inc(PROGRESS_UPDATE_BATCH_SIZE as u64);
+                        } else if done == total {
+                            progress.inc((total % PROGRESS_UPDATE_BATCH_SIZE) as u64);
+                        }
+                        result
                     })
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .flatten()
                     .collect()
             })
         };
@@ -748,8 +758,7 @@ impl BoundariesChecker {
 
         // We assume the tsconfig.json is at the root of the package
         let tsconfig_path = package_root.join_component("tsconfig.json");
-        let resolver =
-            Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
+        let resolver = PackageResolver::new(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
 
@@ -816,7 +825,7 @@ impl BoundariesChecker {
         package_root: &AbsoluteSystemPath,
         file_path: &AbsoluteSystemPath,
         dependency_locations: DependencyLocations<'_>,
-        resolver: &Resolver,
+        resolver: &PackageResolver,
     ) -> Result<(Vec<BoundariesDiagnostic>, Vec<String>), Error> {
         // Read the file once and share it across every diagnostic it
         // produces. Each emitted error keeps an Arc clone instead of a fresh

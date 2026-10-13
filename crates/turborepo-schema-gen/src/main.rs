@@ -603,9 +603,9 @@ fn generate_root_schema_interface() -> String {
 
   /**
    * Controls whether turbo maintains a root AGENTS.md block for AI agents.
-   * Set to false to opt out of future automatic updates.
+   * Set to true to opt in to future automatic updates.
    *
-   * @defaultValue `true`
+   * @defaultValue `false`
    */
   agentGuidance?: boolean;
 

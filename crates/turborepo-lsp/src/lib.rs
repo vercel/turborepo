@@ -282,6 +282,36 @@ impl LspPackageCache {
     }
 }
 
+/// Upper bound on remembered glob validations. Typing a new glob adds one
+/// entry per keystroke, so the cache is cleared instead of growing past this.
+const GLOB_VALIDATION_CACHE_LIMIT: usize = 1024;
+
+/// Remembers whether each glob expression in a `turbo.json` builds.
+///
+/// Validating a glob builds its matcher, which compiles a regular expression.
+/// That dominates re-validating a `turbo.json` on every edit, while the result
+/// depends only on the expression, so unchanged globs reuse it.
+#[derive(Debug, Default)]
+struct GlobValidationCache(Mutex<HashMap<String, Option<String>>>);
+
+impl GlobValidationCache {
+    /// Returns the build error for `expression` if it is not a valid glob.
+    fn error(&self, expression: &str) -> Option<String> {
+        if let Some(error) = lock_or_recover(&self.0).get(expression) {
+            return error.clone();
+        }
+        let error = wax::Glob::new(expression)
+            .err()
+            .map(|error| error.to_string());
+        let mut cache = lock_or_recover(&self.0);
+        if cache.len() >= GLOB_VALIDATION_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(expression.to_string(), error.clone());
+        error
+    }
+}
+
 #[cfg(test)]
 fn retain_unique_named(package_jsons: &mut HashMap<AbsoluteSystemPathBuf, PackageJson>) {
     let counts = package_jsons
@@ -316,6 +346,7 @@ pub struct Backend {
     initializer: Sender<Option<DaemonClient<DaemonConnector>>>,
     daemon: Receiver<Option<DaemonClient<DaemonConnector>>>,
     packages: LspPackageCache,
+    glob_validation: GlobValidationCache,
 
     // this is only used for turbo optimize
     pidlock: Mutex<Option<pidlock::Pidlock>>,
@@ -892,6 +923,7 @@ impl Backend {
             initializer: rx,
             daemon: tx,
             packages: LspPackageCache::default(),
+            glob_validation: GlobValidationCache::default(),
 
             pidlock: Mutex::new(None),
         }
@@ -1116,9 +1148,9 @@ impl Backend {
                 // read string and parse glob
                 if let Some(string) = glob.as_string_lit() {
                     let expression = string.value.strip_prefix('!').unwrap_or(&string.value); // strip the negation
-                    if let Err(glob) = wax::Glob::new(expression) {
+                    if let Some(error) = self.glob_validation.error(expression) {
                         diagnostics.push(Diagnostic {
-                            message: format!("Invalid glob: {glob}"),
+                            message: format!("Invalid glob: {error}"),
                             range: convert_ranges(&rope, collapse_string_range(string.range)),
                             severity: Some(DiagnosticSeverity::ERROR),
                             ..Default::default()
@@ -1298,8 +1330,9 @@ mod tests {
     };
 
     use super::{
-        LspPackageCache, LspPackages, PackageSource, collect_transit_node_tasks,
-        is_turbo_extends_sentinel, report_invalid_packages_and_tasks, retain_unique_named,
+        GLOB_VALIDATION_CACHE_LIMIT, GlobValidationCache, LspPackageCache, LspPackages,
+        PackageSource, collect_transit_node_tasks, is_turbo_extends_sentinel,
+        report_invalid_packages_and_tasks, retain_unique_named,
     };
 
     struct TestRepository {
@@ -1802,6 +1835,30 @@ mod tests {
         assert!(packages.packages.is_empty());
         assert!(packages.completion_labels().is_empty());
         assert!(packages.task_index().is_empty());
+    }
+
+    #[test]
+    fn glob_validation_cache_matches_building_the_glob() {
+        let cache = GlobValidationCache::default();
+        for expression in ["dist/**", "src/**/*.{ts,tsx}", "**/[", "a/**b", "{a,b"] {
+            let expected = wax::Glob::new(expression)
+                .err()
+                .map(|error| error.to_string());
+            // The first call builds the glob and the second reuses the result.
+            assert_eq!(cache.error(expression), expected, "{expression}");
+            assert_eq!(cache.error(expression), expected, "{expression}");
+        }
+        assert!(cache.error("**/[").is_some());
+        assert!(cache.error("dist/**").is_none());
+    }
+
+    #[test]
+    fn glob_validation_cache_is_bounded() {
+        let cache = GlobValidationCache::default();
+        for i in 0..GLOB_VALIDATION_CACHE_LIMIT + 10 {
+            assert!(cache.error(&format!("dist{i}/**")).is_none());
+        }
+        assert!(cache.0.lock().expect("lock").len() <= GLOB_VALIDATION_CACHE_LIMIT);
     }
 
     fn diagnostic_code(diagnostic: &Diagnostic) -> Option<&str> {

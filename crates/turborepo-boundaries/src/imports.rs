@@ -8,16 +8,62 @@ use miette::{NamedSource, SourceSpan};
 use oxc_ast::ast::Comment;
 use oxc_span::Span;
 use tracing::debug;
-use turbo_trace::ImportType;
+use turbo_trace::{ImportType, Tracer};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::{
     external_resolution::PackageExternalDeclarations,
     package_graph::{PackageName, PackageNode},
 };
-use unrs_resolver::{ResolveError, Resolver};
+use unrs_resolver::{Resolution, ResolveError, Resolver};
 
 use crate::{BoundariesChecker, BoundariesDiagnostic, Error};
+
+/// Resolves imports for one package, using the package's tsconfig if it has
+/// one.
+///
+/// The resolver caches a tsconfig only after it loads successfully. When it
+/// can't be loaded (for example, because it `extends` a package that isn't
+/// installed), every `resolve` call would read and parse it again, retry the
+/// `extends` resolution, and fail with the same error. The tsconfig is loaded
+/// once up front instead, and a load error is reused for every resolution it
+/// would decide.
+pub(crate) struct PackageResolver {
+    resolver: Resolver,
+    tsconfig_error: Option<ResolveError>,
+}
+
+impl PackageResolver {
+    pub(crate) fn new(tsconfig: Option<&AbsoluteSystemPath>) -> Self {
+        let resolver = Tracer::create_resolver(tsconfig);
+        // This is the same load `resolve` performs. On success the resolver
+        // caches the tsconfig, so later resolutions reuse it as before.
+        let tsconfig_error =
+            tsconfig.and_then(|tsconfig| resolver.resolve_tsconfig(tsconfig.as_std_path()).err());
+        Self {
+            resolver,
+            tsconfig_error,
+        }
+    }
+
+    pub(crate) fn resolve(
+        &self,
+        directory: &AbsoluteSystemPath,
+        specifier: &str,
+    ) -> Result<Resolution, ResolveError> {
+        match &self.tsconfig_error {
+            // `resolve` loads the tsconfig right after canonicalizing
+            // `directory` (always the directory of a file that was just read)
+            // and parsing the specifier, before any other resolution step. A
+            // non-empty specifier without a query or fragment always parses,
+            // so its resolution is the tsconfig load error.
+            Some(error) if !specifier.is_empty() && !specifier.contains(['?', '#']) => {
+                Err(error.clone())
+            }
+            _ => self.resolver.resolve(directory, specifier),
+        }
+    }
+}
 
 /// All the places a dependency can be declared
 #[derive(Clone, Copy)]
@@ -71,7 +117,7 @@ impl<'a> DependencyLocations<'a> {
 /// `node_modules` (a real npm package) or if the resolver could not resolve
 /// the import. The caller should then fall through to `check_package_import`.
 fn check_import_as_tsconfig_path_alias(
-    resolver: &Resolver,
+    resolver: &PackageResolver,
     package_name: &PackageName,
     package_root: &AbsoluteSystemPath,
     span: SourceSpan,
@@ -181,7 +227,7 @@ pub(crate) fn check_import(
     file_path: &AbsoluteSystemPath,
     file_content: &Arc<str>,
     dependency_locations: DependencyLocations<'_>,
-    resolver: &Resolver,
+    resolver: &PackageResolver,
 ) -> Result<(), Error> {
     // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
     // a warning
@@ -367,7 +413,7 @@ pub(crate) fn check_package_import(
     file_path: &AbsoluteSystemPath,
     file_content: &Arc<str>,
     dependency_locations: DependencyLocations<'_>,
-    resolver: &Resolver,
+    resolver: &PackageResolver,
 ) -> Option<BoundariesDiagnostic> {
     let package_name = get_package_name(import);
 
@@ -517,13 +563,13 @@ mod test {
     fn make_tsconfig_alias_test_args(
         import: &str,
     ) -> (
-        Resolver,
+        PackageResolver,
         PackageName,
         SourceSpan,
         Arc<str>,
         BoundariesResult,
     ) {
-        let resolver = Tracer::create_resolver(None);
+        let resolver = PackageResolver::new(None);
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
         let file_content: Arc<str> = format!("import {{ x }} from \"{import}\";").into();
@@ -604,7 +650,7 @@ mod test {
         let file_content: Arc<str> = "import { $, which } from \"bun\";".into();
         std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
-        let resolver = Tracer::create_resolver(None);
+        let resolver = PackageResolver::new(None);
         let package_name = PackageName::from("my-app");
 
         // `@types/bun` is listed as a devDependency, but `bun` itself is not
@@ -653,7 +699,7 @@ mod test {
         let file_content: Arc<str> = "import { window, commands } from \"vscode\";".into();
         std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
-        let resolver = Tracer::create_resolver(None);
+        let resolver = PackageResolver::new(None);
         let package_name = PackageName::from("my-vscode-ext");
 
         let mut dev_deps = BTreeMap::new();
@@ -701,7 +747,7 @@ mod test {
         let file_content: Arc<str> = "import { Ship } from \"ship\";".into();
         std::fs::write(file_path.as_std_path(), file_content.as_bytes()).unwrap();
 
-        let resolver = Tracer::create_resolver(None);
+        let resolver = PackageResolver::new(None);
         let package_name = PackageName::from("my-app");
 
         // Only @types/ship exists, not ship itself
@@ -746,6 +792,75 @@ mod test {
         ));
     }
 
+    fn write_alias_fixture(root: &AbsoluteSystemPath, tsconfig: &str) {
+        std::fs::write(root.join_component("tsconfig.json").as_std_path(), tsconfig).unwrap();
+        std::fs::create_dir_all(root.join_component("utils").as_std_path()).unwrap();
+        std::fs::write(
+            root.join_components(&["utils", "helper.ts"]).as_std_path(),
+            "export const x = 1;",
+        )
+        .unwrap();
+    }
+
+    #[test_case("react" ; "bare package")]
+    #[test_case("@scope/pkg/sub" ; "scoped subpath")]
+    #[test_case("fs" ; "node builtin")]
+    #[test_case("node:path" ; "prefixed node builtin")]
+    #[test_case("bun" ; "bun runtime module")]
+    #[test_case("@/utils/helper" ; "path alias")]
+    #[test_case("./utils/helper" ; "relative")]
+    #[test_case("/utils/helper" ; "absolute")]
+    #[test_case("#internal" ; "subpath import")]
+    #[test_case("pkg?query" ; "query")]
+    #[test_case("pkg#fragment" ; "fragment")]
+    #[test_case("?query" ; "query only")]
+    #[test_case("" ; "empty")]
+    fn package_resolver_matches_resolver_when_tsconfig_fails_to_load(specifier: &str) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        // `extends` names a package that isn't installed, so the tsconfig
+        // never loads.
+        write_alias_fixture(
+            root,
+            r#"{ "extends": "@repo/tsconfig/base.json", "compilerOptions": { "paths": { "@/*": ["./*"] } } }"#,
+        );
+        let tsconfig = root.join_component("tsconfig.json");
+
+        let package_resolver = PackageResolver::new(Some(&tsconfig));
+        assert!(package_resolver.tsconfig_error.is_some());
+
+        let expected = Tracer::create_resolver(Some(&tsconfig))
+            .resolve(root, specifier)
+            .map(Resolution::into_path_buf);
+        let actual = package_resolver
+            .resolve(root, specifier)
+            .map(Resolution::into_path_buf);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn package_resolver_uses_a_tsconfig_that_loads() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        write_alias_fixture(
+            root,
+            r#"{ "compilerOptions": { "paths": { "@/*": ["./*"] } } }"#,
+        );
+        let tsconfig = root.join_component("tsconfig.json");
+
+        let package_resolver = PackageResolver::new(Some(&tsconfig));
+        assert!(package_resolver.tsconfig_error.is_none());
+
+        let expected = Tracer::create_resolver(Some(&tsconfig))
+            .resolve(root, "@/utils/helper")
+            .map(Resolution::into_path_buf);
+        assert!(expected.is_ok());
+        let actual = package_resolver
+            .resolve(root, "@/utils/helper")
+            .map(Resolution::into_path_buf);
+        assert_eq!(actual, expected);
+    }
+
     #[test]
     fn tsconfig_alias_resolves_path_alias() {
         let tmp = tempfile::tempdir().unwrap();
@@ -773,7 +888,7 @@ mod test {
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
 
-        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+        let resolver = PackageResolver::new(Some(tsconfig_path));
 
         let (resolved, _diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -834,7 +949,7 @@ mod test {
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
 
-        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+        let resolver = PackageResolver::new(Some(tsconfig_path));
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -897,7 +1012,7 @@ mod test {
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
 
-        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+        let resolver = PackageResolver::new(Some(tsconfig_path));
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -961,7 +1076,7 @@ mod test {
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
 
-        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+        let resolver = PackageResolver::new(Some(tsconfig_path));
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -1014,7 +1129,7 @@ mod test {
         let package_name = PackageName::from("my-app");
         let span = SourceSpan::new(0.into(), 0);
 
-        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+        let resolver = PackageResolver::new(Some(tsconfig_path));
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -1072,7 +1187,7 @@ mod test {
         let package_name = PackageName::from("test-pkg");
         let span = SourceSpan::new(0.into(), 0);
 
-        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+        let resolver = PackageResolver::new(Some(tsconfig_path));
 
         let (resolved, diag) = check_import_as_tsconfig_path_alias(
             &resolver,
@@ -1172,7 +1287,7 @@ mod test {
         let file_content: Arc<str> =
             "import { a } from \"undeclared-a\"; import { b } from \"undeclared-b\";".into();
 
-        let resolver = Tracer::create_resolver(None);
+        let resolver = PackageResolver::new(None);
         let package_name = PackageName::from("my-app");
         let package_json = PackageJson::default();
         let internal_deps = HashSet::new();

@@ -24,4 +24,4 @@ pub use task::{
     TaskEnvVarSummary, TaskExecutionSummary, TaskSummary, TaskSummaryTaskDefinition,
 };
 pub use task_factory::{Error as TaskFactoryError, TaskSummaryFactory};
-pub use tracker::{Error, RunSummary, RunTracker, SinglePackageRunSummary};
+pub use tracker::{Error, RunSummary, RunTracker, ScmStatePrefetch, SinglePackageRunSummary};
