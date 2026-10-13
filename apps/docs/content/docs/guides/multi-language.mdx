@@ -122,6 +122,8 @@ Pin the .NET SDK at the repository root so machines sharing cached builds use th
 }
 ```
 
+`rollForward: "disable"` requires the exact SDK version. This prevents a compiler upgrade from reusing cached outputs without a corresponding change to `global.json`.
+
 Create the library project and its source file:
 
 ```xml title="./packages/lib/Lib.csproj"
@@ -192,13 +194,13 @@ Add a `package.json` beside each `.csproj` with a script that invokes the [.NET 
 
 For npm, use `"lib": "*"` instead of `"workspace:*"`. Run your package manager's install command from the repository root to link the workspaces and update its lockfile.
 
-Keep the `package.json` dependency in sync with the `ProjectReference`. .NET uses the project reference to compile the application, while Turborepo uses the package dependency to build `lib` before `api` and invalidate `api`'s cache when the library changes. Turborepo does not read `.csproj` references or manage NuGet dependencies.
+Keep the `package.json` dependency in sync with the `ProjectReference`. .NET uses the project reference to compile the application, while Turborepo uses the package dependency to build `lib` before `api` and invalidate `api`'s cache when the library changes. Turborepo does not read `.csproj` references or manage NuGet dependencies. Review both declarations whenever you add or remove a project reference.
 
 The `DefaultItemExcludes` entries keep .NET from compiling source files reached through workspace links in `node_modules`.
 
 ## Configure tasks and caching
 
-Ignore generated files so they do not become inputs to subsequent builds:
+Ignore `bin/` and `obj/` to keep generated files out of the default input hash. The `outputs` setting below still lets Turborepo cache and restore `bin/`:
 
 ```text title="./.gitignore"
 node_modules/
@@ -239,4 +241,4 @@ dotnet apps/api/bin/Release/net10.0/Api.dll
 
 The application prints `API ready`. A second unchanged `turbo run build` restores the cached results. Editing `packages/lib/Message.cs` causes both `lib` and its dependent `api` to rebuild, while `web` can still use its cache.
 
-.NET still handles project references during an actual build. The package dependency gives Turborepo the information it needs to schedule and cache those builds; it does not replace .NET's dependency resolution.
+.NET still checks project references during the application's build and normally skips recompilation when they are up to date. The package dependency lets Turborepo schedule and cache each project independently; it does not replace .NET's dependency resolution.
