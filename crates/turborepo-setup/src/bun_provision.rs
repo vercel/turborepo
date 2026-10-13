@@ -1,7 +1,8 @@
 //! Locked Bun from official GitHub release archives, verified against each
 //! release's published SHASUMS256.txt. Bun is self-contained: no managed Node,
 //! global Bun, PATH change, `bun install`, or lifecycle execution. `bunx` is
-//! the same binary selected by its invoked name, as Bun's own installer does.
+//! the same binary selected by its invoked name, as Bun's own installer does;
+//! on Windows both exports are hard links to `bun.exe`.
 
 use std::{collections::BTreeMap, io, path::Path, time::Duration};
 
@@ -38,7 +39,10 @@ pub enum Error {
     InvalidLock,
     #[error("no locked Bun artifact for this target; update turbo.lock on a supported target")]
     MissingTarget,
-    #[error("managed Bun promotion is unqualified for Windows, musl or non-Unix hosts")]
+    #[error(
+        "managed Bun promotion is unqualified for this host, Windows arm64 or musl; use macOS, \
+         GNU Linux or Windows x64"
+    )]
     UnsupportedTarget,
     #[error("an exact canonical Bun release version is required")]
     InvalidVersion,
@@ -220,16 +224,19 @@ impl BunPlan {
     }
 
     /// Validate only the selected platform's exact official artifact shape.
+    /// Hosts promote only their own family: Unix builds on macOS and GNU
+    /// Linux, and the x64 baseline build on native Windows x64. Windows arm64
+    /// stays locked but unqualified.
     pub fn from_lock(lock: &Lock, platform: Platform) -> Result<Self, Error> {
-        if !cfg!(unix)
-            || !matches!(
-                platform,
-                Platform::MacosX64
-                    | Platform::MacosArm64
-                    | Platform::LinuxX64Gnu
-                    | Platform::LinuxArm64Gnu
-            )
-        {
+        let qualified = match platform {
+            Platform::MacosX64
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu => cfg!(unix),
+            Platform::WindowsX64 => cfg!(windows),
+            _ => false,
+        };
+        if !qualified {
             return Err(Error::UnsupportedTarget);
         }
         let bun = lock.tools().get("bun").ok_or(Error::InvalidLock)?;
