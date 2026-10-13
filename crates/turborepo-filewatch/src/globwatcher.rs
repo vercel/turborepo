@@ -549,6 +549,15 @@ impl GlobWatcher {
         candidates: HashSet<String>,
         timeout: Duration,
     ) -> Result<HashSet<String>, Error> {
+        // Without an active or pending registration for this hash, every
+        // candidate is reported as changed no matter which file events are
+        // still in flight: events only ever invalidate registrations, and a
+        // registration requested after this call is ordered after it. The
+        // answer is already known, so skip the cookie round trip.
+        if self.is_available() && !self.has_registration_for(&hash) {
+            return Ok(candidates);
+        }
+
         let (tx, rx) = oneshot::channel();
         let req = Query::GetChangedGlobs {
             hash,
@@ -558,6 +567,23 @@ impl GlobWatcher {
 
         self.send_request(req).await?;
         tokio::time::timeout(timeout, rx).await??
+    }
+
+    fn is_available(&self) -> bool {
+        let mut query_ch = self.query_ch_lazy.clone();
+        matches!(query_ch.get_immediate(), Some(Ok(_)))
+    }
+
+    fn has_registration_for(&self, hash: &str) -> bool {
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.active.contains_key(hash)
+            || state
+                .pending
+                .values()
+                .any(|registration| registration.hash == hash)
     }
 
     #[expect(clippy::result_large_err, reason = "retain watcher error details")]
@@ -1905,6 +1931,55 @@ mod test {
                 )
             })
             .collect()
+    }
+
+    #[tokio::test]
+    async fn unregistered_hash_reports_all_candidates_without_a_cookie() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
+
+        let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
+        let raw_excludes = ["my-pkg/.next/cache/**"];
+        let globs = GlobSet {
+            include: make_includes(raw_includes),
+            exclude: wax::any(raw_excludes).unwrap().to_owned(),
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
+        };
+        let candidates: HashSet<String> = raw_includes.iter().map(|s| s.to_string()).collect();
+
+        // Registering makes the watcher available and writes cookies.
+        glob_watcher
+            .watch_globs("registered".to_string(), globs, timeout)
+            .await
+            .unwrap();
+        let cookies = || std::fs::read_dir(cookie_dir.as_std_path()).unwrap().count();
+        let cookies_before = cookies();
+
+        let results = glob_watcher
+            .get_changed_globs("unregistered".to_string(), candidates.clone(), timeout)
+            .await
+            .unwrap();
+        assert_eq!(results, candidates);
+        assert_eq!(
+            cookies(),
+            cookies_before,
+            "no cookie for an unregistered hash"
+        );
+
+        // A registered hash still answers after a cookie round trip.
+        let results = glob_watcher
+            .get_changed_globs("registered".to_string(), candidates.clone(), timeout)
+            .await
+            .unwrap();
+        assert!(results.is_empty());
+        assert!(cookies() > cookies_before);
     }
 
     #[tokio::test]
