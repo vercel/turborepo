@@ -169,7 +169,11 @@ fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            2 => fs::write(f.owned.root().join("apps/web/.npmrc"), "").unwrap(),
+            2 => fs::write(
+                f.owned.root().join("apps/web/.npmrc"),
+                "registry=https://private.invalid",
+            )
+            .unwrap(),
             3 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
             4 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");

@@ -928,6 +928,38 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
 #[test]
+fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    let layout = "auto-install-peers = true\nhoist-pattern[]=react\nresolution-mode=highest\n";
+    write(root, ".npmrc", layout);
+    let words = ["setup", "--check", "--tools-only"];
+    // The policy passed, so check reaches its lock requirement.
+    check_failure(
+        root,
+        &words,
+        false,
+        "managed activation requires turbo.lock",
+    );
+    write(
+        root,
+        ".npmrc",
+        &format!("{layout}registry=https://registry.npmjs.org/\n"),
+    );
+    check_failure(
+        root,
+        &words,
+        false,
+        "official-only setup rejects line 4 of the Repository .npmrc",
+    );
+}
+
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+#[test]
 fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
     use std::os::unix::fs::PermissionsExt;
 
@@ -1470,7 +1502,7 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
         root,
         &["setup", "--plan", "--tools-only"],
         true,
-        "official-only setup rejects Repository configuration",
+        "official-only setup rejects line 1 of the Repository .npmrc",
     );
     assert!(!root.join(".turbo").exists());
 }

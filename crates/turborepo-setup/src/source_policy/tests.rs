@@ -64,6 +64,11 @@ fn config_owner_and_metadata_table() -> TestResult {
             validate(owner, Observation::Readable),
             Err(Error::Configured(owner))
         );
+        assert_eq!(validate(owner, Observation::NonFetching), Ok(()));
+        assert_eq!(
+            validate(owner, Observation::Setting(3)),
+            Err(Error::Setting(owner, 3))
+        );
     }
     for contents in [
         "",
@@ -71,6 +76,7 @@ fn config_owner_and_metadata_table() -> TestResult {
         "script-shell=private-secret",
         "//private-registry/:_authToken=private-secret",
     ] {
+        let project = if contents.is_empty() { None } else { Some(1) };
         for owner in [
             ConfigOwner::Repository,
             ConfigOwner::Ancestor,
@@ -92,11 +98,57 @@ fn config_owner_and_metadata_table() -> TestResult {
             };
             fs::create_dir_all(path.parent().ok_or("fixture parent")?)?;
             fs::write(&path, contents)?;
-            let error = fixture.check(&[]).err().ok_or("expected rejection")?;
-            assert_eq!(error, Error::Configured(owner));
-            assert!(!format!("{error} {error:?}").contains("private-secret"));
-            assert!(!format!("{error} {error:?}").contains(&path.display().to_string()));
+            let expected = match owner {
+                ConfigOwner::Repository | ConfigOwner::Ancestor => {
+                    project.map(|line| Error::Setting(owner, line))
+                }
+                _ => Some(Error::Configured(owner)),
+            };
+            let error = fixture.check(&[]).err();
+            assert_eq!(error, expected);
+            let text = format!(
+                "{error:?} {}",
+                error.as_ref().map(ToString::to_string).unwrap_or_default()
+            );
+            assert!(!text.contains("private-secret"));
+            assert!(!text.contains(&path.display().to_string()));
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn project_npmrc_passes_only_with_non_fetching_settings() -> TestResult {
+    let layout = "auto-install-peers = true\nhoist-pattern[]=react\n# \
+                  comment\nresolution-mode=highest\ndedupe-direct-deps=true\n";
+    for owner in [ConfigOwner::Repository, ConfigOwner::Ancestor] {
+        let fixture = Fixture::new()?;
+        let path = match owner {
+            ConfigOwner::Repository => fixture.root.join(".npmrc"),
+            _ => fixture
+                .root
+                .parent()
+                .ok_or("fixture parent")?
+                .join(".npmrc"),
+        };
+        fs::write(&path, layout)?;
+        assert_eq!(fixture.check(&[])?.registry(), PUBLIC_NPM_REGISTRY);
+        fs::write(
+            &path,
+            format!("{layout}@scope:registry=https://npm.example.test/\n"),
+        )?;
+        assert_eq!(fixture.check(&[]).err(), Some(Error::Setting(owner, 6)));
+        fs::write(&path, format!("{layout}save-exact=${{PRIVATE}}\n"))?;
+        assert_eq!(fixture.check(&[]).err(), Some(Error::Setting(owner, 6)));
+        fs::write(&path, vec![b'#'; usize::try_from(npmrc::LIMIT)? + 1])?;
+        assert_eq!(fixture.check(&[]).err(), Some(Error::Inspection(owner)));
+        // A non-fetching project file never relaxes the other layers.
+        fs::write(&path, layout)?;
+        fs::write(fixture.home.join(".npmrc"), layout)?;
+        assert_eq!(
+            fixture.check(&[]).err(),
+            Some(Error::Configured(ConfigOwner::User))
+        );
     }
     Ok(())
 }
@@ -183,7 +235,7 @@ fn symlink_invocation_and_actual_node_prefix_are_inspected() -> TestResult {
     let shortcut = fixture.directory.path().join("shortcut");
     symlink(&fixture.root, &shortcut)?;
     let ancestor_config = fixture.root.parent().ok_or("fixture")?.join(".npmrc");
-    fs::write(&ancestor_config, b"")?;
+    fs::write(&ancestor_config, b"registry=https://npm.example.test/")?;
     assert_eq!(
         inspect_inputs(
             &shortcut,
@@ -194,7 +246,7 @@ fn symlink_invocation_and_actual_node_prefix_are_inspected() -> TestResult {
             Some(fixture.directory.path())
         )
         .err(),
-        Some(Error::Configured(ConfigOwner::Ancestor))
+        Some(Error::Setting(ConfigOwner::Ancestor, 1))
     );
     fs::remove_file(ancestor_config)?;
     let bundled = fixture
