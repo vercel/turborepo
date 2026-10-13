@@ -167,6 +167,47 @@ fn managed_run_and_exec_pin_a_plain_goroot_and_the_local_toolchain() {
 }
 
 #[test]
+fn powershell_hook_activates_go_like_managed_run_and_restores_on_leaving() {
+    use crate::commands::hook::powershell_for_tests as hook;
+    if unqualified_host() {
+        return;
+    }
+    let f = go_only();
+    let u = go_upstream(&go_zip());
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    let env = run_overrides(&f).unwrap();
+    let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
+    let inside = format!("{};C:\\Windows", bin.display());
+    let (web, home) = (f.owned.root().join("apps/web/src"), f.owned.home());
+    // This shell points GOROOT at another Go and has no GOTOOLCHAIN.
+    let shell = |name: &str| (name == "GOROOT").then(|| r"C:\Go".to_owned());
+    let (entered, state) = hook(None, r"C:\Windows", &web, home, shell);
+    let state = state.unwrap();
+    assert_eq!(
+        entered,
+        format!(
+            "$env:PATH = '{inside}'\n$env:GOROOT = '{}'\n$env:GOTOOLCHAIN = \
+             'local'\n$env:__TURBO_HOOK_STATE = '{state}'\n",
+            env["GOROOT"]
+        )
+    );
+    // The next prompt changes nothing; leaving restores both exactly.
+    let active = |name: &str| env.get(name).cloned();
+    assert_eq!(
+        hook(Some(state.as_str()), &inside, &web, home, active),
+        (String::new(), None)
+    );
+    let (left, cleared) = hook(Some(state.as_str()), &inside, home, home, active);
+    assert_eq!(
+        left,
+        "$env:PATH = 'C:\\Windows'\n$env:GOROOT = 'C:\\Go'\nRemove-Item -LiteralPath \
+         Env:GOTOOLCHAIN -ErrorAction SilentlyContinue\nRemove-Item -LiteralPath \
+         Env:__TURBO_HOOK_STATE -ErrorAction SilentlyContinue\n"
+    );
+    assert_eq!(cleared, None);
+}
+
+#[test]
 fn damaged_go_exports_fail_check_and_frozen_setup_repairs_them() {
     if unqualified_host() {
         return;
