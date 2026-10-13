@@ -870,7 +870,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_guidance_parses_and_defaults_to_true() {
+    fn test_agent_guidance_parses_as_optional() {
         let default = RawRootTurboJson::parse(r#"{"tasks": {}}"#, "turbo.json").unwrap();
         assert_eq!(default.agent_guidance, None);
         let enabled = RawRootTurboJson::parse(r#"{"agentGuidance": true}"#, "turbo.json").unwrap();

@@ -1471,6 +1471,25 @@ impl PruneDomain for CargoPruneKnowledge {
 pub(crate) struct CargoContributor {
     repo_root: AbsoluteSystemPathBuf,
     resolve_external_dependencies: bool,
+    /// The locked `cargo metadata` attempt started by
+    /// [`RepositoryContributor::prefetch_packages`], consumed by the next
+    /// [`RepositoryContributor::discover_packages`].
+    prefetched: std::sync::Mutex<Option<std::thread::JoinHandle<LockedProbe>>>,
+}
+
+/// The locked `cargo metadata` attempt of [`discover_contributor_workspace`],
+/// separated so it can run ahead of
+/// [`RepositoryContributor::discover_packages`]. Holds only the lockfile read
+/// that gates the subprocess and the subprocess result; every error, warning,
+/// and derived fact is still produced by `discover_packages` in its original
+/// order.
+enum LockedProbe {
+    NoManifest,
+    LockfileUnavailable(Error),
+    Ran {
+        lockfile: String,
+        metadata: Result<Metadata, Error>,
+    },
 }
 
 impl CargoContributor {
@@ -1489,7 +1508,15 @@ impl CargoContributor {
         Arc::new(Self {
             repo_root,
             resolve_external_dependencies,
+            prefetched: std::sync::Mutex::new(None),
         })
+    }
+
+    fn take_prefetched(&self) -> Option<std::thread::JoinHandle<LockedProbe>> {
+        self.prefetched
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
     }
 
     fn workspace_roots(&self) -> Vec<WorkspaceRoot> {
@@ -1566,33 +1593,43 @@ impl ContributorMetadata {
     }
 }
 
+fn probe_locked_metadata(repo_root: &AbsoluteSystemPath) -> LockedProbe {
+    if !repo_root.join_component(CARGO_TOML).exists() {
+        return LockedProbe::NoManifest;
+    }
+    match read_lockfile(repo_root) {
+        Ok(lockfile) => LockedProbe::Ran {
+            lockfile,
+            metadata: locked_metadata(repo_root),
+        },
+        Err(error) => LockedProbe::LockfileUnavailable(error),
+    }
+}
+
 fn discover_contributor_workspace(
     repo_root: &AbsoluteSystemPath,
+    probe: LockedProbe,
 ) -> Result<(DiscoveredWorkspace, ContributorMetadata), Error> {
-    let root_manifest_path = repo_root.join_component(CARGO_TOML);
-    if !root_manifest_path.exists() {
-        return Ok((discover_crates(repo_root)?, ContributorMetadata::Absent));
-    }
-
-    let lockfile = match read_lockfile(repo_root) {
-        Ok(lockfile) => lockfile,
-        Err(error) => {
-            return Ok((
-                discover_crates(repo_root)?,
-                ContributorMetadata::Unresolved(error),
-            ));
-        }
-    };
-
-    match locked_metadata(repo_root) {
-        Ok(metadata) => {
+    match probe {
+        LockedProbe::NoManifest => Ok((discover_crates(repo_root)?, ContributorMetadata::Absent)),
+        LockedProbe::LockfileUnavailable(error) => Ok((
+            discover_crates(repo_root)?,
+            ContributorMetadata::Unresolved(error),
+        )),
+        LockedProbe::Ran {
+            lockfile,
+            metadata: Ok(metadata),
+        } => {
             let workspace = workspace_from_metadata(repo_root, &metadata)?;
             Ok((
                 workspace,
                 ContributorMetadata::Resolved { metadata, lockfile },
             ))
         }
-        Err(error) => Ok((
+        LockedProbe::Ran {
+            metadata: Err(error),
+            ..
+        } => Ok((
             discover_crates(repo_root)?,
             ContributorMetadata::Unresolved(error),
         )),
@@ -1758,6 +1795,33 @@ impl RepositoryContributor for CargoContributor {
         ToolchainId::RUST
     }
 
+    /// Starts only the locked `cargo metadata` attempt. Core calls this only
+    /// after [`Self::discover_package_scopes`] found named workspace crates,
+    /// so Cargo eligibility is established statically before any subprocess
+    /// starts. The `rustc` probes stay in `discover_packages`, after the
+    /// checks that consume this metadata, exactly as without a prefetch.
+    fn prefetch_packages(&self) {
+        if !self.resolve_external_dependencies {
+            return;
+        }
+        let mut slot = self
+            .prefetched
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if slot.is_some() {
+            return;
+        }
+        let repo_root = self.repo_root.clone();
+        // Failing to spawn leaves the slot empty; discovery then runs inline.
+        *slot = std::thread::Builder::new()
+            .name("cargo-metadata-prefetch".to_string())
+            .spawn(move || {
+                let _span = tracing::info_span!("cargo_metadata_prefetch").entered();
+                probe_locked_metadata(&repo_root)
+            })
+            .ok();
+    }
+
     #[expect(clippy::expect_used, reason = "CARGO_TOML is a validated static path")]
     fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
         Box::pin(async move {
@@ -1765,7 +1829,13 @@ impl RepositoryContributor for CargoContributor {
             // the async runtime like the JavaScript manifest-parsing path.
             let (workspace, metadata) = turborepo_rayon_compat::block_in_place(|| {
                 if self.resolve_external_dependencies {
-                    discover_contributor_workspace(&self.repo_root)
+                    let probe = match self.take_prefetched() {
+                        Some(prefetched) => prefetched
+                            .join()
+                            .unwrap_or_else(|panic| std::panic::resume_unwind(panic)),
+                        None => probe_locked_metadata(&self.repo_root),
+                    };
+                    discover_contributor_workspace(&self.repo_root, probe)
                 } else {
                     discover_crates(&self.repo_root)
                         .map(|workspace| (workspace, ContributorMetadata::Absent))
