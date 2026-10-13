@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use std::{fs, path::PathBuf};
 
 use turborepo_shim::{
-    capabilities::Capabilities,
+    capabilities::{Capabilities, Requirement},
     managed_run::{Selection, select},
 };
 
@@ -15,6 +15,27 @@ fn capable_global() -> Capabilities {
         br#"{"abiVersion":1,"cliVersion":"synthetic-global","managedRunSchemas":[0]}"#,
     )
     .unwrap()
+}
+
+fn need() -> Requirement {
+    Requirement::new(0, ["node", "pnpm"])
+}
+
+/// A prelaunch report for `target` (this host's when `None`).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn prelaunch(schema: u32, target: Option<&str>, features: &str) -> String {
+    let host = format!(
+        "{}-{}",
+        std::env::consts::OS,
+        match std::env::consts::ARCH {
+            "aarch64" => "arm64",
+            _ => "x64",
+        }
+    );
+    format!(
+        r#"{{"abiVersion":1,"cliVersion":"9999.0.0","managedRunSchemas":[],"experimentalSetup":{{"lockSchema":{schema},"target":"{}","features":[{features}]}}}}"#,
+        target.unwrap_or(&host)
+    )
 }
 
 fn peer(report: &str) -> (tempfile::TempDir, PathBuf) {
@@ -28,54 +49,88 @@ fn peer(report: &str) -> (tempfile::TempDir, PathBuf) {
 }
 
 #[test]
-fn absent_pin_requires_complete_global_schema_membership() {
+fn absent_pin_requires_global_support() {
     let incomplete = Capabilities::unsupported("9999.0.0");
-    let error = select(0, &incomplete, None).unwrap_err().to_string();
+    let error = select(&need(), &incomplete, None).unwrap_err().to_string();
     assert!(
         error.contains("global CLI") && error.contains("schema 0") && error.contains("9999.0.0")
     );
     assert_eq!(
-        select(0, &capable_global(), None).unwrap(),
+        select(&need(), &capable_global(), None).unwrap(),
         Selection::Global
     );
-    assert!(select(1, &capable_global(), None).is_err());
+    assert!(select(&Requirement::new(1, ["node"]), &capable_global(), None).is_err());
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn compatible_installed_peer_is_preserved_even_when_global_is_incomplete() {
-    let (_temp, binary) =
-        peer(r#"{"abiVersion":1,"cliVersion":"old-build-label","managedRunSchemas":[0]}"#);
-    assert_eq!(
-        select(0, &Capabilities::unsupported("9999.0.0"), Some(&binary)).unwrap(),
-        Selection::Local(fs::canonicalize(&binary).unwrap())
-    );
-    let command = std::process::Command::new(&binary)
-        .args(["run", "build", "--", "argument with spaces"])
-        .output()
-        .unwrap();
-    assert!(command.status.success());
-    assert_eq!(
-        String::from_utf8(command.stdout).unwrap().trim(),
-        "run build -- argument with spaces"
-    );
+    for report in [
+        r#"{"abiVersion":1,"cliVersion":"old-build-label","managedRunSchemas":[0]}"#.to_owned(),
+        // Unknown newer features are fine; the required ones must be present.
+        prelaunch(0, None, r#""future-adapter","node","pnpm""#),
+    ] {
+        let (_temp, binary) = peer(&report);
+        assert_eq!(
+            select(
+                &need(),
+                &Capabilities::unsupported("9999.0.0"),
+                Some(&binary)
+            )
+            .unwrap(),
+            Selection::Local(fs::canonicalize(&binary).unwrap())
+        );
+        let command = std::process::Command::new(&binary)
+            .args(["run", "build", "--", "argument with spaces"])
+            .output()
+            .unwrap();
+        assert!(command.status.success());
+        assert_eq!(
+            String::from_utf8(command.stdout).unwrap().trim(),
+            "run build -- argument with spaces"
+        );
+    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[test]
 fn installed_incompatible_pin_is_never_replaced_even_by_a_complete_global() {
-    for report in [
-        r#"{"abiVersion":1,"cliVersion":"9999.0.0","managedRunSchemas":[]}"#,
-        r#"{"abiVersion":1,"cliVersion":"9999.0.0","managedRunSchemas":[1]}"#,
+    let clone_local = Requirement::new(0, ["clone-local", "node", "pnpm"]);
+    for (requirement, report, reason) in [
+        (
+            need(),
+            r#"{"abiVersion":1,"cliVersion":"9999.0.0","managedRunSchemas":[]}"#.to_owned(),
+            "does not support managed runs",
+        ),
+        (
+            need(),
+            r#"{"abiVersion":1,"cliVersion":"9999.0.0","managedRunSchemas":[1]}"#.to_owned(),
+            "does not support managed runs",
+        ),
+        (need(), prelaunch(1, None, r#""node","pnpm""#), "not 0"),
+        (need(), prelaunch(0, None, r#""node""#), "support for pnpm"),
+        // A `turbo setup --no-lock` clone needs a CLI that activates it.
+        (
+            clone_local,
+            prelaunch(0, None, r#""node","pnpm""#),
+            "support for clone-local",
+        ),
+        (
+            need(),
+            prelaunch(0, Some("windows-arm64"), r#""node","pnpm""#),
+            "built for windows-arm64",
+        ),
     ] {
-        let (_temp, binary) = peer(report);
-        let error = select(0, &capable_global(), Some(&binary))
+        let (_temp, binary) = peer(&report);
+        let error = select(&requirement, &capable_global(), Some(&binary))
             .unwrap_err()
             .to_string();
         assert!(
-            error.contains("repository-local CLI")
+            error.contains("repository-local turbo")
                 && error.contains("schema 0")
                 && error.contains("9999.0.0")
+                && error.contains(reason),
+            "{error}"
         );
     }
 }
@@ -93,18 +148,18 @@ fn unsupported_malformed_noisy_nonzero_and_oversized_queries_fail_closed() {
         r#"{"abiVersion":1,"abiVersion":1,"cliVersion":"peer","managedRunSchemas":[0]}"#,
     ] {
         let (_temp, binary) = peer(report);
-        let error = select(0, &capable_global(), Some(&binary))
+        let error = select(&need(), &capable_global(), Some(&binary))
             .unwrap_err()
             .to_string();
         assert!(
-            error.contains("repository-local CLI") && error.contains("schema 0"),
+            error.contains("repository-local turbo") && error.contains("schema 0"),
             "{error}"
         );
     }
     let temp = tempfile::tempdir().unwrap();
     assert!(
         select(
-            0,
+            &need(),
             &capable_global(),
             Some(&temp.path().join("unresolvable-installed-pin"))
         )
@@ -117,7 +172,7 @@ fn unsupported_malformed_noisy_nonzero_and_oversized_queries_fail_closed() {
 fn blocked_query_is_bounded_and_its_native_process_is_reaped() {
     let (_temp, binary) = peer("hang");
     let start = Instant::now();
-    let error = select(0, &capable_global(), Some(&binary))
+    let error = select(&need(), &capable_global(), Some(&binary))
         .unwrap_err()
         .to_string();
     assert!(error.contains("timed out"), "{error}");
@@ -138,20 +193,26 @@ fn blocked_query_is_bounded_and_its_native_process_is_reaped() {
 }
 
 #[test]
-fn native_self_case_cannot_claim_schema_readability_as_complete_support() {
+fn native_self_case_meets_the_same_contract_as_copied_peers() {
     let binary = std::env::current_exe().unwrap();
-    assert!(
-        select(
-            0,
-            &Capabilities::unsupported("partial-build"),
-            Some(&binary)
-        )
-        .is_err()
-    );
+    let local = Selection::Local(fs::canonicalize(&binary).unwrap());
+    let unsupported = Capabilities::unsupported("partial-build");
+    assert!(select(&need(), &unsupported, Some(&binary)).is_err());
     assert_eq!(
-        select(0, &capable_global(), Some(&binary)).unwrap(),
-        Selection::Local(fs::canonicalize(binary).unwrap())
+        select(&need(), &capable_global(), Some(&binary)).unwrap(),
+        local
     );
+    // The same build is compatible on every claimed platform, including
+    // `turbo setup --no-lock` clones and verify-system tools.
+    let every = Requirement::new(0, ["clone-local", "go", "node", "verify-system"]);
+    let current = Capabilities::current("current");
+    if cfg!(any(
+        target_os = "macos",
+        target_os = "linux",
+        all(windows, target_arch = "x86_64")
+    )) {
+        assert_eq!(select(&every, &current, Some(&binary)).unwrap(), local);
+    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -160,7 +221,12 @@ fn probe_suppression_does_not_change_the_callers_environment() {
     let (_temp, binary) = peer("environment");
     let before: Vec<_> = std::env::vars_os().collect();
     assert!(matches!(
-        select(0, &Capabilities::unsupported("partial"), Some(&binary)).unwrap(),
+        select(
+            &need(),
+            &Capabilities::unsupported("partial"),
+            Some(&binary)
+        )
+        .unwrap(),
         Selection::Local(_)
     ));
     assert_eq!(std::env::vars_os().collect::<Vec<_>>(), before);
@@ -196,7 +262,7 @@ fn exited_parent_does_not_leak_same_group_descendants_with_or_without_pipes() {
     for mode in ["held-pipes", "background"] {
         let (_temp, binary) = peer(mode);
         let start = Instant::now();
-        let result = select(0, &capable_global(), Some(&binary));
+        let result = select(&need(), &capable_global(), Some(&binary));
         if mode == "held-pipes" {
             assert!(result.unwrap_err().to_string().contains("timed out"));
         } else {
@@ -225,7 +291,7 @@ fn escaped_descendant_cannot_block_the_deadline_or_reader_cleanup() {
     }
     let (_temp, binary) = peer("escaped-pipes");
     let start = Instant::now();
-    let result = select(0, &capable_global(), Some(&binary));
+    let result = select(&need(), &capable_global(), Some(&binary));
     let pid = fs::read_to_string(binary.parent().unwrap().join("capability-descendant.pid"))
         .unwrap()
         .parse()
@@ -242,7 +308,7 @@ fn escaped_descendant_cannot_block_the_deadline_or_reader_cleanup() {
 #[test]
 fn non_self_probe_fails_closed_until_platform_cleanup_is_qualified() {
     let (_temp, binary) = peer("hang");
-    let error = select(0, &capable_global(), Some(&binary))
+    let error = select(&need(), &capable_global(), Some(&binary))
         .unwrap_err()
         .to_string();
     assert!(error.contains("not qualified") && error.contains("schema 0"));

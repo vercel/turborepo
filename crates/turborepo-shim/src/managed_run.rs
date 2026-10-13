@@ -18,7 +18,7 @@ use std::{
 use miette::Diagnostic;
 use thiserror::Error;
 
-use crate::capabilities::Capabilities;
+use crate::capabilities::{Capabilities, Requirement};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::capabilities::{MAX_RESPONSE_BYTES, QUERY_FLAG};
 
@@ -31,42 +31,58 @@ pub enum Selection {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error(
-    "{cli} cannot provide the required managed-run capability for turbo.lock schema {schema}: \
-     {reason}"
-)]
+#[error("{cli} cannot run {requirement}: {reason}")]
 #[diagnostic(help(
-    "Upgrade to a CLI advertising the complete schema contract or the qualified experimental \
-     Node/pnpm contract for this host. An installed incompatible repository pin must be upgraded; \
-     it is never replaced by the global CLI or fetched implicitly."
+    "Upgrade the repository's turbo dependency to a version that supports these managed tools, \
+     then reinstall dependencies. An installed repository-local turbo is never replaced by the \
+     global CLI or downloaded implicitly."
 ))]
 pub struct Error {
     cli: String,
-    schema: u32,
+    local: Option<PathBuf>,
+    requirement: Requirement,
     reason: String,
 }
 
-/// Caller must first authorize the exact-root experimental Node/pnpm cohort.
-/// This selector does not validate tools, declarations or installations itself.
-/// `local` is an already resolved native binary, not an npm launcher or runner.
-/// Only an actually absent/uninstalled pin is `None`. Resolution failures for
-/// an installed pin must not be converted to absence by the caller.
+impl Error {
+    fn new(requirement: &Requirement, local: Option<&Path>, reason: String) -> Self {
+        Self {
+            cli: match local {
+                Some(path) => format!("repository-local turbo at {}", path.display()),
+                None => "global CLI".to_owned(),
+            },
+            local: local.map(Path::to_owned),
+            requirement: requirement.clone(),
+            reason,
+        }
+    }
+
+    /// Names a pin by the version its package declares, as users know it.
+    pub fn declared(mut self, version: &str) -> Self {
+        if let Some(path) = &self.local {
+            self.cli = format!("repository-local turbo {version} at {}", path.display());
+        }
+        self
+    }
+}
+
+/// Caller must first validate the exact-root managed selection that
+/// `requirement` describes. This selector does not validate tools,
+/// declarations or installations itself. `local` is an already resolved
+/// native binary, not an npm launcher or runner. Only an actually
+/// absent/uninstalled pin is `None`. Resolution failures for an installed pin
+/// must not be converted to absence by the caller.
 pub fn select(
-    schema: u32,
+    requirement: &Requirement,
     global: &Capabilities,
     local: Option<&Path>,
 ) -> Result<Selection, Error> {
     let Some(local) = local else {
-        return require(schema, global, "global CLI").map(|()| Selection::Global);
+        return require(requirement, global, None).map(|()| Selection::Global);
     };
-    let cli = format!("repository-local CLI at {}", local.display());
-    let fail = |reason: String| Error {
-        cli: cli.clone(),
-        schema,
-        reason,
-    };
+    let fail = |reason: String| Error::new(requirement, Some(local), reason);
     let binary = fs::canonicalize(local)
-        .map_err(|err| fail(format!("native binary resolution failed: {err}")))?;
+        .map_err(|err| fail(format!("its native binary cannot be resolved: {err}")))?;
     // Self and copied peers must meet the same contract, not merely parse locks.
     let is_self = std::env::current_exe()
         .ok()
@@ -75,26 +91,22 @@ pub fn select(
     let peer = if is_self {
         global.clone()
     } else {
-        probe(&binary, QUERY_TIMEOUT).map_err(|reason| fail(reason.to_owned()))?
+        probe(&binary, QUERY_TIMEOUT)
+            .map_err(|reason| fail(format!("it does not report managed-run support ({reason})")))?
     };
-    require(schema, &peer, &cli)?;
+    require(requirement, &peer, Some(local))?;
     Ok(Selection::Local(binary))
 }
 
-fn require(schema: u32, capabilities: &Capabilities, cli: &str) -> Result<(), Error> {
-    if capabilities.supports_schema(schema) || capabilities.supports_experimental_node_pnpm(schema)
-    {
-        return Ok(());
+fn require(
+    requirement: &Requirement,
+    capabilities: &Capabilities,
+    local: Option<&Path>,
+) -> Result<(), Error> {
+    match capabilities.shortfall(requirement) {
+        None => Ok(()),
+        Some(reason) => Err(Error::new(requirement, local, reason)),
     }
-    Err(Error {
-        cli: cli.to_owned(),
-        schema,
-        reason: format!(
-            "detected CLI {} advertises neither complete schema support nor qualified \
-             experimental Node/pnpm support for this host",
-            capabilities.cli_version()
-        ),
-    })
 }
 
 /// Keep the root unreaped until group cleanup: its PID cannot be recycled even

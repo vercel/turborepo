@@ -66,13 +66,14 @@ pub trait TurboRunner: Send + Sync {
     }
 
     /// The CLI grammar/config owner validates managed setup before any local
-    /// handoff, update check, or implicit download. No managed policy by
+    /// handoff, update check, or implicit download, and reports what a
+    /// repository-local CLI must support to run it. No managed policy by
     /// default.
-    fn managed_run_schema(
+    fn managed_run_requirement(
         &self,
         _root: &AbsoluteSystemPath,
         _ui: ColorConfig,
-    ) -> Result<Option<u32>, Self::Error> {
+    ) -> Result<Option<capabilities::Requirement>, Self::Error> {
         Ok(None)
     }
 

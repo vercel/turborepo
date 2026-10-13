@@ -237,7 +237,8 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
         assert_eq!(code, 0, "{query}");
         let report = turborepo_shim::capabilities::Capabilities::parse(query.as_bytes()).unwrap();
         assert!(!report.supports_schema(0));
-        assert!(report.supports_experimental_node_pnpm(0));
+        let requirement = turborepo_shim::capabilities::Requirement::new(0, ["node", "pnpm"]);
+        assert_eq!(report.shortfall(&requirement), None);
         for mode in ["strict", "loose"] {
             let mode_arg = format!("--env-mode={mode}");
             // Relative path is invocation-relative, then crosses a root-cwd handoff.

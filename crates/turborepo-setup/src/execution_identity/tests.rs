@@ -438,6 +438,7 @@ fn clone_local_identity_marks_its_resolution_and_keeps_artifact_binding() {
     let local =
         ExecutionSnapshot::select_clone_local(&lock(&fixture()), context(), &selected).unwrap();
     assert_eq!(local.tools(), committed.tools());
+    assert!(local.clone_local() && !committed.clone_local());
     assert_ne!(local.fingerprint(), committed.fingerprint());
     let mut expected: Value = serde_json::from_slice(committed.canonical_identity()).unwrap();
     expected["resolution"] = json!("clone-local");

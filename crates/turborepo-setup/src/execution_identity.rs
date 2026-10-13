@@ -9,7 +9,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use turborepo_platform::{Architecture, OperatingSystem, Platform as HostPlatform};
 
-use crate::lock::{Artifact, Format, Installation, Lock, Platform, additional};
+use crate::lock::{Artifact, Format, Installation, Lock, Platform};
 
 pub const IDENTITY_DOMAIN: &str = "turborepo.setup.execution.v1";
 
@@ -169,10 +169,18 @@ pub struct ExecutionSnapshot {
     tools: BTreeMap<String, SelectedTool>,
     canonical: Vec<u8>,
     fingerprint: String,
+    resolution: Option<&'static str>,
 }
 
 /// Marks identities selected from a `turbo setup --no-lock` record.
 const CLONE_LOCAL: &str = "clone-local";
+
+/// Every lock adapter a snapshot can select. Additional tools (`artifact`)
+/// share the managed projection: artifact digest, format, layout and
+/// executables, never the source URL.
+pub const ADAPTERS: [&str; 11] = [
+    "node", "npm", "pnpm", "yarn", "bun", "rust", "rustup", "uv", "python", "go", "artifact",
+];
 
 impl ExecutionSnapshot {
     // Lock bounds, canonical option ordering and executable collision checks are
@@ -217,22 +225,7 @@ impl ExecutionSnapshot {
         let mut tools = BTreeMap::new();
         for id in selected_ids {
             let tool = lock.tools().get(id).ok_or(Error::MissingTool)?;
-            // Additional tools share the managed projection: artifact digest,
-            // format, layout and executables, never the source URL.
-            if !matches!(
-                tool.adapter.as_str(),
-                "node"
-                    | "npm"
-                    | "pnpm"
-                    | "yarn"
-                    | "bun"
-                    | "rust"
-                    | "rustup"
-                    | "go"
-                    | "uv"
-                    | "python"
-                    | additional::ADAPTER
-            ) {
+            if !ADAPTERS.contains(&tool.adapter.as_str()) {
                 return Err(Error::UnsupportedAdapter);
             }
             let installation = match &tool.installation {
@@ -289,11 +282,16 @@ impl ExecutionSnapshot {
             tools,
             canonical,
             fingerprint,
+            resolution,
         })
     }
 
     pub fn context(&self) -> &ExecutionContext {
         &self.context
+    }
+    /// Selected from a `turbo setup --no-lock` record rather than turbo.lock.
+    pub fn clone_local(&self) -> bool {
+        self.resolution == Some(CLONE_LOCAL)
     }
     pub fn tools(&self) -> &BTreeMap<String, SelectedTool> {
         &self.tools
