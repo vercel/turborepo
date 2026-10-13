@@ -167,7 +167,7 @@ async fn mirrors_serve_the_official_archive_path_beneath_their_base() {
     let bytes = archive(platform, &["uv", "uvx"]);
     let path = format!("/mirror{}", &official(platform).url()[uv::ORIGIN.len()..]);
     let upstream = LoopbackServer::new([(path.clone(), bytes.clone())], |_| {}).unwrap();
-    let fixture = crate::test_support::OwnedSetupFixture::new().unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
     let base = format!("{}/mirror", upstream.origin());
     let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
     let transport = UvTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();

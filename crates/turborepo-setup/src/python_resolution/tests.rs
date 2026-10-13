@@ -153,7 +153,7 @@ fn host_filtered_listings_fail_closed() {
 async fn mirrors_serve_the_official_checksum_paths_beneath_their_base() {
     let path = format!("/mirror{RELEASES}{TAG}/SHA256SUMS");
     let upstream = LoopbackServer::new([(path.clone(), sums("3.12.12"))], |_| {}).unwrap();
-    let fixture = crate::test_support::OwnedSetupFixture::new().unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
     let base = format!("{}/mirror", upstream.origin());
     let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
     let transport = PythonTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
