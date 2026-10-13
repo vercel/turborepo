@@ -213,7 +213,8 @@ impl Adapter {
         match self {
             Self::Javascript { frozen, .. } => {
                 let program = env.program(frozen.program())?;
-                let status = frozen.run(&program, &run.command[1..], root, vars)?;
+                let args = &run.command[1..];
+                let status = frozen.run(&program, args, root, vars, super::installer::status)?;
                 Ok((!status.success()).then(|| crate::commands::exec::exit_code(status)))
             }
             Self::Uv { .. } => {
@@ -607,8 +608,17 @@ impl Environment {
     }
 
     /// The managed executable only, never a lookup on the caller's PATH.
+    /// Windows exports are exactly `name.exe` hard links or `name.cmd`
+    /// forwarders, found without the caller's PATHEXT.
     fn program(&self, name: &'static str) -> Result<PathBuf, Error> {
         let bin = self.bin.as_deref().ok_or(Error::NotInstalled(name))?;
+        #[cfg(windows)]
+        return ["exe", "cmd"]
+            .iter()
+            .map(|extension| bin.join(format!("{name}.{extension}")))
+            .find(|path| path.is_file())
+            .ok_or(Error::NotInstalled(name));
+        #[cfg(not(windows))]
         which::which_in(name, Some(bin), bin).map_err(|_| Error::NotInstalled(name))
     }
 }

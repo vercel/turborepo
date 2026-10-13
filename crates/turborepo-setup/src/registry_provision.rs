@@ -307,7 +307,14 @@ fn tool_id(manager: Manager) -> Result<&'static str, Error> {
 fn native_release(manager: Manager, version: &Version) -> bool {
     manager == Manager::Pnpm && version.major >= 12
 }
-const NATIVE_BINARY: &str = "pnpm-native";
+/// The wrapper's own Corepack download location for this host
+/// (`bin/pnpm.mjs`), never a published file of any platform.
+const NATIVE_BINARY: &str = if cfg!(windows) {
+    "pnpm-native.exe"
+} else {
+    "pnpm-native"
+};
+const NATIVE_LOCATIONS: [&str; 2] = ["pnpm-native", "pnpm-native.exe"];
 const NATIVE_NAMES: [&str; 4] = ["pn", "pnpm", "pnpx", "pnx"];
 fn native_package(platform: Platform) -> Option<(&'static str, &'static str)> {
     Some(match platform {
@@ -472,10 +479,13 @@ fn extract_wrapper(bytes: &VerifiedArtifact, version: &str) -> Result<ExtractedA
         .get("bin")
         .and_then(|v| v.as_object())
         .map(|bin| bin.keys().map(String::as_str).collect::<BTreeSet<_>>());
-    if names != Some(BTreeSet::from(NATIVE_NAMES))
-        || tree.root_path().join(NATIVE_BINARY).try_exists()?
-    {
+    if names != Some(BTreeSet::from(NATIVE_NAMES)) {
         return Err(Error::InvalidPackage);
+    }
+    for location in NATIVE_LOCATIONS {
+        if tree.root_path().join(location).try_exists()? {
+            return Err(Error::InvalidPackage);
+        }
     }
     Ok(tree)
 }
@@ -601,11 +611,6 @@ impl RegistryPlan {
             .ok_or(Error::InvalidLock)?;
         let (artifact, native) = locked_parts(manager, &package.version, platform, parts)?;
         let (artifact, native) = (artifact.clone(), native.cloned());
-        // Native pnpm's launchers are POSIX shell scripts; Windows stays
-        // fail-closed for it, as in #14743.
-        if native.is_some() && windows {
-            return Err(Error::UnsupportedTarget);
-        }
         ExpectedSha256::from_hex(&artifact.sha256)?;
         let node = node.inventory_tool().clone();
         // A changed authored constraint must re-verify, even when archive SHA-256
@@ -825,6 +830,7 @@ impl PreparedRegistry {
             executable(&target)?;
         }
         // Owner-only like every other store directory, whatever the umask.
+        #[cfg_attr(not(unix), allow(unused_mut))]
         let mut launch = fs::DirBuilder::new();
         #[cfg(unix)]
         std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
@@ -832,12 +838,18 @@ impl PreparedRegistry {
         for (name, path) in &self.tool.executables {
             // The bin forwarder calls this file directly, so %~dp0 is always
             // the launch directory. Entry points are fixed validated mappings.
-            // Native pnpm never plans on Windows (`RegistryPlan::from_lock`).
+            // Native pnpm runs from the tool directory, never a bin hard link,
+            // so it still finds `dist/` beside its own image.
             let script = if cfg!(windows) {
-                format!(
-                    "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\{}\" %*\r\n",
-                    self.entrypoints[name].replace('/', "\\")
-                )
+                let command = match (&self.native, name.as_str()) {
+                    (None, _) => format!(
+                        "\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\{}\"",
+                        self.entrypoints[name].replace('/', "\\")
+                    ),
+                    (Some(_), "pnpx" | "pnx") => format!("\"%~dp0..\\{NATIVE_BINARY}\" dlx"),
+                    (Some(_), _) => format!("\"%~dp0..\\{NATIVE_BINARY}\""),
+                };
+                format!("@{command} %*\r\n")
             } else {
                 let id = &self.tool.id;
                 let command = match (&self.native, name.as_str()) {
