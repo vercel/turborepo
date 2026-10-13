@@ -73,6 +73,7 @@ pub(crate) fn official_artifact(
         url: format!("{ORIGIN}{RELEASES}{path}"),
         sha256,
         format: Format::TarGz,
+        alternates: BTreeMap::new(),
         root_prefix: Some("python".into()),
         // uv discovers managed interpreters by their key directory.
         destination: Some(key(version, platform)?),

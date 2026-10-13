@@ -53,6 +53,7 @@ fn document(platform: Platform, bytes: &[u8]) -> Document {
         url: format!("https://dl.google.com/go/{name}"),
         sha256: format!("{:x}", Sha256::digest(bytes)),
         format,
+        alternates: BTreeMap::new(),
         root_prefix: Some("go".into()),
         destination: None,
         executables: go_resolution::executables(format),
