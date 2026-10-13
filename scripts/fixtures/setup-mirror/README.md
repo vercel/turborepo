@@ -13,6 +13,7 @@ signing key was not retained.
 | `ca.pem`         | Self-signed P-256 CA (`CA:TRUE`, `keyCertSign,cRLSign`), 100 years |
 | `server.pem`     | P-256 leaf for `IP:127.0.0.1`, `serverAuth`                      |
 | `server-key.pem` | PKCS#8 key for `server.pem`                                      |
+| `standin.cs`     | Windows stand-in tools, compiled by the mirror with `csc.exe`    |
 
 Generated with OpenSSL 3 `genpkey` (P-256), `req -x509` for the CA and
 `x509 -req -extfile` for the leaf. Inspect with:

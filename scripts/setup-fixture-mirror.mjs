@@ -9,21 +9,22 @@
 //   placeholder digests, so the lock only installs here), and a fixture
 //   pnpm 10.0.0 whose `run` runs package scripts through the shell and whose
 //   `install --frozen-lockfile` succeeds without changing anything.
-// - /rust, /astral, /golang, and /artifacts, on Linux and macOS: a stand-in
-//   rustup that lays out a stable 1.99.0 toolchain, uv 0.13.0 with
-//   CPython 3.12.12, Go 1.22.12, and the additional tool smoke-tool 1.2.3.
-//   They are shell scripts that answer turbo's probes and the native locked
-//   installs and log every call to <state>/calls.log. Windows needs native
-//   stand-ins for these (see `posix` below); until then it gets Node.js and
-//   pnpm only.
+// - /rust, /astral, /golang, and /artifacts: a stand-in rustup that lays out
+//   a stable 1.99.0 toolchain, uv 0.13.0 with CPython 3.12.12, Go 1.22.12,
+//   and the additional tool smoke-tool 1.2.3, each in its official layout for
+//   this host. The stand-ins answer turbo's probes and the native locked
+//   installs and log every call to <state>/calls.log: shell scripts on Linux
+//   and macOS, and on Windows one native executable
+//   (fixtures/setup-mirror/standin.cs) that acts as the tool it is named
+//   after.
 //
 // Usage: node scripts/setup-fixture-mirror.mjs <state-directory>
-// Once listening, it writes "<port> <node-version>" to <state>/ready. On Linux
-// and macOS, <state>/additional-tools.json then holds this host's
-// `setup.additionalTools` declaration. Every request is appended to
-// <state>/requests.log. While <state>/tamper exists, the Node.js archive is
-// served with an extra byte.
+// Once listening, it writes "<port> <node-version>" to <state>/ready, and
+// <state>/additional-tools.json holds this host's `setup.additionalTools`
+// declaration. Every request is appended to <state>/requests.log. While
+// <state>/tamper exists, the Node.js archive is served with an extra byte.
 
+import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createServer } from "node:https";
@@ -230,19 +231,36 @@ routes.set(
 );
 routes.set("/npm/pnpm/-/pnpm-10.0.0.tgz", pnpm);
 
-// The stand-ins below are shell scripts. On Windows each one needs a native
-// executable with the same behavior; add it here, and the journey's other
-// ecosystems can join the Windows smoke.
-const posix = os !== "win";
-if (posix && state.includes("'")) {
+// Stand-ins log each call, so the journey sees which managed tools turbo's
+// probes, the installers, and the tasks ran. Linux and macOS get the shell
+// scripts below; Windows gets the native `standin` under each tool's name.
+const windows = os === "win";
+if (!windows && state.includes("'")) {
   throw new Error("the state directory must not contain a single quote");
 }
-// Shell stand-ins log each call, so the journey sees which managed tools
-// turbo's probes, the installers, and the tasks ran.
 const logCall = (name) => `echo "${name} $*" >> '${calls}'\n`;
 const script = (name, body) => Buffer.from(`#!/bin/sh\n${logCall(name)}${body}`);
 const cpu = { x64: "x86_64", arm64: "aarch64" }[process.arch];
-const triple = os === "darwin" ? `${cpu}-apple-darwin` : `${cpu}-unknown-linux-gnu`;
+const triple = {
+  darwin: `${cpu}-apple-darwin`,
+  linux: `${cpu}-unknown-linux-gnu`,
+  win: `${cpu}-pc-windows-msvc`
+}[os];
+
+// Every supported Windows ships the .NET Framework 4 compiler.
+function compileStandin() {
+  const dir = join(state, "standin");
+  mkdirSync(dir, { recursive: true });
+  const source = readFileSync(new URL("standin.cs", fixtures), "utf8");
+  writeFileSync(join(dir, "standin.cs"), source.replace("@STATE@", () => state));
+  const framework = join(process.env.SystemRoot, "Microsoft.NET", "Framework64", "v4.0.30319");
+  const out = join(dir, "standin.exe");
+  execFileSync(join(framework, "csc.exe"), ["/nologo", `/out:${out}`, join(dir, "standin.cs")], {
+    stdio: ["ignore", 2, 2]
+  });
+  return readFileSync(out);
+}
+const standin = windows ? compileStandin() : undefined;
 
 // Rust: rustup 1.29.1 and the stable channel at 1.99.0 (static.rust-lang.org),
 // whose components rustup pins as gzip and xz tarballs.
@@ -299,12 +317,13 @@ mkdir -p "$tc/bin" "$tc/lib/rustlib" &&
   printf 'cargo-${triple}\\nrust-std-${triple}\\nrustc-${triple}\\n' > "$tc/lib/rustlib/components"
 `
   );
+  const installer = windows ? standin : rustup;
   const archive = "/rust/rustup/archive/1.29.1";
-  routes.set(`${archive}/${triple}/rustup-init`, rustup);
+  routes.set(`${archive}/${triple}/rustup-init${windows ? ".exe" : ""}`, installer);
   for (const target of ["apple-darwin", "unknown-linux-gnu", "unknown-linux-musl", "pc-windows-msvc"]) {
     for (const arch of ["x86_64", "aarch64"]) {
       const exe = target.includes("windows") ? ".exe" : "";
-      routes.set(`${archive}/${arch}-${target}/rustup-init${exe}.sha256`, Buffer.from(`${sha256(rustup)}\n`));
+      routes.set(`${archive}/${arch}-${target}/rustup-init${exe}.sha256`, Buffer.from(`${sha256(installer)}\n`));
     }
   }
   routes.set("/rust/rustup/release-stable.toml", Buffer.from("schema-version = '1'\nversion = '1.29.1'\n"));
@@ -326,11 +345,23 @@ function astral() {
     url: `https://releases.astral.sh${releases}/${file(target)}`
   });
   const python = script("python", 'echo "Python 3.12.12"\n');
-  const archive = tarGz([
-    ["python/bin/python3.12", python, 0o755],
-    ["python/bin/python3", python, 0o755]
-  ]);
-  const self = os === "darwin" ? ["macos", cpu, "none"] : ["linux", cpu, "gnu"];
+  // Windows builds keep python.exe beside Lib, not under bin.
+  const archive = tarGz(
+    windows
+      ? [
+          ["python/python.exe", standin],
+          ["python/Lib/os.py", Buffer.alloc(0)]
+        ]
+      : [
+          ["python/bin/python3.12", python, 0o755],
+          ["python/bin/python3", python, 0o755]
+        ]
+  );
+  const self = {
+    darwin: ["macos", cpu, "none"],
+    linux: ["linux", cpu, "gnu"],
+    win: ["windows", cpu, "none"]
+  }[os];
   const listing = [entry(self, triple)];
   const sums = [`${sha256(archive)}  ${file(triple).replace("%2B", "+")}`];
   // Like real `uv python list --all-arches` output, list both Linux
@@ -346,6 +377,7 @@ function astral() {
   routes.set(`/astral${releases}/SHA256SUMS`, Buffer.from(`${sums.join("\n")}\n`));
   // turbo reads the CPython builds from `uv python list`; its own probes ask
   // for the interpreter.
+  writeFileSync(join(state, "uv-python-list.json"), JSON.stringify(listing));
   const uv = tarGz([
     [
       `uv-${triple}/uv`,
@@ -366,9 +398,12 @@ esac
     ],
     [`uv-${triple}/uvx`, Buffer.from("#!/bin/sh\nexit 1\n"), 0o755]
   ]);
+  // Windows zips are flat.
+  const name = `uv-${triple}.${windows ? "zip" : "tar.gz"}`;
+  const bytes = windows ? zip([["uv.exe", standin], ["uvx.exe", standin]]) : uv;
   const release = "/astral/github/uv/releases/download/0.13.0";
-  routes.set(`${release}/uv-${triple}.tar.gz`, uv);
-  routes.set(`${release}/sha256.sum`, Buffer.from(`${sha256(uv)} *uv-${triple}.tar.gz\n`));
+  routes.set(`${release}/${name}`, bytes);
+  routes.set(`${release}/sha256.sum`, Buffer.from(`${sha256(bytes)} *${name}\n`));
   routes.set(
     "/astral/github/versions/main/v1/uv.ndjson",
     Buffer.from(`${JSON.stringify({ version: "0.13.0", artifacts: [] })}\n`)
@@ -377,7 +412,7 @@ esac
 
 // Go 1.22.12: the go.dev release index and the dl.google.com archive.
 function golang() {
-  const goos = os === "darwin" ? "darwin" : "linux";
+  const goos = { darwin: "darwin", linux: "linux", win: "windows" }[os];
   const goarch = process.arch === "x64" ? "amd64" : "arm64";
   const go = script(
     "go",
@@ -409,14 +444,20 @@ case "$1 $2" in
 esac
 `
   );
-  const archive = tarGz([
-    ["go/bin/go", go, 0o755],
-    ["go/bin/gofmt", script("gofmt", ""), 0o755],
-    ["go/src/go.mod", Buffer.from("module std\n")]
-  ]);
+  const std = ["go/src/go.mod", Buffer.from("module std\n")];
+  const archive = windows
+    ? zip([["go/bin/go.exe", standin], ["go/bin/gofmt.exe", standin], std])
+    : tarGz([["go/bin/go", go, 0o755], ["go/bin/gofmt", script("gofmt", ""), 0o755], std]);
   const files = [];
-  for (const platform of ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"]) {
-    const filename = `go1.22.12.${platform}.tar.gz`;
+  for (const platform of [
+    "darwin-amd64",
+    "darwin-arm64",
+    "linux-amd64",
+    "linux-arm64",
+    "windows-amd64",
+    "windows-arm64"
+  ]) {
+    const filename = `go1.22.12.${platform}.${platform.startsWith("windows") ? "zip" : "tar.gz"}`;
     const [system, arch] = platform.split("-");
     const self = platform === `${goos}-${goarch}`;
     if (self) routes.set(`/golang/go/${filename}`, archive);
@@ -438,12 +479,19 @@ esac
 
 // One root-declared additional tool, served at <mirror>/<host>/<path>.
 function additionalTool() {
-  const platform = os === "darwin" ? `macos-${process.arch}` : `linux-${process.arch}-gnu`;
+  const platform = {
+    darwin: `macos-${process.arch}`,
+    linux: `linux-${process.arch}-gnu`,
+    win: `windows-${process.arch}`
+  }[os];
   const path = `downloads.example.test/smoke-tool/1.2.3/smoke-tool-1.2.3-${platform}.tar.gz`;
+  const executable = `bin/smoke-tool${windows ? ".exe" : ""}`;
   const archive = tarGz([
     [
-      "smoke-tool-1.2.3/bin/smoke-tool",
-      script("smoke-tool", 'echo "smoke-tool 1.2.3 secret=${SMOKE_SECRET:-filtered}"\n'),
+      `smoke-tool-1.2.3/${executable}`,
+      windows
+        ? standin
+        : script("smoke-tool", 'echo "smoke-tool 1.2.3 secret=${SMOKE_SECRET:-filtered}"\n'),
       0o755
     ],
     ["smoke-tool-1.2.3/share/smoke-tool/README", Buffer.from("smoke-tool fixture\n")]
@@ -458,7 +506,7 @@ function additionalTool() {
           sha256: sha256(archive),
           format: "tar-gz",
           rootPrefix: "smoke-tool-1.2.3",
-          executables: { "smoke-tool": "bin/smoke-tool" }
+          executables: { "smoke-tool": executable }
         }
       }
     }
@@ -466,13 +514,11 @@ function additionalTool() {
   writeFileSync(join(state, "additional-tools.json"), JSON.stringify(declaration));
 }
 
-if (posix) {
-  writeFileSync(calls, "");
-  rust();
-  astral();
-  golang();
-  additionalTool();
-}
+writeFileSync(calls, "");
+rust();
+astral();
+golang();
+additionalTool();
 
 const log = join(state, "requests.log");
 writeFileSync(log, "");

@@ -569,10 +569,10 @@ jobs:
   # Installs each packaged archive as users get it (signed and notarized on
   # macOS) on a native host with no Node.js, JS package manager, Rust, uv,
   # Python, or Go on turbo's PATH, then runs managed setup, plain turbo run,
-  # and turbo exec against a loopback fixture mirror. On Linux and macOS the
-  # journey covers Node.js and pnpm, Rust, uv and Python, Go, an additional
-  # tool, locked dependencies, and the installer's bash and zsh hooks; Windows
-  # x64 covers Node.js and pnpm. Nothing is downloaded from a vendor.
+  # and turbo exec against a loopback fixture mirror. The journey covers
+  # Node.js and pnpm, Rust, uv and Python, Go, an additional tool, locked
+  # dependencies, and the installer's shell hooks: bash and zsh on Linux and
+  # macOS, PowerShell on Windows x64. Nothing is downloaded from a vendor.
   standalone-smoke:
     name: "Smoke-test Standalone Archives (${{ matrix.settings.name }})"
     needs: [stage, standalone-archives]
