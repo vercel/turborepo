@@ -338,7 +338,7 @@ fn locked_cargo_dependencies_prefetch_through_the_managed_proxy_and_home() {
     // The managed `cargo.exe` proxy (a cmd.exe image here) runs `fetch
     // --locked` with stdin closed, so it exits 0 without fetching.
     for flags in [&["--frozen"][..], &["--frozen", "--ignore-scripts"]] {
-        assert_eq!(repo.run(&upstream, flags).unwrap(), 0);
+        assert_eq!(repo.ok(&upstream, flags), 0);
     }
     assert!(root.join(".turbo").join("cargo-home").is_dir());
     assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), b"version = 4\n");
