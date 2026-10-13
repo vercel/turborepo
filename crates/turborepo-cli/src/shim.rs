@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use miette::Diagnostic;
-use shared_child::SharedChild;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::inference::RepoState;
@@ -215,13 +214,17 @@ impl VersionProvider for TurboVersionProvider {
     }
 }
 
-/// Implementation of `ChildSpawner` that uses `turborepo-cli`'s spawn_child
-/// function.
+/// Hands off to another turbo (a repository's local CLI) so that killing this
+/// turbo kills it and everything it started: on Unix this process becomes it,
+/// and on Windows it runs in a kill-on-close job object.
 struct TurboChildSpawner;
 
 impl ChildSpawner for TurboChildSpawner {
-    fn spawn(&self, command: std::process::Command) -> std::io::Result<Arc<SharedChild>> {
-        turborepo_process::spawn_child(command)
+    fn hand_off(
+        &self,
+        command: std::process::Command,
+    ) -> std::io::Result<std::process::ExitStatus> {
+        turborepo_process::hand_off(command)
     }
 }
 
