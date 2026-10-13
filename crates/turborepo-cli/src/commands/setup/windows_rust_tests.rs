@@ -131,8 +131,19 @@ impl Repo {
         words.extend(flags.iter().map(OsString::from));
         let args = Args::parse_args(words).unwrap();
         let origin = upstream.origin();
+        // The staged rustup.exe (a cmd.exe image) hands the stand-in batch file
+        // to System32's cmd.exe: a copied cmd.exe image does not run batch
+        // files on the CI hosts, while internal commands and programs work.
         let script = self.outside.join("rustup.cmd");
-        let launcher = [OsString::from("/d"), "/c".into(), script.into()];
+        let system = system32().join("cmd.exe");
+        let launcher = [
+            OsString::from("/d"),
+            "/c".into(),
+            system.into(),
+            "/d".into(),
+            "/c".into(),
+            script.into(),
+        ];
         crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(
                 args,
@@ -318,9 +329,12 @@ fn a_failed_private_install_publishes_nothing() {
     let repo = Repo::new();
     repo.lock();
     fs::write(repo.outside.join("rustup.cmd"), "@exit /b 3\r\n").unwrap();
-    assert!(matches!(
-        repo.run(&repo.upstream(), FROZEN),
-        Err(Error::Rust(_))
-    ));
+    // The stand-in's own status proves the staged rustup.exe ran it.
+    use turborepo_setup::rust_provision::Error::Rustup;
+    let result = repo.run(&repo.upstream(), FROZEN);
+    assert!(
+        matches!(&result, Err(Error::Rust(Rustup(status))) if status.code() == Some(3)),
+        "{result:?}"
+    );
     assert!(repo.manifest().is_none());
 }
