@@ -10,6 +10,7 @@ use crate::cli::{Args, SetupArgs};
 #[cfg(all(test, target_os = "macos"))]
 mod acl;
 mod check;
+mod no_lock;
 mod plan;
 mod provision;
 mod root;
@@ -57,6 +58,10 @@ pub enum Error {
     Node(#[from] turborepo_setup::node_provision::Error),
     #[error(transparent)]
     Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
+    #[error(transparent)]
+    Native(#[from] turborepo_setup::native_baseline::Error),
+    #[error(transparent)]
+    Ephemeral(#[from] turborepo_setup::ephemeral_reconcile::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
@@ -180,6 +185,9 @@ fn run_with_policy(
             );
             Ok(0)
         }
+        Mode::Provision if request.lock == LockMode::NoLock => {
+            no_lock::run(&discovery, snapshot, transports, preflight)
+        }
         Mode::Provision => provision::run(
             &discovery,
             snapshot,
@@ -210,7 +218,7 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // Force reinstalls existing locked selections, independently of local
     // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
-        || request.lock == LockMode::NoLock
+        || (request.lock == LockMode::NoLock && (request.force || request.update_lock))
         || !request.tools_only
         || request.offline
         || (request.force && request.update_lock)
@@ -346,7 +354,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if matches!(control, "--force" | "--plan") {
+                if matches!(control, "--force" | "--no-lock" | "--plan") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(
