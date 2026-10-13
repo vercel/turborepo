@@ -859,7 +859,9 @@ impl Store {
     /// Takes no guard and creates nothing, so a concurrent transaction can
     /// make it stale.
     pub fn storage_use(repo: &Path, grace: Duration) -> Result<Option<StorageUse>, Error> {
-        if !cfg!(unix) {
+        // The same hosts and directory rules as `inspect_with` (#14591 Windows,
+        // #14666 shared repository and `.turbo` directories).
+        if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = fs::canonicalize(repo)?;
