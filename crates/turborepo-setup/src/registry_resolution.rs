@@ -2,11 +2,13 @@
 //! execution, repository I/O or platform-support claim. The coordinator owns
 //! declarations, Node binding and final lock validation/publication.
 
+use std::collections::BTreeMap;
+
 use semver::Version;
 
 pub use crate::registry_provision::{Error, RegistryTransport};
 use crate::{
-    lock::Artifact,
+    lock::{Artifact, Platform},
     package_manager::{CorepackIntegrity, Manager},
     registry_metadata::{RegistryArtifact, RegistryMetadataError},
 };
@@ -25,6 +27,8 @@ pub struct ResolvedRegistry {
     /// Modern Yarn `bin/yarn.js` SHA-256/SHA-512, which Corepack pins instead
     /// of the registry tarball.
     bundle: Option<(String, String)>,
+    /// Native pnpm's verified platform packages, one per locked platform.
+    natives: BTreeMap<Platform, Artifact>,
 }
 impl ResolvedRegistry {
     pub(crate) fn new(
@@ -32,6 +36,7 @@ impl ResolvedRegistry {
         artifact: Artifact,
         sha224: String,
         bundle: Option<(String, String)>,
+        natives: BTreeMap<Platform, Artifact>,
     ) -> Self {
         Self {
             manager: release.manager,
@@ -40,6 +45,7 @@ impl ResolvedRegistry {
             integrity: release.integrity,
             sha224,
             bundle,
+            natives,
         }
     }
     pub fn manager(&self) -> Manager {
@@ -48,6 +54,7 @@ impl ResolvedRegistry {
     pub fn version(&self) -> &Version {
         &self.version
     }
+    /// The registry package itself, which authored integrity pins describe.
     pub fn artifact(&self) -> &Artifact {
         &self.artifact
     }
@@ -83,6 +90,27 @@ impl ResolvedRegistry {
     }
     pub fn into_artifact(self) -> Artifact {
         self.artifact
+    }
+    /// Portable lock artifacts: the package for any platform, or, for native
+    /// pnpm, each platform's verified binary package beside the same package.
+    pub fn into_artifacts(self) -> BTreeMap<Platform, BTreeMap<String, Artifact>> {
+        if self.natives.is_empty() {
+            return BTreeMap::from([(
+                Platform::Any,
+                BTreeMap::from([("package".into(), self.artifact)]),
+            )]);
+        }
+        let package = self.artifact;
+        self.natives
+            .into_iter()
+            .map(|(platform, native)| {
+                let parts = [
+                    ("native".into(), native),
+                    ("package".into(), package.clone()),
+                ];
+                (platform, BTreeMap::from(parts))
+            })
+            .collect()
     }
 }
 
