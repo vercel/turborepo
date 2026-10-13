@@ -1,7 +1,8 @@
 //! Windows PowerShell 5.1 and PowerShell 7 prompts on native Windows, driving
 //! `turbo hook powershell` against repositories with real Windows generations
-//! and trusted setup records. Setup refuses Windows arm64 hosts, so nothing
-//! activates there even with a record present.
+//! and trusted setup records, under a non-ASCII directory that PowerShell
+//! would decode with the console code page. Setup refuses Windows arm64
+//! hosts, so nothing activates there even with a record present.
 #![cfg(windows)]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -16,8 +17,11 @@ use std::{
 
 use turborepo_tool_install::{Store, Tool};
 
-// A duplicate entry proves the hook removes only what it added.
-const BASE_PATH: &str = r"C:\Windows\System32;C:\Windows;C:\Windows\System32\WindowsPowerShell\v1.0;C:\Windows\System32";
+// A duplicate entry proves the hook removes only what it added, and a
+// non-ASCII entry that a console code page cannot corrupt it.
+const BASE_PATH: &str = "C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32\\\
+                         WindowsPowerShell\\v1.0;C:\\Windows\\System32;C:\\J\u{fc}rgen\u{2019}s \
+                         tools";
 const PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
 
 /// The hook reads the real user state directory, which `LOCALAPPDATA` does
@@ -78,30 +82,36 @@ fn repo(dir: &Path, flagged: bool, records: Option<&mut Records>) -> Option<Stri
     Some(bin)
 }
 
+/// Prints `key=<UTF-8 hex>`, so the console code page cannot change what the
+/// test reads.
+const SHOW: &str = "function Show($key, $value) { \"$key=\" + (-join \
+                    ([Text.Encoding]::UTF8.GetBytes([string]$value) | ForEach-Object { \
+                    $_.ToString('x2') })) }";
+
 /// PowerShell commands, each followed by a prompt.
 const STEPS: &[&str] = &[
-    r#""start=$env:PATH""#,
+    "Show start $env:PATH",
     "cd ../a/apps/web",
-    r#""a=$env:PATH""#,
-    r#""node=$(node /d /c echo managed-node)""#,
-    r#""npm=$(npm a b)""#,
+    "Show a $env:PATH",
+    "Show node (node /d /c echo managed-node)",
+    "Show npm (npm a b)",
     // Without `.CMD`, PowerShell cannot reach the npm forwarder.
     "$env:PATHEXT = '.COM;.EXE;.BAT'",
-    r#""pathext=$env:PATH""#,
+    "Show pathext $env:PATH",
     "$env:PATHEXT = '.COM;.EXE;.BAT;.CMD'",
-    r#""restored=$env:PATH""#,
+    "Show restored $env:PATH",
     "cd ../../vendor/c",
-    r#""nested=$env:PATH""#,
+    "Show nested $env:PATH",
     "cd ../../../b",
-    r#""b=$env:PATH""#,
+    "Show b $env:PATH",
     "Add-Content turbo.lock ' '",
-    r#""stale=$env:PATH""#,
+    "Show stale $env:PATH",
     "Remove-Item -Recurse -Force .turbo/tools",
-    r#""removed=$env:PATH""#,
+    "Show removed $env:PATH",
     "cd ../off",
-    r#""off=$env:PATH""#,
+    "Show off $env:PATH",
     "cd ../plain",
-    r#""end=$env:PATH|$env:__TURBO_HOOK_STATE""#,
+    "Show end \"$env:PATH|$env:__TURBO_HOOK_STATE\"",
 ];
 
 fn journey(shell: &str) {
@@ -110,23 +120,26 @@ fn journey(shell: &str) {
         return;
     };
     let refused = common::windows_arm64_host();
-    let temp = tempfile::tempdir().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    // Like a profile under a non-ASCII user name. PowerShell itself would
+    // close a single-quoted literal at the typographic quote.
+    let temp = dir.path().join("J\u{fc}rgen\u{2019}s");
     let mut records = Records::default();
-    let a = repo(&temp.path().join("a"), true, Some(&mut records)).unwrap();
-    let b = repo(&temp.path().join("b"), true, Some(&mut records)).unwrap();
+    let a = repo(&temp.join("a"), true, Some(&mut records)).unwrap();
+    let b = repo(&temp.join("b"), true, Some(&mut records)).unwrap();
     // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
-    repo(&temp.path().join(r"a\vendor\c"), true, None);
-    repo(&temp.path().join("off"), false, Some(&mut records));
-    fs::create_dir(temp.path().join("plain")).unwrap();
+    repo(&temp.join(r"a\vendor\c"), true, None);
+    repo(&temp.join("off"), false, Some(&mut records));
+    fs::create_dir(temp.join("plain")).unwrap();
 
     let turbo = assert_cmd::cargo::cargo_bin("turbo");
     let mut script = format!(
-        "Invoke-Expression (& '{}' hook powershell | Out-String)\n$null = prompt\n",
+        "{SHOW}\nInvoke-Expression (& '{}' hook powershell | Out-String)\n$null = prompt\n",
         turbo.display()
     );
     for step in STEPS {
         // Nothing to run where the hook activates nothing.
-        if refused && (step.contains("node=") || step.contains("npm=")) {
+        if refused && (step.starts_with("Show node") || step.starts_with("Show npm")) {
             continue;
         }
         // Without a console PowerShell never draws a prompt; call it instead.
@@ -135,7 +148,7 @@ fn journey(shell: &str) {
     script.push_str("exit\n");
     let mut child = Command::new(program)
         .args(["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", "-"])
-        .current_dir(temp.path().join("plain"))
+        .current_dir(temp.join("plain"))
         .env("PATH", BASE_PATH)
         .env("PATHEXT", PATHEXT)
         .env_remove("__TURBO_HOOK_STATE")
@@ -156,11 +169,15 @@ fn journey(shell: &str) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let value = |key: &str| {
-        stdout
+        let hex = stdout
             .lines()
             .find_map(|line| line.strip_prefix(&format!("{key}=")))
-            .unwrap_or_else(|| panic!("{key} missing\nstdout:\n{stdout}\nstderr:\n{stderr}"))
-            .to_owned()
+            .unwrap_or_else(|| panic!("{key} missing\nstdout:\n{stdout}\nstderr:\n{stderr}"));
+        let bytes = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
+            .collect();
+        String::from_utf8(bytes).unwrap()
     };
     // PowerShell 7 may add its own directory at startup.
     let start = value("start");
