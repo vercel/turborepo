@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use turborepo_tool_install::{Current, Store, Tool, Verification};
+use turborepo_tool_install::{Current, Record, Store, Tool, Verification};
 
 use crate::{
     artifact_provision::{self, ArtifactPlan},
@@ -80,6 +80,8 @@ pub enum Error {
     Sources(#[from] StorageError),
     #[error("cannot select the locked execution snapshot; run turbo setup: {0}")]
     Selection(#[from] crate::execution_identity::Error),
+    #[error("invalid clone-local setup selection; run turbo setup --no-lock")]
+    InvalidSelection,
     #[error("cannot compose managed PATH with the caller PATH: {0}")]
     Path(#[from] std::env::JoinPathsError),
 }
@@ -143,6 +145,53 @@ impl ActivationPlan {
         Self::verify_captured(&sources, context)
     }
 
+    /// A `turbo setup --no-lock` clone: plan the sealed clone-local selection
+    /// its generation records, in place of turbo.lock, with the same
+    /// declaration, adapter and installation checks. A turbo.lock in the root
+    /// is the committed resolution and is never overridden. Node/npm/pnpm
+    /// ecosystems only, like `--no-lock` setup. The snapshot identity is
+    /// clone-local (see `ExecutionSnapshot::select_clone_local`).
+    pub fn inspect_clone_local(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
+        Self::qualify(&context)?;
+        let sources = Snapshot::capture(repo)?;
+        Self::clone_local(&sources, context, Verification::Stamped)
+    }
+
+    /// `inspect_clone_local` over the caller's original sources, re-hashing
+    /// all installed bytes.
+    pub fn verify_clone_local_captured(
+        sources: &Snapshot,
+        context: ExecutionContext,
+    ) -> Result<Self, Error> {
+        Self::clone_local(sources, context, Verification::Full)
+    }
+
+    fn clone_local(
+        sources: &Snapshot,
+        context: ExecutionContext,
+        verification: Verification,
+    ) -> Result<Self, Error> {
+        Self::qualify(&context)?;
+        sources.ensure_current()?;
+        if sources.previous_lock().is_some() {
+            return Err(StorageError::Conflict.into());
+        }
+        let current = Store::inspect(sources.repository_root())
+            .map_err(Error::DamagedInventory)?
+            .ok_or(Error::MissingInventory)?;
+        let record = current.record.ok_or(Error::StaleInventory)?;
+        let native = crate::native_baseline::NativeRecord::decode(record.bytes())
+            .map_err(|_| Error::InvalidSelection)?;
+        Self::from_selection(
+            sources.repository_root(),
+            sources,
+            native.selection(),
+            Some(&record),
+            context,
+            verification,
+        )
+    }
+
     fn captured(
         sources: &Snapshot,
         context: ExecutionContext,
@@ -175,6 +224,19 @@ impl ActivationPlan {
         verification: Verification,
     ) -> Result<Self, Error> {
         let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
+        Self::from_selection(repo, sources, lock, None, context, verification)
+    }
+
+    /// `lock` is turbo.lock, or with `recorded`, the clone-local selection
+    /// decoded from that exact generation record.
+    fn from_selection(
+        repo: &Path,
+        sources: &Snapshot,
+        lock: &Lock,
+        recorded: Option<&Record>,
+        context: ExecutionContext,
+        verification: Verification,
+    ) -> Result<Self, Error> {
         let python = sources.ecosystems().python;
         if !lock.tools().is_empty()
             && lock
@@ -204,7 +266,7 @@ impl ActivationPlan {
             return Err(Error::DeclarationDrift);
         }
         sources
-            .check_native_coverage(None)
+            .check_native_coverage(Some(lock))
             .map_err(|_| Error::InvalidLock)?;
         // Additional-tool entries are projections of the root configuration,
         // so any difference, including a removed declaration, is drift.
@@ -316,12 +378,16 @@ impl ActivationPlan {
         // Inventory records its cohort in ID order.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
-        let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
+        let snapshot = match recorded {
+            None => ExecutionSnapshot::select(lock, context, &selected)?,
+            Some(_) => ExecutionSnapshot::select_clone_local(lock, context, &selected)?,
+        };
         let current = Store::inspect_with(repo, verification)
             .map_err(Error::DamagedInventory)?
             .ok_or(Error::MissingInventory)?;
         // Complete set equality prevents unrelated exports sharing our PATH.
-        if current.tools != tools {
+        // A clone-local plan also stays bound to the record it decoded.
+        if current.tools != tools || recorded.is_some_and(|r| current.record.as_ref() != Some(r)) {
             return Err(Error::StaleInventory);
         }
         if let Some(node) = &node {

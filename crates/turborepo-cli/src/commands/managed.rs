@@ -5,8 +5,9 @@ use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 
 use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
 use turborepo_setup::execution_identity::{ExecutionContext, Libc};
+use turborepo_tool_install::Store;
 
-use crate::commands::setup::authorization::Authorization;
+use crate::commands::setup::authorization::{self, Authorization};
 
 pub(crate) fn select(
     base: &crate::commands::CommandBase,
@@ -16,16 +17,17 @@ pub(crate) fn select(
     }
     // These initial managed adapters must not probe unprovisioned native tools.
     let flags = &base.opts.future_flags;
+    let managed = || {
+        std::fs::symlink_metadata(base.repo_root.join_component("turbo.lock")).is_ok()
+            || Store::selects_record(base.repo_root.as_std_path()).unwrap_or(true)
+    };
     for (enabled, marker) in [
         (flags.experimental_cargo_workspaces, "Cargo.toml"),
         (flags.experimental_python_workspaces, "pyproject.toml"),
         (flags.experimental_go_workspaces, "go.work"),
         (flags.experimental_go_workspaces, "go.mod"),
     ] {
-        if enabled
-            && base.repo_root.join_component(marker).exists()
-            && std::fs::symlink_metadata(base.repo_root.join_component("turbo.lock")).is_ok()
-        {
+        if enabled && base.repo_root.join_component(marker).exists() && managed() {
             return Err(turborepo_run::Error::ManagedTools(
                 "initial managed run supports Node/pnpm JS repositories only; use a supported \
                  setup adapter"
@@ -51,9 +53,13 @@ pub(crate) struct ManagedTools {
     inherited_path: Option<OsString>,
     identity: String,
     ci: bool,
+    clone_local: bool,
 }
 
 impl ManagedTools {
+    /// A root turbo.lock, or without one the sealed selection of this clone's
+    /// `turbo setup --no-lock` generation, selects managed mode. Either way
+    /// activation is equally strict and never downloads.
     pub(crate) fn inspect(
         root: &Path,
         config: &Path,
@@ -65,11 +71,19 @@ impl ManagedTools {
         if !enabled {
             return Ok(None);
         }
-        match std::fs::symlink_metadata(root.join("turbo.lock")) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        let clone_local = match std::fs::symlink_metadata(root.join("turbo.lock")) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                // Lock-only leftovers and ordinary repositories stay unmanaged.
+                if !Store::selects_record(root).map_err(|e| {
+                    format!("cannot read managed tools; run turbo setup --no-lock: {e}")
+                })? {
+                    return Ok(None);
+                }
+                true
+            }
             Err(error) => return Err(format!("cannot read turbo.lock; run turbo setup: {error}")),
-            Ok(_) => {}
-        }
+            Ok(_) => false,
+        };
         let canonical = root.canonicalize().map_err(|e| e.to_string())?;
         if config
             .parent()
@@ -86,20 +100,34 @@ impl ManagedTools {
             );
         }
         let ci = turborepo_ci::is_ci();
-        let authorization = Authorization::inspect(&canonical, user_base, context()?)
-            .map_err(|e| e.guidance(ci))?;
+        let explain = |e: authorization::Error| guidance(&e, ci, clone_local);
+        let authorization = if clone_local {
+            Authorization::inspect_clone_local(&canonical, user_base, context()?)
+        } else {
+            Authorization::inspect(&canonical, user_base, context()?)
+        }
+        .map_err(explain)?;
         let snapshot = authorization
             .with_current(|p| p.snapshot().clone())
-            .map_err(|e| e.guidance(ci))?;
+            .map_err(explain)?;
         let identity = snapshot.fingerprint().to_owned();
         let tools = Arc::new(Self {
             authorization,
             inherited_path: std::env::var_os("PATH"),
             identity,
             ci,
+            clone_local,
         });
         tools.revalidate()?;
         Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
+    }
+}
+
+fn guidance(error: &authorization::Error, ci: bool, clone_local: bool) -> String {
+    if clone_local {
+        error.no_lock_guidance()
+    } else {
+        error.guidance(ci)
     }
 }
 
@@ -128,7 +156,7 @@ impl ManagedEnvironment for ManagedTools {
                 }
                 Ok(overrides)
             })
-            .map_err(|e| e.guidance(self.ci))?
+            .map_err(|e| guidance(&e, self.ci, self.clone_local))?
     }
 
     fn cache_identity(&self) -> &str {

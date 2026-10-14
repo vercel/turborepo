@@ -472,3 +472,20 @@ fn replaced_root_rejected_at_entry_even_with_identical_manifest_bytes() {
             .is_err()
     );
 }
+
+#[test]
+fn selects_record_reads_only_the_manifest_selection() {
+    let repo = tempfile::tempdir().unwrap();
+    assert!(!Store::selects_record(repo.path()).unwrap());
+    let mut store = Store::open(repo.path()).unwrap();
+    store.reconcile(&[tool("node")], populate).unwrap();
+    assert!(!Store::selects_record(repo.path()).unwrap());
+    select(&mut store, &[tool("node")], &record("selection"), false);
+    assert!(Store::selects_record(repo.path()).unwrap());
+    // A hint only: damaged trees still select the record; readiness is separate.
+    let generation = store.current().unwrap().unwrap().bin;
+    fs::remove_dir_all(generation.parent().unwrap()).unwrap();
+    assert!(Store::selects_record(repo.path()).unwrap());
+    fs::write(repo.path().join(".turbo/tools/manifest.json"), "{}").unwrap();
+    assert!(Store::selects_record(repo.path()).is_err());
+}
