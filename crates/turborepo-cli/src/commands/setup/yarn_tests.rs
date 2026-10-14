@@ -104,3 +104,34 @@ fn provisions_checks_repeats_and_rejects_drift(version: &str, package: &str, dri
 fn locked_yarn_classic_provisions_checks_repeats_and_rejects_frozen_drift() {
     provisions_checks_repeats_and_rejects_drift("1.22.22", "yarn", "yarn@1.22.21");
 }
+
+#[test]
+fn yarn_without_node_rejects_before_writers_even_with_native_uv() {
+    let (f, u) = yarn("1.22.22", "yarn");
+    let root = f.owned.root();
+    fs::remove_file(root.join(".nvmrc")).unwrap();
+    fs::remove_file(root.join("turbo.lock")).unwrap();
+    fs::write(
+        root.join("turbo.json"),
+        r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true}}"#,
+    )
+    .unwrap();
+    fs::write(root.join("uv.toml"), "required-version = '>=0.9.0'\n").unwrap();
+    let before: Vec<_> = ["package.json", "turbo.json", "uv.toml", ".gitignore"]
+        .map(|name| (name, fs::read(root.join(name)).unwrap()))
+        .into();
+    let error = f.run(&u, &["--tools-only", "--no-frozen"]).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("a native Node declaration is required"),
+        "{error}"
+    );
+    assert_eq!(u.hits(), 0);
+    assert!(!root.join(".turbo").exists());
+    assert!(!root.join("turbo.lock").exists());
+    for (name, bytes) in before {
+        assert_eq!(fs::read(root.join(name)).unwrap(), bytes);
+    }
+    f.no_execution();
+}

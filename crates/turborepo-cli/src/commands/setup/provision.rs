@@ -345,7 +345,9 @@ pub(super) fn lock_report(
 /// ecosystems that join resolution extend these, never one caller.
 pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
     let declared = snapshot.declarations();
-    let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
+    let js_manager = declared.contains_key("npm")
+        || declared.contains_key("pnpm")
+        || declared.contains_key("yarn");
     if !declared.contains_key("node")
         && (js_manager
             || (!declared.contains_key("uv")
