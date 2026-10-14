@@ -282,7 +282,7 @@ fn run_with_policy(
     if snapshot.previous_lock().is_some_and(|lock| {
         lock.tools().values().any(|tool| {
             let id = match tool.adapter.as_str() {
-                "node" | "npm" | "pnpm" => Some(ToolchainId::JAVASCRIPT),
+                "node" | "npm" | "pnpm" | "yarn" => Some(ToolchainId::JAVASCRIPT),
                 "rust" | "rustup" => Some(ToolchainId::RUST),
                 "uv" | "python" => Some(ToolchainId::PYTHON),
                 "go" => Some(ToolchainId::GO),
@@ -318,7 +318,7 @@ fn run_with_policy(
         if snapshot
             .declarations()
             .keys()
-            .any(|id| matches!(id.as_str(), "node" | "npm" | "pnpm"))
+            .any(|id| matches!(id.as_str(), "node" | "npm" | "pnpm" | "yarn"))
         {
             return Err(Error::Unsupported(
                 "JavaScript skip with declared JavaScript tools and managed native tools",
