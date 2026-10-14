@@ -199,6 +199,23 @@ fn invoke_path(
     (code, format!("{stdout}{stderr}"))
 }
 
+/// A run with an explicit PATH that may write when `read_only` is false, with
+/// whitespace-normalized output like `invoke`.
+fn invoke_on_path(
+    root: &Path,
+    words: &[&str],
+    ci: bool,
+    path: &std::ffi::OsStr,
+    read_only: bool,
+) -> (i32, String) {
+    let (code, stdout, stderr) = invoke_raw_options(root, words, ci, &[], Some(path), read_only);
+    let text = format!("{stdout}{stderr}")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    (code, text)
+}
+
 fn invoke(root: &Path, words: &[&str], ci: bool) -> (i32, String) {
     invoke_with(root, words, ci, &[])
 }
