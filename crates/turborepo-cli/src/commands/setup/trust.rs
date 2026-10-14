@@ -15,6 +15,8 @@ use sha2::{Digest, Sha256};
 use turborepo_tool_install::{Store, Tool};
 
 const LIMIT: u64 = 1024 * 1024;
+/// Bounds one pruning pass over the user's records.
+const MAX_RECORDS: usize = 4096;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -313,8 +315,67 @@ impl TrustStore {
 
     /// Only call under source/writer/Store guards after the cohort was freshly
     /// staged from verified artifacts or reused from matching external
-    /// evidence.
+    /// evidence. Then prunes other roots' records that can never authorize.
     pub(super) fn publish(&self, store: &Store) -> io::Result<()> {
+        self.record(store)?;
+        // Stale records already never authorize, so failing to remove one must
+        // not fail an otherwise successful setup.
+        if let Err(error) = self.prune() {
+            tracing::debug!("could not prune stale setup records: {error}");
+        }
+        Ok(())
+    }
+
+    /// Remove other roots' records whose root is gone or is now a different
+    /// directory (deleted, moved or re-cloned). Reads stay bounded and never
+    /// follow links. Unsafe, corrupt or misfiled records are left alone.
+    fn prune(&self) -> io::Result<usize> {
+        let own = self.path();
+        let mut removed = 0;
+        let entries = match fs::read_dir(&self.directory) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
+            Err(error) => return Err(error),
+        };
+        for entry in entries.take(MAX_RECORDS) {
+            let path = entry?.path();
+            if path == own || path.extension().is_none_or(|extension| extension != "json") {
+                continue;
+            }
+            let Ok(Some(bytes)) = read(&path, true) else {
+                continue;
+            };
+            let Ok(record) = serde_json::from_slice::<Record>(&bytes) else {
+                continue;
+            };
+            let installation = &record.installation;
+            let name = hash(installation.root.as_os_str().as_encoded_bytes());
+            if path != self.directory.join(format!("{name}.json")) {
+                continue;
+            }
+            let stale = match fs::metadata(&installation.root) {
+                Err(error) => error.kind() == io::ErrorKind::NotFound,
+                #[cfg(unix)]
+                Ok(metadata) => {
+                    use std::os::unix::fs::MetadataExt;
+                    (metadata.dev(), metadata.ino()) != (installation.device, installation.inode)
+                }
+                #[cfg(not(unix))]
+                Ok(_) => false,
+            };
+            // A concurrent setup may have just replaced this record; keep it.
+            if stale && read(&path, true)?.as_deref() == Some(bytes.as_slice()) {
+                fs::remove_file(&path)?;
+                removed += 1;
+            }
+        }
+        if removed > 0 {
+            File::open(&self.directory)?.sync_all()?;
+        }
+        Ok(removed)
+    }
+
+    fn record(&self, store: &Store) -> io::Result<()> {
         self.load()?;
         let installation = self.installation(store)?.ok_or_else(unsafe_state)?;
         let Some(lock) = read(&self.root.join("turbo.lock"), false)? else {
