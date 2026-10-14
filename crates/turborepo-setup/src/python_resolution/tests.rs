@@ -99,7 +99,7 @@ fn inconsistent_listings_fail_closed() {
     let mutations: [fn(&mut Value); 4] = [
         |v| v[0]["key"] = json!("cpython-3.12.11-macos-aarch64-none/../escape"),
         |v| v[0]["url"] = json!("https://example.com/cpython.tar.gz"),
-        |v| v[0]["url"] = json!(format!("{ORIGIN}{RELEASES}{TAG}/cpython-3.12.11.tar.zst")),
+        |v| v[0]["url"] = json!(format!("{ORIGIN}{RELEASES}{TAG}/../cpython-3.12.11.tar.gz")),
         |v| {
             let duplicate = v[0].clone();
             v.as_array_mut().unwrap().push(duplicate);
@@ -119,6 +119,17 @@ fn inconsistent_listings_fail_closed() {
         filename("3.12.11", TARGETS[0].3).replace('+', "%2B")
     ));
     assert!(Listing::parse(&serde_json::to_vec(&github).unwrap()).is_ok());
+    // Real uv listings include older full `.tar.zst` builds; only that
+    // uninstallable target is skipped.
+    let mut zstd = listing_json();
+    zstd[0]["url"] = json!(format!(
+        "{ORIGIN}{RELEASES}20211017/cpython-3.12.11-aarch64-apple-darwin-pgo%2Blto-20211017T1616.\
+         tar.zst"
+    ));
+    let listing = Listing::parse(&serde_json::to_vec(&zstd).unwrap()).unwrap();
+    let targets = &listing.0[&Version::new(3, 12, 11)];
+    assert!(!targets.contains_key(&Platform::MacosArm64));
+    assert!(targets.contains_key(&Platform::LinuxX64Gnu));
 }
 
 #[test]

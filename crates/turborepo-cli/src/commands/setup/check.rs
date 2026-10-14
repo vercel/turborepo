@@ -32,23 +32,13 @@ pub(super) fn run(
     tools_only: bool,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
-    // Activation readiness does not cover uv/Python yet; never report ready.
-    if sources.uv_requirement()?.is_some()
-        || sources.python_requirement()?.is_some()
-        || sources.previous_lock().is_some_and(|lock| {
-            lock.tools().contains_key("uv") || lock.tools().contains_key("python")
-        })
-    {
-        return Err(Error::Unsupported(
-            "uv and Python readiness checks are not implemented; run turbo setup --tools-only",
-        ));
-    }
     if sources.declarations().contains_key("rustup") {
         return Err(Error::Unsupported("Rust toolchain readiness checks"));
     }
     let context = context()?;
     preflight()?;
-    let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;
+    // Keep the original captured sources and their workspace-flag gating.
+    let plan = ActivationPlan::inspect_captured(&sources, context)?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.
     preflight()?;

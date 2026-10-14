@@ -7,7 +7,7 @@ use std::{fs, io, path::Path, time::Duration};
 
 use sha2::{Digest, Sha256};
 use turborepo_archive::{ExtractedArtifact, Layout};
-use turborepo_download::ExpectedSha256;
+use turborepo_download::{ExpectedSha256, VerifiedArtifact};
 use turborepo_tool_install::{Store, Tool};
 
 use crate::{
@@ -163,19 +163,47 @@ impl UvPlan {
 
     /// Download/verify/extract only, with no installation or execution.
     pub async fn download(&self, transport: &UvTransport) -> Result<PreparedUv, Error> {
+        let bytes = self.fetch(transport).await?;
+        self.extract(&bytes)
+    }
+
+    /// Like `download`, but keeps the verified archive for one later
+    /// preparation in the same setup run, so resolving Python and then
+    /// provisioning the same uv downloads it once.
+    pub async fn download_retained(&self, transport: &UvTransport) -> Result<PreparedUv, Error> {
+        let bytes = self.fetch(transport).await?;
+        let prepared = self.extract(&bytes)?;
+        if let Ok(mut retained) = transport.retained.lock() {
+            *retained = Some(bytes.into_bytes());
+        }
+        Ok(prepared)
+    }
+
+    async fn fetch(&self, transport: &UvTransport) -> Result<VerifiedArtifact, Error> {
+        let expected = || ExpectedSha256::from_hex(&self.artifact.sha256);
+        let retained = transport.retained.lock().ok().and_then(|mut r| r.take());
+        // Bytes kept for another selection fail verification and are dropped.
+        if let Some(bytes) = retained
+            && let Ok(verified) = VerifiedArtifact::verify_bytes(bytes, expected()?)
+        {
+            return Ok(verified);
+        }
         let path = self
             .artifact
             .url
             .strip_prefix(uv::ORIGIN)
             .ok_or(Error::InvalidLock)?;
-        let bytes = transport
+        Ok(transport
             .client
             .download_verified(
                 &format!("{}{path}", transport.origin),
-                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                expected()?,
                 turborepo_download::Limits::new(128 * 1024 * 1024, Duration::from_secs(120))?,
             )
-            .await?;
+            .await?)
+    }
+
+    fn extract(&self, bytes: &VerifiedArtifact) -> Result<PreparedUv, Error> {
         let required: Vec<_> = self
             .artifact
             .executables
@@ -183,7 +211,7 @@ impl UvPlan {
             .map(String::as_str)
             .collect();
         let tree = turborepo_archive::extract(
-            &bytes,
+            bytes,
             turborepo_archive::Format::TarGz,
             turborepo_archive::Limits::new(512 * 1024 * 1024, 64, 4096, 8)?,
             Layout {

@@ -8,6 +8,7 @@ const PYTHON: &str =
     r#"{"futureFlags":{"experimentalSetup":true,"experimentalPythonWorkspaces":true}}"#;
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 const REFRESH: &[&str] = &["--tools-only", "--no-frozen", "--update-lock"];
+const CHECK: &[&str] = &["--check", "--tools-only"];
 
 fn fixture(flags: &str, request: &str) -> OwnedSetupFixture {
     let owned = OwnedSetupFixture::new().unwrap();
@@ -119,12 +120,11 @@ fn python_only_local_setup_locks_installs_and_repeats_without_traffic() {
     for flags in [LOCAL, FROZEN] {
         assert_eq!(run(&owned, &upstream, flags).unwrap(), 0);
     }
-    assert_eq!(upstream.hits(), 3);
     assert_eq!(fs::read(owned.root().join("turbo.lock")).unwrap(), bytes);
-    assert!(matches!(
-        run(&owned, &upstream, &["--check", "--tools-only"]),
-        Err(Error::Unsupported(_))
-    ));
+    let before = publication_guards::state(owned.root());
+    assert_eq!(run(&owned, &upstream, CHECK).unwrap(), 0);
+    assert_eq!(publication_guards::state(owned.root()), before);
+    assert_eq!(upstream.hits(), 3);
     assert!(!owned.root().join("probe-ran").exists());
 }
 
@@ -270,14 +270,41 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
         format!("{}|only-managed|run app", tools.join("python").display())
     );
     assert!(current.bin.join("python3").exists());
-    // Resolution lists through a verified scratch uv; provisioning installs both.
+    // Resolution lists through a verified scratch uv whose archive provisioning
+    // then reuses, so it is fetched once.
+    let archive = UvArtifact::for_platform(
+        &semver::Version::new(0, 13, 0),
+        provision::platform().unwrap(),
+    )
+    .unwrap()
+    .filename();
+    let fetched = |name: &str| {
+        let requests = upstream.requests();
+        requests.iter().filter(|path| path.ends_with(name)).count()
+    };
+    assert_eq!(fetched(&archive), 1);
     let hits = upstream.hits();
-    for flags in [LOCAL, FROZEN] {
+    for flags in [LOCAL, FROZEN, CHECK] {
         assert_eq!(run(&owned, &upstream, flags).unwrap(), 0);
     }
     assert_eq!(upstream.hits(), hits);
     let committed = fs::read(owned.root().join("turbo.lock")).unwrap();
+    // Readiness follows the same workspace-flag gating as setup.
+    fs::write(owned.root().join("turbo.json"), ENABLED).unwrap();
+    assert!(matches!(
+        run(&owned, &upstream, CHECK),
+        Err(Error::Activation(
+            turborepo_setup::activation::Error::UnsupportedAdapter
+        ))
+    ));
+    fs::write(owned.root().join("turbo.json"), PYTHON).unwrap();
     fs::write(owned.root().join(".python-version"), "3.13\n").unwrap();
+    assert!(matches!(
+        run(&owned, &upstream, CHECK),
+        Err(Error::Activation(
+            turborepo_setup::activation::Error::DeclarationDrift
+        ))
+    ));
     match run(&owned, &upstream, FROZEN) {
         Err(Error::LockDiagnostics(lock_diagnostics::Error::Drift(locations))) => {
             assert_eq!(locations, "python: .python-version");

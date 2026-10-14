@@ -546,3 +546,172 @@ fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
     ));
     assert_eq!(state(repo.path()), before);
 }
+
+const PYTHON: Ecosystems = Ecosystems {
+    python: true,
+    rust: false,
+};
+const PYPROJECT: &str =
+    "[project]\nname = \"app\"\nversion = \"0.1.0\"\n[tool.uv]\nrequired-version = \">=0.13\"\n";
+
+/// Adds root uv (and optionally CPython) selections for the test context.
+fn with_python(mut value: Value, python: bool) -> Value {
+    let uv =
+        crate::uv::UvArtifact::for_platform(&semver::Version::new(0, 13, 0), Platform::MacosArm64)
+            .unwrap()
+            .lock_artifact("33".repeat(32));
+    value["tools"]["uv"] = json!({"adapter":"uv","version":"0.13.0","declarations":[],
+        "installation":{"kind":"managed","artifacts":{"macos-arm64":{"distribution":uv}}}});
+    if python {
+        let artifact = crate::python_resolution::official_artifact(
+            &semver::Version::new(3, 12, 12),
+            Platform::MacosArm64,
+            "20260211/cpython-3.12.12%2B20260211-aarch64-apple-darwin-install_only_stripped.tar.gz",
+            "44".repeat(32),
+        )
+        .unwrap();
+        value["tools"]["python"] = json!({"adapter":"python","version":"3.12.12",
+            "declarations":[],
+            "installation":{"kind":"managed","artifacts":{"macos-arm64":{"distribution":artifact}}}});
+    }
+    value
+}
+
+/// Writes root uv/Python declarations, binds the lock to them exactly as
+/// setup captures them, and installs every selected tool.
+fn python_installed(mut value: Value) -> (tempfile::TempDir, Value) {
+    let repo = tempfile::tempdir().unwrap();
+    if value["tools"].get("node").is_some() {
+        write_sources(repo.path(), &fixture());
+    }
+    fs::write(repo.path().join("pyproject.toml"), PYPROJECT).unwrap();
+    if value["tools"].get("python").is_some() {
+        fs::write(repo.path().join(".python-version"), "3.12\n").unwrap();
+    }
+    let captured = Snapshot::capture_with(repo.path(), PYTHON).unwrap();
+    for id in ["uv", "python"] {
+        if value["tools"].get(id).is_some() {
+            value["tools"][id]["declarations"] =
+                serde_json::to_value(&captured.declarations()[id]).unwrap();
+        }
+    }
+    fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
+    let lock = Lock::parse(value.to_string().as_bytes()).unwrap();
+    let mut tools = if lock.tools().contains_key("node") {
+        desired(&value, None)
+    } else {
+        Vec::new()
+    };
+    tools.push(
+        UvPlan::from_lock(&lock, Platform::MacosArm64)
+            .unwrap()
+            .inventory_tool()
+            .clone(),
+    );
+    if lock.tools().contains_key("python") {
+        let plan = PythonPlan::from_lock(&lock, Platform::MacosArm64).unwrap();
+        tools.push(plan.inventory_tool().clone());
+    }
+    seed(repo.path(), &tools);
+    (repo, value)
+}
+
+#[test]
+fn uv_and_python_export_bins_and_pin_uv_to_the_locked_interpreter() {
+    let (repo, _) = python_installed(with_python(fixture(), true));
+    let before = state(repo.path());
+    let plan = ActivationPlan::inspect_with(repo.path(), context(), PYTHON).unwrap();
+    let ids: Vec<_> = plan.tools().iter().map(|tool| tool.id.as_str()).collect();
+    assert_eq!(ids, ["node", "pnpm", "python", "uv"]);
+    assert_eq!(plan.snapshot().tools().len(), 4);
+    for name in ["node", "pnpm", "python", "python3", "uv", "uvx"] {
+        assert!(plan.path_prepend().join(name).is_file(), "{name}");
+    }
+    let python = &plan.tools()[2];
+    let tree = Store::inspect(repo.path())
+        .unwrap()
+        .unwrap()
+        .tool_tree(python)
+        .unwrap();
+    assert!(tree.join("cpython-3.12.12-macos-aarch64-none").is_dir());
+    assert_eq!(
+        plan.runtime_env(),
+        &BTreeMap::from([
+            (
+                "UV_PYTHON".into(),
+                "cpython-3.12.12-macos-aarch64-none".into()
+            ),
+            ("UV_PYTHON_DOWNLOADS".into(), "never".into()),
+            ("UV_PYTHON_INSTALL_DIR".into(), tree.into_os_string()),
+            ("UV_PYTHON_PREFERENCE".into(), "only-managed".into()),
+        ])
+    );
+    assert_eq!(state(repo.path()), before);
+}
+
+#[test]
+fn python_only_uv_mirrors_its_launchers_without_selecting_an_interpreter() {
+    let (repo, _) = python_installed(with_python(json!({"schemaVersion":0,"tools":{}}), false));
+    let plan = ActivationPlan::inspect_with(repo.path(), context(), PYTHON).unwrap();
+    assert_eq!(plan.tools().len(), 1);
+    assert_eq!(
+        plan.runtime_env(),
+        &BTreeMap::from([
+            ("UV_PYTHON_DOWNLOADS".into(), OsString::from("never")),
+            (
+                "UV_PYTHON_INSTALL_DIR".into(),
+                plan.path_prepend()
+                    .with_file_name("tools")
+                    .join("python")
+                    .into_os_string()
+            ),
+        ])
+    );
+}
+
+#[test]
+fn uv_and_python_fail_closed_when_disabled_drifted_stale_or_damaged() {
+    for change in 0..5 {
+        let (repo, value) = python_installed(with_python(fixture(), true));
+        let bin = Store::inspect(repo.path()).unwrap().unwrap().bin;
+        match change {
+            // experimentalPythonWorkspaces off: selections are not activated.
+            0 => {}
+            1 => fs::write(repo.path().join(".python-version"), "3.13\n").unwrap(),
+            2 => fs::write(
+                repo.path().join("pyproject.toml"),
+                PYPROJECT.replace(">=0.13", "<0.13"),
+            )
+            .unwrap(),
+            3 => {
+                let mut tools = desired(&value, None);
+                let lock = Lock::parse(value.to_string().as_bytes()).unwrap();
+                tools.push(
+                    UvPlan::from_lock(&lock, Platform::MacosArm64)
+                        .unwrap()
+                        .inventory_tool()
+                        .clone(),
+                );
+                seed(repo.path(), &tools);
+            }
+            _ => fs::remove_file(bin.join("python3")).unwrap(),
+        }
+        let before = state(repo.path());
+        let result = if change == 0 {
+            ActivationPlan::inspect(repo.path(), context())
+        } else {
+            ActivationPlan::inspect_with(repo.path(), context(), PYTHON)
+        };
+        assert!(
+            matches!(
+                (change, result),
+                (0, Err(Error::UnsupportedAdapter))
+                    | (1 | 2, Err(Error::DeclarationDrift))
+                    | (3, Err(Error::StaleInventory))
+                    | (4, Err(Error::DamagedInventory(_)))
+            ),
+            "{change}"
+        );
+        assert_eq!(state(repo.path()), before);
+    }
+}
