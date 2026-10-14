@@ -88,7 +88,23 @@ pub fn parse_release(
     if bytes.len() > MAX_METADATA_BYTES {
         return Err(RegistryMetadataError::TooLarge);
     }
-    let (name, version) = validate_selection(manager, exact_version)?;
+    let (name, _) = validate_selection(manager, exact_version)?;
+    parse_package(bytes, manager, name, exact_version, authored)
+}
+
+/// Like `parse_release`, for an adapter-owned registry package name such as
+/// pnpm's `@pnpm/exe.<target>` platform binaries.
+pub(crate) fn parse_package(
+    bytes: &[u8],
+    manager: Manager,
+    name: &str,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
+    if bytes.len() > MAX_METADATA_BYTES {
+        return Err(RegistryMetadataError::TooLarge);
+    }
+    let (_, version) = validate_selection(manager, exact_version)?;
     // Typed deserialization rejects duplicate security-relevant fields; ignore
     // unrelated upstream enrichment within the bounded complete JSON document.
     let mut deserializer = serde_json::Deserializer::from_slice(bytes);
@@ -101,7 +117,10 @@ pub fn parse_release(
         return Err(RegistryMetadataError::IdentityMismatch);
     }
     // Compare the literal decoded string, not a URL parser's normalized form.
-    let tarball = format!("{PUBLIC_NPM_REGISTRY}/{name}/-/{name}-{exact_version}.tgz");
+    let tarball = format!(
+        "{PUBLIC_NPM_REGISTRY}/{}",
+        tarball_path(name, exact_version)
+    );
     if document.dist.tarball != tarball {
         return Err(RegistryMetadataError::InvalidTarball);
     }
@@ -141,6 +160,13 @@ pub fn parse_release(
         integrity,
         byte_pin,
     })
+}
+
+/// Registry-relative tarball path; scoped packages drop the scope from the
+/// file name (`@pnpm/exe.linux-x64/-/exe.linux-x64-12.0.0.tgz`).
+pub(crate) fn tarball_path(name: &str, version: &str) -> String {
+    let file = name.rsplit_once('/').map_or(name, |(_, file)| file);
+    format!("{name}/-/{file}-{version}.tgz")
 }
 
 pub(crate) fn validate_selection(

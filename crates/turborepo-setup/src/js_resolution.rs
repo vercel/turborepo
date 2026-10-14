@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    lock::{self, Document, Format, Installation, Lock, Platform, Tool, reconcile::Resolution},
+    lock::{self, Document, Installation, Lock, Tool, reconcile::Resolution},
     node_provision::{NodePlan, NodeTransport},
     package_manager::{self, Declaration, Manager},
     registry_resolution::RegistryTransport,
@@ -88,23 +88,15 @@ pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Resul
     if tool.adapter != id || !tool.options.is_empty() {
         return Err(invalid());
     }
-    for parts in artifacts.values() {
-        let artifact = parts.values().next().ok_or_else(invalid)?;
-        if parts.len() != 1
-            || artifact.url != format!("https://registry.npmjs.org/{id}/-/{id}-{version}.tgz")
-            || artifact.format != Format::TarGz
-            || artifact.root_prefix.as_deref() != Some("package")
-            || artifact.destination.is_some()
-        {
-            return Err(invalid());
-        }
-        crate::registry_provision::validate_executables(
+    for (platform, parts) in artifacts {
+        let (package, _) = crate::registry_provision::locked_parts(
             declaration.manager,
             &tool.version,
-            &artifact.executables,
+            *platform,
+            parts,
         )
         .map_err(|_| invalid())?;
-        declaration.locked_integrity(&version, &artifact.sha256)?;
+        declaration.locked_integrity(&version, &package.sha256)?;
     }
     Ok(())
 }
@@ -252,10 +244,7 @@ pub(crate) async fn resolve_tools(
                 declarations: snapshot.declarations()[id].clone(),
                 options: BTreeMap::new(),
                 installation: Installation::Managed {
-                    artifacts: BTreeMap::from([(
-                        Platform::Any,
-                        BTreeMap::from([("package".into(), selected.into_artifact())]),
-                    )]),
+                    artifacts: selected.into_artifacts(),
                 },
             }
         };
