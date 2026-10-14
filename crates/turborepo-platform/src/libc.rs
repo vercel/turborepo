@@ -2,8 +2,9 @@
 //!
 //! Released Linux `turbo` binaries are statically linked against musl, so the
 //! compiled target says nothing about the host. Detection reads the ELF
-//! interpreter of `/bin/sh` and, for glibc, the release banner in the
-//! `libc.so.6` beside that loader. It never executes anything, and every read
+//! interpreter of `/bin/sh`, then for glibc the release banner in the
+//! `libc.so.6` beside that loader, and for musl the release string the loader
+//! (musl's whole `libc.so`) embeds. It never executes anything, and every read
 //! is bounded.
 
 use std::{
@@ -20,8 +21,8 @@ use crate::{Architecture, Platform};
 pub enum Libc {
     /// glibc, with the release version it reports (for example `2.39`).
     Glibc { version: String },
-    /// musl. Its version is not detected.
-    Musl,
+    /// musl, with the release version its loader embeds (for example `1.2.5`).
+    Musl { version: String },
 }
 
 /// The host's C library could not be classified. Callers must fail closed.
@@ -95,9 +96,9 @@ fn linked_glibc() -> Option<Libc> {
 
 /// Classify the C library under `root` for binaries of `arch`.
 fn detect(root: &Path, arch: Architecture) -> Result<Libc, LibcError> {
-    let (machine, glibc_loader, musl_loader) = match arch {
-        Architecture::X64 => (62, "ld-linux-x86-64.so.2", "ld-musl-x86_64.so.1"),
-        Architecture::Arm64 => (183, "ld-linux-aarch64.so.1", "ld-musl-aarch64.so.1"),
+    let (machine, glibc_loader, musl_arch) = match arch {
+        Architecture::X64 => (62, "ld-linux-x86-64.so.2", "x86_64"),
+        Architecture::Arm64 => (183, "ld-linux-aarch64.so.1", "aarch64"),
         Architecture::Unknown => return Err(LibcError::new(root, "unsupported architecture")),
     };
     let shell = root.join(SHELL);
@@ -107,15 +108,18 @@ fn detect(root: &Path, arch: Architecture) -> Result<Libc, LibcError> {
         .strip_prefix("/")
         .map_err(|_| LibcError::new(&shell, "relative ELF interpreter"))?;
     let name = relative.file_name().and_then(|name| name.to_str());
-    if name == Some(musl_loader) {
-        return Ok(Libc::Musl);
-    }
-    if name != Some(glibc_loader) {
+    let musl = name == Some(format!("ld-musl-{musl_arch}.so.1").as_str());
+    if !musl && name != Some(glibc_loader) {
         return Err(LibcError::new(&shell, "unrecognized ELF interpreter"));
     }
     let loader = root.join(relative);
     let loader = fs::canonicalize(&loader)
-        .map_err(|_| LibcError::new(&loader, "cannot resolve the glibc loader"))?;
+        .map_err(|_| LibcError::new(&loader, "cannot resolve the C library loader"))?;
+    if musl {
+        let version = musl_version(&read(&loader, MAX_LIBC_BYTES, false)?, musl_arch)
+            .ok_or_else(|| LibcError::new(&loader, "no musl release version"))?;
+        return Ok(Libc::Musl { version });
+    }
     let libc = loader.with_file_name("libc.so.6");
     let version = glibc_version(&read(&libc, MAX_LIBC_BYTES, false)?)
         .ok_or_else(|| LibcError::new(&libc, "no glibc release version"))?;
@@ -195,11 +199,6 @@ fn interpreter(bytes: &[u8], machine: u16) -> Result<String, &'static str> {
 fn glibc_version(bytes: &[u8]) -> Option<String> {
     const BANNER: &[u8] = b"GNU C Library ";
     const RELEASE: &[u8] = b" release version ";
-    let find = |haystack: &[u8], needle: &[u8]| {
-        haystack
-            .windows(needle.len())
-            .position(|window| window == needle)
-    };
     let mut rest = bytes;
     while let Some(start) = find(rest, BANNER) {
         let string = rest[start..].split(|b| *b == 0).next().unwrap_or_default();
@@ -218,6 +217,47 @@ fn glibc_version(bytes: &[u8]) -> Option<String> {
         rest = &rest[start + BANNER.len()..];
     }
     None
+}
+
+/// The release musl compiles into its loader as the NUL-terminated
+/// `__libc_version`, which the loader's own `musl libc (<arch>)` usage banner
+/// prints. Requires that banner and exactly one distinct `X.Y.Z` string, with
+/// an optional `-suffix` such as a git build's; anything else fails closed.
+fn musl_version(bytes: &[u8], arch: &str) -> Option<String> {
+    find(
+        bytes,
+        format!("musl libc ({arch})\nVersion %s\n").as_bytes(),
+    )?;
+    let release = |string: &[u8]| {
+        let (core, suffix) = string.split_at(
+            string
+                .iter()
+                .position(|b| *b == b'-')
+                .unwrap_or(string.len()),
+        );
+        let parts = || core.split(|b| *b == b'.');
+        string.len() <= 32
+            && parts().count() == 3
+            && parts().all(|part| !part.is_empty() && part.iter().all(u8::is_ascii_digit))
+            && suffix.len() != 1
+            && suffix
+                .iter()
+                .all(|b| b.is_ascii_alphanumeric() || b"-._".contains(b))
+    };
+    let mut found = None;
+    for string in bytes.split(|b| *b == 0).filter(|string| release(string)) {
+        if found.is_some_and(|found| found != string) {
+            return None;
+        }
+        found = Some(string);
+    }
+    String::from_utf8(found?.to_vec()).ok()
+}
+
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 #[cfg(test)]
@@ -288,14 +328,73 @@ mod tests {
         assert_eq!(detect(root.path(), Architecture::Arm64), Ok(glibc("2.31")));
     }
 
+    /// A musl loader's strings: the usage banner, unrelated text, a GCC note
+    /// that is not a standalone string, and the embedded release.
+    fn musl_loader(arch: &str, releases: &[&str]) -> Vec<u8> {
+        let mut bytes = format!(
+            "\x7fELF\0musl libc ({arch})\nVersion %s\nDynamic Program \
+             Loader\n\0/proc/self/fd/\0GCC: (Alpine 14.2.0) 14.2.0\0"
+        )
+        .into_bytes();
+        for release in releases {
+            bytes.extend_from_slice(release.as_bytes());
+            bytes.push(0);
+        }
+        bytes
+    }
+
     #[test]
-    fn musl_hosts_are_classified_from_the_interpreter_alone() {
-        for (arch, machine, loader) in [
-            (Architecture::X64, X64, "/lib/ld-musl-x86_64.so.1"),
-            (Architecture::Arm64, ARM64, "/lib/ld-musl-aarch64.so.1"),
+    fn musl_hosts_report_the_release_their_loader_embeds() {
+        let musl = |version: &str| {
+            Ok::<_, LibcError>(Libc::Musl {
+                version: version.into(),
+            })
+        };
+        for (arch, machine, name) in [
+            (Architecture::X64, X64, "x86_64"),
+            (Architecture::Arm64, ARM64, "aarch64"),
         ] {
-            let root = host(&[("bin/sh", &elf(machine, Some(loader)))]);
-            assert_eq!(detect(root.path(), arch), Ok(Libc::Musl));
+            let loader = format!("lib/ld-musl-{name}.so.1");
+            let shell = elf(machine, Some(&format!("/{loader}")));
+            for (releases, expected) in [
+                (&["1.2.5"][..], musl("1.2.5")),
+                // Repeats of one release and git builds are unambiguous.
+                (&["1.1.24", "1.1.24"][..], musl("1.1.24")),
+                (
+                    &["1.2.5-git-12-gabcdef0"][..],
+                    musl("1.2.5-git-12-gabcdef0"),
+                ),
+            ] {
+                let contents = musl_loader(name, releases);
+                let root = host(&[("bin/sh", &shell), (loader.as_str(), &contents)]);
+                assert_eq!(detect(root.path(), arch), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn unrecognized_musl_loaders_fail_closed() {
+        let loader = "lib/ld-musl-x86_64.so.1";
+        let shell = elf(X64, Some("/lib/ld-musl-x86_64.so.1"));
+        let root = host(&[("bin/sh", &shell)]);
+        assert_eq!(
+            rejected(&root, Architecture::X64),
+            "cannot resolve the C library loader"
+        );
+        for contents in [
+            // Another architecture's loader, or no banner at all.
+            musl_loader("aarch64", &["1.2.5"]),
+            b"1.2.5\0".to_vec(),
+            // No release, a malformed one, or two different ones.
+            musl_loader("x86_64", &[]),
+            musl_loader("x86_64", &["1.2", "1.2.5-", "v1.2.5", "1.2.x"]),
+            musl_loader("x86_64", &["1.2.4", "1.2.5"]),
+        ] {
+            let root = host(&[("bin/sh", &shell), (loader, &contents)]);
+            assert_eq!(
+                rejected(&root, Architecture::X64),
+                "no musl release version"
+            );
         }
     }
 
@@ -335,7 +434,7 @@ mod tests {
         let root = host(&[("bin/sh", &shell)]);
         assert_eq!(
             rejected(&root, Architecture::X64),
-            "cannot resolve the glibc loader"
+            "cannot resolve the C library loader"
         );
         assert_eq!(
             rejected(&root, Architecture::Unknown),

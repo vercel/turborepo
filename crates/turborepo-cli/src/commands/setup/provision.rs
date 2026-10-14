@@ -192,7 +192,7 @@ fn glibc_host(platform: Platform) -> Result<Platform, Error> {
     use turborepo_platform::Libc;
     match turborepo_platform::host_libc() {
         Ok(Some(Libc::Glibc { .. })) => Ok(platform),
-        Ok(Some(Libc::Musl)) => Err(Error::MuslHost),
+        Ok(Some(Libc::Musl { .. })) => Err(Error::MuslHost),
         Ok(None) => Err(Error::Unsupported(
             "managed promotion requires macOS or GNU Linux",
         )),

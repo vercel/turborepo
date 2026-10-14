@@ -264,6 +264,24 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
     assert!(select(&f).is_err()); // Lock exists, but setup never prepared evidence.
     assert!(!f.owned.home().join("turborepo").exists());
     assert!(!f.owned.root().join(".turbo").exists());
+    // A managed lock on a musl host gets musl guidance, not `turbo setup`,
+    // before any user state is read.
+    let musl = || {
+        use turborepo_platform::{Architecture, OperatingSystem, Platform};
+        turborepo_setup::execution_identity::ExecutionContext::new(
+            Platform::new(OperatingSystem::Linux, Architecture::X64),
+            turborepo_setup::execution_identity::Libc::Musl {
+                abi: "1.2.5".into(),
+            },
+            "x86_64-linux-6.1".into(),
+            std::collections::BTreeSet::from(["baseline".to_owned()]),
+        )
+        .map_err(|e| e.to_string())
+    };
+    let error = ManagedTools::inspect(f.owned.root(), &config, true, f.owned.home(), musl);
+    let error = error.err().unwrap();
+    assert!(error.contains("not supported on musl"), "{error}");
+    assert!(!error.contains("run turbo setup"), "{error}");
     // Cargo repositories are no longer refused; they need the same setup.
     fs::write(
         f.owned.root().join("Cargo.toml"),

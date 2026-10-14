@@ -101,6 +101,12 @@ impl ExecutionContext {
     pub fn artifact_platform(&self) -> Platform {
         self.artifact_platform
     }
+
+    /// musl Linux, which has no official managed artifacts: only
+    /// verify-system tools activate there.
+    pub fn musl(&self) -> bool {
+        matches!(self.libc, Libc::Musl { .. })
+    }
 }
 
 fn token(value: &str) -> bool {
