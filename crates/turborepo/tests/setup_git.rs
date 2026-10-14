@@ -32,6 +32,11 @@ fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
 /// Runs standalone turbo without HTTP access. Returns the exit code and
 /// combined output without wrapping or gutters.
 fn turbo(root: &Path, words: &[&str], path: &Path) -> (i32, String) {
+    let home = tempfile::tempdir().unwrap();
+    turbo_with_home(root, words, path, home.path())
+}
+
+fn turbo_with_home(root: &Path, words: &[&str], path: &Path, home: &Path) -> (i32, String) {
     let proxy = TcpListener::bind("127.0.0.1:0").unwrap();
     proxy.set_nonblocking(true).unwrap();
     let url = format!("http://{}", proxy.local_addr().unwrap());
@@ -40,10 +45,11 @@ fn turbo(root: &Path, words: &[&str], path: &Path) -> (i32, String) {
         .current_dir(root)
         .args(words)
         .env("PATH", path)
-        .env("HOME", root.join("home"))
-        .env("XDG_CONFIG_HOME", root.join("config"))
-        .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
-        .env("VERCEL_CONFIG_DIR_PATH", root.join("config"))
+        .env("HOME", home)
+        .env("XDG_DATA_HOME", home.join("data"))
+        .env("XDG_CONFIG_HOME", home.join("config"))
+        .env("TURBO_CONFIG_DIR_PATH", home.join("config"))
+        .env("VERCEL_CONFIG_DIR_PATH", home.join("config"))
         .env("TURBO_TELEMETRY_DISABLED", "1")
         .env("DO_NOT_TRACK", "1")
         .env("HTTP_PROXY", &url)
@@ -212,11 +218,47 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     };
     let mut store = turborepo_tool_install::Store::open(&root).unwrap();
     store.reconcile(&tools, stage).unwrap();
+    // Inventory alone is not authority. Seed the same private, external
+    // receipt that verified setup publishes, without weakening its guards.
+    let home = tempfile::tempdir().unwrap();
+    let records = home.path().join(if cfg!(target_os = "macos") {
+        "Library/Application Support/turborepo/setup-roots"
+    } else {
+        "data/turborepo/setup-roots"
+    });
+    fs::create_dir_all(&records).unwrap();
+    fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
+    let canonical_root = root.canonicalize().unwrap();
+    assert!(!records.starts_with(&canonical_root));
+    use std::os::unix::fs::MetadataExt;
+
+    use sha2::{Digest, Sha256};
+    let hash = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    let identity = fs::metadata(&canonical_root).unwrap();
+    let current = store.current().unwrap().unwrap();
+    let record = serde_json::json!({
+        "schema": 1,
+        "lock_sha256": hash(&fs::read(root.join("turbo.lock")).unwrap()),
+        "installation": {
+            "root": canonical_root,
+            "device": identity.dev(),
+            "inode": identity.ino(),
+            "manifest_sha256": hash(&fs::read(root.join(".turbo/tools/manifest.json")).unwrap()),
+            "bin": current.bin,
+            "tools": current.tools,
+        },
+    });
+    let receipt = records.join(format!(
+        "{}.json",
+        hash(canonical_root.as_os_str().as_encoded_bytes())
+    ));
+    fs::write(&receipt, serde_json::to_vec(&record).unwrap()).unwrap();
+    fs::set_permissions(&receipt, fs::Permissions::from_mode(0o600)).unwrap();
     drop(store);
 
     // Docker images often lack Git too; neither run needs it here.
     let frozen = ["setup", "--frozen", "--tools-only"];
-    let (code, text) = turbo(&root, &frozen, Path::new(""));
+    let (code, text) = turbo_with_home(&root, &frozen, Path::new(""), home.path());
     if system_policy_blocked(&text) {
         return;
     }
@@ -226,7 +268,12 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
         "{text}"
     );
     assert!(text.contains("NoGitrepositoryfound"), "{text}");
-    let (code, text) = turbo(&root, &["setup", "--check", "--tools-only"], Path::new(""));
+    let (code, text) = turbo_with_home(
+        &root,
+        &["setup", "--check", "--tools-only"],
+        Path::new(""),
+        home.path(),
+    );
     assert_eq!(code, 0, "{text}");
     assert!(text.contains("node24.0.0:ready"), "{text}");
 
@@ -243,13 +290,13 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
             .unwrap()
             .success()
     );
-    let (code, text) = turbo(&root, &frozen, Path::new(""));
+    let (code, text) = turbo_with_home(&root, &frozen, Path::new(""), home.path());
     assert_eq!(code, 1, "{text}");
     assert!(
         text.contains("couldnotrun`git`:itwasnotfoundonPATH"),
         "{text}"
     );
-    let (code, text) = turbo(&root, &frozen, bin.path());
+    let (code, text) = turbo_with_home(&root, &frozen, bin.path(), home.path());
     assert_eq!(code, 1, "{text}");
     assert!(text.contains("add/.turbo/to.gitignore"), "{text}");
 }
