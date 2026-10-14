@@ -845,3 +845,98 @@ fn missing_stale_and_rewritten_npm_locks_fail_readably_and_stay_unchanged() {
     );
     n.no_tasks();
 }
+
+const NO_LOCK: &[&str] = &["--no-lock", "--tools-only"];
+fn selection(f: &Fixture) -> Lock {
+    let current = turborepo_tool_install::Store::inspect(f.owned.root())
+        .unwrap()
+        .unwrap();
+    Lock::parse(current.record.unwrap().bytes()).unwrap()
+}
+
+#[test]
+fn npm_no_lock_provisions_bundled_or_registry_npm_that_turbo_run_activates() {
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        let f = &n.f;
+        let root = f.owned.root();
+        fs::remove_file(root.join("turbo.lock")).unwrap();
+        let u = n.upstream();
+        assert_eq!(f.run(&u, NO_LOCK).unwrap(), 0);
+        assert_eq!(u.hits(), if bundled { 3 } else { 7 });
+        assert!(!root.join("turbo.lock").exists());
+        let pinned = selection(f);
+        let npm = &pinned.tools()["npm"];
+        assert_eq!(npm.version, n.version);
+        assert_eq!(
+            matches!(npm.installation, Installation::Bundled { .. }),
+            bundled
+        );
+        let current = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.tools.len(), if bundled { 1 } else { 2 });
+        // Healthy repeats keep pins and generation without traffic.
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        assert_eq!(f.run(&empty, NO_LOCK).unwrap(), 0);
+        assert_eq!(empty.hits(), 0);
+        assert_eq!(selection(f), pinned);
+        let repeat = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(repeat.bin, current.bin);
+        // Plain turbo run puts the same clone-local npm first on PATH.
+        let tools = crate::commands::managed::ManagedTools::inspect(
+            root,
+            &root.join("turbo.json"),
+            true,
+            f.owned.home(),
+            crate::commands::managed::context,
+        )
+        .unwrap()
+        .unwrap();
+        let overrides = tools.revalidate().unwrap();
+        let first = std::env::split_paths(std::ffi::OsStr::new(&overrides["PATH"]))
+            .next()
+            .unwrap();
+        for name in ["node", "npm", "npx"] {
+            assert!(first.join(name).is_file(), "{name}");
+        }
+        n.untouched();
+    }
+}
+
+#[test]
+fn npm_no_lock_pin_change_reconciles_owners_without_a_lock() {
+    let mut n = NpmFixture::new(true);
+    let root = n.f.owned.root().to_owned();
+    fs::remove_file(root.join("turbo.lock")).unwrap();
+    n.f.run(&n.upstream(), NO_LOCK).unwrap();
+    let before = selection(&n.f).tools()["node"].clone();
+    n.version = "11.0.0".into();
+    n.npm = NpmFixture::package(&n.version);
+    fs::write(
+        root.join("package.json"),
+        r#"{"packageManager":"npm@11.0.0"}"#,
+    )
+    .unwrap();
+    let u = n.upstream();
+    n.f.run(&u, NO_LOCK).unwrap();
+    assert_eq!(u.hits(), 5); // Ownership changes restage the exact same Node artifact.
+    assert!(!root.join("turbo.lock").exists());
+    let after = selection(&n.f);
+    assert_eq!(after.tools()["node"].version, before.version);
+    assert!(matches!(
+        after.tools()["npm"].installation,
+        Installation::Managed { .. }
+    ));
+    let current = turborepo_tool_install::Store::inspect(&root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.tools.len(), 2);
+    for name in ["npm", "npx"] {
+        let shim = fs::read_to_string(current.bin.join(name)).unwrap();
+        assert!(shim.contains(&format!("$tools/npm/bin/{name}-cli.js")));
+    }
+    n.untouched();
+}

@@ -4,7 +4,7 @@ use std::{io, path::Path};
 
 use turborepo_setup::{
     Preparation, ephemeral_reconcile,
-    lock::{Snapshot, reconcile},
+    lock::{Installation, Snapshot, reconcile},
     native_baseline::NativeRecord,
     source_policy::OfficialSourcePolicy,
 };
@@ -27,7 +27,7 @@ pub(super) fn run(
     }
     if let Some(id) = declared
         .keys()
-        .find(|id| !matches!(id.as_str(), "node" | "pnpm"))
+        .find(|id| !matches!(id.as_str(), "node" | "npm" | "pnpm"))
     {
         return Err(Error::NoLockTool(id.clone()));
     }
@@ -110,16 +110,23 @@ pub(super) fn run(
         (_, Some(native)) => native.selection(),
         _ => return Err(Error::Unsupported("missing native selection")),
     };
-    // NativeRecord::preflight rejects managed npm declarations; --no-lock
-    // provisions only Node and pnpm, preserving Node's bundled npm.
-    let provision::Plans { node, pnpm, .. } = provision::plans(&snapshot, selection)?;
+    // NativeRecord::preflight admits only Node with npm or pnpm; Node-bundled
+    // npm adds no tool and stays bound to Node's bytes.
+    let provision::Plans {
+        node, pnpm, npm, ..
+    } = provision::plans(&snapshot, selection)?;
+    let bundled_npm = selection
+        .tools()
+        .get("npm")
+        .filter(|npm| matches!(npm.installation, Installation::Bundled { .. }))
+        .map(|npm| npm.version.clone());
     let node = node.ok_or(Error::Unsupported("a native Node declaration is required"))?;
+    // At most one manager tool: pnpm, or npm unless Node bundles it.
     let mut desired = vec![node.inventory_tool().clone()];
-    if let Some(pnpm) = &pnpm {
-        desired.push(pnpm.inventory_tool().clone());
-    }
+    desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(npm.as_ref().map(|plan| plan.inventory_tool().clone()));
     let expected = store.generation().or_else(|_| store.repair_generation())?;
-    let (prepared_node, prepared_pnpm) = runtime.block_on(async {
+    let (prepared_node, prepared_manager) = runtime.block_on(async {
         let node = node
             .prepare(&store, &desired, &sources.node, preparation)
             .await?;
@@ -127,14 +134,19 @@ pub(super) fn run(
         if let Some(staged) = &staged {
             staged.check(&snapshot, &store)?;
         }
-        let pnpm = match &pnpm {
-            Some(plan) => {
+        // npm and pnpm share the exact, integrity-verified registry transport.
+        let manager = match (&pnpm, &npm) {
+            (Some(plan), _) => {
                 plan.prepare(&store, &desired, &sources.pnpm, preparation)
                     .await?
             }
-            None => None,
+            (_, Some(plan)) => {
+                plan.prepare(&store, &desired, &sources.pnpm, preparation)
+                    .await?
+            }
+            _ => None,
         };
-        Ok::<_, Error>((node, pnpm))
+        Ok::<_, Error>((node, manager))
     })?;
     checked()?;
     let stage_tool = |tool: &turborepo_tool_install::Tool, tree: &Path| {
@@ -144,7 +156,7 @@ pub(super) fn run(
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?
                 .stage(tool, tree)
         } else {
-            prepared_pnpm
+            prepared_manager
                 .as_ref()
                 .ok_or(turborepo_tool_install::Error::InvalidInventory)?
                 .stage(tool, tree)
@@ -176,13 +188,16 @@ pub(super) fn run(
             tool.id,
             tool.version,
             if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id == "pnpm" && prepared_pnpm.is_none())
+                || (tool.id != "node" && prepared_manager.is_none())
             {
                 "reused"
             } else {
                 "installed"
             }
         );
+    }
+    if let Some(npm) = bundled_npm {
+        println!("npm {npm}: provided by managed Node (bundled)");
     }
     println!(
         "No turbo.lock written (--no-lock). Clone-local selections do not establish cross-machine \
