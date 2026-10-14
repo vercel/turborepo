@@ -122,6 +122,39 @@ fn interrupted_cleanup_leaves_only_inactive_remnants_for_the_next_run() {
 }
 
 #[test]
+fn inspection_accepts_shared_parents_but_rejects_an_unowned_store() {
+    let repo = tempfile::tempdir().unwrap();
+    fs::set_permissions(repo.path(), fs::Permissions::from_mode(0o775)).unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    fs::set_permissions(
+        repo.path().join(".turbo"),
+        fs::Permissions::from_mode(0o775),
+    )
+    .unwrap();
+    store.reconcile(&[versioned("1.0.0")], populate).unwrap();
+    let before = names(&store);
+    let usage = store.remove_inactive(GRACE).unwrap();
+    assert_eq!(Store::storage_use(repo.path(), GRACE).unwrap(), Some(usage));
+    assert_eq!(names(&store), before);
+    // Matching Store::open's shared-parent policy must not relax the owned
+    // installation boundary or change permissions during read-only reporting.
+    fs::set_permissions(&store.root, fs::Permissions::from_mode(0o775)).unwrap();
+    assert!(matches!(
+        Store::storage_use(repo.path(), GRACE),
+        Err(Error::UnsafePath)
+    ));
+    assert!(matches!(
+        store.remove_inactive(GRACE),
+        Err(Error::UnsafePath)
+    ));
+    assert_eq!(names(&store), before);
+    assert_eq!(
+        fs::metadata(&store.root).unwrap().permissions().mode() & 0o777,
+        0o775
+    );
+}
+
+#[test]
 fn invalid_selection_fails_closed_without_removing_anything() {
     let repo = tempfile::tempdir().unwrap();
     let mut store = Store::open(repo.path()).unwrap();

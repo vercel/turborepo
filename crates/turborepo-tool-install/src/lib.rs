@@ -863,11 +863,14 @@ impl Store {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = fs::canonicalize(repo)?;
-        real_directory(&repo)?;
+        shared_directory(&repo)?;
         let turbo = repo.join(".turbo");
         let root = turbo.join("tools");
-        for path in [&turbo, &root] {
-            match real_directory(path) {
+        for (path, check) in [
+            (&turbo, shared_directory as DirectoryCheck),
+            (&root, real_directory as DirectoryCheck),
+        ] {
+            match check(path) {
                 Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
                 result => result?,
             }
@@ -914,7 +917,23 @@ impl Store {
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
             result => result?,
         }
-        File::open(path)?.set_modified(SystemTime::now())?;
+        #[cfg(windows)]
+        let directory = {
+            use std::os::windows::fs::OpenOptionsExt;
+            // FILE_WRITE_ATTRIBUTES is sufficient for the retirement stamp.
+            // Open the directory itself, without following reparse points or
+            // permitting replacement while its timestamp is updated.
+            let directory = OpenOptions::new()
+                .access_mode(0x100)
+                .custom_flags(0x0200_0000 | 0x0020_0000)
+                .share_mode(0x1 | 0x2)
+                .open(&path)?;
+            real_directory(&path)?;
+            directory
+        };
+        #[cfg(not(windows))]
+        let directory = File::open(path)?;
+        directory.set_modified(SystemTime::now())?;
         Ok(())
     }
 
