@@ -191,7 +191,33 @@ fn validate_tool<'a>(
                     return Err((path, reason.into()));
                 }
             }
+            if windows {
+                windows_executable(name, path)?;
+            }
         }
+    }
+    Ok(())
+}
+
+/// The managed bin directory exports a Windows executable as `name.exe` (a
+/// hard link) or `name.cmd` (a forwarder that names the target in a batch
+/// line), adding that suffix itself.
+fn windows_executable<'a>(name: &str, path: &'a Spanned<String>) -> Result<(), Invalid<'a>> {
+    let lower = path.to_ascii_lowercase();
+    let launcher = lower.ends_with(".cmd")
+        && path
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_./".contains(&b));
+    if !lower.ends_with(".exe") && !launcher {
+        let reason = format!(
+            "Windows executable {name:?} must be a `.exe` file or a `.cmd` launcher whose path \
+             uses only letters, digits, `-`, `_`, `.`, and `/`"
+        );
+        return Err((path, reason.into()));
+    }
+    if fold(name, true) != name.to_ascii_lowercase() {
+        let reason = format!("Windows executable {name:?} must omit its `.exe` or `.cmd` suffix");
+        return Err((path, reason.into()));
     }
     Ok(())
 }

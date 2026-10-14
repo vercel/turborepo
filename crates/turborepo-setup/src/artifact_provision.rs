@@ -38,7 +38,10 @@ pub enum Error {
          setup.additionalTools.{tool}.artifacts"
     )]
     MissingTarget { tool: String, platform: String },
-    #[error("additional tool installation is not qualified for Windows or non-Unix hosts")]
+    #[error(
+        "additional tool installation is qualified for macOS, GNU Linux, and Windows x64 hosts \
+         only"
+    )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this additional tool unchanged")]
     InventoryMismatch,
@@ -242,7 +245,14 @@ impl ArtifactPlan {
         transport: &ArtifactTransport,
         preparation: Preparation,
     ) -> Result<Option<PreparedArtifact>, Error> {
-        if self.tool.platform.starts_with("windows-") || !cfg!(unix) {
+        // Windows arm64 is unqualified, as for every other setup adapter.
+        let qualified = match self.platform {
+            Platform::WindowsX64 | Platform::WindowsArm64 => {
+                self.platform == Platform::WindowsX64 && cfg!(windows)
+            }
+            _ => cfg!(unix),
+        };
+        if !qualified {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.contains(&self.tool) {
@@ -423,7 +433,10 @@ impl PreparedArtifact {
                     .values()
                     .next()
                     .ok_or(turborepo_tool_install::Error::InvalidInventory)?;
-                write_executable(&destination.join(relative), bytes.as_bytes())?;
+                // Lock paths use `/`; never join them unsplit onto a Windows
+                // verbatim destination.
+                let path: std::path::PathBuf = relative.split('/').collect();
+                write_executable(&destination.join(path), bytes.as_bytes())?;
             }
         }
         Ok(())
@@ -451,11 +464,19 @@ fn write_executable(path: &Path, bytes: &[u8]) -> io::Result<()> {
     file.set_permissions(fs::Permissions::from_mode(0o755))
 }
 
+/// Windows has no executable bit; PATHEXT and the `.exe` name decide.
 #[cfg(not(unix))]
-fn write_executable(_: &Path, _: &[u8]) -> io::Result<()> {
-    Err(io::Error::other(
-        "additional tool binaries require a Unix host",
-    ))
+fn write_executable(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()
 }
 
 #[cfg(test)]
