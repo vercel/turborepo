@@ -3,7 +3,9 @@
 
 use miette::Diagnostic;
 use thiserror::Error;
+use turborepo_repository::toolchain::ToolchainId;
 use turborepo_setup::source_policy::OfficialSourcePolicy;
+use turborepo_turbo_json::ToolPolicy;
 
 use crate::cli::{Args, SetupArgs};
 
@@ -11,6 +13,7 @@ use crate::cli::{Args, SetupArgs};
 mod acl;
 pub(crate) mod authorization;
 mod check;
+mod effective;
 mod lock_diagnostics;
 mod no_lock;
 mod offline;
@@ -233,21 +236,95 @@ fn run_with_policy(
     }
 
     let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
-    validate_request(&request)?;
+    let eligible = discovery.source_eligibility();
+    let plan = effective::Plan::new(
+        discovery.policy(),
+        [
+            (eligible.node(), ToolchainId::JAVASCRIPT),
+            (eligible.cargo(), ToolchainId::RUST),
+            (eligible.python(), ToolchainId::PYTHON),
+            (eligible.go(), ToolchainId::GO),
+        ]
+        .into_iter()
+        .filter_map(|(eligible, id)| eligible.then_some(id)),
+        request.tools_only,
+    );
+    validate(&request, plan.tools_only())?;
     if args.test_run {
         return Err(Error::NotImplemented);
     }
-    let eligible = discovery.source_eligibility();
-    // Go, Python, and Rust declarations are captured only when their workspace
-    // flags are on; disabled ecosystems are neither read nor locked.
+    if plan.unsupported() {
+        return Err(Error::Unsupported("verify-system non-JavaScript tools"));
+    }
+    if plan.explicit_dependencies() {
+        return Err(Error::NotImplemented);
+    }
+    let skipped = |id: &ToolchainId| {
+        plan.toolchain(id)
+            .is_some_and(|t| t.tools.0 == ToolPolicy::Skip)
+    };
+    let javascript = plan
+        .toolchain(&ToolchainId::JAVASCRIPT)
+        .map_or(ToolPolicy::Skip, |t| t.tools.0);
+    if javascript == ToolPolicy::VerifySystem {
+        return Err(Error::Unsupported("verify-system JavaScript tools"));
+    }
+    // Preserve current workspace gating, with explicit policy skips disabling
+    // interpretation of that ecosystem's declarations.
     let snapshot = turborepo_setup::lock::Snapshot::capture_with(
         discovery.snapshot_root()?.as_std_path(),
         turborepo_setup::lock::Ecosystems {
-            python: eligible.python(),
-            rust: eligible.cargo(),
-            go: eligible.go(),
+            python: eligible.python() && !skipped(&ToolchainId::PYTHON),
+            rust: eligible.cargo() && !skipped(&ToolchainId::RUST),
+            go: eligible.go() && !skipped(&ToolchainId::GO),
         },
     )?;
+    if snapshot.previous_lock().is_some_and(|lock| {
+        lock.tools().values().any(|tool| {
+            let id = match tool.adapter.as_str() {
+                "node" | "npm" | "pnpm" | "yarn" => Some(ToolchainId::JAVASCRIPT),
+                "rust" | "rustup" => Some(ToolchainId::RUST),
+                "uv" | "python" => Some(ToolchainId::PYTHON),
+                "go" => Some(ToolchainId::GO),
+                _ => None,
+            };
+            id.is_some_and(|id| skipped(&id))
+        })
+    }) {
+        return Err(Error::Unsupported(
+            "turbo.lock selects tools that the setup policy skips; remove the skip or the locked \
+             tools",
+        ));
+    }
+    for line in plan.report() {
+        println!("{line}");
+    }
+    if javascript == ToolPolicy::Skip {
+        // The current snapshot has no JavaScript enable switch. Never provision
+        // JavaScript against an explicit skip while preparing a native cohort.
+        if plan.all_tools_skipped() {
+            if snapshot
+                .previous_lock()
+                .is_some_and(|lock| !lock.tools().is_empty())
+            {
+                return Err(Error::Unsupported(
+                    "turbo.lock selects tools that the setup policy skips; remove the skip or the \
+                     locked tools",
+                ));
+            }
+            println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
+            return Ok(0);
+        }
+        if snapshot
+            .declarations()
+            .keys()
+            .any(|id| matches!(id.as_str(), "node" | "npm" | "pnpm" | "yarn"))
+        {
+            return Err(Error::Unsupported(
+                "JavaScript skip with declared JavaScript tools and managed native tools",
+            ));
+        }
+    }
     // Never silently: version-manager files are reported, not read as requests.
     if let Some(report) = turborepo_setup::version_managers::report(
         &snapshot.ignored_declarations(),
@@ -303,11 +380,16 @@ fn run_with_policy(
     Ok(code)
 }
 
+#[cfg(test)]
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
+    validate(request, request.tools_only)
+}
+
+fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     // Plans report locked reinstalls or proposed resolution, never both.
     let read_only = match request.mode {
         Mode::Check => !request.force && !request.update_lock,
-        Mode::Plan => request.tools_only && !(request.force && request.update_lock),
+        Mode::Plan => tools_only && !(request.force && request.update_lock),
         Mode::Provision => false,
     };
     if read_only && request.lock != LockMode::NoLock {
