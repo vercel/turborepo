@@ -53,6 +53,7 @@ fn plan(platform: Platform, bytes: &[u8]) -> GoPlan {
         root_prefix: Some("go".into()),
         destination: None,
         executables: go_resolution::executables(format),
+        alternates: BTreeMap::new(),
     };
     let tool = lock::Tool {
         adapter: "go".into(),
