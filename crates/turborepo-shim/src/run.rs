@@ -599,7 +599,7 @@ fn modify_args_for_local(
     // The shim consumes this flag and changes cwd to the repository root.
     // Preserve its already-resolved absolute path before the task-args boundary.
     if let Some(config) = &shim_args.root_turbo_json {
-        raw_args.push(format!("--root-turbo-json={config}"));
+        raw_args.push(format!("--root-turbo-json={config}").into());
     }
 
     // We add this flag after the raw args to avoid accidentally passing it
@@ -942,10 +942,11 @@ mod tests {
         ];
         let raw = modify_args_for_local(&mut args, &state, "2.0.0");
         let separator = raw.iter().position(|arg| arg == "--").unwrap();
-        assert!(raw[..separator].contains(&format!(
-            "--root-turbo-json={}",
-            root.join_component("turbo.jsonc")
-        )));
+        assert!(
+            raw[..separator].contains(
+                &format!("--root-turbo-json={}", root.join_component("turbo.jsonc")).into()
+            )
+        );
         assert_eq!(
             &raw[separator + 1..],
             &["--root-turbo-json=task-value", "argument with spaces"]
