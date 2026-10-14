@@ -483,22 +483,16 @@ fn run_reporting(
     }
     // Offline repeats and clone-local --no-lock run only when every
     // dependency is skipped (`validate`).
-    let code = if request.lock == LockMode::NoLock && !request.offline {
-        no_lock::run(&discovery, snapshot, transports, preflight)?
+    let provisioned = if request.offline {
+        offline::run(&discovery, snapshot, &request, transports, preflight)
+    } else if request.lock == LockMode::NoLock {
+        no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
-        let provisioned = if request.offline {
-            offline::run(&discovery, snapshot, &request, transports, preflight)?
-        } else {
-            provision::run(&discovery, snapshot, &request, transports, preflight)?
-        };
-        report.downloaded_bytes = provisioned.downloaded_bytes;
-        report.tools_installed = provisioned.installed;
-        report.tools_reused = provisioned.reused;
-        0
-    };
-    if code != 0 {
-        return Ok(code);
-    }
+        provision::run(&discovery, snapshot, &request, transports, preflight)
+    }?;
+    report.downloaded_bytes = provisioned.downloaded_bytes;
+    report.tools_installed = provisioned.installed;
+    report.tools_reused = provisioned.reused;
     let root = discovery.snapshot_root()?.as_std_path();
     Ok(dependencies.install(root, ecosystems, trust_base)?)
 }
