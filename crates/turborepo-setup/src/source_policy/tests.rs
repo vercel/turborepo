@@ -370,6 +370,7 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
             "{\"setup\":{}}",
             "{\"setup\":null}",
             "{\"setup\":{\"registry\":\"private-secret\"}}",
+            "{\"setup\":{\"additionalTools\":{},\"tools\":\"skip\"}}",
         ] {
             fs::write(&path, contents)?;
             assert_eq!(
@@ -377,6 +378,9 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
                 Some(Error::Configured(ConfigOwner::RootPolicy))
             );
         }
+        // Setup applies additional tools, so declaring only them is not ignored.
+        fs::write(&path, "{\"setup\":{\"additionalTools\":{}}}")?;
+        assert!(fixture.check(&[]).is_ok());
         fs::write(path, "invalid private-secret")?;
         assert_eq!(
             fixture.check(&[]).err(),

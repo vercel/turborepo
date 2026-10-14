@@ -158,6 +158,7 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
                 args,
                 setup_args,
                 Some(provision::Transports {
+                    artifact: None,
                     trust_base: Some(self.owned.home().to_owned()),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin).unwrap(),
                     pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin).unwrap(),

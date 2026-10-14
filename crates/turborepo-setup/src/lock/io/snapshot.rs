@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fmt, io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -174,11 +174,21 @@ impl Snapshot {
 
     /// Whether `lock` records exactly the declared additional tools.
     pub fn matches_additional(&self, lock: &Lock) -> bool {
-        let locked = lock
+        self.additional_drift(lock).is_empty()
+    }
+
+    /// Additional tool IDs whose locked entry differs from the declaration,
+    /// including added and removed declarations.
+    pub fn additional_drift(&self, lock: &Lock) -> BTreeSet<String> {
+        let locked: BTreeMap<_, _> = lock
             .tools()
             .iter()
-            .filter(|(_, tool)| tool.adapter == additional::ADAPTER);
-        locked.eq(self.additional.iter())
+            .filter(|(_, tool)| tool.adapter == additional::ADAPTER)
+            .collect();
+        let ids = locked.keys().copied().chain(self.additional.keys());
+        ids.filter(|id| locked.get(*id).copied() != self.additional.get(*id))
+            .cloned()
+            .collect()
     }
 
     /// Resolver inputs come from the captured bytes, never current disk state.

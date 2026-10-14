@@ -265,6 +265,7 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
         let policy = f.owned.policy_at(f.owned.root()).unwrap();
         let result = crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(args, setup_args, Some(provision::Transports {
+                artifact: None,
                 trust_base: Some(f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
