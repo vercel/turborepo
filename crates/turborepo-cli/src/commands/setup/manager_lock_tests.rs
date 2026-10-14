@@ -139,3 +139,67 @@ fn bun_lock_lifecycle_and_preserved_variants_are_validated() {
     assert_eq!(empty.hits(), 0);
     assert_eq!(fs::read(&path).unwrap(), value.to_string().into_bytes());
 }
+
+/// Bun runs scripts itself, so a Bun repository needs no Node declaration.
+#[test]
+fn bun_only_repositories_set_up_without_node() {
+    let f = fresh();
+    fs::remove_file(f.owned.root().join(".nvmrc")).unwrap();
+    fs::write(
+        f.owned.root().join("package.json"),
+        json!({"packageManager":"bun@1.2.23"}).to_string(),
+    )
+    .unwrap();
+    let u = LoopbackServer::new(bun_routes("1.2.23"), |_| {}).unwrap();
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    let created = selected(&f);
+    assert_eq!(created.tools().keys().collect::<Vec<_>>(), ["bun"]);
+    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let current = store.current().unwrap().unwrap();
+    assert_eq!(current.tools.len(), 1);
+    assert!(current.bin.join("bunx").exists());
+    assert!(!current.bin.join("node").exists());
+    drop(store);
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    for flags in [LOCAL, FROZEN, &["--check", "--tools-only"]] {
+        assert_eq!(f.run(&empty, flags).unwrap(), 0);
+    }
+    assert_eq!(empty.hits(), 0);
+    // Declaring Node adds only its entry, and removing it drops only that.
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    assert!(f.run(&empty, FROZEN).is_err());
+    let node = LoopbackServer::new(super::routes(&f, "24.0.0", "10.0.0"), |p| {
+        assert!(!p.starts_with("/oven-sh/"))
+    })
+    .unwrap();
+    assert_eq!(f.run(&node, LOCAL).unwrap(), 0);
+    assert_eq!(selected(&f).tools().len(), 2);
+    assert_eq!(selected(&f).tools()["bun"], created.tools()["bun"]);
+    fs::remove_file(f.owned.root().join(".nvmrc")).unwrap();
+    assert_eq!(f.run(&empty, LOCAL).unwrap(), 0);
+    assert_eq!(selected(&f), created);
+    assert_eq!(empty.hits(), 0);
+    untouched(&f);
+}
+
+#[test]
+fn node_based_managers_still_require_a_node_declaration() {
+    for manager in ["pnpm@10.0.0", "yarn@1.22.22", "yarn@4.5.0"] {
+        let f = fresh();
+        fs::remove_file(f.owned.root().join(".nvmrc")).unwrap();
+        fs::write(
+            f.owned.root().join("package.json"),
+            json!({ "packageManager": manager }).to_string(),
+        )
+        .unwrap();
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        let error = f.run(&empty, LOCAL).unwrap_err().to_string();
+        assert!(
+            error.contains("Node declaration is required"),
+            "{manager}: {error}"
+        );
+        assert_eq!(empty.hits(), 0);
+        assert!(!f.owned.root().join("turbo.lock").exists());
+        untouched(&f);
+    }
+}
