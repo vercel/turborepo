@@ -200,7 +200,8 @@ fn invoke_path(
 }
 
 /// A run with an explicit PATH that may write when `read_only` is false, with
-/// whitespace-normalized output like `invoke`.
+/// whitespace-normalized output like `invoke`. The harness asserts that setup
+/// makes no HTTP connection, so `turbo run`'s standard telemetry is disabled.
 fn invoke_on_path(
     root: &Path,
     words: &[&str],
@@ -208,7 +209,8 @@ fn invoke_on_path(
     path: &std::ffi::OsStr,
     read_only: bool,
 ) -> (i32, String) {
-    let (code, stdout, stderr) = invoke_raw_options(root, words, ci, &[], Some(path), read_only);
+    let env = [("TURBO_TELEMETRY_DISABLED", "1".into())];
+    let (code, stdout, stderr) = invoke_raw_options(root, words, ci, &env, Some(path), read_only);
     let text = format!("{stdout}{stderr}")
         .split_whitespace()
         .collect::<Vec<_>>()
