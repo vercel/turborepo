@@ -391,6 +391,13 @@ impl Store {
         }))
     }
 
+    /// Validate a complete desired inventory without reading existing state or
+    /// performing I/O. Adapters must apply this before preparation, including
+    /// fresh preparation that deliberately skips reuse of damaged generations.
+    pub fn validate_desired(desired: &[Tool]) -> Result<(), Error> {
+        validate_tools(desired)
+    }
+
     /// Readiness for a complete desired tool set, without downloading or
     /// staging. Damaged trees return false so provisioning can repair them
     /// atomically.
