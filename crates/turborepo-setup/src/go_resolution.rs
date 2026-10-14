@@ -213,6 +213,7 @@ pub fn resolve(requirements: &GoRequirements, index: &[u8]) -> Result<Tool, Erro
                     url: format!("{ARTIFACT_ORIGIN}/go/{name}"),
                     sha256: sha256.clone(),
                     format,
+                    alternates: BTreeMap::new(),
                     root_prefix: Some("go".into()),
                     destination: None,
                     executables: executables(format),

@@ -77,6 +77,7 @@ fn locks_one_release_with_official_per_platform_archives() {
             url: "https://dl.google.com/go/go1.22.12.linux-arm64.tar.gz".into(),
             sha256: SHA.into(),
             format: Format::TarGz,
+            alternates: BTreeMap::new(),
             root_prefix: Some("go".into()),
             destination: None,
             executables: BTreeMap::from([
