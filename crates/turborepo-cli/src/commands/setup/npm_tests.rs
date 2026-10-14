@@ -150,6 +150,10 @@ impl NpmFixture {
                 rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 artifact: None,
+                go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(
+                    upstream.origin(),
+                )
+                .unwrap(),
             };
             report = Some(plan::report(
                 &discovery,

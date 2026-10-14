@@ -110,6 +110,10 @@ pub enum Error {
     )]
     AdditionalToolDrift(std::collections::BTreeSet<String>),
     #[error(transparent)]
+    Go(#[from] turborepo_setup::go_provision::Error),
+    #[error(transparent)]
+    GoResolution(#[from] turborepo_setup::go_resolution::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -211,16 +215,14 @@ fn run_with_policy(
         return Err(Error::NotImplemented);
     }
     let eligible = discovery.source_eligibility();
-    if eligible.go() {
-        return Err(Error::Unsupported("Go workspace setup"));
-    }
-    // Python declarations are captured only when experimentalPythonWorkspaces
-    // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
+    // Go, Python, and Rust declarations are captured only when their workspace
+    // flags are on; disabled ecosystems are neither read nor locked.
     let snapshot = turborepo_setup::lock::Snapshot::capture_with(
         discovery.snapshot_root()?.as_std_path(),
         turborepo_setup::lock::Ecosystems {
             python: eligible.python(),
             rust: eligible.cargo(),
+            go: eligible.go(),
         },
     )?;
     // Never silently: version-manager files are reported, not read as requests.

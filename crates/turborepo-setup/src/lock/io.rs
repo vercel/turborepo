@@ -16,7 +16,9 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 7] = ["node", "npm", "pnpm", "uv", "python", "rust", "rustup"];
+const NATIVE: [&str; 8] = [
+    "node", "npm", "pnpm", "uv", "python", "rust", "rustup", "go",
+];
 /// rustup's root toolchain files. Both at once is ambiguous, not precedence.
 const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
 const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
@@ -27,6 +29,7 @@ const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
 pub struct Ecosystems {
     pub python: bool,
     pub rust: bool,
+    pub go: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -43,6 +46,8 @@ pub enum StorageError {
     Python(#[from] crate::python_discovery::PythonDiscoveryError),
     #[error(transparent)]
     Rust(#[from] crate::rust_discovery::Error),
+    #[error(transparent)]
+    Go(#[from] crate::go_discovery::GoDiscoveryError),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }
@@ -286,6 +291,21 @@ pub(crate) fn probe_native_with(
             }
             _ => return Err(StorageError::Declarations),
         }
+    }
+    if ecosystems.go
+        && let Some(go) = crate::go_discovery::GoRequirements::read_with(&mut read)?
+    {
+        let sources = go.sources().iter().map(|source| Declaration {
+            file: source.file.into(),
+            field: Some(source.field.into()),
+            request: source.request.clone(),
+        });
+        result.insert("go".into(), sources.collect());
+    }
+    if ecosystems.python
+        && let Some(uv) = crate::uv_discovery::UvRequirement::read_with(&mut read)?
+    {
+        result.insert("uv".into(), vec![uv.declaration()]);
     }
     for values in result.values_mut() {
         declarations(values)?;

@@ -301,6 +301,7 @@ mod lock_updates {
         let ecosystems = Ecosystems {
             rust: true,
             python: true,
+            go: false,
         };
         let snapshot = Snapshot::capture_with(root.path(), ecosystems).unwrap();
         let requirement = snapshot.uv_requirement().unwrap().unwrap();
@@ -369,6 +370,10 @@ mod lock_updates {
                                     other_server.origin(),
                                 )
                                 .unwrap(),
+                            go: &crate::go_resolution::GoTransport::loopback_http_for_tests(
+                                other_server.origin(),
+                            )
+                            .unwrap(),
                             platform,
                         },
                         &rustup,

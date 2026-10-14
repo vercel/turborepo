@@ -18,6 +18,7 @@ const TOOLCHAIN: &str = "[toolchain]\nchannel = \"1.99\"\nprofile = \"minimal\"\
 const RUST: Ecosystems = Ecosystems {
     rust: true,
     python: false,
+    go: false,
 };
 
 fn context() -> ExecutionContext {
@@ -586,6 +587,7 @@ fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
 const PYTHON: Ecosystems = Ecosystems {
     python: true,
     rust: false,
+    go: false,
 };
 const PYPROJECT: &str =
     "[project]\nname = \"app\"\nversion = \"0.1.0\"\n[tool.uv]\nrequired-version = \">=0.13\"\n";
@@ -783,6 +785,7 @@ fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
         Ecosystems {
             rust: true,
             python: true,
+            go: false,
         },
     )
     .unwrap();
