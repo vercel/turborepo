@@ -79,6 +79,25 @@ pub enum Error {
          turbo setup --tools-only without --offline to download and verify them."
     )]
     OfflineMissing(String),
+    #[error("--no-lock needs a Node declaration in the repository root")]
+    #[diagnostic(
+        code(turbo::setup::no_lock_node),
+        help(
+            "Declare Node in .nvmrc, .node-version, or package.json (devEngines.runtime or \
+             engines.node). --no-lock provisions only Node and an optional exact pnpm. No tools, \
+             dependencies, or locks were changed."
+        )
+    )]
+    NoLockNode,
+    #[error(
+        "--no-lock provisions only Node and pnpm, but the repository declares {0}; clone-local \
+         setup for it is not supported yet"
+    )]
+    #[diagnostic(
+        code(turbo::setup::no_lock_tool),
+        help("No tools, dependencies, or locks were changed.")
+    )]
+    NoLockTool(String),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]

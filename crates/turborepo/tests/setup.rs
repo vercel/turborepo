@@ -414,8 +414,9 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
                     (true, true) if words.contains(&"--offline") => {
                         "offline setup requires turbo.lock"
                     }
+                    // --no-lock needs a Node declaration (#14701).
                     (true, true) if words.contains(&"--no-lock") => {
-                        "invalid or unsupported native resolution record"
+                        "--no-lock needs a Node declaration"
                     }
                     (true, true) if words.contains(&"--force") => {
                         "locked provisioning requires turbo.lock"
@@ -460,7 +461,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         &["setup", "--no-lock"],
         true,
         if QUALIFIED {
-            "invalid or unsupported native resolution record"
+            "--no-lock needs a Node declaration"
         } else {
             UNQUALIFIED
         },
