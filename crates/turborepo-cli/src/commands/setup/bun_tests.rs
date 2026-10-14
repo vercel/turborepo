@@ -61,6 +61,7 @@ fn locked_bun_provisions_checks_repeats_and_rejects_frozen_drift() {
         FROZEN,
         &["--tools-only", "--no-frozen"],
         &["--check", "--tools-only"],
+        &["--plan", "--tools-only"],
     ] {
         assert_eq!(f.run(&u, flags).unwrap(), 0);
     }
