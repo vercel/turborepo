@@ -1432,7 +1432,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
 ))]
 #[test]
 fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 
     use sha2::{Digest, Sha256};
     use turborepo_setup::{
@@ -1494,13 +1494,19 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     // cover verified downloads and receipt publication; this fixture observes
     // the real binary's plain/frozen/check reporting without traffic or probes.
     let home = tempfile::tempdir().unwrap();
+    fs::set_permissions(home.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let user_data = home.path().join(if cfg!(target_os = "macos") {
         "Library/Application Support"
     } else {
         ".local/share"
     });
     let records = user_data.join("turborepo/setup-roots");
-    fs::create_dir_all(&records).unwrap();
+    // Keep every fixture-owned state ancestor private even with umask 0002.
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&records)
+        .unwrap();
     fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
     let canonical_root = root.canonicalize().unwrap();
     let identity = fs::metadata(&canonical_root).unwrap();
