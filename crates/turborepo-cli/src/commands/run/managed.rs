@@ -133,29 +133,41 @@ impl ManagedEnvironment for ManagedTools {
     }
 }
 
+fn qualified_libc(host: Option<turborepo_platform::Libc>) -> Result<Libc, String> {
+    match host {
+        Some(turborepo_platform::Libc::Glibc { version }) => Ok(Libc::Gnu { abi: version }),
+        None if cfg!(target_os = "macos") => Ok(Libc::None),
+        _ => Err("managed Node/pnpm run is unsupported on this host".into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn managed_abi_uses_host_glibc_version_and_rejects_musl() {
+        assert_eq!(
+            qualified_libc(Some(turborepo_platform::Libc::Glibc {
+                version: "2.39".into(),
+            }))
+            .unwrap(),
+            Libc::Gnu { abi: "2.39".into() }
+        );
+        assert!(qualified_libc(Some(turborepo_platform::Libc::Musl)).is_err());
+        assert_eq!(qualified_libc(None).is_ok(), cfg!(target_os = "macos"));
+    }
+}
+
 /// Conservative native execution identity. No readiness-only/unprobed labels.
 /// These initial adapters are supported only on native macOS and GNU Linux.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
-    if !cfg!(any(
-        target_os = "macos",
-        all(target_os = "linux", target_env = "gnu")
-    )) {
+    if !cfg!(any(target_os = "macos", target_os = "linux")) {
         return Err("managed Node/pnpm run is unsupported on this host".into());
     }
-    let libc = {
-        #[cfg(all(target_os = "linux", target_env = "gnu"))]
-        {
-            let abi = unsafe { std::ffi::CStr::from_ptr(libc::gnu_get_libc_version()) }
-                .to_str()
-                .map_err(|e| e.to_string())?
-                .to_owned();
-            Libc::Gnu { abi }
-        }
-        #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
-        {
-            Libc::None
-        }
-    };
+    // Released Linux binaries are musl-static; their target is not the host's
+    // execution ABI. Use the same bounded, non-executing detection as setup.
+    let libc = qualified_libc(turborepo_platform::host_libc().map_err(|e| e.to_string())?)?;
     let mut cpu = BTreeSet::from(["baseline".into()]);
     #[cfg(target_arch = "x86_64")]
     for (name, detected) in [
