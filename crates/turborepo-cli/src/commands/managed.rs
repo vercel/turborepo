@@ -114,7 +114,10 @@ impl ManagedTools {
         let authorization = if clone_local {
             Authorization::inspect_clone_local(&canonical, user_base, context()?)
         } else {
-            let ecosystems = ecosystems(&canonical, config)?;
+            // Same guidance as an invalid declaration in the captured sources.
+            let ecosystems = ecosystems(&canonical, config).map_err(|error| {
+                format!("tool declarations are invalid ({error}); fix them, then run turbo setup")
+            })?;
             Authorization::inspect(&canonical, user_base, context()?, ecosystems)
         }
         .map_err(explain)?;
