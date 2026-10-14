@@ -579,6 +579,8 @@ fn failure_cleans_owned_staging_without_surrounding_writes() {
         limits: limits(),
         bytes: 0,
         excluded: Vec::new(),
+        name_residue: false,
+        case_sensitive: None,
     };
     let fixture = zip(
         &[("pkg/bin/tool", 0, b"x"), ("../sentinel", 0, b"changed")],
