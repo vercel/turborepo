@@ -277,8 +277,9 @@ fn qualified_host() -> bool {
 }
 
 fn diagnostic_contains(text: &str, expected: &str) -> bool {
-    // Miette may wrap sentences and filenames across lines with `|` gutters.
-    text.replace([' ', '|'], "")
+    // Miette may wrap sentences and filenames across lines with `|` gutters,
+    // at a width that depends on the length of temporary paths.
+    text.replace([' ', '|', '\n', '\r'], "")
         .contains(&expected.replace(' ', ""))
 }
 
