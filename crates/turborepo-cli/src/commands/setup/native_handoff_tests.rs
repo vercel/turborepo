@@ -180,6 +180,7 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
     ]);
     let result = crate::cli::dispatch_setup(&args, |args, setup| run_with_policy(args, setup,
         Some(provision::Transports {
+                bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
             artifact: None,
             trust_base:Some(user_base.clone()),
             registry:turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),

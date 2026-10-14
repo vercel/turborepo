@@ -104,6 +104,7 @@ impl NativeArtifacts {
         let args = f.args(&["--tools-only", "--no-frozen"]);
         let result = crate::cli::dispatch_setup(&args, |args, setup| run_with_policy(args, setup,
             Some(provision::Transports {
+                bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 artifact: None,
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
