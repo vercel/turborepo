@@ -1,10 +1,6 @@
 //! Python-only parser → discovery → uv lock writer → provisioning fixtures.
 //! Fixture uv binaries are installed but never executed by setup.
-use turborepo_setup::{
-    lock::{Lock, reconcile},
-    uv::UvArtifact,
-    uv_resolution::UvTransport,
-};
+use turborepo_setup::{lock::Lock, uv::UvArtifact, uv_resolution::UvTransport};
 
 use super::*;
 
@@ -136,8 +132,8 @@ fn declaration_changes_update_locally_and_frozen_names_uv() {
     declare(&owned, "==0.12.*");
     let bytes = fs::read(owned.root().join("turbo.lock")).unwrap();
     match run(&owned, &upstream, FROZEN) {
-        Err(Error::Reconcile(reconcile::Error::Drift(ids))) => {
-            assert_eq!(ids.into_iter().collect::<Vec<_>>(), ["uv"]);
+        Err(Error::LockDiagnostics(lock_diagnostics::Error::Drift(locations))) => {
+            assert_eq!(locations, "uv: pyproject.toml (tool.uv.required-version)");
         }
         other => panic!("expected named uv drift, got {other:?}"),
     }

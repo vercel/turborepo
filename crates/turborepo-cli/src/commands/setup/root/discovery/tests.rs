@@ -377,7 +377,9 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
     };
     assert!(matches!(
         dispatch(&["--frozen", "--tools-only"]),
-        Err(setup::Error::Unsupported(_))
+        Err(setup::Error::LockDiagnostics(
+            setup::lock_diagnostics::Error::Missing
+        )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.
     ));
     for flags in [&["--plan"][..], &["--check"], &["--__test-run"]] {
         assert!(matches!(dispatch(flags), Err(setup::Error::NotImplemented)));

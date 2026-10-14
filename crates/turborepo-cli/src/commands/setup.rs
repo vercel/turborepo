@@ -10,6 +10,7 @@ use crate::cli::{Args, SetupArgs};
 #[cfg(all(test, target_os = "macos"))]
 mod acl;
 mod check;
+mod lock_diagnostics;
 mod no_lock;
 mod plan;
 mod provision;
@@ -63,6 +64,9 @@ pub enum Error {
         )
     )]
     UnclassifiedLibc(turborepo_platform::LibcError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LockDiagnostics(#[from] lock_diagnostics::Error),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
