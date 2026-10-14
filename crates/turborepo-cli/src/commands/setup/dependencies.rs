@@ -280,10 +280,12 @@ impl Environment {
         let mut vars = plan.runtime_env().clone();
         let path = plan.path(std::env::var_os("PATH").as_deref())?;
         vars.insert("PATH".into(), path);
-        Ok(Self {
-            bin: plan.path_prepend().to_owned(),
-            vars,
-        })
+        // Dependency setup runs only with managed tools, never verify-system.
+        let bin = plan
+            .path_prepend()
+            .ok_or(Error::NotInstalled("package manager"))?
+            .to_owned();
+        Ok(Self { bin, vars })
     }
 
     /// The managed executable only, never a lookup on the caller's PATH.
