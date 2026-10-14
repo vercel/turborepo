@@ -215,8 +215,6 @@ mod npm;
 mod publication_guards;
 #[path = "rustup_tests.rs"]
 mod rustup;
-#[path = "uv_tests.rs"]
-mod uv;
 #[cfg(target_os = "macos")]
 #[path = "trust_acl_tests.rs"]
 mod trust_acl;
@@ -224,6 +222,8 @@ mod trust_acl;
 mod trust_publication;
 #[path = "trust_tests.rs"]
 mod trusted_roots;
+#[path = "uv_tests.rs"]
+mod uv;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {

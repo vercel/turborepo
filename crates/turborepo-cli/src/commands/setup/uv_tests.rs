@@ -70,6 +70,7 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
             args,
             setup_args,
             Some(provision::Transports {
+                trust_base: Some(owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
                     .unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)

@@ -22,7 +22,7 @@ fn seed(f: &Fixture, git: bool) {
     let lock = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
     let plans = provision::plans(&lock, lock.previous_lock().unwrap()).unwrap();
     let mut tools = vec![
-        plans.node.inventory_tool().clone(),
+        plans.node.unwrap().inventory_tool().clone(),
         plans.pnpm.unwrap().inventory_tool().clone(),
     ];
     if git {

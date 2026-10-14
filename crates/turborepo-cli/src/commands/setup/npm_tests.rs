@@ -130,6 +130,7 @@ impl NpmFixture {
             let discovery = root::Discovery::capture(args)?;
             let sources = turborepo_setup::lock::Snapshot::capture(self.f.owned.root())?;
             let transports = provision::Transports {
+                trust_base: Some(self.f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
                     upstream.origin(),
                 )
