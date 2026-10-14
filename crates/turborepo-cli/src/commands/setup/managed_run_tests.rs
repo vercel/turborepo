@@ -7,7 +7,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use super::*;
 use crate::commands::{
     CommandBase,
-    run::managed::{self, ManagedTools},
+    managed::{self, ManagedTools},
 };
 
 fn select(f: &Fixture) -> Result<Option<Arc<ManagedRun>>, String> {

@@ -11,9 +11,7 @@ use turborepo_tracing::TurboSubscriber;
 use turborepo_types::DryRunMode;
 use turborepo_ui::{LogSinks, sender::UISender};
 
-use crate::commands::CommandBase;
-
-pub(crate) mod managed;
+use crate::commands::{CommandBase, managed};
 
 #[derive(Debug, PartialEq, Eq)]
 enum RunOutcome<T> {

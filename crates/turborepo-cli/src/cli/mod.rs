@@ -21,7 +21,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         CommandBase, bin, boundaries, config, daemon, docs, exec, generate, get_mfe_port, hook,
-        info, link, login, logout, ls, prune, query, run, setup, telemetry, unlink,
+        info, link, login, logout, ls, managed, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
@@ -414,9 +414,9 @@ pub fn run(
 
     // Exec leaves stdout, stderr, and the repository to the program: no
     // version banner, telemetry, agent guidance, or worker runtimes.
-    if let Some(Command::Exec { .. }) = cli_args.command {
+    if let Some(Command::Exec { command }) = &cli_args.command {
         let repo_root = repo_root(repo_state.as_ref(), &cli_args)?;
-        return Ok(exec::run(&repo_root, &cli_args)?);
+        return exec::run(&repo_root, &cli_args, command, color_config);
     }
 
     // Initialize rayon's global pool before the tokio runtime so we
@@ -499,7 +499,7 @@ async fn run_main(
     // or agent-file maintenance; shim handoff validation is not sufficient.
     if matches!(cli_args.command, Some(Command::Run { .. })) {
         let base = CommandBase::new(cli_args.clone(), repo_root.clone(), version, color_config)?;
-        run::managed::select(&base)?;
+        managed::select(&base)?;
     }
     let telemetry_handle = {
         let _span = tracing::info_span!("telemetry_init").entered();
