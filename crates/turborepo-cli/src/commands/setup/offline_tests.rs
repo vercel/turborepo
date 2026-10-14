@@ -50,7 +50,7 @@ fn unavailable(f: &Fixture, u: &LoopbackServer) -> Error {
         "pnpm-10.0.0.tgz",
         "SHA-256",
         "without --offline",
-        "download-cache repair is not implemented",
+        "No complete verified download-cache source is available",
     ] {
         assert!(message.contains(fragment), "{fragment}: {message}");
     }
@@ -77,9 +77,7 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         let empty = LoopbackServer::new([], |_| {}).unwrap();
         for flags in [
             OFFLINE,
-            OFFLINE_FORCE,
             &["--offline"][..],
-            &["--offline", "--force"][..],
             &["--tools-only", "--offline", "--frozen"],
             &["--tools-only", "--offline", "--no-frozen"],
         ] {
@@ -96,6 +94,70 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
                 fs::read(f.owned.root().join(file)).unwrap(),
                 b"dependency sentinel"
             );
+        }
+        assert_eq!(empty.hits(), 0);
+    }
+}
+
+#[test]
+fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_and_environment() {
+    for node_only in [false, true] {
+        let mut f = Fixture::new();
+        if node_only {
+            f.lock["tools"].as_object_mut().unwrap().remove("pnpm");
+            f.declare(json!({}));
+        }
+        f.run(&Upstream::new(&f, false, None), FROZEN).unwrap();
+        for name in [
+            "package-lock.json",
+            "pnpm-lock.yaml",
+            "yarn.lock",
+            "bun.lock",
+        ] {
+            fs::write(f.owned.root().join(name), format!("{name} sentinel")).unwrap();
+        }
+        let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+        let declaration = fs::read(f.owned.root().join("package.json")).unwrap();
+        let environment: std::collections::BTreeMap<_, _> = std::env::vars_os().collect();
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        for flags in [OFFLINE_FORCE, &["--offline", "--force"][..]] {
+            let before = f.manifest().unwrap();
+            assert_eq!(f.run(&empty, flags).unwrap(), 0);
+            assert_ne!(f.manifest().unwrap(), before);
+            let authorization = super::super::authorization::Authorization::inspect(
+                f.owned.root(),
+                f.owned.home(),
+                check::context().unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                authorization
+                    .with_current(|plan| plan.tools().len())
+                    .unwrap(),
+                if node_only { 1 } else { 2 }
+            );
+            assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+            assert_eq!(
+                fs::read(f.owned.root().join("package.json")).unwrap(),
+                declaration
+            );
+            for name in [
+                "package-lock.json",
+                "pnpm-lock.yaml",
+                "yarn.lock",
+                "bun.lock",
+            ] {
+                assert_eq!(
+                    fs::read_to_string(f.owned.root().join(name)).unwrap(),
+                    format!("{name} sentinel")
+                );
+            }
+            assert_eq!(
+                std::env::vars_os().collect::<std::collections::BTreeMap<_, _>>(),
+                environment
+            );
+            assert_eq!(attempt(&f, &empty, OFFLINE).unwrap(), 0);
+            f.no_execution();
         }
         assert_eq!(empty.hits(), 0);
     }

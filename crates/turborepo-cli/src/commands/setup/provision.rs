@@ -966,7 +966,7 @@ pub(super) fn run(
         println!("npm {}: provided by managed Node (bundled)", npm.version);
     }
     if offline {
-        println!("Offline: used only trusted installed tools and verified cached artifacts.");
+        println!("Offline: used only installed tools and verified cached artifacts.");
     }
     Ok(0)
 }

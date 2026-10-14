@@ -99,6 +99,9 @@ impl RegistryTransport {
         match authored {
             None => Some(bytes),
             Some(pin) if pin.algorithm == "sha256" => (pin.digest == sha256).then_some(bytes),
+            Some(pin) if pin.algorithm == "sha224" => {
+                (sha224_hex(&bytes) == pin.digest).then_some(bytes)
+            }
             Some(pin) if pin.algorithm == "sha512" => VerifiedArtifact::verify_bytes_sha512(
                 bytes.into_bytes(),
                 ExpectedSha512::from_hex(&pin.digest).ok()?,

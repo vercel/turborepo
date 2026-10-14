@@ -11,10 +11,10 @@ use super::{Error as SetupError, authorization::Authorization, check, provision,
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(
-        "offline setup cannot reuse the locked installation: {reason}\nRequired artifacts not \
-         verified for offline reuse/repair:\n{artifacts}\nRun turbo setup --tools-only without \
-         --offline to verify or repair them. No complete verified download-cache source is \
-         available."
+        "offline setup is missing verified cached artifacts; nothing was installed\noffline setup \
+         cannot reuse the locked installation: {reason}\nRequired artifacts not verified for \
+         offline reuse/repair:\n{artifacts}\nRun turbo setup --tools-only without --offline to \
+         download and verify them. No complete verified download-cache source is available."
     )]
     Unavailable {
         #[source]
@@ -55,6 +55,15 @@ fn inspect(
         "offline setup requires turbo.lock; run turbo setup --tools-only online and commit the \
          lock",
     ))?;
+    // Offline never resolves changed declarations, regardless of lock mode.
+    // Diagnose this before inventory or cache access, preserving the original
+    // cache-only provisioning request's actionable failure.
+    if !lock.matches_native(sources.declarations())? || !sources.matches_additional(lock) {
+        return Err(SetupError::Unsupported(
+            "offline setup cannot resolve changed tool declarations; run turbo setup --tools-only \
+             without --offline",
+        ));
+    }
     // Reuse exactly the same native constraints, authored integrity and host
     // mappings as locked provisioning, before looking at any local inventory.
     provision::plans(sources, lock)?;
