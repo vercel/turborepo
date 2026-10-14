@@ -181,10 +181,10 @@ impl Store {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = fs::canonicalize(repo)?;
-        real_directory(&repo)?;
+        shared_directory(&repo)?;
         let repo_handle = open_directory(&repo)?;
         let turbo = repo.join(".turbo");
-        directory(&turbo)?;
+        create_directory(&turbo, shared_directory)?;
         let root = turbo.join("tools");
         directory(&root)?;
         let root_handle = open_directory(&root)?;
@@ -195,12 +195,14 @@ impl Store {
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-        let lock = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(path)?;
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let lock = options.open(path)?;
         let owner_pid = std::process::id();
         lock.try_lock().map_err(|e| match e {
             std::fs::TryLockError::WouldBlock => Error::Busy,
@@ -228,8 +230,8 @@ impl Store {
     }
 
     fn check_root(&self) -> Result<(), Error> {
-        real_directory(self.repository_root()?)?;
-        real_directory(self.root.parent().ok_or(Error::UnsafePath)?)?;
+        shared_directory(self.repository_root()?)?;
+        shared_directory(self.root.parent().ok_or(Error::UnsafePath)?)?;
         real_directory(&self.root)?;
         if self.owner_pid != std::process::id() || fs::canonicalize(&self.root)? != self.root {
             return Err(Error::UnsafePath);
@@ -310,11 +312,13 @@ impl Store {
             return Err(Error::UnsupportedPlatform);
         }
         let repo = fs::canonicalize(repo)?;
-        real_directory(&repo)?;
+        shared_directory(&repo)?;
         let turbo = repo.join(".turbo");
         let root = turbo.join("tools");
-        for path in [&turbo, &root] {
-            match real_directory(path) {
+        let checks: [(&Path, DirectoryCheck); 2] =
+            [(&turbo, shared_directory), (&root, real_directory)];
+        for (path, check) in checks {
+            match check(path) {
                 Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
                 result => result?,
             }
@@ -328,7 +332,7 @@ impl Store {
         if Self::manifest_bytes(&root)? != before {
             return Err(Error::InvalidInventory);
         }
-        real_directory(&turbo)?;
+        shared_directory(&turbo)?;
         real_directory(&root)?;
         same_directory(&root_handle, &root)?;
         Ok(Some(Current {
@@ -615,9 +619,14 @@ impl Store {
             }
             return Ok(Outcome::Unchanged);
         }
-        let stage = tempfile::Builder::new()
-            .prefix("generation-")
-            .tempdir_in(&self.root)?;
+        let mut builder = tempfile::Builder::new();
+        builder.prefix("generation-");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            builder.permissions(fs::Permissions::from_mode(0o700));
+        }
+        let stage = builder.tempdir_in(&self.root)?;
         let tools = stage.path().join("tools");
         directory(&tools)?;
         let bin = stage.path().join("bin");
@@ -787,13 +796,48 @@ fn validate_tools(tools: &[Tool]) -> Result<(), Error> {
     Ok(())
 }
 
+type DirectoryCheck = fn(&Path) -> Result<(), Error>;
+
+/// A directory setup creates: real, owned by the effective user, and not
+/// writable by anyone else. Ownership keeps a store below a group-writable
+/// `.turbo` from being substituted by another user.
 fn real_directory(path: &Path) -> Result<(), Error> {
     let m = fs::symlink_metadata(path)?;
     if !m.is_dir() || m.file_type().is_symlink() {
         return Err(Error::UnsafePath);
     }
     #[cfg(unix)]
-    if std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o022 != 0 {
+    {
+        use std::os::unix::fs::MetadataExt;
+        if !private_to_user(m.mode(), m.uid()) {
+            return Err(Error::UnsafePath);
+        }
+    }
+    // Junctions are symlinks above; also reject every other reparse point.
+    #[cfg(windows)]
+    if std::os::windows::fs::MetadataExt::file_attributes(&m) & 0x400 != 0 {
+        return Err(Error::UnsafePath);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn private_to_user(mode: u32, uid: u32) -> bool {
+    mode & 0o022 == 0 && uid == rustix::process::geteuid().as_raw()
+}
+
+/// The repository root and the `.turbo` directory other turbo commands share
+/// keep the modes the user's umask gave them (0775 under Ubuntu's default).
+/// Whoever can write the root can already change what setup provisions, and
+/// the owned store below cannot be substituted, so only world-writable
+/// directories are rejected.
+fn shared_directory(path: &Path) -> Result<(), Error> {
+    let m = fs::symlink_metadata(path)?;
+    if !m.is_dir() || m.file_type().is_symlink() {
+        return Err(Error::UnsafePath);
+    }
+    #[cfg(unix)]
+    if std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o002 != 0 {
         return Err(Error::UnsafePath);
     }
     // Junctions are symlinks above; also reject every other reparse point.
@@ -934,8 +978,15 @@ fn check_shim(shim: &Path, tree: &Path, id: &str, path: &str) -> Result<(), Erro
 }
 
 fn directory(path: &Path) -> Result<(), Error> {
+    create_directory(path, real_directory)
+}
+
+/// Create an owner-only directory, or check an existing one with `existing`.
+/// A umask only clears bits, so any umask that leaves the owner its own
+/// permissions yields exactly 0700.
+fn create_directory(path: &Path, existing: DirectoryCheck) -> Result<(), Error> {
     match fs::symlink_metadata(path) {
-        Ok(_) => real_directory(path),
+        Ok(_) => existing(path),
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
             let mut builder = fs::DirBuilder::new();
             builder.recursive(false);

@@ -392,7 +392,11 @@ impl PreparedRegistry {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
         copy_tree(&self.tree.root_path(), destination)?;
-        fs::create_dir(destination.join(&self.launch_directory))?;
+        // Owner-only like every other store directory, whatever the umask.
+        let mut launch = fs::DirBuilder::new();
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
+        launch.create(destination.join(&self.launch_directory))?;
         for (name, path) in &self.tool.executables {
             let script = format!(
                 "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
