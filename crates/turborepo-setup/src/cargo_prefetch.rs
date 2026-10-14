@@ -41,7 +41,8 @@ pub enum Error {
 /// Where the clone's private Cargo home lives, without creating or checking
 /// it. Activation exposes this same directory to tasks as `CARGO_HOME`.
 pub fn cargo_home_path(root: &Path) -> PathBuf {
-    root.join(".turbo/cargo-home")
+    // Split components: `/` is not a separator under a `\\?\` root.
+    root.join(".turbo").join("cargo-home")
 }
 
 /// The repository's private Cargo home, beside managed tools rather than in
