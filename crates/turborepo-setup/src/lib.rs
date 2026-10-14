@@ -41,6 +41,7 @@ pub mod uv_discovery;
 pub mod uv_metadata;
 pub mod uv_provision;
 pub mod uv_resolution;
+pub mod uv_sync;
 pub mod version_managers;
 pub mod version_request;
 pub mod writer_storage;
