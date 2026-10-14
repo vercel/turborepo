@@ -8,6 +8,7 @@ pub mod cargo_prefetch;
 pub mod ephemeral_reconcile;
 pub mod execution_identity;
 pub mod go_discovery;
+pub mod go_prefetch;
 pub mod go_provision;
 pub mod go_resolution;
 pub mod js_resolution;
