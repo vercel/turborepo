@@ -50,6 +50,15 @@ pub enum Error {
         tool: String,
         source: turborepo_archive::Error,
     },
+    #[error(
+        "additional tool {tool:?} exports {executable:?}, which {other:?} also exports; rename it \
+         under setup.additionalTools.{tool}.artifacts"
+    )]
+    Collision {
+        tool: String,
+        executable: String,
+        other: String,
+    },
     #[error("cannot prepare additional tool downloads: {0}")]
     Transport(#[source] turborepo_download::Error),
     #[error(transparent)]
@@ -239,6 +248,45 @@ impl ArtifactPlan {
             payload: Payload::Archive(tree),
             tool: self.tool.clone(),
         })
+    }
+}
+
+/// Rejects an additional-tool export that shares a PATH name with any other
+/// selected tool, built-in or additional, so one never shadows another in the
+/// shared managed bin directory. Names fold ASCII case, and on Windows their
+/// PATHEXT suffix, because either filesystem may treat them as one name.
+pub fn check_exports<'a>(
+    builtin: impl IntoIterator<Item = &'a Tool>,
+    additional: impl IntoIterator<Item = &'a Tool>,
+) -> Result<(), Error> {
+    let mut owners = std::collections::BTreeMap::new();
+    // Built-in exports first, so a collision always names the additional tool.
+    let builtin = builtin.into_iter().map(|tool| (tool, false));
+    for (tool, extra) in builtin.chain(additional.into_iter().map(|tool| (tool, true))) {
+        let windows = tool.platform.starts_with("windows-");
+        for name in tool.executables.keys() {
+            if let Some(other) = owners.insert(fold(name, windows), &tool.id)
+                && extra
+            {
+                return Err(Error::Collision {
+                    tool: tool.id.clone(),
+                    executable: name.clone(),
+                    other: other.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn fold(name: &str, windows: bool) -> String {
+    let name = name.to_ascii_lowercase();
+    match [".exe", ".cmd", ".bat", ".com"]
+        .iter()
+        .find_map(|suffix| name.strip_suffix(suffix))
+    {
+        Some(stem) if windows => stem.to_owned(),
+        _ => name,
     }
 }
 

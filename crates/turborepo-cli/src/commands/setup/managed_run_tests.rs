@@ -397,3 +397,6 @@ fn deleted_shims_and_declaration_drift_never_download_and_setup_recovers() {
     assert_ne!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
     assert!(select(&f).unwrap().is_some());
 }
+
+#[path = "additional_activation_tests.rs"]
+mod additional;

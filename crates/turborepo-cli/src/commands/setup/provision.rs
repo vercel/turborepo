@@ -704,6 +704,13 @@ pub(super) fn run(
     .cloned()
     .collect();
     desired.extend(artifacts.iter().map(|plan| plan.inventory_tool().clone()));
+    // Activation rejects the same shadowing, so never install a cohort that
+    // `turbo run` would refuse.
+    let declared: Vec<_> = artifacts.iter().map(ArtifactPlan::inventory_tool).collect();
+    turborepo_setup::artifact_provision::check_exports(
+        desired.iter().filter(|tool| !declared.contains(tool)),
+        declared.iter().copied(),
+    )?;
     let policy = preflight()?;
     let mut transports = transports
         .map(Ok)
