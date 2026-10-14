@@ -20,8 +20,8 @@ use turborepo_watch::WatchClient;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        CommandBase, bin, boundaries, config, daemon, docs, exec, generate, get_mfe_port, hook, info,
-        link, login, logout, ls, prune, query, run, setup, telemetry, unlink,
+        CommandBase, bin, boundaries, config, daemon, docs, exec, generate, get_mfe_port, hook,
+        info, link, login, logout, ls, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
