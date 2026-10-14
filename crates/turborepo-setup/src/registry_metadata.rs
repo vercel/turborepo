@@ -201,10 +201,6 @@ pub(crate) fn is_modern_yarn(manager: Manager, version: &Version) -> bool {
 }
 
 /// `{name}/-/{basename}-{version}.tgz`; scoped packages drop the scope.
-pub(crate) fn tarball_path(name: &str, version: &str) -> String {
-    let base = name.rsplit_once('/').map_or(name, |(_, base)| base);
-    format!("{name}/-/{base}-{version}.tgz")
-}
 
 fn sri_sha512(value: &str) -> Result<CorepackIntegrity, RegistryMetadataError> {
     let encoded = value

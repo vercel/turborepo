@@ -531,7 +531,7 @@ impl RegistryPlan {
         if package.adapter != id || !package.options.is_empty() {
             return Err(Error::InvalidLock);
         }
-        let (name, version) = registry_metadata::validate_selection(manager, &package.version)?;
+        let (_name, version) = registry_metadata::validate_selection(manager, &package.version)?;
         let Installation::Managed { artifacts } = &package.installation else {
             return Err(Error::InvalidLock);
         };
