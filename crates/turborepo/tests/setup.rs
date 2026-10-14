@@ -1905,6 +1905,8 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
         ),
     );
     // The changed declaration is named before any storage or network access.
+    let lock_before = fs::read(root.join("turbo.lock")).unwrap();
+    let project_before = fs::read(root.join("pyproject.toml")).unwrap();
     for ci in [false, true] {
         let words: &[&str] = if ci {
             &["setup", "--tools-only"]
@@ -1917,5 +1919,12 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
             ci,
             "turbo.lock declarations changed: uv: pyproject.toml (tool.uv.required-version)",
         );
+        assert_eq!(fs::read(root.join("turbo.lock")).unwrap(), lock_before);
+        assert_eq!(
+            fs::read(root.join("pyproject.toml")).unwrap(),
+            project_before
+        );
+        assert!(!root.join("uv.lock").exists());
+        assert!(!root.join(".turbo").exists());
     }
 }
