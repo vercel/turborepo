@@ -373,15 +373,27 @@ fn root_policy_and_cli_overrides_select_the_effective_setup() {
     assert_eq!(u.hits(), 0);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
 
-    // Skipping an ecosystem without a setup adapter lets JavaScript proceed.
+    // Preserve the native managed adapters added after the original policy
+    // stack. System Rust remains unsupported and must fail before traffic.
     let cargo = r#","experimentalCargoWorkspaces":true"#;
     let f = Fixture::new();
-    configure(&f, cargo, r#"{"tools":"managed"}"#);
+    configure(&f, cargo, r#"{"rust":{"tools":"verify-system"}}"#);
     let u = Upstream::new(&f, false, None);
     assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
-    configure(&f, cargo, r#"{"rust":{"tools":"skip"}}"#);
+    assert_eq!(u.hits(), 0);
+    configure(&f, cargo, r#"{"tools":"managed"}"#);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // Explicitly skipped Rust is not interpreted while JavaScript proceeds.
+    let f = Fixture::new();
+    configure(&f, cargo, r#"{"rust":{"tools":"skip"}}"#);
+    fs::write(f.owned.root().join("rust-toolchain.toml"), "invalid = [").unwrap();
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
 
     // Skipped JavaScript tools prepare nothing and never hide locked tools.
     let f = Fixture::new();

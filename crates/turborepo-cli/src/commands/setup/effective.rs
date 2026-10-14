@@ -81,7 +81,7 @@ impl Toolchain {
 }
 
 /// Effective setup for the eligible toolchains, JavaScript first.
-pub(super) struct Plan(Vec<Toolchain>);
+pub(super) struct Plan(Vec<Toolchain>, bool);
 
 impl Plan {
     pub fn new(
@@ -89,11 +89,19 @@ impl Plan {
         eligible: impl IntoIterator<Item = ToolchainId>,
         tools_only: bool,
     ) -> Self {
+        let eligible: Vec<_> = eligible.into_iter().collect();
+        let configured = eligible.iter().any(|id| {
+            let configured = policy.toolchain(id);
+            configured.tools.is_some()
+                || configured.dependencies.is_some()
+                || configured.lifecycle_scripts.is_some()
+        });
         Self(
             eligible
                 .into_iter()
                 .map(|id| Toolchain::new(policy, id, tools_only))
                 .collect(),
+            configured,
         )
     }
 
@@ -133,6 +141,11 @@ impl Plan {
     }
 
     pub fn report(&self) -> Vec<String> {
+        if !self.1 {
+            // Keep established check/plan output unchanged when setup has no
+            // explicit repository decisions, even with --tools-only.
+            return Vec::new();
+        }
         self.0.iter().map(Toolchain::report).collect()
     }
 }
@@ -164,6 +177,8 @@ mod tests {
     fn cli_overrides_policy_which_overrides_inference() {
         let inferred = plan("{}", false);
         assert!(!inferred.tools_only() && !inferred.unsupported());
+        assert!(inferred.report().is_empty());
+        assert!(plan("{}", true).report().is_empty());
         // Preserve the native adapters that landed after this policy stack:
         // managed Rust remains supported, but system Rust is still fail-closed.
         assert!(plan(r#"{"rust":{"tools":"verify-system"}}"#, false).unsupported());
