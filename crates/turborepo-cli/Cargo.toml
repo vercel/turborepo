@@ -21,6 +21,8 @@ rustls-tls = [
   "turborepo-watch/rustls-tls",
 ]
 heap-dhat = ["dep:dhat"]
+# Cross-crate fixtures only. Consumers must enable this via dev-dependencies.
+test-support = ["turborepo-setup/test-support"]
 pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]

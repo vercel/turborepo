@@ -37,7 +37,7 @@ pub(super) struct Transports {
     pub uv: UvTransport,
     pub rustup: RustupTransport,
     pub python: PythonTransport,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub trust_base: Option<std::path::PathBuf>,
     /// Fixture override; otherwise built from the locked artifact origins.
     pub artifact: Option<ArtifactTransport>,
@@ -72,7 +72,7 @@ impl Transports {
             uv: UvTransport::official(policy)?,
             rustup: RustupTransport::official(policy)?,
             python: PythonTransport::official(policy)?,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
             artifact: None,
             go: GoTransport::official(policy)?,
@@ -81,7 +81,7 @@ impl Transports {
     }
 
     pub(super) fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(base) = &self.trust_base {
             return Ok(base.clone());
         }
