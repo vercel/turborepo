@@ -25,12 +25,8 @@ fn tracked(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
 }
 #[test]
 fn no_lock_ci_repeat_preserves_24_0_pin_generation_and_zero_advance_metadata() {
-    for (legacy, flags) in [
-        (false, NO_LOCK),
-        (true, NO_LOCK),
-        (false, &["--no-lock"][..]),
-        (true, &["--no-lock"][..]),
-    ] {
+    // Plain --no-lock cannot install locked dependencies (TURBO-6229).
+    for (legacy, flags) in [(false, NO_LOCK), (true, NO_LOCK)] {
         let f = fresh();
         fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
         let before = tracked(&f);

@@ -93,6 +93,10 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
     }
 }
 pub(super) fn bundled(prefix: &str) -> Vec<u8> {
+    bundled_with(prefix, "throw new Error('never execute');")
+}
+/// A Node release whose bundled npm and npx CLIs are `cli`.
+pub(super) fn bundled_with(prefix: &str, cli: &str) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in [
         ("bin/node", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
@@ -101,14 +105,8 @@ pub(super) fn bundled(prefix: &str) -> Vec<u8> {
             "lib/node_modules/npm/package.json",
             r#"{"name":"npm","version":"11.6.1","bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}"#,
         ),
-        (
-            "lib/node_modules/npm/bin/npm-cli.js",
-            "throw new Error('never execute');",
-        ),
-        (
-            "lib/node_modules/npm/bin/npx-cli.js",
-            "throw new Error('never execute');",
-        ),
+        ("lib/node_modules/npm/bin/npm-cli.js", cli),
+        ("lib/node_modules/npm/bin/npx-cli.js", cli),
     ] {
         let mut h = tar::Header::new_gnu();
         h.set_size(body.len() as u64);

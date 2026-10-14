@@ -373,11 +373,10 @@ fn root_policy_and_cli_overrides_select_the_effective_setup() {
     let f = Fixture::new();
     configure(&f, "", r#"{"dependencies":"locked"}"#);
     let u = Upstream::new(&f, false, None);
-    assert!(matches!(
-        f.run(&u, &["--frozen"]),
-        Err(Error::NotImplemented)
-    ));
-    assert_eq!(u.hits(), 0);
+    // Locked dependencies reach dependency setup instead of failing as
+    // pending; this fixture's pnpm installer reports itself as skipped.
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
 
     // Preserve the native managed adapters added after the original policy
@@ -432,10 +431,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        if flags == ["--no-frozen", "--tools-only"]
-            || flags == ["--frozen"]
-            || flags == ["--no-lock"]
-        {
+        if flags == ["--no-frozen", "--tools-only"] || flags == ["--frozen"] {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else if flags == ["--check"] {
@@ -446,16 +442,24 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert!(!f.owned.root().join(".turbo").exists());
         } else {
             let result = f.run(&u, &flags);
-            if flags.contains(&"--offline") && !flags.contains(&"--no-lock") {
-                assert!(
-                    matches!(&result, Err(Error::Offline(_))),
-                    "{flags:?}: {result:?}"
-                );
-            } else {
-                assert!(
+            match flags.as_slice() {
+                // Neither can install locked dependencies (#14486, #14518).
+                ["--no-lock"] | ["--frozen", "--offline"] => {
+                    assert!(
+                        matches!(&result, Err(Error::Unsupported(_))),
+                        "{flags:?}: {result:?}"
+                    );
+                }
+                _ if flags.contains(&"--offline") && !flags.contains(&"--no-lock") => {
+                    assert!(
+                        matches!(&result, Err(Error::Offline(_))),
+                        "{flags:?}: {result:?}"
+                    );
+                }
+                _ => assert!(
                     matches!(&result, Err(Error::NotImplemented)),
                     "{flags:?}: {result:?}"
-                );
+                ),
             }
             assert_eq!(u.hits(), 0);
             assert!(!f.owned.root().join(".turbo").exists());
