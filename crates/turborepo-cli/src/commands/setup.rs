@@ -461,6 +461,8 @@ mod tests {
                 vec!["--no-frozen"],
                 vec!["--force"],
                 vec!["--no-lock"],
+                vec!["--offline"],
+                vec!["--offline", "--force"],
                 vec!["--no-frozen", "--update-lock"],
             ] {
                 let request = request(&flags, ci).unwrap();
@@ -470,8 +472,9 @@ mod tests {
         }
         for (flags, mode) in [
             (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
-            (vec!["--offline"], Mode::Provision),
             (vec!["--no-lock", "--force"], Mode::Provision),
+            (vec!["--no-lock", "--offline"], Mode::Provision),
+            (vec!["--no-lock", "--force", "--offline"], Mode::Provision),
         ] {
             let request = request(&flags, false).unwrap();
             assert_eq!(request.mode, mode);
@@ -480,9 +483,20 @@ mod tests {
                 Err(Error::NotImplemented)
             ));
         }
-        let request =
+        let no_lock =
             request(&["--force", "--offline", "--tools-only", "--no-lock"], true).unwrap();
-        assert!(request.force && request.offline && request.tools_only);
-        assert!(!request.update_lock);
+        assert!(no_lock.force && no_lock.offline && no_lock.tools_only);
+        assert!(!no_lock.update_lock);
+        assert!(matches!(
+            validate_request(&no_lock),
+            Err(Error::NotImplemented)
+        ));
+        for ci in [false, true] {
+            let refresh = request(&["--offline", "--no-frozen", "--update-lock"], ci).unwrap();
+            assert!(matches!(
+                validate_request(&refresh),
+                Err(Error::Unsupported(message)) if message.starts_with("--offline cannot resolve --update-lock")
+            ));
+        }
     }
 }

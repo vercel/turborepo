@@ -358,10 +358,16 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert!(!f.owned.root().join(".turbo").exists());
         } else {
             let result = f.run(&u, &flags);
-            if flags.contains(&"--offline") {
-                assert!(matches!(result, Err(Error::Offline(_))));
+            if flags.contains(&"--offline") && !flags.contains(&"--no-lock") {
+                assert!(
+                    matches!(&result, Err(Error::Offline(_))),
+                    "{flags:?}: {result:?}"
+                );
             } else {
-                assert!(matches!(result, Err(Error::NotImplemented)));
+                assert!(
+                    matches!(&result, Err(Error::NotImplemented)),
+                    "{flags:?}: {result:?}"
+                );
             }
             assert_eq!(u.hits(), 0);
             assert!(!f.owned.root().join(".turbo").exists());
