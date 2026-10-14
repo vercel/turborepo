@@ -44,6 +44,7 @@ fn lock(rustup: &[u8], manifest: &str, with_rustup: bool) -> Lock {
             root_prefix: None,
             destination: None,
             executables: BTreeMap::from([("rustup".into(), "bin/rustup.exe".into())]),
+            alternates: BTreeMap::new(),
         };
         (platform, BTreeMap::from([("rustup-init".to_owned(), part)]))
     });
