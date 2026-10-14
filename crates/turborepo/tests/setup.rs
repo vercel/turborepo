@@ -156,7 +156,10 @@ fn invoke_with(
 fn failure(root: &Path, words: &[&str], ci: bool, expected: &str) -> String {
     let (code, text) = invoke(root, words, ci);
     assert_eq!(code, 1, "{words:?}: {text}");
-    assert!(diagnostic_contains(&text, expected), "{text}");
+    assert!(
+        diagnostic_contains(&text, expected),
+        "{words:?}: expected {expected:?}: {text}"
+    );
     text
 }
 
@@ -391,6 +394,12 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
                     (false, _) => PENDING,
                     (true, true) if words.contains(&"--no-lock") => {
                         "invalid or unsupported native resolution record"
+                    }
+                    (true, true) if words.contains(&"--force") => {
+                        "locked provisioning requires turbo.lock"
+                    }
+                    (true, true) if words.contains(&"--frozen") => {
+                        "frozen mode requires turbo.lock"
                     }
                     (true, true) => "a native Node declaration is required",
                     (true, false) => UNQUALIFIED,
