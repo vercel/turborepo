@@ -322,7 +322,12 @@ fn standalone_gate_reads_only_the_selected_root_config() {
         vec!["--root-turbo-json", "custom.json", "setup", "--plan"],
         vec!["--cwd=selected-root", "setup", "--plan"],
     ] {
-        failure(root, &words, false, PENDING);
+        let expected = if words.contains(&"--offline") {
+            "invalid turbo.lock JSON"
+        } else {
+            PENDING
+        };
+        failure(root, &words, false, expected);
     }
     let invalid_gate = r#"{"futureFlags":{"experimentalSetup":"true"}}"#;
     write(root, "custom.json", invalid_gate);
@@ -370,7 +375,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         // Plain setup and --check act like --tools-only, so they reach the same gate.
         let supported = !words
             .iter()
-            .any(|word| matches!(*word, "--plan" | "--offline" | "--__test-run"));
+            .any(|word| matches!(*word, "--plan" | "--__test-run"));
         // A Cargo workspace without a root rust-toolchain file declares no tool.
         let text = if supported && words.contains(&"--check") {
             let (code, text) = invoke(root, &words, false);
@@ -392,6 +397,9 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
                 false,
                 match (supported, QUALIFIED) {
                     (false, _) => PENDING,
+                    (true, true) if words.contains(&"--offline") => {
+                        "offline setup requires turbo.lock"
+                    }
                     (true, true) if words.contains(&"--no-lock") => {
                         "invalid or unsupported native resolution record"
                     }
