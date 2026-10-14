@@ -234,7 +234,13 @@ fn run_with_policy(
         return Ok(0);
     }
     let code = if request.offline {
-        offline::run(&discovery, snapshot, transports.as_ref(), preflight, request.force)
+        offline::run(
+            &discovery,
+            snapshot,
+            transports.as_ref(),
+            preflight,
+            request.force,
+        )
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {

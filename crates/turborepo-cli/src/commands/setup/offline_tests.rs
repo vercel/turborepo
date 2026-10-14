@@ -78,6 +78,8 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         for flags in [
             OFFLINE,
             OFFLINE_FORCE,
+            &["--offline"][..],
+            &["--offline", "--force"][..],
             &["--tools-only", "--offline", "--frozen"],
             &["--tools-only", "--offline", "--no-frozen"],
         ] {
@@ -243,10 +245,12 @@ fn declaration_drift_missing_lock_and_unsupported_offline_controls_never_resolve
         attempt(&f, &empty, &["--check", "--tools-only", "--offline"]).unwrap(),
         0
     );
-    assert!(matches!(
-        attempt(&f, &empty, &["--plan", "--tools-only", "--offline"]),
-        Err(Error::NotImplemented)
-    ));
+    // Main's locked plan is also read-only offline; it must retain the same
+    // zero-write/traffic/probe guarantees verified by attempt().
+    assert_eq!(
+        attempt(&f, &empty, &["--plan", "--tools-only", "--offline"]).unwrap(),
+        0
+    );
     assert_eq!(empty.hits(), 0);
 }
 
@@ -258,12 +262,16 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
         let args = f.args(OFFLINE);
         let called = std::cell::Cell::new(0);
         let expected = std::cell::RefCell::new(None);
+        let policy = f.owned.policy_at(f.owned.root()).unwrap();
         let result = crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(args, setup_args, Some(provision::Transports {
                 trust_base: Some(f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
+                uv: turborepo_setup::uv_resolution::UvTransport::official(&policy).unwrap(),
+                rustup: turborepo_setup::rustup_provision::RustupTransport::official(&policy).unwrap(),
+                python: turborepo_setup::python_resolution::PythonTransport::official(&policy).unwrap(),
             }), || {
                 called.set(called.get() + 1);
                 if called.get() == 2 {

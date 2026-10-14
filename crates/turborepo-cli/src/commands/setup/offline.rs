@@ -117,9 +117,6 @@ pub(super) fn run(
         })
         .map_err(|error| unavailable(error, &artifacts))?;
     println!("{}", lines.join("\n"));
-    println!(
-        "Dependencies skipped (--tools-only). No resolution, downloads, writes, probes, or tasks \
-         run."
-    );
+    println!("No resolution, downloads, writes, probes, or tasks run.");
     Ok(0)
 }
