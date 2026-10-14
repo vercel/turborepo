@@ -165,7 +165,7 @@ fn resolved_candidate_missing_current_host_is_rejected_before_publication_or_sto
         false,
         |request| {
             runtime
-                .block_on(turborepo_setup::js_resolution::resolve(
+                .block_on(turborepo_setup::js_resolution::resolve_with_bun(
                     request, &node, &registry, &bun,
                 ))
                 .map_err(|e| reconcile::Error::Resolution(e.to_string()))

@@ -175,7 +175,12 @@ fn apply(
     reconcile::reconcile(&snapshot, mode, offline, |request| {
         let before = lock_bytes(root);
         let manifest = fs::read(root.join("package.json")).unwrap();
-        let result = runtime.block_on(resolve(request, &world.node, &world.registry, &world.bun));
+        let result = runtime.block_on(resolve_with_bun(
+            request,
+            &world.node,
+            &world.registry,
+            &world.bun,
+        ));
         assert_eq!(lock_bytes(root), before); // Resolver never publishes.
         // Only explicit response-hook drift may change this sentinel.
         if result.is_ok() {
@@ -463,8 +468,13 @@ fn fresh_source_drift_revalidation_fails_before_publication_and_next_traffic() {
     assert!(
         reconcile::reconcile(&snapshot, Mode::Local, false, |request| {
             fs::write(p.join(".nvmrc"), "24.1.0").unwrap();
-            rt.block_on(resolve(request, &world.node, &world.registry, &world.bun))
-                .map_err(|e| reconcile::Error::Resolution(e.to_string()))
+            rt.block_on(resolve_with_bun(
+                request,
+                &world.node,
+                &world.registry,
+                &world.bun,
+            ))
+            .map_err(|e| reconcile::Error::Resolution(e.to_string()))
         })
         .is_err()
     );

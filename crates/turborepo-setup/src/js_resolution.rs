@@ -188,14 +188,6 @@ async fn resolve_inner(
 
 /// The JavaScript cohort only (Node and its package manager), for composition
 /// with other ecosystems' selections before final lock validation.
-pub(crate) async fn resolve_tools(
-    request: &Resolution<'_>,
-    node: &NodeTransport,
-    registry: &RegistryTransport,
-) -> Result<BTreeMap<String, Tool>, Error> {
-    resolve_tools_with_bun(request, node, registry, None).await
-}
-
 pub(crate) async fn resolve_tools_with_bun(
     request: &Resolution<'_>,
     node: &NodeTransport,
