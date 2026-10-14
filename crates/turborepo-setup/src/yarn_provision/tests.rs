@@ -4,7 +4,7 @@ use std::{fs, io::Write, path::Path, process::Command};
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha224, Sha256, Sha512};
 
 use super::*;
 use crate::{
@@ -205,12 +205,22 @@ async fn classic_pins_cover_the_registry_archive() {
         .prepare_if_needed(&store, &desired(&node, &yarn), &transport)
         .await;
     assert!(prepared.unwrap().is_some());
+    // Legacy Corepack SHA-224 pins also cover the verified archive bytes.
+    let (value, request) = pinned(format!("sha224.{}", hex::encode(Sha224::digest(&bytes))));
+    let (node, yarn) = plan(&value, &request).unwrap();
+    assert!(
+        yarn.prepare_if_needed(&store, &desired(&node, &yarn), &transport)
+            .await
+            .unwrap()
+            .is_some()
+    );
     let hits = server.hits();
-    for pin in [
-        format!("sha256.{}", sha256(&other)),
-        format!("sha512.{}", sha512(&other).digest),
-        format!("sha224.{}", "a".repeat(56)),
+    for (pin, requests) in [
+        (format!("sha256.{}", sha256(&other)), 0),
+        (format!("sha512.{}", sha512(&other).digest), 1),
+        (format!("sha224.{}", "a".repeat(56)), 2),
     ] {
+        let before = server.hits();
         let (value, request) = pinned(pin);
         let result = match plan(&value, &request) {
             Ok((node, yarn)) => yarn
@@ -220,9 +230,11 @@ async fn classic_pins_cover_the_registry_archive() {
             Err(error) => Err(error),
         };
         assert!(result.is_err());
+        assert_eq!(server.hits(), before + requests);
     }
-    // Only the SHA-512 pin needs registry metadata; no artifact is downloaded.
-    assert_eq!(server.hits(), hits + 1);
+    // SHA-256 conflicts fail before traffic; SHA-512 conflicts need only
+    // metadata. SHA-224 is verified against the downloaded archive bytes.
+    assert_eq!(server.hits(), hits + 3);
     assert!(store.current().unwrap().is_none());
 }
 

@@ -124,6 +124,7 @@ fn propose(
         rust,
         artifacts,
         go,
+        yarn,
     } = provision::plans(&sources, &outcome.lock)?;
     let mut desired: Vec<_> = node
         .as_ref()
@@ -138,6 +139,7 @@ fn propose(
     desired.extend(rust.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(artifacts.iter().map(|plan| plan.inventory_tool().clone()));
     desired.extend(go.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
     // Same per-tool reuse as setup's preparation; inspection never writes.
     let (installed, damaged) = match Store::inspect(root) {
         Ok(current) => (current.map(|c| c.tools).unwrap_or_default(), false),
