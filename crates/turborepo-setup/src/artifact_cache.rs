@@ -79,11 +79,19 @@ impl ArtifactCache {
         let cutoff = SystemTime::now()
             .checked_sub(unused_for)
             .ok_or_else(|| io::Error::other("invalid setup download cache age"))?;
+        Self::prune_entries(self.entries()?, cutoff)
+    }
+
+    fn prune_entries(entries: Vec<PathBuf>, cutoff: SystemTime) -> io::Result<DiskUse> {
         let mut removed = DiskUse::default();
-        for path in self.entries()? {
-            let metadata = fs::symlink_metadata(&path)?;
+        for path in entries {
+            let Some(metadata) = skip_missing(fs::symlink_metadata(&path))? else {
+                continue;
+            };
             if metadata.is_file() && metadata.modified()? < cutoff {
-                fs::remove_file(&path)?;
+                if skip_missing(fs::remove_file(&path))?.is_none() {
+                    continue;
+                }
                 removed.entries += 1;
                 removed.bytes += metadata.len();
             }
@@ -93,10 +101,20 @@ impl ArtifactCache {
 
     /// Apparent size of cached entries and partials, shared by every clone.
     pub fn disk_use(&self) -> io::Result<DiskUse> {
+        Self::measure_entries(self.entries()?)
+    }
+
+    fn measure_entries(entries: Vec<PathBuf>) -> io::Result<DiskUse> {
         let mut usage = DiskUse::default();
-        for path in self.entries()? {
-            usage.entries += 1;
-            usage.bytes += fs::symlink_metadata(path)?.len();
+        for path in entries {
+            let Some(metadata) = skip_missing(fs::symlink_metadata(path))? else {
+                continue;
+            };
+            // Enumeration is a snapshot: a replaced link is not cache storage.
+            if metadata.is_file() {
+                usage.entries += 1;
+                usage.bytes += metadata.len();
+            }
         }
         Ok(usage)
     }
@@ -113,15 +131,23 @@ impl ArtifactCache {
             if self.check(&platform).is_err() {
                 continue;
             }
-            for entry in fs::read_dir(platform)? {
-                let entry = entry?;
+            let Some(directory) = skip_missing(fs::read_dir(platform))? else {
+                continue;
+            };
+            for entry in directory {
+                let Some(entry) = skip_missing(entry)? else {
+                    continue;
+                };
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
                 let digest = name.len() == 64
                     && name
                         .bytes()
                         .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b));
-                if entry.file_type()?.is_file() && (digest || name.starts_with(".partial-")) {
+                let Some(kind) = skip_missing(entry.file_type())? else {
+                    continue;
+                };
+                if kind.is_file() && (digest || name.starts_with(".partial-")) {
                     entries.push(entry.path());
                 }
             }
@@ -181,6 +207,16 @@ impl ArtifactCache {
             }
         }
         Err(io::Error::other("unsafe setup download cache directory"))
+    }
+}
+
+// An entry/platform may disappear after enumeration while another clone
+// prunes or publishes. Only absence is skippable; retain every other error.
+fn skip_missing<T>(result: io::Result<T>) -> io::Result<Option<T>> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
     }
 }
 

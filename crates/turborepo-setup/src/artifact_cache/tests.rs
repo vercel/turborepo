@@ -187,3 +187,82 @@ fn pruning_keeps_entries_another_repository_used_recently() {
     expected.sort();
     assert_eq!(files(&directory), expected);
 }
+
+#[test]
+fn disappeared_snapshot_entries_do_not_abort_measurement_or_pruning() {
+    let base = tempfile::tempdir().unwrap();
+    let cache = ArtifactCache::new(base.path()).unwrap();
+    let (gone, gone_sha) = verified(b"gone");
+    let (old, old_sha) = verified(b"old archive");
+    let (live, live_sha) = verified(b"live archive");
+    for artifact in [&gone, &old, &live] {
+        cache.put(Platform::Any, artifact).unwrap();
+    }
+    let directory = base.path().join("turborepo/setup-artifacts/v1/any");
+    age(&directory.join(&gone_sha), 40);
+    age(&directory.join(&old_sha), 40);
+    let entries = cache.entries().unwrap();
+    // Deterministically model another clone removing/renaming after enumeration.
+    fs::rename(directory.join(&gone_sha), base.path().join("relocated")).unwrap();
+    let usage = ArtifactCache::measure_entries(entries.clone()).unwrap();
+    assert_eq!(usage.entries, 2);
+    assert_eq!(
+        usage.bytes,
+        (old.as_bytes().len() + live.as_bytes().len()) as u64
+    );
+    let cutoff = SystemTime::now() - Duration::from_secs(30 * 86_400);
+    let removed = ArtifactCache::prune_entries(entries, cutoff).unwrap();
+    assert_eq!(removed.entries, 1);
+    assert_eq!(removed.bytes, old.as_bytes().len() as u64);
+    assert_eq!(files(&directory), std::slice::from_ref(&live_sha));
+    assert!(cache.get(Platform::Any, &live_sha, LIMIT).is_some());
+    assert_eq!(
+        fs::read(base.path().join("relocated")).unwrap(),
+        gone.as_bytes()
+    );
+}
+
+#[test]
+fn replaced_snapshot_links_are_not_counted_or_pruned_and_other_errors_remain_errors() {
+    let base = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let cache = ArtifactCache::new(base.path()).unwrap();
+    let (artifact, sha) = verified(b"archive");
+    cache.put(Platform::Any, &artifact).unwrap();
+    let entries = cache.entries().unwrap();
+    let entry = entries[0].clone();
+    fs::remove_file(&entry).unwrap();
+    fs::write(outside.path().join("keep"), b"outside bytes").unwrap();
+    symlink(outside.path().join("keep"), &entry).unwrap();
+    assert_eq!(
+        ArtifactCache::measure_entries(entries.clone()).unwrap(),
+        DiskUse::default()
+    );
+    assert_eq!(
+        ArtifactCache::prune_entries(entries, SystemTime::now()).unwrap(),
+        DiskUse::default()
+    );
+    assert!(
+        fs::symlink_metadata(entry)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        fs::read(outside.path().join("keep")).unwrap(),
+        b"outside bytes"
+    );
+    assert!(cache.get(Platform::Any, &sha, LIMIT).is_none());
+    assert!(
+        skip_missing::<()>(Err(io::ErrorKind::NotFound.into()))
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        skip_missing::<()>(Err(io::ErrorKind::PermissionDenied.into()))
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::PermissionDenied
+    );
+    assert!(skip_missing(Ok(())).unwrap().is_some());
+}
