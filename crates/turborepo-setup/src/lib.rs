@@ -16,6 +16,7 @@ pub mod go_resolution;
 pub mod js_resolution;
 pub mod lifecycle;
 pub mod lock;
+pub mod mirror;
 pub mod native_baseline;
 pub mod native_resolution;
 pub mod node;
