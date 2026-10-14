@@ -35,6 +35,9 @@ use url::Url;
 
 pub use crate::error::{Error, Result};
 
+/// 403 error code returned when a token may read artifacts but not write them.
+pub const REMOTE_CACHE_READ_ONLY_CODE: &str = "remote_cache_read_only";
+
 pub mod analytics;
 mod error;
 mod retry;
@@ -279,7 +282,11 @@ impl Client for APIClient {
             }
         };
 
-        if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
+        if api_error.code == REMOTE_CACHE_READ_ONLY_CODE {
+            Error::RemoteCacheReadOnly {
+                message: api_error.message,
+            }
+        } else if let Some(status_string) = api_error.code.strip_prefix("remote_caching_") {
             let status = match status_string {
                 "disabled" => CachingStatus::Disabled,
                 "enabled" => CachingStatus::Enabled,
@@ -1332,8 +1339,8 @@ mod test {
     use url::Url;
 
     use crate::{
-        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString, TokenClient,
-        telemetry::TelemetryClient,
+        APIAuth, APIClient, AnonAPIClient, CacheClient, CachingStatus, Client, Error,
+        REMOTE_CACHE_READ_ONLY_CODE, SecretString, TokenClient, telemetry::TelemetryClient,
     };
 
     #[test]
@@ -1584,6 +1591,39 @@ mod test {
         );
         let err = APIClient::handle_403(response).await;
         assert_snapshot!(err.to_string(), @"Unknown status forbidden: Not authorized");
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_maps_read_only_code() {
+        let body = format!(
+            r#"{{"error": {{"code": "{REMOTE_CACHE_READ_ONLY_CODE}", "message": "Read only"}}}}"#
+        );
+        let response = reqwest::Response::from(http::Response::builder().body(body).unwrap());
+        let err = APIClient::handle_403(response).await;
+        assert!(
+            matches!(&err, Error::RemoteCacheReadOnly { message } if message == "Read only"),
+            "{err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_maps_remote_caching_status() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body(r#"{"error": {"code": "remote_caching_paused", "message": "Paused"}}"#)
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert!(
+            matches!(
+                err,
+                Error::CacheDisabled {
+                    status: CachingStatus::Paused,
+                    ..
+                }
+            ),
+            "{err:?}"
+        );
     }
 
     #[tokio::test]

@@ -126,6 +126,17 @@ impl CacheMultiplexer {
         }
     }
 
+    /// Treats the remote cache as read-only for the rest of the run, as if
+    /// `remote:r` had been configured. Reads are unaffected, and a run that
+    /// already skips remote writes is left unchanged.
+    pub fn disable_remote_writes(&self) {
+        if self.cache_config.remote.write
+            && let Some(http) = &self.http
+        {
+            http.disable_writes_read_only();
+        }
+    }
+
     pub fn requests(&self) -> Option<Arc<Mutex<UploadMap>>> {
         self.http.as_ref().map(|http| http.requests())
     }
@@ -149,6 +160,7 @@ impl CacheMultiplexer {
             && self.cache_config.remote.write
             && let Some(fs) = &self.fs
             && let Some(http) = self.get_http_cache()
+            && !http.uploads_disabled()
         {
             // Archive construction reads and compresses every output file;
             // keep that synchronous work off the Tokio runtime workers.
@@ -183,7 +195,7 @@ impl CacheMultiplexer {
                     self.should_use_http_cache.store(false, Ordering::Relaxed);
                     Ok(())
                 }
-                Err(CacheError::ForbiddenRemoteCacheWrite) if http.is_disabled() => Ok(()),
+                Err(CacheError::ForbiddenRemoteCacheWrite) if http.uploads_disabled() => Ok(()),
                 Err(CacheError::RemoteCacheUnavailable) => Ok(()), // local write succeeded
                 Err(e) => Err(e),
                 Ok(()) => Ok(()),
@@ -203,6 +215,9 @@ impl CacheMultiplexer {
         }
 
         let http_result = match self.get_http_cache() {
+            // Uploads were disabled for this run after the remote cache
+            // reported the token as read-only; that was already reported once.
+            Some(http) if self.cache_config.remote.write && http.uploads_disabled() => None,
             Some(http) => {
                 if self.cache_config.remote.write {
                     let http_result = http.put(anchor, key, files, duration).await;
@@ -239,7 +254,10 @@ impl CacheMultiplexer {
                 Ok(())
             }
             Some(Err(CacheError::ForbiddenRemoteCacheWrite))
-                if self.http.as_ref().is_some_and(|http| http.is_disabled()) =>
+                if self
+                    .http
+                    .as_ref()
+                    .is_some_and(|http| http.uploads_disabled()) =>
             {
                 Ok(())
             }
@@ -551,6 +569,126 @@ mod tests {
             })]
         );
         query.assert_calls_async(0).await;
+        Ok(())
+    }
+
+    fn mock_server_multiplexer(
+        opts: &CacheOpts,
+        root: &AbsoluteSystemPathBuf,
+        server: &httpmock::MockServer,
+    ) -> Result<CacheMultiplexer> {
+        Ok(CacheMultiplexer::new(
+            opts,
+            root,
+            Some(APIClient::new(
+                server.base_url(),
+                None,
+                None,
+                "2.0.0",
+                false,
+            )?),
+            Some(APIAuth {
+                team_id: None,
+                team_slug: None,
+                token: SecretString::new("token".into()),
+            }),
+            None,
+            LazyScmState::resolved(None),
+        )?)
+    }
+
+    async fn mock_remote_hit(server: &httpmock::MockServer) -> httpmock::Mock<'_> {
+        server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::HEAD)
+                    .path("/v8/artifacts/remote-hit");
+                then.status(200).header("x-artifact-duration", "7");
+            })
+            .await
+    }
+
+    #[tokio::test]
+    async fn read_only_upload_response_disables_uploads_but_keeps_reads() -> Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let first_put = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::PUT)
+                    .path("/v8/artifacts/first");
+                then.status(403)
+                    .header("content-type", "application/json")
+                    .body(format!(
+                        r#"{{"error":{{"code":"{}","message":"read only"}}}}"#,
+                        turborepo_api_client::REMOTE_CACHE_READ_ONLY_CODE
+                    ));
+            })
+            .await;
+        let second_put = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::PUT)
+                    .path("/v8/artifacts/second");
+                then.status(202);
+            })
+            .await;
+        let remote_hit = mock_remote_hit(&server).await;
+
+        let root = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("output.txt")?;
+        std::fs::write(root.resolve(&file), "content")?;
+        let cache = mock_server_multiplexer(&both_write_opts(), &root, &server)?;
+
+        for hash in ["first", "second"] {
+            cache
+                .put(&root, hash, std::slice::from_ref(&file), 1)
+                .await?;
+        }
+        first_put.assert_calls_async(1).await;
+        second_put.assert_calls_async(0).await;
+        assert_eq!(
+            cache.exists("second").await?.unwrap().source,
+            CacheSource::Local
+        );
+        assert_eq!(
+            cache.exists("remote-hit").await?.unwrap().source,
+            CacheSource::Remote
+        );
+        remote_hit.assert_calls_async(1).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn disable_remote_writes_skips_uploads_and_respects_read_only_config() -> Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let put = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::PUT);
+                then.status(202);
+            })
+            .await;
+        let remote_hit = mock_remote_hit(&server).await;
+
+        let root = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("output.txt")?;
+        std::fs::write(root.resolve(&file), "content")?;
+        let cache = mock_server_multiplexer(&both_write_opts(), &root, &server)?;
+        cache.disable_remote_writes();
+        cache
+            .put(&root, "status-read-only", std::slice::from_ref(&file), 1)
+            .await?;
+        put.assert_calls_async(0).await;
+        assert_eq!(
+            cache.exists("remote-hit").await?.unwrap().source,
+            CacheSource::Remote
+        );
+        remote_hit.assert_calls_async(1).await;
+
+        // An explicit `remote:r` is already read-only and stays untouched.
+        let mut read_only_opts = both_write_opts();
+        read_only_opts.cache.remote.write = false;
+        let cache = mock_server_multiplexer(&read_only_opts, &root, &server)?;
+        cache.disable_remote_writes();
+        assert!(!cache.http.as_ref().unwrap().uploads_disabled());
         Ok(())
     }
 

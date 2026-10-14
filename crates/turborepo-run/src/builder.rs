@@ -205,17 +205,24 @@ impl CacheStatusProbe for APIClient {
     }
 }
 
+/// `read_only_tx` fires if the server reports the token as read-only, which
+/// can happen after the run has started; dropping it signals nothing.
 fn start_remote_cache_preflight(
     client: impl CacheStatusProbe,
     token: SecretString,
     team_id: Option<String>,
     team_slug: Option<String>,
+    read_only_tx: tokio::sync::oneshot::Sender<()>,
 ) -> RemoteCachePreflight {
     tokio::spawn(
         async move {
-            client
+            let result = client
                 .check_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
-                .await
+                .await;
+            if result.as_ref().is_ok_and(|response| response.read_only) {
+                let _ = read_only_tx.send(());
+            }
+            result
         }
         .instrument(tracing::info_span!("remote_cache_preflight")),
     )
@@ -2218,6 +2225,7 @@ impl RunBuilder {
             None
         };
 
+        let (read_only_tx, read_only_rx) = tokio::sync::oneshot::channel();
         let preflight_handle = if self.opts.remote_cache_disabled_reason.is_none() {
             if let (Some(client), Some(auth)) = (api_client.clone(), self.api_auth.as_ref()) {
                 Some(start_remote_cache_preflight(
@@ -2225,6 +2233,7 @@ impl RunBuilder {
                     auth.token.clone(),
                     auth.team_id.clone(),
                     auth.team_slug.clone(),
+                    read_only_tx,
                 ))
             } else {
                 None
@@ -2268,6 +2277,16 @@ impl RunBuilder {
                 scm_state.clone(),
             )?
         };
+        // Apply a read-only status whenever the preflight resolves, without
+        // delaying the run on it. Uploads that start afterwards are skipped.
+        if preflight_handle.is_some() {
+            let async_cache = async_cache.clone();
+            tokio::spawn(async move {
+                if read_only_rx.await.is_ok() {
+                    async_cache.disable_remote_writes();
+                }
+            });
+        }
 
         let BuiltExecutionContext {
             pkg_dep_graph,
@@ -3967,17 +3986,48 @@ mod remote_cache_status_tests {
         result: turborepo_api_client::Result<CachingStatusResponse>,
     ) -> RemoteCacheStatus {
         let probe = StubCacheStatusProbe(Mutex::new(Some(result)));
+        let (read_only_tx, _read_only_rx) = tokio::sync::oneshot::channel();
         let handle = start_remote_cache_preflight(
             probe,
             SecretString::new("test-token".to_string()),
             None,
             None,
+            read_only_tx,
         );
         resolve_remote_cache_status(None, Some(handle)).await
     }
 
+    async fn preflight_signals_read_only(read_only: bool) -> bool {
+        let probe = StubCacheStatusProbe(Mutex::new(Some(Ok(CachingStatusResponse {
+            status: CachingStatus::Enabled,
+            read_only,
+        }))));
+        let (read_only_tx, read_only_rx) = tokio::sync::oneshot::channel();
+        let handle = start_remote_cache_preflight(
+            probe,
+            SecretString::new("test-token".to_string()),
+            None,
+            None,
+            read_only_tx,
+        );
+        assert!(matches!(
+            resolve_remote_cache_status(None, Some(handle)).await,
+            RemoteCacheStatus::Enabled
+        ));
+        read_only_rx.await.is_ok()
+    }
+
+    #[tokio::test]
+    async fn preflight_signals_read_only_status() {
+        assert!(preflight_signals_read_only(true).await);
+        assert!(!preflight_signals_read_only(false).await);
+    }
+
     fn response(status: CachingStatus) -> CachingStatusResponse {
-        CachingStatusResponse { status }
+        CachingStatusResponse {
+            status,
+            read_only: false,
+        }
     }
 
     #[tokio::test]

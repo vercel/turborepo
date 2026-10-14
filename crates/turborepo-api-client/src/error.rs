@@ -39,6 +39,8 @@ pub enum Error {
         status: CachingStatus,
         message: String,
     },
+    #[error("{message}")]
+    RemoteCacheReadOnly { message: String },
     #[error("unable to parse '{text}' as JSON: {err}")]
     InvalidJson {
         err: serde_json::Error,
