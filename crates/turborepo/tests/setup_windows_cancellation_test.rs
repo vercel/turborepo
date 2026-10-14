@@ -397,6 +397,10 @@ fn start_blocked(
 
 #[test]
 fn interrupted_download_releases_locks_and_leaves_resumable_state() {
+    if common::windows_arm64_host() {
+        eprintln!("Skipped: managed setup refuses Windows arm64 hosts, even for x64 turbo.");
+        return;
+    }
     let launcher = ProcessLauncher::new();
     let cases = [
         (
@@ -492,6 +496,10 @@ fn interrupted_download_releases_locks_and_leaves_resumable_state() {
 /// setup rejects before any transaction, so the wrapper exits promptly.
 #[test]
 fn npm_configuration_fails_closed_before_any_transaction() {
+    if common::windows_arm64_host() {
+        eprintln!("Skipped: managed setup refuses Windows arm64 hosts, even for x64 turbo.");
+        return;
+    }
     let launcher = ProcessLauncher::new();
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap().join("repo");

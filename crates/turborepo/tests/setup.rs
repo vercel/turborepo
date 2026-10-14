@@ -1,6 +1,8 @@
 //! Standalone command surface: no Node.js, manager, local CLI, tasks, or HTTP.
 #![cfg_attr(test, allow(clippy::expect_used))]
 
+mod common;
+
 use std::{fs, io, net::TcpListener, path::Path, process::Command};
 
 #[cfg(all(
@@ -836,7 +838,10 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
-    let qualified = qualified_host() || cfg!(all(windows, target_arch = "x86_64"));
+    // Windows arm64 hosts are refused even when this build is x64.
+    let arm64_windows = common::windows_arm64_host();
+    let qualified =
+        (qualified_host() || cfg!(all(windows, target_arch = "x86_64"))) && !arm64_windows;
     let musl = matches!(
         turborepo_platform::host_libc(),
         Ok(Some(turborepo_platform::Libc::Musl))
@@ -858,7 +863,7 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
                     "managed activation requires turbo.lock"
                 } else if musl {
                     "not supported on musl Linux hosts"
-                } else if cfg!(all(windows, target_arch = "aarch64")) {
+                } else if arm64_windows {
                     "managed setup is not qualified for Windows arm64"
                 } else {
                     "managed promotion requires macOS, GNU Linux or Windows x64"
@@ -1343,6 +1348,10 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         pnpm_provision::PnpmPlan,
         test_support::OwnedSetupFixture,
     };
+    if common::windows_arm64_host() {
+        eprintln!("Skipped: managed setup refuses Windows arm64 hosts, even for x64 turbo.");
+        return;
+    }
     if !(qualified_host() || cfg!(all(windows, target_arch = "x86_64"))) {
         return;
     }

@@ -139,12 +139,8 @@ pub(super) fn platform() -> Result<Platform, Error> {
         ("macos", "aarch64") => Ok(Platform::MacosArm64),
         ("linux", "x86_64") => glibc_host(Platform::LinuxX64Gnu),
         ("linux", "aarch64") => glibc_host(Platform::LinuxArm64Gnu),
-        // Compile-time architecture: an x64 build under arm64 emulation is
-        // x64. Native arm64 is unqualified and never borrows x64 artifacts.
-        ("windows", "x86_64") => Ok(Platform::WindowsX64),
-        ("windows", "aarch64") => Err(Error::Unsupported(
-            "managed setup is not qualified for Windows arm64; use Windows x64",
-        )),
+        ("windows", "x86_64") => windows_x64_platform(windows_host_machine()),
+        ("windows", "aarch64") => Err(Error::Unsupported(WINDOWS_ARM64)),
         _ => Err(Error::Unsupported(
             "managed promotion requires macOS, GNU Linux or Windows x64",
         )),
@@ -163,6 +159,40 @@ fn glibc_host(platform: Platform) -> Result<Platform, Error> {
         )),
         Err(error) => Err(Error::UnclassifiedLibc(error)),
     }
+}
+
+const WINDOWS_ARM64: &str = "managed setup is not qualified for Windows arm64, including x64 \
+                             turbo under emulation; use WSL or a Windows x64 machine";
+
+/// Releases ship the x64 binary as the Windows arm64 copy, so an x64 build
+/// must still check the host. Native arm64 is unqualified and never borrows
+/// x64 artifacts; an unidentified host fails closed.
+pub(super) fn windows_x64_platform(host_machine: Option<u16>) -> Result<Platform, Error> {
+    const AMD64: u16 = 0x8664;
+    const ARM64: u16 = 0xAA64;
+    match host_machine {
+        Some(AMD64) => Ok(Platform::WindowsX64),
+        Some(ARM64) => Err(Error::Unsupported(WINDOWS_ARM64)),
+        _ => Err(Error::Unsupported(
+            "managed setup could not confirm a Windows x64 host",
+        )),
+    }
+}
+
+/// The host's native machine (`IMAGE_FILE_MACHINE_*`), not this process's.
+#[cfg(windows)]
+pub(super) fn windows_host_machine() -> Option<u16> {
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, IsWow64Process2};
+    let (mut process, mut native) = (0, 0);
+    // SAFETY: the current-process pseudo-handle is always valid, and both
+    // out-pointers are live locals.
+    let ok = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, &mut native) } != 0;
+    ok.then_some(native)
+}
+
+#[cfg(not(windows))]
+pub(super) fn windows_host_machine() -> Option<u16> {
+    None
 }
 
 pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error> {
