@@ -75,7 +75,7 @@ fn desired(
     if let Some(node) = &node {
         tools.push(node.inventory_tool().clone());
         if lock.tools().contains_key("pnpm") {
-            let pnpm = PnpmPlan::from_lock(&lock, platform, &node, authored).unwrap();
+            let pnpm = PnpmPlan::from_lock(&lock, platform, node, authored).unwrap();
             tools.push(pnpm.inventory_tool().clone());
         }
     }
