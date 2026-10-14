@@ -80,6 +80,34 @@ pub(crate) fn official_artifact(
     })
 }
 
+/// Network-free checks for a preserved selection: the release still satisfies
+/// the request and every target is an official build at uv's key directory.
+pub fn validate(tool: &Tool, requirement: &PythonRequirement) -> Result<(), Error> {
+    let invalid = || lock::Error::Invalid("locked Python contradicts its request or layout");
+    let version = exact_release(&tool.version).ok_or_else(invalid)?;
+    let Installation::Managed { artifacts } = &tool.installation else {
+        return Err(invalid().into());
+    };
+    if tool.adapter != "python" || !tool.options.is_empty() || !requirement.matches(&version) {
+        return Err(invalid().into());
+    }
+    for (platform, parts) in artifacts {
+        match parts.get("distribution") {
+            Some(artifact) if parts.len() == 1 && is_official(&version, *platform, artifact) => {}
+            _ => return Err(invalid().into()),
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn is_official(version: &Version, platform: Platform, artifact: &Artifact) -> bool {
+    artifact
+        .url
+        .strip_prefix(&format!("{ORIGIN}{RELEASES}"))
+        .and_then(|path| official_artifact(version, platform, path, artifact.sha256.clone()))
+        .is_some_and(|official| &official == artifact)
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("invalid or ambiguous uv Python download listing")]

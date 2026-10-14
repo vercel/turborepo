@@ -1432,8 +1432,9 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
 ))]
 #[test]
 fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
+    use sha2::{Digest, Sha256};
     use turborepo_setup::{
         lock::{Lock, Platform, Snapshot},
         node_provision::NodePlan,
@@ -1488,6 +1489,40 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
             },
         )
         .unwrap();
+    // Seed setup's private user receipt as well as its synthetic installation.
+    // Repo-writable inventory alone must never authorize reuse. Library fixtures
+    // cover verified downloads and receipt publication; this fixture observes
+    // the real binary's plain/frozen/check reporting without traffic or probes.
+    let home = tempfile::tempdir().unwrap();
+    let user_data = home.path().join(if cfg!(target_os = "macos") {
+        "Library/Application Support"
+    } else {
+        ".local/share"
+    });
+    let records = user_data.join("turborepo/setup-roots");
+    fs::create_dir_all(&records).unwrap();
+    fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
+    let canonical_root = root.canonicalize().unwrap();
+    let identity = fs::metadata(&canonical_root).unwrap();
+    let current = store.current().unwrap().unwrap();
+    let record = serde_json::json!({
+        "schema": 1,
+        "lock_sha256": format!("{:x}", Sha256::digest(fs::read(root.join("turbo.lock")).unwrap())),
+        "installation": {
+            "root": canonical_root,
+            "device": identity.dev(),
+            "inode": identity.ino(),
+            "manifest_sha256": format!("{:x}", Sha256::digest(fs::read(root.join(".turbo/tools/manifest.json")).unwrap())),
+            "bin": current.bin,
+            "tools": current.tools,
+        },
+    });
+    let receipt = records.join(format!(
+        "{:x}.json",
+        Sha256::digest(canonical_root.as_os_str().as_encoded_bytes())
+    ));
+    fs::write(&receipt, serde_json::to_vec(&record).unwrap()).unwrap();
+    fs::set_permissions(&receipt, fs::Permissions::from_mode(0o600)).unwrap();
     drop(store);
     let git = which::which("git").unwrap();
     assert!(
@@ -1524,7 +1559,8 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
             .current_dir(root)
             .args(["setup", mode])
             .env("PATH", bin.path())
-            .env("HOME", root.join("home"))
+            .env("HOME", home.path())
+            .env("XDG_DATA_HOME", &user_data)
             .env("TURBO_TELEMETRY_DISABLED", "1")
             .env("HTTP_PROXY", &proxy)
             .env("HTTPS_PROXY", &proxy)

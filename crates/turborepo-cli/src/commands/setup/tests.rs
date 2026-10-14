@@ -136,6 +136,7 @@ impl Fixture {
                         upstream.origin(),
                     )
                     .unwrap(),
+                python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 }),
                 || {
                     Ok(self

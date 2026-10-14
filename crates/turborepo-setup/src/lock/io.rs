@@ -16,7 +16,7 @@ pub use snapshot::Snapshot;
 
 pub type DeclarationMap = BTreeMap<String, Vec<Declaration>>;
 const LOCK_NAME: &str = "turbo.lock";
-const NATIVE: [&str; 5] = ["node", "npm", "pnpm", "uv", "rustup"];
+const NATIVE: [&str; 6] = ["node", "npm", "pnpm", "uv", "python", "rustup"];
 const RUST_TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
 const MAX_TOOLCHAIN_BYTES: usize = 64 * 1024;
 
@@ -38,6 +38,8 @@ pub enum StorageError {
     Declarations,
     #[error(transparent)]
     Uv(#[from] crate::uv_discovery::UvDiscoveryError),
+    #[error(transparent)]
+    Python(#[from] crate::python_discovery::PythonDiscoveryError),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
 }

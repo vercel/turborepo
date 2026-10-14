@@ -9,6 +9,8 @@ use turborepo_setup::{
     npm_provision::NpmPlan,
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
+    python_provision::PythonPlan,
+    python_resolution::PythonTransport,
     rustup_provision::{RustupPlan, RustupTransport},
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
@@ -24,6 +26,7 @@ pub(super) struct Transports {
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
     pub uv: UvTransport,
     pub rustup: RustupTransport,
+    pub python: PythonTransport,
     #[cfg(test)]
     pub trust_base: Option<std::path::PathBuf>,
 }
@@ -35,6 +38,7 @@ impl Transports {
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
             uv: UvTransport::official(policy)?,
             rustup: RustupTransport::official(policy)?,
+            python: PythonTransport::official(policy)?,
             #[cfg(test)]
             trust_base: None,
         })
@@ -141,10 +145,11 @@ pub(super) struct Plans {
     pub pnpm: Option<PnpmPlan>,
     pub npm: Option<NpmPlan>,
     pub uv: Option<UvPlan>,
+    pub python: Option<PythonPlan>,
     pub rustup: Option<RustupPlan>,
 }
 
-const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "uv", "rustup"];
+const SUPPORTED: [&str; 6] = ["node", "npm", "pnpm", "uv", "python", "rustup"];
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -157,7 +162,7 @@ pub(super) fn plans(
         .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, uv and rustup are supported",
+            "only managed Node, npm, pnpm, uv, Python and rustup are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -210,7 +215,21 @@ pub(super) fn plans(
         .contains_key("rustup")
         .then(|| RustupPlan::from_lock(lock, platform))
         .transpose()?;
-    if node.is_none() && uv.is_none() && rustup.is_none() {
+    let python = match snapshot.python_requirement()? {
+        Some(requirement) => {
+            let plan = PythonPlan::from_lock(lock, platform)?;
+            let version = semver::Version::parse(&plan.inventory_tool().version)
+                .map_err(|_| Error::Unsupported("invalid locked Python version"))?;
+            if !requirement.matches(&version) {
+                return Err(Error::Unsupported(
+                    "locked Python does not satisfy native declarations",
+                ));
+            }
+            Some(plan)
+        }
+        None => None,
+    };
+    if node.is_none() && uv.is_none() && python.is_none() && rustup.is_none() {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
     Ok(Plans {
@@ -219,6 +238,7 @@ pub(super) fn plans(
         npm,
         uv,
         rustup,
+        python,
     })
 }
 
@@ -290,9 +310,15 @@ pub(super) fn resolve(
     runtime
         .block_on(turborepo_setup::native_resolution::resolve(
             request,
-            &sources.node,
-            &sources.registry,
-            &sources.uv,
+            turborepo_setup::native_resolution::Transports {
+                node: &sources.node,
+                registry: &sources.registry,
+                uv: &sources.uv,
+                python: &sources.python,
+                platform: platform().map_err(|e| {
+                    turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
+                })?,
+            },
         ))
         .map_err(|e| turborepo_setup::lock::reconcile::Error::Resolution(e.to_string()))
 }
@@ -327,7 +353,7 @@ pub(super) fn run(
                 .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, uv and rustup are supported",
+                "only managed Node, npm, pnpm, uv, Python and rustup are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -427,6 +453,7 @@ pub(super) fn run(
         npm,
         uv,
         rustup,
+        python,
     } = plans(&snapshot, lock)?;
     let trust = match trust {
         Some(trust) => trust,
@@ -438,6 +465,7 @@ pub(super) fn run(
         npm.as_ref().map(NpmPlan::inventory_tool),
         uv.as_ref().map(UvPlan::inventory_tool),
         rustup.as_ref().map(RustupPlan::inventory_tool),
+        python.as_ref().map(PythonPlan::inventory_tool),
     ]
     .into_iter()
     .flatten()
@@ -472,8 +500,8 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm, prepared_npm, prepared_uv, prepared_rustup) = runtime
-        .block_on(async {
+    let (prepared_node, prepared_pnpm, prepared_npm, prepared_uv, prepared_python, prepared_rustup) =
+        runtime.block_on(async {
             let recheck = || {
                 preflight()?;
                 revalidate(discovery)?;
@@ -513,6 +541,14 @@ pub(super) fn run(
                 None => None,
             };
             recheck()?;
+            let python = match &python {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.python, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
             let rustup = match &rustup {
                 Some(plan) => {
                     plan.prepare(&store, &desired, &transports.rustup, preparation)
@@ -520,7 +556,7 @@ pub(super) fn run(
                 }
                 None => None,
             };
-            Ok::<_, Error>((node, pnpm, npm, uv, rustup))
+            Ok::<_, Error>((node, pnpm, npm, uv, python, rustup))
         })?;
     let missing = || turborepo_tool_install::Error::InvalidInventory;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| match tool.id.as_str() {
@@ -537,6 +573,10 @@ pub(super) fn run(
             .ok_or_else(missing)?
             .stage(tool, destination),
         "uv" => prepared_uv
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "python" => prepared_python
             .as_ref()
             .ok_or_else(missing)?
             .stage(tool, destination),
@@ -573,6 +613,7 @@ pub(super) fn run(
                 || (tool.id == "npm" && prepared_npm.is_none())
                 || (tool.id == "uv" && prepared_uv.is_none())
                 || (tool.id == "rustup" && prepared_rustup.is_none())
+                || (tool.id == "python" && prepared_python.is_none())
             {
                 "reused"
             } else {

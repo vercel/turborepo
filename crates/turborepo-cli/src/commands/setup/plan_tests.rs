@@ -339,6 +339,10 @@ fn loopback(f: &Fixture, u: &LoopbackServer) -> provision::Transports {
             u.origin(),
         )
         .unwrap(),
+        python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(
+            u.origin(),
+        )
+        .unwrap(),
     }
 }
 

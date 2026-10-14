@@ -10,7 +10,10 @@ use super::{
     NATIVE, RUST_TOOLCHAIN_FILES, StorageError, WriteOutcome, WriterStorage, probe_native_with,
     read_optional, records,
 };
-use crate::uv_discovery::{self, UvRequirement};
+use crate::{
+    python_discovery::PythonRequirement,
+    uv_discovery::{self, UvRequirement},
+};
 
 const SOURCES: [(&str, usize); 5] = [
     ("package.json", crate::node_discovery::MAX_MANIFEST_BYTES),
@@ -20,6 +23,8 @@ const SOURCES: [(&str, usize); 5] = [
     (RUST_TOOLCHAIN_FILES[1], MAX_TOOLCHAIN_BYTES),
 ];
 type Inputs = BTreeMap<&'static str, Option<Vec<u8>>>;
+/// uv and CPython declarations, captured only with Python workspaces enabled.
+const PYTHON_SOURCES: [&str; 3] = ["uv.toml", "pyproject.toml", ".python-version"];
 
 /// Read-only expected state for an explicit native resolver transaction.
 /// Bound to a caller-selected stable canonical root. No public constructor or
@@ -44,7 +49,7 @@ impl fmt::Debug for Snapshot {
 
 fn inputs(root: &Path, ecosystems: Ecosystems) -> io::Result<Inputs> {
     let python: &[&'static str] = if ecosystems.python {
-        &uv_discovery::SOURCES
+        &PYTHON_SOURCES
     } else {
         &[]
     };
@@ -65,12 +70,18 @@ fn inputs(root: &Path, ecosystems: Ecosystems) -> io::Result<Inputs> {
         .collect()
 }
 
+fn captured(inputs: &Inputs, file: &str) -> io::Result<Option<Vec<u8>>> {
+    inputs
+        .get(file)
+        .cloned()
+        .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+}
 fn read_uv(inputs: &Inputs) -> Result<Option<UvRequirement>, StorageError> {
-    Ok(UvRequirement::read_with(|file, _| {
-        inputs
-            .get(file)
-            .cloned()
-            .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
+    Ok(UvRequirement::read_with(|file, _| captured(inputs, file))?)
+}
+fn read_python(inputs: &Inputs) -> Result<Option<PythonRequirement>, StorageError> {
+    Ok(PythonRequirement::read_with(|file, _| {
+        captured(inputs, file)
     })?)
 }
 
@@ -94,10 +105,13 @@ impl Snapshot {
                 .cloned()
                 .ok_or_else(|| io::Error::other("source is not covered by the snapshot"))
         })?;
-        if ecosystems.python
-            && let Some(uv) = read_uv(&captured)?
-        {
-            native.insert("uv".into(), vec![uv.declaration()]);
+        if ecosystems.python {
+            if let Some(uv) = read_uv(&captured)? {
+                native.insert("uv".into(), vec![uv.declaration()]);
+            }
+            if let Some(python) = read_python(&captured)? {
+                native.insert("python".into(), vec![python.declaration()]);
+            }
         }
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
@@ -138,6 +152,14 @@ impl Snapshot {
             return Ok(None);
         }
         read_uv(&self.inputs)
+    }
+
+    /// The root CPython request from captured bytes; None when disabled.
+    pub fn python_requirement(&self) -> Result<Option<PythonRequirement>, StorageError> {
+        if !self.ecosystems.python {
+            return Ok(None);
+        }
+        read_python(&self.inputs)
     }
 
     /// Resolver inputs come from the captured bytes, never current disk state.
@@ -251,13 +273,13 @@ impl Snapshot {
         let python = self.ecosystems.python;
         let covered = |file: &str| {
             SOURCES.iter().any(|(source, _)| file == *source)
-                || (python && uv_discovery::SOURCES.contains(&file))
+                || (python && PYTHON_SOURCES.contains(&file))
         };
         for lock in candidate.into_iter().chain(self.previous.as_ref()) {
             if lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
                     || !NATIVE.contains(&tool.adapter.as_str())
-                    || (tool.adapter == "uv" && !python)
+                    || (matches!(tool.adapter.as_str(), "uv" | "python") && !python)
                     || tool
                         .declarations
                         .iter()
