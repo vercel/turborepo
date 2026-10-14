@@ -18,6 +18,11 @@ use crate::{
 };
 
 const RELEASES: &str = "https://github.com";
+// GitHub answers release downloads with a redirect to its asset CDN.
+const ASSETS: [&str; 2] = [
+    "https://release-assets.githubusercontent.com",
+    "https://objects.githubusercontent.com",
+];
 const PLATFORMS: [Platform; 6] = [
     Platform::MacosX64,
     Platform::MacosArm64,
@@ -102,17 +107,41 @@ fn official(platform: Platform, version: &str, sha256: &str) -> Result<Artifact,
     })
 }
 
+/// Portable check of EVERY locked variant without host restrictions, for
+/// preserved selections; the exact release must still match declarations.
+pub(crate) fn validate(tool: &crate::lock::Tool, declaration: &Declaration) -> Result<(), Error> {
+    let Installation::Managed { artifacts } = &tool.installation else {
+        return Err(Error::InvalidLock);
+    };
+    if tool.adapter != "bun" || !tool.options.is_empty() {
+        return Err(Error::InvalidLock);
+    }
+    for (platform, parts) in artifacts {
+        let artifact = parts.get("distribution").ok_or(Error::InvalidLock)?;
+        let expected = official(*platform, &tool.version, &artifact.sha256);
+        if parts.len() != 1 || expected.ok().as_ref() != Some(artifact) {
+            return Err(Error::InvalidLock);
+        }
+    }
+    let version = Version::parse(&tool.version).map_err(|_| Error::InvalidLock)?;
+    declaration.preflight_integrity(&version)?;
+    Ok(())
+}
+
 pub struct BunTransport {
     client: DownloadClient,
     // Test transport changes only the origin; lock provenance remains official.
     origin: String,
 }
 impl BunTransport {
-    // TODO(TURBO-6373): GitHub answers release downloads with a redirect to
-    // its asset CDN; approve those origins once redirect support lands.
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+        let assets = ASSETS
+            .into_iter()
+            .map(ApprovedOrigin::https)
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
-            client: DownloadClient::new([ApprovedOrigin::https(RELEASES)?])?,
+            client: DownloadClient::new([ApprovedOrigin::https(RELEASES)?])?
+                .with_redirect_origins(assets),
             origin: RELEASES.into(),
         })
     }

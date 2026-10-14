@@ -426,20 +426,23 @@ pub(super) fn resolve(
     sources: &Transports,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
     runtime
-        .block_on(turborepo_setup::native_resolution::resolve_with_rust(
-            request,
-            turborepo_setup::native_resolution::Transports {
-                node: &sources.node,
-                registry: &sources.registry,
-                uv: &sources.uv,
-                python: &sources.python,
-                go: &sources.go,
-                platform: platform().map_err(|e| {
-                    turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
-                })?,
-            },
-            &sources.rustup,
-        ))
+        .block_on(
+            turborepo_setup::native_resolution::resolve_with_rust_and_bun(
+                request,
+                turborepo_setup::native_resolution::Transports {
+                    node: &sources.node,
+                    registry: &sources.registry,
+                    uv: &sources.uv,
+                    python: &sources.python,
+                    go: &sources.go,
+                    platform: platform().map_err(|e| {
+                        turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
+                    })?,
+                },
+                &sources.rustup,
+                &sources.bun,
+            ),
+        )
         .map_err(|e| turborepo_setup::lock::reconcile::Error::Resolution(e.to_string()))
 }
 

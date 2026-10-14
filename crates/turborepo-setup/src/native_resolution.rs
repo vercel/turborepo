@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 
 use crate::{
+    bun_provision::BunTransport,
     go_resolution::{self, GoTransport},
     js_resolution,
     lock::{self, Document, Lock, Platform, reconcile::Resolution},
@@ -51,7 +52,7 @@ pub struct Transports<'a> {
 
 pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result<Lock, Error> {
     let go = sources.go;
-    let tools = resolve_tools(&request, sources).await?;
+    let tools = resolve_tools(&request, sources, None).await?;
     candidate(&request, tools, go).await
 }
 
@@ -63,7 +64,21 @@ pub async fn resolve_with_rust(
     rustup: &crate::rustup_provision::RustupTransport,
 ) -> Result<Lock, Error> {
     let go = sources.go;
-    let mut tools = resolve_tools(&request, sources).await?;
+    let mut tools = resolve_tools(&request, sources, None).await?;
+    tools.extend(crate::rust_resolution::resolve_request(&request, rustup).await?);
+    candidate(&request, tools, go).await
+}
+
+/// Compose authorized Bun downloads with all native cohorts without changing
+/// the existing transport bundle or the Rust-only public entry point.
+pub async fn resolve_with_rust_and_bun(
+    request: Resolution<'_>,
+    sources: Transports<'_>,
+    rustup: &crate::rustup_provision::RustupTransport,
+    bun: &BunTransport,
+) -> Result<Lock, Error> {
+    let go = sources.go;
+    let mut tools = resolve_tools(&request, sources, Some(bun)).await?;
     tools.extend(crate::rust_resolution::resolve_request(&request, rustup).await?);
     candidate(&request, tools, go).await
 }
@@ -71,6 +86,7 @@ pub async fn resolve_with_rust(
 async fn resolve_tools(
     request: &Resolution<'_>,
     sources: Transports<'_>,
+    bun: Option<&BunTransport>,
 ) -> Result<BTreeMap<String, lock::Tool>, Error> {
     let node = sources.node;
     let registry = sources.registry;
@@ -81,11 +97,11 @@ async fn resolve_tools(
             "offline resolution metadata is not cached",
         ));
     }
-    let mut tools = if ["node", "npm", "pnpm"]
+    let mut tools = if ["node", "npm", "pnpm", "yarn", "bun"]
         .iter()
         .any(|id| declared.contains_key(*id))
     {
-        js_resolution::resolve_tools(request, node, registry).await?
+        js_resolution::resolve_tools_with_bun(request, node, registry, bun).await?
     } else {
         BTreeMap::new()
     };
