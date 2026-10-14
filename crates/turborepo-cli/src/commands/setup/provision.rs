@@ -45,7 +45,7 @@ impl Transports {
         })
     }
 
-    fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
+    pub(super) fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
         #[cfg(test)]
         if let Some(base) = &self.trust_base {
             return Ok(base.clone());

@@ -218,6 +218,8 @@ mod managed_run;
 mod native_plain_run;
 #[path = "npm_tests.rs"]
 mod npm;
+#[path = "offline_tests.rs"]
+mod offline_repeat;
 #[path = "publication_guards.rs"]
 mod publication_guards;
 #[path = "rustup_tests.rs"]
@@ -359,7 +361,18 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert_eq!(u.hits(), 0);
             assert!(!f.owned.root().join(".turbo").exists());
         } else {
-            assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+            let result = f.run(&u, &flags);
+            if flags.contains(&"--offline") && !flags.contains(&"--no-lock") {
+                assert!(
+                    matches!(&result, Err(Error::Offline(_))),
+                    "{flags:?}: {result:?}"
+                );
+            } else {
+                assert!(
+                    matches!(&result, Err(Error::NotImplemented)),
+                    "{flags:?}: {result:?}"
+                );
+            }
             assert_eq!(u.hits(), 0);
             assert!(!f.owned.root().join(".turbo").exists());
         }

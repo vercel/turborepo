@@ -13,6 +13,7 @@ pub(crate) mod authorization;
 mod check;
 mod lock_diagnostics;
 mod no_lock;
+mod offline;
 mod plan;
 mod provision;
 mod root;
@@ -73,6 +74,8 @@ pub enum Error {
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
+    #[error(transparent)]
+    Offline(#[from] offline::Error),
     #[error(transparent)]
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
@@ -230,7 +233,15 @@ fn run_with_policy(
         );
         return Ok(0);
     }
-    let code = if request.lock == LockMode::NoLock {
+    let code = if request.offline {
+        offline::run(
+            &discovery,
+            snapshot,
+            transports.as_ref(),
+            preflight,
+            request.force,
+        )
+    } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
         provision::run(
@@ -276,11 +287,19 @@ fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // dependency installers exist, plain setup provisions and checks exactly
     // the tools --tools-only does and reports dependencies as skipped.
     if request.mode != Mode::Provision
-        || (request.lock == LockMode::NoLock && (request.force || request.update_lock))
-        || request.offline
+        || (request.lock == LockMode::NoLock
+            && (request.force || request.update_lock || request.offline))
         || (request.force && request.update_lock)
     {
         return Err(Error::NotImplemented);
+    }
+    // --offline --force reinstalls only from verified local bytes; resolution
+    // always needs the network.
+    if request.offline && request.update_lock {
+        return Err(Error::Unsupported(
+            "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \
+             --update-lock without --offline",
+        ));
     }
     Ok(())
 }
@@ -421,7 +440,7 @@ mod tests {
             );
             for control in ["--no-lock", "--force", "--offline", "--plan"] {
                 let request = request(&["--tools-only", "--no-frozen", control], ci).unwrap();
-                if matches!(control, "--force" | "--no-lock" | "--plan") {
+                if matches!(control, "--force" | "--no-lock" | "--plan" | "--offline") {
                     assert!(validate_request(&request).is_ok());
                 } else {
                     assert!(matches!(
@@ -442,6 +461,8 @@ mod tests {
                 vec!["--no-frozen"],
                 vec!["--force"],
                 vec!["--no-lock"],
+                vec!["--offline"],
+                vec!["--offline", "--force"],
                 vec!["--no-frozen", "--update-lock"],
             ] {
                 let request = request(&flags, ci).unwrap();
@@ -451,8 +472,9 @@ mod tests {
         }
         for (flags, mode) in [
             (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
-            (vec!["--offline"], Mode::Provision),
             (vec!["--no-lock", "--force"], Mode::Provision),
+            (vec!["--no-lock", "--offline"], Mode::Provision),
+            (vec!["--no-lock", "--force", "--offline"], Mode::Provision),
         ] {
             let request = request(&flags, false).unwrap();
             assert_eq!(request.mode, mode);
@@ -461,9 +483,20 @@ mod tests {
                 Err(Error::NotImplemented)
             ));
         }
-        let request =
+        let no_lock =
             request(&["--force", "--offline", "--tools-only", "--no-lock"], true).unwrap();
-        assert!(request.force && request.offline && request.tools_only);
-        assert!(!request.update_lock);
+        assert!(no_lock.force && no_lock.offline && no_lock.tools_only);
+        assert!(!no_lock.update_lock);
+        assert!(matches!(
+            validate_request(&no_lock),
+            Err(Error::NotImplemented)
+        ));
+        for ci in [false, true] {
+            let refresh = request(&["--offline", "--no-frozen", "--update-lock"], ci).unwrap();
+            assert!(matches!(
+                validate_request(&refresh),
+                Err(Error::Unsupported(message)) if message.starts_with("--offline cannot resolve --update-lock")
+            ));
+        }
     }
 }
