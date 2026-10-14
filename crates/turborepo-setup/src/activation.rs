@@ -1,5 +1,5 @@
-//! Read-only Node/npm/pnpm environment planning, plus uv/Python when enabled,
-//! not execution authorization.
+//! Read-only Node/npm/pnpm/Rust environment planning, plus uv/Python when
+//! enabled, not execution authorization.
 //! Repo-writable inventory proves readiness only. Consumers must separately
 //! authorize setup-recorded tools with trusted-root user state, gate managed
 //! mode, and revalidate before use. No CLI support is advertised by this
@@ -8,6 +8,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
+    io,
     path::{Path, PathBuf},
 };
 
@@ -20,8 +21,12 @@ use crate::{
     npm_provision::NpmPlan,
     pnpm_provision::PnpmPlan,
     python_provision::PythonPlan,
+    rust_provision::{self, RustPlan},
+    rustup_provision::RustupPlan,
     uv_provision::UvPlan,
 };
+
+const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "rust", "rustup"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -32,7 +37,7 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports managed Node/npm/pnpm, plus uv and Python with \
+        "activation planning supports managed Node/npm/pnpm/Rust, plus uv and Python with \
          experimentalPythonWorkspaces; use a supported setup adapter"
     )]
     UnsupportedAdapter,
@@ -51,6 +56,8 @@ pub enum Error {
     StaleInventory,
     #[error("managed installation is damaged or unsafe; run turbo setup: {0}")]
     DamagedInventory(#[source] turborepo_tool_install::Error),
+    #[error("unsafe private CARGO_HOME; remove {0} and rerun turbo setup")]
+    UnsafeCargoHome(PathBuf),
     #[error("cannot capture or revalidate setup sources; run turbo setup: {0}")]
     Sources(#[from] StorageError),
     #[error("cannot select the locked execution snapshot; run turbo setup: {0}")]
@@ -66,8 +73,8 @@ pub struct ActivationPlan {
     snapshot: ExecutionSnapshot,
     bin: PathBuf,
     tools: Vec<Tool>,
-    // Node/pnpm need no runtime variables. uv/Python values derive only from
-    // this generation and the lock, never from host or user settings.
+    // Managed Rust and uv/Python values derive only from the generation,
+    // the lock and private clone paths, never from host or user settings.
     runtime_env: BTreeMap<String, OsString>,
 }
 
@@ -75,14 +82,14 @@ impl ActivationPlan {
     /// Caller selects the exact root and execution context; no root/host
     /// probes, ancestor search, system-tool fallback, resolution, or
     /// storage creation. A missing lock is an error, not unconfigured-mode
-    /// policy for future callers.
+    /// policy for future callers. Rust declarations are ignored, so a lock
+    /// with Rust selections is drift; see `inspect_with`.
     pub fn inspect(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
-        Self::qualify(&context)?;
-        let sources = Snapshot::capture(repo)?;
-        Self::inspect_captured(&sources, context)
+        Self::inspect_with(repo, context, Ecosystems::default())
     }
 
-    /// Inspect a root with explicitly enabled declaration ecosystems.
+    /// Use setup's exact workspace-flag eligibility when capturing
+    /// declarations.
     pub fn inspect_with(
         repo: &Path,
         context: ExecutionContext,
@@ -93,8 +100,7 @@ impl ActivationPlan {
         Self::inspect_captured(&sources, context)
     }
 
-    /// Inspect the caller's original source/lock snapshot, never recapture it
-    /// after drift. The snapshot binds its own canonical repository root.
+    /// Inspect the caller's original snapshot; never recapture after drift.
     pub fn inspect_captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
         Self::qualify(&context)?;
         sources.ensure_current()?;
@@ -127,7 +133,7 @@ impl ActivationPlan {
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
                 id != &tool.adapter
-                    || !(matches!(id.as_str(), "node" | "npm" | "pnpm")
+                    || !(SUPPORTED.contains(&id.as_str())
                         || (python && matches!(id.as_str(), "uv" | "python")))
                     || !(matches!(tool.installation, Installation::Managed { .. })
                         || (id == "npm"
@@ -204,6 +210,26 @@ impl ActivationPlan {
             None
         };
         // The Store records a generation's tools in id order.
+        let rust = match lock.tools().get("rust") {
+            None => None,
+            Some(_) if !lock.tools().contains_key("rustup") => return Err(Error::InvalidLock),
+            Some(tool) => {
+                // Same semantic binding as setup: the exact channel and options
+                // must still satisfy the captured root toolchain file.
+                let toolchain = sources.rust_toolchain()?.ok_or(Error::DeclarationDrift)?;
+                if !rust_provision::satisfies(&toolchain, tool) {
+                    return Err(Error::DeclarationDrift);
+                }
+                let rust = RustPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+                tools.push(rust.inventory_tool().clone());
+                Some(rust)
+            }
+        };
+        if lock.tools().contains_key("rustup") {
+            let rustup = RustupPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+            tools.push(rustup.inventory_tool().clone());
+        }
+        // Inventory records its cohort in ID order.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
@@ -221,7 +247,29 @@ impl ActivationPlan {
             node.verify_bundled_npm(&tree)
                 .map_err(|_| Error::StaleInventory)?;
         }
-        let runtime_env = uv_env(&current, uv, python.as_ref())?;
+        let mut runtime_env = uv_env(&current, uv, python.as_ref())?;
+        if let Some(rust) = &rust {
+            // Shims run the toolchain binaries directly. These variables keep
+            // a task's rustup and Cargo on this private, installed toolchain
+            // and per-clone Cargo home, never the user's homes or overrides.
+            let home = current
+                .tool_tree(rust.inventory_tool())
+                .ok_or(Error::StaleInventory)?;
+            let cargo_home = crate::cargo_prefetch::cargo_home_path(repo);
+            // Cargo creates a missing home on first use; never create it here.
+            match std::fs::symlink_metadata(&cargo_home) {
+                Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
+                    return Err(Error::UnsafeCargoHome(cargo_home));
+                }
+                Err(e) if e.kind() != io::ErrorKind::NotFound => {
+                    return Err(StorageError::from(e).into());
+                }
+                _ => {}
+            }
+            runtime_env.insert("RUSTUP_HOME".into(), home.into_os_string());
+            runtime_env.insert("RUSTUP_TOOLCHAIN".into(), rust.toolchain().into());
+            runtime_env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
+        }
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
@@ -244,6 +292,8 @@ impl ActivationPlan {
         &self.bin
     }
 
+    /// Absolute values to set for tasks and turbo's own tool probes, after
+    /// any strict/loose filtering. They contain local paths: never hash them.
     pub fn runtime_env(&self) -> &BTreeMap<String, OsString> {
         &self.runtime_env
     }
