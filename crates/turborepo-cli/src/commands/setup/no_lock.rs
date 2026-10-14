@@ -80,8 +80,11 @@ pub(super) fn run(
         (_, Some(native)) => native.selection(),
         _ => return Err(Error::Unsupported("missing native selection")),
     };
-    // NativeRecord preflight limits clone-local selections to Node and pnpm.
-    let provision::Plans { node, pnpm, .. } = provision::plans(&snapshot, selection)?;
+    // NativeRecord::preflight rejects managed npm declarations; --no-lock
+    // provisions only Node and pnpm, preserving Node's bundled npm.
+    let provision::Plans {
+        node, pnpm, npm: _, ..
+    } = provision::plans(&snapshot, selection)?;
     let node = node.ok_or(Error::Unsupported("a native Node declaration is required"))?;
     let mut desired = vec![node.inventory_tool().clone()];
     if let Some(pnpm) = &pnpm {
