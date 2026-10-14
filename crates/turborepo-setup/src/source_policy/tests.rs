@@ -162,7 +162,7 @@ fn environment_prefix_and_known_system_locations() -> TestResult {
         "NpM_CoNfIg_PrEfIx",
         "NPM_CONFIG_GLOBALCONFIG",
         "npm_config_userconfig",
-        "NPM_CONFIG_SCRIPT_SHELL",
+        "NPM_CONFIG_HTTPS_PROXY",
         "COREPACK_NPM_REGISTRY",
         "NVM_NODEJS_ORG_MIRROR",
         "DESTDIR",
@@ -194,6 +194,165 @@ fn environment_prefix_and_known_system_locations() -> TestResult {
         ]
         .map(PathBuf::from)
     );
+    Ok(())
+}
+
+/// `npx`/`npm exec`/`npm run` (npm 11) and pnpm 11+ default wrapper keys.
+fn wrapper_env(fixture: &Fixture) -> Vec<(OsString, OsString)> {
+    let at = |path: &str| fixture.directory.path().join(path).into_os_string();
+    let mut env: Vec<(OsString, OsString)> = [
+        ("npm_config_cache", at("home/.npm")),
+        ("npm_config_call", "turbo setup".into()),
+        ("npm_config_global_prefix", at("selected")),
+        ("npm_config_globalconfig", at("selected/etc/npmrc")),
+        ("npm_config_init_module", at("home/.npm-init.js")),
+        (
+            "npm_config_local_prefix",
+            fixture.root.clone().into_os_string(),
+        ),
+        ("npm_config_loglevel", "silent".into()),
+        ("npm_config_node_gyp", at("node-gyp/bin/node-gyp.js")),
+        ("npm_config_noproxy", "".into()),
+        ("npm_config_npm_version", "11.13.0".into()),
+        ("npm_config_package", "turbo".into()),
+        ("npm_config_prefix", at("selected")),
+        (
+            "npm_config_user_agent",
+            "npm/11.13.0 node/v24.0.0 linux x64".into(),
+        ),
+        ("npm_config_userconfig", fixture.home.join(".npmrc").into()),
+        ("npm_config_yes", "true".into()),
+        ("NPM_CONFIG_SCRIPT_SHELL", "/bin/sh".into()),
+        (
+            "npm_config_user-agent",
+            "pnpm/11.0.0 node/v24.0.0 linux x64".into(),
+        ),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.into(), value))
+    .collect();
+    env.push(("npm_lifecycle_event".into(), "npx".into()));
+    env
+}
+
+/// `pnpm run` (pnpm 10.34) defaults; pnpm 8 to 10.0 export a subset.
+fn pnpm10_run_env(fixture: &Fixture) -> Vec<(OsString, OsString)> {
+    let at = |path: &str| fixture.directory.path().join(path).into_os_string();
+    [
+        ("npm_config__jsr_registry", "https://npm.jsr.io/".into()),
+        ("npm_config_frozen_lockfile", "".into()),
+        ("npm_config_globalconfig", at("home/.config/pnpm/rc")),
+        ("npm_config_node_gyp", at("pnpm/node-gyp/bin/node-gyp.js")),
+        ("npm_config_npm_globalconfig", at("system/npmrc")),
+        ("npm_config_registry", "https://registry.npmjs.org/".into()),
+        (
+            "npm_config_user_agent",
+            "pnpm/10.34.7 npm/? node/v24.17.0 linux x64".into(),
+        ),
+        ("npm_config_verify_deps_before_run", "false".into()),
+        ("pnpm_config_verify_deps_before_run", "false".into()),
+    ]
+    .into_iter()
+    .map(|(key, value)| (key.into(), value))
+    .collect()
+}
+
+#[test]
+fn wrapper_environments_pass_and_reported_locations_are_inspected() -> TestResult {
+    let fixture = Fixture::new()?;
+    let env = wrapper_env(&fixture);
+    assert_eq!(fixture.check(&env)?.registry(), PUBLIC_NPM_REGISTRY);
+    assert!(fixture.check(&pnpm10_run_env(&fixture)).is_ok());
+    for registry in ["https://registry.npmjs.org", "HTTPS://Registry.NPMJS.org/"] {
+        let env = [("NPM_CONFIG_REGISTRY".into(), registry.into())];
+        assert!(fixture.check(&env).is_ok(), "{registry}");
+    }
+    // Each reported location is followed to the file npm would read.
+    let custom = fixture.directory.path().join("custom");
+    for (key, value, config, owner) in [
+        ("npm_config_userconfig", "npmrc", "npmrc", ConfigOwner::User),
+        (
+            "npm_config_globalconfig",
+            "npmrc",
+            "npmrc",
+            ConfigOwner::System,
+        ),
+        (
+            "npm_config_npm_globalconfig",
+            "npmrc",
+            "npmrc",
+            ConfigOwner::System,
+        ),
+        ("npm_config_prefix", "", "etc/npmrc", ConfigOwner::Prefix),
+        (
+            "NPM_CONFIG_GLOBAL_PREFIX",
+            "",
+            "etc/npmrc",
+            ConfigOwner::Prefix,
+        ),
+        (
+            "npm_config_local_prefix",
+            "",
+            ".npmrc",
+            ConfigOwner::Repository,
+        ),
+    ] {
+        let mut env = env.clone();
+        env.push((key.into(), custom.join(value).into_os_string()));
+        assert!(fixture.check(&env).is_ok(), "{key}");
+        let config = custom.join(config);
+        fs::create_dir_all(config.parent().ok_or("parent")?)?;
+        fs::write(&config, "registry=https://private.invalid/")?;
+        let expected = if owner == ConfigOwner::Repository {
+            Error::Setting(owner, 1)
+        } else {
+            Error::Configured(owner)
+        };
+        assert_eq!(fixture.check(&env).err(), Some(expected));
+        fs::remove_dir_all(&custom)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn wrapper_environments_with_source_settings_fail_closed() -> TestResult {
+    let fixture = Fixture::new()?;
+    for (key, value) in [
+        ("npm_config_registry", "https://private.invalid/"),
+        ("npm_config_registry", "http://registry.npmjs.org/"),
+        ("npm_config_registry", "https://registry.npmjs.org:443/"),
+        ("npm_config_registry", "https://private@registry.npmjs.org/"),
+        ("npm_config_registry", "https://registry.npmjs.org/private/"),
+        ("npm_config_registry", "https://registry.npmjs.org//"),
+        ("npm_config_registry", "https://registry.npmjs.org/?private"),
+        ("npm_config_registry", "https://registry.npmjs.org."),
+        ("npm_config_registry", " https://registry.npmjs.org/"),
+        ("npm_config_registry", "https://registry.yarnpkg.com/"),
+        ("npm_config__jsr_registry", "https://private.invalid/"),
+        ("npm_config__jsr_registry", "https://registry.npmjs.org/"),
+        ("npm_config_@jsr:registry", "https://npm.jsr.io/"),
+        ("npm_config_@scope:registry", "https://private.invalid/"),
+        ("npm_config_proxy", "http://proxy.invalid"),
+        ("npm_config_https-proxy", "http://proxy.invalid"),
+        ("npm_config_noproxy", "registry.npmjs.org"),
+        ("npm_config_cafile", "/private/ca.pem"),
+        ("npm_config_strict_ssl", "false"),
+        ("npm_config__auth", "private-secret"),
+        (
+            "npm_config_//registry.npmjs.org/:_authToken",
+            "private-secret",
+        ),
+        ("npm_config_store_dir", "/private/store"),
+        ("npm_config_userconfig", "relative/.npmrc"),
+        ("npm_config_prefix", ""),
+    ] {
+        let mut env = wrapper_env(&fixture);
+        env.extend(pnpm10_run_env(&fixture));
+        env.push((key.into(), value.into()));
+        let error = fixture.check(&env).err();
+        assert_eq!(error, Some(Error::Environment), "{key}");
+        assert!(!format!("{error:?}").contains("private"));
+    }
     Ok(())
 }
 

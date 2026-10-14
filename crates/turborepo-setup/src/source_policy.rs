@@ -3,7 +3,7 @@
 //! before mutation. Recheck if discovery/environment changes before traffic.
 
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     fs,
     io::{self, Read},
     path::{Component, Path, PathBuf},
@@ -78,14 +78,16 @@ impl OfficialSourcePolicy {
     /// pass only when every setting is on the non-fetching allowlist in
     /// `npmrc`; user, system, and prefix global npmrc files are rejected
     /// outright. Non-Unix hosts remain explicitly unqualified.
-    /// Every NPM_CONFIG_* override (including prefix/globalconfig/userconfig),
-    /// regardless of spelling/value, is rejected before filesystem inspection.
+    /// NPM_CONFIG_* variables outside the wrapper allowlist, regardless of
+    /// spelling/value, are rejected before filesystem inspection. Registry
+    /// keys pass only at their official defaults. Reported
+    /// prefix/globalconfig/userconfig locations are inspected, never trusted.
     pub fn inspect(invocation: &Path, current_node: Option<&Path>) -> Result<Self, Error> {
         if !cfg!(unix) {
             return Err(Error::UnsupportedHost);
         }
         let env: Vec<_> = std::env::vars_os().collect();
-        reject_environment(&env)?;
+        environment_configs(&env)?;
         let home_key = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
         let home = env
             .iter()
@@ -106,18 +108,82 @@ impl OfficialSourcePolicy {
     }
 }
 
-fn reject_environment(env: &[(OsString, OsString)]) -> Result<(), Error> {
-    if env.iter().any(|(key, _)| {
-        let key = key.to_string_lossy().to_ascii_uppercase();
-        key.starts_with("NPM_CONFIG_")
-            || matches!(
-                key.as_str(),
-                "COREPACK_NPM_REGISTRY" | "NODEJS_ORG_MIRROR" | "NVM_NODEJS_ORG_MIRROR" | "DESTDIR"
-            )
-    }) {
-        return Err(Error::Environment);
+/// `npm_config_*` keys that `npx`, `npm exec`, `npm run`, and pnpm export by
+/// default or for common invocation flags. None of them selects a registry,
+/// proxy, TLS setting, or credential.
+const WRAPPER_NPM_CONFIG: &[&str] = &[
+    "cache",
+    "call",
+    "frozen_lockfile",
+    "init_module",
+    "loglevel",
+    "node_gyp",
+    "npm_version",
+    "package",
+    "script_shell",
+    "user_agent",
+    "verify_deps_before_run",
+    "yes",
+];
+
+/// Registry keys that `pnpm run` (pnpm 10 and earlier) exports from its
+/// defaults, accepted only at exactly those official values. `_jsr_registry`
+/// is pnpm's `@jsr:registry`, which setup never uses.
+const WRAPPER_DEFAULT_REGISTRIES: &[(&str, &str)] = &[
+    ("registry", PUBLIC_NPM_REGISTRY),
+    ("_jsr_registry", "https://npm.jsr.io"),
+];
+
+/// Only scheme/host case and one trailing slash are normalized; any port,
+/// credential, path, query, or whitespace makes the value non-default.
+fn is_official_registry(value: &OsStr, official: &str) -> bool {
+    value.to_str().is_some_and(|value| {
+        value
+            .strip_suffix('/')
+            .unwrap_or(value)
+            .eq_ignore_ascii_case(official)
+    })
+}
+
+/// Rejects every source-changing environment variable and returns the npm
+/// configuration files that wrapper-reported locations point to. Callers must
+/// inspect those files like any other configuration.
+fn environment_configs(env: &[(OsString, OsString)]) -> Result<Vec<(PathBuf, ConfigOwner)>, Error> {
+    let mut paths = Vec::new();
+    for (key, value) in env {
+        let key = key.to_string_lossy().to_ascii_lowercase();
+        if matches!(
+            key.as_str(),
+            "corepack_npm_registry" | "nodejs_org_mirror" | "nvm_nodejs_org_mirror" | "destdir"
+        ) {
+            return Err(Error::Environment);
+        }
+        // npm treats `-` and non-leading `_` in environment keys alike.
+        let Some(name) = key.strip_prefix("npm_config_").map(|n| n.replace('-', "_")) else {
+            continue;
+        };
+        // npm exports an empty `noproxy` by default; any value is a proxy setting.
+        if WRAPPER_NPM_CONFIG.contains(&name.as_str())
+            || (name == "noproxy" && value.is_empty())
+            || WRAPPER_DEFAULT_REGISTRIES
+                .iter()
+                .any(|(key, official)| name == *key && is_official_registry(value, official))
+        {
+            continue;
+        }
+        let location = Path::new(value);
+        if !location.is_absolute() {
+            return Err(Error::Environment);
+        }
+        paths.push(match name.as_str() {
+            "userconfig" => (location.to_owned(), ConfigOwner::User),
+            "globalconfig" | "npm_globalconfig" => (location.to_owned(), ConfigOwner::System),
+            "prefix" | "global_prefix" => (location.join("etc/npmrc"), ConfigOwner::Prefix),
+            "local_prefix" => (location.join(".npmrc"), ConfigOwner::Repository),
+            _ => return Err(Error::Environment),
+        });
     }
-    Ok(())
+    Ok(paths)
 }
 
 fn system_configs() -> Vec<PathBuf> {
@@ -146,7 +212,7 @@ fn inspect_inputs(
     system: Vec<PathBuf>,
     boundary: Option<&Path>,
 ) -> Result<OfficialSourcePolicy, Error> {
-    reject_environment(env)?;
+    let reported = environment_configs(env)?;
     if !invocation.is_absolute() || !home.is_absolute() {
         return Err(Error::Locations);
     }
@@ -210,6 +276,7 @@ fn inspect_inputs(
             paths.push((prefix.join(BUNDLED_NPMRC), ConfigOwner::Prefix));
         }
     }
+    paths.extend(reported);
     let inspected: Vec<PathBuf> = paths.iter().map(|(path, _)| path.clone()).collect();
     for (path, owner) in paths {
         // Only owned fixtures have a boundary. Check the closest existing
