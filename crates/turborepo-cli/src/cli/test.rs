@@ -338,6 +338,7 @@ fn setup_parser_keeps_controls_separate_from_tasks() {
         "--no-frozen",
         "--offline",
         "--tools-only",
+        "--ignore-scripts",
         "--no-lock",
         "--update-lock",
     ] {

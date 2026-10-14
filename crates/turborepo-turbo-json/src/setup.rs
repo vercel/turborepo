@@ -2,10 +2,10 @@
 //!
 //! The policy is optional. Without it, `turbo setup` infers what to prepare
 //! from native declaration files, and a committed `turbo.lock` alone makes a
-//! repository managed. Root `tools` and `dependencies` apply to every
-//! toolchain; a key named by a canonical toolchain ID overrides them for that
-//! toolchain. `additionalTools` declares tools that no built-in adapter
-//! manages.
+//! repository managed. Root `tools`, `dependencies`, and `lifecycleScripts`
+//! apply to every toolchain; a key named by a canonical toolchain ID overrides
+//! them for that toolchain. `additionalTools` declares tools that no built-in
+//! adapter manages.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -49,6 +49,18 @@ pub enum DependencyPolicy {
     Skip,
 }
 
+/// Whether dependency setup lets package managers run lifecycle scripts.
+/// `native` keeps each package manager's defaults and committed allowlists or
+/// trust settings. `skip` passes the package manager's own flag for skipping
+/// them, and fails where the package manager has none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserializable, JsonSchema, TS)]
+pub enum LifecycleScripts {
+    #[serde(rename = "native")]
+    Native,
+    #[serde(rename = "skip")]
+    Skip,
+}
+
 /// Setup policy for one toolchain. Omitted values use the root `setup`
 /// values, then the inferred default.
 #[derive(Clone, Debug, Default, Serialize, Deserializable, JsonSchema)]
@@ -61,6 +73,9 @@ pub struct RawToolchainSetupPolicy {
     /// How `turbo setup` prepares this toolchain's dependencies.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<Spanned<DependencyPolicy>>,
+    /// Whether this toolchain's dependency setup runs lifecycle scripts.
+    #[serde(rename = "lifecycleScripts", skip_serializing_if = "Option::is_none")]
+    pub lifecycle_scripts: Option<Spanned<LifecycleScripts>>,
 }
 
 /// Repository policy for `turbo setup`. Only allowed in the root turbo.json
@@ -80,6 +95,9 @@ pub struct RawSetupPolicy {
     /// How `turbo setup` prepares dependencies for every toolchain.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dependencies: Option<Spanned<DependencyPolicy>>,
+    /// Whether dependency setup runs lifecycle scripts for every toolchain.
+    #[serde(rename = "lifecycleScripts", skip_serializing_if = "Option::is_none")]
+    pub lifecycle_scripts: Option<Spanned<LifecycleScripts>>,
     /// Setup policy for the JavaScript toolchain.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub javascript: Option<Spanned<RawToolchainSetupPolicy>>,
@@ -109,6 +127,7 @@ pub struct RawSetupPolicy {
 pub struct ToolchainSetupPolicy {
     pub tools: Option<ToolPolicy>,
     pub dependencies: Option<DependencyPolicy>,
+    pub lifecycle_scripts: Option<LifecycleScripts>,
 }
 
 /// The validated root `setup` policy.
@@ -136,6 +155,7 @@ impl SetupPolicy {
         let defaults = ToolchainSetupPolicy {
             tools: raw.tools.as_ref().map(|tools| *tools.as_inner()),
             dependencies: raw.dependencies.as_ref().map(|deps| *deps.as_inner()),
+            lifecycle_scripts: raw.lifecycle_scripts.as_ref().map(|s| *s.as_inner()),
         };
         check_dependencies(defaults.tools, raw.dependencies.as_ref())?;
 
@@ -164,6 +184,7 @@ impl SetupPolicy {
             let policy = ToolchainSetupPolicy {
                 tools,
                 dependencies: toolchain.dependencies.as_ref().map(|deps| *deps.as_inner()),
+                lifecycle_scripts: toolchain.lifecycle_scripts.as_ref().map(|s| *s.as_inner()),
             };
             overrides.insert(id, policy);
         }
@@ -189,6 +210,7 @@ impl SetupPolicy {
         ToolchainSetupPolicy {
             tools,
             dependencies,
+            lifecycle_scripts: local.lifecycle_scripts.or(self.defaults.lifecycle_scripts),
         }
     }
 
@@ -238,12 +260,14 @@ fn check_dependencies(
 impl WithMetadata for RawToolchainSetupPolicy {
     fn add_text(&mut self, text: Arc<str>) {
         self.tools.add_text(text.clone());
-        self.dependencies.add_text(text);
+        self.dependencies.add_text(text.clone());
+        self.lifecycle_scripts.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
         self.tools.add_path(path.clone());
-        self.dependencies.add_path(path);
+        self.dependencies.add_path(path.clone());
+        self.lifecycle_scripts.add_path(path);
     }
 }
 
@@ -264,6 +288,7 @@ impl WithMetadata for RawSetupPolicy {
     fn add_text(&mut self, text: Arc<str>) {
         self.tools.add_text(text.clone());
         self.dependencies.add_text(text.clone());
+        self.lifecycle_scripts.add_text(text.clone());
         for toolchain in self.toolchains_mut() {
             toolchain.add_text(text.clone());
             toolchain.value.add_text(text.clone());
@@ -281,6 +306,7 @@ impl WithMetadata for RawSetupPolicy {
     fn add_path(&mut self, path: Arc<str>) {
         self.tools.add_path(path.clone());
         self.dependencies.add_path(path.clone());
+        self.lifecycle_scripts.add_path(path.clone());
         for toolchain in self.toolchains_mut() {
             toolchain.add_path(path.clone());
             toolchain.value.add_path(path.clone());
