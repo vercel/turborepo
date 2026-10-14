@@ -1,4 +1,7 @@
-//! Fail-closed official-only precursor, not mirror/configuration support.
+//! Fail-closed source preflight: npm configuration never redirects setup
+//! downloads. Only root `setup.mirrors` and the `TURBO_SETUP_*` mirror
+//! variables do, so any npmrc, including a committed one whose registry equals
+//! a configured mirror, is still rejected rather than parsed.
 //! No subprocesses or network. Call before constructing either transport and
 //! before mutation. Recheck if discovery/environment changes before traffic.
 
@@ -43,8 +46,9 @@ pub enum Error {
     #[error("official-only source preflight is not qualified on this host")]
     UnsupportedHost,
     #[error(
-        "official-only setup rejects {0:?} configuration, including empty npmrc files; remove it \
-         or wait for mirror/policy support"
+        "official-only setup rejects {0:?} configuration, including empty npmrc files; remove it, \
+         and configure download mirrors with setup.mirrors or TURBO_SETUP_NODE_MIRROR and \
+         TURBO_SETUP_NPM_REGISTRY instead"
     )]
     Configured(ConfigOwner),
     #[error(
@@ -458,23 +462,31 @@ fn bundled_prefix(bytes: &[u8]) -> Option<PathBuf> {
     .then(|| prefix.to_path_buf())
 }
 
-/// Setup applies these root policy keys, and none configures download
-/// sources. Any other shape, including an empty policy, is not applied yet.
+/// Setup applies these root policy keys. Only `mirrors` configures download
+/// sources, and setup routes those through validated transports. Any other
+/// shape, including an empty policy, is not applied yet.
 fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
     use jsonc_parser::ast::Value;
     const VALUES: [&str; 3] = ["tools", "dependencies", "lifecycleScripts"];
     const TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
+    const MIRRORS: [&str; 2] = ["node", "npmRegistry"];
+    let strings = |keys: &[&str], value: &Value| {
+        matches!(value, Value::Object(object) if object.properties.iter().all(|p| {
+            keys.contains(&p.name.as_str()) && matches!(p.value, Value::StringLit(_))
+        }))
+    };
     let value =
         |name: &str, value: &Value| VALUES.contains(&name) && matches!(value, Value::StringLit(_));
-    let toolchain = |name: &str, toolchain: &Value| {
-        TOOLCHAINS.contains(&name)
-            && matches!(toolchain, Value::Object(object)
-                if object.properties.iter().all(|p| value(p.name.as_str(), &p.value)))
-    };
+    let toolchain =
+        |name: &str, toolchain: &Value| TOOLCHAINS.contains(&name) && strings(&VALUES, toolchain);
     matches!(setup, Value::Object(object) if !object.properties.is_empty()
     && object.properties.iter().all(|p| {
         let name = p.name.as_str();
-        value(name, &p.value) || toolchain(name, &p.value) || name == "additionalTools"
+        // `additionalTools` declares tools no built-in adapter manages.
+        value(name, &p.value)
+            || toolchain(name, &p.value)
+            || name == "additionalTools"
+            || (name == "mirrors" && strings(&MIRRORS, &p.value))
     }))
 }
 

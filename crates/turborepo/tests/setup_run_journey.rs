@@ -163,6 +163,21 @@ fn routes() -> Vec<(String, Vec<u8>)> {
         "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(&pnpm)))}});
     routes.push(("/pnpm/10.0.0".into(), metadata.to_string().into_bytes()));
     routes.push(("/pnpm/-/pnpm-10.0.0.tgz".into(), pnpm));
+    // The same bytes beneath the path-prefixed mirror bases the mirror
+    // journey configures.
+    let mirrored: Vec<_> = routes
+        .iter()
+        .flat_map(|(path, body)| {
+            let (bases, rest): (&[&str], _) = match path.strip_prefix("/dist") {
+                Some(rest) => (&["/policy/node", "/env/node"], rest),
+                None => (&["/policy/npm"], path.as_str()),
+            };
+            bases
+                .iter()
+                .map(move |base| (format!("{base}{rest}"), body.clone()))
+        })
+        .collect();
+    routes.extend(mirrored);
     routes
 }
 
@@ -170,7 +185,7 @@ fn routes() -> Vec<(String, Vec<u8>)> {
 /// records every CONNECT target and never resolves or contacts the request's
 /// authority.
 struct Upstream {
-    _origin: LoopbackServer,
+    origin: LoopbackServer,
     proxy: String,
     connects: Arc<Mutex<Vec<String>>>,
 }
@@ -206,7 +221,7 @@ impl Upstream {
             }
         });
         Self {
-            _origin: origin,
+            origin,
             proxy,
             connects,
         }
@@ -418,6 +433,16 @@ impl Journey {
         }
     }
 
+    /// The same repository with a root `setup.mirrors` policy.
+    fn mirrored(mirrors: &str) -> Self {
+        let j = Self::new();
+        let config = format!(
+            r#"{{"futureFlags":{{"experimentalSetup":true}},"agentGuidance":false,"setup":{{"mirrors":{mirrors}}},"tasks":{{"build":{{"cache":false}}}}}}"#
+        );
+        fs::write(j.root.join("turbo.json"), config).unwrap();
+        j
+    }
+
     fn read(&self, path: &str) -> Vec<u8> {
         fs::read(self.root.join(path)).unwrap()
     }
@@ -585,4 +610,61 @@ fn repository_local_cli_pins_after_global_setup() {
     j.turbo(&j.web, &["run", "build"], &[])
         .fails("turbo setup")
         .offline();
+}
+
+/// TURBO-6404: root `setup.mirrors` routes downloads, an environment variable
+/// overrides one mirror, and `turbo.lock` keeps the official URLs either way.
+/// Each policy mirror sits on the other official host, so the CONNECT log
+/// shows which base served each tool.
+#[test]
+fn policy_mirrors_route_downloads_and_environment_overrides_them() {
+    let official = Journey::new();
+    let first = official.turbo(&official.root, TOOLS_ONLY, &[]);
+    if first.host_policy_blocked() {
+        return;
+    }
+    first.succeeds();
+    let lock = official.read("turbo.lock");
+    let policy = r#"{"node":"https://registry.npmjs.org/policy/node/","npmRegistry":"https://nodejs.org/policy/npm"}"#;
+    let env = [("TURBO_SETUP_NODE_MIRROR", "https://nodejs.org/env/node")];
+    for (env, node, hosts) in [
+        (&[][..], "/policy/node/", &ORIGINS[..]),
+        (&env[..], "/env/node/", &ORIGINS[..1]),
+    ] {
+        let j = Journey::mirrored(policy);
+        let outcome = j.turbo(&j.web, TOOLS_ONLY, env);
+        outcome.succeeds();
+        assert_eq!(j.read("turbo.lock"), lock, "{}", outcome.text);
+        let requests = j.upstream.origin.requests();
+        for base in [node, "/policy/npm/"] {
+            assert!(requests.iter().any(|path| path.starts_with(base)));
+        }
+        assert!(
+            requests
+                .iter()
+                .all(|path| path.starts_with(node) || path.starts_with("/policy/npm/")),
+            "{requests:?}"
+        );
+        let mut connects = outcome.connects.clone();
+        connects.sort();
+        connects.dedup();
+        let mut expected = hosts.to_vec();
+        expected.sort();
+        assert_eq!(connects, expected);
+    }
+}
+
+/// Invalid committed mirrors fail before any traffic or write, naming the key
+/// and masking the value, for setup and for every other command.
+#[test]
+fn invalid_policy_mirrors_fail_before_traffic_without_echo() {
+    let j = Journey::mirrored(r#"{"node":"https://user:s3cret@mirror.example/dist"}"#);
+    for args in [TOOLS_ONLY, &["run", "build"][..]] {
+        let outcome = j.turbo(&j.root, args, &[]);
+        outcome
+            .fails("setup.mirrors.node must be an absolute HTTPS URL")
+            .offline();
+        assert!(!outcome.text.contains("s3cret"), "{}", outcome.text);
+    }
+    assert!(!j.root.join("turbo.lock").exists() && !j.root.join(".turbo").exists());
 }

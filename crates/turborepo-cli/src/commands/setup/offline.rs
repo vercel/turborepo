@@ -171,9 +171,9 @@ pub(super) fn run(
         return checked.map(report);
     }
     let plans = provision::plans(&sources, lock)?;
-    let transports = transports
-        .map(Ok)
-        .unwrap_or_else(|| provision::Transports::official(&preflight()?))?;
+    let transports = transports.map(Ok).unwrap_or_else(|| {
+        provision::Transports::official(&preflight()?, discovery.policy().mirrors())
+    })?;
     let available: Vec<_> = [
         plans
             .node
