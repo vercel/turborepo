@@ -112,7 +112,10 @@ impl RegistryTransport {
             artifact
         };
         Ok(crate::registry_resolution::ResolvedRegistry::new(
-            release, package, natives, sha224_hex(&bytes),
+            release,
+            package,
+            natives,
+            sha224_hex(&bytes),
         ))
     }
 
