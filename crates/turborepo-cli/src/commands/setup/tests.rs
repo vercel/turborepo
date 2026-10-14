@@ -206,6 +206,8 @@ mod checks;
 mod plans;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "authorization_tests.rs"]
+mod authorization;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]
