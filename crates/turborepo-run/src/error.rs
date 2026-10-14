@@ -11,6 +11,8 @@ use turborepo_ui::tui;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[error("managed setup validation failed: {0}")]
+    ManagedTools(String),
     #[error("Invalid task configuration")]
     EngineValidation(#[related] Vec<ValidateError>),
     #[error(transparent)]

@@ -109,7 +109,7 @@ fn production_no_lock_ci_healthy_repeat_has_positive_pins_record_and_no_traffic(
                 text.contains("No turbo.lock written")
                     && text.contains("cross-machine")
                     && text.contains("Dependencies skipped")
-                    && text.contains("activation is not enabled")
+                    && text.contains("No tasks run")
             );
             let after = Store::inspect(root).unwrap().unwrap();
             assert_eq!(after.bin, before.bin);

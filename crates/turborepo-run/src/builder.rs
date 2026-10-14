@@ -413,6 +413,7 @@ pub struct RunBuilder {
     // workspace configuration) changed since the graph was built; the watch
     // client checks the changed-file set before sharing it.
     shared_pkg_graph: Option<Arc<PackageGraph>>,
+    managed_environment: Option<Arc<crate::ManagedRun>>,
 }
 
 impl RunBuilder {
@@ -436,6 +437,7 @@ impl RunBuilder {
             opts,
             version,
             api_auth,
+            managed_environment,
         } = input;
 
         Ok(Self {
@@ -456,6 +458,7 @@ impl RunBuilder {
             skip_repo_index_and_scm_state: false,
             skip_external_dependencies: false,
             shared_pkg_graph: None,
+            managed_environment,
         })
     }
 
@@ -2177,6 +2180,10 @@ impl RunBuilder {
             TurboState::platform_name(),
         );
         let start_at = Local::now();
+        // Reject stale managed state before graph/probe work or HTTP activation.
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(Error::ManagedTools)?;
+        }
 
         let RepoDiscovery {
             run_telemetry,
@@ -2318,6 +2325,7 @@ impl RunBuilder {
                     start_at,
                     opts: Arc::new(self.opts),
                     env_at_execution_start,
+                    managed_environment: self.managed_environment,
                     filtered_pkgs,
                     remote_cache_status,
                     engine,
@@ -3307,6 +3315,7 @@ mod origins_match_tests {
                 opts: affected_opts(repo_root, filters),
                 version: "test",
                 api_auth: None,
+                managed_environment: None,
             },
             None,
         )
@@ -3569,6 +3578,7 @@ mod origins_match_tests {
                 opts,
                 version: "test",
                 api_auth: None,
+                managed_environment: None,
             },
             None,
         )
