@@ -5,8 +5,8 @@ use super::*;
 
 const RELEASE: &str = "/oven-sh/bun/releases/download/bun-v1.2.23";
 
-#[test]
-fn locked_bun_provisions_checks_repeats_and_rejects_frozen_drift() {
+/// A canonical Bun lock for this host and its loopback release.
+fn bun() -> (Fixture, LoopbackServer) {
     let mut f = Fixture::new();
     let platform = provision::platform().unwrap();
     let target = match platform {
@@ -34,13 +34,19 @@ fn locked_bun_provisions_checks_repeats_and_rejects_frozen_drift() {
     let lock_path = f.owned.root().join("turbo.lock");
     let canonical = turborepo_setup::lock::Lock::parse(&fs::read(&lock_path).unwrap()).unwrap();
     fs::write(&lock_path, canonical.canonical_bytes().unwrap()).unwrap();
-    let lock = fs::read(&lock_path).unwrap();
     let u = LoopbackServer::new(
         [(f.node_path.clone(), f.node.clone()), (path, archive)],
         |_| {},
     )
     .unwrap();
+    (f, u)
+}
 
+#[test]
+fn locked_bun_provisions_checks_repeats_and_rejects_frozen_drift() {
+    let (f, u) = bun();
+    let lock_path = f.owned.root().join("turbo.lock");
+    let lock = fs::read(&lock_path).unwrap();
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 2);
     let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
@@ -75,4 +81,19 @@ fn locked_bun_provisions_checks_repeats_and_rejects_frozen_drift() {
     assert_eq!(f.manifest().unwrap(), manifest);
     assert_eq!(fs::read(&lock_path).unwrap(), lock);
     f.no_execution();
+}
+
+#[test]
+fn bun_check_failures_are_readonly_and_actionable() {
+    let installed = || {
+        let (f, u) = bun();
+        assert!(matches!(
+            f.check(super::checks::CHECK),
+            Err(Error::Activation(
+                turborepo_setup::activation::Error::MissingInventory
+            ))
+        ));
+        (f, u)
+    };
+    super::checks::assert_manager_check_failures(installed, "bun", "yarn@4.5.0");
 }

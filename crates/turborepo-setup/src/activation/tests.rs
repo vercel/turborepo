@@ -67,12 +67,15 @@ fn desired(
 ) -> Vec<Tool> {
     let lock = Lock::parse(value.to_string().as_bytes()).unwrap();
     let platform = Platform::MacosArm64;
+    let node = lock
+        .tools()
+        .contains_key("node")
+        .then(|| NodePlan::from_lock(&lock, platform).unwrap());
     let mut tools = Vec::new();
-    if lock.tools().contains_key("node") {
-        let node = NodePlan::from_lock(&lock, platform).unwrap();
+    if let Some(node) = &node {
         tools.push(node.inventory_tool().clone());
         if lock.tools().contains_key("pnpm") {
-            let pnpm = PnpmPlan::from_lock(&lock, platform, &node, authored).unwrap();
+            let pnpm = PnpmPlan::from_lock(&lock, platform, node, authored).unwrap();
             tools.push(pnpm.inventory_tool().clone());
         }
     }
@@ -83,6 +86,27 @@ fn desired(
             rust.inventory_tool().clone(),
             rustup.inventory_tool().clone(),
         ]);
+    }
+    if lock.tools().contains_key("yarn") {
+        tools.push(
+            YarnPlan::from_lock(
+                &lock,
+                Platform::MacosArm64,
+                node.as_ref().unwrap(),
+                authored,
+            )
+            .unwrap()
+            .inventory_tool()
+            .clone(),
+        );
+    }
+    if lock.tools().contains_key("bun") {
+        tools.push(
+            BunPlan::from_lock(&lock, Platform::MacosArm64)
+                .unwrap()
+                .inventory_tool()
+                .clone(),
+        );
     }
     tools.sort_by(|a, b| a.id.cmp(&b.id));
     tools
@@ -104,6 +128,48 @@ fn with_rust(repo: &Path, mut value: Value) -> Value {
     }}}}});
     fs::write(repo.join("turbo.lock"), value.to_string()).unwrap();
     value
+}
+
+/// Replace pnpm with an exact Yarn classic, modern Yarn, or Bun selection in
+/// the official lock shape, returning the matching `packageManager` value.
+fn with_manager(id: &str, version: &str) -> (Value, String) {
+    let request = format!("{id}@{version}");
+    let declarations = json!([{"file":"package.json","field":"/packageManager","request":request}]);
+    let installation = if id == "bun" {
+        json!({"kind":"managed","artifacts":{"macos-arm64":{"distribution":{
+            "url":format!("https://github.com/oven-sh/bun/releases/download/bun-v{version}/bun-darwin-aarch64.zip"),
+            "sha256":"33".repeat(32),"format":"zip","rootPrefix":"bun-darwin-aarch64",
+            "executables":{"bun":"bun","bunx":"bun"}
+        }}}})
+    } else {
+        let tarball = if version.starts_with("1.") {
+            format!("yarn/-/yarn-{version}.tgz")
+        } else {
+            format!("@yarnpkg/cli-dist/-/cli-dist-{version}.tgz")
+        };
+        json!({"kind":"managed","artifacts":{"any":{"package":{
+            "url":format!("https://registry.npmjs.org/{tarball}"),
+            "sha256":"44".repeat(32),"format":"tar-gz","rootPrefix":"package",
+            "executables":{"yarn":"bin/yarn.js","yarnpkg":"bin/yarn.js"}
+        }}}})
+    };
+    let mut value = fixture();
+    let tools = value["tools"].as_object_mut().unwrap();
+    tools.remove("pnpm");
+    tools.insert(
+        id.into(),
+        json!({"adapter":id,"version":version,"declarations":declarations,"installation":installation}),
+    );
+    (value, request)
+}
+
+fn manager_sources(repo: &Path, value: &Value, package_manager: &str) {
+    write_sources(repo, value);
+    fs::write(
+        repo.join("package.json"),
+        json!({ "packageManager": package_manager }).to_string(),
+    )
+    .unwrap();
 }
 
 // Readiness fixtures only, not executable authorization or vendor verification.
@@ -755,6 +821,38 @@ fn uv_and_python_fail_closed_when_disabled_drifted_stale_or_damaged() {
 }
 
 #[test]
+fn yarn_and_bun_contribute_exports_through_the_node_and_pnpm_plan_shape() {
+    for (id, version, exports) in [
+        ("yarn", "1.22.22", ["yarn", "yarnpkg"]),
+        ("yarn", "4.5.0", ["yarn", "yarnpkg"]),
+        ("bun", "1.2.23", ["bun", "bunx"]),
+    ] {
+        let (value, request) = with_manager(id, version);
+        let repo = tempfile::tempdir().unwrap();
+        manager_sources(repo.path(), &value, &request);
+        let tools = desired(&value, None);
+        seed(repo.path(), &tools);
+        fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
+        let before = state(repo.path());
+        let plan = ActivationPlan::inspect(repo.path(), context()).unwrap();
+        assert_eq!(plan.tools(), tools, "{request}");
+        assert_eq!(plan.snapshot().tools().len(), 2);
+        // Same representation as Node/pnpm: one managed bin, no runtime values.
+        assert!(plan.runtime_env().is_empty());
+        for name in ["node", "npm", "npx"].into_iter().chain(exports) {
+            assert!(plan.path_prepend().join(name).exists(), "{request}: {name}");
+        }
+        assert!(!plan.path_prepend().join("pnpm").exists());
+        let path = plan.path(Some(OsStr::new("/host/bin"))).unwrap();
+        assert_eq!(
+            std::env::split_paths(&path).collect::<Vec<_>>(),
+            [plan.path_prepend().to_owned(), PathBuf::from("/host/bin")]
+        );
+        assert_eq!(state(repo.path()), before);
+    }
+}
+
+#[test]
 fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
     let (repo, value) = python_installed(with_python(fixture(), true));
     let python_env = ActivationPlan::inspect_with(repo.path(), context(), PYTHON)
@@ -924,4 +1022,64 @@ fn rust_only_plans_bind_the_toolchain_file_tree_and_cargo_home() {
         ActivationPlan::inspect_with(repo.path(), context(), RUST),
         Err(Error::DamagedInventory(_))
     ));
+}
+
+#[test]
+fn switched_or_missing_manager_installations_never_activate() {
+    let (yarn, yarn_request) = with_manager("yarn", "4.5.0");
+    let (bun, bun_request) = with_manager("bun", "1.2.23");
+    for case in 0..3 {
+        let repo = tempfile::tempdir().unwrap();
+        manager_sources(repo.path(), &yarn, &yarn_request);
+        let installed = desired(&yarn, None);
+        seed(repo.path(), &installed);
+        let expected = match case {
+            // The declaration moved to Bun after setup; the lock still selects Yarn.
+            0 => {
+                manager_sources(repo.path(), &yarn, &bun_request);
+                Error::DeclarationDrift
+            }
+            // Lock and declaration select Bun, but Yarn is what was installed.
+            1 => {
+                manager_sources(repo.path(), &bun, &bun_request);
+                Error::StaleInventory
+            }
+            // A Node-only generation never satisfies a locked manager.
+            _ => {
+                seed(repo.path(), &installed[..1]);
+                Error::StaleInventory
+            }
+        };
+        let before = state(repo.path());
+        let result = ActivationPlan::inspect(repo.path(), context());
+        assert_eq!(
+            result.err().map(|e| std::mem::discriminant(&e)),
+            Some(std::mem::discriminant(&expected)),
+            "case {case}"
+        );
+        assert_eq!(state(repo.path()), before);
+    }
+}
+
+#[test]
+fn modern_yarn_bundle_pin_is_part_of_the_installed_binding() {
+    let (mut value, _) = with_manager("yarn", "4.5.0");
+    let repo = tempfile::tempdir().unwrap();
+    let digest = "aa".repeat(64);
+    manager_sources(repo.path(), &value, &format!("yarn@4.5.0+sha512.{digest}"));
+    let captured = Snapshot::capture(repo.path()).unwrap();
+    value["tools"]["yarn"]["declarations"] =
+        serde_json::to_value(&captured.declarations()["yarn"]).unwrap();
+    fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
+    seed(repo.path(), &desired(&value, None));
+    assert!(matches!(
+        ActivationPlan::inspect(repo.path(), context()),
+        Err(Error::StaleInventory)
+    ));
+    let authored = crate::package_manager::CorepackIntegrity {
+        algorithm: "sha512",
+        digest,
+    };
+    seed(repo.path(), &desired(&value, Some(&authored)));
+    assert!(ActivationPlan::inspect(repo.path(), context()).is_ok());
 }

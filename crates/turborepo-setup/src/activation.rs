@@ -1,5 +1,5 @@
-//! Read-only Node/npm/pnpm/Rust environment planning, plus uv/Python when
-//! enabled, not execution authorization.
+//! Read-only Node/npm/pnpm/Yarn/Bun/Rust environment planning, plus uv/Python
+//! when enabled, not execution authorization.
 //! Repo-writable inventory proves readiness only. Consumers must separately
 //! authorize setup-recorded tools with trusted-root user state, gate managed
 //! mode, and revalidate before use. No CLI support is advertised by this
@@ -17,9 +17,10 @@ use turborepo_tool_install::{Current, Store, Tool, Verification};
 use crate::{
     bun_provision::BunPlan,
     execution_identity::{ExecutionContext, ExecutionSnapshot},
-    lock::{Ecosystems, Installation, Platform, Snapshot, StorageError},
+    lock::{Ecosystems, Installation, Lock, Platform, Snapshot, StorageError},
     node_provision::NodePlan,
     npm_provision::NpmPlan,
+    package_manager::{Declaration, Manager},
     pnpm_provision::PnpmPlan,
     python_provision::PythonPlan,
     rust_provision::{self, RustPlan},
@@ -201,40 +202,14 @@ impl ActivationPlan {
         } else {
             None
         };
-        if lock.tools().contains_key("pnpm") {
-            let node = node.as_ref().ok_or(Error::InvalidLock)?;
+        if ["npm", "pnpm", "yarn", "bun"]
+            .iter()
+            .any(|id| lock.tools().contains_key(*id))
+        {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            // Share setup's full authored-pin validation and reuse identity;
-            // an authoritative version does not erase devEngines integrity.
-            let pnpm = PnpmPlan::from_declaration(lock, platform, node, &manager)
-                .map_err(|_| Error::InvalidLock)?;
-            tools.push(pnpm.inventory_tool().clone());
-        }
-        if lock.tools().contains_key("npm") {
-            let node = node.as_ref().ok_or(Error::InvalidLock)?;
-            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            if let Some(npm) = NpmPlan::from_declaration(lock, platform, node, &manager)
-                .map_err(|_| Error::InvalidLock)?
-            {
-                tools.push(npm.inventory_tool().clone());
+            if let Some(tool) = manager_tool(lock, platform, node.as_ref(), &manager)? {
+                tools.push(tool);
             }
-        }
-        if lock.tools().contains_key("yarn") {
-            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            let yarn = YarnPlan::from_declaration(
-                lock,
-                platform,
-                node.as_ref().ok_or(Error::InvalidLock)?,
-                &manager,
-            )
-            .map_err(|_| Error::InvalidLock)?;
-            tools.push(yarn.inventory_tool().clone());
-        }
-        if lock.tools().contains_key("bun") {
-            let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            let bun = BunPlan::from_declaration(lock, platform, &manager)
-                .map_err(|_| Error::InvalidLock)?;
-            tools.push(bun.inventory_tool().clone());
         }
         // Inventory records tools in ID order.
         let uv = lock.tools().contains_key("uv");
@@ -383,6 +358,47 @@ fn uv_env(
         env.insert("UV_PYTHON".into(), python.key().into());
     }
     Ok(env)
+}
+
+/// The installed identity setup provisions for the declared manager. Each plan
+/// shares setup's full authored-pin validation and reuse identity, so an
+/// authoritative version never erases devEngines integrity.
+fn manager_tool(
+    lock: &Lock,
+    platform: Platform,
+    node: Option<&NodePlan>,
+    manager: &Declaration,
+) -> Result<Option<Tool>, Error> {
+    let node = || node.ok_or(Error::InvalidLock);
+    let id = match manager.manager {
+        Manager::Npm => "npm",
+        Manager::Pnpm => "pnpm",
+        Manager::Yarn => "yarn",
+        Manager::Bun => "bun",
+        _ => return Err(Error::UnsupportedAdapter),
+    };
+    if !lock.tools().contains_key(id) {
+        return Err(Error::DeclarationDrift);
+    }
+    if manager.manager == Manager::Npm {
+        return NpmPlan::from_declaration(lock, platform, node()?, manager)
+            .map(|plan| plan.map(|plan| plan.inventory_tool().clone()))
+            .map_err(|_| Error::InvalidLock);
+    }
+    Ok(Some(match manager.manager {
+        Manager::Pnpm => PnpmPlan::from_declaration(lock, platform, node()?, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+        Manager::Yarn => YarnPlan::from_declaration(lock, platform, node()?, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+        _ => BunPlan::from_declaration(lock, platform, manager)
+            .map_err(|_| Error::InvalidLock)?
+            .inventory_tool()
+            .clone(),
+    }))
 }
 
 #[cfg(all(test, unix))]
