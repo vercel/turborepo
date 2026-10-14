@@ -1,6 +1,6 @@
-//! Locked Yarn 1 from the classic `yarn` registry package, launched by the
-//! selected managed Node. No Corepack, install hooks, or dependency
-//! installation.
+//! Locked Yarn on the selected managed Node: Yarn 1 from the classic `yarn`
+//! package, Yarn 2+ from the `@yarnpkg/cli-dist` bundle Corepack also uses.
+//! No Corepack, install hooks, `yarnPath` probes, or dependency installation.
 
 use turborepo_tool_install::{Store, Tool};
 
@@ -16,7 +16,8 @@ use crate::{
 
 pub struct YarnPlan(RegistryPlan);
 impl YarnPlan {
-    /// Bind the applicable `packageManager`/devEngines integrity.
+    /// Bind the applicable `packageManager`/devEngines integrity. Modern Yarn
+    /// pins are verified against the bundle bytes before every preparation.
     pub fn from_declaration(
         lock: &Lock,
         platform: Platform,

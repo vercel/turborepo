@@ -1,6 +1,6 @@
-//! Exact npm/pnpm → verified portable artifact. No installation, execution,
-//! repository I/O or platform-support claim. The coordinator owns declarations,
-//! Node binding and final lock validation/publication.
+//! Exact npm/pnpm/Yarn → verified portable artifact. No installation,
+//! execution, repository I/O or platform-support claim. The coordinator owns
+//! declarations, Node binding and final lock validation/publication.
 
 use std::collections::BTreeMap;
 
@@ -25,6 +25,9 @@ pub struct ResolvedRegistry {
     /// SHA-224 of the verified archive bytes, for older Corepack pins.
     sha224: String,
     natives: BTreeMap<Platform, Artifact>,
+    /// Modern Yarn `bin/yarn.js` SHA-256/SHA-512, which Corepack pins instead
+    /// of the registry tarball.
+    bundle: Option<(String, String)>,
 }
 impl ResolvedRegistry {
     pub(crate) fn new(
@@ -32,6 +35,7 @@ impl ResolvedRegistry {
         artifact: Artifact,
         natives: BTreeMap<Platform, Artifact>,
         sha224: String,
+        bundle: Option<(String, String)>,
     ) -> Self {
         Self {
             manager: release.manager,
@@ -40,6 +44,7 @@ impl ResolvedRegistry {
             integrity: release.integrity,
             sha224,
             natives,
+            bundle,
         }
     }
     pub fn manager(&self) -> Manager {
@@ -58,28 +63,29 @@ impl ResolvedRegistry {
     pub fn integrity(&self) -> &CorepackIntegrity {
         &self.integrity
     }
+    /// SHA-256 covered by authored pins: the bundle for modern Yarn, otherwise
+    /// the locked archive. Pass this to Declaration::locked_integrity.
+    pub fn pinned_sha256(&self) -> &str {
+        self.bundle
+            .as_ref()
+            .map_or(&self.artifact.sha256, |(sha256, _)| sha256)
+    }
     /// Check a native pin selected AFTER byte-derived SHA-256 is available via
     /// Declaration::locked_integrity. No refetch, metadata-only proof or OR
     /// flattening.
     pub fn verify_authored(&self, authored: Option<&CorepackIntegrity>) -> Result<(), Error> {
         let Some(pin) = authored else { return Ok(()) };
-        let (length, actual) = match pin.algorithm {
-            "sha224" => (56, &self.sha224),
-            "sha256" => (64, &self.artifact.sha256),
-            "sha512" => (128, &self.integrity.digest),
-            _ => return Err(RegistryMetadataError::InvalidIntegrity.into()),
-        };
-        if pin.digest.len() != length || !pin.digest.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(RegistryMetadataError::InvalidIntegrity.into());
+        match &self.bundle {
+            // Bundle pins have no SHA-224 form; Corepack's SHA-224 pins name
+            // registry archives.
+            Some((sha256, sha512)) => check_pin(pin, None, sha256, sha512),
+            None => check_pin(
+                pin,
+                Some(&self.sha224),
+                &self.artifact.sha256,
+                &self.integrity.digest,
+            ),
         }
-        if !pin.digest.eq_ignore_ascii_case(actual) {
-            return Err(if pin.algorithm == "sha512" {
-                RegistryMetadataError::IntegrityConflict.into()
-            } else {
-                turborepo_download::Error::DigestMismatch.into()
-            });
-        }
-        Ok(())
     }
     pub fn into_artifact(self) -> Artifact {
         self.artifact
@@ -105,6 +111,31 @@ impl ResolvedRegistry {
             })
             .collect()
     }
+}
+
+pub(crate) fn check_pin(
+    pin: &CorepackIntegrity,
+    sha224: Option<&str>,
+    sha256: &str,
+    sha512: &str,
+) -> Result<(), Error> {
+    let (length, actual) = match (pin.algorithm, sha224) {
+        ("sha224", Some(sha224)) => (56, sha224),
+        ("sha256", _) => (64, sha256),
+        ("sha512", _) => (128, sha512),
+        _ => return Err(RegistryMetadataError::InvalidIntegrity.into()),
+    };
+    if pin.digest.len() != length || !pin.digest.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(RegistryMetadataError::InvalidIntegrity.into());
+    }
+    if !pin.digest.eq_ignore_ascii_case(actual) {
+        return Err(if pin.algorithm == "sha512" {
+            RegistryMetadataError::IntegrityConflict.into()
+        } else {
+            turborepo_download::Error::DigestMismatch.into()
+        });
+    }
+    Ok(())
 }
 
 #[cfg(all(test, unix))]
