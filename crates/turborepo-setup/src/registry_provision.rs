@@ -35,6 +35,8 @@ pub enum Error {
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
+    #[error("offline setup has no verified cached package artifact and never contacts upstream")]
+    Offline,
     #[error(transparent)]
     Authored(#[from] crate::package_manager::Error),
     #[error(transparent)]
@@ -55,6 +57,7 @@ pub struct RegistryTransport {
     client: DownloadClient,
     origin: String,
     cache: Option<ArtifactCache>,
+    offline: bool,
 }
 impl RegistryTransport {
     // TODO(TURBO-6219): Apply mirror/registry policy to requests and validation.
@@ -64,6 +67,7 @@ impl RegistryTransport {
             client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
             origin: policy.registry().into(),
             cache: None,
+            offline: false,
         })
     }
 
@@ -71,6 +75,13 @@ impl RegistryTransport {
     /// always verifies registry metadata.
     pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
         self.cache = cache;
+        self
+    }
+
+    /// Serve only verified cache hits; metadata and artifact requests fail
+    /// before traffic with [`Error::Offline`].
+    pub fn offline(mut self) -> Self {
+        self.offline = true;
         self
     }
 
@@ -88,6 +99,9 @@ impl RegistryTransport {
         match authored {
             None => Some(bytes),
             Some(pin) if pin.algorithm == "sha256" => (pin.digest == sha256).then_some(bytes),
+            Some(pin) if pin.algorithm == "sha224" => {
+                (sha224_hex(&bytes) == pin.digest).then_some(bytes)
+            }
             Some(pin) if pin.algorithm == "sha512" => VerifiedArtifact::verify_bytes_sha512(
                 bytes.into_bytes(),
                 ExpectedSha512::from_hex(&pin.digest).ok()?,
@@ -179,6 +193,9 @@ impl RegistryTransport {
         authored: Option<&CorepackIntegrity>,
         locked_sha256: Option<&str>,
     ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
+        if self.offline {
+            return Err(Error::Offline);
+        }
         // Validate before interpolating any request path or making traffic.
         registry_metadata::validate_selection(manager, version)?;
         let metadata = self
@@ -231,6 +248,7 @@ impl RegistryTransport {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
             cache: None,
+            offline: false,
         })
     }
 }
@@ -594,6 +612,18 @@ impl RegistryPlan {
         &self.tool
     }
 
+    /// Read-only cache preflight; preparation verifies every part again.
+    pub fn cache_available(&self, transport: &RegistryTransport) -> bool {
+        transport
+            .cached(self.platform, &self.artifact.sha256, self.authored.as_ref())
+            .is_some()
+            && self.native.as_ref().is_none_or(|(_, native)| {
+                transport
+                    .cached(self.platform, &native.sha256, None)
+                    .is_some()
+            })
+    }
+
     /// Prepare without executing Node, then reconcile the SAME complete desired
     /// set with all adapter callbacks. Only healthy generations allow reuse.
     pub async fn prepare_if_needed(
@@ -809,6 +839,10 @@ impl PnpmPlan {
 
     pub fn inventory_tool(&self) -> &Tool {
         self.0.inventory_tool()
+    }
+
+    pub fn cache_available(&self, transport: &RegistryTransport) -> bool {
+        self.0.cache_available(transport)
     }
 
     /// Prepare only; reconcile the same complete desired inventory afterward.

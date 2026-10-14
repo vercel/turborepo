@@ -626,7 +626,7 @@ impl Store {
         stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
-        self.reconcile_prepared(desired, false, None, stage_tool, before_publish)
+        self.reconcile_prepared(desired, None, None, stage_tool, before_publish)
     }
 
     /// Replace the whole generation using fresh adapter preparations, including
@@ -639,7 +639,21 @@ impl Store {
         stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
         before_publish: impl FnOnce() -> Result<(), Error>,
     ) -> Result<Outcome, Error> {
-        self.reconcile_prepared(desired, true, None, stage_tool, before_publish)
+        self.reconcile_prepared(desired, Some(&[]), None, stage_tool, before_publish)
+    }
+
+    /// Forced replacement that copies `reused` tools from the healthy
+    /// selection instead of staging them, for reinstalls (such as offline)
+    /// with fresh bytes for only some tools. A reused tool missing from the
+    /// healthy selection is staged, so the caller must be able to fail it.
+    pub fn force_reconcile_reusing_checked(
+        &mut self,
+        desired: &[Tool],
+        reused: &[Tool],
+        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
+        before_publish: impl FnOnce() -> Result<(), Error>,
+    ) -> Result<Outcome, Error> {
+        self.reconcile_prepared(desired, Some(reused), None, stage_tool, before_publish)
     }
 
     /// Select caller-validated metadata atomically with the complete cohort.
@@ -661,17 +675,18 @@ impl Store {
     ) -> Result<Outcome, Error> {
         self.reconcile_prepared(
             desired,
-            force,
+            force.then_some(&[][..]),
             Some((record, expected)),
             stage_tool,
             before_publish,
         )
     }
 
+    // `force` lists the tools a forced replacement still copies.
     fn reconcile_prepared(
         &mut self,
         desired: &[Tool],
-        force: bool,
+        force: Option<&[Tool]>,
         recorded: Option<(&Record, &GenerationExpectation)>,
         mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), Error>,
         before_publish: impl FnOnce() -> Result<(), Error>,
@@ -683,7 +698,7 @@ impl Store {
         }
         let record_sha256 = recorded.map(|(record, _)| record.hash());
         let old = self.healthy_inventory()?;
-        let valid_old = old.as_ref().filter(|_| !force);
+        let valid_old = old.as_ref().filter(|_| force.is_none());
         let mut desired = desired.to_vec();
         desired.sort_by(|a, b| a.id.cmp(&b.id));
         if valid_old.is_some_and(|old| {
@@ -715,7 +730,11 @@ impl Store {
         for tool in desired {
             let tree = tools.join(&tool.id);
             directory(&tree)?;
-            let reused = valid_old.and_then(|old| {
+            let reuse = match force {
+                Some(reused) => old.as_ref().filter(|_| reused.contains(&tool)),
+                None => valid_old,
+            };
+            let reused = reuse.and_then(|old| {
                 let entry = old.tools.iter().find(|entry| entry.tool == tool)?;
                 Some((old, entry))
             });

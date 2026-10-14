@@ -187,3 +187,153 @@ fn concurrent_repositories_share_one_cache_without_partial_entries() {
     );
     assert_eq!(u.hits(), before);
 }
+
+const OFFLINE: &[&str] = &["--frozen", "--tools-only", "--offline"];
+
+#[test]
+fn offline_setup_installs_only_installed_or_cached_bytes_without_traffic() {
+    let cache = tempfile::tempdir().unwrap();
+    let seed = Fixture::new();
+    let u = Upstream::new(&seed, false, None);
+    assert_eq!(
+        seed.run_with(u.origin(), Some(cache.path()), FROZEN)
+            .unwrap(),
+        0
+    );
+    // A reachable upstream proves offline mode chooses not to use it.
+    for flags in [
+        OFFLINE,
+        &["--tools-only", "--offline"],
+        &["--tools-only", "--offline", "--force"],
+    ] {
+        let f = Fixture::new();
+        assert_eq!(
+            f.run_with(u.origin(), Some(cache.path()), flags).unwrap(),
+            0
+        );
+        assert_eq!(
+            Store::inspect(f.owned.root()).unwrap().unwrap().tools.len(),
+            2
+        );
+        f.no_execution();
+    }
+    // Healthy installed tools need no cache entries at all.
+    let empty = tempfile::tempdir().unwrap();
+    assert_eq!(
+        seed.run_with(u.origin(), Some(empty.path()), OFFLINE)
+            .unwrap(),
+        0
+    );
+    assert_eq!(u.hits(), 3);
+}
+
+#[test]
+fn offline_misses_list_every_missing_artifact_and_publish_nothing() {
+    let f = Fixture::new();
+    let node = format!(
+        "node 24.0.0 [distribution]: https://nodejs.org{}",
+        f.node_path
+    );
+    let pnpm = "pnpm 10.0.0 [package]: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz";
+    let empty = tempfile::tempdir().unwrap();
+    for cache in [None, Some(empty.path())] {
+        let text = f
+            .run_with(&unreachable_origin(), cache, OFFLINE)
+            .unwrap_err()
+            .to_string();
+        assert!(text.contains(&node) && text.contains(pnpm), "{text}");
+        assert!(
+            text.contains(&format!("{:x}", Sha256::digest(&f.pnpm))),
+            "{text}"
+        );
+        assert!(f.manifest().is_none());
+    }
+    // Only the uncached artifact is listed; cached Node is not installed alone.
+    let partial = tempfile::tempdir().unwrap();
+    let corrupt = Upstream::new(&f, true, None);
+    assert!(
+        f.run_with(corrupt.origin(), Some(partial.path()), FROZEN)
+            .is_err()
+    );
+    let hits = corrupt.hits();
+    let text = f
+        .run_with(corrupt.origin(), Some(partial.path()), OFFLINE)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        !text.contains("node 24.0.0") && text.contains(pnpm),
+        "{text}"
+    );
+    assert_eq!(corrupt.hits(), hits);
+    assert!(f.manifest().is_none());
+    f.no_execution();
+}
+
+#[test]
+fn offline_never_creates_refreshes_or_re_resolves_a_lock() {
+    for case in 0..3 {
+        let f = Fixture::new();
+        let u = Upstream::new(&f, false, None);
+        let flags: &[&str] = match case {
+            0 => {
+                fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+                &["--tools-only", "--no-frozen", "--offline"]
+            }
+            1 => {
+                fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap();
+                &["--tools-only", "--no-frozen", "--offline"]
+            }
+            _ => &["--tools-only", "--no-frozen", "--offline", "--update-lock"],
+        };
+        assert!(
+            matches!(f.run(&u, flags), Err(Error::Unsupported(_))),
+            "{case}"
+        );
+        assert_eq!(u.hits(), 0);
+        assert!(!f.owned.root().join(".turbo").exists());
+        assert_eq!(f.owned.root().join("turbo.lock").exists(), case != 0);
+    }
+}
+
+#[test]
+fn offline_force_reinstalls_from_cached_or_verified_installed_bytes() {
+    const FORCE: &[&str] = &["--frozen", "--tools-only", "--offline", "--force"];
+    let cache = tempfile::tempdir().unwrap();
+    let (seed, f) = (Fixture::new(), Fixture::new());
+    let u = Upstream::new(&f, false, None);
+    // Another clone seeds the cache; this one installs without it.
+    assert_eq!(
+        seed.run_with(u.origin(), Some(cache.path()), FROZEN)
+            .unwrap(),
+        0
+    );
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    let hits = u.hits();
+    let pnpm = format!(
+        "turborepo/setup-artifacts/v1/any/{:x}",
+        Sha256::digest(&f.pnpm)
+    );
+    fs::remove_file(cache.path().join(pnpm)).unwrap();
+    // Cached Node with installed-only pnpm, then installed-only for both.
+    for cache in [Some(cache.path()), None] {
+        let before = f.manifest().unwrap();
+        assert_eq!(f.run_with(&unreachable_origin(), cache, FORCE).unwrap(), 0);
+        assert_ne!(f.manifest().unwrap(), before);
+        let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+        assert_eq!(current.tools.len(), 2);
+    }
+    // Neither cached nor healthy: every artifact is listed, nothing published.
+    let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+    fs::write(current.bin.join("../tools/pnpm/dist/resource"), "damage").unwrap();
+    let before = f.manifest().unwrap();
+    let text = f
+        .run_with(&unreachable_origin(), None, FORCE)
+        .unwrap_err()
+        .to_string();
+    let both =
+        text.contains("node 24.0.0 [distribution]") && text.contains("pnpm 10.0.0 [package]");
+    assert!(both, "{text}");
+    assert_eq!(f.manifest().unwrap(), before);
+    assert_eq!(u.hits(), hits);
+    f.no_execution();
+}
