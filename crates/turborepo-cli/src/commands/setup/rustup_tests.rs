@@ -77,6 +77,7 @@ impl Repo {
                 args,
                 setup_args,
                 Some(provision::Transports {
+                    trust_base: Some(self.owned.home().to_owned()),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin).unwrap(),
                     pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin).unwrap(),
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
@@ -115,9 +116,42 @@ fn locked_rustup_bootstrap_is_private_atomic_and_repeatable() {
         fs::read_link(current.bin.join("rustup")).unwrap(),
         std::path::Path::new("../tools/rustup/bin/rustup")
     );
-    // Never run, never a toolchain, never the caller's home or a lock rewrite.
+    // Never execute the installer or create a Rust toolchain/user installation.
+    // Only the producer's private, external setup receipt may be written.
     assert!(!repo.owned.root().join("installer-ran").exists());
-    assert_eq!(fs::read_dir(repo.owned.home()).unwrap().count(), 0);
+    assert!(!repo.owned.home().join(".cargo").exists());
+    assert!(!repo.owned.home().join(".rustup").exists());
+    let home_entries: Vec<_> = fs::read_dir(repo.owned.home())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(home_entries, ["turborepo"]);
+    let state = repo.owned.home().join("turborepo");
+    let state_entries: Vec<_> = fs::read_dir(&state)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(state_entries, ["setup-roots"]);
+    let records: Vec<_> = fs::read_dir(state.join("setup-roots"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect();
+    assert_eq!(records.len(), 1);
+    assert!(!records[0].starts_with(repo.owned.root()));
+    let receipt: Value = serde_json::from_slice(&fs::read(&records[0]).unwrap()).unwrap();
+    assert_eq!(receipt["schema"], 1);
+    assert_eq!(
+        receipt["lock_sha256"],
+        format!("{:x}", Sha256::digest(&lock))
+    );
+    assert_eq!(
+        receipt["installation"]["manifest_sha256"],
+        format!("{:x}", Sha256::digest(repo.manifest().unwrap()))
+    );
+    assert_eq!(
+        receipt["installation"]["tools"],
+        serde_json::to_value(&current.tools).unwrap()
+    );
     assert_eq!(
         fs::read(repo.owned.root().join("turbo.lock")).unwrap(),
         lock
