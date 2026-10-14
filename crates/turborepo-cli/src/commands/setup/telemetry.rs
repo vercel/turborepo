@@ -68,6 +68,10 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
     match error {
         Error::Disabled | Error::FrozenUpdateLock => SetupFailure::Request,
         Error::NotImplemented => SetupFailure::Unsupported,
+        // #14701's --no-lock refusals: like "a native Node declaration is
+        // required", and an unsupported clone-local tool.
+        Error::NoLockNode => SetupFailure::Discovery,
+        Error::NoLockTool(_) => SetupFailure::Unsupported,
         Error::MuslHost | Error::UnclassifiedLibc(_) => SetupFailure::Platform,
         Error::LockDiagnostics(super::lock_diagnostics::Error::Missing) => {
             SetupFailure::LockMissing
