@@ -28,7 +28,7 @@ pub enum Channel {
 }
 
 impl Channel {
-    fn parse(value: &str) -> Option<Self> {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
         let dated = |rest: &str| {
             let bytes = rest.as_bytes();
             (rest.len() == 10

@@ -227,6 +227,29 @@ impl RustupPlan {
     }
 }
 
+impl RustupPlan {
+    /// The verified multicall binary toolchain installs run: freshly prepared
+    /// bytes staged into the empty `scratch`, or the healthy selected tree.
+    pub fn executable(
+        &self,
+        store: &Store,
+        desired: &[Tool],
+        prepared: Option<&PreparedRustup>,
+        scratch: &Path,
+    ) -> Result<PathBuf, Error> {
+        let tree = match prepared {
+            Some(prepared) => {
+                prepared.stage(&self.tool, scratch)?;
+                scratch.to_owned()
+            }
+            None => store
+                .reusable_tree(&self.tool, desired)?
+                .ok_or(Error::InventoryMismatch)?,
+        };
+        Ok(tree.join(&self.tool.executables["rustup"]))
+    }
+}
+
 /// Verified installer bytes, not yet staged or executed.
 pub struct PreparedRustup {
     bytes: Vec<u8>,

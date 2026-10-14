@@ -98,6 +98,8 @@ pub enum Error {
     #[error(transparent)]
     PythonResolution(#[from] turborepo_setup::python_resolution::Error),
     #[error(transparent)]
+    Rust(#[from] turborepo_setup::rust_provision::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),

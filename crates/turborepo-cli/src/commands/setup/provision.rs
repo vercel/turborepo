@@ -11,6 +11,7 @@ use turborepo_setup::{
     pnpm_provision::{PnpmPlan, PnpmTransport},
     python_provision::PythonPlan,
     python_resolution::PythonTransport,
+    rust_provision::RustPlan,
     rustup_provision::{RustupPlan, RustupTransport},
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
@@ -147,9 +148,10 @@ pub(super) struct Plans {
     pub uv: Option<UvPlan>,
     pub python: Option<PythonPlan>,
     pub rustup: Option<RustupPlan>,
+    pub rust: Option<RustPlan>,
 }
 
-const SUPPORTED: [&str; 6] = ["node", "npm", "pnpm", "uv", "python", "rustup"];
+const SUPPORTED: [&str; 7] = ["node", "npm", "pnpm", "uv", "python", "rust", "rustup"];
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -162,7 +164,7 @@ pub(super) fn plans(
         .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, uv, Python and rustup are supported",
+            "only managed Node, npm, pnpm, uv, Python and Rust are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -229,7 +231,22 @@ pub(super) fn plans(
         }
         None => None,
     };
-    if node.is_none() && uv.is_none() && python.is_none() && rustup.is_none() {
+    let rust = match (lock.tools().get("rust"), &rustup) {
+        (None, _) => None,
+        (Some(_), None) => return Err(Error::Unsupported("managed Rust requires locked rustup")),
+        (Some(tool), Some(_)) => {
+            let toolchain = snapshot.rust_toolchain()?.ok_or(Error::Unsupported(
+                "managed Rust requires a root rust-toolchain declaration",
+            ))?;
+            if !turborepo_setup::rust_provision::satisfies(&toolchain, tool) {
+                return Err(Error::Unsupported(
+                    "locked Rust does not satisfy the rust-toolchain declaration",
+                ));
+            }
+            Some(RustPlan::from_lock(lock, platform)?)
+        }
+    };
+    if node.is_none() && uv.is_none() && python.is_none() && rustup.is_none() && rust.is_none() {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
     Ok(Plans {
@@ -239,6 +256,7 @@ pub(super) fn plans(
         uv,
         rustup,
         python,
+        rust,
     })
 }
 
@@ -302,7 +320,10 @@ pub(super) fn resolve(
     request: turborepo_setup::lock::reconcile::Resolution<'_>,
     sources: &Transports,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
-    if request.version_ids().contains("rustup") {
+    if ["rust", "rustup"]
+        .iter()
+        .any(|id| request.version_ids().contains(*id))
+    {
         return Err(turborepo_setup::lock::reconcile::Error::Resolution(
             "resolving Rust toolchain declarations into turbo.lock is not implemented yet".into(),
         ));
@@ -353,7 +374,7 @@ pub(super) fn run(
                 .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, uv, Python and rustup are supported",
+                "only managed Node, npm, pnpm, uv, Python and Rust are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -454,6 +475,7 @@ pub(super) fn run(
         uv,
         rustup,
         python,
+        rust,
     } = plans(&snapshot, lock)?;
     let trust = match trust {
         Some(trust) => trust,
@@ -466,6 +488,7 @@ pub(super) fn run(
         uv.as_ref().map(UvPlan::inventory_tool),
         rustup.as_ref().map(RustupPlan::inventory_tool),
         python.as_ref().map(PythonPlan::inventory_tool),
+        rust.as_ref().map(RustPlan::inventory_tool),
     ]
     .into_iter()
     .flatten()
@@ -558,6 +581,21 @@ pub(super) fn run(
             };
             Ok::<_, Error>((node, pnpm, npm, uv, python, rustup))
         })?;
+    preflight()?;
+    revalidate(discovery)?;
+    snapshot.check_guard(&guard)?;
+    trust.preflight()?;
+    let prepared_rust = match (&rust, &rustup) {
+        (Some(plan), Some(rustup)) => {
+            let scratch = tempfile::Builder::new()
+                .prefix(".rustup-")
+                .tempdir_in(root.join(".turbo/tools"))?;
+            let rustup =
+                rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
+            plan.prepare(&store, &desired, &rustup, preparation)?
+        }
+        _ => None,
+    };
     let missing = || turborepo_tool_install::Error::InvalidInventory;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| match tool.id.as_str() {
         "node" => prepared_node
@@ -581,6 +619,10 @@ pub(super) fn run(
             .ok_or_else(missing)?
             .stage(tool, destination),
         "rustup" => prepared_rustup
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "rust" => prepared_rust
             .as_ref()
             .ok_or_else(missing)?
             .stage(tool, destination),
@@ -614,6 +656,7 @@ pub(super) fn run(
                 || (tool.id == "uv" && prepared_uv.is_none())
                 || (tool.id == "rustup" && prepared_rustup.is_none())
                 || (tool.id == "python" && prepared_python.is_none())
+                || (tool.id == "rust" && prepared_rust.is_none())
             {
                 "reused"
             } else {
@@ -628,9 +671,6 @@ pub(super) fn run(
         )
     {
         println!("npm {}: provided by managed Node (bundled)", npm.version);
-    }
-    if rustup.is_some() {
-        println!("rustup is private to this repository; no Rust toolchain was installed.");
     }
     Ok(0)
 }
