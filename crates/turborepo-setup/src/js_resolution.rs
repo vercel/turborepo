@@ -208,6 +208,7 @@ pub(crate) async fn resolve_tools_with_bun(
         Some(Manager::Pnpm) => Some("pnpm"),
         Some(Manager::Yarn) => Some("yarn"),
         Some(Manager::Bun) => Some("bun"),
+        Some(_) => return Err(Error::Unsupported("package manager declaration resolution")),
     };
     let manager_version = manager
         .as_ref()
