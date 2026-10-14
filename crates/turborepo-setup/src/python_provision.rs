@@ -1,10 +1,16 @@
 //! Locked CPython adapter: a verified python-build-standalone archive staged at
 //! uv's key directory inside the generation's `python` tool, which is where the
 //! managed uv launchers point `UV_PYTHON_INSTALL_DIR`. No resolution, no uv
-//! installer (it writes absolute links that a relocatable generation rejects),
-//! no system Python and no subprocesses.
+//! installer (it writes absolute links that a relocatable generation rejects)
+//! and no system Python. The only subprocess is the verified interpreter
+//! compiling its own standard library while staging.
 
-use std::{fs, io, path::Path, time::Duration};
+use std::{
+    fs, io,
+    path::Path,
+    process::{Command, Stdio},
+    time::Duration,
+};
 
 use turborepo_archive::{Allowances, ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
@@ -57,6 +63,9 @@ pub struct PythonPlan {
     key: String,
     /// The versioned interpreter; `bin/python3` is a relative link to it.
     interpreter: String,
+    /// The standard library, including site-packages. Only this directory is
+    /// importable; other `lib` trees (Tix data in 3.8) are not Python.
+    stdlib: String,
 }
 
 impl PythonPlan {
@@ -108,6 +117,7 @@ impl PythonPlan {
             artifact,
             key,
             interpreter: format!("bin/python{}.{}", version.major, version.minor),
+            stdlib: format!("lib/python{}.{}", version.major, version.minor),
         })
     }
 
@@ -167,6 +177,8 @@ impl PythonPlan {
             tree,
             tool: self.tool.clone(),
             key: self.key.clone(),
+            interpreter: self.interpreter.clone(),
+            stdlib: self.stdlib.clone(),
         }))
     }
 }
@@ -175,6 +187,8 @@ pub struct PreparedPython {
     tree: ExtractedArtifact,
     tool: Tool,
     key: String,
+    interpreter: String,
+    stdlib: String,
 }
 
 impl PreparedPython {
@@ -197,6 +211,31 @@ impl PreparedPython {
         let installation = destination.join(&self.key);
         fs::create_dir(&installation)?;
         copy_tree(&self.tree.root_path(), &installation)?;
+        self.compile_bytecode(&installation)?;
+        Ok(())
+    }
+
+    /// The Unix builds ship almost no bytecode, so the first import of the
+    /// stdlib or pip would write `__pycache__` into the hashed tree and damage
+    /// it. Compile it before the Store hashes the tree, with the verified
+    /// interpreter isolated from the environment and the repository.
+    /// Unchecked-hash bytecode never consults source mtimes, which neither the
+    /// archive nor the copy preserves.
+    fn compile_bytecode(&self, installation: &Path) -> io::Result<()> {
+        let status = Command::new(installation.join(&self.interpreter))
+            .args(["-I", "-B", "-m", "compileall", "-q", "-f", "-j", "0"])
+            .args(["--invalidation-mode", "unchecked-hash", &self.stdlib])
+            .current_dir(installation)
+            .env_clear()
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
+        if !status.success() {
+            return Err(io::Error::other(
+                "the verified Python could not compile its standard library",
+            ));
+        }
         Ok(())
     }
 }
