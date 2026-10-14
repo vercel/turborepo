@@ -317,7 +317,15 @@ impl TrustStore {
     pub(super) fn publish(&self, store: &Store) -> io::Result<()> {
         self.load()?;
         let installation = self.installation(store)?.ok_or_else(unsafe_state)?;
-        let lock = read(&self.root.join("turbo.lock"), false)?.ok_or_else(unsafe_state)?;
+        let Some(lock) = read(&self.root.join("turbo.lock"), false)? else {
+            // Ephemeral setup succeeds without creating or retaining locked-run
+            // authority. A future committed lock requires setup again.
+            return match fs::remove_file(self.path()) {
+                Ok(()) => File::open(&self.directory)?.sync_all(),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                Err(error) => Err(error),
+            };
+        };
         let bytes = serde_json::to_vec(&Record {
             schema: 1,
             lock_sha256: hash(&lock),

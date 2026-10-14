@@ -383,6 +383,7 @@ pub struct MicroFrontendProxyProvider<'a, M> {
     package_graph: &'a PackageGraph,
     tasks_in_graph: HashSet<TaskId<'a>>,
     mfe_configs: &'a M,
+    managed_path: bool,
 }
 
 impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
@@ -402,7 +403,15 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
             package_graph,
             tasks_in_graph: tasks_in_graph.cloned().collect(),
             mfe_configs: micro_frontends_configs,
+            managed_path: false,
         }
+    }
+
+    /// Resolve custom proxy launchers from the freshly authorized task PATH.
+    /// Ordinary repositories retain their existing process-global lookup.
+    pub fn with_managed_path(mut self) -> Self {
+        self.managed_path = true;
+        self
     }
 
     fn dev_tasks(&self, task_id: &TaskId) -> Option<Vec<(TaskId<'static>, String)>> {
@@ -554,8 +563,20 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             }
             args.extend(proxy_args);
 
-            let program =
-                which::which(package_manager.command()).map_err(CommandProviderError::from)?;
+            let program = if self.managed_path {
+                let path = environment
+                    .get("PATH")
+                    .ok_or(which::Error::CannotFindBinaryPath)
+                    .map_err(CommandProviderError::from)?;
+                which::which_in(
+                    package_manager.command(),
+                    Some(path),
+                    package_context.repository_root(),
+                )
+            } else {
+                which::which(package_manager.command())
+            }
+            .map_err(CommandProviderError::from)?;
             let mut cmd = Command::new(&program);
             cmd.current_dir(package_dir).args(args).open_stdin();
             apply_environment(&mut cmd, environment);
@@ -840,6 +861,70 @@ mod tests {
         };
         assert_eq!(task_id.package(), package);
         CommandProvider::<CommandProviderError>::command(&provider, &task_id, environment)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn custom_proxy_uses_authorized_lookup_path_and_never_host_fallback() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, package_dir) = create_test_repo();
+        let graph = package_graph(
+            &root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([("proxy".into(), Spanned::new("node proxy.js".into()))]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let launcher = bin.join_component("npm");
+        fs::write(
+            &launcher,
+            "#!/bin/sh\nprintf 'authorized-manager\\nALLOWED_VAR=%s\\n' \"$ALLOWED_VAR\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755)).unwrap();
+        let config = MockMfeConfig("configs/microfrontends.json");
+        let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
+        let provider =
+            MicroFrontendProxyProvider::new(&graph, tasks.iter(), &config).with_managed_path();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("PATH".into(), bin.to_string()),
+            ("ALLOWED_VAR".into(), "kept".into()),
+        ]));
+        let task = TaskId::new("web", "proxy");
+        let command =
+            CommandProvider::<CommandProviderError>::command(&provider, &task, &environment)
+                .unwrap()
+                .unwrap();
+        assert_eq!(command.program(), launcher.as_std_path().as_os_str());
+        assert_eq!(
+            command_stdout(command).await,
+            "authorized-manager\nALLOWED_VAR=kept\n"
+        );
+        assert!(
+            CommandProvider::<CommandProviderError>::command(
+                &provider,
+                &task,
+                &EnvironmentVariableMap::default()
+            )
+            .is_err()
+        );
+        fs::remove_file(launcher).unwrap();
+        assert!(
+            CommandProvider::<CommandProviderError>::command(&provider, &task, &environment)
+                .is_err()
+        );
+        // The authorized task PATH is not a new override for ordinary repos.
+        let ordinary = MicroFrontendProxyProvider::new(&graph, tasks.iter(), &config);
+        let result =
+            CommandProvider::<CommandProviderError>::command(&ordinary, &task, &environment);
+        match which::which("npm") {
+            Ok(host) => assert_eq!(result.unwrap().unwrap().program(), host.as_os_str()),
+            Err(_) => assert!(result.is_err()),
+        }
     }
 
     async fn command_stdout(cmd: Command) -> String {
