@@ -67,9 +67,12 @@ fn desired(
 ) -> Vec<Tool> {
     let lock = Lock::parse(value.to_string().as_bytes()).unwrap();
     let platform = Platform::MacosArm64;
+    let node = lock
+        .tools()
+        .contains_key("node")
+        .then(|| NodePlan::from_lock(&lock, platform).unwrap());
     let mut tools = Vec::new();
-    if lock.tools().contains_key("node") {
-        let node = NodePlan::from_lock(&lock, platform).unwrap();
+    if let Some(node) = &node {
         tools.push(node.inventory_tool().clone());
         if lock.tools().contains_key("pnpm") {
             let pnpm = PnpmPlan::from_lock(&lock, platform, &node, authored).unwrap();
