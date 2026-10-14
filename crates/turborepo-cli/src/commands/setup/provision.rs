@@ -1,4 +1,4 @@
-//! Local reconciliation followed by locked tools-only provisioning.
+//! Local reconciliation followed by locked tool provisioning.
 //! Force reinstalls committed selections without resolution or lock writes.
 //! No probes, dependency execution or activation.
 use std::{fs, io, path::Path, process::Command};
@@ -542,8 +542,5 @@ pub(super) fn run(
     if rustup.is_some() {
         println!("rustup is private to this repository; no Rust toolchain was installed.");
     }
-    println!(
-        "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."
-    );
     Ok(0)
 }

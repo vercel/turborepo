@@ -1,5 +1,5 @@
-//! Native local/frozen provisioning and read-only tools-only checks/plans.
-//! No execution.
+//! Native local/frozen/no-lock provisioning, read-only checks and tools-only
+//! plans. No execution.
 
 use miette::Diagnostic;
 use thiserror::Error;
@@ -31,8 +31,8 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use local or frozen --tools-only provisioning, \
-         --plan --tools-only reports or --check --tools-only readiness checks"
+        "this setup mode is not implemented; use local or frozen provisioning, --plan \
+         --tools-only reports or --check readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
@@ -212,19 +212,20 @@ fn run_with_policy(
     ) {
         eprintln!("{report}");
     }
-    match request.mode {
-        Mode::Check => check::run(&discovery, snapshot, preflight),
-        Mode::Plan => {
-            println!(
-                "{}",
-                plan::report(&discovery, snapshot, &request, transports, preflight)?
-            );
-            Ok(0)
-        }
-        Mode::Provision if request.lock == LockMode::NoLock => {
-            no_lock::run(&discovery, snapshot, transports, preflight)
-        }
-        Mode::Provision => provision::run(
+    if request.mode == Mode::Check {
+        return check::run(&discovery, snapshot, request.tools_only, preflight);
+    }
+    if request.mode == Mode::Plan {
+        println!(
+            "{}",
+            plan::report(&discovery, snapshot, &request, transports, preflight)?
+        );
+        return Ok(0);
+    }
+    let code = if request.lock == LockMode::NoLock {
+        no_lock::run(&discovery, snapshot, transports, preflight)
+    } else {
+        provision::run(
             &discovery,
             snapshot,
             request.lock,
@@ -236,26 +237,38 @@ fn run_with_policy(
             request.force,
             transports,
             preflight,
-        ),
-    }
+        )
+    }?;
+    // Never claim dependencies are ready: they are skipped until dependency
+    // policy and installers exist, even without --tools-only.
+    println!(
+        "Dependencies skipped ({}). No tasks run; managed activation is not enabled.",
+        if request.tools_only {
+            "--tools-only"
+        } else {
+            "dependency installation is not supported yet"
+        }
+    );
+    Ok(code)
 }
 
 fn validate_request(request: &SetupRequest) -> Result<(), Error> {
     // Plans report locked reinstalls or proposed resolution, never both.
     let read_only = match request.mode {
         Mode::Check => !request.force && !request.update_lock,
-        Mode::Plan => !(request.force && request.update_lock),
+        Mode::Plan => request.tools_only && !(request.force && request.update_lock),
         Mode::Provision => false,
     };
-    if read_only && request.tools_only && request.lock != LockMode::NoLock {
+    if read_only && request.lock != LockMode::NoLock {
         // CI/frozen/offline never change read-only modes into resolution or repair.
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
-    // Write normalization. Combined force/refresh remains fail-closed.
+    // Write normalization. Combined force/refresh remains fail-closed. Until
+    // dependency installers exist, plain setup provisions and checks exactly
+    // the tools --tools-only does and reports dependencies as skipped.
     if request.mode != Mode::Provision
         || (request.lock == LockMode::NoLock && (request.force || request.update_lock))
-        || !request.tools_only
         || request.offline
         || (request.force && request.update_lock)
     {
@@ -330,13 +343,17 @@ mod tests {
     }
 
     #[test]
-    fn tools_only_check_accepts_ci_frozen_and_offline_without_resolution() {
+    fn checks_accept_ci_frozen_and_offline_without_resolution() {
         for ci in [false, true] {
             for flags in [
                 vec!["--check", "--tools-only"],
                 vec!["--check", "--tools-only", "--offline"],
                 vec!["--check", "--tools-only", "--frozen"],
                 vec!["--check", "--tools-only", "--no-frozen", "--offline"],
+                vec!["--check"],
+                vec!["--check", "--offline"],
+                vec!["--check", "--frozen"],
+                vec!["--check", "--no-frozen", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert_eq!(request.mode, Mode::Check);
@@ -409,11 +426,25 @@ mod tests {
     }
 
     #[test]
-    fn modes_and_controls_reach_the_empty_executor() {
+    fn plain_setup_provisions_and_checks_like_tools_only_but_plan_does_not() {
+        for ci in [false, true] {
+            for flags in [
+                vec![],
+                vec!["--frozen"],
+                vec!["--no-frozen"],
+                vec!["--force"],
+                vec!["--no-lock"],
+                vec!["--no-frozen", "--update-lock"],
+            ] {
+                let request = request(&flags, ci).unwrap();
+                assert!(!request.tools_only);
+                assert!(validate_request(&request).is_ok(), "{flags:?}");
+            }
+        }
         for (flags, mode) in [
-            (vec![], Mode::Provision),
             (vec!["--plan", "--force", "--update-lock"], Mode::Plan),
-            (vec!["--check"], Mode::Check),
+            (vec!["--offline"], Mode::Provision),
+            (vec!["--no-lock", "--force"], Mode::Provision),
         ] {
             let request = request(&flags, false).unwrap();
             assert_eq!(request.mode, mode);

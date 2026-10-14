@@ -156,7 +156,10 @@ fn invoke_with(
 fn failure(root: &Path, words: &[&str], ci: bool, expected: &str) -> String {
     let (code, text) = invoke(root, words, ci);
     assert_eq!(code, 1, "{words:?}: {text}");
-    assert!(diagnostic_contains(&text, expected), "{text}");
+    assert!(
+        diagnostic_contains(&text, expected),
+        "{words:?}: expected {expected:?}: {text}"
+    );
     text
 }
 
@@ -316,8 +319,8 @@ fn standalone_gate_reads_only_the_selected_root_config() {
     write(root, "selected-root/turbo.json", ENABLED);
     for words in [
         vec!["setup", "--offline"],
-        vec!["--root-turbo-json", "custom.json", "setup"],
-        vec!["--cwd=selected-root", "setup"],
+        vec!["--root-turbo-json", "custom.json", "setup", "--plan"],
+        vec!["--cwd=selected-root", "setup", "--plan"],
     ] {
         failure(root, &words, false, PENDING);
     }
@@ -364,18 +367,45 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         vec!["--__test-run"],
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        let supported = words.contains(&"--tools-only");
+        // Plain setup and --check act like --tools-only, so they reach the same gate.
+        let supported = !words
+            .iter()
+            .any(|word| matches!(*word, "--plan" | "--offline" | "--__test-run"));
         // A Cargo workspace without a root rust-toolchain file declares no tool.
-        let text = failure(
-            root,
-            &words,
-            false,
-            match (supported, QUALIFIED) {
-                (false, _) => PENDING,
-                (true, true) => "a native Node declaration is required",
-                (true, false) => UNQUALIFIED,
-            },
-        );
+        let text = if supported && words.contains(&"--check") {
+            let (code, text) = invoke(root, &words, false);
+            assert_eq!(code, 1, "{text}");
+            let expected = if QUALIFIED {
+                "managed activation requires turbo.lock"
+            } else {
+                UNQUALIFIED
+            };
+            assert!(
+                diagnostic_contains(&text, expected) || external_system_policy_blocked(code, &text),
+                "{text}"
+            );
+            text
+        } else {
+            failure(
+                root,
+                &words,
+                false,
+                match (supported, QUALIFIED) {
+                    (false, _) => PENDING,
+                    (true, true) if words.contains(&"--no-lock") => {
+                        "invalid or unsupported native resolution record"
+                    }
+                    (true, true) if words.contains(&"--force") => {
+                        "locked provisioning requires turbo.lock"
+                    }
+                    (true, true) if words.contains(&"--frozen") => {
+                        "frozen mode requires turbo.lock"
+                    }
+                    (true, true) => "a native Node declaration is required",
+                    (true, false) => UNQUALIFIED,
+                },
+            )
+        };
         if !supported {
             assert!(text.contains("no tasks were run"), "{text}");
         }
@@ -393,10 +423,26 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     );
     let text = failure(root, &["setup", "--update-lock"], true, "inferred in CI");
     assert!(text.contains("--no-frozen"), "{text}");
-    for flags in [vec!["--update-lock", "--no-frozen"], vec!["--no-lock"]] {
-        let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
-        failure(root, &words, true, PENDING);
-    }
+    failure(
+        root,
+        &["setup", "--update-lock", "--no-frozen"],
+        true,
+        if QUALIFIED {
+            "a native Node declaration is required"
+        } else {
+            UNQUALIFIED
+        },
+    );
+    failure(
+        root,
+        &["setup", "--no-lock"],
+        true,
+        if QUALIFIED {
+            "invalid or unsupported native resolution record"
+        } else {
+            UNQUALIFIED
+        },
+    );
 }
 
 #[test]
@@ -417,6 +463,11 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 let text = failure(root, words, false, "failed to parse Cargo.toml");
                 assert_diagnostic_path(&text, &root.join("Cargo.toml"));
                 assert!(!text.contains(PENDING), "{text}");
+            } else if !words.contains(&"--plan") {
+                // Plain setup and check reach JS tools without parsing Cargo.
+                let (code, text) = invoke(root, words, false);
+                assert_eq!(code, 1, "{text}");
+                assert!(!text.contains("Cargo"), "{text}");
             } else {
                 failure(root, words, false, PENDING);
             }
@@ -455,7 +506,12 @@ fn diagnostic_assertions_preserve_wrapped_sentences_and_filenames() {
 }
 
 fn inferred(root: &Path, words: &[&str], expected: &Path) {
-    let words: Vec<_> = words.iter().copied().chain(["--verbosity=2"]).collect();
+    // A pending mode stops right after root discovery is logged.
+    let words: Vec<_> = words
+        .iter()
+        .copied()
+        .chain(["--plan", "--verbosity=2"])
+        .collect();
     let text = failure(root, &words, true, PENDING);
     let expected = canonical_path(expected);
     assert!(text.contains(&format!("setup root: {expected}")), "{text}");
@@ -1370,6 +1426,139 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
     }
 }
 
+#[cfg(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+))]
+#[test]
+fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use turborepo_setup::{
+        lock::{Lock, Platform, Snapshot},
+        node_provision::NodePlan,
+        pnpm_provision::PnpmPlan,
+    };
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    write(root, "turbo.json", ENABLED);
+    write(root, ".nvmrc", "24.0.0");
+    write(root, ".gitignore", "/.turbo/\n");
+    write(root, "package.json", r#"{"packageManager":"pnpm@10.0.0"}"#);
+    let (platform, selector, spelling) = match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos", "aarch64") => (Platform::MacosArm64, "macos-arm64", "darwin-arm64"),
+        ("macos", _) => (Platform::MacosX64, "macos-x64", "darwin-x64"),
+        ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64-gnu", "linux-arm64"),
+        _ => (Platform::LinuxX64Gnu, "linux-x64-gnu", "linux-x64"),
+    };
+    let prefix = format!("node-v24.0.0-{spelling}");
+    let lock = serde_json::json!({"schemaVersion":0,"tools":{
+        "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
+            "installation":{"kind":"managed","artifacts":{selector:{"distribution":{
+                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz"),"sha256":"0".repeat(64),
+                "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}}}}}},
+        "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
+            "installation":{"kind":"managed","artifacts":{"any":{"package":{
+                "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"1".repeat(64),
+                "format":"tar-gz","rootPrefix":"package","executables":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}}}}}
+    }}).to_string();
+    write(root, "turbo.lock", &lock);
+    let lock = Lock::parse(lock.as_bytes()).unwrap();
+    let node = NodePlan::from_lock(&lock, platform).unwrap();
+    let declaration = Snapshot::capture(root)
+        .unwrap()
+        .package_manager()
+        .unwrap()
+        .unwrap();
+    let pnpm = PnpmPlan::from_declaration(&lock, platform, &node, &declaration).unwrap();
+    // Seed the locked generation so frozen setup reuses it without downloads;
+    // the CLI library fixtures cover actual downloads.
+    let mut store = turborepo_tool_install::Store::open(root).unwrap();
+    store
+        .reconcile(
+            &[node.inventory_tool().clone(), pnpm.inventory_tool().clone()],
+            |tool, destination| {
+                for relative in tool.executables.values() {
+                    let file = destination.join(relative);
+                    fs::create_dir_all(file.parent().unwrap())?;
+                    fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
+                    fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
+                }
+                Ok::<_, turborepo_tool_install::Error>(())
+            },
+        )
+        .unwrap();
+    drop(store);
+    let git = which::which("git").unwrap();
+    assert!(
+        Command::new(&git)
+            .current_dir(root)
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE")
+            .env_remove("GIT_INDEX_FILE")
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let bin = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(git, bin.path().join("git")).unwrap();
+    let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
+    monitor.set_nonblocking(true).unwrap();
+    let proxy = format!("http://{}", monitor.local_addr().unwrap());
+    // Plain --check checks the same tools and never claims dependency readiness.
+    for (mode, outcome, skipped) in [
+        (
+            "--frozen",
+            "reused",
+            "dependency installation is not supported yet",
+        ),
+        (
+            "--check",
+            "ready",
+            "dependency checks are not supported yet",
+        ),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
+            .env_clear()
+            .current_dir(root)
+            .args(["setup", mode])
+            .env("PATH", bin.path())
+            .env("HOME", root.join("home"))
+            .env("TURBO_TELEMETRY_DISABLED", "1")
+            .env("HTTP_PROXY", &proxy)
+            .env("HTTPS_PROXY", &proxy)
+            .env("ALL_PROXY", &proxy)
+            .env("NO_PROXY", "")
+            .output()
+            .unwrap();
+        assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+        let code = output.status.code().unwrap();
+        if external_system_policy_blocked(code, &text) {
+            return;
+        }
+        assert_eq!(code, 0, "{text}");
+        assert!(
+            text.contains(&format!("node 24.0.0: {outcome}"))
+                && text.contains(&format!("pnpm 10.0.0: {outcome}")),
+            "{text}"
+        );
+        assert!(
+            text.contains(&format!("Dependencies skipped ({skipped})")),
+            "{text}"
+        );
+        assert!(!root.join("probe-ran").exists() && !root.join("node_modules").exists());
+    }
+}
+
 #[test]
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
@@ -1532,17 +1721,9 @@ fn native_refresh_rejects_ci_and_unimplemented_combinations_before_snapshot_or_t
     }
     for ci in [false, true] {
         // `--plan --update-lock` proposes a refresh; with --force it is denied.
-        for controls in [
-            &["--force"][..],
-            &["--offline"],
-            &["--plan", "--force"],
-            &[],
-        ] {
-            let mut words = vec!["setup", "--no-frozen", "--update-lock"];
-            if !controls.is_empty() {
-                words.push("--tools-only");
-                words.extend(controls);
-            }
+        for controls in [&["--force"][..], &["--offline"], &["--plan", "--force"]] {
+            let mut words = vec!["setup", "--no-frozen", "--update-lock", "--tools-only"];
+            words.extend(controls);
             failure(root, &words, ci, PENDING);
         }
         for conflict in ["--frozen", "--no-lock", "--check"] {
