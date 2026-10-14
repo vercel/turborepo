@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use turborepo_tool_install::{Current, Store, Tool};
+use turborepo_tool_install::{Current, Store, Tool, Verification};
 
 use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot},
@@ -91,6 +91,8 @@ impl ActivationPlan {
 
     /// Use setup's exact workspace-flag eligibility when capturing
     /// declarations.
+    /// Repeated inspection uses publication stamps; explicit verification
+    /// hashes bytes.
     pub fn inspect_with(
         repo: &Path,
         context: ExecutionContext,
@@ -101,11 +103,37 @@ impl ActivationPlan {
         Self::inspect_captured(&sources, context)
     }
 
-    /// Inspect the caller's original snapshot; never recapture after drift.
+    /// Inspect the original source snapshot with publication-stamp caching.
     pub fn inspect_captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
+        Self::captured(sources, context, Verification::Stamped)
+    }
+
+    /// Re-hash all installed bytes while retaining the caller's original
+    /// sources.
+    pub fn verify_captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
+        Self::captured(sources, context, Verification::Full)
+    }
+
+    /// Full verification for callers selecting declaration ecosystems
+    /// explicitly.
+    pub fn verify_with(
+        repo: &Path,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+    ) -> Result<Self, Error> {
+        Self::qualify(&context)?;
+        let sources = Snapshot::capture_with(repo, ecosystems)?;
+        Self::verify_captured(&sources, context)
+    }
+
+    fn captured(
+        sources: &Snapshot,
+        context: ExecutionContext,
+        verification: Verification,
+    ) -> Result<Self, Error> {
         Self::qualify(&context)?;
         sources.ensure_current()?;
-        Self::from_sources(sources.repository_root(), sources, context)
+        Self::from_sources(sources.repository_root(), sources, context, verification)
     }
 
     fn qualify(context: &ExecutionContext) -> Result<(), Error> {
@@ -128,6 +156,7 @@ impl ActivationPlan {
         repo: &Path,
         sources: &Snapshot,
         context: ExecutionContext,
+        verification: Verification,
     ) -> Result<Self, Error> {
         let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
         let python = sources.ecosystems().python;
@@ -245,7 +274,7 @@ impl ActivationPlan {
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
         let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
-        let current = Store::inspect(repo)
+        let current = Store::inspect_with(repo, verification)
             .map_err(Error::DamagedInventory)?
             .ok_or(Error::MissingInventory)?;
         // Complete set equality prevents unrelated exports sharing our PATH.

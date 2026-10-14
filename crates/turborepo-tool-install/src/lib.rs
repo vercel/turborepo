@@ -74,6 +74,70 @@ struct Inventory {
 }
 
 const RECORD_LIMIT: u64 = 1024 * 1024;
+const STAMPS: &str = "stamps.json";
+
+/// How much installed content a readiness check reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verification {
+    /// Re-hash every installed file's bytes against the recorded tree hash.
+    Full,
+    /// Trust a tree's recorded hash while the stat stamp taken when its
+    /// generation was published still matches: every entry's name, type,
+    /// size, mode, inode, mtime, ctime and link target. A mismatch, or a
+    /// missing or unreadable stamp, re-hashes that tree as `Full` does. Any
+    /// write, replacement, chmod or added or removed entry changes the stamp;
+    /// only a same-size in-place write within the same filesystem timestamp
+    /// tick as the stamped state, or forged stamps, can go unseen.
+    Stamped,
+}
+
+/// Per-generation cache beside (not in) the manifest, so readers that predate
+/// it still parse the manifest and hash in full. Each stamp is bound to the
+/// content hash it vouches for.
+#[derive(Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Stamps {
+    tools: BTreeMap<String, Stamp>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Stamp {
+    tree_sha256: String,
+    stat_sha256: String,
+}
+
+impl Stamps {
+    /// A missing, unsafe or malformed file is only a cache miss.
+    fn read(generation: &Path) -> Self {
+        let path = generation.join(STAMPS);
+        let read = || -> Result<Self, Error> {
+            let m = fs::symlink_metadata(&path)?;
+            if !m.is_file() || m.file_type().is_symlink() {
+                return Err(Error::UnsafePath);
+            }
+            let mut bytes = Vec::new();
+            File::open(&path)?
+                .take(RECORD_LIMIT)
+                .read_to_end(&mut bytes)?;
+            Ok(serde_json::from_slice(&bytes)?)
+        };
+        read().unwrap_or_default()
+    }
+
+    /// Whether this tree still has the stat stamp recorded for its hash.
+    fn fresh(&self, installed: &Installed, tree: &Path) -> Result<bool, Error> {
+        if !cfg!(unix) {
+            return Ok(false);
+        }
+        match self.tools.get(&installed.tool.id) {
+            Some(stamp) if stamp.tree_sha256 == installed.tree_sha256 => {
+                Ok(tree_digest(tree, TreeDigest::Stat)? == stamp.stat_sha256)
+            }
+            _ => Ok(false),
+        }
+    }
+}
 
 /// Opaque bookkeeping, never execution authorization. The caller must exclude
 /// secrets, raw source manifests and machine paths, and validate canonical
@@ -307,7 +371,13 @@ impl Store {
     /// integrity/bookkeeping evidence, NOT authorization to execute repo data.
     /// Reject publication observed during inspection; callers must still handle
     /// later changes (this does not lease a generation against hostile edits).
+    /// Stamped, for repeated run-time validation.
     pub fn inspect(repo: &Path) -> Result<Option<Current>, Error> {
+        Self::inspect_with(repo, Verification::Stamped)
+    }
+
+    /// `inspect` with an explicit content verification level.
+    pub fn inspect_with(repo: &Path, verification: Verification) -> Result<Option<Current>, Error> {
         if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedPlatform);
         }
@@ -328,7 +398,7 @@ impl Store {
         let Some(inventory) = Self::inventory(&root)? else {
             return Ok(None);
         };
-        let record = Self::check(&root, &inventory);
+        let record = Self::check(&root, &inventory, verification);
         if Self::manifest_bytes(&root)? != before {
             return Err(Error::InvalidInventory);
         }
@@ -387,7 +457,7 @@ impl Store {
         let Some(inventory) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
-        let record = Self::check(&self.root, &inventory)?;
+        let record = Self::check(&self.root, &inventory, Verification::Stamped)?;
         Ok(Some(Current {
             bin: self.root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
@@ -442,7 +512,7 @@ impl Store {
         let Some(old) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
-        match Self::check(&self.root, &old) {
+        match Self::check(&self.root, &old, Verification::Stamped) {
             Ok(_) => Ok(Some(old)),
             // Metadata/path validation above remains fail-closed. Damaged install
             // contents can be rebuilt, but must never be copied into staging.
@@ -489,18 +559,27 @@ impl Store {
         Ok(record)
     }
 
-    fn check(root: &Path, inventory: &Inventory) -> Result<Option<Record>, Error> {
+    fn check(
+        root: &Path,
+        inventory: &Inventory,
+        verification: Verification,
+    ) -> Result<Option<Record>, Error> {
         let generation = root.join(&inventory.generation);
         real_directory(&generation)?;
         let tools = generation.join("tools");
         real_directory(&tools)?;
         let bin = generation.join("bin");
         real_directory(&bin)?;
+        let stamps = match verification {
+            Verification::Stamped => Stamps::read(&generation),
+            Verification::Full => Stamps::default(),
+        };
         let mut names = BTreeSet::new();
         let mut damaged = false;
         for installed in &inventory.tools {
             let tree = tools.join(&installed.tool.id);
-            damaged |= tree_hash(&tree)? != installed.tree_sha256;
+            damaged |=
+                !stamps.fresh(installed, &tree)? && tree_hash(&tree)? != installed.tree_sha256;
             check_executables(&tree, &installed.tool)?;
             for (name, executable) in &installed.tool.executables {
                 let shim = shim_name(name, executable)?;
@@ -632,10 +711,15 @@ impl Store {
         let bin = stage.path().join("bin");
         directory(&bin)?;
         let mut installed = Vec::new();
+        let mut stamps = Stamps::default();
         for tool in desired {
             let tree = tools.join(&tool.id);
             directory(&tree)?;
-            if let Some(old) = valid_old.filter(|old| old.contains(&tool)) {
+            let reused = valid_old.and_then(|old| {
+                let entry = old.tools.iter().find(|entry| entry.tool == tool)?;
+                Some((old, entry))
+            });
+            if let Some((old, _)) = reused {
                 copy_tree(
                     &self.root.join(&old.generation).join("tools").join(&tool.id),
                     &tree,
@@ -643,25 +727,35 @@ impl Store {
             } else {
                 stage_tool(&tool, &tree)?;
             }
+            // Stamp before hashing: a change while hashing can only leave a
+            // stale stamp, never one vouching for bytes that were not hashed.
+            let stat_sha256 = cfg!(unix)
+                .then(|| tree_digest(&tree, TreeDigest::Stat))
+                .transpose()?;
             let tree_sha256 = tree_hash(&tree)?;
+            // A stamped health check did not re-read the reused source tree.
+            if reused.is_some_and(|(_, entry)| entry.tree_sha256 != tree_sha256) {
+                return Err(Error::InvalidInventory);
+            }
             check_executables(&tree, &tool)?;
             for (name, path) in &tool.executables {
                 make_shim(&tree, &bin, &tool.id, name, path)?;
             }
+            if let Some(stat_sha256) = stat_sha256 {
+                stamps.tools.insert(
+                    tool.id.clone(),
+                    Stamp {
+                        tree_sha256: tree_sha256.clone(),
+                        stat_sha256,
+                    },
+                );
+            }
             installed.push(Installed { tool, tree_sha256 });
         }
         if let Some((record, _)) = recorded {
-            let mut options = OpenOptions::new();
-            options.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
-            options
-                .open(stage.path().join("record.json"))?
-                .write_all(record.bytes())?;
+            write_private(&stage.path().join("record.json"), record.bytes())?;
         }
+        write_private(&stage.path().join(STAMPS), &serde_json::to_vec(&stamps)?)?;
         let inventory = Inventory {
             schema: 1,
             record_sha256,
@@ -689,7 +783,7 @@ impl Store {
         sync_directory(&self.root)?;
         before_publish()?;
         self.check_root()?;
-        Self::check(&self.root, &inventory)?;
+        Self::check(&self.root, &inventory, Verification::Stamped)?;
         if let Some((record, expected)) = recorded {
             self.check_generation(expected)?;
             self.preserve_record(record)?;
@@ -1040,14 +1134,31 @@ fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
     Ok(())
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TreeDigest {
+    /// File bytes: the recorded tree hash.
+    Bytes,
+    /// File inode, mtime and ctime instead of bytes: a publication stamp.
+    Stat,
+}
+
+fn tree_hash(root: &Path) -> Result<String, Error> {
+    tree_digest(root, TreeDigest::Bytes)
+}
+
 // Walk without following directory links. Accept only relative, existing
 // symlinks confined to this tool's full tree, preserving adjacent
-// libraries/resources.
-fn tree_hash(root: &Path) -> Result<String, Error> {
-    state_hash(root, true)
+// libraries/resources. Both digests preserve the same names, types, modes
+// and links. Repair snapshots retain their separate unhealthy-link allowance.
+fn tree_digest(root: &Path, digest: TreeDigest) -> Result<String, Error> {
+    state_digest(root, digest, true)
 }
 
 fn state_hash(root: &Path, healthy_links: bool) -> Result<String, Error> {
+    state_digest(root, TreeDigest::Bytes, healthy_links)
+}
+
+fn state_digest(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<String, Error> {
     real_directory(root)?;
     let mut hash = Sha256::new();
     walk(root, &mut |path| {
@@ -1079,14 +1190,30 @@ fn state_hash(root: &Path, healthy_links: bool) -> Result<String, Error> {
             }
             hash.update(b"file");
             hash.update(m.len().to_le_bytes());
-            let mut file = File::open(path)?;
-            let mut bytes = [0; 8192];
-            loop {
-                let n = file.read(&mut bytes)?;
-                if n == 0 {
-                    break;
+            match digest {
+                TreeDigest::Bytes => {
+                    let mut file = File::open(path)?;
+                    let mut bytes = [0; 8192];
+                    loop {
+                        let n = file.read(&mut bytes)?;
+                        if n == 0 {
+                            break;
+                        }
+                        hash.update(&bytes[..n]);
+                    }
                 }
-                hash.update(&bytes[..n]);
+                // Writes, replacement and chmod all advance ctime, which the
+                // owner cannot set back.
+                #[cfg(unix)]
+                TreeDigest::Stat => {
+                    use std::os::unix::fs::MetadataExt;
+                    hash.update(m.ino().to_le_bytes());
+                    for time in [m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec()] {
+                        hash.update(time.to_le_bytes());
+                    }
+                }
+                #[cfg(not(unix))]
+                TreeDigest::Stat => return Err(Error::UnsupportedPlatform),
             }
         } else if m.is_dir() {
             hash.update(b"directory");
@@ -1130,6 +1257,19 @@ fn copy_tree(source: &Path, dest: &Path) -> Result<(), Error> {
         }
         Ok(())
     })
+}
+
+/// A new owner-only file in a private staged generation.
+fn write_private(path: &Path, bytes: &[u8]) -> Result<(), Error> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(bytes)?;
+    Ok(())
 }
 
 fn sync_directory(path: &Path) -> Result<(), Error> {

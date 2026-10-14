@@ -387,7 +387,7 @@ fn native_provenance_and_capture_changes_are_rejected() {
         Err(Error::DeclarationDrift)
     ));
     assert!(matches!(
-        ActivationPlan::from_sources(repo.path(), &captured, context()),
+        ActivationPlan::from_sources(repo.path(), &captured, context(), Verification::Full),
         Err(Error::Sources(StorageError::Conflict))
     ));
     assert_eq!(state(repo.path()), before);
