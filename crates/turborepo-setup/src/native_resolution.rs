@@ -74,7 +74,7 @@ async fn resolve_tools(
         .iter()
         .any(|id| declared.contains_key(*id))
     {
-        js_resolution::resolve_tools(&request, node, registry).await?
+        js_resolution::resolve_tools(request, node, registry).await?
     } else {
         BTreeMap::new()
     };
