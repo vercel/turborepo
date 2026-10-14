@@ -32,12 +32,13 @@ pub enum Selection {
 
 #[derive(Debug, Error, Diagnostic)]
 #[error(
-    "{cli} cannot provide complete managed-run support for turbo.lock schema {schema}: {reason}"
+    "{cli} cannot provide the required managed-run capability for turbo.lock schema {schema}: \
+     {reason}"
 )]
 #[diagnostic(help(
-    "Upgrade to a CLI that advertises the complete required schema contract. An installed \
-     incompatible repository pin must be upgraded; it is never replaced by the global CLI or \
-     fetched implicitly."
+    "Upgrade to a CLI advertising the complete schema contract or the qualified experimental \
+     Node/pnpm contract for this host. An installed incompatible repository pin must be upgraded; \
+     it is never replaced by the global CLI or fetched implicitly."
 ))]
 pub struct Error {
     cli: String,
@@ -45,6 +46,8 @@ pub struct Error {
     reason: String,
 }
 
+/// Caller must first authorize the exact-root experimental Node/pnpm cohort.
+/// This selector does not validate tools, declarations or installations itself.
 /// `local` is an already resolved native binary, not an npm launcher or runner.
 /// Only an actually absent/uninstalled pin is `None`. Resolution failures for
 /// an installed pin must not be converted to absence by the caller.
@@ -64,7 +67,7 @@ pub fn select(
     };
     let binary = fs::canonicalize(local)
         .map_err(|err| fail(format!("native binary resolution failed: {err}")))?;
-    // The self case must meet the same COMPLETE criterion, not merely parse locks.
+    // Self and copied peers must meet the same contract, not merely parse locks.
     let is_self = std::env::current_exe()
         .ok()
         .and_then(|p| fs::canonicalize(p).ok())
@@ -79,14 +82,16 @@ pub fn select(
 }
 
 fn require(schema: u32, capabilities: &Capabilities, cli: &str) -> Result<(), Error> {
-    if capabilities.supports_schema(schema) {
+    if capabilities.supports_schema(schema) || capabilities.supports_experimental_node_pnpm(schema)
+    {
         return Ok(());
     }
     Err(Error {
         cli: cli.to_owned(),
         schema,
         reason: format!(
-            "detected CLI {} does not advertise that complete schema capability",
+            "detected CLI {} advertises neither complete schema support nor qualified \
+             experimental Node/pnpm support for this host",
             capabilities.cli_version()
         ),
     })

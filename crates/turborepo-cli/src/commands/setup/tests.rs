@@ -214,6 +214,8 @@ mod first_lock;
 mod force;
 #[path = "managed_run_tests.rs"]
 mod managed_run;
+#[path = "native_handoff_tests.rs"]
+mod native_handoff;
 #[path = "native_plain_run_tests.rs"]
 mod native_plain_run;
 #[path = "npm_tests.rs"]
