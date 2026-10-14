@@ -82,6 +82,10 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         Error::OfflineMissing(_) => SetupFailure::Download,
         Error::Unsupported(message) => match *message {
             "managed promotion requires macOS or GNU Linux"
+            | "managed promotion requires macOS, GNU Linux or Windows x64"
+            | "managed setup is not qualified for Windows arm64, including x64 turbo under \
+             emulation; use WSL or a Windows x64 machine"
+            | "managed setup could not confirm a Windows x64 host"
             | "cannot select setup check host platform" => SetupFailure::Platform,
             "frozen mode requires turbo.lock" | "locked provisioning requires turbo.lock" => {
                 SetupFailure::LockMissing
@@ -139,6 +143,9 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         Error::Install(_) => SetupFailure::Install,
         Error::Root(_) | Error::Path(_) => SetupFailure::Discovery,
         Error::Io(_) => SetupFailure::Io,
+        // The Windows Ctrl+C relay failed to register.
+        #[cfg(windows)]
+        Error::Signal(_) => SetupFailure::Io,
     }
 }
 
@@ -211,10 +218,15 @@ mod tests {
         let unsupported = |message| failure(&Error::Unsupported(message));
         assert_eq!(failure(&Error::FrozenUpdateLock), SetupFailure::Request);
         assert_eq!(failure(&Error::NotImplemented), SetupFailure::Unsupported);
-        assert_eq!(
-            unsupported("managed promotion requires macOS or GNU Linux"),
-            SetupFailure::Platform
-        );
+        for message in [
+            "managed promotion requires macOS or GNU Linux",
+            "managed promotion requires macOS, GNU Linux or Windows x64",
+            "managed setup is not qualified for Windows arm64, including x64 turbo under \
+             emulation; use WSL or a Windows x64 machine",
+            "managed setup could not confirm a Windows x64 host",
+        ] {
+            assert_eq!(unsupported(message), SetupFailure::Platform);
+        }
         assert_eq!(
             unsupported("frozen mode requires turbo.lock"),
             SetupFailure::LockMissing
