@@ -24,6 +24,8 @@ pub(super) struct Transports {
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
     pub uv: UvTransport,
     pub rustup: RustupTransport,
+    #[cfg(test)]
+    pub trust_base: Option<std::path::PathBuf>,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -33,7 +35,18 @@ impl Transports {
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
             uv: UvTransport::official(policy)?,
             rustup: RustupTransport::official(policy)?,
+            #[cfg(test)]
+            trust_base: None,
         })
+    }
+
+    fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
+        #[cfg(test)]
+        if let Some(base) = &self.trust_base {
+            return Ok(base.clone());
+        }
+        dirs_next::data_local_dir()
+            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
     }
 }
 
@@ -323,10 +336,33 @@ pub(super) fn run(
             plans(&snapshot, lock)?;
         }
     }
+    // User state is checked before the first writer or download, but after the
+    // read-only lock/plan diagnostics above and below, which never need it.
+    let trust_base = transports
+        .as_ref()
+        .map(Transports::trust_base)
+        .transpose()?;
+    let open_trust = || -> Result<super::trust::TrustStore, Error> {
+        // Preserve actionable read-only source/Git diagnostics before checking
+        // user state; none of these checks creates a writer or downloads tools.
+        preflight()?;
+        revalidate(discovery)?;
+        storage(root)?;
+        let base = trust_base
+            .clone()
+            .or_else(dirs_next::data_local_dir)
+            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))?;
+        let trust = super::trust::TrustStore::new(&base, root)?;
+        trust.preflight()?;
+        Ok(trust)
+    };
+    let mut trust = None;
     let mut transports = transports;
     let snapshot = if write {
         use turborepo_setup::lock::{WriteOutcome, reconcile};
+        let trust = trust.insert(open_trust()?);
         let check = || {
+            trust.preflight()?;
             preflight()?;
             revalidate(discovery)?;
             storage(root)?;
@@ -392,6 +428,10 @@ pub(super) fn run(
         uv,
         rustup,
     } = plans(&snapshot, lock)?;
+    let trust = match trust {
+        Some(trust) => trust,
+        None => open_trust()?,
+    };
     let desired: Vec<_> = [
         node.as_ref().map(NodePlan::inventory_tool),
         pnpm.as_ref().map(PnpmPlan::inventory_tool),
@@ -423,7 +463,11 @@ pub(super) fn run(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let preparation = if force {
+    // Repo inventory can prove health, never provenance. A missing/stale user
+    // record forces the entire cohort through verified artifact preparation.
+    let recorded = trust.allows_reuse(&store)?;
+    let replace = force || !recorded;
+    let preparation = if replace {
         turborepo_setup::Preparation::Fresh
     } else {
         turborepo_setup::Preparation::IfNeeded
@@ -503,17 +547,22 @@ pub(super) fn run(
         _ => Err(missing()),
     };
     let before_publish = || {
+        trust.preflight()?;
         storage(root).map_err(io::Error::other)?;
         preflight().map_err(io::Error::other)?;
         revalidate(discovery).map_err(io::Error::other)?;
         snapshot.check_guard(&guard).map_err(io::Error::other)?;
         Ok(())
     };
-    if force {
+    if replace {
         store.force_reconcile_checked(&desired, stage, before_publish)?;
     } else {
         store.reconcile_checked(&desired, stage, before_publish)?;
     }
+    // A published generation without this second, external publication is not
+    // trusted. On failure, rerunning setup freshly verifies it before repair.
+    before_publish()?;
+    trust.publish(&store)?;
     for tool in &desired {
         println!(
             "{} {}: {}",
