@@ -18,6 +18,7 @@ const TOOLCHAIN: &str = "[toolchain]\nchannel = \"1.99\"\nprofile = \"minimal\"\
 const RUST: Ecosystems = Ecosystems {
     rust: true,
     python: false,
+    go: false,
 };
 
 fn context() -> ExecutionContext {
@@ -784,6 +785,7 @@ fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
         Ecosystems {
             rust: true,
             python: true,
+            go: false,
         },
     )
     .unwrap();

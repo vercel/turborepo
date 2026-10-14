@@ -161,6 +161,7 @@ fn proposed(f: &Fixture, upstream: &LoopbackServer, flags: &[&str]) -> Result<St
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
+                artifact: None,
             }),
             || Ok(f.owned.policy_at(&root.join("apps/web/src"))?),
         )?);
