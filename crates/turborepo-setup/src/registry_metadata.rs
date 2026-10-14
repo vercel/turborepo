@@ -200,8 +200,6 @@ pub(crate) fn is_modern_yarn(manager: Manager, version: &Version) -> bool {
     manager == Manager::Yarn && version.major >= 2
 }
 
-/// `{name}/-/{basename}-{version}.tgz`; scoped packages drop the scope.
-
 fn sri_sha512(value: &str) -> Result<CorepackIntegrity, RegistryMetadataError> {
     let encoded = value
         .strip_prefix("sha512-")
