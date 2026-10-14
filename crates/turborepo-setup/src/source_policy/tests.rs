@@ -303,7 +303,12 @@ fn wrapper_environments_pass_and_reported_locations_are_inspected() -> TestResul
         let config = custom.join(config);
         fs::create_dir_all(config.parent().ok_or("parent")?)?;
         fs::write(&config, "registry=https://private.invalid/")?;
-        assert_eq!(fixture.check(&env).err(), Some(Error::Configured(owner)));
+        let expected = if owner == ConfigOwner::Repository {
+            Error::Setting(owner, 1)
+        } else {
+            Error::Configured(owner)
+        };
+        assert_eq!(fixture.check(&env).err(), Some(expected));
         fs::remove_dir_all(&custom)?;
     }
     Ok(())
