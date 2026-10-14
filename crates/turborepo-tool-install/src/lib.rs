@@ -1,13 +1,13 @@
 //! Clone-local installation transactions, not resolution or activation.
 //! Callers supply verified trees; one manifest replacement selects a complete
-//! generation with owned shims. Old generations stay inactive for later
-//! cleanup. This ignored inventory is NOT authorization: future activation must
-//! authorize setup-recorded tools using user state outside the repository,
-//! never repo data. Repository parents are trusted; same-user hostile mutation
-//! is out of scope, as with archive staging. Managed paths reject symlinks;
-//! staging is private. Windows exports are `.exe` hard links or generated
-//! `.cmd` forwarders found through PATHEXT, and directory handles are pinned
-//! without delete sharing instead of comparing inode identity.
+//! generation with owned shims. Replaced generations stay inactive through a
+//! cleanup grace period. This ignored inventory is NOT authorization: future
+//! activation must authorize setup-recorded tools using user state outside the
+//! repository, never repo data. Repository parents are trusted; same-user
+//! hostile mutation is out of scope, as with archive staging. Managed paths
+//! reject symlinks; staging is private. Windows exports are `.exe` hard links
+//! or generated `.cmd` forwarders found through PATHEXT, and directory handles
+//! are pinned without delete sharing instead of comparing inode identity.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,6 +15,7 @@ use std::{
     io::{self, Read, Write},
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, SystemTime},
 };
 
 mod repair;
@@ -243,6 +244,18 @@ pub enum Outcome {
 pub struct DiskUse {
     pub entries: usize,
     pub bytes: u64,
+}
+
+/// Disk use of one clone's or worktree's `.turbo/tools`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StorageUse {
+    /// The selected generation.
+    pub selected: DiskUse,
+    /// Inactive entries past their grace period: removed by
+    /// [`Store::remove_inactive`], or removable when only inspected.
+    pub removable: DiskUse,
+    /// Inactive entries still within their grace period.
+    pub retained: DiskUse,
 }
 
 impl DiskUse {
@@ -834,6 +847,7 @@ impl Store {
             self.check_generation(expected)?;
             self.preserve_record(record)?;
         }
+        self.retire_selected()?;
         manifest
             .persist(self.root.join("manifest.json"))
             .map_err(|e| Error::Io(e.error))?;
@@ -841,51 +855,47 @@ impl Store {
         Ok(Outcome::Replaced)
     }
 
-    /// Disk use of the selected generation, which stays per clone/worktree.
-    pub fn selected_use(&self) -> Result<DiskUse, Error> {
-        let mut usage = DiskUse::default();
-        if let Some(generation) = self.selected_generation()?
-            && real_directory(&self.root.join(&generation)).is_ok()
-        {
-            usage.add(&self.root.join(generation))?;
+    /// Read-only disk use at this exact repository root, for plans and checks.
+    /// Takes no guard and creates nothing, so a concurrent transaction can
+    /// make it stale.
+    pub fn storage_use(repo: &Path, grace: Duration) -> Result<Option<StorageUse>, Error> {
+        if !cfg!(unix) {
+            return Err(Error::UnsupportedPlatform);
         }
-        Ok(usage)
-    }
-
-    /// Generations the manifest no longer selects, plus orphaned staging and
-    /// manifest temporaries from interrupted transactions. Read-only.
-    pub fn inactive_use(&self) -> Result<DiskUse, Error> {
-        let mut usage = DiskUse::default();
-        for path in self.inactive()? {
-            usage.add(&path)?;
-        }
-        Ok(usage)
-    }
-
-    /// Remove inactive turbo-owned entries under this guard, never the
-    /// selection, manifest, lock, links or unrecognized entries. `turbo run`
-    /// reads the selection without this guard, so the caller chooses when no
-    /// process can still be using a replaced generation. An interruption
-    /// leaves only inactive remnants, which the next call removes.
-    pub fn remove_inactive(&mut self) -> Result<DiskUse, Error> {
-        let mut removed = DiskUse::default();
-        for path in self.inactive()? {
-            removed.add(&path)?;
-            if fs::symlink_metadata(&path)?.is_dir() {
-                fs::remove_dir_all(&path)?;
-            } else {
-                fs::remove_file(&path)?;
+        let repo = fs::canonicalize(repo)?;
+        shared_directory(&repo)?;
+        let turbo = repo.join(".turbo");
+        let root = turbo.join("tools");
+        for (path, check) in [
+            (&turbo, shared_directory as DirectoryCheck),
+            (&root, real_directory as DirectoryCheck),
+        ] {
+            match check(path) {
+                Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+                result => result?,
             }
         }
-        sync_directory(&self.root)?;
-        Ok(removed)
+        Self::usage(&root, grace, false).map(Some)
+    }
+
+    /// Remove inactive turbo-owned entries once they have been inactive for
+    /// `grace`, never the selection, manifest, lock, links or unrecognized
+    /// entries. `turbo run` uses the selection without this guard, so a
+    /// replaced generation's grace starts when it is replaced. An
+    /// interruption leaves only inactive remnants for a later call.
+    pub fn remove_inactive(&mut self, grace: Duration) -> Result<StorageUse, Error> {
+        self.check_root()?;
+        let usage = Self::usage(&self.root, grace, true)?;
+        if usage.removable.entries > 0 {
+            sync_directory(&self.root)?;
+        }
+        Ok(usage)
     }
 
     // A present but invalid manifest fails closed instead of making every
     // generation look inactive.
-    fn selected_generation(&self) -> Result<Option<String>, Error> {
-        self.check_root()?;
-        let Some(bytes) = Self::manifest_bytes(&self.root)? else {
+    fn selected_generation(root: &Path) -> Result<Option<String>, Error> {
+        let Some(bytes) = Self::manifest_bytes(root)? else {
             return Ok(None);
         };
         let inventory: Inventory = serde_json::from_slice(&bytes)?;
@@ -896,23 +906,73 @@ impl Store {
         Ok(Some(inventory.generation))
     }
 
-    fn inactive(&self) -> Result<Vec<PathBuf>, Error> {
-        let selected = self.selected_generation()?;
-        let mut inactive = Vec::new();
-        for entry in fs::read_dir(&self.root)? {
+    // Stamp the outgoing selection before it can become inactive, so its
+    // modification time is when its cleanup grace started.
+    fn retire_selected(&self) -> Result<(), Error> {
+        let Some(generation) = Self::selected_generation(&self.root)? else {
+            return Ok(());
+        };
+        let path = self.root.join(generation);
+        match real_directory(&path) {
+            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+            result => result?,
+        }
+        #[cfg(windows)]
+        let directory = {
+            use std::os::windows::fs::OpenOptionsExt;
+            // FILE_WRITE_ATTRIBUTES is sufficient for the retirement stamp.
+            // Open the directory itself, without following reparse points or
+            // permitting replacement while its timestamp is updated.
+            let directory = OpenOptions::new()
+                .access_mode(0x100)
+                .custom_flags(0x0200_0000 | 0x0020_0000)
+                .share_mode(0x1 | 0x2)
+                .open(&path)?;
+            real_directory(&path)?;
+            directory
+        };
+        #[cfg(not(windows))]
+        let directory = File::open(path)?;
+        directory.set_modified(SystemTime::now())?;
+        Ok(())
+    }
+
+    // Replaced generations carry their retirement time. Leftovers from
+    // interrupted transactions were never selected; their own modification
+    // time is a conservative stand-in.
+    fn usage(root: &Path, grace: Duration, remove: bool) -> Result<StorageUse, Error> {
+        let selected = Self::selected_generation(root)?;
+        let now = SystemTime::now();
+        let mut usage = StorageUse::default();
+        for entry in fs::read_dir(root)? {
             let entry = entry?;
+            let (path, kind) = (entry.path(), entry.file_type()?);
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            let kind = entry.file_type()?;
+            if kind.is_dir() && selected.as_deref() == Some(name.as_ref()) {
+                usage.selected.add(&path)?;
+                continue;
+            }
             let generation = name.starts_with("generation-") && kind.is_dir();
             // NamedTempFile's default prefix, only ever a manifest candidate.
             let temporary = name.starts_with(".tmp") && kind.is_file();
-            if (generation && Some(name.as_ref()) != selected.as_deref()) || temporary {
-                inactive.push(entry.path());
+            if !generation && !temporary {
+                continue;
+            }
+            // A future timestamp is never settled.
+            let inactive_for = now.duration_since(entry.metadata()?.modified()?);
+            if !inactive_for.is_ok_and(|age| age >= grace) {
+                usage.retained.add(&path)?;
+                continue;
+            }
+            usage.removable.add(&path)?;
+            if remove && generation {
+                fs::remove_dir_all(&path)?;
+            } else if remove {
+                fs::remove_file(&path)?;
             }
         }
-        inactive.sort();
-        Ok(inactive)
+        Ok(usage)
     }
 }
 

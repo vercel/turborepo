@@ -67,7 +67,7 @@ impl Transports {
         };
         Ok(Self {
             node: node.with_cache(cache.clone()),
-            pnpm: registry()?.with_cache(cache),
+            pnpm: registry()?.with_cache(cache.clone()),
             registry: registry()?,
             uv: UvTransport::official(policy)?,
             rustup: RustupTransport::official(policy)?,
@@ -1025,6 +1025,12 @@ pub(super) fn run(
     }
     if offline {
         println!("Offline: used only installed tools and verified cached artifacts.");
+    }
+    // Cleanup follows both generation and external trust publication, while
+    // the writer and Store guards are still held. It never fails setup.
+    for line in super::cleanup::after_provisioning(&mut store, transports.node.cache(), lock, host)
+    {
+        println!("{line}");
     }
     Ok(0)
 }

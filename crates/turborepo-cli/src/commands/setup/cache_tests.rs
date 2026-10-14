@@ -12,7 +12,7 @@ fn unreachable_origin() -> String {
 }
 
 // Every file in the shared cache, failing on anything but digest entries.
-fn entries(cache: &Path) -> Vec<Vec<u8>> {
+pub(super) fn entries(cache: &Path) -> Vec<Vec<u8>> {
     let root = cache.join("turborepo/setup-artifacts/v1");
     let mut entries = Vec::new();
     for platform in fs::read_dir(root).unwrap() {
@@ -29,7 +29,7 @@ fn entries(cache: &Path) -> Vec<Vec<u8>> {
     entries
 }
 
-fn change_node(f: &mut Fixture) {
+pub(super) fn change_node(f: &mut Fixture) {
     let prefix = f
         .node_path
         .rsplit('/')

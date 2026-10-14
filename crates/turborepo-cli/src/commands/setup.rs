@@ -13,6 +13,7 @@ use crate::cli::{Args, SetupArgs};
 mod acl;
 pub(crate) mod authorization;
 mod check;
+mod cleanup;
 mod effective;
 mod lock_diagnostics;
 mod no_lock;

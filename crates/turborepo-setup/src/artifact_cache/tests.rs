@@ -266,3 +266,29 @@ fn replaced_snapshot_links_are_not_counted_or_pruned_and_other_errors_remain_err
     );
     assert!(skip_missing(Ok(())).unwrap().is_some());
 }
+
+#[test]
+fn lock_references_keep_entries_whose_installs_were_reused() {
+    let base = tempfile::tempdir().unwrap();
+    let cache = ArtifactCache::new(base.path()).unwrap();
+    let (referenced, sha256) = verified(b"archive a reused install came from");
+    cache.put(Platform::MacosArm64, &referenced).unwrap();
+    let entry = base
+        .path()
+        .join("turborepo/setup-artifacts/v1/macos-arm64")
+        .join(&sha256);
+    age(&entry, 40);
+    // Only the exact lock key is refreshed; misses create nothing.
+    cache.mark_used(Platform::Any, &sha256);
+    cache.mark_used(Platform::LinuxX64Gnu, &sha256);
+    cache.mark_used(Platform::MacosArm64, &"0".repeat(64));
+    assert_eq!(
+        files(&base.path().join("turborepo/setup-artifacts/v1")),
+        ["macos-arm64"]
+    );
+    let month = Duration::from_secs(30 * 86_400);
+    assert!(fs::metadata(&entry).unwrap().modified().unwrap() < SystemTime::now() - month);
+    cache.mark_used(Platform::MacosArm64, &sha256);
+    assert_eq!(cache.prune_unused(month).unwrap(), DiskUse::default());
+    assert!(cache.get(Platform::MacosArm64, &sha256, LIMIT).is_some());
+}

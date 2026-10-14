@@ -96,6 +96,12 @@ impl NodeTransport {
         self
     }
 
+    /// The actual caller-selected cache used by this transport, for best-effort
+    /// cleanup after successful setup. Never a repository-authored setting.
+    pub fn cache(&self) -> Option<&ArtifactCache> {
+        self.cache.as_ref()
+    }
+
     /// Read only bounded official metadata for a native portable selection.
     /// No caller URL, artifact download, installation or executable probing.
     pub async fn resolve_native(
