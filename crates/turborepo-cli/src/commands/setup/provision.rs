@@ -344,6 +344,11 @@ pub(super) fn run(
         .map(Transports::trust_base)
         .transpose()?;
     let open_trust = || -> Result<super::trust::TrustStore, Error> {
+        // Preserve actionable read-only source/Git diagnostics before checking
+        // user state; none of these checks creates a writer or downloads tools.
+        preflight()?;
+        revalidate(discovery)?;
+        storage(root)?;
         let base = trust_base
             .clone()
             .or_else(dirs_next::data_local_dir)
