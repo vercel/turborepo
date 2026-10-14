@@ -85,6 +85,24 @@ fn tgz(files: &[(&str, &str)]) -> Vec<u8> {
     gzip.finish().unwrap()
 }
 
+/// The registry's `dist.integrity` value for these bytes.
+fn integrity(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut encoded = String::from("sha512-");
+    for chunk in Sha512::digest(bytes).chunks(3) {
+        let byte = |i: usize| u32::from(*chunk.get(i).unwrap_or(&0));
+        let n = (byte(0) << 16) | (byte(1) << 8) | byte(2);
+        for i in 0..4 {
+            encoded.push(if i > chunk.len() {
+                '='
+            } else {
+                ALPHABET[((n >> (18 - 6 * i)) & 63) as usize] as char
+            });
+        }
+    }
+    encoded
+}
+
 struct Fixture {
     owned: OwnedSetupFixture,
     node: Vec<u8>,
@@ -161,22 +179,9 @@ impl Fixture {
             let digest = Sha256::digest(other);
             sums.push_str(&format!("{digest:x}  node-v24.0.0-{other}\n"));
         }
-        const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let mut integrity = String::new();
-        for chunk in Sha512::digest(&self.pnpm).chunks(3) {
-            let byte = |i: usize| u32::from(*chunk.get(i).unwrap_or(&0));
-            let n = (byte(0) << 16) | (byte(1) << 8) | byte(2);
-            for i in 0..4 {
-                integrity.push(if i > chunk.len() {
-                    '='
-                } else {
-                    ALPHABET[((n >> (18 - 6 * i)) & 63) as usize] as char
-                });
-            }
-        }
         let metadata = json!({"name":"pnpm","version":"10.0.0","dist":{
             "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
-            "integrity":format!("sha512-{integrity}")}});
+            "integrity":integrity(&self.pnpm)}});
         LoopbackServer::new(
             [
                 ("/dist/index.json".into(), index.to_string().into_bytes()),
@@ -384,3 +389,5 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
 
 #[path = "windows_additional_tests.rs"]
 mod additional;
+#[path = "windows_yarn_tests.rs"]
+mod yarn;
