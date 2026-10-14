@@ -451,6 +451,21 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+
+    #[error("Invalid additional tool {tool:?}: {reason}.")]
+    #[diagnostic(help(
+        "Declare an exact version and, for each supported platform, an HTTPS `url`, a lowercase \
+         `sha256`, a `format`, and relative `executables` paths. Tool IDs and executable names \
+         belong to one tool."
+    ))]
+    SetupInvalidAdditionalTool {
+        tool: String,
+        reason: String,
+        #[label("invalid declaration")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
 }
 
 impl From<crate::parser::BiomeParseError> for Error {
