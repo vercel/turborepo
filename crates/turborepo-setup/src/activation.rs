@@ -190,8 +190,13 @@ impl ActivationPlan {
         }
         if lock.tools().contains_key("yarn") {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            let yarn = YarnPlan::from_declaration(lock, platform, &node, &manager)
-                .map_err(|_| Error::InvalidLock)?;
+            let yarn = YarnPlan::from_declaration(
+                lock,
+                platform,
+                node.as_ref().ok_or(Error::InvalidLock)?,
+                &manager,
+            )
+            .map_err(|_| Error::InvalidLock)?;
             tools.push(yarn.inventory_tool().clone());
         }
         let uv = lock.tools().contains_key("uv");
