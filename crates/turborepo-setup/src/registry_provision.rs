@@ -32,7 +32,10 @@ pub enum Error {
     InvalidLock,
     #[error("package manager requires the selected managed Node in the complete desired inventory")]
     NodeBinding,
-    #[error("registry package promotion is unqualified for Windows, musl or non-Unix hosts")]
+    #[error(
+        "registry package promotion is unqualified for this host, Windows arm64 or musl; use \
+         macOS, GNU Linux or Windows x64"
+    )]
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
@@ -557,15 +560,16 @@ impl RegistryPlan {
         manager: Manager,
     ) -> Result<Self, Error> {
         let id = package_name(manager)?;
-        if !cfg!(unix)
-            || !matches!(
-                platform,
-                Platform::MacosX64
-                    | Platform::MacosArm64
-                    | Platform::LinuxX64Gnu
-                    | Platform::LinuxArm64Gnu
-            )
-        {
+        let windows = platform == Platform::WindowsX64;
+        let qualified = match platform {
+            Platform::MacosX64
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu => cfg!(unix),
+            Platform::WindowsX64 => cfg!(windows),
+            _ => false,
+        };
+        if !qualified {
             return Err(Error::UnsupportedTarget);
         }
         let selected_node = NodePlan::from_lock(lock, platform).map_err(|_| Error::NodeBinding)?;
@@ -586,6 +590,11 @@ impl RegistryPlan {
             .ok_or(Error::InvalidLock)?;
         let (artifact, native) = locked_parts(manager, &package.version, platform, parts)?;
         let (artifact, native) = (artifact.clone(), native.cloned());
+        // Native pnpm's launchers are POSIX shell scripts; Windows stays
+        // fail-closed for it.
+        if native.is_some() && windows {
+            return Err(Error::UnsupportedTarget);
+        }
         ExpectedSha256::from_hex(&artifact.sha256)?;
         let node = node.inventory_tool().clone();
         // A changed authored constraint must re-verify, even when archive SHA-256
@@ -594,12 +603,19 @@ impl RegistryPlan {
             serde_json::to_vec(&(&node, authored.map(|pin| (pin.algorithm, &pin.digest))))
                 .map_err(|_| Error::InvalidLock)?;
         let launch_directory = format!("managed-node-{:x}", Sha256::digest(binding));
+        // Windows launchers are batch files so PATHEXT resolves `pnpm`.
+        let extension = if windows { ".cmd" } else { "" };
         let executables = native
             .as_ref()
             .unwrap_or(&artifact)
             .executables
             .keys()
-            .map(|name| (name.clone(), format!("{launch_directory}/{name}")))
+            .map(|name| {
+                (
+                    name.clone(),
+                    format!("{launch_directory}/{name}{extension}"),
+                )
+            })
             .collect();
         // Reuse identity binds every verified part.
         let artifact_sha256 = match &native {
@@ -776,7 +792,7 @@ impl PreparedRegistry {
         tool: &Tool,
         destination: &Path,
     ) -> Result<(), turborepo_tool_install::Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(turborepo_tool_install::Error::UnsupportedPlatform);
         }
         if tool != &self.tool
@@ -792,27 +808,38 @@ impl PreparedRegistry {
             executable(&target)?;
         }
         // Owner-only like every other store directory, whatever the umask.
+        #[cfg_attr(not(unix), allow(unused_mut))]
         let mut launch = fs::DirBuilder::new();
         #[cfg(unix)]
         std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
         launch.create(destination.join(&self.launch_directory))?;
         for (name, path) in &self.tool.executables {
-            let id = &self.tool.id;
-            let command = match (&self.native, name.as_str()) {
-                (None, _) => format!(
-                    "\"$tools/node/bin/node\" \"$tools/{id}/{}\"",
-                    self.entrypoints[name]
-                ),
-                (Some(_), "pnpx" | "pnx") => format!("\"$tools/{id}/{NATIVE_BINARY}\" dlx"),
-                (Some(_), _) => format!("\"$tools/{id}/{NATIVE_BINARY}\""),
+            // The bin forwarder calls this file directly, so %~dp0 is always
+            // the launch directory. Entry points are fixed validated mappings.
+            // Native pnpm never plans on Windows (`RegistryPlan::from_lock`).
+            let script = if cfg!(windows) {
+                format!(
+                    "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\{}\" %*\r\n",
+                    self.entrypoints[name].replace('/', "\\")
+                )
+            } else {
+                let id = &self.tool.id;
+                let command = match (&self.native, name.as_str()) {
+                    (None, _) => format!(
+                        "\"$tools/node/bin/node\" \"$tools/{id}/{}\"",
+                        self.entrypoints[name]
+                    ),
+                    (Some(_), "pnpx" | "pnx") => format!("\"$tools/{id}/{NATIVE_BINARY}\" dlx"),
+                    (Some(_), _) => format!("\"$tools/{id}/{NATIVE_BINARY}\""),
+                };
+                format!(
+                    "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
+                     \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) \
+                     tools=\"$here/../tools\";; esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) \
+                     || exit 126\nexec {command} \"$@\"\n",
+                    self.launch_directory
+                )
             };
-            let script = format!(
-                "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
-                 \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) tools=\"$here/../tools\";; \
-                 esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) || exit 126\nexec {command} \
-                 \"$@\"\n",
-                self.launch_directory
-            );
             fs::write(destination.join(path), script)?;
             executable(&destination.join(path))?;
         }

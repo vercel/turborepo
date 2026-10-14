@@ -185,7 +185,7 @@ fn environment_prefix_and_known_system_locations() -> TestResult {
     );
     #[cfg(unix)]
     assert_eq!(
-        system_configs(),
+        system_configs(&[])?,
         [
             "/etc/npmrc",
             "/usr/etc/npmrc",
@@ -642,5 +642,36 @@ fn only_a_linked_keg_npmrc_in_its_own_cellar_is_followed() -> TestResult {
     // No other layer follows a link, even into a keg.
     symlink(&keg, fixture.home.join(".npmrc"))?;
     assert_eq!(check(), Some(Error::Inspection(ConfigOwner::User)));
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_global_npm_prefix_is_inspected_and_required() -> TestResult {
+    let fixture = Fixture::new()?;
+    let app_data = fixture.directory.path().join("AppData/Roaming");
+    let env = [(OsString::from("AppData"), app_data.clone().into_os_string())];
+    let system = system_configs(&env)?;
+    assert_eq!(system, [app_data.join("npm").join("etc").join("npmrc")]);
+    assert_eq!(system_configs(&[]).err(), Some(Error::Locations));
+    let relative = [(OsString::from("APPDATA"), OsString::from("Roaming"))];
+    assert_eq!(system_configs(&relative).err(), Some(Error::Locations));
+    for path in [
+        system[0].clone(),
+        app_data.join("npm/node_modules/npm/npmrc"),
+    ] {
+        fs::create_dir_all(path.parent().ok_or("parent")?)?;
+        fs::write(&path, "registry=https://mirror.invalid")?;
+        let result = inspect_inputs(
+            &fixture.root,
+            &fixture.home,
+            None,
+            &[],
+            system.clone(),
+            Some(fixture.directory.path()),
+        );
+        assert_eq!(result.err(), Some(Error::Configured(ConfigOwner::System)));
+        fs::remove_file(path)?;
+    }
     Ok(())
 }

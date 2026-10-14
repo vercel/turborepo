@@ -141,9 +141,9 @@ impl OwnedSetupFixture {
 
     /// Re-runs the production fail-closed npmrc/root-policy checks at an owned
     /// invocation. Neither lexical traversal nor symlink escape can extend the
-    /// ancestor scan outside this fixture. Non-Unix hosts stay unqualified.
+    /// ancestor scan outside this fixture. Other hosts stay unqualified.
     pub fn policy_at(&self, invocation: &Path) -> Result<OfficialSourcePolicy, Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedHost);
         }
         let boundary = fs::canonicalize(self.directory.path()).map_err(|_| Error::Locations)?;
@@ -187,7 +187,7 @@ mod tests {
     use super::*;
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     #[test]
     fn owned_inventory_uses_the_same_fail_closed_policy_and_is_ephemeral() -> TestResult {
         let fixture = OwnedSetupFixture::new()?;
@@ -296,7 +296,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     #[test]
     fn fixture_does_not_qualify_unsupported_hosts() -> TestResult {
         let fixture = OwnedSetupFixture::new()?;

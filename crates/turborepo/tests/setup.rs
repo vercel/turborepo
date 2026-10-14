@@ -14,13 +14,16 @@ mod no_lock;
 const PENDING: &str = "this setup mode is not implemented";
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
 const DISABLED: &str = "requires root futureFlags.experimentalSetup";
-const UNQUALIFIED: &str = "managed promotion requires macOS or GNU Linux";
-const QUALIFIED: bool = cfg!(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(
-        target_os = "macos",
-        all(target_os = "linux", target_env = "gnu")
-    )
+const UNQUALIFIED: &str = "managed promotion requires macOS, GNU Linux or Windows x64";
+const QUALIFIED: bool = cfg!(any(
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    ),
+    all(windows, target_arch = "x86_64")
 ));
 
 #[cfg(all(
@@ -111,6 +114,14 @@ fn invoke_raw_options(
     let proxy = TcpListener::bind("127.0.0.1:0").expect("bind HTTP monitor");
     proxy.set_nonblocking(true).expect("nonblocking monitor");
     let url = format!("http://{}", proxy.local_addr().expect("monitor address"));
+    // Windows has no unprivileged symlinks, so expose Git's own directory.
+    #[cfg(windows)]
+    let git_path = which::which("git")
+        .expect("host git")
+        .parent()
+        .expect("git directory")
+        .to_path_buf();
+    #[cfg(not(windows))]
     let git_path = root.join("host-bin");
     #[cfg(unix)]
     if !git_path.exists() {
@@ -137,6 +148,8 @@ fn invoke_raw_options(
         .args(words)
         .env("PATH", path)
         .env("HOME", root.join("home"))
+        .env("USERPROFILE", root.join("home"))
+        .env("APPDATA", root.join("appdata"))
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
         .env("VERCEL_CONFIG_DIR_PATH", root.join("config"))
@@ -823,7 +836,7 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
-    let qualified = qualified_host();
+    let qualified = qualified_host() || cfg!(all(windows, target_arch = "x86_64"));
     let musl = matches!(
         turborepo_platform::host_libc(),
         Ok(Some(turborepo_platform::Libc::Musl))
@@ -845,8 +858,10 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
                     "managed activation requires turbo.lock"
                 } else if musl {
                     "not supported on musl Linux hosts"
+                } else if cfg!(all(windows, target_arch = "aarch64")) {
+                    "managed setup is not qualified for Windows arm64"
                 } else {
-                    "managed promotion requires macOS or GNU Linux"
+                    "managed promotion requires macOS, GNU Linux or Windows x64"
                 },
             );
         }
@@ -1308,12 +1323,16 @@ fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
     );
 }
 
-#[cfg(all(
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    any(target_os = "macos", target_os = "linux")
+#[cfg(any(
+    all(
+        any(target_arch = "x86_64", target_arch = "aarch64"),
+        any(target_os = "macos", target_os = "linux")
+    ),
+    all(windows, target_arch = "x86_64")
 ))]
 #[test]
 fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
+    #[cfg(unix)]
     use std::os::unix::fs::PermissionsExt;
 
     use turborepo_setup::{
@@ -1324,13 +1343,14 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         pnpm_provision::PnpmPlan,
         test_support::OwnedSetupFixture,
     };
-    if !qualified_host() {
+    if !(qualified_host() || cfg!(all(windows, target_arch = "x86_64"))) {
         return;
     }
     let owned = OwnedSetupFixture::new().unwrap();
     owned.init_git().unwrap();
     let root = owned.root();
     // Ubuntu's default 0002 umask leaves fresh clones group-writable.
+    #[cfg(unix)]
     fs::set_permissions(root, fs::Permissions::from_mode(0o775)).unwrap();
     write(root, "turbo.json", ENABLED);
     write(root, ".nvmrc", "24.0.0");
@@ -1352,14 +1372,20 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         ("macos", "aarch64") => (Platform::MacosArm64, "macos-arm64", "darwin-arm64"),
         ("macos", _) => (Platform::MacosX64, "macos-x64", "darwin-x64"),
         ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64-gnu", "linux-arm64"),
+        ("windows", _) => (Platform::WindowsX64, "windows-x64", "win-x64"),
         _ => (Platform::LinuxX64Gnu, "linux-x64-gnu", "linux-x64"),
     };
     let prefix = format!("node-v24.0.0-{spelling}");
+    let (extension, format, executable) = if cfg!(windows) {
+        ("zip", "zip", "node.exe")
+    } else {
+        ("tar.gz", "tar-gz", "bin/node")
+    };
     let lock = serde_json::json!({"schemaVersion":0,"tools":{
         "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
             "installation":{"kind":"managed","artifacts":{selector:{"distribution":{
-                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz"),"sha256":"0".repeat(64),
-                "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}}}}}},
+                "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.{extension}"),"sha256":"0".repeat(64),
+                "format":format,"rootPrefix":prefix,"executables":{"node":executable}}}}}},
         "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
             "installation":{"kind":"managed","artifacts":{"any":{"package":{
                 "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"1".repeat(64),
@@ -1382,6 +1408,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
             let file = destination.join(relative);
             fs::create_dir_all(file.parent().unwrap())?;
             fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
+            #[cfg(unix)]
             fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
         }
         fs::write(destination.join("resource"), "adjacent resource")?;
@@ -1420,7 +1447,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     assert_eq!(stderr, "");
                     assert_eq!(stdout, format!(
                         "Locked tools-only plan (turbo.lock unchanged):\n\
-                         node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org/dist/v24.0.0/{prefix}.tar.gz\n  SHA-256: {}\n\
+                         node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org/dist/v24.0.0/{prefix}.{extension}\n  SHA-256: {}\n\
                          pnpm 10.0.0: {action}\n  Declaration: package.json#/packageManager (pnpm@10.0.0)\n  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n  SHA-256: {}\n\
                          Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
                          Tracked changes: none. No downloads, probes, or tasks run.\n",
@@ -1474,110 +1501,113 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         assert!(!text.contains("tasks are ready") && !root.join("probe-ran").exists());
     }
     // Actual native prune, both output shapes, not a manually copied fixture.
-    let pruned = OwnedSetupFixture::new().unwrap();
-    let context = ExecutionContext::new(
-        turborepo_platform::Platform::current(),
-        if cfg!(target_os = "linux") {
-            Libc::Gnu { abi: "gnu".into() }
-        } else {
-            Libc::None
-        },
-        "host-readiness".into(),
-        ["unprobed".into()].into(),
-    )
-    .unwrap();
-    assert_eq!(context.artifact_platform(), platform);
-    let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
-    monitor.set_nonblocking(true).unwrap();
-    let proxy = format!("http://{}", monitor.local_addr().unwrap());
-    for docker in [false, true] {
-        let output_root = pruned.root().join(if docker { "docker" } else { "plain" });
-        let before = snapshot(root);
-        let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
-        command
-            .env_clear()
-            .current_dir(root)
-            .args(["prune", "web", "--out-dir"])
-            .arg(&output_root)
-            .env("PATH", "")
-            .env("HOME", root.join("home"))
-            .env("TURBO_TELEMETRY_DISABLED", "1")
-            .env("DO_NOT_TRACK", "1")
-            .env("HTTP_PROXY", &proxy)
-            .env("HTTPS_PROXY", &proxy)
-            .env("ALL_PROXY", &proxy)
-            .env("NO_PROXY", "");
-        if docker {
-            command.arg("--docker");
-        }
-        let output = command.output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert_eq!(snapshot(root), before);
-        let roots = if docker {
-            vec![output_root.join("full"), output_root.join("json")]
-        } else {
-            vec![output_root]
-        };
-        for output_root in roots {
-            for file in ["turbo.lock", ".nvmrc"] {
-                assert_eq!(
-                    fs::read(output_root.join(file)).unwrap(),
-                    fs::read(root.join(file)).unwrap()
-                );
-            }
-            assert!(!output_root.join(".turbo").exists());
-            check_failure(
-                &output_root,
-                &["setup", "--check", "--tools-only"],
-                true,
-                "managed installation is missing; run turbo setup",
-            );
-            // A separate repo-local generation, not copied ignored state.
-            let mut store = turborepo_tool_install::Store::open(&output_root).unwrap();
-            store.reconcile(&tools, stage).unwrap();
-            drop(store);
-            let (code, text) = invoke(
-                &output_root,
-                &["setup", "--check", "--tools-only", "--offline"],
-                true,
-            );
-            if external_system_policy_blocked(code, &text) {
-                eprintln!(
-                    "TURBO-6277: real pruned fixture check success remains blocked by external \
-                     System npm configuration."
-                );
+    // Windows prune output is not qualified here; it still checks the source.
+    if cfg!(unix) {
+        let pruned = OwnedSetupFixture::new().unwrap();
+        let context = ExecutionContext::new(
+            turborepo_platform::Platform::current(),
+            if cfg!(target_os = "linux") {
+                Libc::Gnu { abi: "gnu".into() }
             } else {
-                assert_eq!(code, 0, "{text}");
-                assert!(text.contains("Dependencies skipped"), "{text}");
+                Libc::None
+            },
+            "host-readiness".into(),
+            ["unprobed".into()].into(),
+        )
+        .unwrap();
+        assert_eq!(context.artifact_platform(), platform);
+        let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
+        monitor.set_nonblocking(true).unwrap();
+        let proxy = format!("http://{}", monitor.local_addr().unwrap());
+        for docker in [false, true] {
+            let output_root = pruned.root().join(if docker { "docker" } else { "plain" });
+            let before = snapshot(root);
+            let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
+            command
+                .env_clear()
+                .current_dir(root)
+                .args(["prune", "web", "--out-dir"])
+                .arg(&output_root)
+                .env("PATH", "")
+                .env("HOME", root.join("home"))
+                .env("TURBO_TELEMETRY_DISABLED", "1")
+                .env("DO_NOT_TRACK", "1")
+                .env("HTTP_PROXY", &proxy)
+                .env("HTTPS_PROXY", &proxy)
+                .env("ALL_PROXY", &proxy)
+                .env("NO_PROXY", "");
+            if docker {
+                command.arg("--docker");
             }
-            // Owned policy is a test-only typed seam, never a production opt-out.
-            // Inspect the actual prune output and all fixture state without locks.
-            let before = snapshot(pruned.root().parent().unwrap());
-            let sources = Snapshot::capture(&output_root).unwrap();
-            pruned.policy_at(&output_root).unwrap();
-            let plan = ActivationPlan::inspect(&output_root, context.clone()).unwrap();
-            assert_eq!(plan.tools(), tools);
-            pruned.policy_at(&output_root).unwrap();
-            sources.ensure_current().unwrap();
-            assert_eq!(snapshot(pruned.root().parent().unwrap()), before);
-            eprintln!(
-                "Real prune output {}: owned typed Node/pnpm readiness passed",
-                output_root.display()
+            let output = command.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
             );
-            fs::write(plan.path_prepend().join("../tools/pnpm/resource"), "damage").unwrap();
-            let damaged = snapshot(pruned.root().parent().unwrap());
-            assert!(matches!(
-                ActivationPlan::inspect(&output_root, context.clone()),
-                Err(turborepo_setup::activation::Error::DamagedInventory(_))
-            ));
-            assert_eq!(snapshot(pruned.root().parent().unwrap()), damaged);
+            assert_eq!(snapshot(root), before);
+            let roots = if docker {
+                vec![output_root.join("full"), output_root.join("json")]
+            } else {
+                vec![output_root]
+            };
+            for output_root in roots {
+                for file in ["turbo.lock", ".nvmrc"] {
+                    assert_eq!(
+                        fs::read(output_root.join(file)).unwrap(),
+                        fs::read(root.join(file)).unwrap()
+                    );
+                }
+                assert!(!output_root.join(".turbo").exists());
+                check_failure(
+                    &output_root,
+                    &["setup", "--check", "--tools-only"],
+                    true,
+                    "managed installation is missing; run turbo setup",
+                );
+                // A separate repo-local generation, not copied ignored state.
+                let mut store = turborepo_tool_install::Store::open(&output_root).unwrap();
+                store.reconcile(&tools, stage).unwrap();
+                drop(store);
+                let (code, text) = invoke(
+                    &output_root,
+                    &["setup", "--check", "--tools-only", "--offline"],
+                    true,
+                );
+                if external_system_policy_blocked(code, &text) {
+                    eprintln!(
+                        "TURBO-6277: real pruned fixture check success remains blocked by \
+                         external System npm configuration."
+                    );
+                } else {
+                    assert_eq!(code, 0, "{text}");
+                    assert!(text.contains("Dependencies skipped"), "{text}");
+                }
+                // Owned policy is a test-only typed seam, never a production opt-out.
+                // Inspect the actual prune output and all fixture state without locks.
+                let before = snapshot(pruned.root().parent().unwrap());
+                let sources = Snapshot::capture(&output_root).unwrap();
+                pruned.policy_at(&output_root).unwrap();
+                let plan = ActivationPlan::inspect(&output_root, context.clone()).unwrap();
+                assert_eq!(plan.tools(), tools);
+                pruned.policy_at(&output_root).unwrap();
+                sources.ensure_current().unwrap();
+                assert_eq!(snapshot(pruned.root().parent().unwrap()), before);
+                eprintln!(
+                    "Real prune output {}: owned typed Node/pnpm readiness passed",
+                    output_root.display()
+                );
+                fs::write(plan.path_prepend().join("../tools/pnpm/resource"), "damage").unwrap();
+                let damaged = snapshot(pruned.root().parent().unwrap());
+                assert!(matches!(
+                    ActivationPlan::inspect(&output_root, context.clone()),
+                    Err(turborepo_setup::activation::Error::DamagedInventory(_))
+                ));
+                assert_eq!(snapshot(pruned.root().parent().unwrap()), damaged);
+            }
         }
+        assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
     }
-    assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
     fs::write(current.bin.join("../tools/pnpm/resource"), "damage").unwrap();
     check_failure(
         root,
