@@ -586,6 +586,7 @@ fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
 const PYTHON: Ecosystems = Ecosystems {
     python: true,
     rust: false,
+    go: false,
 };
 const PYPROJECT: &str =
     "[project]\nname = \"app\"\nversion = \"0.1.0\"\n[tool.uv]\nrequired-version = \">=0.13\"\n";
