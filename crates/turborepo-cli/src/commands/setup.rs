@@ -86,6 +86,8 @@ pub enum Error {
     #[error(transparent)]
     UvResolution(#[from] turborepo_setup::uv_resolution::Error),
     #[error(transparent)]
+    Rustup(#[from] turborepo_setup::rustup_provision::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -187,8 +189,8 @@ fn run_with_policy(
         return Err(Error::NotImplemented);
     }
     let eligible = discovery.source_eligibility();
-    if eligible.cargo() || eligible.go() {
-        return Err(Error::Unsupported("non-JavaScript workspace setup"));
+    if eligible.go() {
+        return Err(Error::Unsupported("Go workspace setup"));
     }
     // Python declarations are captured only when experimentalPythonWorkspaces
     // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
@@ -196,6 +198,7 @@ fn run_with_policy(
         discovery.snapshot_root()?.as_std_path(),
         turborepo_setup::lock::Ecosystems {
             python: eligible.python(),
+            rust: eligible.cargo(),
         },
     )?;
     // Never silently: version-manager files are reported, not read as requests.

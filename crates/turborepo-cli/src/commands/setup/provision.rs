@@ -9,6 +9,7 @@ use turborepo_setup::{
     npm_provision::NpmPlan,
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
+    rustup_provision::{RustupPlan, RustupTransport},
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
     uv_resolution::UvTransport,
@@ -22,6 +23,7 @@ pub(super) struct Transports {
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
     pub uv: UvTransport,
+    pub rustup: RustupTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -30,6 +32,7 @@ impl Transports {
             pnpm: PnpmTransport::official(policy)?,
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
             uv: UvTransport::official(policy)?,
+            rustup: RustupTransport::official(policy)?,
         })
     }
 }
@@ -125,9 +128,10 @@ pub(super) struct Plans {
     pub pnpm: Option<PnpmPlan>,
     pub npm: Option<NpmPlan>,
     pub uv: Option<UvPlan>,
+    pub rustup: Option<RustupPlan>,
 }
 
-const SUPPORTED: [&str; 4] = ["node", "npm", "pnpm", "uv"];
+const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "uv", "rustup"];
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -144,7 +148,7 @@ pub(super) fn plans(
         .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, and uv are supported",
+            "only managed Node, npm, pnpm, uv and rustup are supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -192,7 +196,12 @@ pub(super) fn plans(
         }
         None => None,
     };
-    if node.is_none() && uv.is_none() {
+    let rustup = lock
+        .tools()
+        .contains_key("rustup")
+        .then(|| RustupPlan::from_lock(lock, platform))
+        .transpose()?;
+    if node.is_none() && uv.is_none() && rustup.is_none() {
         return Err(Error::Unsupported("turbo.lock selects no managed tools"));
     }
     Ok(Plans {
@@ -200,6 +209,7 @@ pub(super) fn plans(
         pnpm,
         npm,
         uv,
+        rustup,
     })
 }
 
@@ -242,7 +252,9 @@ pub(super) fn lock_report(
 pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
     let declared = snapshot.declarations();
     let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
-    if !declared.contains_key("node") && (js_manager || !declared.contains_key("uv")) {
+    if !declared.contains_key("node")
+        && (js_manager || (!declared.contains_key("uv") && !declared.contains_key("rustup")))
+    {
         return Err(Error::Unsupported(
             if snapshot.ecosystems().python && !js_manager {
                 "a native Node or uv declaration is required"
@@ -261,6 +273,11 @@ pub(super) fn resolve(
     request: turborepo_setup::lock::reconcile::Resolution<'_>,
     sources: &Transports,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
+    if request.version_ids().contains("rustup") {
+        return Err(turborepo_setup::lock::reconcile::Error::Resolution(
+            "resolving Rust toolchain declarations into turbo.lock is not implemented yet".into(),
+        ));
+    }
     runtime
         .block_on(turborepo_setup::native_resolution::resolve(
             request,
@@ -298,7 +315,7 @@ pub(super) fn run(
                 .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, and uv are supported",
+                "only managed Node, npm, pnpm, uv and rustup are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -374,12 +391,14 @@ pub(super) fn run(
         pnpm,
         npm,
         uv,
+        rustup,
     } = plans(&snapshot, lock)?;
     let desired: Vec<_> = [
         node.as_ref().map(NodePlan::inventory_tool),
         pnpm.as_ref().map(PnpmPlan::inventory_tool),
         npm.as_ref().map(NpmPlan::inventory_tool),
         uv.as_ref().map(UvPlan::inventory_tool),
+        rustup.as_ref().map(RustupPlan::inventory_tool),
     ]
     .into_iter()
     .flatten()
@@ -410,47 +429,56 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm, prepared_npm, prepared_uv) = runtime.block_on(async {
-        let recheck = || {
-            preflight()?;
-            revalidate(discovery)?;
-            snapshot.check_guard(&guard)?;
-            Ok::<_, Error>(())
-        };
-        let node = match &node {
-            Some(plan) => {
-                plan.prepare(&store, &desired, &transports.node, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let pnpm = match &pnpm {
-            Some(plan) => {
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let npm = match &npm {
-            Some(plan) => {
-                // npm and pnpm share the exact integrity-verified registry transport.
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let uv = match &uv {
-            Some(plan) => {
-                plan.prepare(&store, &desired, &transports.uv, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        Ok::<_, Error>((node, pnpm, npm, uv))
-    })?;
+    let (prepared_node, prepared_pnpm, prepared_npm, prepared_uv, prepared_rustup) = runtime
+        .block_on(async {
+            let recheck = || {
+                preflight()?;
+                revalidate(discovery)?;
+                snapshot.check_guard(&guard)?;
+                Ok::<_, Error>(())
+            };
+            let node = match &node {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.node, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let pnpm = match &pnpm {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let npm = match &npm {
+                Some(plan) => {
+                    // npm and pnpm share the exact integrity-verified registry transport.
+                    plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let uv = match &uv {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.uv, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let rustup = match &rustup {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.rustup, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            Ok::<_, Error>((node, pnpm, npm, uv, rustup))
+        })?;
     let missing = || turborepo_tool_install::Error::InvalidInventory;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| match tool.id.as_str() {
         "node" => prepared_node
@@ -466,6 +494,10 @@ pub(super) fn run(
             .ok_or_else(missing)?
             .stage(tool, destination),
         "uv" => prepared_uv
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "rustup" => prepared_rustup
             .as_ref()
             .ok_or_else(missing)?
             .stage(tool, destination),
@@ -492,6 +524,7 @@ pub(super) fn run(
                 || (tool.id == "pnpm" && prepared_pnpm.is_none())
                 || (tool.id == "npm" && prepared_npm.is_none())
                 || (tool.id == "uv" && prepared_uv.is_none())
+                || (tool.id == "rustup" && prepared_rustup.is_none())
             {
                 "reused"
             } else {
@@ -506,6 +539,9 @@ pub(super) fn run(
         )
     {
         println!("npm {}: provided by managed Node (bundled)", npm.version);
+    }
+    if rustup.is_some() {
+        println!("rustup is private to this repository; no Rust toolchain was installed.");
     }
     println!(
         "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."

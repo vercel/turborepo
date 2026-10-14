@@ -119,6 +119,7 @@ fn propose(
         pnpm,
         npm,
         uv,
+        rustup,
     } = provision::plans(&sources, &outcome.lock)?;
     let mut desired: Vec<_> = node
         .as_ref()
@@ -128,6 +129,7 @@ fn propose(
     desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(npm.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(uv.as_ref().map(|plan| plan.inventory_tool().clone()));
+    desired.extend(rustup.as_ref().map(|plan| plan.inventory_tool().clone()));
     // Same per-tool reuse as setup's preparation; inspection never writes.
     let (installed, damaged) = match Store::inspect(root) {
         Ok(current) => (current.map(|c| c.tools).unwrap_or_default(), false),

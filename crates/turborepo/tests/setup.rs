@@ -14,6 +14,14 @@ mod no_lock;
 const PENDING: &str = "this setup mode is not implemented";
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
 const DISABLED: &str = "requires root futureFlags.experimentalSetup";
+const UNQUALIFIED: &str = "managed promotion requires macOS or GNU Linux";
+const QUALIFIED: bool = cfg!(all(
+    any(target_arch = "x86_64", target_arch = "aarch64"),
+    any(
+        target_os = "macos",
+        all(target_os = "linux", target_env = "gnu")
+    )
+));
 
 fn write(root: &Path, name: &str, contents: &str) {
     fs::write(root.join(name), contents).expect("write fixture");
@@ -338,14 +346,15 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     ] {
         let words: Vec<_> = ["setup"].into_iter().chain(flags).collect();
         let supported = words.contains(&"--tools-only");
+        // A Cargo workspace without a root rust-toolchain file declares no tool.
         let text = failure(
             root,
             &words,
             false,
-            if supported {
-                "non-JavaScript workspace setup"
-            } else {
-                PENDING
+            match (supported, QUALIFIED) {
+                (false, _) => PENDING,
+                (true, true) => "a native Node declaration is required",
+                (true, false) => UNQUALIFIED,
             },
         );
         if !supported {
@@ -353,11 +362,15 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
         }
         assert!(!text.contains("test run successful"), "{text}");
     }
-    failure(
+    check_failure(
         root,
         &["setup", "--check", "--tools-only"],
         false,
-        "non-JavaScript workspace setup",
+        if QUALIFIED {
+            "managed activation requires turbo.lock"
+        } else {
+            UNQUALIFIED
+        },
     );
     let text = failure(root, &["setup", "--update-lock"], true, "inferred in CI");
     assert!(text.contains("--no-frozen"), "{text}");
