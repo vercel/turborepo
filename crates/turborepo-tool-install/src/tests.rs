@@ -7,6 +7,7 @@ use std::{
 
 use super::*;
 
+mod cleanup;
 mod force;
 mod inherited_child;
 mod inherited_lock;
