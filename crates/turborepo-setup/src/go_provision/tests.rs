@@ -125,6 +125,37 @@ async fn verified_archive_installs_go_and_gofmt_then_reuses_healthy_trees() {
 }
 
 #[tokio::test]
+async fn invalid_complete_cohorts_fail_before_traffic_including_fresh_preparation() {
+    let bytes = archive(true);
+    let platform = Platform::LinuxX64Gnu;
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    let server = LoopbackServer::new([(ROUTE.to_owned(), bytes)], |_| {}).unwrap();
+    let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let store = Store::open(repo.path()).unwrap();
+    let tool = plan.inventory_tool().clone();
+    let mut collision = tool.clone();
+    collision.id = "other".into();
+    let mut invalid = tool.clone();
+    invalid.id = "../invalid".into();
+    for preparation in [Preparation::IfNeeded, Preparation::Fresh] {
+        for desired in [
+            vec![tool.clone(), tool.clone()],
+            vec![tool.clone(), collision.clone()],
+            vec![tool.clone(), invalid.clone()],
+        ] {
+            assert!(matches!(
+                plan.prepare(&store, &desired, &transport, preparation)
+                    .await,
+                Err(Error::Install(_))
+            ));
+            assert_eq!(server.hits(), 0);
+            assert!(Store::inspect(repo.path()).unwrap().is_none());
+        }
+    }
+}
+
+#[tokio::test]
 async fn corrupt_or_incomplete_archives_never_stage() {
     let platform = Platform::LinuxX64Gnu;
     for (locked, served) in [

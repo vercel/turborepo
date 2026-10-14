@@ -113,6 +113,8 @@ impl GoPlan {
         if !desired.contains(&self.tool) {
             return Err(Error::InventoryMismatch);
         }
+        // Fresh skips reuse, never validation of the complete desired cohort.
+        Store::validate_desired(desired)?;
         if preparation == crate::Preparation::IfNeeded
             && store.reusable_tree(&self.tool, desired)?.is_some()
         {
