@@ -118,13 +118,24 @@ fn invoke_raw_options(
         std::os::unix::fs::symlink(which::which("git").expect("host git"), git_path.join("git"))
             .expect("bind fixture git");
     }
+    let path = path.map_or_else(
+        || git_path.clone().into_os_string(),
+        |path| {
+            // Storage still needs Git. Keep the explicit system-tool fixture
+            // directories first; this final directory contains only Git.
+            std::env::join_paths(
+                std::env::split_paths(path).chain(std::iter::once(git_path.clone())),
+            )
+            .expect("fixture PATH")
+        },
+    );
     let before = snapshot(root);
     let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
     command
         .env_clear()
         .current_dir(root)
         .args(words)
-        .env("PATH", path.unwrap_or(git_path.as_os_str()))
+        .env("PATH", path)
         .env("HOME", root.join("home"))
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("TURBO_CONFIG_DIR_PATH", root.join("config"))
@@ -893,11 +904,18 @@ fn verify_system_locks_and_verifies_installed_tools_without_installing() {
     ] {
         assert!(text.contains(expected), "{expected}: {text}");
     }
-    let lock = fs::read_to_string(root.join("turbo.lock")).unwrap();
-    assert!(
-        lock.contains(r#""installation":{"kind":"verify-system","executables":["node"]}"#),
-        "{lock}"
-    );
+    let lock: serde_json::Value =
+        serde_json::from_slice(&fs::read(root.join("turbo.lock")).unwrap()).unwrap();
+    assert_eq!(lock["schemaVersion"], 0);
+    assert_eq!(lock["tools"].as_object().unwrap().len(), 2);
+    for (id, version) in [("node", "24.0.0"), ("pnpm", "10.0.0")] {
+        assert_eq!(lock["tools"][id]["adapter"], id);
+        assert_eq!(lock["tools"][id]["version"], version);
+        assert_eq!(
+            lock["tools"][id]["installation"],
+            serde_json::json!({"kind":"verify-system","executables":[id]}),
+        );
+    }
     assert!(!root.join(".turbo/tools").exists());
 
     // Frozen repeats and checks are read-only and verify the locked versions.
