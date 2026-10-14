@@ -184,3 +184,23 @@ fn test_conflicting_daemon_flags() {
         "expected conflict error in stderr, got: {stderr}"
     );
 }
+
+#[test]
+fn test_managed_repository_reports_argument_errors_like_the_normal_cli() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
+    fs::write(
+        dir.join("turbo.json"),
+        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{}}}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("turbo.lock"), "{}").unwrap();
+    let output = run_turbo(dir, &["run", "build", "--daemon", "--no-daemon"]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot be used with") && !stderr.contains("managed setup"),
+        "{stderr}"
+    );
+}
