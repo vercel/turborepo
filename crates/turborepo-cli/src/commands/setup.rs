@@ -159,6 +159,9 @@ pub enum Error {
     Root(#[from] root::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+    #[cfg(windows)]
+    #[error(transparent)]
+    Signal(#[from] turborepo_signals::listeners::Error),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -241,6 +244,8 @@ impl SetupRequest {
 }
 
 pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
+    #[cfg(windows)]
+    exit_on_relayed_ctrl_c()?;
     let invocation = match args.cwd.as_deref() {
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
@@ -251,6 +256,23 @@ pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
             None,
         )?)
     })
+}
+
+/// Setup runs before turbo's signal handler and has no graceful phase, so a
+/// console Ctrl+C ends it through the default handler. The npm wrapper relays
+/// Ctrl+C over a pipe instead under a package manager terminal; end setup the
+/// same way, so locks release with the process and the transaction resumes.
+#[cfg(windows)]
+fn exit_on_relayed_ctrl_c() -> Result<(), Error> {
+    const STATUS_CONTROL_C_EXIT: u32 = 0xC000_013A;
+    if let Some(mut relay) = turborepo_signals::listeners::wrapper_ctrl_c()? {
+        std::thread::spawn(move || {
+            if let Some(Some(_)) = relay.blocking_recv() {
+                crate::process_exit::exit(STATUS_CONTROL_C_EXIT as i32);
+            }
+        });
+    }
+    Ok(())
 }
 
 // Trusted internal fixture injection only: never a CLI flag, repo URL or env
