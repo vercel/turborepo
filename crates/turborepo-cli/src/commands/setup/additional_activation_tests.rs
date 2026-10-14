@@ -24,6 +24,10 @@ fn artifact() -> Vec<u8> {
 }
 
 fn declare(f: &Fixture, executable: &str) {
+    declare_with(f, executable, &artifact());
+}
+
+fn declare_with(f: &Fixture, executable: &str, artifact: &[u8]) {
     let path = f.owned.root().join("turbo.json");
     let mut config: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     let platform = serde_json::to_value(provision::platform().unwrap()).unwrap();
@@ -32,7 +36,7 @@ fn declare(f: &Fixture, executable: &str) {
     } else {
         json!({"fixture": {"version": "1.2.3", "artifacts": {platform.as_str().unwrap(): {
             "url": "https://downloads.example.test/fixture-1.2.3.tar.gz",
-            "sha256": format!("{:x}", Sha256::digest(artifact())),
+            "sha256": format!("{:x}", Sha256::digest(artifact)),
             "format": "tar-gz", "rootPrefix": "fixture-1.2.3",
             "executables": {executable: "bin/fixture"}}}}})
     };
@@ -43,6 +47,10 @@ fn declare(f: &Fixture, executable: &str) {
 /// Node, pnpm, and the tool installed by local setup. The task's Node runs
 /// the declared tool from the task PATH.
 fn prepared() -> (Fixture, LoopbackServer) {
+    prepared_with("#!/bin/sh\nfixture task > managed-result\n", artifact())
+}
+
+fn prepared_with(node: &str, tool: Vec<u8>) -> (Fixture, LoopbackServer) {
     let mut f = runnable();
     let distribution = f.lock["tools"]["node"]["installation"]["artifacts"]
         .as_object_mut()
@@ -54,13 +62,10 @@ fn prepared() -> (Fixture, LoopbackServer) {
         .as_str()
         .unwrap()
         .to_owned();
-    f.node = archive(
-        &prefix,
-        &[("bin/node", "#!/bin/sh\nfixture task > managed-result\n")],
-    );
+    f.node = archive(&prefix, &[("bin/node", node)]);
     distribution["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&f.node)));
     f.save();
-    declare(&f, "fixture");
+    declare_with(&f, "fixture", &tool);
     let integrity = super::super::first_lock::base64(&sha2::Sha512::digest(&f.pnpm));
     let metadata = json!({"name":"pnpm","version":"10.0.0","dist":{
         "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
@@ -69,7 +74,7 @@ fn prepared() -> (Fixture, LoopbackServer) {
         (f.node_path.clone(), f.node.clone()),
         ("/pnpm/10.0.0".into(), metadata.to_string().into_bytes()),
         ("/pnpm/-/pnpm-10.0.0.tgz".into(), f.pnpm.clone()),
-        ("/fixture-1.2.3.tar.gz".into(), artifact()),
+        ("/fixture-1.2.3.tar.gz".into(), tool),
     ];
     let u = LoopbackServer::new(routes, |_| {}).unwrap();
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
@@ -154,4 +159,22 @@ fn executables_owned_by_built_in_tools_are_rejected_before_any_download() {
     assert!(error.contains("tool declarations are invalid"), "{error}");
     assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
     assert_eq!(u.hits(), 4);
+}
+
+#[test]
+fn task_hashes_follow_the_tool_artifact_and_never_the_clone_location() {
+    const HASH: &str = "#!/bin/sh\nprintf '%s' \"$TURBO_HASH\" > managed-result\n";
+    let mut runs = vec![];
+    // The first two are separate clones with identical declarations.
+    for resource in ["fixture resource", "fixture resource", "other bytes"] {
+        let files = [("bin/fixture", TOOL), ("share/data.txt", resource)];
+        let (f, _u) = prepared_with(HASH, archive("fixture-1.2.3", &files));
+        let tools = select(&f).unwrap().unwrap();
+        let identity = tools.cache_identity().to_owned();
+        runs.push((identity, execute(&f, "strict", tools)));
+    }
+    assert!(!runs[0].1.is_empty());
+    assert_eq!(runs[0], runs[1]);
+    assert_ne!(runs[0].0, runs[2].0);
+    assert_ne!(runs[0].1, runs[2].1);
 }
