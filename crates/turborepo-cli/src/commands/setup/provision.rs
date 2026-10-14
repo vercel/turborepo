@@ -6,9 +6,9 @@ use std::{fs, io, path::Path, process::Command};
 
 use turborepo_setup::{
     artifact_provision::{ArtifactPlan, ArtifactTransport},
-    lock::{Platform, Snapshot, additional},
     go_provision::GoPlan,
     go_resolution::GoTransport,
+    lock::{Platform, Snapshot, additional},
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -181,7 +181,8 @@ pub(super) fn plans(
     }
     if lock.tools().iter().any(|(id, tool)| !supported(id, tool)) {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are supported",
+            "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are \
+             supported",
         ));
     }
     let node = if lock.tools().contains_key("node") {
@@ -408,7 +409,8 @@ pub(super) fn run(
             && lock.tools().iter().any(|(id, tool)| !supported(id, tool))
         {
             return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are supported",
+                "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are \
+                 supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
