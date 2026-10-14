@@ -38,11 +38,25 @@ pub(super) fn platform() -> Result<Platform, Error> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "x86_64") => Ok(Platform::MacosX64),
         ("macos", "aarch64") => Ok(Platform::MacosArm64),
-        ("linux", "x86_64") if cfg!(target_env = "gnu") => Ok(Platform::LinuxX64Gnu),
-        ("linux", "aarch64") if cfg!(target_env = "gnu") => Ok(Platform::LinuxArm64Gnu),
+        ("linux", "x86_64") => glibc_host(Platform::LinuxX64Gnu),
+        ("linux", "aarch64") => glibc_host(Platform::LinuxArm64Gnu),
         _ => Err(Error::Unsupported(
             "managed promotion requires macOS or GNU Linux",
         )),
+    }
+}
+
+/// Released Linux `turbo` binaries are musl-static, so GNU artifacts follow
+/// the host's C library rather than this binary's target.
+fn glibc_host(platform: Platform) -> Result<Platform, Error> {
+    use turborepo_platform::Libc;
+    match turborepo_platform::host_libc() {
+        Ok(Some(Libc::Glibc { .. })) => Ok(platform),
+        Ok(Some(Libc::Musl)) => Err(Error::MuslHost),
+        Ok(None) => Err(Error::Unsupported(
+            "managed promotion requires macOS or GNU Linux",
+        )),
+        Err(error) => Err(Error::UnclassifiedLibc(error)),
     }
 }
 
