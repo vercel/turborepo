@@ -593,55 +593,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn read_only_upload_response_disables_uploads_but_keeps_reads() -> Result<()> {
-        let server = httpmock::MockServer::start_async().await;
-        let first_put = server
-            .mock_async(|when, then| {
-                when.method(httpmock::Method::PUT)
-                    .path("/v8/artifacts/first");
-                then.status(403)
-                    .header("content-type", "application/json")
-                    .body(format!(
-                        r#"{{"error":{{"code":"{}","message":"read only"}}}}"#,
-                        turborepo_api_client::REMOTE_CACHE_READ_ONLY_CODE
-                    ));
-            })
-            .await;
-        let second_put = server
-            .mock_async(|when, then| {
-                when.method(httpmock::Method::PUT)
-                    .path("/v8/artifacts/second");
-                then.status(202);
-            })
-            .await;
-        let remote_hit = mock_remote_hit(&server).await;
-
-        let root = tempdir()?;
-        let root = AbsoluteSystemPathBuf::try_from(root.path())?;
-        let file = AnchoredSystemPathBuf::from_raw("output.txt")?;
-        std::fs::write(root.resolve(&file), "content")?;
-        let cache = mock_server_multiplexer(&both_write_opts(), &root, &server)?;
-
-        for hash in ["first", "second"] {
-            cache
-                .put(&root, hash, std::slice::from_ref(&file), 1)
-                .await?;
-        }
-        first_put.assert_calls_async(1).await;
-        second_put.assert_calls_async(0).await;
-        assert_eq!(
-            cache.exists("second").await?.unwrap().source,
-            CacheSource::Local
-        );
-        assert_eq!(
-            cache.exists("remote-hit").await?.unwrap().source,
-            CacheSource::Remote
-        );
-        remote_hit.assert_calls_async(1).await;
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn disable_remote_writes_skips_uploads_and_respects_read_only_config() -> Result<()> {
         let server = httpmock::MockServer::start_async().await;
         let put = server

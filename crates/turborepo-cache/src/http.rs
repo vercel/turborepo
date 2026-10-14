@@ -34,8 +34,8 @@ const WRITE_FORBIDDEN_MESSAGE: &str = "Remote cache rejected an upload with 403 
 /// Why uploads were disabled for the rest of the run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WritesDisabledReason {
-    /// The server reported a read-only token. This is the intended experience
-    /// for such tokens, so it is not a warning.
+    /// The status endpoint reported a read-only token. This is the intended
+    /// experience for such tokens, so it is not a warning.
     ReadOnly,
     /// An upload was still forbidden after token recovery.
     Forbidden,
@@ -378,25 +378,15 @@ impl HTTPCache {
                             self.disable_after_forbidden_for(access);
                             Err(CacheError::ForbiddenRemoteCacheWrite)
                         }
-                        result => result.map_err(|err| self.convert_operation_error(hash, err)),
+                        result => result.map_err(|err| Self::convert_api_error(hash, err)),
                     }
                 } else {
                     self.disable_after_forbidden_for(access);
                     Err(CacheError::ForbiddenRemoteCacheWrite)
                 }
             }
-            Err(e) => Err(self.convert_operation_error(hash, e)),
+            Err(e) => Err(Self::convert_api_error(hash, e)),
         }
-    }
-
-    /// A read-only token can never write, so token recovery is skipped and
-    /// only uploads are disabled.
-    fn convert_operation_error(&self, hash: &str, err: turborepo_api_client::Error) -> CacheError {
-        if let turborepo_api_client::Error::RemoteCacheReadOnly { .. } = err {
-            self.disable_writes_read_only();
-            return CacheError::ForbiddenRemoteCacheWrite;
-        }
-        Self::convert_api_error(hash, err)
     }
 
     #[tracing::instrument(skip_all)]
@@ -1590,42 +1580,33 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_read_only_upload_skips_recovery_and_keeps_reads() {
+    async fn test_read_only_status_skips_uploads_and_keeps_reads() {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
         let cache = cache_with_token("read-only-token");
+        assert!(cache.disable_writes_read_only());
         let attempts = AtomicUsize::new(0);
-        for hash in ["first", "second"] {
-            let result = cache
-                .execute_with_access_and_recovery(
-                    super::RemoteAccess::Write,
-                    hash,
-                    |_| {
-                        attempts.fetch_add(1, Ordering::SeqCst);
-                        async {
-                            Err::<(), _>(turborepo_api_client::Error::RemoteCacheReadOnly {
-                                message: "read only".into(),
-                            })
-                        }
-                    },
-                    |_| async {
-                        panic!("a read-only token must not be recovered");
-                        #[allow(unreachable_code)]
-                        Ok::<Option<SecretString>, ()>(None)
-                    },
-                )
-                .await;
-            assert!(matches!(
-                result,
-                Err(crate::CacheError::ForbiddenRemoteCacheWrite)
-            ));
-        }
-        // The second upload is skipped without contacting the server.
-        assert_eq!(attempts.load(Ordering::SeqCst), 1);
-        assert_eq!(
-            cache.writes_disabled.get(),
-            Some(&super::WritesDisabledReason::ReadOnly)
-        );
+        let result = cache
+            .execute_with_access_and_recovery(
+                super::RemoteAccess::Write,
+                "hash",
+                |_| {
+                    attempts.fetch_add(1, Ordering::SeqCst);
+                    async { Ok::<_, turborepo_api_client::Error>(()) }
+                },
+                |_| async {
+                    panic!("skipped uploads must not recover");
+                    #[allow(unreachable_code)]
+                    Ok::<Option<SecretString>, ()>(None)
+                },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        // The upload is skipped without contacting the server.
+        assert_eq!(attempts.load(Ordering::SeqCst), 0);
         assert!(!cache.is_disabled());
         assert_eq!(successful_read(&cache).await.unwrap(), "read");
     }
