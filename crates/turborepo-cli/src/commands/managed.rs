@@ -139,15 +139,20 @@ impl ManagedEnvironment for ManagedTools {
 fn qualified_libc(host: Option<turborepo_platform::Libc>) -> Result<Libc, String> {
     match host {
         Some(turborepo_platform::Libc::Glibc { version }) => Ok(Libc::Gnu { abi: version }),
-        None if cfg!(target_os = "macos") => Ok(Libc::None),
+        None if cfg!(any(target_os = "macos", windows)) => Ok(Libc::None),
         _ => Err("managed Node/pnpm run is unsupported on this host".into()),
     }
 }
 
 /// Conservative native execution identity. No readiness-only/unprobed labels.
-/// These initial adapters are supported only on native macOS and GNU Linux.
+/// These initial adapters are supported only on native macOS, GNU Linux and
+/// Windows x64. Windows arm64 is unqualified and never borrows x64 artifacts.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
-    if !cfg!(any(target_os = "macos", target_os = "linux")) {
+    if !cfg!(any(
+        target_os = "macos",
+        target_os = "linux",
+        all(windows, target_arch = "x86_64")
+    )) {
         return Err("managed Node/pnpm run is unsupported on this host".into());
     }
     // Released Linux binaries are musl-static; their target is not the host's
@@ -207,6 +212,25 @@ mod tests {
             Libc::Gnu { abi: "2.39".into() }
         );
         assert!(qualified_libc(Some(turborepo_platform::Libc::Musl)).is_err());
-        assert_eq!(qualified_libc(None).is_ok(), cfg!(target_os = "macos"));
+        assert_eq!(
+            qualified_libc(None).is_ok(),
+            cfg!(any(target_os = "macos", windows))
+        );
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use turborepo_setup::lock::Platform;
+
+    #[test]
+    fn only_windows_x64_qualifies_for_managed_execution() {
+        let context = super::context();
+        if cfg!(target_arch = "x86_64") {
+            let platform = context.map(|c| c.artifact_platform());
+            assert!(matches!(platform, Ok(Platform::WindowsX64)), "{platform:?}");
+        } else {
+            assert!(context.is_err());
+        }
     }
 }

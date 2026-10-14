@@ -14,6 +14,8 @@ mod acl;
 pub(crate) mod authorization;
 mod check;
 mod cleanup;
+#[cfg(windows)]
+mod dacl;
 mod effective;
 mod lock_diagnostics;
 mod no_lock;

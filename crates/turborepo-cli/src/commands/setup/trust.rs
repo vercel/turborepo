@@ -2,11 +2,12 @@
 //! or execution capability. Run consumers must additionally gate managed mode,
 //! validate declarations/lock and revalidate immediately before use.
 //! Same-user hostile mutation during a transaction is outside the Store
-//! contract.
+//! contract. Unix privacy uses owner, mode and macOS ACL checks; Windows uses
+//! owner-only DACLs read from each opened handle (see `dacl`).
 
 use std::{
     fs::{self, File},
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Component, Path, PathBuf},
 };
 
@@ -22,6 +23,7 @@ const MAX_RECORDS: usize = 4096;
 #[serde(deny_unknown_fields)]
 struct Installation {
     root: PathBuf,
+    /// Unix device and inode, or Windows volume serial number and file index.
     device: u64,
     inode: u64,
     manifest_sha256: String,
@@ -70,43 +72,79 @@ fn read(path: &Path, private: bool) -> io::Result<Option<Vec<u8>>> {
     if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.len() > LIMIT {
         return Err(unsafe_state());
     }
+    let mut file = open(path, &metadata, private)?;
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(LIMIT + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > LIMIT {
+        return Err(unsafe_state());
+    }
+    Ok(Some(bytes))
+}
+
+/// Opens the checked path without following links and rechecks the handle.
+#[cfg(unix)]
+fn open(path: &Path, metadata: &fs::Metadata, private: bool) -> io::Result<File> {
+    use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+    if private
+        && (metadata.uid() != unsafe { libc::geteuid() }
+            || metadata.mode() & 0o077 != 0
+            || metadata.nlink() != 1)
+    {
+        return Err(unsafe_state());
+    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    let opened = file.metadata()?;
+    if (opened.dev(), opened.ino()) != (metadata.dev(), metadata.ino()) {
+        return Err(unsafe_state());
+    }
+    #[cfg(target_os = "macos")]
+    if private {
+        super::acl::check(&file, true)?;
+    }
+    Ok(file)
+}
+
+/// The opened handle, not the earlier path metadata, is checked and read.
+#[cfg(windows)]
+fn open(path: &Path, _: &fs::Metadata, private: bool) -> io::Result<File> {
+    let file = super::dacl::open(path, false)?;
+    if private {
+        if super::dacl::information(&file)?.nNumberOfLinks != 1 {
+            return Err(unsafe_state());
+        }
+        super::dacl::check(&file)?;
+    }
+    Ok(file)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn open(_: &Path, _: &fs::Metadata, _: bool) -> io::Result<File> {
+    Err(unsafe_state())
+}
+
+/// Repository identity: device and inode, or volume serial number and file
+/// index on Windows. A same-path re-clone gets a new identity.
+fn identity(path: &Path) -> io::Result<(u64, u64)> {
     #[cfg(unix)]
     {
-        use std::{
-            io::Read,
-            os::unix::fs::{MetadataExt, OpenOptionsExt},
-        };
-        if private
-            && (metadata.uid() != unsafe { libc::geteuid() }
-                || metadata.mode() & 0o077 != 0
-                || metadata.nlink() != 1)
-        {
-            return Err(unsafe_state());
-        }
-        let mut file = fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(path)?;
-        let opened = file.metadata()?;
-        if (opened.dev(), opened.ino()) != (metadata.dev(), metadata.ino()) {
-            return Err(unsafe_state());
-        }
-        #[cfg(target_os = "macos")]
-        if private {
-            super::acl::check(&file, true)?;
-        }
-        let mut bytes = Vec::new();
-        Read::by_ref(&mut file)
-            .take(LIMIT + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() as u64 > LIMIT {
-            return Err(unsafe_state());
-        }
-        Ok(Some(bytes))
+        use std::os::unix::fs::MetadataExt;
+        let metadata = fs::metadata(path)?;
+        Ok((metadata.dev(), metadata.ino()))
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
     {
-        let _ = private;
+        let info = super::dacl::information(&super::dacl::open(path, true)?)?;
+        let index = (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow);
+        Ok((info.dwVolumeSerialNumber.into(), index))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = path;
         Err(unsafe_state())
     }
 }
@@ -132,7 +170,16 @@ fn private_directory(path: &Path) -> io::Result<()> {
         super::acl::check(&File::open(path)?, true)?;
         Ok(())
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        match super::dacl::create_directory(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+        super::dacl::check(&super::dacl::open(path, true)?)
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = path;
         Err(unsafe_state())
@@ -143,7 +190,7 @@ impl TrustStore {
     // The caller chooses a user location, never a repository-authored path.
     // No writes until publication. Missing user state simply prohibits reuse.
     pub(crate) fn new(base: &Path, root: &Path) -> io::Result<Self> {
-        if !cfg!(unix)
+        if !cfg!(any(unix, windows))
             || !base.is_absolute()
             || base.components().any(|c| matches!(c, Component::ParentDir))
         {
@@ -196,6 +243,17 @@ impl TrustStore {
                     }
                     #[cfg(target_os = "macos")]
                     super::acl::check(&File::open(path)?, path == self.directory)?;
+                    // Windows checks only the record directory's descriptor;
+                    // ancestors only need to be real directories. Junctions
+                    // are symlinks above; reject every other reparse point.
+                    #[cfg(windows)]
+                    if path == self.directory {
+                        super::dacl::check(&super::dacl::open(path, true)?)?;
+                    } else if std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400
+                        != 0
+                    {
+                        return Err(unsafe_state());
+                    }
                     #[cfg(unix)]
                     {
                         use std::os::unix::fs::MetadataExt;
@@ -254,7 +312,8 @@ impl TrustStore {
         &self,
         inspect: impl FnOnce() -> io::Result<Option<turborepo_tool_install::Current>>,
     ) -> io::Result<Option<Installation>> {
-        let path = self.root.join(".turbo/tools/manifest.json");
+        // Split components: `/` is not a separator under a `\\?\` root.
+        let path = self.root.join(".turbo").join("tools").join("manifest.json");
         let Some(before) = read(&path, false)? else {
             return Ok(None);
         };
@@ -264,24 +323,17 @@ impl TrustStore {
         if read(&path, false)?.as_deref() != Some(before.as_slice()) {
             return Err(unsafe_state());
         }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            let metadata = fs::metadata(&self.root)?;
-            Ok(Some(Installation {
-                root: self.root.clone(),
-                device: metadata.dev(),
-                inode: metadata.ino(),
-                manifest_sha256: hash(&before),
-                bin: current.bin,
-                tools: current.tools,
-            }))
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = current;
-            Err(unsafe_state())
-        }
+        let (device, inode) = identity(&self.root)?;
+        Ok(Some(Installation {
+            root: self.root.clone(),
+            device,
+            inode,
+            manifest_sha256: hash(&before),
+            // Windows records the PATH spelling that activation uses, because
+            // cmd.exe cannot resolve `%~dp0..` under `\\?\`. No-op on Unix.
+            bin: dunce::simplified(&current.bin).to_path_buf(),
+            tools: current.tools,
+        }))
     }
 
     /// Setup-only reuse of previously verified bytes. Deliberately ignores lock
@@ -386,15 +438,9 @@ impl TrustStore {
             if path != self.directory.join(format!("{name}.json")) {
                 continue;
             }
-            let stale = match fs::metadata(&installation.root) {
+            let stale = match identity(&installation.root) {
                 Err(error) => error.kind() == io::ErrorKind::NotFound,
-                #[cfg(unix)]
-                Ok(metadata) => {
-                    use std::os::unix::fs::MetadataExt;
-                    (metadata.dev(), metadata.ino()) != (installation.device, installation.inode)
-                }
-                #[cfg(not(unix))]
-                Ok(_) => false,
+                Ok(found) => found != (installation.device, installation.inode),
             };
             // A concurrent setup may have just replaced this record; keep it.
             if stale && read(&path, true)?.as_deref() == Some(bytes.as_slice()) {
@@ -403,7 +449,7 @@ impl TrustStore {
             }
         }
         if removed > 0 {
-            File::open(&self.directory)?.sync_all()?;
+            sync_directory(&self.directory)?;
         }
         Ok(removed)
     }
@@ -411,11 +457,15 @@ impl TrustStore {
     fn record(&self, store: &Store) -> io::Result<()> {
         self.load()?;
         let installation = self.installation(store)?.ok_or_else(unsafe_state)?;
+        self.write_record(installation)
+    }
+
+    fn write_record(&self, installation: Installation) -> io::Result<()> {
         let Some(lock) = read(&self.root.join("turbo.lock"), false)? else {
             // Ephemeral setup succeeds without creating or retaining locked-run
             // authority. A future committed lock requires setup again.
             return match fs::remove_file(self.path()) {
-                Ok(()) => File::open(&self.directory)?.sync_all(),
+                Ok(()) => sync_directory(&self.directory),
                 Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
                 Err(error) => Err(error),
             };
@@ -447,13 +497,32 @@ impl TrustStore {
             private_directory(&path)?;
         }
         private_directory(&self.directory)?;
+        #[cfg(not(windows))]
         let mut staged = tempfile::NamedTempFile::new_in(&self.directory)?;
+        #[cfg(windows)]
+        let mut staged =
+            tempfile::Builder::new().make_in(&self.directory, super::dacl::create_file)?;
         #[cfg(target_os = "macos")]
         super::acl::check(staged.as_file(), true)?;
+        #[cfg(windows)]
+        super::dacl::check(staged.as_file())?;
         staged.write_all(&bytes)?;
         staged.as_file().sync_all()?;
         staged.persist(self.path()).map_err(|e| e.error)?;
-        File::open(&self.directory)?.sync_all()?;
-        Ok(())
+        sync_directory(&self.directory)
     }
 }
+
+/// A read-only Windows directory handle cannot be flushed. A rename or removal
+/// lost in a crash only makes the next setup verify artifacts again.
+fn sync_directory(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    File::open(path)?.sync_all()?;
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+#[cfg(all(test, windows))]
+#[path = "trust_windows_tests.rs"]
+mod windows_tests;
