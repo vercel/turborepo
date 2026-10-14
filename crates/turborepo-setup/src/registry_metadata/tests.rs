@@ -361,3 +361,45 @@ fn mirror_tarballs_are_accepted_only_for_their_mirror_and_never_recorded() {
     let mirror = Some("https://mirror.example/npm");
     assert!(parse_release_from(&canonical, Manager::Pnpm, "10.0.0", None, mirror).is_ok());
 }
+
+#[test]
+fn scoped_native_tarballs_keep_exact_mirror_paths_identity_and_canonical_provenance() {
+    let (name, version, base) = (
+        "@pnpm/exe.linux-x64",
+        "12.11.2",
+        "https://mirror.example/npm",
+    );
+    let path = tarball_path(name, version);
+    let mut value = document(name, version);
+    value["dist"]["tarball"] = json!(format!("{base}/{path}"));
+    let bytes = serde_json::to_vec(&value).unwrap();
+    let parsed =
+        parse_package_from(&bytes, Manager::Pnpm, name, version, None, Some(base)).unwrap();
+    assert_eq!(parsed.tarball, format!("https://registry.npmjs.org/{path}"));
+    assert_eq!(parsed.integrity.digest, SHA512);
+    for mirror in [
+        None,
+        Some("https://other.example/npm"),
+        Some("https://mirror.example"),
+    ] {
+        assert_eq!(
+            parse_package_from(&bytes, Manager::Pnpm, name, version, None, mirror).unwrap_err(),
+            InvalidTarball
+        );
+    }
+    assert_eq!(
+        parse_package_from(
+            &bytes,
+            Manager::Pnpm,
+            "@pnpm/exe.darwin-arm64",
+            version,
+            None,
+            Some(base)
+        )
+        .unwrap_err(),
+        IdentityMismatch
+    );
+    value["dist"]["tarball"] = json!(format!("https://registry.npmjs.org/{path}"));
+    let canonical = serde_json::to_vec(&value).unwrap();
+    assert!(parse_package_from(&canonical, Manager::Pnpm, name, version, None, Some(base)).is_ok());
+}
