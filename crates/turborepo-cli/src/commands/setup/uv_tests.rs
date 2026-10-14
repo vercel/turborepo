@@ -276,13 +276,19 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
         assert_eq!(run(&owned, &upstream, flags).unwrap(), 0);
     }
     assert_eq!(upstream.hits(), hits);
+    let committed = fs::read(owned.root().join("turbo.lock")).unwrap();
     fs::write(owned.root().join(".python-version"), "3.13\n").unwrap();
     match run(&owned, &upstream, FROZEN) {
-        Err(Error::Reconcile(reconcile::Error::Drift(ids))) => {
-            assert_eq!(ids.into_iter().collect::<Vec<_>>(), ["python"]);
+        Err(Error::LockDiagnostics(lock_diagnostics::Error::Drift(locations))) => {
+            assert_eq!(locations, "python: .python-version");
         }
         other => panic!("expected named Python drift, got {other:?}"),
     }
+    assert_eq!(upstream.hits(), hits);
+    assert_eq!(
+        fs::read(owned.root().join("turbo.lock")).unwrap(),
+        committed
+    );
     assert_eq!(run(&owned, &upstream, LOCAL).unwrap(), 0);
     let lock = locked(&owned).unwrap();
     assert_eq!(lock.tools()["python"].version, "3.13.1");
