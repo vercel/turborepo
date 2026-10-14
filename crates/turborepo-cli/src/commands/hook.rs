@@ -19,7 +19,7 @@ use crate::{cli::HookShell, commands::setup::trust::TrustStore};
 
 /// Exported so nested shells agree on what the hook added. Internal only.
 const STATE: &str = "__TURBO_HOOK_STATE";
-const SEPARATOR: char = ':';
+const SEPARATOR: char = if cfg!(windows) { ';' } else { ':' };
 
 const BASH: &str = r#"_turbo_hook() {
   local previous_exit_status=$?
@@ -46,6 +46,27 @@ typeset -ag chpwd_functions
 if (( ! ${chpwd_functions[(I)_turbo_hook]} )); then
   chpwd_functions=(_turbo_hook $chpwd_functions)
 fi
+"#;
+
+// Redefining the function replaces its handlers, so sourcing twice is safe.
+const FISH: &str = r#"function _turbo_hook --on-event fish_prompt --on-variable PWD
+  @EXE@ hook fish --export | source
+end
+"#;
+
+// Windows PowerShell 5.1 and PowerShell 7 have no directory hook, so wrap the
+// prompt once. The original prompt runs first so it still sees the user's `$?`.
+const POWERSHELL: &str = r#"if ($null -eq $global:__TurboHookPrompt) {
+  $global:__TurboHookPrompt = $function:prompt
+  function global:prompt {
+    $turboPrompt = & $global:__TurboHookPrompt
+    $turboExitCode = $global:LASTEXITCODE
+    $turboHook = (& @EXE@ hook powershell --export) -join "`n"
+    if ($turboHook) { Invoke-Expression $turboHook }
+    $global:LASTEXITCODE = $turboExitCode
+    $turboPrompt
+  }
+}
 "#;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -143,8 +164,10 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
         let template = match shell {
             HookShell::Bash => BASH,
             HookShell::Zsh => ZSH,
+            HookShell::Fish => FISH,
+            HookShell::PowerShell => POWERSHELL,
         };
-        template.replace("@EXE@", &quote(&exe))
+        template.replace("@EXE@", &quote(shell, &exe))
     };
     match std::io::stdout().lock().write_all(output.as_bytes()) {
         Ok(()) => 0,
@@ -188,7 +211,9 @@ fn changes(
         return Changes::default();
     }
 
-    let (status, bin, reason) = if !enabled(&root) {
+    // Setup records trusted roots only on Unix so far, so `turbo setup` cannot
+    // help elsewhere: stay off rather than print a notice.
+    let (status, bin, reason) = if !cfg!(unix) || !enabled(&root) {
         (Status::Off, None, None)
     } else {
         match trust.and_then(|trust| trust.recorded().map_err(|e| e.to_string())) {
@@ -338,27 +363,54 @@ fn remove(path: &str, bin: &str) -> String {
 
 fn render(shell: HookShell, changes: &Changes) -> String {
     let mut out = String::new();
-    match shell {
-        HookShell::Bash | HookShell::Zsh => {
-            if let Some(path) = &changes.path {
-                let _ = writeln!(out, "export PATH={};", quote(path));
-            }
-            match &changes.state {
-                Some(Some(state)) => {
-                    let _ = writeln!(out, "export {STATE}={};", quote(state));
-                }
-                Some(None) => {
-                    let _ = writeln!(out, "unset {STATE};");
-                }
-                None => {}
-            }
+    let mut set = |name: &str, value: &str| {
+        let value = quote(shell, value);
+        let _ = match shell {
+            HookShell::Bash | HookShell::Zsh => writeln!(out, "export {name}={value};"),
+            // fish splits PATH on `:` like the environment does.
+            HookShell::Fish => writeln!(out, "set -gx {name} {value};"),
+            HookShell::PowerShell => writeln!(out, "$env:{name} = {value}"),
+        };
+    };
+    if let Some(path) = &changes.path {
+        set("PATH", path);
+    }
+    match &changes.state {
+        Some(Some(state)) => set(STATE, state),
+        Some(None) => {
+            let _ = match shell {
+                HookShell::Bash | HookShell::Zsh => writeln!(out, "unset {STATE};"),
+                HookShell::Fish => writeln!(out, "set -e {STATE};"),
+                HookShell::PowerShell => writeln!(
+                    out,
+                    "Remove-Item -LiteralPath Env:{STATE} -ErrorAction SilentlyContinue"
+                ),
+            };
         }
+        None => {}
     }
     out
 }
 
-fn quote(value: &str) -> String {
-    format!("'{}'", value.replace('\'', r"'\''"))
+fn quote(shell: HookShell, value: &str) -> String {
+    let mut quoted = String::from("'");
+    for c in value.chars() {
+        match (shell, c) {
+            (HookShell::Bash | HookShell::Zsh, '\'') => quoted.push_str(r"'\''"),
+            (HookShell::Fish, '\'' | '\\') => {
+                quoted.push('\\');
+                quoted.push(c);
+            }
+            // PowerShell also closes single quotes with typographic quotes.
+            (HookShell::PowerShell, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') => {
+                quoted.push(c);
+                quoted.push(c);
+            }
+            _ => quoted.push(c),
+        }
+    }
+    quoted.push('\'');
+    quoted
 }
 
 #[cfg(test)]
@@ -366,13 +418,53 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
+    /// Writes test PATHs with `:` and converts them to the native separator.
+    fn p(path: &str) -> String {
+        path.replace(':', &SEPARATOR.to_string())
+    }
+
     #[test]
     fn path_edits_round_trip_exactly_and_keep_user_changes() {
         for original in ["", "/usr/bin", "/a:/b", "/bin:/a:/bin", "/a::/b"] {
-            assert_eq!(remove(&prepend(original, "/bin"), "/bin"), original);
+            let original = p(original);
+            assert_eq!(remove(&prepend(&original, "/bin"), "/bin"), original);
         }
-        assert_eq!(remove("/mine:/tools:/a", "/tools"), "/mine:/a");
-        assert_eq!(remove("/a:/b", "/tools"), "/a:/b");
+        assert_eq!(remove(&p("/mine:/tools:/a"), "/tools"), p("/mine:/a"));
+        assert_eq!(remove(&p("/a:/b"), "/tools"), p("/a:/b"));
+    }
+
+    #[test]
+    fn every_shell_quotes_and_applies_the_same_changes() {
+        let changes = Changes {
+            path: Some(r"/it's\here".into()),
+            state: Some(None),
+            notice: None,
+        };
+        assert_eq!(
+            render(HookShell::Bash, &changes),
+            "export PATH='/it'\\''s\\here';\nunset __TURBO_HOOK_STATE;\n"
+        );
+        assert_eq!(
+            render(HookShell::Fish, &changes),
+            "set -gx PATH '/it\\'s\\\\here';\nset -e __TURBO_HOOK_STATE;\n"
+        );
+        assert_eq!(
+            render(HookShell::PowerShell, &changes),
+            "$env:PATH = '/it''s\\here'\nRemove-Item -LiteralPath Env:__TURBO_HOOK_STATE \
+             -ErrorAction SilentlyContinue\n"
+        );
+        assert_eq!(
+            quote(HookShell::PowerShell, "a\u{2019}b"),
+            "'a\u{2019}\u{2019}b'"
+        );
+        let state = Changes {
+            state: Some(Some("1;x".into())),
+            ..Default::default()
+        };
+        assert_eq!(
+            render(HookShell::PowerShell, &state),
+            "$env:__TURBO_HOOK_STATE = '1;x'\n"
+        );
     }
 
     #[test]
@@ -438,11 +530,11 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let left = changes(
             Some(state),
-            "/mine:/repo/bin:/usr/bin",
+            &p("/mine:/repo/bin:/usr/bin"),
             Some(temp.path()),
             None,
         );
-        assert_eq!(left.path.as_deref(), Some("/mine:/usr/bin"));
+        assert_eq!(left.path, Some(p("/mine:/usr/bin")));
         assert_eq!(left.state, Some(None));
         assert_eq!(
             changes(None, "/usr/bin", Some(temp.path()), None),
