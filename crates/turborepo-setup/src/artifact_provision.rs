@@ -147,7 +147,7 @@ impl ArtifactPlan {
         if !tool.options.is_empty()
             || artifacts.contains_key(&Platform::Any)
             || artifact.destination.is_some()
-            || binary != artifact.root_prefix.is_none()
+            || (binary && artifact.root_prefix.is_some())
             || (binary && artifact.executables.len() != 1)
             || artifact
                 .root_prefix
@@ -241,6 +241,7 @@ impl ArtifactPlan {
             source,
         };
         let required: Vec<_> = self.tool.executables.values().map(String::as_str).collect();
+        // Without a `rootPrefix`, entries sit at the archive's top level.
         let root = self.artifact.root_prefix.as_deref().unwrap_or_default();
         let limits = turborepo_archive::Limits::new(MAX_EXTRACTED_BYTES, 100_000, 4096, 64)
             .map_err(unpack)?;

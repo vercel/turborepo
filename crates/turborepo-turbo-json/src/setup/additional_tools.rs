@@ -86,12 +86,14 @@ pub struct RawAdditionalToolArtifact {
     /// `binary` for a single executable file, or the archive format.
     #[deserializable(required)]
     pub format: Format,
-    /// The single top-level directory that contains every archive entry.
-    /// Required for archives and not allowed for binaries.
+    /// The single top-level directory that contains every archive entry. Omit
+    /// it for an archive whose entries sit at its top level. Not allowed for
+    /// binaries.
     #[serde(rename = "rootPrefix", skip_serializing_if = "Option::is_none")]
     pub root_prefix: Option<Spanned<String>>,
-    /// Executable names mapped to paths relative to `rootPrefix`. A binary has
-    /// exactly one entry, which names where the file is installed.
+    /// Executable names mapped to paths relative to `rootPrefix`, or to the
+    /// archive's top level without one. A binary has exactly one entry, which
+    /// names where the file is installed.
     #[deserializable(required)]
     pub executables: Executables,
 }
@@ -219,14 +221,8 @@ fn validate_artifact(raw: &RawAdditionalToolArtifact) -> Result<(), Invalid<'_>>
             &raw.format,
             "a binary maps exactly one executable",
         )?,
-        (_, None) => {
-            return Err((
-                &raw.format,
-                "archives require a `rootPrefix`, the single top-level directory that contains \
-                 every entry"
-                    .into(),
-            ));
-        }
+        // Entries at the archive's top level, such as protoc's release zips.
+        (_, None) => {}
         (_, Some(prefix)) => ensure(
             portable_path(prefix) && !prefix.contains('/'),
             prefix,

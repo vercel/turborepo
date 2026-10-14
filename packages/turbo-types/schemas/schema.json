@@ -263,7 +263,7 @@
       "required": ["executables", "format", "sha256", "url"],
       "properties": {
         "executables": {
-          "description": "Executable names mapped to paths relative to `rootPrefix`. A binary has exactly one entry, which names where the file is installed.",
+          "description": "Executable names mapped to paths relative to `rootPrefix`, or to the archive's top level without one. A binary has exactly one entry, which names where the file is installed.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/String"
@@ -278,7 +278,7 @@
           ]
         },
         "rootPrefix": {
-          "description": "The single top-level directory that contains every archive entry. Required for archives and not allowed for binaries.",
+          "description": "The single top-level directory that contains every archive entry. Omit it for an archive whose entries sit at its top level. Not allowed for binaries.",
           "anyOf": [
             {
               "$ref": "#/definitions/String"
