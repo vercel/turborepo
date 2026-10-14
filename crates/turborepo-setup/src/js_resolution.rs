@@ -88,27 +88,22 @@ pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Resul
     if tool.adapter != id || !tool.options.is_empty() {
         return Err(invalid());
     }
-    let mappings = if declaration.manager == Manager::Npm {
-        [("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")]
-    } else {
-        [("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")]
-    };
     for parts in artifacts.values() {
         let artifact = parts.values().next().ok_or_else(invalid)?;
-        let paths = &artifact.executables;
         if parts.len() != 1
             || artifact.url != format!("https://registry.npmjs.org/{id}/-/{id}-{version}.tgz")
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || paths.get(id).map(String::as_str) != Some(mappings[0].1)
-            || (declaration.manager == Manager::Npm && paths.len() != 2)
-            || paths
-                .iter()
-                .any(|(name, path)| !mappings.iter().any(|(n, p)| name == n && path == p))
         {
             return Err(invalid());
         }
+        crate::registry_provision::validate_executables(
+            declaration.manager,
+            &tool.version,
+            &artifact.executables,
+        )
+        .map_err(|_| invalid())?;
         declaration.locked_integrity(&version, &artifact.sha256)?;
     }
     Ok(())
@@ -132,6 +127,30 @@ pub async fn resolve(
     node: &NodeTransport,
     registry: &RegistryTransport,
 ) -> Result<Lock, Error> {
+    let snapshot = request.snapshot();
+    let tools = resolve_tools(&request, node, registry).await?;
+    let candidate = Lock::new(Document {
+        schema_version: lock::SCHEMA_VERSION,
+        tools,
+    })?;
+    // Preserved payloads passed preflight; new payloads come from validated
+    // adapter resolutions, with native byte-specific integrity checked above.
+    if !candidate.matches_native(snapshot.declarations())? {
+        return Err(Error::Unsupported(
+            "candidate differs from captured provenance",
+        ));
+    }
+    snapshot.ensure_current()?;
+    Ok(candidate)
+}
+
+/// The JavaScript cohort only (Node and its package manager), for composition
+/// with other ecosystems' selections before final lock validation.
+pub(crate) async fn resolve_tools(
+    request: &Resolution<'_>,
+    node: &NodeTransport,
+    registry: &RegistryTransport,
+) -> Result<BTreeMap<String, Tool>, Error> {
     let snapshot = request.snapshot();
     snapshot.ensure_current()?;
     if !snapshot.declarations().contains_key("node") {
@@ -159,7 +178,10 @@ pub async fn resolve(
         .previous_selection()
         .into_iter()
         .flat_map(Lock::tools)
-        .filter(|(id, _)| snapshot.declarations().contains_key(*id))
+        .filter(|(id, _)| {
+            matches!(id.as_str(), "node" | "npm" | "pnpm")
+                && snapshot.declarations().contains_key(*id)
+        })
         .map(|(id, tool)| (id.clone(), tool.clone()))
         .collect();
     if !request.version_ids().contains("node") {
@@ -252,19 +274,8 @@ pub async fn resolve(
             );
         }
     }
-    let candidate = Lock::new(Document {
-        schema_version: lock::SCHEMA_VERSION,
-        tools,
-    })?;
-    // Preserved payloads passed preflight; new payloads come from validated
-    // adapter resolutions, with native byte-specific integrity checked above.
-    if !candidate.matches_native(snapshot.declarations())? {
-        return Err(Error::Unsupported(
-            "candidate differs from captured provenance",
-        ));
-    }
     snapshot.ensure_current()?;
-    Ok(candidate)
+    Ok(tools)
 }
 
 #[cfg(all(test, unix))]

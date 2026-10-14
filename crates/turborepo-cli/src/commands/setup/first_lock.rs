@@ -84,7 +84,7 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
         untouched(&f);
     }
 }
-fn bundled(prefix: &str) -> Vec<u8> {
+pub(super) fn bundled(prefix: &str) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in [
         ("bin/node", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
@@ -124,7 +124,7 @@ fn bundled(prefix: &str) -> Vec<u8> {
     gzip.write_all(&tar.into_inner().unwrap()).unwrap();
     gzip.finish().unwrap()
 }
-fn base64(bytes: &[u8]) -> String {
+pub(super) fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = String::new();
     for chunk in bytes.chunks(3) {
@@ -256,6 +256,8 @@ fn dispatch(
         node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(u.origin()).unwrap(),
     }), || {
         hook();
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
@@ -271,6 +273,8 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     let initial = selected(&f);
     let manifest = f.manifest().unwrap();
     let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+    assert!(lock.starts_with(b"{\n  \"schemaVersion\": 0,\n  \"tools\": {\n    \"node\": {\n"));
+    assert!(lock.ends_with(b"\n  }\n}\n"));
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     assert_eq!(f.run(&empty, LOCAL).unwrap(), 0);
     assert_eq!(empty.hits(), 0); // Unchanged floating Node never refreshes.
@@ -321,9 +325,9 @@ fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
         let u = LoopbackServer::new([], |_| {}).unwrap();
         match case {
             0 => fs::remove_file(f.owned.root().join(".nvmrc")).unwrap(),
-            1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.6.1"}"#).unwrap(),
+            1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.x"}"#).unwrap(),
             2 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.x"}"#).unwrap(),
-            3 => fs::write(f.owned.root().join(".npmrc"), "").unwrap(),
+            3 => fs::write(f.owned.root().join(".npmrc"), "registry=https://private.invalid").unwrap(),
             4 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
             5 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
             _ => {},
@@ -413,7 +417,12 @@ fn local_writer_wait_rechecks_policy_git_and_workspace() {
         std::thread::scope(|scope| {
             let pending = scope.spawn(|| f.run(&u, LOCAL));
             rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            fs::write(f.owned.root().join(name), "").unwrap();
+            let rejected = if name.ends_with(".npmrc") {
+                "registry=https://private.invalid"
+            } else {
+                ""
+            };
+            fs::write(f.owned.root().join(name), rejected).unwrap();
             drop(guard);
             assert!(pending.join().unwrap().is_err());
         });
@@ -504,7 +513,11 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
                         foreign["tools"]["node"]["version"] = json!("24.9.0");
                         fs::write(root.join("turbo.lock"), foreign.to_string()).unwrap();
                     }
-                    _ => fs::write(root.join("apps/web/.npmrc"), "").unwrap(),
+                    _ => fs::write(
+                        root.join("apps/web/.npmrc"),
+                        "registry=https://private.invalid",
+                    )
+                    .unwrap(),
                 }
             }
         })
@@ -515,4 +528,29 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
         assert_eq!(store.current().unwrap().unwrap().tools.len(), 2);
         untouched(&f);
     }
+}
+#[test]
+fn local_older_corepack_sha224_pins_bind_the_downloaded_pnpm_bytes() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let r = routes(&f, "24.0.0", "10.0.0");
+    let pnpm = &r.iter().find(|(p, _)| p.ends_with(".tgz")).unwrap().1;
+    let good = format!("pnpm@10.0.0+sha224.{:x}", sha2::Sha224::digest(pnpm));
+    let u = LoopbackServer::new(r.clone(), |_| {}).unwrap();
+    let package = f.owned.root().join("package.json");
+    let wrong = format!("pnpm@10.0.0+sha224.{}", "0".repeat(56));
+    fs::write(&package, json!({ "packageManager": wrong }).to_string()).unwrap();
+    assert!(f.run(&u, LOCAL).is_err());
+    assert!(!f.owned.root().join("turbo.lock").exists());
+    fs::write(&package, json!({ "packageManager": good }).to_string()).unwrap();
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    assert_eq!(selected(&f).tools()["pnpm"].version, "10.0.0");
+    let manifest = f.manifest().unwrap();
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    for flags in [LOCAL, &["--check", "--tools-only"]] {
+        assert_eq!(f.run(&empty, flags).unwrap(), 0);
+    }
+    assert_eq!(empty.hits(), 0);
+    assert_eq!(f.manifest().unwrap(), manifest);
+    untouched(&f);
 }

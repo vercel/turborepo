@@ -40,7 +40,7 @@ pub(super) fn snapshot(root: &Path) -> Vec<Entry> {
 
 const CHECK: &[&str] = &["--check", "--tools-only"];
 impl Fixture {
-    fn check(&self, flags: &[&str]) -> Result<i32, Error> {
+    pub(super) fn check(&self, flags: &[&str]) -> Result<i32, Error> {
         let before = snapshot(self.owned.root().parent().unwrap());
         let args = self.args(flags);
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
@@ -169,7 +169,11 @@ fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            2 => fs::write(f.owned.root().join("apps/web/.npmrc"), "").unwrap(),
+            2 => fs::write(
+                f.owned.root().join("apps/web/.npmrc"),
+                "registry=https://private.invalid",
+            )
+            .unwrap(),
             3 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
             4 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");

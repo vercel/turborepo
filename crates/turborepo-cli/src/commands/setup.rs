@@ -44,6 +44,25 @@ pub enum Error {
     NotImplemented,
     #[error("unsupported setup request: {0}")]
     Unsupported(&'static str),
+    #[error("managed tools are not supported on musl Linux hosts such as Alpine")]
+    #[diagnostic(
+        code(turbo::setup::musl_host),
+        help(
+            "Managed setup installs official glibc builds. On musl hosts, install the \
+             repository's tools in the image and use verify-system for them."
+        )
+    )]
+    MuslHost,
+    #[error("cannot classify this Linux host's C library: {0}")]
+    #[diagnostic(
+        code(turbo::setup::unclassified_libc),
+        help(
+            "turbo reads the ELF interpreter of /bin/sh and the libc.so.6 beside a glibc loader \
+             without running them. Managed setup requires a glibc host with those files; \
+             otherwise install the tools yourself and use verify-system."
+        )
+    )]
+    UnclassifiedLibc(turborepo_platform::LibcError),
     #[error(transparent)]
     SourcePolicy(#[from] turborepo_setup::source_policy::Error),
     #[error(transparent)]
@@ -57,11 +76,17 @@ pub enum Error {
     #[error(transparent)]
     Node(#[from] turborepo_setup::node_provision::Error),
     #[error(transparent)]
-    Pnpm(#[from] turborepo_setup::pnpm_provision::Error),
+    Registry(#[from] turborepo_setup::pnpm_provision::Error),
     #[error(transparent)]
     Native(#[from] turborepo_setup::native_baseline::Error),
     #[error(transparent)]
     Ephemeral(#[from] turborepo_setup::ephemeral_reconcile::Error),
+    #[error(transparent)]
+    Uv(#[from] turborepo_setup::uv_provision::Error),
+    #[error(transparent)]
+    UvResolution(#[from] turborepo_setup::uv_resolution::Error),
+    #[error(transparent)]
+    Rustup(#[from] turborepo_setup::rustup_provision::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
@@ -164,11 +189,18 @@ fn run_with_policy(
         return Err(Error::NotImplemented);
     }
     let eligible = discovery.source_eligibility();
-    if eligible.cargo() || eligible.python() || eligible.go() {
-        return Err(Error::Unsupported("non-JavaScript workspace setup"));
+    if eligible.go() {
+        return Err(Error::Unsupported("Go workspace setup"));
     }
-    let snapshot =
-        turborepo_setup::lock::Snapshot::capture(discovery.snapshot_root()?.as_std_path())?;
+    // Python declarations are captured only when experimentalPythonWorkspaces
+    // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
+    let snapshot = turborepo_setup::lock::Snapshot::capture_with(
+        discovery.snapshot_root()?.as_std_path(),
+        turborepo_setup::lock::Ecosystems {
+            python: eligible.python(),
+            rust: eligible.cargo(),
+        },
+    )?;
     // Never silently: version-manager files are reported, not read as requests.
     if let Some(report) = turborepo_setup::version_managers::report(
         &snapshot.ignored_declarations(),
@@ -253,10 +285,16 @@ mod tests {
     }
 
     #[test]
-    fn platform_qualification_rejects_unsupported_hosts_including_musl() {
+    fn platform_qualification_follows_the_host_libc_not_the_build_target() {
+        use turborepo_platform::Libc;
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
-        let host = cfg!(target_os = "macos") || cfg!(all(target_os = "linux", target_env = "gnu"));
-        assert_eq!(provision::platform().is_ok(), arch && host);
+        let libc = turborepo_platform::host_libc();
+        let host = cfg!(target_os = "macos") || matches!(libc, Ok(Some(Libc::Glibc { .. })));
+        let platform = provision::platform();
+        assert_eq!(platform.is_ok(), arch && host);
+        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl))) {
+            assert!(matches!(platform, Err(Error::MuslHost)));
+        }
     }
 
     #[test]

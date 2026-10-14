@@ -11,13 +11,14 @@ fn dev(version: String, on_fail: &str) -> Value {
 #[test]
 fn top_and_dev_pins_are_preflighted_and_combined_without_losing_strong_integrity() -> TestResult {
     let version = Version::parse("10.0.0")?;
+    let sha224 = "c".repeat(56);
     let sha256 = "a".repeat(64);
     let sha512 = "b".repeat(128);
-    for algorithm in ["sha256", "sha512"] {
-        let digest = if algorithm == "sha256" {
-            &sha256
-        } else {
-            &sha512
+    for algorithm in ["sha224", "sha256", "sha512"] {
+        let digest = match algorithm {
+            "sha224" => &sha224,
+            "sha256" => &sha256,
+            _ => &sha512,
         };
         let pin = format!("10.0.0+{algorithm}.{digest}");
         for value in [
@@ -50,12 +51,29 @@ fn top_and_dev_pins_are_preflighted_and_combined_without_losing_strong_integrity
         assert_eq!(selected.algorithm, "sha512");
         assert_eq!(selected.digest, sha512);
     }
+    // Only one pin reaches byte verification, so SHA-224 is never displaced.
+    for (top, alternative) in [
+        (
+            format!("pnpm@10.0.0+sha224.{sha224}"),
+            format!("10.0.0+sha512.{sha512}"),
+        ),
+        (
+            format!("pnpm@10.0.0+sha256.{sha256}"),
+            format!("10.0.0+sha224.{sha224}"),
+        ),
+    ] {
+        let declaration = declaration(
+            json!({"packageManager":top,"devEngines":{"packageManager":dev(alternative,"error")}}),
+        )?;
+        assert!(declaration.locked_integrity(&version, &sha256).is_err());
+        assert!(declaration.preflight_integrity(&version).is_err());
+    }
     Ok(())
 }
 #[test]
 fn known_invalid_pins_and_unsupported_algorithms_fail_without_side_effects() -> TestResult {
     let version = Version::parse("10.0.0")?;
-    for (algorithm, bytes) in [("sha256", 64), ("sha1", 40), ("sha224", 56), ("sha384", 96)] {
+    for (algorithm, bytes) in [("sha256", 64), ("sha1", 40), ("sha384", 96)] {
         let pin = format!("10.0.0+{algorithm}.{}", "b".repeat(bytes));
         for value in [
             json!({"packageManager":format!("pnpm@{pin}")}),

@@ -14,7 +14,10 @@ use crate::node_discovery::UniqueJson;
 mod io;
 pub mod reconcile;
 pub(crate) use io::probe_native_with;
-pub use io::{DeclarationMap, Snapshot, StorageError, WriteOutcome, probe_native, write};
+pub use io::{
+    DeclarationMap, Ecosystems, Snapshot, StorageError, WriteOutcome, probe_native,
+    probe_native_in, write,
+};
 
 pub const SCHEMA_VERSION: u32 = 0;
 pub const MAX_LOCK_BYTES: usize = 1024 * 1024;
@@ -198,6 +201,20 @@ impl Lock {
                 {
                     return Err(Error::Invalid("expected canonical exact builtin version"));
                 }
+            }
+            // uv and CPython releases share canonical `X.Y.Z` identities.
+            if matches!(tool.adapter.as_str(), "uv" | "python")
+                && crate::uv::exact_release(&tool.version).is_none()
+            {
+                return Err(Error::Invalid("expected canonical exact release"));
+            }
+            if tool.adapter == "go"
+                && crate::go_discovery::GoVersion::parse(&tool.version)
+                    .is_none_or(|v| !v.is_toolchain() || v.to_string() != tool.version)
+            {
+                return Err(Error::Invalid(
+                    "expected canonical exact Go toolchain version",
+                ));
             }
             declarations(&tool.declarations)?;
             if tool.options.len() > 32 {

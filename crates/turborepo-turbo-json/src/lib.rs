@@ -31,6 +31,7 @@ pub mod loader;
 pub mod parser;
 pub mod processed;
 pub mod raw;
+pub mod setup;
 pub mod validator;
 
 pub use error::{Error, InvalidEnvPrefixError, ParseError, UnnecessaryPackageTaskSyntaxError};
@@ -49,6 +50,11 @@ pub use raw::{
     HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawObservabilityOtel,
     RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
     RawTaskDefinition, RawTurboJson,
+};
+pub use setup::{
+    ArtifactFormat, ArtifactPlatform, DependencyPolicy, RawAdditionalTool,
+    RawAdditionalToolArtifact, RawSetupPolicy, RawToolchainSetupPolicy, SetupPolicy, ToolPolicy,
+    ToolchainSetupPolicy,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 
@@ -90,11 +96,15 @@ impl TryFrom<RawTurboJson> for TurboJson {
             return Err(Error::PipelineField { span, text });
         }
 
-        // `futureFlags` key is only allowed in root turbo.json
+        // `futureFlags` and `setup` keys are only allowed in root turbo.json
         let is_workspace_config = raw_turbo.extends.is_some();
         if is_workspace_config && let Some(future_flags) = raw_turbo.future_flags {
             let (span, text) = future_flags.span_and_text("turbo.json");
             return Err(Error::FutureFlagsInPackage { span, text });
+        }
+        if is_workspace_config && let Some(setup) = raw_turbo.setup {
+            let (span, text) = setup.span_and_text("turbo.json");
+            return Err(Error::SetupInPackage { span, text });
         }
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();

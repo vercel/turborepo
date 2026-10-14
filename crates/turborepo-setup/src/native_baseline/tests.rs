@@ -148,22 +148,29 @@ fn strict_decode_rejects_noncanonical_unknown_duplicate_schema_and_oversized_rec
     let text = String::from_utf8(bytes.clone()).unwrap();
     let mut unknown = serde_json::to_value(lock.document()).unwrap();
     unknown["tools"]["node"]["extra"] = json!(true);
-    let schema = "\"schemaVersion\":0";
+    let schema = "\"schemaVersion\": 0";
     let cases = [
-        text.replace(schema, "\"schemaVersion\":1").into_bytes(),
+        text.replace(schema, "\"schemaVersion\": 1").into_bytes(),
         text.replace(schema, &format!("{schema},{schema}"))
             .into_bytes(),
         serde_json::to_vec(&unknown).unwrap(),
-        serde_json::to_vec_pretty(lock.document()).unwrap(),
+        serde_json::to_vec(lock.document()).unwrap(),
         bytes[..bytes.len() - 1].to_vec(),
         [b" ".as_slice(), &bytes].concat(),
         [bytes.as_slice(), b"{}"].concat(),
         vec![b' '; crate::lock::MAX_LOCK_BYTES + 1],
     ];
-    for bytes in cases {
-        assert!(NativeRecord::decode(&bytes).is_err());
-        if bytes.len() <= crate::lock::MAX_LOCK_BYTES {
-            publish(&mut store, &tools, bytes);
+    for (index, invalid_bytes) in cases.into_iter().enumerate() {
+        assert_ne!(
+            invalid_bytes, bytes,
+            "case {index} must alter canonical bytes"
+        );
+        assert!(
+            NativeRecord::decode(&invalid_bytes).is_err(),
+            "case {index} must be rejected"
+        );
+        if invalid_bytes.len() <= crate::lock::MAX_LOCK_BYTES {
+            publish(&mut store, &tools, invalid_bytes);
             assert_invalid(Baseline::capture(&snapshot, &store));
         }
     }

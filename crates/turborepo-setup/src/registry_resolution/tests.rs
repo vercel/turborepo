@@ -8,7 +8,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha224, Sha256, Sha512};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -104,8 +104,11 @@ fn paths(package: &Value) -> Vec<String> {
         .collect()
 }
 fn metadata(name: &str, bytes: &[u8]) -> Value {
-    json!({"name":name,"version":"10.0.0","dist":{
-        "tarball":format!("https://registry.npmjs.org/{name}/-/{name}-10.0.0.tgz"),
+    metadata_for(name, "10.0.0", bytes)
+}
+fn metadata_for(name: &str, version: &str, bytes: &[u8]) -> Value {
+    json!({"name":name,"version":version,"dist":{
+        "tarball":format!("https://registry.npmjs.org/{name}/-/{name}-{version}.tgz"),
         "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(bytes))),
         "shasum":"not a fallback","sha256":"00".repeat(32)}})
 }
@@ -129,11 +132,11 @@ async fn exact_npm_pnpm_portable_identity_authored_pins_and_no_root_mutation() {
             json!(format!("touch {}/should-never-run", repo.path().display()));
         let bytes = archive(&pkg, &paths(&pkg));
         let registry = fixture(name, metadata(name, &bytes), bytes.clone()).await;
-        for algorithm in ["sha256", "sha512"] {
-            let digest = if algorithm == "sha256" {
-                format!("{:x}", Sha256::digest(&bytes))
-            } else {
-                format!("{:x}", Sha512::digest(&bytes))
+        for algorithm in ["sha224", "sha256", "sha512"] {
+            let digest = match algorithm {
+                "sha224" => format!("{:x}", Sha224::digest(&bytes)),
+                "sha256" => format!("{:x}", Sha256::digest(&bytes)),
+                _ => format!("{:x}", Sha512::digest(&bytes)),
             };
             let pin = CorepackIntegrity {
                 algorithm,
@@ -199,12 +202,15 @@ async fn exact_npm_pnpm_portable_identity_authored_pins_and_no_root_mutation() {
         }
         assert_eq!(
             *registry.requests.lock().unwrap(),
-            vec![
+            [
                 format!("/{name}/10.0.0"),
                 format!("/{name}/-/{name}-10.0.0.tgz"),
-                format!("/{name}/10.0.0"),
-                format!("/{name}/-/{name}-10.0.0.tgz")
             ]
+            .iter()
+            .cycle()
+            .take(6)
+            .cloned()
+            .collect::<Vec<_>>()
         );
     }
     assert_eq!(
@@ -293,7 +299,12 @@ async fn mandatory_real_bytes_and_authored_mismatch_including_late_native_altern
         .locked_integrity(selected.version(), &selected.artifact().sha256)
         .unwrap();
     selected.verify_authored(late.as_ref()).unwrap();
-    for (algorithm, length) in [("sha256", 64), ("sha512", 128), ("sha1", 40)] {
+    for (algorithm, length) in [
+        ("sha224", 56),
+        ("sha256", 64),
+        ("sha512", 128),
+        ("sha1", 40),
+    ] {
         let pin = CorepackIntegrity {
             algorithm,
             digest: "0".repeat(length),
@@ -355,6 +366,51 @@ async fn package_identity_complete_bins_and_required_regular_files() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn pnpm_majors_lock_their_published_bins_and_native_releases_fail_before_traffic() {
+    // pnpm 11's real layout: `.mjs` entry points, `pn`/`pnx` aliases, and the
+    // old `.cjs` files kept only as Corepack shims.
+    let bins = json!({"pn":"bin/pnpm.mjs","pnpm":"bin/pnpm.mjs","pnpx":"bin/pnpx.mjs",
+        "pnx":"bin/pnpx.mjs"});
+    let pkg = json!({"name":"pnpm","version":"11.28.2","type":"module","bin":bins,
+        "engines":{"node":">=22.13"}});
+    let files = ["pnpm.cjs", "pnpx.cjs", "pnpm.mjs", "pnpx.mjs"].map(|f| format!("bin/{f}"));
+    let mut all = files.to_vec();
+    all.push("dist/pnpm.mjs".into());
+    let bytes = archive(&pkg, &all);
+    let document = metadata_for("pnpm", "11.28.2", &bytes);
+    let registry = fixture("pnpm", document.clone(), bytes).await;
+    let selected = registry
+        .transport
+        .resolve_exact(Manager::Pnpm, "11.28.2", None)
+        .await
+        .unwrap();
+    let expected: BTreeMap<String, String> = serde_json::from_value(bins).unwrap();
+    assert_eq!(selected.artifact().executables, expected);
+    // The pnpm 10 pair is not a pnpm 11 layout, even though its files exist.
+    let mut legacy = pkg.clone();
+    legacy["bin"] = json!({"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"});
+    let bytes = archive(&legacy, &files);
+    let registry = fixture("pnpm", metadata_for("pnpm", "11.28.2", &bytes), bytes).await;
+    assert!(matches!(
+        registry
+            .transport
+            .resolve_exact(Manager::Pnpm, "11.28.2", None)
+            .await,
+        Err(Error::InvalidPackage)
+    ));
+    for version in ["12.0.0", "12.11.2"] {
+        assert!(matches!(
+            registry
+                .transport
+                .resolve_exact(Manager::Pnpm, version, None)
+                .await,
+            Err(Error::NativePnpm)
+        ));
+    }
+    assert_eq!(registry.requests.lock().unwrap().len(), 2);
 }
 
 #[tokio::test]

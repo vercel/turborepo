@@ -6,9 +6,13 @@ use std::{fs, io, path::Path, process::Command};
 use turborepo_setup::{
     lock::{Platform, Snapshot},
     node_provision::{NodePlan, NodeTransport},
+    npm_provision::NpmPlan,
     package_manager::Manager,
     pnpm_provision::{PnpmPlan, PnpmTransport},
+    rustup_provision::{RustupPlan, RustupTransport},
     source_policy::OfficialSourcePolicy,
+    uv_provision::UvPlan,
+    uv_resolution::UvTransport,
 };
 use turborepo_tool_install::Store;
 
@@ -18,6 +22,8 @@ pub(super) struct Transports {
     pub node: NodeTransport,
     pub pnpm: PnpmTransport,
     pub registry: turborepo_setup::registry_resolution::RegistryTransport,
+    pub uv: UvTransport,
+    pub rustup: RustupTransport,
 }
 impl Transports {
     pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
@@ -25,6 +31,8 @@ impl Transports {
             node: NodeTransport::official(policy)?,
             pnpm: PnpmTransport::official(policy)?,
             registry: turborepo_setup::registry_resolution::RegistryTransport::official(policy)?,
+            uv: UvTransport::official(policy)?,
+            rustup: RustupTransport::official(policy)?,
         })
     }
 }
@@ -33,11 +41,25 @@ pub(super) fn platform() -> Result<Platform, Error> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "x86_64") => Ok(Platform::MacosX64),
         ("macos", "aarch64") => Ok(Platform::MacosArm64),
-        ("linux", "x86_64") if cfg!(target_env = "gnu") => Ok(Platform::LinuxX64Gnu),
-        ("linux", "aarch64") if cfg!(target_env = "gnu") => Ok(Platform::LinuxArm64Gnu),
+        ("linux", "x86_64") => glibc_host(Platform::LinuxX64Gnu),
+        ("linux", "aarch64") => glibc_host(Platform::LinuxArm64Gnu),
         _ => Err(Error::Unsupported(
             "managed promotion requires macOS or GNU Linux",
         )),
+    }
+}
+
+/// Released Linux `turbo` binaries are musl-static, so GNU artifacts follow
+/// the host's C library rather than this binary's target.
+fn glibc_host(platform: Platform) -> Result<Platform, Error> {
+    use turborepo_platform::Libc;
+    match turborepo_platform::host_libc() {
+        Ok(Some(Libc::Glibc { .. })) => Ok(platform),
+        Ok(Some(Libc::Musl)) => Err(Error::MuslHost),
+        Ok(None) => Err(Error::Unsupported(
+            "managed promotion requires macOS or GNU Linux",
+        )),
+        Err(error) => Err(Error::UnclassifiedLibc(error)),
     }
 }
 
@@ -73,8 +95,19 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
             .env_remove("GIT_INDEX_FILE")
             .args(arguments)
             .output()
+            .map_err(turborepo_setup::writer_storage::git_spawn_error)
     };
     let ignored = git(&["check-ignore", "--", ".turbo/"])?;
+    // Exit 128 is a Git failure (for example, not a repository), not a missing
+    // ignore rule; editing .gitignore would not help.
+    if ignored.status.code() == Some(128) {
+        return Err(io::Error::other(format!(
+            "Git could not check whether .turbo/ is ignored ({}); run turbo setup inside the \
+             repository's Git checkout",
+            String::from_utf8_lossy(&ignored.stderr).trim()
+        ))
+        .into());
+    }
     let tracked = git(&["ls-files", "--", ".turbo/"])?;
     if !ignored.status.success()
         || ignored.stdout != b".turbo/\n"
@@ -91,9 +124,14 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
 /// Read-only current-host selection, shared by frozen execution and checked
 /// publication. No storage, transports, probes or writes are initialized here.
 pub(super) struct Plans {
-    pub node: NodePlan,
+    pub node: Option<NodePlan>,
     pub pnpm: Option<PnpmPlan>,
+    pub npm: Option<NpmPlan>,
+    pub uv: Option<UvPlan>,
+    pub rustup: Option<RustupPlan>,
 }
+
+const SUPPORTED: [&str; 5] = ["node", "npm", "pnpm", "uv", "rustup"];
 pub(super) fn plans(
     snapshot: &Snapshot,
     lock: &turborepo_setup::lock::Lock,
@@ -107,33 +145,72 @@ pub(super) fn plans(
     if lock
         .tools()
         .keys()
-        .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+        .any(|id| !SUPPORTED.contains(&id.as_str()))
     {
         return Err(Error::Unsupported(
-            "only managed Node and pnpm are supported",
+            "only managed Node, npm, pnpm, uv and rustup are supported",
         ));
     }
-    let node = NodePlan::from_lock(lock, platform)?;
-    let version = semver::Version::parse(&node.inventory_tool().version)
-        .map_err(|_| Error::Unsupported("invalid locked Node version"))?;
-    if !snapshot
-        .node_requirements()?
-        .matches_locked_version(&version)
-    {
-        return Err(Error::Unsupported(
-            "locked Node does not satisfy native declarations",
-        ));
-    }
-    let manager = snapshot.package_manager()?;
-    let pnpm = if let Some(manager) = manager {
-        if manager.manager != Manager::Pnpm {
-            return Err(Error::Unsupported("npm override provisioning"));
+    let node = if lock.tools().contains_key("node") {
+        let node = NodePlan::from_lock(lock, platform)?;
+        let version = semver::Version::parse(&node.inventory_tool().version)
+            .map_err(|_| Error::Unsupported("invalid locked Node version"))?;
+        if !snapshot
+            .node_requirements()?
+            .matches_locked_version(&version)
+        {
+            return Err(Error::Unsupported(
+                "locked Node does not satisfy native declarations",
+            ));
         }
-        Some(PnpmPlan::from_declaration(lock, platform, &node, &manager)?)
+        Some(node)
     } else {
         None
     };
-    Ok(Plans { node, pnpm })
+    let (mut pnpm, mut npm) = (None, None);
+    if let Some(manager) = snapshot.package_manager()? {
+        let node = node
+            .as_ref()
+            .ok_or(Error::Unsupported("a native Node declaration is required"))?;
+        match manager.manager {
+            Manager::Pnpm => {
+                pnpm = Some(PnpmPlan::from_declaration(lock, platform, node, &manager)?);
+            }
+            Manager::Npm => {
+                npm = NpmPlan::from_declaration(lock, platform, node, &manager)?;
+            }
+            _ => return Err(Error::Unsupported("package manager provisioning")),
+        }
+    }
+    let uv = match snapshot.uv_requirement()? {
+        Some(requirement) => {
+            let plan = UvPlan::from_lock(lock, platform)?;
+            let version = semver::Version::parse(&plan.inventory_tool().version)
+                .map_err(|_| Error::Unsupported("invalid locked uv version"))?;
+            if !requirement.matches(&version) {
+                return Err(Error::Unsupported(
+                    "locked uv does not satisfy native declarations",
+                ));
+            }
+            Some(plan)
+        }
+        None => None,
+    };
+    let rustup = lock
+        .tools()
+        .contains_key("rustup")
+        .then(|| RustupPlan::from_lock(lock, platform))
+        .transpose()?;
+    if node.is_none() && uv.is_none() && rustup.is_none() {
+        return Err(Error::Unsupported("turbo.lock selects no managed tools"));
+    }
+    Ok(Plans {
+        node,
+        pnpm,
+        npm,
+        uv,
+        rustup,
+    })
 }
 
 pub(super) fn lock_report(
@@ -173,8 +250,18 @@ pub(super) fn lock_report(
 /// gate and [`resolve`], so a plan proposes exactly what setup would publish;
 /// ecosystems that join resolution extend these, never one caller.
 pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
-    if !snapshot.declarations().contains_key("node") {
-        return Err(Error::Unsupported("a native Node declaration is required"));
+    let declared = snapshot.declarations();
+    let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
+    if !declared.contains_key("node")
+        && (js_manager || (!declared.contains_key("uv") && !declared.contains_key("rustup")))
+    {
+        return Err(Error::Unsupported(
+            if snapshot.ecosystems().python && !js_manager {
+                "a native Node or uv declaration is required"
+            } else {
+                "a native Node declaration is required"
+            },
+        ));
     }
     Ok(())
 }
@@ -186,11 +273,17 @@ pub(super) fn resolve(
     request: turborepo_setup::lock::reconcile::Resolution<'_>,
     sources: &Transports,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
+    if request.version_ids().contains("rustup") {
+        return Err(turborepo_setup::lock::reconcile::Error::Resolution(
+            "resolving Rust toolchain declarations into turbo.lock is not implemented yet".into(),
+        ));
+    }
     runtime
-        .block_on(turborepo_setup::js_resolution::resolve(
+        .block_on(turborepo_setup::native_resolution::resolve(
             request,
             &sources.node,
             &sources.registry,
+            &sources.uv,
         ))
         .map_err(|e| turborepo_setup::lock::reconcile::Error::Resolution(e.to_string()))
 }
@@ -208,11 +301,6 @@ pub(super) fn run(
     let write = lock_mode == super::LockMode::Write && !force;
     let root = discovery.snapshot_root()?.as_std_path();
     platform()?;
-    // Unsupported native requests must fail before ANY writer, even no-op locks.
-    let manager = snapshot.package_manager()?;
-    if manager.as_ref().is_some_and(|m| m.manager != Manager::Pnpm) {
-        return Err(Error::Unsupported("npm override provisioning"));
-    }
     if write {
         resolvable(&snapshot)?;
     }
@@ -224,10 +312,10 @@ pub(super) fn run(
             && lock
                 .tools()
                 .keys()
-                .any(|id| !matches!(id.as_str(), "node" | "pnpm"))
+                .any(|id| !SUPPORTED.contains(&id.as_str()))
         {
             return Err(Error::Unsupported(
-                "only managed Node and pnpm are supported",
+                "only managed Node, npm, pnpm, uv and rustup are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -280,6 +368,15 @@ pub(super) fn run(
         transports = Some(sources);
         published
     } else {
+        // Frozen mode names stale declarations instead of a generic mismatch.
+        if lock_mode == super::LockMode::Frozen && snapshot.previous_lock().is_some() {
+            use turborepo_setup::lock::reconcile;
+            reconcile::reconcile(&snapshot, reconcile::Mode::Frozen, false, |_| {
+                Err(reconcile::Error::Resolution(
+                    "frozen setup never resolves".into(),
+                ))
+            })?;
+        }
         snapshot
     };
     let lock = snapshot
@@ -289,11 +386,24 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
-    let Plans { node, pnpm } = plans(&snapshot, lock)?;
-    let mut desired = vec![node.inventory_tool().clone()];
-    if let Some(pnpm) = &pnpm {
-        desired.push(pnpm.inventory_tool().clone());
-    }
+    let Plans {
+        node,
+        pnpm,
+        npm,
+        uv,
+        rustup,
+    } = plans(&snapshot, lock)?;
+    let desired: Vec<_> = [
+        node.as_ref().map(NodePlan::inventory_tool),
+        pnpm.as_ref().map(PnpmPlan::inventory_tool),
+        npm.as_ref().map(NpmPlan::inventory_tool),
+        uv.as_ref().map(UvPlan::inventory_tool),
+        rustup.as_ref().map(RustupPlan::inventory_tool),
+    ]
+    .into_iter()
+    .flatten()
+    .cloned()
+    .collect();
     let policy = preflight()?;
     let transports = transports
         .map(Ok)
@@ -319,34 +429,79 @@ pub(super) fn run(
     } else {
         turborepo_setup::Preparation::IfNeeded
     };
-    let (prepared_node, prepared_pnpm) = runtime.block_on(async {
-        let node = node
-            .prepare(&store, &desired, &transports.node, preparation)
-            .await?;
-        preflight()?;
-        revalidate(discovery)?;
-        snapshot.check_guard(&guard)?;
-        let pnpm = match &pnpm {
-            Some(plan) => {
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        Ok::<_, Error>((node, pnpm))
-    })?;
-    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        if tool == node.inventory_tool() {
-            prepared_node
-                .as_ref()
-                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                .stage(tool, destination)
-        } else {
-            prepared_pnpm
-                .as_ref()
-                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                .stage(tool, destination)
-        }
+    let (prepared_node, prepared_pnpm, prepared_npm, prepared_uv, prepared_rustup) = runtime
+        .block_on(async {
+            let recheck = || {
+                preflight()?;
+                revalidate(discovery)?;
+                snapshot.check_guard(&guard)?;
+                Ok::<_, Error>(())
+            };
+            let node = match &node {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.node, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let pnpm = match &pnpm {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let npm = match &npm {
+                Some(plan) => {
+                    // npm and pnpm share the exact integrity-verified registry transport.
+                    plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let uv = match &uv {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.uv, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            recheck()?;
+            let rustup = match &rustup {
+                Some(plan) => {
+                    plan.prepare(&store, &desired, &transports.rustup, preparation)
+                        .await?
+                }
+                None => None,
+            };
+            Ok::<_, Error>((node, pnpm, npm, uv, rustup))
+        })?;
+    let missing = || turborepo_tool_install::Error::InvalidInventory;
+    let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| match tool.id.as_str() {
+        "node" => prepared_node
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "pnpm" => prepared_pnpm
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "npm" => prepared_npm
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "uv" => prepared_uv
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        "rustup" => prepared_rustup
+            .as_ref()
+            .ok_or_else(missing)?
+            .stage(tool, destination),
+        _ => Err(missing()),
     };
     let before_publish = || {
         storage(root).map_err(io::Error::other)?;
@@ -367,12 +522,26 @@ pub(super) fn run(
             tool.version,
             if (tool.id == "node" && prepared_node.is_none())
                 || (tool.id == "pnpm" && prepared_pnpm.is_none())
+                || (tool.id == "npm" && prepared_npm.is_none())
+                || (tool.id == "uv" && prepared_uv.is_none())
+                || (tool.id == "rustup" && prepared_rustup.is_none())
             {
                 "reused"
             } else {
                 "installed"
             }
         );
+    }
+    if let Some(npm) = lock.tools().get("npm")
+        && matches!(
+            npm.installation,
+            turborepo_setup::lock::Installation::Bundled { .. }
+        )
+    {
+        println!("npm {}: provided by managed Node (bundled)", npm.version);
+    }
+    if rustup.is_some() {
+        println!("rustup is private to this repository; no Rust toolchain was installed.");
     }
     println!(
         "Dependencies skipped (--tools-only). No tasks run; managed activation is not enabled."

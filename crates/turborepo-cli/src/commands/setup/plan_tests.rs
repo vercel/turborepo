@@ -265,7 +265,11 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 flags.push("--frozen");
             }
             2 => fs::write(f.owned.root().join("turbo.lock"), "invalid").unwrap(),
-            3 => fs::write(f.owned.root().join("apps/web/.npmrc"), "").unwrap(),
+            3 => fs::write(
+                f.owned.root().join("apps/web/.npmrc"),
+                "registry=https://private.invalid",
+            )
+            .unwrap(),
             4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
             5 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");
@@ -328,6 +332,12 @@ fn loopback(u: &LoopbackServer) -> provision::Transports {
         node: NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin())
+            .unwrap(),
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+            u.origin(),
+        )
+        .unwrap(),
     }
 }
 

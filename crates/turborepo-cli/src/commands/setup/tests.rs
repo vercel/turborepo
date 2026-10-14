@@ -128,6 +128,13 @@ impl Fixture {
                         upstream.origin(),
                     )
                     .unwrap(),
+                    uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    ).unwrap(),
+                    rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+                        upstream.origin(),
+                    )
+                    .unwrap(),
                 }),
                 || {
                     Ok(self
@@ -201,8 +208,14 @@ const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 mod first_lock;
 #[path = "force_tests.rs"]
 mod force;
+#[path = "npm_tests.rs"]
+mod npm;
 #[path = "publication_guards.rs"]
 mod publication_guards;
+#[path = "rustup_tests.rs"]
+mod rustup;
+#[path = "uv_tests.rs"]
+mod uv;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {

@@ -31,6 +31,19 @@ pub(super) fn run(
     sources: Snapshot,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
+    // Activation readiness does not cover uv yet; never report it as ready.
+    if sources.uv_requirement()?.is_some()
+        || sources
+            .previous_lock()
+            .is_some_and(|lock| lock.tools().contains_key("uv"))
+    {
+        return Err(Error::Unsupported(
+            "uv readiness checks are not implemented; run turbo setup --tools-only",
+        ));
+    }
+    if sources.declarations().contains_key("rustup") {
+        return Err(Error::Unsupported("Rust toolchain readiness checks"));
+    }
     let context = context()?;
     preflight()?;
     let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;
@@ -45,6 +58,16 @@ pub(super) fn run(
     sources.ensure_current()?;
     for tool in plan.tools() {
         println!("{} {}: ready", tool.id, tool.version);
+    }
+    if let Some(npm) = sources
+        .previous_lock()
+        .and_then(|lock| lock.tools().get("npm"))
+        && matches!(
+            npm.installation,
+            turborepo_setup::lock::Installation::Bundled { .. }
+        )
+    {
+        println!("npm {}: ready (bundled with managed Node)", npm.version);
     }
     println!(
         "Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run."

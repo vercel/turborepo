@@ -27,8 +27,62 @@ impl NpmPlan {
         RegistryPlan::from_lock(lock, platform, node, authored, Manager::Npm).map(Self)
     }
 
+    /// Validate the exact native pin and every applicable authored constraint.
+    /// Bundled npm has no separate inventory owner or registry preparation.
+    pub fn from_declaration(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        declaration: &crate::package_manager::Declaration,
+    ) -> Result<Option<Self>, Error> {
+        let tool = lock.tools().get("npm").ok_or(Error::InvalidLock)?;
+        if declaration.manager != Manager::Npm
+            || crate::js_resolution::exact_manager(declaration).map_err(|_| Error::InvalidLock)?
+                != tool.version
+        {
+            return Err(Error::InvalidLock);
+        }
+        if matches!(tool.installation, crate::lock::Installation::Bundled { .. }) {
+            // Lock validation binds npm's version and exports to Node. Do not
+            // interpret an authored registry digest as evidence for Node bytes.
+            if declaration
+                .package_manager
+                .iter()
+                .chain(&declaration.dev_engines)
+                .any(|request| request.integrity.is_some())
+                || NodePlan::from_lock(lock, platform)
+                    .map_err(|_| Error::NodeBinding)?
+                    .inventory_tool()
+                    != node.inventory_tool()
+            {
+                return Err(Error::InvalidLock);
+            }
+            return Ok(None);
+        }
+        // Reject malformed portable variants and contradictory authored SHA-256
+        // before selecting the host artifact, inventory reuse or any transport.
+        crate::js_resolution::validate_registry(tool, declaration)
+            .map_err(|_| Error::InvalidLock)?;
+        let plan = Self::from_lock(lock, platform, node, None)?;
+        let version = semver::Version::parse(&tool.version).map_err(|_| Error::InvalidLock)?;
+        let authored =
+            declaration.locked_integrity(&version, &plan.inventory_tool().artifact_sha256)?;
+        Self::from_lock(lock, platform, node, authored.as_ref()).map(Some)
+    }
+
     pub fn inventory_tool(&self) -> &Tool {
         self.0.inventory_tool()
+    }
+
+    /// Force verifies fresh bytes without changing the selected resolution.
+    pub async fn prepare(
+        &self,
+        store: &Store,
+        desired: &[Tool],
+        transport: &NpmTransport,
+        preparation: crate::Preparation,
+    ) -> Result<Option<PreparedNpm>, Error> {
+        self.0.prepare(store, desired, transport, preparation).await
     }
 
     /// Hold the Store guard through preparation and one reconciliation of this

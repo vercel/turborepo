@@ -3,7 +3,8 @@
 
 use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
-use sha2::{Digest, Sha256};
+use semver::Version;
+use sha2::{Digest, Sha224, Sha256};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
@@ -28,6 +29,8 @@ pub enum Error {
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
+    #[error("pnpm 12 and later ship native binaries, which setup cannot provision yet")]
+    NativePnpm,
     #[error(transparent)]
     Authored(#[from] crate::package_manager::Error),
     #[error(transparent)]
@@ -70,10 +73,12 @@ impl RegistryTransport {
         if exact_version.len() > 128 {
             return Err(registry_metadata::RegistryMetadataError::InvalidVersion.into());
         }
+        // Select the published layout before any traffic.
+        let (_, version) = registry_metadata::validate_selection(manager, exact_version)?;
+        let mappings = standard_mappings(manager, &version)?;
         let (release, bytes) = self
             .verified_release(manager, exact_version, authored, None)
             .await?;
-        let (_, mappings) = standard_mappings(manager)?;
         let executables = mappings
             .iter()
             .map(|(name, path)| (name.to_string(), path.to_string()))
@@ -89,7 +94,9 @@ impl RegistryTransport {
             executables,
         };
         Ok(crate::registry_resolution::ResolvedRegistry::new(
-            release, artifact,
+            release,
+            artifact,
+            sha224_hex(&bytes),
         ))
     }
 
@@ -111,8 +118,9 @@ impl RegistryTransport {
             .await?;
         let release = registry_metadata::parse_release(&metadata, manager, version, authored)?;
         let additional = release
-            .additional_sha256
+            .byte_pin
             .as_ref()
+            .filter(|pin| pin.algorithm == "sha256")
             .map(|pin| pin.digest.as_str());
         if locked_sha256
             .zip(additional)
@@ -133,6 +141,13 @@ impl RegistryTransport {
                 Limits::new(64 * 1024 * 1024, Duration::from_secs(120))?,
             )
             .await?;
+        // Older Corepack pins: checked in addition to the registry SHA-512.
+        if let Some(pin) = release.byte_pin.as_ref()
+            && pin.algorithm == "sha224"
+            && sha224_hex(&bytes) != pin.digest
+        {
+            return Err(turborepo_download::Error::DigestMismatch.into());
+        }
         Ok((release, bytes))
     }
 
@@ -146,19 +161,55 @@ impl RegistryTransport {
     }
 }
 
-type Mappings = &'static [(&'static str, &'static str)];
-fn standard_mappings(manager: Manager) -> Result<(&'static str, Mappings), Error> {
+fn sha224_hex(bytes: &VerifiedArtifact) -> String {
+    format!("{:x}", Sha224::digest(bytes.as_bytes()))
+}
+
+fn package_name(manager: Manager) -> Result<&'static str, Error> {
     match manager {
-        Manager::Npm => Ok((
-            "npm",
-            &[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")],
-        )),
-        Manager::Pnpm => Ok((
-            "pnpm",
-            &[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")],
-        )),
+        Manager::Npm => Ok("npm"),
+        Manager::Pnpm => Ok("pnpm"),
         _ => Err(Error::InvalidLock),
     }
+}
+
+type Mappings = &'static [(&'static str, &'static str)];
+/// Published `bin` entries, primary first. pnpm 11 moved its entry points to
+/// ES modules and added the `pn`/`pnx` aliases (its `.cjs` files remain only
+/// as Corepack shims); pnpm 12's entry points are native binaries.
+fn standard_mappings(manager: Manager, version: &Version) -> Result<Mappings, Error> {
+    match (manager, version.major) {
+        (Manager::Npm, _) => Ok(&[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")]),
+        (Manager::Pnpm, ..=10) => Ok(&[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")]),
+        (Manager::Pnpm, 11) => Ok(&[
+            ("pnpm", "bin/pnpm.mjs"),
+            ("pnpx", "bin/pnpx.mjs"),
+            ("pn", "bin/pnpm.mjs"),
+            ("pnx", "bin/pnpx.mjs"),
+        ]),
+        (Manager::Pnpm, _) => Err(Error::NativePnpm),
+        _ => Err(Error::InvalidLock),
+    }
+}
+
+/// Pure check of locked executables for every platform variant: the primary
+/// entry point plus only published mappings (npm locks all of them).
+pub(crate) fn validate_executables(
+    manager: Manager,
+    version: &str,
+    executables: &BTreeMap<String, String>,
+) -> Result<(), Error> {
+    let version = Version::parse(version).map_err(|_| Error::InvalidLock)?;
+    let mappings = standard_mappings(manager, &version)?;
+    if executables.get(package_name(manager)?).map(String::as_str) != Some(mappings[0].1)
+        || (manager == Manager::Npm && executables.len() != mappings.len())
+        || executables
+            .iter()
+            .any(|(name, path)| !mappings.iter().any(|&(n, p)| n == name && p == path))
+    {
+        return Err(Error::InvalidLock);
+    }
+    Ok(())
 }
 
 fn extract_package(
@@ -168,7 +219,7 @@ fn extract_package(
     executables: &BTreeMap<String, String>,
     exact_bins: bool,
 ) -> Result<ExtractedArtifact, Error> {
-    let (name, _) = standard_mappings(manager)?;
+    let name = package_name(manager)?;
     let mut required = vec!["package.json"];
     required.extend(executables.values().map(String::as_str));
     let tree = turborepo_archive::extract(
@@ -223,7 +274,7 @@ impl RegistryPlan {
         authored: Option<&CorepackIntegrity>,
         manager: Manager,
     ) -> Result<Self, Error> {
-        let (name, mappings) = standard_mappings(manager)?;
+        let name = package_name(manager)?;
         if !cfg!(unix)
             || !matches!(
                 platform,
@@ -258,16 +309,10 @@ impl RegistryPlan {
             || artifact.format != Format::TarGz
             || artifact.root_prefix.as_deref() != Some("package")
             || artifact.destination.is_some()
-            || artifact.executables.get(name).map(String::as_str) != Some(mappings[0].1)
-            || (manager == Manager::Npm && artifact.executables.len() != mappings.len())
-            || artifact.executables.iter().any(|(name, path)| {
-                !mappings.iter().any(|(expected_name, expected_path)| {
-                    name == expected_name && path == expected_path
-                })
-            })
         {
             return Err(Error::InvalidLock);
         }
+        validate_executables(manager, &package.version, &artifact.executables)?;
         ExpectedSha256::from_hex(&artifact.sha256)?;
         let node = node.inventory_tool().clone();
         // A changed authored constraint must re-verify, even when archive SHA-256
@@ -378,7 +423,11 @@ impl PreparedRegistry {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
         copy_tree(&self.tree.root_path(), destination)?;
-        fs::create_dir(destination.join(&self.launch_directory))?;
+        // Owner-only like every other store directory, whatever the umask.
+        let mut launch = fs::DirBuilder::new();
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
+        launch.create(destination.join(&self.launch_directory))?;
         for (name, path) in &self.tool.executables {
             let script = format!(
                 "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
