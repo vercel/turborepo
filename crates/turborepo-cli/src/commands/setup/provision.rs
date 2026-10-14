@@ -20,6 +20,7 @@ use turborepo_setup::{
     source_policy::OfficialSourcePolicy,
     uv_provision::UvPlan,
     uv_resolution::UvTransport,
+    yarn_provision::YarnPlan,
 };
 use turborepo_tool_install::Store;
 
@@ -161,13 +162,14 @@ pub(super) struct Plans {
     pub uv: Option<UvPlan>,
     pub python: Option<PythonPlan>,
     pub rustup: Option<RustupPlan>,
+    pub yarn: Option<YarnPlan>,
     pub rust: Option<RustPlan>,
     pub artifacts: Vec<ArtifactPlan>,
     pub go: Option<GoPlan>,
 }
 
-const SUPPORTED: [&str; 8] = [
-    "node", "npm", "pnpm", "uv", "python", "rust", "rustup", "go",
+const SUPPORTED: [&str; 9] = [
+    "node", "npm", "pnpm", "uv", "python", "rust", "rustup", "go", "yarn",
 ];
 pub(super) fn plans(
     snapshot: &Snapshot,
@@ -181,7 +183,7 @@ pub(super) fn plans(
     }
     if lock.tools().iter().any(|(id, tool)| !supported(id, tool)) {
         return Err(Error::Unsupported(
-            "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are \
+            "only managed Node, npm, pnpm, uv, Python, Rust, Go, Yarn, and additional tools are \
              supported",
         ));
     }
@@ -201,7 +203,7 @@ pub(super) fn plans(
     } else {
         None
     };
-    let (mut pnpm, mut npm) = (None, None);
+    let (mut pnpm, mut npm, mut yarn) = (None, None, None);
     if let Some(manager) = snapshot.package_manager()? {
         let node = node
             .as_ref()
@@ -212,6 +214,9 @@ pub(super) fn plans(
             }
             Manager::Npm => {
                 npm = NpmPlan::from_declaration(lock, platform, node, &manager)?;
+            }
+            Manager::Yarn => {
+                yarn = Some(YarnPlan::from_declaration(lock, platform, node, &manager)?);
             }
             _ => return Err(Error::Unsupported("package manager provisioning")),
         }
@@ -298,6 +303,7 @@ pub(super) fn plans(
         rust,
         artifacts,
         go,
+        yarn,
     })
 }
 
@@ -339,7 +345,9 @@ pub(super) fn lock_report(
 /// ecosystems that join resolution extend these, never one caller.
 pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
     let declared = snapshot.declarations();
-    let js_manager = declared.contains_key("npm") || declared.contains_key("pnpm");
+    let js_manager = declared.contains_key("npm")
+        || declared.contains_key("pnpm")
+        || declared.contains_key("yarn");
     if !declared.contains_key("node")
         && (js_manager
             || (!declared.contains_key("uv")
@@ -409,8 +417,8 @@ pub(super) fn run(
             && lock.tools().iter().any(|(id, tool)| !supported(id, tool))
         {
             return Err(Error::Unsupported(
-                "only managed Node, npm, pnpm, uv, Python, Rust, Go, and additional tools are \
-                 supported",
+                "only managed Node, npm, pnpm, uv, Python, Rust, Go, Yarn, and additional tools \
+                 are supported",
             ));
         }
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
@@ -521,6 +529,7 @@ pub(super) fn run(
         rust,
         artifacts,
         go,
+        yarn,
     } = plans(&snapshot, lock)?;
     let trust = match trust {
         Some(trust) => trust,
@@ -535,6 +544,7 @@ pub(super) fn run(
         python.as_ref().map(PythonPlan::inventory_tool),
         rust.as_ref().map(RustPlan::inventory_tool),
         go.as_ref().map(GoPlan::inventory_tool),
+        yarn.as_ref().map(YarnPlan::inventory_tool),
     ]
     .into_iter()
     .flatten()
@@ -584,6 +594,7 @@ pub(super) fn run(
         prepared_rustup,
         prepared_artifacts,
         prepared_go,
+        prepared_yarn,
     ) = runtime.block_on(async {
         let recheck = || {
             preflight()?;
@@ -657,7 +668,15 @@ pub(super) fn run(
             }
             None => None,
         };
-        Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared, go))
+        recheck()?;
+        let yarn = match &yarn {
+            Some(plan) => {
+                plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                    .await?
+            }
+            None => None,
+        };
+        Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared, go, yarn))
     })?;
     preflight()?;
     revalidate(discovery)?;
@@ -712,6 +731,10 @@ pub(super) fn run(
                 .as_ref()
                 .ok_or_else(missing)?
                 .stage(tool, destination),
+            "yarn" => prepared_yarn
+                .as_ref()
+                .ok_or_else(missing)?
+                .stage(tool, destination),
             "go" => prepared_go
                 .as_ref()
                 .ok_or_else(missing)?
@@ -747,6 +770,7 @@ pub(super) fn run(
                     || (tool.id == "rustup" && prepared_rustup.is_none())
                     || (tool.id == "python" && prepared_python.is_none())
                     || (tool.id == "rust" && prepared_rust.is_none())
+                    || (tool.id == "yarn" && prepared_yarn.is_none())
                     || (tool.id == "go" && prepared_go.is_none()),
                 String::new(),
             ),

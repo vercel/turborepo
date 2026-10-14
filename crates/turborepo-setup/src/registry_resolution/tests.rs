@@ -494,7 +494,7 @@ async fn bounded_inputs_download_package_and_archive_with_no_request_escape() {
     assert!(
         registry
             .transport
-            .resolve_exact(Manager::Yarn, "10.0.0", None)
+            .resolve_exact(Manager::Bun, "10.0.0", None)
             .await
             .is_err()
     );

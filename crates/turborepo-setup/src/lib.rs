@@ -51,6 +51,7 @@ pub mod uv_sync;
 pub mod version_managers;
 pub mod version_request;
 pub mod writer_storage;
+pub mod yarn_provision;
 
 /// Locked artifact preparation policy; never changes resolution or health
 /// evidence.

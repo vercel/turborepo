@@ -1634,6 +1634,11 @@ fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
             r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#,
             "invalid native setup declarations",
         ),
+        (
+            Some("24.x"),
+            r#"{"packageManager":"yarn@https://repo.yarnpkg.com/4.5.0/packages/yarnpkg-cli/bin/yarn.js"}"#,
+            "package.json#/packageManager: URLs, paths and aliases are unsupported",
+        ),
     ] {
         let temp = tempfile::tempdir().unwrap();
         write(temp.path(), "turbo.json", ENABLED);
