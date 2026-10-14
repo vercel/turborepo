@@ -89,7 +89,7 @@ fn official(platform: Platform, version: &str, sha256: &str) -> Result<Artifact,
         "bun"
     };
     Ok(Artifact {
-        alternates: Vec::new(),
+        alternates: BTreeMap::new(),
         url: format!("{RELEASES}{}/bun-{target}.zip", release(version)?),
         sha256: sha256.into(),
         format: Format::Zip,
