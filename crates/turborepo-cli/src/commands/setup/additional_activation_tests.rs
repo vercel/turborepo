@@ -100,7 +100,7 @@ fn exec_check_and_hook_expose_the_tool_and_stale_states_never_fall_back() {
     let output = root.join("apps/web/exec-result");
     let launch = |mut command: std::process::Command| {
         command.stdout(fs::File::create(&output)?);
-        shared_child::SharedChild::spawn(&mut command).map(Arc::new)
+        command.status()
     };
     let command = ["fixture", "a b"].map(OsString::from);
     let tools = select(&f).unwrap().unwrap();

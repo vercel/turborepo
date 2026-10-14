@@ -1,10 +1,9 @@
 //! `turbo exec`: run one program with the managed environment that `turbo run`
 //! gives tasks. Never provisions, downloads, or writes setup state.
 
-use std::{env, ffi::OsString, io, process::ExitStatus, sync::Arc};
+use std::{env, ffi::OsString, io, process::ExitStatus};
 
 use miette::Diagnostic;
-use shared_child::SharedChild;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_run::ManagedEnvironment;
@@ -77,7 +76,21 @@ pub fn run(
         return Err(Error::ManagedSetupRequired.into());
     };
     let cwd = invocation_cwd(args, |name| env::var_os(name))?;
-    Ok(spawn(tools.as_ref(), command, &cwd, launch)?)
+    Ok(spawn(tools.as_ref(), command, &cwd, launcher(args))?)
+}
+
+/// Killing `turbo exec` must kill the program it runs. On Unix, exec becomes
+/// the program, except in a local CLI that global turbo handed off to
+/// (`--skip-infer`). Global turbo reports that CLI's status and would turn a
+/// signal death into 2, so the CLI stays the parent and reports 128 + signal.
+fn launcher(args: &Args) -> fn(std::process::Command) -> io::Result<ExitStatus> {
+    #[cfg(unix)]
+    if !args.skip_infer {
+        return replace_process;
+    }
+    #[cfg(not(unix))]
+    let _ = args;
+    run_child
 }
 
 /// The program runs in `--cwd`, else where the user invoked turbo. Global
@@ -102,7 +115,7 @@ pub(crate) fn spawn(
     tools: &dyn ManagedEnvironment,
     command: &[OsString],
     cwd: &AbsoluteSystemPath,
-    launch: impl FnOnce(std::process::Command) -> io::Result<Arc<SharedChild>>,
+    launch: impl FnOnce(std::process::Command) -> io::Result<ExitStatus>,
 ) -> Result<i32, Error> {
     let Some((program, arguments)) = command.split_first() else {
         unreachable!("the exec grammar requires a program");
@@ -123,33 +136,50 @@ pub(crate) fn spawn(
         .args(arguments)
         .current_dir(cwd.as_std_path())
         .envs(overrides.iter());
-    let child = launch(child).map_err(|source| Error::Spawn {
-        program: display(),
-        source,
-    })?;
-    let status = child.wait().map_err(|source| Error::Spawn {
+    let status = launch(child).map_err(|source| Error::Spawn {
         program: display(),
         source,
     })?;
     Ok(exit_code(status))
 }
 
-/// Same signal handling as local CLI handoff: SIGTERM and SIGHUP reach the
-/// child as SIGTERM, and Ctrl+C reaches it from the terminal exactly once.
-/// On Windows the child shares turbo's console, which delivers Ctrl+C to it
-/// directly, while turbo swallows the event and waits for its exit status.
-fn launch(command: std::process::Command) -> io::Result<Arc<SharedChild>> {
+/// Replaces turbo with the program (`execve`) once its environment is ready.
+/// No turbo process is left to kill on its own: SIGKILL, every other signal,
+/// job control, and the exit status, including a signal death, reach or come
+/// from the program as if it ran directly. Returns only if it cannot start.
+#[cfg(unix)]
+fn replace_process(mut command: std::process::Command) -> io::Result<ExitStatus> {
+    use std::{io::Write, os::unix::process::CommandExt};
+    // Nothing buffered may be lost with the process image.
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+    Err(command.exec())
+}
+
+/// Runs the program as a child: SIGTERM and SIGHUP reach it as SIGTERM, and
+/// Ctrl+C reaches it from the terminal exactly once.
+#[cfg(unix)]
+fn run_child(command: std::process::Command) -> io::Result<ExitStatus> {
     let child = turborepo_process::spawn_child(command)?;
     // Ignore SIGINT only after spawning, so the child keeps its disposition.
-    #[cfg(unix)]
     unsafe {
         libc::signal(libc::SIGINT, libc::SIG_IGN);
     }
-    Ok(child)
+    child.wait()
 }
 
-/// A signal death becomes the shell's `128 + signal`, so in-process exec and
-/// local CLI handoff report the same status. Windows exit codes, including
+/// Windows has no `execve`. The program shares turbo's console, which
+/// delivers Ctrl+C to it directly while turbo swallows the event and waits.
+/// It runs in a kill-on-close job object, so terminating turbo also
+/// terminates the program and everything it started. After the program exits
+/// on its own, whatever it deliberately left running survives, as on Unix.
+#[cfg(windows)]
+fn run_child(command: std::process::Command) -> io::Result<ExitStatus> {
+    turborepo_process::spawn_contained_child(command)?.wait()
+}
+
+/// A child's signal death becomes the shell's `128 + signal`, the status a
+/// shell reports for a program it ran directly. Windows exit codes, including
 /// NTSTATUS values such as `STATUS_CONTROL_C_EXIT`, pass through unchanged.
 pub(crate) fn exit_code(status: ExitStatus) -> i32 {
     #[cfg(unix)]
@@ -226,8 +256,8 @@ mod tests {
         (temp, tools)
     }
 
-    fn plain(mut command: std::process::Command) -> io::Result<Arc<SharedChild>> {
-        SharedChild::spawn(&mut command).map(Arc::new)
+    fn plain(mut command: std::process::Command) -> io::Result<ExitStatus> {
+        command.status()
     }
 
     #[test]
@@ -258,7 +288,7 @@ mod tests {
     fn stale_or_missing_tools_never_start_a_process() {
         let (temp, tools) = fixture(true);
         let work = AbsoluteSystemPathBuf::try_from(temp.path().join("work")).unwrap();
-        let never = |_| -> io::Result<Arc<SharedChild>> { panic!("must not spawn") };
+        let never = |_| -> io::Result<ExitStatus> { panic!("must not spawn") };
         let command = [OsString::from("node")];
         assert!(matches!(
             spawn(&tools, &command, &work, never),
@@ -285,7 +315,7 @@ mod tests {
         let ready = work.as_std_path().join("ready");
         let child = {
             let work = work.clone();
-            std::thread::spawn(move || spawn(&tools, &[OsString::from("serve")], &work, launch))
+            std::thread::spawn(move || spawn(&tools, &[OsString::from("serve")], &work, run_child))
         };
         let started = std::time::Instant::now();
         while !ready.exists() {
@@ -297,6 +327,86 @@ mod tests {
         assert_eq!(child.join().unwrap().unwrap(), 5);
         let signals = fs::read_to_string(work.as_std_path().join("signals")).unwrap();
         assert_eq!(signals, "term\n");
+    }
+
+    const HOST: &str = "TURBO_EXEC_TEST_REPLACE_HOST";
+
+    /// Runs exec like the CLI does, in a process the test can signal.
+    fn exec_host(spec: &str) {
+        let spec: serde_json::Value = serde_json::from_str(spec).unwrap();
+        let tools = Tools {
+            path: spec["path"].as_str().unwrap().to_owned(),
+            checks: AtomicUsize::new(0),
+            stale: false,
+        };
+        let work = AbsoluteSystemPathBuf::new(spec["work"].as_str().unwrap()).unwrap();
+        let words: Vec<String> = serde_json::from_value(spec["args"].clone()).unwrap();
+        let args = Args::parse_args(words.into_iter().map(OsString::from).collect()).unwrap();
+        let status = spawn(&tools, &[OsString::from("serve")], &work, launcher(&args)).unwrap();
+        fs::write(work.as_std_path().join("status"), status.to_string()).unwrap();
+    }
+
+    /// SIGKILL to exec is SIGKILL to the program: exec became it. A local
+    /// CLI that global turbo handed off to stays the program's parent.
+    #[test]
+    fn exec_becomes_the_program_unless_handed_off() {
+        if let Ok(spec) = env::var(HOST) {
+            return exec_host(&spec);
+        }
+        for (flags, replaced) in [(&[][..], true), (&["--skip-infer"][..], false)] {
+            let (temp, tools) = fixture(false);
+            let body = "trap 'exit 5' TERM\necho $$ > ready\nwhile :; do :; done";
+            tool(&temp.path().join("managed"), "serve", body);
+            let work = temp.path().join("work");
+            let args: Vec<_> = ["turbo"]
+                .iter()
+                .chain(flags)
+                .chain(&["exec", "--", "serve"])
+                .collect();
+            let spec = serde_json::json!({ "path": tools.path, "work": work, "args": args });
+            let mut host = std::process::Command::new(env::current_exe().unwrap())
+                .args([
+                    "commands::exec::tests::exec_becomes_the_program_unless_handed_off",
+                    "--exact",
+                ])
+                .env(HOST, spec.to_string())
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            let ready = work.join("ready");
+            let started = std::time::Instant::now();
+            let pid: i32 = loop {
+                if let Some(pid) = fs::read_to_string(&ready)
+                    .ok()
+                    .and_then(|text| text.trim().parse().ok())
+                {
+                    break pid;
+                }
+                assert!(started.elapsed().as_secs() < 30, "{flags:?}: never started");
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
+            let host_pid = host.id() as i32;
+            if (pid == host_pid) != replaced {
+                unsafe { libc::kill(pid, libc::SIGKILL) };
+                let _ = host.kill();
+                panic!("{flags:?}: exec is {host_pid}, the program is {pid}");
+            }
+            let signal = if replaced {
+                libc::SIGKILL
+            } else {
+                libc::SIGTERM
+            };
+            unsafe { libc::kill(host_pid, signal) };
+            let status = host.wait().unwrap();
+            if replaced {
+                assert_eq!(status.signal(), Some(libc::SIGKILL));
+            } else {
+                assert!(status.success(), "{status:?}");
+                let code = fs::read_to_string(work.join("status")).unwrap();
+                assert_eq!(code, "5");
+            }
+        }
     }
 
     #[test]
@@ -476,8 +586,8 @@ fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
         }
     }
 
-    fn plain(mut command: std::process::Command) -> io::Result<Arc<SharedChild>> {
-        SharedChild::spawn(&mut command).map(Arc::new)
+    fn plain(mut command: std::process::Command) -> io::Result<ExitStatus> {
+        command.status()
     }
 
     fn words(command: &[&str]) -> Vec<OsString> {
@@ -545,21 +655,29 @@ fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
         }
     }
 
-    /// Runs in a dedicated hidden console, where Ctrl+C reaches every attached
-    /// process as a keypress would, but never the test runner's console.
-    fn ctrl_c_host(spec: &str) {
+    fn host_spec(spec: &str) -> (AbsoluteSystemPathBuf, Tools, Vec<OsString>) {
         let spec: Value = serde_json::from_str(spec).unwrap();
         let work = AbsoluteSystemPathBuf::new(spec["work"].as_str().unwrap()).unwrap();
         let tools = Tools(spec["path"].as_str().unwrap().to_owned());
         let command: Vec<String> = serde_json::from_value(spec["command"].clone()).unwrap();
-        let command: Vec<OsString> = command.into_iter().map(OsString::from).collect();
+        (
+            work,
+            tools,
+            command.into_iter().map(OsString::from).collect(),
+        )
+    }
+
+    /// Runs in a dedicated hidden console, where Ctrl+C reaches every attached
+    /// process as a keypress would, but never the test runner's console.
+    fn ctrl_c_host(spec: &str) {
+        let (work, tools, command) = host_spec(spec);
         // GitHub's Windows runners start tests with Ctrl+C ignored, a state
         // every child inherits. Restore the interactive default.
         unsafe { SetConsoleCtrlHandler(None, 0) };
         let pids = work.as_std_path().join("pids.json");
         let exec = {
             let work = work.clone();
-            thread::spawn(move || spawn(&tools, &command, &work, launch))
+            thread::spawn(move || spawn(&tools, &command, &work, run_child))
         };
         let access = PROCESS_SYNCHRONIZE | PROCESS_TERMINATE;
         let tree: Vec<_> = wait_for(&pids)
@@ -637,6 +755,95 @@ fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
             );
             let interrupts = work.as_std_path().join("interrupts");
             assert_eq!(fs::read_to_string(interrupts).unwrap(), "x", "{name}");
+        }
+        assert!(!fixture.host_ran());
+    }
+
+    const TREE_HOST: &str = "TURBO_EXEC_TEST_TREE_HOST";
+
+    /// Starts a detached descendant at once, which nothing but a job object
+    /// would take down with it. With `exit`, exits 3 once `release` exists.
+    const TREE: &str = r#"
+const fs = require('fs');
+const child = require('child_process').spawn(process.execPath,
+  ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore', detached: true });
+fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
+setInterval(() => process.argv[2] === 'exit' && fs.existsSync('release') && process.exit(3), 20);
+"#;
+
+    fn tree_host(spec: &str) {
+        let (work, tools, command) = host_spec(spec);
+        let status = spawn(&tools, &command, &work, run_child).unwrap();
+        fs::write(work.as_std_path().join("status"), status.to_string()).unwrap();
+    }
+
+    /// TerminateProcess on exec (CI cancellation, an IDE's stop button) takes
+    /// the command and all of its descendants with it. After the command
+    /// exits on its own, a descendant it deliberately left running survives.
+    #[test]
+    fn terminating_exec_kills_the_command_tree_but_a_normal_exit_releases_it() {
+        if let Ok(spec) = env::var(TREE_HOST) {
+            return tree_host(&spec);
+        }
+        let fixture = Fixture::new();
+        for terminate in [true, false] {
+            let work = fixture.work(if terminate { "terminated" } else { "exited" });
+            let script = work.as_std_path().join("tree.js");
+            fs::write(&script, TREE).unwrap();
+            let mode = if terminate { "run" } else { "exit" };
+            let command = ["node", script.to_str().unwrap(), mode];
+            let spec =
+                json!({ "work": work.as_str(), "path": fixture.tools.0, "command": command });
+            let mut host = std::process::Command::new(env::current_exe().unwrap())
+                .args([
+                    "commands::exec::windows_tests::terminating_exec_kills_the_command_tree_but_a_normal_exit_releases_it",
+                    "--exact",
+                ])
+                .env(TREE_HOST, spec.to_string())
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap();
+            let access = PROCESS_SYNCHRONIZE | PROCESS_TERMINATE;
+            let tree: Vec<_> = wait_for(&work.as_std_path().join("pids.json"))
+                .into_iter()
+                .map(|pid| unsafe { OpenProcess(access, 0, pid) })
+                .collect();
+            assert!(tree.iter().all(|handle| !handle.is_null()));
+            if terminate {
+                host.kill().unwrap();
+            } else {
+                fs::write(work.as_std_path().join("release"), "").unwrap();
+            }
+            let start = Instant::now();
+            let status = loop {
+                if let Some(status) = host.try_wait().unwrap() {
+                    break status;
+                }
+                if start.elapsed() > TIMEOUT {
+                    let _ = host.kill();
+                    panic!("exec did not return");
+                }
+                thread::sleep(Duration::from_millis(50));
+            };
+            let wait = if terminate { 10_000 } else { 500 };
+            let alive: Vec<_> = tree
+                .into_iter()
+                .map(|handle| unsafe {
+                    let alive = WaitForSingleObject(handle, wait) != WAIT_OBJECT_0;
+                    TerminateProcess(handle, 1);
+                    CloseHandle(handle);
+                    alive
+                })
+                .collect();
+            if terminate {
+                assert_eq!(alive, [false, false], "the command tree outlived exec");
+            } else {
+                assert!(status.success(), "{status:?}");
+                let code = fs::read_to_string(work.as_std_path().join("status")).unwrap();
+                assert_eq!(code, "3");
+                assert_eq!(alive, [false, true], "a normal exit must release the job");
+            }
         }
         assert!(!fixture.host_ran());
     }

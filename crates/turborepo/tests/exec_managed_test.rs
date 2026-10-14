@@ -239,6 +239,7 @@ fn exec_fails_after_drift_or_damage_and_runs_nothing() {
 mod parity {
     use std::{
         io::Read,
+        os::unix::process::ExitStatusExt,
         process::Stdio,
         thread,
         time::{Duration, Instant},
@@ -378,7 +379,7 @@ esac
                 let mut process =
                     CapturedProcess::spawn(&mut command(&repo, &launcher, entry, &words));
                 process.track_task(wait_for(&home.join("ready")));
-                // Exec ignores SIGINT only once its child is running.
+                // Let the npm wrapper finish starting before signaling.
                 thread::sleep(Duration::from_millis(200));
                 let target = Pid::from_raw(process.child.id() as i32);
                 if group {
@@ -396,6 +397,41 @@ esac
                 );
                 assert_eq!(take(&home.join("signals")), record, "{entry:?} {signal}");
             }
+        }
+    }
+
+    fn parent(pid: i32) -> i32 {
+        let ps = Command::new("ps")
+            .args(["-o", "ppid=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&ps.stdout).trim().parse().unwrap()
+    }
+
+    /// TURBO-6424: exec becomes the managed command, so no turbo process is
+    /// left that SIGKILL could take down without it.
+    #[test]
+    fn sigkill_to_exec_leaves_no_command_running() {
+        let repo = Repo::provisioned_with(NODE);
+        let launcher = ProcessLauncher::new();
+        let home = repo.owned.home().to_owned();
+        for entry in ENTRIES {
+            let words = ["exec", "--", "node", "wait"];
+            let mut process = CapturedProcess::spawn(&mut command(&repo, &launcher, entry, &words));
+            let pid = wait_for(&home.join("ready"));
+            process.track_task(pid);
+            let entrypoint = process.child.id() as i32;
+            // The wrapper is a Node parent; its native turbo became the command.
+            let exec = match entry {
+                Entrypoint::NpmWrapper => parent(pid),
+                _ => pid,
+            };
+            assert_eq!(exec, entrypoint, "{entry:?}: exec is not the command");
+            kill(Pid::from_raw(pid), Signal::SIGKILL).unwrap();
+            // finish() also waits until the managed command itself is gone.
+            let output = process.finish(TIMEOUT);
+            assert_eq!(output.status.signal(), Some(9), "{entry:?}");
+            assert_eq!(take(&home.join("signals")), "", "{entry:?}");
         }
     }
 
