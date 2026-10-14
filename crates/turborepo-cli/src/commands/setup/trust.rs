@@ -37,9 +37,16 @@ struct Record {
     installation: Installation,
 }
 
-pub(super) struct TrustStore {
+pub(crate) struct TrustStore {
     directory: PathBuf,
     root: PathBuf,
+}
+
+/// Setup-recorded tools for the interactive shell hook only.
+pub(crate) struct Recorded {
+    pub(crate) bin: PathBuf,
+    /// turbo.lock changed since setup recorded this installation.
+    pub(crate) stale: bool,
 }
 
 fn unsafe_state() -> io::Error {
@@ -135,7 +142,7 @@ fn private_directory(path: &Path) -> io::Result<()> {
 impl TrustStore {
     // The caller chooses a user location, never a repository-authored path.
     // No writes until publication. Missing user state simply prohibits reuse.
-    pub(super) fn new(base: &Path, root: &Path) -> io::Result<Self> {
+    pub(crate) fn new(base: &Path, root: &Path) -> io::Result<Self> {
         if !cfg!(unix)
             || !base.is_absolute()
             || base.components().any(|c| matches!(c, Component::ParentDir))
@@ -166,7 +173,7 @@ impl TrustStore {
         Ok(Self { directory, root })
     }
 
-    fn path(&self) -> PathBuf {
+    pub(crate) fn path(&self) -> PathBuf {
         // Encoded native bytes avoid lossy collisions for non-UTF8 Unix roots.
         self.directory.join(format!(
             "{}.json",
@@ -284,6 +291,29 @@ impl TrustStore {
         };
         // Damaged inventory is repairable, never reusable.
         Ok(self.installation(store).ok().flatten().as_ref() == Some(&record.installation))
+    }
+
+    /// Lenient read-only view for the shell hook. Like allows_reuse, lock
+    /// drift does not prevent selection; it is reported so the hook can keep
+    /// the last-installed tools active with a notice. The current installation
+    /// must still equal the recorded one. MUST NOT authorize run or exec,
+    /// which stay strict. Never opens a writable Store or creates user state.
+    pub(crate) fn recorded(&self) -> io::Result<Option<Recorded>> {
+        let Some(record) = self.load()? else {
+            return Ok(None);
+        };
+        let installation = self
+            .inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))
+            .ok()
+            .flatten();
+        if installation.as_ref() != Some(&record.installation) {
+            return Ok(None);
+        }
+        let lock = read(&self.root.join("turbo.lock"), false)?;
+        Ok(Some(Recorded {
+            stale: lock.is_none_or(|lock| hash(&lock) != record.lock_sha256),
+            bin: record.installation.bin,
+        }))
     }
 
     /// Strict read-only consumer check, unlike setup reuse. The supplied plan

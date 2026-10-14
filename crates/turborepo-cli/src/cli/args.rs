@@ -427,6 +427,24 @@ impl From<CompletionShell> for usage::complete::Shell {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HookShell {
+    Bash,
+    Zsh,
+}
+impl FromStr for HookShell {
+    type Err = String;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "bash" => Ok(Self::Bash),
+            "zsh" => Ok(Self::Zsh),
+            _ => Err(format!(
+                "unsupported shell: {value} (supported shells: bash, zsh)"
+            )),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NonEmptyPath(pub(crate) Utf8PathBuf);
 impl FromStr for NonEmptyPath {
@@ -643,11 +661,20 @@ impl Args {
     /// Route setup before validating its tail or inferring a repository.
     /// The command grammar consumes global values and distinguishes task names.
     pub(crate) fn is_setup_command(words: &[OsString]) -> bool {
+        Self::selects_command(words, "setup")
+    }
+
+    /// The shell hook always runs in the invoking (global) binary.
+    pub(crate) fn is_hook_command(words: &[OsString]) -> bool {
+        Self::selects_command(words, "hook")
+    }
+
+    fn selects_command(words: &[OsString], name: &str) -> bool {
         let argv: Vec<_> = words.iter().skip(1).map(OsString::as_os_str).collect();
         let mut parser = usage::Parser::new(Self::command(), &argv);
         while let Some(Ok(event)) = parser.next_event() {
             if let usage::Event::Command(command) = event {
-                return command.name == "setup";
+                return command.name == name;
             }
         }
         false
@@ -1149,6 +1176,20 @@ pub enum Command {
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: CompletionShell },
+    /// EXPERIMENTAL: Print a shell hook that activates managed tools at the
+    /// prompt
+    ///
+    /// Add `eval "$(turbo hook zsh)"` to ~/.zshrc or `eval "$(turbo hook
+    /// bash)"` to ~/.bashrc. Inside a repository with root
+    /// futureFlags.experimentalSetup, the hook puts the tools `turbo setup`
+    /// installed first on PATH and removes them when you leave. It never
+    /// installs tools or updates turbo.lock.
+    Hook {
+        shell: HookShell,
+        /// Print the shell changes for the current directory
+        #[usage(long, hide = true)]
+        export: bool,
+    },
     /// Runs the Turborepo background daemon
     Daemon {
         /// Set the idle timeout for turbod

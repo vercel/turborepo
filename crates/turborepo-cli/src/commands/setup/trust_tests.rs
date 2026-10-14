@@ -200,6 +200,33 @@ fn lock_drift_is_setup_reuse_not_run_authority_and_failed_setup_keeps_record() {
 }
 
 #[test]
+fn shell_hook_view_keeps_recorded_tools_on_lock_drift_but_never_repo_inventory() {
+    for case in 0..5 {
+        let f = Fixture::new();
+        let u = Upstream::new(&f, false, None);
+        f.run(&u, FROZEN).unwrap();
+        let bin = Store::inspect(f.owned.root()).unwrap().unwrap().bin;
+        let fresh = trust(&f).recorded().unwrap().unwrap();
+        assert!(fresh.bin == bin && !fresh.stale);
+        match case {
+            0 => fs::write(f.owned.root().join("turbo.lock"), format!("{}\n", f.lock)).unwrap(),
+            1 => seed(&f, false),
+            2 => fs::write(bin.join("../tools/node/resource"), b"tampered").unwrap(),
+            3 => fs::remove_dir_all(f.owned.root().join(".turbo/tools")).unwrap(),
+            _ => fs::remove_file(record(&f).0).unwrap(),
+        }
+        let recorded = trust(&f).recorded().unwrap();
+        if case == 0 {
+            let recorded = recorded.unwrap();
+            assert!(recorded.bin == bin && recorded.stale);
+        } else {
+            assert!(recorded.is_none(), "case {case}");
+        }
+        f.no_execution();
+    }
+}
+
+#[test]
 fn moved_and_same_path_recloned_roots_cannot_reuse_records() {
     for same_path in [false, true] {
         let f = Fixture::new();

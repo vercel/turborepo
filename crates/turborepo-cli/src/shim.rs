@@ -55,7 +55,8 @@ impl TurboRunner for TurboCliRunner<'_> {
     type Error = cli::Error;
 
     fn is_global_command(&self) -> bool {
-        cli::Args::is_setup_command(&std::env::args_os().collect::<Vec<_>>())
+        let words: Vec<_> = std::env::args_os().collect();
+        cli::Args::is_setup_command(&words) || cli::Args::is_hook_command(&words)
     }
 
     fn managed_run_schema(
@@ -266,8 +267,10 @@ pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> R
     // Parse args to get verbosity and color config for the subscriber
     let args = ShimArgs::parse().map_err(turborepo_shim::Error::from)?;
 
-    // Setup must not write profiles, even for help or rejected task-only flags.
-    let is_setup = cli::Args::is_setup_command(&std::env::args_os().collect::<Vec<_>>());
+    // Setup and the shell hook must not write profiles, even for help or
+    // rejected task-only flags.
+    let words: Vec<_> = std::env::args_os().collect();
+    let is_setup = cli::Args::is_setup_command(&words) || cli::Args::is_hook_command(&words);
     #[cfg(feature = "heap-dhat")]
     if !is_setup && let Some(heap_profile_file) = args.heap_profile_file() {
         crate::heap_profile::start_global(heap_profile_file);
