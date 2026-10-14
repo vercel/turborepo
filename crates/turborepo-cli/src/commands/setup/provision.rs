@@ -40,7 +40,9 @@ pub(super) struct Transports {
     pub python: PythonTransport,
     #[cfg(any(test, feature = "test-support"))]
     pub trust_base: Option<std::path::PathBuf>,
-    /// Fixture override; otherwise built from the locked artifact origins.
+    /// A mirror or fixture; otherwise built from the locked artifact origins.
+    /// Either way it uses the shared download cache, and offline setup makes
+    /// it cache-only.
     pub artifact: Option<ArtifactTransport>,
     pub go: GoTransport,
     pub bun: BunTransport,
@@ -98,7 +100,12 @@ impl Transports {
             python,
             #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
-            artifact: None,
+            // Otherwise built from the locked artifact origins.
+            artifact: mirrors
+                .artifact
+                .as_ref()
+                .map(|mirror| ArtifactTransport::mirrored(policy, mirror))
+                .transpose()?,
             go,
             bun,
         })
@@ -113,8 +120,10 @@ impl Transports {
             .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
     }
 
-    // Only Node/registry adapters enter cached offline provisioning. Other
-    // adapters retain the read-only trusted-repeat path in offline::run.
+    // Only Node/registry adapters and additional tools enter cached offline
+    // provisioning; the additional-tool transport is made cache-only where it
+    // is built. Other adapters retain the read-only trusted-repeat path in
+    // offline::run.
     fn offline(self) -> Self {
         Self {
             node: self.node.offline(),
@@ -123,6 +132,12 @@ impl Transports {
             ..self
         }
     }
+}
+
+/// Adapters whose locked artifacts offline setup can install from the shared
+/// download cache.
+pub(super) fn offline_cacheable(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
+    matches!(id, "node" | "pnpm" | "npm") || tool.adapter == additional::ADAPTER
 }
 
 fn supported(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
@@ -571,11 +586,11 @@ pub(super) fn run(
         // Do not let a non-cache adapter enter a network preparation path.
         if lock
             .tools()
-            .keys()
-            .any(|id| !matches!(id.as_str(), "node" | "pnpm" | "npm"))
+            .iter()
+            .any(|(id, tool)| !offline_cacheable(id, tool))
         {
             return Err(Error::Unsupported(
-                "offline cache repair supports Node, npm, and pnpm only",
+                "offline cache repair supports Node, npm, pnpm, and additional tools only",
             ));
         }
     } else if request.lock == super::LockMode::Frozen {
@@ -746,7 +761,15 @@ pub(super) fn run(
         Some(transport) => Some(transport),
         None if artifacts.is_empty() => None,
         None => Some(ArtifactTransport::new(&policy, &artifacts)?),
-    };
+    }
+    .map(|transport| {
+        let transport = transport.with_cache(transports.node.cache().cloned());
+        if offline {
+            transport.offline()
+        } else {
+            transport
+        }
+    });
     revalidate(discovery)?;
     storage(root)?;
     snapshot.ensure_current()?;
@@ -927,11 +950,41 @@ pub(super) fn run(
         };
         let mut prepared = Vec::new();
         if let Some(transport) = &artifact_transport {
+            use turborepo_setup::artifact_provision::Error::Offline;
             for plan in &artifacts {
                 recheck()?;
+                let tool = plan.inventory_tool();
+                // Same offline rules as Node: collect misses, and let a forced
+                // reinstall reuse the recorded tree when nothing is cached.
                 prepared.push(
-                    plan.prepare(&store, &desired, transport, preparation)
-                        .await?,
+                    match plan.prepare(&store, &desired, transport, preparation).await {
+                        Err(Offline) if reuse_installed => {
+                            match plan
+                                .prepare(
+                                    &store,
+                                    &desired,
+                                    transport,
+                                    turborepo_setup::Preparation::IfNeeded,
+                                )
+                                .await
+                            {
+                                Ok(None) => {
+                                    reused.push(tool.clone());
+                                    None
+                                }
+                                Err(Offline) => {
+                                    offline_missing.push(tool.id.as_str());
+                                    None
+                                }
+                                result => result?,
+                            }
+                        }
+                        Err(Offline) => {
+                            offline_missing.push(tool.id.as_str());
+                            None
+                        }
+                        result => result?,
+                    },
                 );
             }
         }
@@ -1071,6 +1124,9 @@ pub(super) fn run(
             ),
         };
         let from_cache = match tool.id.as_str() {
+            _ if additional(tool).is_some() => additional(tool)
+                .and_then(|(_, prepared)| prepared)
+                .is_some_and(|prepared| prepared.from_cache()),
             "node" => prepared_node.as_ref().is_some_and(|node| node.from_cache()),
             "pnpm" => prepared_pnpm.as_ref().is_some_and(|pnpm| pnpm.from_cache()),
             "npm" => prepared_npm.as_ref().is_some_and(|npm| npm.from_cache()),

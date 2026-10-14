@@ -28,6 +28,8 @@ pub const GO_MIRROR_ENV: &str = "TURBO_SETUP_GO_MIRROR";
 pub const RUST_MIRROR_ENV: &str = "TURBO_SETUP_RUST_MIRROR";
 const NODE_POLICY: &str = "setup.mirrors.node";
 const NPM_REGISTRY_POLICY: &str = "setup.mirrors.npmRegistry";
+/// Serves each additional-tool artifact at `<mirror>/<host>/<path>`.
+pub const ARTIFACT_MIRROR_ENV: &str = "TURBO_SETUP_ARTIFACT_MIRROR";
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[error(
@@ -54,6 +56,7 @@ pub struct Mirrors {
     pub python: Option<Mirror>,
     pub go: Option<Mirror>,
     pub rust: Option<Mirror>,
+    pub artifact: Option<Mirror>,
 }
 
 impl Mirrors {
@@ -87,6 +90,11 @@ impl Mirrors {
             python: select(PYTHON_MIRROR_ENV, "setup.mirrors.python", &policy.python)?,
             go: select(GO_MIRROR_ENV, "setup.mirrors.go", &policy.go)?,
             rust: select(RUST_MIRROR_ENV, "setup.mirrors.rust", &policy.rust)?,
+            // Environment only: there is no committed policy for this mirror.
+            artifact: var(ARTIFACT_MIRROR_ENV)
+                .filter(|value| !value.is_empty())
+                .map(|value| Mirror::parse(ARTIFACT_MIRROR_ENV, value, false))
+                .transpose()?,
         })
     }
 }

@@ -1,6 +1,7 @@
-//! Trusted read-only offline repeats, with verified-cache repair for Node and
-//! registry adapters. Repository inventory alone never authorizes reuse.
-//! Cache misses are diagnosed before writers; no resolver or executable probe.
+//! Trusted read-only offline repeats, with verified-cache repair for Node,
+//! registry adapters, and additional tools. Repository inventory alone never
+//! authorizes reuse. Cache misses are diagnosed before writers; no resolver or
+//! executable probe.
 use turborepo_setup::{
     lock::{Installation, Platform, Snapshot},
     source_policy::OfficialSourcePolicy,
@@ -164,8 +165,8 @@ pub(super) fn run(
         .ok_or(SetupError::Unsupported("offline setup requires turbo.lock"))?;
     if lock
         .tools()
-        .keys()
-        .any(|id| !matches!(id.as_str(), "node" | "npm" | "pnpm"))
+        .iter()
+        .any(|(id, tool)| !provision::offline_cacheable(id, tool))
     {
         // Other adapters still support only the original trusted read-only repeat.
         return checked.map(report);
@@ -190,6 +191,12 @@ pub(super) fn run(
     ]
     .into_iter()
     .flatten()
+    .chain(plans.artifacts.iter().map(|plan| {
+        (
+            plan.inventory_tool().id.as_str(),
+            plan.cache_available(transports.node.cache()),
+        )
+    }))
     .collect();
     if checked.is_err() && available.iter().any(|(_, cached)| !cached) {
         // Retain the original storage/provenance cause when no verified repair
