@@ -1694,6 +1694,11 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
         } else {
             &words
         };
-        failure(root, words, ci, r#"native declarations changed for {"uv"}"#);
+        failure(
+            root,
+            words,
+            ci,
+            "turbo.lock declarations changed: uv: pyproject.toml (tool.uv.required-version)",
+        );
     }
 }
