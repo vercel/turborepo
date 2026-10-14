@@ -265,6 +265,20 @@ impl GoTransport {
         })
     }
 
+    /// One validated mirror base serves both official paths: the index at
+    /// `<base>/dl/?mode=json&include=all` and archives at `<base>/go/<file>`.
+    /// No redirect leaves its origin.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &crate::mirror::Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            metadata: mirror.base().into(),
+            artifacts: mirror.base().into(),
+        })
+    }
+
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only.
     #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
