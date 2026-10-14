@@ -130,6 +130,7 @@ fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_a
                 f.owned.root(),
                 f.owned.home(),
                 check::context().unwrap(),
+                Default::default(),
             )
             .unwrap();
             assert_eq!(

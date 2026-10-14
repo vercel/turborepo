@@ -252,6 +252,22 @@ fn python_upstream() -> LoopbackServer {
 }
 
 #[test]
+fn managed_run_keeps_uv_on_the_locked_python_and_follows_the_workspace_flag() {
+    let owned = fixture(PYTHON, ">=0.13");
+    fs::write(owned.root().join(".python-version"), "3.12\n").unwrap();
+    assert_eq!(run(&owned, &python_upstream(), LOCAL).unwrap(), 0);
+    let (env, bin) = run_overrides(&owned).unwrap();
+    assert!(bin.join("uv").exists() && bin.join("python3").exists());
+    assert_eq!(env["UV_PYTHON_DOWNLOADS"], "never");
+    assert_eq!(env["UV_PYTHON_PREFERENCE"], "only-managed");
+    assert!(env["UV_PYTHON"].starts_with("cpython-3.12.12-"), "{env:?}");
+    // Without the flag setup never reads uv declarations, so run rejects them.
+    fs::write(owned.root().join("turbo.json"), ENABLED).unwrap();
+    let error = run_overrides(&owned).unwrap_err();
+    assert!(error.contains("experimentalPythonWorkspaces"), "{error}");
+}
+
+#[test]
 fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
     let owned = fixture(PYTHON, ">=0.13");
     fs::write(owned.root().join(".python-version"), "3.12\n").unwrap();

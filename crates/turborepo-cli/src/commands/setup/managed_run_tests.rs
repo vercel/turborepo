@@ -264,22 +264,17 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
     assert!(select(&f).is_err()); // Lock exists, but setup never prepared evidence.
     assert!(!f.owned.home().join("turborepo").exists());
     assert!(!f.owned.root().join(".turbo").exists());
+    // Cargo repositories are no longer refused; they need the same setup.
     fs::write(
         f.owned.root().join("Cargo.toml"),
         "[workspace]\nmembers = []\n",
     )
     .unwrap();
-    let mut opts = input(&f, "strict").opts;
-    opts.future_flags.experimental_cargo_workspaces = true;
-    let root = turbopath::AbsoluteSystemPathBuf::try_from(f.owned.root()).unwrap();
-    let base = CommandBase::from_opts(opts, root, "fixture", turborepo_ui::ColorConfig::new(true));
-    assert!(
-        managed::select(&base)
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("Node/pnpm JS")
-    );
+    let cargo = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
+    fs::write(&config, cargo).unwrap();
+    let error = select(&f).err().unwrap();
+    assert!(error.contains("run turbo setup"), "{error}");
+    assert!(!f.owned.root().join(".turbo").exists());
 }
 
 #[test]
