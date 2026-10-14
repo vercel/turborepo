@@ -36,7 +36,7 @@ fn declare(f: &Fixture, artifact: Option<&[u8]>) {
 }
 
 fn exports(f: &Fixture) -> Vec<String> {
-    let bin = f.plan().path_prepend().to_path_buf();
+    let bin = f.plan().path_prepend().unwrap().to_path_buf();
     let mut names: Vec<_> = fs::read_dir(bin)
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -101,7 +101,7 @@ fn a_running_managed_executable_never_blocks_rollback_or_upgrade() {
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     // The selected executable stays open in a running process. A builtin
     // `pause` on a held stdin pipe blocks without a child process to leak.
-    let bin = f.plan().path_prepend().to_path_buf();
+    let bin = f.plan().path_prepend().unwrap().to_path_buf();
     let mut running = Command::new(bin.join("fixture-exe.exe"))
         .args(["/d", "/c", "pause"])
         .stdin(std::process::Stdio::piped())
