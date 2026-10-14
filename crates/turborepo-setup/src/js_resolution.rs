@@ -96,7 +96,7 @@ pub(crate) fn exact_manager(declaration: &Declaration) -> Result<String, Error> 
 // host/promotion restrictions. Inspect EVERY variant, not the current platform.
 pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Result<(), Error> {
     let invalid = || Error::Registry(crate::registry_resolution::Error::InvalidLock);
-    let (name, version) =
+    let (_name, version) =
         crate::registry_metadata::validate_selection(declaration.manager, &tool.version)
             .map_err(crate::registry_resolution::Error::from)?;
     let Installation::Managed { artifacts } = &tool.installation else {
