@@ -13,6 +13,7 @@ pub mod go_discovery;
 pub mod go_prefetch;
 pub mod go_provision;
 pub mod go_resolution;
+pub mod js_install;
 pub mod js_resolution;
 pub mod lifecycle;
 pub mod lock;
