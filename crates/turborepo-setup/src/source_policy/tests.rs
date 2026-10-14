@@ -375,7 +375,7 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
             "{\"setup\":{\"tools\":{\"url\":\"private-secret\"}}}",
             "{\"setup\":{\"javascript\":\"skip\"}}",
             "{\"setup\":{\"mirrors\":\"private-secret\"}}",
-            "{\"setup\":{\"mirrors\":{\"bun\":\"private-secret\"}}}",
+            "{\"setup\":{\"mirrors\":{\"go\":\"private-secret\"}}}",
             "{\"setup\":{\"mirrors\":{\"node\":{\"url\":\"private-secret\"}}}}",
         ] {
             fs::write(&path, contents)?;
@@ -404,7 +404,9 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
         fs::write(
             &path,
             "{\"setup\":{\"tools\":\"managed\",\"mirrors\":{\"node\":\"https://mirror.invalid/\
-             dist\",\"npmRegistry\":\"https://mirror.invalid/npm\"}}}",
+             dist\",\"npmRegistry\":\"https://mirror.invalid/npm\",\"bun\":\"https://mirror.\
+             invalid/github\",\"uv\":\"https://mirror.invalid/astral\",\"python\":\"https://\
+             mirror.invalid/astral\"}}}",
         )?;
         assert!(fixture.check(&[]).is_ok());
         fs::write(path, "invalid private-secret")?;

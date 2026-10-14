@@ -146,6 +146,18 @@ impl BunTransport {
         })
     }
 
+    /// Send the official release paths to a validated mirror base. The mirror
+    /// must serve the bytes itself: no redirect leaves its origin.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &crate::mirror::Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            origin: mirror.base().into(),
+        })
+    }
+
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only.
     #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {

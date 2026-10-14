@@ -145,6 +145,18 @@ impl UvTransport {
         })
     }
 
+    /// Send the official index and release paths to a validated mirror base.
+    pub fn mirrored(
+        _policy: &crate::source_policy::OfficialSourcePolicy,
+        mirror: &crate::mirror::Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            origin: mirror.base().into(),
+            retained: Mutex::default(),
+        })
+    }
+
     /// Read only bounded official metadata: the version index, then the
     /// selected release's checksum file. No artifact download or execution.
     pub async fn resolve(&self, requirement: &UvRequirement) -> Result<Tool, Error> {

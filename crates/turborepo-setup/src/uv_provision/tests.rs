@@ -162,6 +162,24 @@ async fn locked_uv_installs_verified_tree_with_repo_scoped_launchers() {
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn mirrors_serve_the_official_archive_path_beneath_their_base() {
+    let platform = Platform::LinuxX64Gnu;
+    let bytes = archive(platform, &["uv", "uvx"]);
+    let path = format!("/mirror{}", &official(platform).url()[uv::ORIGIN.len()..]);
+    let upstream = LoopbackServer::new([(path.clone(), bytes.clone())], |_| {}).unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
+    let base = format!("{}/mirror", upstream.origin());
+    let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
+    let transport = UvTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    let outcome = install(&mut store, &plan, &transport, crate::Preparation::IfNeeded).await;
+    assert_eq!(outcome.unwrap(), Outcome::Replaced);
+    assert_eq!(upstream.requests(), [path]);
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn checksum_and_layout_failures_never_publish() {
     let platform = Platform::LinuxX64Gnu;
     let good = archive(platform, &["uv", "uvx"]);

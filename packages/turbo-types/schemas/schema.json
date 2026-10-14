@@ -912,6 +912,17 @@
       "description": "Credential-free HTTPS mirrors for `turbo setup` downloads. Each value is a base URL that serves the same paths as the official source.",
       "type": "object",
       "properties": {
+        "bun": {
+          "description": "Replaces the `https://github.com` origin for Bun release checksums and archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "node": {
           "description": "Replaces `https://nodejs.org/dist` for Node.js release metadata and archives.",
           "anyOf": [
@@ -925,6 +936,28 @@
         },
         "npmRegistry": {
           "description": "Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn package metadata and tarballs.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "python": {
+          "description": "Replaces the `https://releases.astral.sh` origin for CPython build checksums and archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uv": {
+          "description": "Replaces the `https://releases.astral.sh` origin for uv's version index and release archives, keeping their official paths.",
           "anyOf": [
             {
               "$ref": "#/definitions/String"

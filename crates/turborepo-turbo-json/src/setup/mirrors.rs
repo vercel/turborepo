@@ -1,8 +1,8 @@
 //! Download mirrors under `setup.mirrors`. A mirror changes only where
 //! `turbo setup` downloads from: `turbo.lock` keeps the official URLs, and
-//! every download is verified against its locked digest. The
-//! `TURBO_SETUP_NODE_MIRROR` and `TURBO_SETUP_NPM_REGISTRY` environment
-//! variables override these values for one invocation.
+//! every download is verified against its locked digest. The matching
+//! `TURBO_SETUP_*` environment variables override these values for one
+//! invocation.
 
 use std::sync::Arc;
 
@@ -28,6 +28,18 @@ pub struct RawSetupMirrors {
     /// metadata and tarballs.
     #[serde(rename = "npmRegistry", skip_serializing_if = "Option::is_none")]
     pub npm_registry: Option<Spanned<String>>,
+    /// Replaces the `https://github.com` origin for Bun release checksums and
+    /// archives, keeping their official paths.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bun: Option<Spanned<String>>,
+    /// Replaces the `https://releases.astral.sh` origin for uv's version index
+    /// and release archives, keeping their official paths.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uv: Option<Spanned<String>>,
+    /// Replaces the `https://releases.astral.sh` origin for CPython build
+    /// checksums and archives, keeping their official paths.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub python: Option<Spanned<String>>,
 }
 
 /// Validated `setup.mirrors` bases. `None` keeps the official source.
@@ -35,6 +47,21 @@ pub struct RawSetupMirrors {
 pub struct SetupMirrors {
     pub node: Option<String>,
     pub npm_registry: Option<String>,
+    pub bun: Option<String>,
+    pub uv: Option<String>,
+    pub python: Option<String>,
+}
+
+impl RawSetupMirrors {
+    fn values(&self) -> [(&'static str, &Option<Spanned<String>>); 5] {
+        [
+            ("node", &self.node),
+            ("npmRegistry", &self.npm_registry),
+            ("bun", &self.bun),
+            ("uv", &self.uv),
+            ("python", &self.python),
+        ]
+    }
 }
 
 /// The mirror rule shared with the `TURBO_SETUP_*` environment variables: an
@@ -57,7 +84,7 @@ pub(super) fn validate(raw: Option<&Spanned<RawSetupMirrors>>) -> Result<SetupMi
     let Some(raw) = raw else {
         return Ok(SetupMirrors::default());
     };
-    let values = [("node", &raw.node), ("npmRegistry", &raw.npm_registry)];
+    let values = raw.values();
     for (key, value) in values {
         let Some(value) = value else { continue };
         if !mirror_url(value).is_some_and(|url| url.scheme() == "https") {
@@ -69,6 +96,9 @@ pub(super) fn validate(raw: Option<&Spanned<RawSetupMirrors>>) -> Result<SetupMi
     Ok(SetupMirrors {
         node: base(&raw.node),
         npm_registry: base(&raw.npm_registry),
+        bun: base(&raw.bun),
+        uv: base(&raw.uv),
+        python: base(&raw.python),
     })
 }
 
@@ -96,14 +126,28 @@ fn masked<'a>(
     (Some(range.into()), NamedSource::new(path, text))
 }
 
+impl RawSetupMirrors {
+    fn values_mut(&mut self) -> [&mut Option<Spanned<String>>; 5] {
+        [
+            &mut self.node,
+            &mut self.npm_registry,
+            &mut self.bun,
+            &mut self.uv,
+            &mut self.python,
+        ]
+    }
+}
+
 impl WithMetadata for RawSetupMirrors {
     fn add_text(&mut self, text: Arc<str>) {
-        self.node.add_text(text.clone());
-        self.npm_registry.add_text(text);
+        self.values_mut()
+            .into_iter()
+            .for_each(|value| value.add_text(text.clone()));
     }
 
     fn add_path(&mut self, path: Arc<str>) {
-        self.node.add_path(path.clone());
-        self.npm_registry.add_path(path);
+        self.values_mut()
+            .into_iter()
+            .for_each(|value| value.add_path(path.clone()));
     }
 }
