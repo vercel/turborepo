@@ -141,24 +141,6 @@ fn qualified_libc(host: Option<turborepo_platform::Libc>) -> Result<Libc, String
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn managed_abi_uses_host_glibc_version_and_rejects_musl() {
-        assert_eq!(
-            qualified_libc(Some(turborepo_platform::Libc::Glibc {
-                version: "2.39".into(),
-            }))
-            .unwrap(),
-            Libc::Gnu { abi: "2.39".into() }
-        );
-        assert!(qualified_libc(Some(turborepo_platform::Libc::Musl)).is_err());
-        assert_eq!(qualified_libc(None).is_ok(), cfg!(target_os = "macos"));
-    }
-}
-
 /// Conservative native execution identity. No readiness-only/unprobed labels.
 /// These initial adapters are supported only on native macOS and GNU Linux.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
@@ -206,4 +188,22 @@ pub(crate) fn context() -> Result<ExecutionContext, String> {
         cpu,
     )
     .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn managed_abi_uses_host_glibc_version_and_rejects_musl() {
+        assert_eq!(
+            qualified_libc(Some(turborepo_platform::Libc::Glibc {
+                version: "2.39".into(),
+            }))
+            .unwrap(),
+            Libc::Gnu { abi: "2.39".into() }
+        );
+        assert!(qualified_libc(Some(turborepo_platform::Libc::Musl)).is_err());
+        assert_eq!(qualified_libc(None).is_ok(), cfg!(target_os = "macos"));
+    }
 }
