@@ -25,9 +25,6 @@ pub struct CacheMultiplexer {
     // This does create a mild race condition where we might use the cache
     // even though another thread might be removing it, but that's fine.
     should_use_http_cache: AtomicBool,
-    // Just for keeping track of whether we've already printed a warning about the remote cache
-    // being read-only
-    should_print_skipping_remote_put: AtomicBool,
     cache_config: CacheConfig,
     fs: Option<Arc<FSCache>>,
     http: Option<Arc<HTTPCache>>,
@@ -107,7 +104,6 @@ impl CacheMultiplexer {
         };
 
         Ok(CacheMultiplexer {
-            should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
             cache_config: opts.cache,
             fs: fs_cache,
@@ -215,8 +211,8 @@ impl CacheMultiplexer {
         }
 
         let http_result = match self.get_http_cache() {
-            // Uploads were disabled for this run after the remote cache
-            // reported the token as read-only; that was already reported once.
+            // Uploads were disabled for this run, either because the token is
+            // read-only or because an upload stayed forbidden after recovery.
             Some(http) if self.cache_config.remote.write && http.uploads_disabled() => None,
             Some(http) => {
                 if self.cache_config.remote.write {
@@ -224,20 +220,9 @@ impl CacheMultiplexer {
 
                     Some(http_result)
                 } else {
-                    if self
-                        .should_print_skipping_remote_put
-                        .load(Ordering::Relaxed)
-                    {
-                        turborepo_log::warn(
-                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
-                            "Remote cache is read-only, skipping upload",
-                        )
-                        .emit();
-                        self.should_print_skipping_remote_put
-                            .store(false, Ordering::Relaxed);
-                    }
-                    // Cache is functional but running in read-only mode, so we don't want to try to
-                    // write to it
+                    // Remote writes are disabled by configuration. The run
+                    // header already reports the cache as read-only.
+                    debug!("remote cache is read-only, skipping upload of {key}");
                     None
                 }
             }

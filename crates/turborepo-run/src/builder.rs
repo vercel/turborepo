@@ -250,6 +250,7 @@ async fn resolve_remote_cache_status(
     let result = tokio::time::timeout(Duration::from_millis(250), handle).await;
     match result {
         Ok(Ok(Ok(response))) => match response.status {
+            CachingStatus::Enabled if response.read_only => RemoteCacheStatus::EnabledReadOnly,
             CachingStatus::Enabled => RemoteCacheStatus::Enabled,
             CachingStatus::Disabled => {
                 RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::DisabledForTeam)
@@ -270,6 +271,15 @@ async fn resolve_remote_cache_status(
             tracing::debug!("Remote cache preflight timed out after 250ms; assuming enabled");
             RemoteCacheStatus::Enabled
         }
+    }
+}
+
+/// A run whose configuration skips remote writes (`remote:r`, the deprecated
+/// read-only setting, or `--no-cache`) only reads from the remote cache.
+fn apply_configured_read_only(status: RemoteCacheStatus, remote_write: bool) -> RemoteCacheStatus {
+    match status {
+        RemoteCacheStatus::Enabled if !remote_write => RemoteCacheStatus::EnabledReadOnly,
+        status => status,
     }
 }
 
@@ -2085,9 +2095,11 @@ impl RunBuilder {
             repo_index,
             analytics_handle,
         } = input;
-        let remote_cache_status =
+        let remote_cache_status = apply_configured_read_only(
             resolve_remote_cache_status(self.opts.remote_cache_disabled_reason, preflight_handle)
-                .await;
+                .await,
+            self.opts.cache_opts.cache.remote.write,
+        );
 
         let run_cache = Arc::new(RunCache::new(
             async_cache,
@@ -3964,7 +3976,7 @@ mod remote_cache_status_tests {
 
     use super::{
         CacheStatusProbe, RemoteCacheStatus, RemoteCacheUnavailableReason,
-        resolve_remote_cache_status, start_remote_cache_preflight,
+        apply_configured_read_only, resolve_remote_cache_status, start_remote_cache_preflight,
     };
 
     struct StubCacheStatusProbe(Mutex<Option<turborepo_api_client::Result<CachingStatusResponse>>>);
@@ -3997,7 +4009,7 @@ mod remote_cache_status_tests {
         resolve_remote_cache_status(None, Some(handle)).await
     }
 
-    async fn preflight_signals_read_only(read_only: bool) -> bool {
+    async fn preflight_signals_read_only(read_only: bool) -> (RemoteCacheStatus, bool) {
         let probe = StubCacheStatusProbe(Mutex::new(Some(Ok(CachingStatusResponse {
             status: CachingStatus::Enabled,
             read_only,
@@ -4010,17 +4022,41 @@ mod remote_cache_status_tests {
             None,
             read_only_tx,
         );
-        assert!(matches!(
-            resolve_remote_cache_status(None, Some(handle)).await,
-            RemoteCacheStatus::Enabled
-        ));
-        read_only_rx.await.is_ok()
+        let status = resolve_remote_cache_status(None, Some(handle)).await;
+        (status, read_only_rx.await.is_ok())
     }
 
     #[tokio::test]
     async fn preflight_signals_read_only_status() {
-        assert!(preflight_signals_read_only(true).await);
-        assert!(!preflight_signals_read_only(false).await);
+        let (status, signaled) = preflight_signals_read_only(true).await;
+        assert!(matches!(status, RemoteCacheStatus::EnabledReadOnly));
+        assert!(signaled);
+        let (status, signaled) = preflight_signals_read_only(false).await;
+        assert!(matches!(status, RemoteCacheStatus::Enabled));
+        assert!(!signaled);
+    }
+
+    #[test]
+    fn configured_read_only_marks_enabled_status() {
+        assert!(matches!(
+            apply_configured_read_only(RemoteCacheStatus::Enabled, false),
+            RemoteCacheStatus::EnabledReadOnly
+        ));
+        assert!(matches!(
+            apply_configured_read_only(RemoteCacheStatus::Enabled, true),
+            RemoteCacheStatus::Enabled
+        ));
+        assert!(matches!(
+            apply_configured_read_only(RemoteCacheStatus::EnabledReadOnly, true),
+            RemoteCacheStatus::EnabledReadOnly
+        ));
+        assert!(matches!(
+            apply_configured_read_only(
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused),
+                false
+            ),
+            RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused)
+        ));
     }
 
     fn response(status: CachingStatus) -> CachingStatusResponse {

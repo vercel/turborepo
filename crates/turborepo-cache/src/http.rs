@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     io::{Read, Seek, SeekFrom, Write},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -27,10 +27,28 @@ use crate::{
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
 
-const READ_ONLY_MESSAGE: &str = "Remote cache is read-only for this token; skipping uploads";
 const WRITE_FORBIDDEN_MESSAGE: &str = "Remote cache rejected an upload with 403 and write access \
                                        could not be restored; skipping uploads for this run \
                                        (remote cache reads remain enabled)";
+
+/// Why uploads were disabled for the rest of the run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WritesDisabledReason {
+    /// The server reported a read-only token. This is the intended experience
+    /// for such tokens, so it is not a warning.
+    ReadOnly,
+    /// An upload was still forbidden after token recovery.
+    Forbidden,
+}
+
+impl WritesDisabledReason {
+    fn warning(self) -> Option<&'static str> {
+        match self {
+            WritesDisabledReason::ReadOnly => None,
+            WritesDisabledReason::Forbidden => Some(WRITE_FORBIDDEN_MESSAGE),
+        }
+    }
+}
 
 /// Whether a remote cache operation reads or writes artifacts. A 403 that
 /// survives token recovery disables only the matching access for the run.
@@ -56,7 +74,7 @@ pub struct HTTPCache {
     api_auth: Arc<Mutex<APIAuth>>,
     recovery_lock: tokio::sync::Mutex<()>,
     disabled: AtomicBool,
-    writes_disabled: AtomicBool,
+    writes_disabled: OnceLock<WritesDisabledReason>,
     outage_breaker: crate::outage_breaker::OutageBreaker,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
@@ -114,7 +132,7 @@ impl HTTPCache {
             api_auth: Arc::new(Mutex::new(api_auth)),
             recovery_lock: tokio::sync::Mutex::new(()),
             disabled: AtomicBool::new(false),
-            writes_disabled: AtomicBool::new(false),
+            writes_disabled: OnceLock::new(),
             outage_breaker: Default::default(),
             analytics_recorder,
             scm_state,
@@ -151,22 +169,28 @@ impl HTTPCache {
     /// Whether uploads are skipped, either because the whole remote cache is
     /// disabled or because only writes are.
     pub(crate) fn uploads_disabled(&self) -> bool {
-        self.is_disabled() || self.writes_disabled.load(Ordering::Acquire)
+        self.is_disabled() || self.writes_disabled.get().is_some()
     }
 
-    /// Skips uploads for the rest of the run while keeping remote reads.
+    /// Silently skips uploads for the rest of the run while keeping remote
+    /// reads, because the token is read-only.
     pub(crate) fn disable_writes_read_only(&self) -> bool {
-        self.disable_writes(READ_ONLY_MESSAGE)
+        self.disable_writes(WritesDisabledReason::ReadOnly)
     }
 
-    fn disable_writes(&self, message: &str) -> bool {
-        let first = !self.writes_disabled.swap(true, Ordering::AcqRel);
-        if first && !self.is_disabled() {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
-                message,
-            )
-            .emit();
+    fn disable_writes(&self, reason: WritesDisabledReason) -> bool {
+        let first = self.writes_disabled.set(reason).is_ok();
+        if first {
+            debug!("skipping remote cache uploads for this run: {reason:?}");
+            if let Some(warning) = reason.warning()
+                && !self.is_disabled()
+            {
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                    warning,
+                )
+                .emit();
+            }
         }
         first
     }
@@ -177,7 +201,7 @@ impl HTTPCache {
                 self.disable_after_forbidden();
             }
             RemoteAccess::Write => {
-                self.disable_writes(WRITE_FORBIDDEN_MESSAGE);
+                self.disable_writes(WritesDisabledReason::Forbidden);
             }
         }
     }
@@ -1598,7 +1622,10 @@ mod test {
         }
         // The second upload is skipped without contacting the server.
         assert_eq!(attempts.load(Ordering::SeqCst), 1);
-        assert!(cache.uploads_disabled());
+        assert_eq!(
+            cache.writes_disabled.get(),
+            Some(&super::WritesDisabledReason::ReadOnly)
+        );
         assert!(!cache.is_disabled());
         assert_eq!(successful_read(&cache).await.unwrap(), "read");
     }
@@ -1625,7 +1652,10 @@ mod test {
             Err(crate::CacheError::ForbiddenRemoteCacheWrite)
         ));
         assert_eq!(recoveries.load(Ordering::SeqCst), 1);
-        assert!(cache.uploads_disabled());
+        assert_eq!(
+            cache.writes_disabled.get(),
+            Some(&super::WritesDisabledReason::Forbidden)
+        );
         assert!(!cache.is_disabled());
         assert_eq!(successful_read(&cache).await.unwrap(), "read");
     }
@@ -1648,6 +1678,25 @@ mod test {
         assert!(cache.uploads_disabled());
         assert!(!cache.is_disabled());
         assert_eq!(successful_read(&cache).await.unwrap(), "read");
+    }
+
+    #[test]
+    fn test_only_unexpected_write_disables_warn() {
+        // A read-only token is the intended experience, not a failure.
+        assert_eq!(super::WritesDisabledReason::ReadOnly.warning(), None);
+        assert_snapshot!(
+            super::WritesDisabledReason::Forbidden.warning().unwrap(),
+            @"Remote cache rejected an upload with 403 and write access could not be restored; skipping uploads for this run (remote cache reads remain enabled)"
+        );
+
+        // Whichever reason disables writes first is the one reported.
+        let cache = cache_with_token("token");
+        assert!(cache.disable_writes_read_only());
+        assert!(!cache.disable_writes(super::WritesDisabledReason::Forbidden));
+        assert_eq!(
+            cache.writes_disabled.get(),
+            Some(&super::WritesDisabledReason::ReadOnly)
+        );
     }
 
     #[test]

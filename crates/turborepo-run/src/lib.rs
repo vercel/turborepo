@@ -97,6 +97,9 @@ pub(crate) enum RemoteCacheUnavailableReason {
 pub(crate) enum RemoteCacheStatus {
     Disabled(RemoteCacheDisabledReason),
     Enabled,
+    /// Remote reads are enabled but uploads are skipped, either by the
+    /// server (read-only token) or by configuration.
+    EnabledReadOnly,
     Unavailable(RemoteCacheUnavailableReason),
 }
 
@@ -198,6 +201,9 @@ const SLOW_SHUTDOWN_STATUS_INTERVAL: Duration = Duration::from_secs(2);
 fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (String, bool) {
     match status {
         RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+        RemoteCacheStatus::EnabledReadOnly => {
+            ("Remote caching enabled (read-only)".to_string(), false)
+        }
         RemoteCacheStatus::Disabled(reason) => {
             let msg = match reason {
                 RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
@@ -1868,6 +1874,13 @@ mod tests {
         assert_eq!(
             remote_cache_status_message(RemoteCacheStatus::Enabled, "https://cache.example.com"),
             ("Remote caching enabled".to_string(), false)
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::EnabledReadOnly,
+                "https://cache.example.com"
+            ),
+            ("Remote caching enabled (read-only)".to_string(), false)
         );
         assert_eq!(
             remote_cache_status_message(
