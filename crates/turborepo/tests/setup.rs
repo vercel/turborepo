@@ -1503,6 +1503,11 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     fs::create_dir_all(&records).unwrap();
     fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
     let canonical_root = root.canonicalize().unwrap();
+    assert!(!records.starts_with(&canonical_root));
+    assert_eq!(
+        fs::metadata(&records).unwrap().permissions().mode() & 0o077,
+        0
+    );
     let identity = fs::metadata(&canonical_root).unwrap();
     let current = store.current().unwrap().unwrap();
     let record = serde_json::json!({
@@ -1523,6 +1528,10 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     ));
     fs::write(&receipt, serde_json::to_vec(&record).unwrap()).unwrap();
     fs::set_permissions(&receipt, fs::Permissions::from_mode(0o600)).unwrap();
+    assert_eq!(
+        fs::metadata(&receipt).unwrap().permissions().mode() & 0o077,
+        0
+    );
     drop(store);
     let git = which::which("git").unwrap();
     assert!(
