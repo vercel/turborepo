@@ -498,7 +498,9 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
             .fails("turbo setup")
             .offline();
         j.turbo(&j.root, TOOLS_ONLY, &ci)
-            .fails("locally and commit the updated lock")
+            .fails("node: .nvmrc")
+            .fails("turbo setup --tools-only")
+            .fails("locally and commit the updated turbo.lock")
             .offline();
     }
     assert_eq!(j.read("turbo.lock"), lock);
