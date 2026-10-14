@@ -253,18 +253,29 @@ pub(super) fn plans(
     };
     let (mut pnpm, mut npm, mut yarn, mut bun) = (None, None, None, None);
     if let Some(manager) = snapshot.package_manager()? {
-        let node = node
-            .as_ref()
-            .ok_or(Error::Unsupported("a native Node declaration is required"))?;
+        let node = || {
+            node.as_ref()
+                .ok_or(Error::Unsupported("a native Node declaration is required"))
+        };
         match manager.manager {
             Manager::Pnpm => {
-                pnpm = Some(PnpmPlan::from_declaration(lock, platform, node, &manager)?);
+                pnpm = Some(PnpmPlan::from_declaration(
+                    lock,
+                    platform,
+                    node()?,
+                    &manager,
+                )?);
             }
             Manager::Npm => {
-                npm = NpmPlan::from_declaration(lock, platform, node, &manager)?;
+                npm = NpmPlan::from_declaration(lock, platform, node()?, &manager)?;
             }
             Manager::Yarn => {
-                yarn = Some(YarnPlan::from_declaration(lock, platform, node, &manager)?);
+                yarn = Some(YarnPlan::from_declaration(
+                    lock,
+                    platform,
+                    node()?,
+                    &manager,
+                )?);
             }
             Manager::Bun => {
                 bun = Some(BunPlan::from_declaration(lock, platform, &manager)?);
@@ -401,13 +412,13 @@ pub(super) fn resolvable(snapshot: &Snapshot) -> Result<(), Error> {
     let declared = snapshot.declarations();
     let js_manager = declared.contains_key("npm")
         || declared.contains_key("pnpm")
-        || declared.contains_key("yarn")
-        || declared.contains_key("bun");
+        || declared.contains_key("yarn");
     if !declared.contains_key("node")
         && (js_manager
             || (!declared.contains_key("uv")
                 && !declared.contains_key("rustup")
-                && !declared.contains_key("go")))
+                && !declared.contains_key("go")
+                && !declared.contains_key("bun")))
     {
         return Err(Error::Unsupported(
             if snapshot.ecosystems().python && !js_manager {
