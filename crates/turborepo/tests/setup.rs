@@ -1810,7 +1810,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         (
             "--frozen",
             "reused",
-            "dependency installation is not supported yet",
+            "pnpm dependency installation is not supported yet",
         ),
         (
             "--check",

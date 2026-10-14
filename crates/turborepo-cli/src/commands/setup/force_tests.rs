@@ -209,7 +209,10 @@ fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         let result = f.run(&u, &flags);
-        if flags.contains(&"--offline") {
+        if flags.contains(&"--offline") && !flags.contains(&"--tools-only") {
+            // Offline setup cannot install locked dependencies yet.
+            assert!(matches!(result, Err(Error::Unsupported(_))));
+        } else if flags.contains(&"--offline") {
             // Nothing is installed, so offline force has no verified bytes.
             assert!(matches!(result, Err(Error::Offline(_))));
         } else {

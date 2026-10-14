@@ -511,6 +511,13 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     {
         return Err(Error::NotImplemented);
     }
+    // Offline reinstalls only verified local bytes; resolution needs the network.
+    if request.offline && request.update_lock {
+        return Err(Error::Unsupported(
+            "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \
+             --update-lock without --offline",
+        ));
+    }
     // Installers run with the activation that turbo.lock records and contact
     // package registries, so neither mode can install locked dependencies.
     if !tools_only && request.offline {
@@ -523,13 +530,6 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
         return Err(Error::Unsupported(
             "--no-lock cannot install locked dependencies, because installers run with the \
              managed tools that turbo.lock records; add --tools-only",
-        ));
-    }
-    // Offline reinstalls only verified local bytes; resolution needs the network.
-    if request.offline && request.update_lock {
-        return Err(Error::Unsupported(
-            "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \
-             --update-lock without --offline",
         ));
     }
     Ok(())
