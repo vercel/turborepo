@@ -145,6 +145,7 @@ impl Fixture {
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                     artifact: Some(turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(origin).unwrap()),
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
+                    bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
                 }),
                 || {
                     Ok(self
@@ -220,6 +221,8 @@ const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 mod additional_tools;
 #[path = "authorization_tests.rs"]
 mod authorization;
+#[path = "bun_tests.rs"]
+mod bun;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]
