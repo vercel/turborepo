@@ -216,5 +216,5 @@ pub(super) fn run(
     }
     // Cache reads above are preflight only. Locked preparation verifies every
     // byte again, and publishes fresh external provenance under both guards.
-    provision::run(discovery, sources, request, Some(transports), preflight)
+    provision::run(discovery, sources, request, Some(transports), preflight).map(|_| 0)
 }

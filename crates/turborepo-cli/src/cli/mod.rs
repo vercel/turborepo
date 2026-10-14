@@ -112,7 +112,7 @@ fn init_rayon_pool() {
     }
 }
 
-fn initialize_deferred_telemetry_client(
+pub(crate) fn initialize_deferred_telemetry_client(
     http_client: SharedHttpClient,
     color_config: ColorConfig,
     version: &str,
@@ -401,9 +401,12 @@ pub fn run(
         Args::new(env::args_os().collect())
     };
 
-    // Setup must not bootstrap task configuration, telemetry, agent guidance,
-    // HTTP clients, or worker runtimes. Help already exited during parsing.
-    if let Some(result) = dispatch_setup(&cli_args, setup::run) {
+    // Setup must not bootstrap task configuration, agent guidance, HTTP
+    // clients, or worker runtimes. Help already exited during parsing. Its
+    // standard telemetry starts only after the outcome is final.
+    if let Some(result) = dispatch_setup(&cli_args, |args, setup_args| {
+        setup::run_with_telemetry(args, setup_args, color_config)
+    }) {
         return result.map_err(Into::into);
     }
     // Runs at every prompt: no telemetry, update checks, agent guidance,

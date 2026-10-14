@@ -2,11 +2,14 @@
 //! with the managed tools, plus read-only checks/plans. Never runs Turborepo
 //! tasks.
 
+use std::time::Instant;
+
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::toolchain::ToolchainId;
 use turborepo_setup::source_policy::OfficialSourcePolicy;
 use turborepo_turbo_json::ToolPolicy;
+use turborepo_ui::ColorConfig;
 
 use crate::cli::{Args, SetupArgs};
 
@@ -25,6 +28,7 @@ mod offline;
 mod plan;
 mod provision;
 mod root;
+mod telemetry;
 pub(crate) mod trust;
 mod verify_system;
 
@@ -243,14 +247,38 @@ impl SetupRequest {
     }
 }
 
+/// The CLI entry point: setup, then standard telemetry about its outcome. Only
+/// after the outcome is final, so telemetry cannot affect it.
+pub fn run_with_telemetry(
+    args: &Args,
+    setup_args: &SetupArgs,
+    color_config: ColorConfig,
+) -> Result<i32, Error> {
+    let started = Instant::now();
+    let mut report = telemetry::Report::default();
+    let result = run_observed(args, setup_args, &mut report);
+    telemetry::record(&report, &result, started.elapsed(), color_config);
+    result
+}
+
+/// Production setup without telemetry, so tests never initialize it.
+#[cfg(test)]
 pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
+    run_observed(args, setup_args, &mut telemetry::Report::default())
+}
+
+fn run_observed(
+    args: &Args,
+    setup_args: &SetupArgs,
+    report: &mut telemetry::Report,
+) -> Result<i32, Error> {
     #[cfg(windows)]
     exit_on_relayed_ctrl_c()?;
     let invocation = match args.cwd.as_deref() {
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
     };
-    run_with_policy(args, setup_args, None, || {
+    run_reporting(args, setup_args, None, report, || {
         Ok(OfficialSourcePolicy::inspect(
             invocation.as_std_path(),
             None,
@@ -277,10 +305,36 @@ fn exit_on_relayed_ctrl_c() -> Result<(), Error> {
 
 // Trusted internal fixture injection only: never a CLI flag, repo URL or env
 // override.
+#[cfg(all(
+    test,
+    any(
+        all(
+            any(target_arch = "x86_64", target_arch = "aarch64"),
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+        ),
+        all(windows, target_arch = "x86_64")
+    )
+))]
 fn run_with_policy(
     args: &Args,
     setup_args: &SetupArgs,
     transports: Option<provision::Transports>,
+    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+) -> Result<i32, Error> {
+    run_reporting(
+        args,
+        setup_args,
+        transports,
+        &mut telemetry::Report::default(),
+        preflight,
+    )
+}
+
+fn run_reporting(
+    args: &Args,
+    setup_args: &SetupArgs,
+    transports: Option<provision::Transports>,
+    report: &mut telemetry::Report,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     // Discovery reads files/Git metadata: no language-tool probes, environment
@@ -290,8 +344,10 @@ fn run_with_policy(
     if !discovery.flags().experimental_setup {
         return Err(Error::Disabled);
     }
+    report.gate_passed();
 
     let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
+    report.request(&request);
     let eligible = discovery.source_eligibility();
     let plan = effective::Plan::new(
         discovery.policy(),
@@ -428,12 +484,16 @@ fn run_with_policy(
     // Offline repeats and clone-local --no-lock run only when every
     // dependency is skipped (`validate`).
     let code = if request.offline {
-        offline::run(&discovery, snapshot, &request, transports, preflight)
+        offline::run(&discovery, snapshot, &request, transports, preflight)?
     } else if request.lock == LockMode::NoLock {
-        no_lock::run(&discovery, snapshot, transports, preflight)
+        no_lock::run(&discovery, snapshot, transports, preflight)?
     } else {
-        provision::run(&discovery, snapshot, &request, transports, preflight)
-    }?;
+        let provisioned = provision::run(&discovery, snapshot, &request, transports, preflight)?;
+        report.downloaded_bytes = provisioned.downloaded_bytes;
+        report.tools_installed = provisioned.installed;
+        report.tools_reused = provisioned.reused;
+        0
+    };
     if code != 0 {
         return Ok(code);
     }
@@ -529,8 +589,15 @@ pub fn setup_for_tests(
         bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
             .map_err(|e| e.to_string())?,
     };
-    run_with_policy(&args, setup_args, Some(transports), || Ok(policy()?))
-        .map_err(|e| e.to_string())
+    // Like run_with_policy, never telemetry.
+    run_reporting(
+        &args,
+        setup_args,
+        Some(transports),
+        &mut telemetry::Report::default(),
+        || Ok(policy()?),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

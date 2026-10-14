@@ -721,6 +721,11 @@ impl RegistryPlan {
                 bytes
             }
         };
+        let mut downloaded_bytes = if from_cache {
+            0
+        } else {
+            bytes.as_bytes().len() as u64
+        };
         let (tree, native) = match &self.native {
             None => {
                 let executables = &self.artifact.executables;
@@ -749,6 +754,7 @@ impl RegistryPlan {
                         if let Some(cache) = &transport.cache {
                             let _ = cache.put(self.platform, &bytes);
                         }
+                        downloaded_bytes += bytes.as_bytes().len() as u64;
                         bytes
                     }
                 };
@@ -766,6 +772,7 @@ impl RegistryPlan {
         Ok(Some(PreparedRegistry {
             tree,
             native,
+            downloaded_bytes,
             tool: self.tool.clone(),
             launch_directory: self.launch_directory.clone(),
             entrypoints: self.artifact.executables.clone(),
@@ -778,6 +785,7 @@ pub struct PreparedRegistry {
     tree: ExtractedArtifact,
     /// The verified platform package and its binary path, for native pnpm.
     native: Option<(ExtractedArtifact, String)>,
+    downloaded_bytes: u64,
     tool: Tool,
     launch_directory: String,
     entrypoints: std::collections::BTreeMap<String, String>,
@@ -787,6 +795,12 @@ impl PreparedRegistry {
     /// Whether all verified bytes came from the shared download cache.
     pub fn from_cache(&self) -> bool {
         self.from_cache
+    }
+
+    /// Verified package bytes transferred for this preparation; cache hits
+    /// transfer nothing.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
     }
 
     /// Copy verified resources; launch this generation's managed Node, or the
