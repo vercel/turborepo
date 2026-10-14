@@ -320,16 +320,8 @@ pub(super) fn resolve(
     request: turborepo_setup::lock::reconcile::Resolution<'_>,
     sources: &Transports,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
-    if ["rust", "rustup"]
-        .iter()
-        .any(|id| request.version_ids().contains(*id))
-    {
-        return Err(turborepo_setup::lock::reconcile::Error::Resolution(
-            "resolving Rust toolchain declarations into turbo.lock is not implemented yet".into(),
-        ));
-    }
     runtime
-        .block_on(turborepo_setup::native_resolution::resolve(
+        .block_on(turborepo_setup::native_resolution::resolve_with_rust(
             request,
             turborepo_setup::native_resolution::Transports {
                 node: &sources.node,
@@ -340,6 +332,7 @@ pub(super) fn resolve(
                     turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
                 })?,
             },
+            &sources.rustup,
         ))
         .map_err(|e| turborepo_setup::lock::reconcile::Error::Resolution(e.to_string()))
 }

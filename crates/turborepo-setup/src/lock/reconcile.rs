@@ -50,6 +50,7 @@ pub struct Resolution<'a> {
     version_ids: BTreeSet<String>,
     ownership_ids: BTreeSet<String>,
     offline: bool,
+    refresh: bool,
 }
 impl Resolution<'_> {
     pub fn snapshot(&self) -> &Snapshot {
@@ -67,6 +68,10 @@ impl Resolution<'_> {
     }
     pub fn offline(&self) -> bool {
         self.offline
+    }
+    /// Explicit `--update-lock`: unchanged floating requests may move too.
+    pub fn refresh(&self) -> bool {
+        self.refresh
     }
 }
 
@@ -247,6 +252,7 @@ fn coordinate(
             version_ids: version_ids.clone(),
             ownership_ids: ownership_ids.clone(),
             offline,
+            refresh: mode == Mode::Refresh,
         })?
     };
     snapshot.check_native_coverage(Some(&candidate))?;

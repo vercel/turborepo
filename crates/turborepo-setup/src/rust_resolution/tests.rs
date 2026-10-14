@@ -169,3 +169,218 @@ async fn official_resolution_reads_only_the_requested_channel_manifest() {
     assert_eq!(tool.version, "nightly-2026-10-11");
     assert_eq!(server.requests(), [path]);
 }
+
+mod lock_updates {
+    use std::{fs, path::Path, process::Command};
+
+    use super::*;
+    use crate::lock::{
+        Ecosystems, Snapshot,
+        reconcile::{self, Mode},
+    };
+
+    fn upstream(stable: &str) -> LoopbackServer {
+        let mut routes = vec![
+            (
+                "/rustup/release-stable.toml".to_owned(),
+                b"schema-version = '1'\nversion = '1.29.1'\n".to_vec(),
+            ),
+            (
+                "/dist/channel-rust-stable.toml".into(),
+                fixture(stable, "2026-10-01").into_bytes(),
+            ),
+            (
+                "/dist/channel-rust-1.99.0.toml".into(),
+                fixture("1.99.0", "2026-10-01").into_bytes(),
+            ),
+        ];
+        for platform in rustup::PLATFORMS {
+            let url = rustup::installer_url(&semver::Version::new(1, 29, 1), platform).unwrap();
+            let path = url.strip_prefix("https://static.rust-lang.org").unwrap();
+            routes.push((
+                format!("{path}.sha256"),
+                format!("{}\n", "a".repeat(64)).into_bytes(),
+            ));
+        }
+        LoopbackServer::new(routes, |_| {}).unwrap()
+    }
+
+    fn update(root: &Path, server: &LoopbackServer, mode: Mode) -> Lock {
+        let transport = RustupTransport::loopback_http_for_tests(server.origin()).unwrap();
+        let snapshot = Snapshot::capture_with(
+            root,
+            Ecosystems {
+                rust: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        reconcile::reconcile(&snapshot, mode, false, |request| {
+            let tools = runtime
+                .block_on(resolve_request(&request, &transport))
+                .unwrap();
+            Ok(Lock::new(Document {
+                schema_version: lock::SCHEMA_VERSION,
+                tools,
+            })?)
+        })
+        .unwrap()
+        .lock
+    }
+
+    #[test]
+    fn edits_keep_the_locked_release_until_an_explicit_refresh() {
+        let root = tempfile::tempdir().unwrap();
+        let git = Command::new("git")
+            .args(["init", "--quiet"])
+            .arg(root.path())
+            .status();
+        assert!(git.unwrap().success());
+        fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
+        let file = root.path().join("rust-toolchain.toml");
+        fs::write(
+            &file,
+            "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n",
+        )
+        .unwrap();
+        let created = update(root.path(), &upstream("1.99.0"), Mode::Local);
+        assert_eq!(created.tools()["rust"].version, "1.99.0");
+        assert_eq!(created.tools()["rustup"].version, "1.29.1");
+
+        // A newer stable exists, but only the component edit re-resolves.
+        let newer = upstream("1.100.0");
+        let edited = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\ncomponents = \
+                      [\"rust-src\"]\n";
+        fs::write(&file, edited).unwrap();
+        let targeted = update(root.path(), &newer, Mode::Local);
+        assert_eq!(newer.requests(), ["/dist/channel-rust-1.99.0.toml"]);
+        assert_eq!(targeted.tools()["rust"].version, "1.99.0");
+        assert_eq!(targeted.tools()["rust"].options["components"], ["rust-src"]);
+        assert_eq!(targeted.tools()["rustup"], created.tools()["rustup"]);
+
+        let refreshed = update(root.path(), &newer, Mode::Refresh);
+        assert_eq!(refreshed.tools()["rust"].version, "1.100.0");
+        assert!(
+            newer
+                .requests()
+                .contains(&"/dist/channel-rust-stable.toml".to_owned())
+        );
+
+        // Removing the file drops both selections without any resolution.
+        fs::remove_file(&file).unwrap();
+        let offline = LoopbackServer::new([], |_| {}).unwrap();
+        assert!(
+            update(root.path(), &offline, Mode::Local)
+                .tools()
+                .is_empty()
+        );
+        assert_eq!(offline.hits(), 0);
+    }
+
+    #[test]
+    fn rust_creation_and_removal_preserve_locked_uv_without_uv_traffic() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(
+            Command::new("git")
+                .args(["init", "--quiet"])
+                .arg(root.path())
+                .status()
+                .unwrap()
+                .success()
+        );
+        fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
+        fs::write(
+            root.path().join("uv.toml"),
+            "required-version = '==0.13.0'\n",
+        )
+        .unwrap();
+        let ecosystems = Ecosystems {
+            rust: true,
+            python: true,
+        };
+        let snapshot = Snapshot::capture_with(root.path(), ecosystems).unwrap();
+        let requirement = snapshot.uv_requirement().unwrap().unwrap();
+        let platform = crate::lock::Platform::LinuxX64Gnu;
+        let official =
+            crate::uv::UvArtifact::for_platform(&semver::Version::new(0, 13, 0), platform).unwrap();
+        let uv = Tool {
+            adapter: "uv".into(),
+            version: "0.13.0".into(),
+            declarations: vec![requirement.declaration()],
+            options: BTreeMap::new(),
+            installation: Installation::Managed {
+                artifacts: BTreeMap::from([(
+                    platform,
+                    BTreeMap::from([(
+                        "distribution".into(),
+                        official.lock_artifact("a".repeat(64)),
+                    )]),
+                )]),
+            },
+        };
+        let lock = Lock::new(Document {
+            schema_version: lock::SCHEMA_VERSION,
+            tools: BTreeMap::from([("uv".into(), uv.clone())]),
+        })
+        .unwrap();
+        snapshot.commit(&lock).unwrap();
+        let rust_server = upstream("1.99.0");
+        let other_server = LoopbackServer::new([], |_| {}).unwrap();
+        let node =
+            crate::node_provision::NodeTransport::loopback_http_for_tests(other_server.origin())
+                .unwrap();
+        let registry = crate::registry_resolution::RegistryTransport::loopback_http_for_tests(
+            other_server.origin(),
+        )
+        .unwrap();
+        let uv_transport =
+            crate::uv_resolution::UvTransport::loopback_http_for_tests(other_server.origin())
+                .unwrap();
+        let rustup = RustupTransport::loopback_http_for_tests(rust_server.origin()).unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let file = root.path().join("rust-toolchain.toml");
+        fs::write(
+            &file,
+            "[toolchain]\nchannel = 'stable'\nprofile = 'minimal'\n",
+        )
+        .unwrap();
+        for remove in [false, true] {
+            if remove {
+                fs::remove_file(&file).unwrap();
+            }
+            let snapshot = Snapshot::capture_with(root.path(), ecosystems).unwrap();
+            let selected = reconcile::reconcile(&snapshot, Mode::Local, false, |request| {
+                runtime
+                    .block_on(crate::native_resolution::resolve_with_rust(
+                        request,
+                        crate::native_resolution::Transports {
+                            node: &node,
+                            registry: &registry,
+                            uv: &uv_transport,
+                            python:
+                                &crate::python_resolution::PythonTransport::loopback_http_for_tests(
+                                    other_server.origin(),
+                                )
+                                .unwrap(),
+                            platform,
+                        },
+                        &rustup,
+                    ))
+                    .map_err(|error| reconcile::Error::Resolution(error.to_string()))
+            })
+            .unwrap()
+            .lock;
+            assert_eq!(selected.tools()["uv"], uv);
+            assert_eq!(selected.tools().contains_key("rust"), !remove);
+            assert_eq!(selected.tools().contains_key("rustup"), !remove);
+            assert_eq!(other_server.hits(), 0);
+        }
+    }
+}

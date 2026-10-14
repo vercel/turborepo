@@ -63,6 +63,57 @@ pub fn toolchain_name(channel: &Channel, manifest: &Manifest) -> Result<String, 
     Ok(format!("{name}-{}", manifest.date()))
 }
 
+/// Rust selections for one reconcile request: unaffected ones verbatim, and
+/// changed or refreshed declarations resolved. A components, targets or
+/// profile edit keeps the locked release of an unchanged floating channel;
+/// only an explicit refresh moves it. Other ecosystems are the caller's.
+pub async fn resolve_request(
+    request: &crate::lock::reconcile::Resolution<'_>,
+    transport: &RustupTransport,
+) -> Result<BTreeMap<String, Tool>, Error> {
+    let snapshot = request.snapshot();
+    let previous = snapshot.previous_lock().map(Lock::tools);
+    let mut tools = BTreeMap::new();
+    for id in ["rustup", "rust"] {
+        let Some(declarations) = snapshot.declarations().get(id) else {
+            continue;
+        };
+        let locked = previous.and_then(|tools| tools.get(id));
+        if !request.version_ids().contains(id) {
+            // Reconcile requires these bytes unchanged; absence is its drift.
+            tools.extend(locked.map(|tool| (id.to_owned(), tool.clone())));
+            continue;
+        }
+        if request.offline() {
+            return Err(Error::Unavailable("offline Rust metadata".into()));
+        }
+        let tool = if id == "rustup" {
+            transport.resolve(declarations.clone()).await?
+        } else {
+            let mut toolchain = snapshot
+                .rust_toolchain()
+                .map_err(|_| rust_metadata::Error::Invalid)?
+                .ok_or(Error::Channel)?;
+            let channel = |values: &[lock::Declaration]| {
+                values
+                    .iter()
+                    .filter(|d| d.field.as_deref().is_none_or(|f| f == "toolchain.channel"))
+                    .map(|d| d.request.clone())
+                    .collect::<Vec<_>>()
+            };
+            if let Some(locked) = locked
+                && !request.refresh()
+                && channel(&locked.declarations) == channel(declarations)
+            {
+                toolchain.channel = Channel::parse(&locked.version).ok_or(Error::Channel)?;
+            }
+            resolve_official(transport, &toolchain).await?
+        };
+        tools.insert(id.to_owned(), tool);
+    }
+    Ok(tools)
+}
+
 /// Fetch the official manifest for the request, then resolve it.
 pub async fn resolve_official(
     transport: &RustupTransport,
