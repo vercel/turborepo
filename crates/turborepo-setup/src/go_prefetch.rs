@@ -53,7 +53,7 @@ pub struct Prefetch<'a> {
 
 impl Prefetch<'_> {
     pub fn run(&self) -> Result<(), Error> {
-        let root = self.root.canonicalize()?;
+        let root = canonical(self.root)?;
         // Capture root files before running anything that could change them.
         let mut protected = BTreeMap::new();
         for name in ["go.work", "go.work.sum", "go.mod", "go.sum"] {
@@ -69,7 +69,7 @@ impl Prefetch<'_> {
             for line in String::from_utf8_lossy(&output.stdout).lines() {
                 let module = PathBuf::from(line.trim());
                 if module.is_absolute() {
-                    let module = module.canonicalize()?;
+                    let module = canonical(&module)?;
                     snapshot(&mut protected, module.with_file_name("go.sum"))?;
                     snapshot(&mut protected, module)?;
                 }
@@ -141,6 +141,16 @@ impl Prefetch<'_> {
     }
 }
 
+/// Windows canonical paths are verbatim (`\\?\C:\...`). go would run in and
+/// report that spelling while GOROOT and PATH use the ordinary one, so keep
+/// the ordinary spelling wherever it names the same path.
+fn canonical(path: &Path) -> io::Result<PathBuf> {
+    #[cfg(windows)]
+    return dunce::canonicalize(path);
+    #[cfg(not(windows))]
+    path.canonicalize()
+}
+
 fn read(path: &Path) -> io::Result<Option<Vec<u8>>> {
     match fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
@@ -157,5 +167,5 @@ fn snapshot(files: &mut BTreeMap<PathBuf, Option<Vec<u8>>>, path: PathBuf) -> io
     Ok(())
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests;
