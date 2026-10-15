@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use futures::{StreamExt, stream};
 use tracing::{debug, info, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
@@ -374,14 +375,25 @@ impl CacheMultiplexer {
         };
         let hashes: Vec<_> = remote_keys.iter().map(|(_, key)| key.clone()).collect();
         let batch = http.batch_exists(&hashes).await;
-        for (index, key) in remote_keys {
-            hits[index] = match &batch {
+        // Older self-hosted caches do not implement the batch endpoint. Resolve
+        // their HEAD fallbacks concurrently so network latency does not add up
+        // once per task, while limiting the number of in-flight requests.
+        let batch = &batch;
+        let resolved = stream::iter(remote_keys.into_iter().map(|(index, key)| async move {
+            let hit = match batch {
                 Ok(entries) => match entries.get(&key) {
                     Some(hit) => hit.clone(),
                     None => http.exists(&key).await.ok().flatten(),
                 },
                 Err(_) => http.exists(&key).await.ok().flatten(),
             };
+            (index, hit)
+        }))
+        .buffer_unordered(16)
+        .collect::<Vec<_>>()
+        .await;
+        for (index, hit) in resolved {
+            hits[index] = hit;
         }
         hits
     }

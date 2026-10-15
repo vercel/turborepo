@@ -351,6 +351,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dry_run_fallback_does_not_serialize_remote_heads() -> Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let query = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::POST).path("/v8/artifacts");
+                then.status(404);
+            })
+            .await;
+        let head = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::HEAD)
+                    .path("/v8/artifacts/hit");
+                then.status(200)
+                    .header("x-artifact-duration", "42")
+                    .delay(Duration::from_millis(200));
+            })
+            .await;
+        let root = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root.path())?;
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: CacheConfig::remote_only(),
+            workers: 1,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+        let cache = AsyncCache::new(
+            &opts,
+            &root,
+            Some(APIClient::new(
+                server.base_url(),
+                None,
+                None,
+                "2.0.0",
+                false,
+            )?),
+            Some(APIAuth {
+                team_id: None,
+                team_slug: None,
+                token: SecretString::new("test-token".into()),
+            }),
+            None,
+            LazyScmState::resolved(None),
+        )?;
+
+        let hits = tokio::time::timeout(
+            Duration::from_secs(2),
+            try_join_all((0..16).map(|_| cache.dry_run_exists("hit"))),
+        )
+        .await??;
+        assert_eq!(hits.len(), 16);
+        assert!(hits.into_iter().all(|hit| hit.is_some()));
+        query.assert_calls_async(1).await;
+        head.assert_calls_async(16).await;
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn dry_run_batch_preserves_remote_metadata_and_misses() -> Result<()> {
         use turborepo_api_client::{Bytes, CacheClient};
 
