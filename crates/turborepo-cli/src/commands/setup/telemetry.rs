@@ -62,9 +62,37 @@ fn native_failure(error: &turborepo_setup::native_baseline::Error) -> SetupFailu
     }
 }
 
+fn activation_failure(error: &turborepo_setup::activation::Error) -> SetupFailure {
+    use turborepo_setup::activation::Error as Activation;
+    match error {
+        Activation::MissingLock => SetupFailure::LockMissing,
+        Activation::DeclarationDrift => SetupFailure::LockStale,
+        Activation::InvalidLock => SetupFailure::LockInvalid,
+        Activation::UnsupportedAdapter => SetupFailure::Unsupported,
+        Activation::UnsupportedPlatform => SetupFailure::Platform,
+        _ => SetupFailure::Readiness,
+    }
+}
+
+// Failures before the installer runs keep their tool-side categories; the
+// native install itself, its lifecycle policy, and its host are
+// `Dependencies`.
+fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
+    use super::dependencies::Error as Dependencies;
+    match error {
+        Dependencies::UndeclaredManager => SetupFailure::Discovery,
+        Dependencies::Unlocked(_) | Dependencies::Sources(_) => SetupFailure::LockInvalid,
+        Dependencies::NotInstalled(_) | Dependencies::Untrusted => SetupFailure::Readiness,
+        Dependencies::Activation(error) => activation_failure(error),
+        Dependencies::Host(_)
+        | Dependencies::Install(_)
+        | Dependencies::Lifecycle(_)
+        | Dependencies::Io(_) => SetupFailure::Dependencies,
+    }
+}
+
 // `Unsupported` carries fixed messages; unmatched ones stay `Unsupported`.
 pub(super) fn failure(error: &Error) -> SetupFailure {
-    use turborepo_setup::activation::Error as Activation;
     match error {
         Error::Disabled | Error::FrozenUpdateLock => SetupFailure::Request,
         Error::NotImplemented => SetupFailure::Unsupported,
@@ -103,14 +131,8 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
             _ => SetupFailure::Unsupported,
         },
         Error::SourcePolicy(_) => SetupFailure::SourcePolicy,
-        Error::Activation(error) => match error {
-            Activation::MissingLock => SetupFailure::LockMissing,
-            Activation::DeclarationDrift => SetupFailure::LockStale,
-            Activation::InvalidLock => SetupFailure::LockInvalid,
-            Activation::UnsupportedAdapter => SetupFailure::Unsupported,
-            Activation::UnsupportedPlatform => SetupFailure::Platform,
-            _ => SetupFailure::Readiness,
-        },
+        Error::Activation(error) => activation_failure(error),
+        Error::Dependencies(error) => dependencies_failure(error),
         Error::Storage(_) | Error::Lock(_) => SetupFailure::LockInvalid,
         Error::Reconcile(_) => SetupFailure::Resolution,
         Error::UvResolution(_) | Error::PythonResolution(_) | Error::GoResolution(_) => {
@@ -278,6 +300,26 @@ mod tests {
             (Activation::StaleInventory, SetupFailure::Readiness),
         ] {
             assert_eq!(failure(&Error::Activation(error)), expected);
+        }
+        use super::super::dependencies::Error as Dependencies;
+        for (error, expected) in [
+            (Dependencies::UndeclaredManager, SetupFailure::Discovery),
+            (Dependencies::Unlocked("pnpm"), SetupFailure::LockInvalid),
+            (Dependencies::Untrusted, SetupFailure::Readiness),
+            (
+                Dependencies::Activation(Activation::DeclarationDrift),
+                SetupFailure::LockStale,
+            ),
+            (
+                Dependencies::Host("private host detail".into()),
+                SetupFailure::Dependencies,
+            ),
+            (
+                Dependencies::Io(std::io::Error::other("private path")),
+                SetupFailure::Dependencies,
+            ),
+        ] {
+            assert_eq!(failure(&Error::Dependencies(error)), expected);
         }
     }
 }

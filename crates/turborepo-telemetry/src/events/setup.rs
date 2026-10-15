@@ -68,6 +68,8 @@ vocabulary!(
         Download => "download",
         /// Writing the repository-local installation.
         Install => "install",
+        /// Running a native locked dependency install with the managed tools.
+        Dependencies => "dependencies",
         Io => "io",
     }
 );
