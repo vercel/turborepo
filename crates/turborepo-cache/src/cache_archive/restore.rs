@@ -1451,6 +1451,44 @@ mod tests {
     mod absolute_path_tests {
         use super::*;
 
+        #[cfg(windows)]
+        #[test_case::test_case("C:/Windows/Temp/evil.txt", tar::EntryType::Regular ; "file")]
+        #[test_case::test_case("C:/Windows/Temp/evil/", tar::EntryType::Directory ; "directory")]
+        #[test_case::test_case("C:/", tar::EntryType::Directory ; "drive root")]
+        #[test_case::test_case("C:evil.txt", tar::EntryType::Regular ; "drive-relative file")]
+        #[test_case::test_case("C:evil/", tar::EntryType::Directory ; "drive-relative directory")]
+        fn test_windows_drive_prefixed_path_rejected(
+            path: &str,
+            entry_type: tar::EntryType,
+        ) -> Result<()> {
+            // Bypass tar::Builder's path validation to model an untrusted artifact.
+            let mut tar_bytes = generate_raw_tar_with_unsafe_path(path, b"");
+            let mut header = Header::from_byte_slice(&tar_bytes[..512]).clone();
+            header.set_entry_type(entry_type);
+            header.set_cksum();
+            tar_bytes[..512].copy_from_slice(header.as_bytes());
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor, None);
+            assert!(
+                matches!(
+                    result,
+                    Err(crate::CacheError::PathError(
+                        turbopath::PathError::NotRelative(_),
+                        _
+                    ))
+                ),
+                "drive-prefixed path {path} should be rejected before restoration, got: {result:?}"
+            );
+            assert_eq!(fs::read_dir(output_dir.path())?.count(), 0);
+
+            Ok(())
+        }
+
         #[test]
         fn test_absolute_path_file_rejected() -> Result<()> {
             let tar_bytes = generate_raw_tar_with_unsafe_path("/etc/passwd", b"malicious content");
