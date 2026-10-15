@@ -158,7 +158,6 @@ impl Repo {
                     bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
                     artifact: None,
                     trust_base: Some(self.owned.home().to_owned()),
-                    cache: None,
                 }),
                 || Ok(self.owned.policy_at(self.owned.root())?),
             )
