@@ -87,6 +87,7 @@ fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
         Dependencies::Host(_)
         | Dependencies::Install(_)
         | Dependencies::Lifecycle(_)
+        | Dependencies::Uv(_)
         | Dependencies::Io(_) => SetupFailure::Dependencies,
     }
 }
@@ -316,6 +317,10 @@ mod tests {
             ),
             (
                 Dependencies::Io(std::io::Error::other("private path")),
+                SetupFailure::Dependencies,
+            ),
+            (
+                Dependencies::Uv(turborepo_setup::uv_sync::Error::Failed(2)),
                 SetupFailure::Dependencies,
             ),
         ] {

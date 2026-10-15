@@ -38,6 +38,7 @@ impl Fixture {
             root: &self.root(),
             offline,
             builds,
+            env: &BTreeMap::new(),
         }
         .run()
     }
@@ -109,11 +110,13 @@ fn missing_stale_or_rewritten_locks_are_rejected_without_rewriting() {
 #[test]
 fn disclosure_describes_uv_builds_not_javascript_lifecycle_scripts() {
     let f = Fixture::new("exit 0");
+    let env = BTreeMap::new();
     let sync = |builds| UvSync {
         uv: Path::new("uv"),
         root: f.temp.path(),
         offline: false,
         builds,
+        env: &env,
     };
     assert!(sync(Builds::Native).disclosure().contains("build backends"));
     assert!(sync(Builds::Skip).disclosure().contains("--no-build"));
