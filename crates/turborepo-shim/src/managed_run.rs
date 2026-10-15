@@ -1,15 +1,16 @@
 //! Capability-based selection only. Root metadata and run dispatch are
 //! consumers.
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::os::fd::AsRawFd;
 use std::{
     fs,
     path::{Path, PathBuf},
     time::Duration,
 };
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 use std::{
     io::Read,
-    os::fd::AsRawFd,
     process::{Child, Command, Stdio},
     thread,
     time::Instant,
@@ -19,7 +20,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 
 use crate::capabilities::{Capabilities, Requirement};
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 use crate::capabilities::{MAX_RESPONSE_BYTES, QUERY_FLAG};
 
 const QUERY_TIMEOUT: Duration = Duration::from_secs(3);
@@ -151,7 +152,7 @@ fn exited(child: &Child) -> Result<Option<bool>, &'static str> {
     Ok((pid != 0).then_some(info.si_code == libc::CLD_EXITED && status == 0))
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn probe(_binary: &Path, _timeout: Duration) -> Result<Capabilities, &'static str> {
     Err(
         "non-self native capability probing is not qualified on this platform; no pin \
@@ -159,8 +160,115 @@ fn probe(_binary: &Path, _timeout: Duration) -> Result<Capabilities, &'static st
     )
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+/// Ends the whole query job on every exit path. The job forbids breakaway, so
+/// descendants holding the pipes die with it and the readers finish.
+#[cfg(windows)]
+struct Query {
+    child: Child,
+    job: turborepo_process::JobObject,
+}
+
+#[cfg(windows)]
+impl Drop for Query {
+    fn drop(&mut self) {
+        let _ = self.job.terminate();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// Anonymous pipes cannot be nonblocking on Windows, so bounded reader
+/// threads report each stream while this thread enforces the deadline.
+#[cfg(windows)]
 fn probe(binary: &Path, timeout: Duration) -> Result<Capabilities, &'static str> {
+    use std::{
+        os::windows::{io::AsRawHandle, process::CommandExt},
+        sync::mpsc::{self, RecvTimeoutError},
+    };
+    // Suspended until it is in the job, so no descendant can start outside it.
+    const CREATE_SUSPENDED: u32 = 0x0000_0004;
+    let job = turborepo_process::JobObject::new()
+        .map_err(|_| "capability query could not be contained")?;
+    let child = query_command(binary)?
+        .creation_flags(CREATE_SUSPENDED)
+        .spawn()
+        .map_err(|_| "capability query could not start")?;
+    let mut query = Query { child, job };
+    let handle = query.child.as_raw_handle();
+    if !query.job.assign_suspended_process(handle).unwrap_or(false) {
+        return Err("capability query could not be contained");
+    }
+    let (sender, receiver) = mpsc::channel();
+    let stdout = query.child.stdout.take().ok_or("missing stdout pipe")?;
+    let stderr = query.child.stderr.take().ok_or("missing stderr pipe")?;
+    for (is_stdout, pipe, limit) in [
+        (
+            true,
+            Box::new(stdout) as Box<dyn Read + Send>,
+            MAX_RESPONSE_BYTES + 1,
+        ),
+        (false, Box::new(stderr), 1),
+    ] {
+        let sender = sender.clone();
+        thread::spawn(move || {
+            let mut bytes = Vec::new();
+            let read = pipe.take(limit as u64).read_to_end(&mut bytes);
+            let _ = sender.send((is_stdout, read.map(|_| bytes)));
+        });
+    }
+    let record = |(is_stdout, read): (bool, std::io::Result<Vec<u8>>),
+                  output: &mut Option<Vec<u8>>|
+     -> Result<(), &'static str> {
+        let bytes = read.map_err(|_| "capability output read failed")?;
+        if is_stdout && bytes.len() > MAX_RESPONSE_BYTES {
+            return Err("capability response exceeded its byte limit");
+        }
+        if !is_stdout && !bytes.is_empty() {
+            return Err("capability query wrote unexpected stderr");
+        }
+        if is_stdout {
+            *output = Some(bytes);
+        }
+        Ok(())
+    };
+    let deadline = Instant::now() + timeout;
+    let (mut output, mut received) = (None, 0);
+    // Descendants inherit the pipes even with null stdio, so the query ends
+    // when its root exits: ending the job then closes every inherited copy.
+    let status = loop {
+        while let Ok(message) = receiver.try_recv() {
+            record(message, &mut output)?;
+            received += 1;
+        }
+        match query.child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+            Ok(None) => return Err("capability query timed out"),
+            Err(_) => return Err("capability process wait failed"),
+        }
+    };
+    if !status.success() {
+        return Err("capability query exited unsuccessfully");
+    }
+    query
+        .job
+        .terminate()
+        .map_err(|_| "capability query could not be contained")?;
+    while received < 2 {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match receiver.recv_timeout(remaining.max(Duration::from_millis(250))) {
+            Ok(message) => record(message, &mut output)?,
+            Err(RecvTimeoutError::Timeout) => return Err("capability query timed out"),
+            Err(RecvTimeoutError::Disconnected) => return Err("capability output read failed"),
+        }
+        received += 1;
+    }
+    Capabilities::parse(&output.ok_or("capability output read failed")?)
+        .map_err(|_| "capability response is malformed or uses an unsupported ABI")
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
+fn query_command(binary: &Path) -> Result<Command, &'static str> {
     let mut command = Command::new(binary);
     command
         .arg(QUERY_FLAG)
@@ -171,7 +279,12 @@ fn probe(binary: &Path, timeout: Duration) -> Result<Capabilities, &'static str>
     // Old CLIs may not implement the preflight. Suppress normal startup's
     // download/update/telemetry/agent paths without altering the real dispatch env.
     for (key, _) in std::env::vars_os() {
-        let name = key.to_string_lossy();
+        // Windows variable names are case-insensitive.
+        let name = if cfg!(windows) {
+            key.to_string_lossy().to_ascii_uppercase()
+        } else {
+            key.to_string_lossy().into_owned()
+        };
         if name.starts_with("TURBO_")
             || name.starts_with("__TURBO_")
             || matches!(
@@ -188,7 +301,12 @@ fn probe(binary: &Path, timeout: Duration) -> Result<Capabilities, &'static str>
         .env("TURBO_NO_UPDATE_NOTIFIER", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0");
-    #[cfg(unix)]
+    Ok(command)
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn probe(binary: &Path, timeout: Duration) -> Result<Capabilities, &'static str> {
+    let mut command = query_command(binary)?;
     {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
