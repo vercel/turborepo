@@ -42,6 +42,21 @@ pub enum Error {
     Io(#[from] io::Error),
 }
 
+/// How a frozen install refuses every registry and network request, using
+/// only the manager's own cache.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Offline {
+    /// Native arguments after the frozen ones.
+    Args(&'static [&'static str]),
+    /// Native settings read from the environment.
+    Env(&'static [(&'static str, &'static str)]),
+    /// Why this manager version cannot be kept off the network.
+    Unsupported(String),
+}
+
+/// The first Bun release with `bun install --offline`.
+const BUN_OFFLINE: Version = Version::new(1, 4, 1);
+
 /// A package manager with a frozen install adapter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Frozen {
@@ -91,6 +106,35 @@ impl Frozen {
             Manager::Yarn if version.major < 2 => &["install", "--frozen-lockfile"],
             Manager::Yarn => &["install", "--immutable"],
             Manager::Bun => &["install", "--frozen-lockfile"],
+            _ => unreachable!("Frozen::new admits only adapted managers"),
+        }
+    }
+
+    /// The locked version's native offline mode. Each one fails on anything
+    /// missing from the manager's cache instead of downloading it.
+    pub fn offline(self, version: &Version, root: &Path) -> Offline {
+        match self.manager {
+            // npm's update check bypasses its cache even with --offline.
+            Manager::Npm => Offline::Args(&["--offline", "--no-update-notifier"]),
+            Manager::Pnpm => Offline::Args(&["--offline"]),
+            Manager::Yarn if version.major < 2 => Offline::Args(&["--offline"]),
+            // Modern Yarn has no flag, but `enableNetwork: false` blocks every
+            // request, with its global or project cache alike. A per-host
+            // `networkSettings` entry takes precedence over it.
+            Manager::Yarn => match crate::lifecycle::yarn_host_network(root) {
+                Ok(false) => Offline::Env(&[("YARN_ENABLE_NETWORK", "0")]),
+                Ok(true) => Offline::Unsupported(
+                    ".yarnrc.yml enables the network for a host in networkSettings, which Yarn \
+                     prefers over the enableNetwork setting that offline setup disables"
+                        .into(),
+                ),
+                Err(error) => Offline::Unsupported(error.to_string()),
+            },
+            Manager::Bun if *version >= BUN_OFFLINE => Offline::Args(&["--offline"]),
+            Manager::Bun => Offline::Unsupported(format!(
+                "Bun {version} has no offline install mode (`bun install --offline` needs Bun \
+                 {BUN_OFFLINE} or newer)"
+            )),
             _ => unreachable!("Frozen::new admits only adapted managers"),
         }
     }

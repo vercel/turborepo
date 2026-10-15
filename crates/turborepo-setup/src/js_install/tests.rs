@@ -143,3 +143,40 @@ fn bun_installs_frozen_from_either_lock_and_never_migrates_it() {
     assert!(!f.root().join("bun.lock").exists());
     assert_eq!(fs::read(f.root().join("bun.lockb")).unwrap(), b"binary");
 }
+
+#[test]
+fn offline_modes_follow_each_manager_and_locked_version() {
+    let f = Fixture::new();
+    let offline = |manager, version: &str| {
+        let version = Version::parse(version).unwrap();
+        Frozen::new(manager).unwrap().offline(&version, &f.root())
+    };
+    let flag = Offline::Args(&["--offline"]);
+    assert_eq!(
+        offline(Manager::Npm, "11.6.1"),
+        Offline::Args(&["--offline", "--no-update-notifier"])
+    );
+    assert_eq!(offline(Manager::Pnpm, "10.18.0"), flag);
+    assert_eq!(offline(Manager::Yarn, "1.22.22"), flag);
+    assert_eq!(offline(Manager::Bun, "1.4.1"), flag);
+    let Offline::Unsupported(bun) = offline(Manager::Bun, "1.4.0") else {
+        panic!("Bun 1.4.0 has no --offline");
+    };
+    assert!(bun.contains("needs Bun 1.4.1 or newer"), "{bun}");
+    // Modern Yarn reads enableNetwork from its environment, unless a host
+    // entry in the committed .yarnrc.yml takes precedence.
+    let network = Offline::Env(&[("YARN_ENABLE_NETWORK", "0")]);
+    assert_eq!(offline(Manager::Yarn, "4.9.2"), network);
+    let rc = f.root().join(".yarnrc.yml");
+    let host = "networkSettings:\n  \"*.example\":\n    enableNetwork:";
+    for (value, kept_offline) in [(" false", true), (" true", false), (" \"true\"", false)] {
+        fs::write(&rc, format!("{host}{value}\n")).unwrap();
+        let mode = offline(Manager::Yarn, "4.9.2");
+        assert_eq!(mode == network, kept_offline, "{value}: {mode:?}");
+    }
+    fs::write(&rc, "networkSettings: [").unwrap();
+    assert!(matches!(
+        offline(Manager::Yarn, "3.8.7"),
+        Offline::Unsupported(reason) if reason.contains(".yarnrc.yml")
+    ));
+}

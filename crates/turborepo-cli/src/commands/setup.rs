@@ -493,8 +493,10 @@ fn run_reporting(
         );
         return Ok(0);
     }
-    // Offline repeats and clone-local --no-lock run only when every
-    // dependency is skipped (`validate`).
+    // Offline setup reuses the trusted installation or verified cached bytes;
+    // enabled dependencies then install offline from the native caches.
+    // Clone-local --no-lock runs only when every dependency is skipped
+    // (`validate`).
     let provisioned = if request.offline {
         offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
@@ -640,14 +642,8 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
              --update-lock without --offline",
         ));
     }
-    // Installers run with the activation that turbo.lock records and contact
-    // package registries, so neither mode can install locked dependencies.
-    if !tools_only && request.offline {
-        return Err(Error::Unsupported(
-            "--offline cannot install locked dependencies yet; add --tools-only to prepare only \
-             tools offline",
-        ));
-    }
+    // Installers run with the activation that turbo.lock records. Offline,
+    // they use their native offline modes (`dependencies`).
     if !tools_only && request.lock == LockMode::NoLock {
         return Err(Error::Unsupported(
             "--no-lock cannot install locked dependencies, because installers run with the \
@@ -878,6 +874,10 @@ mod tests {
                 vec!["--plan"],
                 vec!["--check"],
                 vec!["--check", "--offline"],
+                // Native offline installs (`dependencies`).
+                vec!["--offline"],
+                vec!["--frozen", "--offline"],
+                vec!["--force", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert!(!request.tools_only);
@@ -912,20 +912,14 @@ mod tests {
                 Err(Error::Unsupported(message)) if message.starts_with("--offline cannot resolve --update-lock")
             ));
         }
-        // Offline repeats (#14518) and --no-lock (#14486) cannot install
-        // locked dependencies; with dependencies skipped they still provision.
-        for flags in [
-            vec!["--offline"],
-            vec!["--offline", "--force"],
-            vec!["--no-lock"],
-        ] {
-            let request = request(&flags, false).unwrap();
-            assert_eq!(request.mode, Mode::Provision);
-            assert!(matches!(
-                validate_request(&request),
-                Err(Error::Unsupported(_))
-            ));
-            assert!(validate(&request, true).is_ok(), "{flags:?}");
-        }
+        // --no-lock (#14486) cannot install locked dependencies; with
+        // dependencies skipped it still provisions.
+        let no_lock = request(&["--no-lock"], false).unwrap();
+        assert_eq!(no_lock.mode, Mode::Provision);
+        assert!(matches!(
+            validate_request(&no_lock),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(validate(&no_lock, true).is_ok());
     }
 }

@@ -129,10 +129,11 @@ fn inspect(
     Ok(lines)
 }
 
-// One line per trusted, reused tool.
+/// Trusted reuse touches no tools; the caller reports dependencies, which
+/// may still install offline from the native caches.
 fn report(lines: Vec<String>) -> provision::Provisioned {
     println!("{}", lines.join("\n"));
-    println!("No resolution, downloads, writes, probes, or tasks run.");
+    println!("Tools: no resolution, downloads, writes, or probes.");
     provision::Provisioned {
         reused: lines.len(),
         ..Default::default()
