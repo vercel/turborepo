@@ -171,6 +171,75 @@ impl Dependencies {
         reasons.into_iter().collect::<Vec<_>>().join("; ")
     }
 
+    /// `--tools-only` for a JavaScript repository, for direct plan tests.
+    #[cfg(test)]
+    pub fn tools_only() -> Self {
+        Self(vec![(
+            ToolchainId::JAVASCRIPT,
+            Step::Skip("--tools-only".into()),
+        )])
+    }
+
+    /// `--plan` lines for the locked or proposed tool versions.
+    pub fn plan(&self, root: &Path, lock: &Lock) -> Result<Vec<String>, Error> {
+        if self.skipped() {
+            return Ok(vec![format!(
+                "Dependencies skipped ({}); dependency readiness was not checked.",
+                self.reasons()
+            )]);
+        }
+        self.describe(root, lock, |run, lockfile| {
+            format!(
+                "{} from {lockfile} with managed {} ({lockfile} stays unchanged)",
+                run.command.join(" "),
+                run.installer
+            )
+        })
+    }
+
+    /// `--check` lines. The initial adapters keep no readiness evidence, so
+    /// dependencies are never reported ready.
+    pub fn check(&self, root: &Path, lock: &Lock) -> Result<Vec<String>, Error> {
+        if self.skipped() {
+            return Ok(vec![format!(
+                "Dependencies skipped ({}); dependency readiness was not checked. No tasks run.",
+                self.reasons()
+            )]);
+        }
+        let mut lines = self.describe(root, lock, |run, lockfile| {
+            format!(
+                "not checked; turbo setup reruns {} from {lockfile}, because dependency readiness \
+                 is not tracked",
+                run.command.join(" ")
+            )
+        })?;
+        lines.push("No tasks run.".into());
+        Ok(lines)
+    }
+
+    fn describe(
+        &self,
+        root: &Path,
+        lock: &Lock,
+        action: impl Fn(&Run, &str) -> String,
+    ) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for (id, step) in &self.0 {
+            let id = id.as_str();
+            match step {
+                Step::Skip(reason) => lines.push(format!("{id} dependencies: skipped ({reason})")),
+                Step::Install(adapter) => {
+                    let run = adapter.run(root, lock)?;
+                    let action = action(&run, adapter.lockfile());
+                    lines.push(format!("{id} dependencies: {action}"));
+                    let policy = run.policy.report().into_iter();
+                    lines.extend(policy.map(|line| format!("  {line}")));
+                }
+            }
+        }
+        Ok(lines)
+    }
+
     /// After provisioning: every enabled installer in order, each with the
     /// managed environment that setup just recorded. The first failing
     /// installer's exit status becomes setup's, after it is reported.
