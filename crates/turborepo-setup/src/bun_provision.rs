@@ -326,6 +326,7 @@ impl BunPlan {
             },
         )?;
         Ok(Some(PreparedBun {
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             tree,
             tool: self.tool.clone(),
         }))
@@ -335,8 +336,14 @@ impl BunPlan {
 pub struct PreparedBun {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
 }
 impl PreparedBun {
+    /// Verified archive bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Callback for Store::reconcile: copy the verified release tree as-is.
     pub fn stage(
         &self,

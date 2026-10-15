@@ -8,6 +8,53 @@ const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 const FORCE: &[&str] = &["--tools-only", "--no-frozen", "--force"];
 const CHECK: &[&str] = &["--tools-only", "--check", "--offline"];
 
+#[test]
+fn npm_telemetry_counts_managed_owners_and_artifact_bytes() {
+    use turborepo_telemetry::events::setup::{SetupDependencies, SetupLock, SetupMode};
+
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        let f = &n.f;
+        let u = n.upstream();
+        let artifacts = (f.node.len() + if bundled { 0 } else { n.npm.len() }) as u64;
+        let owners = if bundled { 1 } else { 2 };
+        for (flags, downloaded_bytes, tools_installed, tools_reused) in [
+            (FROZEN, artifacts, owners, 0),
+            (FROZEN, 0, 0, owners),
+            (FORCE, artifacts, owners, 0),
+        ] {
+            let mut report = telemetry::Report::default();
+            let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
+                let transports = f.transports(u.origin(), None);
+                run_reporting(args, setup_args, Some(transports), &mut report, || {
+                    Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
+                })
+            })
+            .unwrap();
+            assert_eq!(result.unwrap(), 0);
+            assert_eq!(
+                report,
+                telemetry::Report {
+                    gated: true,
+                    request: Some((
+                        SetupMode::Provision,
+                        if flags == FORCE {
+                            SetupLock::Write
+                        } else {
+                            SetupLock::Frozen
+                        },
+                        SetupDependencies::Skip
+                    )),
+                    downloaded_bytes,
+                    tools_installed,
+                    tools_reused,
+                }
+            );
+            n.untouched();
+        }
+    }
+}
+
 struct NpmFixture {
     f: Fixture,
     npm: Vec<u8>,

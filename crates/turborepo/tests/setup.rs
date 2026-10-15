@@ -157,6 +157,9 @@ fn invoke_raw_options(
         .env("VERCEL_CONFIG_DIR_PATH", root.join("config"))
         .env("TURBO_INVOCATION_DIR", root.join("unrelated-invocation"))
         .env("TURBO_FORCE", "true")
+        // These assertions cover setup's own traffic and writes. Standard
+        // telemetry is covered separately with its own config and proxy.
+        .env("TURBO_TELEMETRY_DISABLED", "1")
         .env("AI_AGENT", "setup-test")
         .env("HTTP_PROXY", &url)
         .env("HTTPS_PROXY", &url)
@@ -1964,6 +1967,182 @@ fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
         true,
         "frozen mode requires turbo.lock",
     );
+}
+
+/// Real setup with standard telemetry left on: a user config directory outside
+/// the repository, debug output of every event sent, and a proxy that accepts
+/// connections but never answers. Returns (code, stdout, stderr, connected).
+fn invoke_with_telemetry(
+    root: &Path,
+    config: &Path,
+    words: &[&str],
+    opt_out: Option<&str>,
+) -> (i32, String, String, bool) {
+    let proxy = TcpListener::bind("127.0.0.1:0").expect("bind HTTP monitor");
+    proxy.set_nonblocking(true).expect("nonblocking monitor");
+    let url = format!("http://{}", proxy.local_addr().expect("monitor address"));
+    let before = snapshot(root);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
+    command
+        .env_clear()
+        .current_dir(root)
+        .args(words)
+        .env("PATH", "")
+        .env("HOME", root.join("home"))
+        .env("XDG_CONFIG_HOME", config)
+        .env("TURBO_CONFIG_DIR_PATH", config)
+        .env("VERCEL_CONFIG_DIR_PATH", config)
+        .env("TURBO_TELEMETRY_DEBUG", "1")
+        .env("HTTP_PROXY", &url)
+        .env("HTTPS_PROXY", &url)
+        .env("ALL_PROXY", &url)
+        .env("NO_PROXY", "");
+    if let Some(variable) = opt_out {
+        command.env(variable, "1");
+    }
+    let started = std::time::Instant::now();
+    let output = command.output().expect("run standalone turbo");
+    // Never waits for the unanswered request (10s request timeout).
+    assert!(started.elapsed() < std::time::Duration::from_secs(8));
+    assert_eq!(snapshot(root), before, "telemetry must not write the repo");
+    (
+        output.status.code().expect("standalone turbo exit code"),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+        proxy.accept().is_ok(),
+    )
+}
+
+fn telemetry_events(stdout: &str) -> Vec<serde_json::Value> {
+    stdout
+        .split("[telemetry event]")
+        .skip(1)
+        .map(|chunk| {
+            serde_json::Deserializer::from_str(chunk.trim_start())
+                .into_iter::<serde_json::Value>()
+                .next()
+                .expect("telemetry event")
+                .expect("telemetry event JSON")
+        })
+        .collect()
+}
+
+#[test]
+fn setup_telemetry_is_standard_opt_out_redacted_and_never_changes_the_result() {
+    const NOTICE: &str = "anonymous telemetry";
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("private-repo-name");
+    fs::create_dir(&root).unwrap();
+    write(&root, "turbo.json", ENABLED);
+    write(&root, ".nvmrc", "24.0.0");
+    write(&root, "package.json", "{}");
+    let cwd = format!("--cwd={}", root.display());
+    let words = ["setup", "--frozen", "--tools-only", cwd.as_str()];
+    let (diagnostic, category) = if QUALIFIED {
+        ("frozen mode requires turbo.lock", "lock_missing")
+    } else {
+        (UNQUALIFIED, "platform")
+    };
+    let unchanged = |code: i32, stderr: &str| {
+        assert_eq!(code, 1, "{stderr}");
+        assert!(diagnostic_contains(stderr, diagnostic), "{stderr}");
+    };
+
+    // On by default: the one-time notice, then aggregate events only.
+    let config = temp.path().join("config");
+    let (code, stdout, stderr, _) = invoke_with_telemetry(&root, &config, &words, None);
+    unchanged(code, &stderr);
+    assert!(stderr.contains(NOTICE), "{stderr}");
+    let events = telemetry_events(&stdout);
+    let mut setup: Vec<String> = events
+        .iter()
+        .filter_map(|event| event.get("command"))
+        .filter(|event| event["command"] == "setup" && event["parent_id"].is_string())
+        .map(|event| {
+            format!(
+                "{}={}",
+                event["key"].as_str().unwrap(),
+                event["value"].as_str().unwrap()
+            )
+        })
+        .collect();
+    setup.sort();
+    let duration = setup
+        .iter()
+        .position(|e| e.starts_with("duration_ms="))
+        .unwrap();
+    assert!(
+        setup.remove(duration)["duration_ms=".len()..]
+            .parse::<u64>()
+            .is_ok()
+    );
+    let failure = format!("failure={category}");
+    assert_eq!(
+        setup,
+        [
+            "command=called",
+            "dependencies=skip",
+            &failure,
+            "lock=frozen",
+            "mode=provision",
+            "outcome=failed"
+        ]
+    );
+    // No paths, repository names, arguments, declarations, or URLs.
+    let sent = serde_json::to_string(&events).unwrap();
+    for private in [
+        root.to_str().unwrap(),
+        "private-repo-name",
+        "--frozen",
+        "--cwd",
+        "24.0.0",
+        ".nvmrc",
+        "http",
+    ] {
+        assert!(!sent.contains(private), "{private}: {sent}");
+    }
+    let (code, stdout, stderr, _) = invoke_with_telemetry(&root, &config, &words, None);
+    unchanged(code, &stderr);
+    assert!(!stderr.contains(NOTICE) && !telemetry_events(&stdout).is_empty());
+
+    // Each standard opt-out, and setup without the future flag: the same local
+    // diagnostic with no notice, events, config, or connection.
+    let disable = Command::new(env!("CARGO_BIN_EXE_turbo"))
+        .env_clear()
+        .current_dir(temp.path())
+        .args(["telemetry", "disable"])
+        .env("PATH", "")
+        .env("HOME", temp.path().join("home"))
+        .env("TURBO_CONFIG_DIR_PATH", &config)
+        .env("HTTPS_PROXY", "http://127.0.0.1:9")
+        .output()
+        .unwrap();
+    assert!(
+        disable.status.success(),
+        "{}",
+        String::from_utf8_lossy(&disable.stderr)
+    );
+    for (config, opt_out) in [
+        (config, None),
+        (
+            temp.path().join("disabled"),
+            Some("TURBO_TELEMETRY_DISABLED"),
+        ),
+        (temp.path().join("dnt"), Some("DO_NOT_TRACK")),
+    ] {
+        let (code, stdout, stderr, connected) =
+            invoke_with_telemetry(&root, &config, &words, opt_out);
+        unchanged(code, &stderr);
+        assert!(!stderr.contains(NOTICE) && !stdout.contains("[telemetry") && !connected);
+        assert_eq!(config.exists(), opt_out.is_none());
+    }
+    write(&root, "turbo.json", "{}");
+    let config = temp.path().join("flagless");
+    let (code, stdout, stderr, connected) = invoke_with_telemetry(&root, &config, &words, None);
+    assert_eq!(code, 1);
+    assert!(diagnostic_contains(&stderr, DISABLED), "{stderr}");
+    assert!(!stderr.contains(NOTICE) && !stdout.contains("[telemetry") && !connected);
+    assert!(!config.exists());
 }
 
 #[test]

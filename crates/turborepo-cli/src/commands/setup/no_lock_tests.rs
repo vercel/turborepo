@@ -380,7 +380,7 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
             }
         });
         assert!(fired.get());
-        assert!(result.is_err());
+        assert!(result.is_err(), "case {case}");
         assert_eq!(f.manifest(), before);
         assert_eq!(current(&f).bin, old.bin);
         assert_eq!(

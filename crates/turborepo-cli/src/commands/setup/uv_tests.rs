@@ -133,6 +133,80 @@ fn python_only_local_setup_locks_installs_and_repeats_without_traffic() {
 }
 
 #[test]
+fn telemetry_counts_downloaded_uv_bytes() {
+    let owned = fixture(PYTHON, ">=0.12, <0.14");
+    let upstream = upstream(&["0.12.24", "0.13.0", "0.14.0"]);
+    let platform = provision::platform().unwrap();
+    let official =
+        UvArtifact::for_platform(&semver::Version::parse("0.13.0").unwrap(), platform).unwrap();
+    let artifact = archive(
+        &format!("uv-{}", official.target()),
+        &[
+            ("uv", "#!/bin/sh\ntouch probe-ran\n"),
+            ("uvx", "#!/bin/sh\nexit 1\n"),
+        ],
+    )
+    .len() as u64;
+    let cwd = owned.root().join("apps/web/src");
+    let report = |flags: &[&str]| {
+        let mut words = vec![
+            "turbo".into(),
+            "setup".into(),
+            "--cwd".into(),
+            cwd.clone().into_os_string(),
+        ];
+        words.extend(flags.iter().map(std::ffi::OsString::from));
+        let args = Args::parse_args(words).unwrap();
+        let origin = upstream.origin();
+        let mut report = telemetry::Report::default();
+        let code = crate::cli::dispatch_setup(&args, |args, setup_args| {
+            let transports = provision::Transports {
+                trust_base: Some(owned.home().to_owned()),
+                node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+                pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+                registry:
+                    turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
+                uv: UvTransport::loopback_http_for_tests(origin).unwrap(),
+                rustup:
+                    turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
+                bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+                python:
+                    turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
+                artifact: None,
+                go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+            };
+            run_reporting(args, setup_args, Some(transports), &mut report, || {
+                Ok(owned.policy_at(&cwd)?)
+            })
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(code, 0);
+        (
+            report.downloaded_bytes,
+            report.tools_installed,
+            report.tools_reused,
+        )
+    };
+    // A uv-only repository transfers its verified archive once, then reuses it.
+    assert_eq!(report(LOCAL), (artifact, 1, 0));
+    assert_eq!(report(LOCAL), (0, 0, 1));
+}
+
+#[test]
 fn declaration_changes_update_locally_and_frozen_names_uv() {
     let owned = fixture(PYTHON, ">=0.12");
     let upstream = upstream(&["0.12.24", "0.13.0"]);
