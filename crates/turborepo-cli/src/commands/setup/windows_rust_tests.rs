@@ -26,10 +26,12 @@ fn manifest() -> String {
     for package in ["rustc", "cargo", "rust-std"] {
         let url =
             format!("https://static.rust-lang.org/dist/2026-10-01/{package}-1.99.0-{HOST}.tar.gz");
+        let xz_url = url.replace(".tar.gz", ".tar.xz");
         text.push_str(&format!(
             "[pkg.{package}]\nversion = \"1.99.0\"\n[pkg.{package}.target.{HOST}]\navailable = \
-             true\nurl = \"{url}\"\nhash = \"{:x}\"\n",
-            Sha256::digest(&url)
+             true\nurl = \"{url}\"\nhash = \"{:x}\"\nxz_url = \"{xz_url}\"\nxz_hash = \"{:x}\"\n",
+            Sha256::digest(&url),
+            Sha256::digest(&xz_url)
         ));
     }
     text
