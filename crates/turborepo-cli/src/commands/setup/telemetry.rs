@@ -89,6 +89,7 @@ fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
         | Dependencies::Lifecycle(_)
         | Dependencies::Uv(_)
         | Dependencies::Cargo(_)
+        | Dependencies::Go(_)
         | Dependencies::Io(_) => SetupFailure::Dependencies,
     }
 }
@@ -326,6 +327,12 @@ mod tests {
             ),
             (
                 Dependencies::Cargo(turborepo_setup::cargo_prefetch::Error::StaleLock),
+                SetupFailure::Dependencies,
+            ),
+            (
+                Dependencies::Go(turborepo_setup::go_prefetch::Error::MissingSums(
+                    "private module".into(),
+                )),
                 SetupFailure::Dependencies,
             ),
         ] {
