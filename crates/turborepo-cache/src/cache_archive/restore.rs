@@ -10,7 +10,7 @@ use crate::{
     cache_archive::{
         restore_directory::{CachedDirTree, restore_directory, validate_restore_path},
         restore_manifest::RestoreManifest,
-        restore_regular::restore_regular,
+        restore_regular::{RegularRestore, restore_regular},
         restore_symlink::{
             canonicalize_linkname, restore_symlink, restore_symlink_allow_missing_target,
         },
@@ -96,26 +96,32 @@ impl<'a> CacheReader<'a> {
 
         for entry in tr.entries()? {
             let mut entry = entry?;
-            let entry_type = entry.header().entry_type();
             match restore_entry(&mut dir_cache, anchor, &mut entry, previous_manifest) {
                 Err(CacheError::LinkTargetDoesNotExist(_, _)) => {
                     symlinks.push(entry);
                 }
                 Err(e) => return Err(e),
-                Ok((restored_path, skipped)) => {
-                    if entry_type == tar::EntryType::Regular {
-                        let key = restored_path.as_str().to_owned();
-                        if skipped {
+                Ok((restored_path, regular)) => {
+                    match regular {
+                        Some(RegularRestore::Skipped) => {
+                            let key = restored_path.as_str().to_owned();
                             if let Some(existing) =
                                 previous_manifest.and_then(|m| m.files.get(&key))
                             {
                                 new_manifest.order.push(key.clone());
                                 new_manifest.files.insert(key, *existing);
                             }
-                        } else {
+                        }
+                        Some(RegularRestore::Written(Some(metadata))) => {
+                            let key = restored_path.as_str().to_owned();
+                            let _ = new_manifest.record_file_metadata(key, &metadata);
+                        }
+                        Some(RegularRestore::Written(None)) => {
+                            let key = restored_path.as_str().to_owned();
                             let resolved = anchor.resolve(&restored_path);
                             let _ = new_manifest.record_file(key, &resolved);
                         }
+                        None => {}
                     }
                     restored.push(restored_path);
                 }
@@ -178,24 +184,22 @@ impl<'a> CacheReader<'a> {
     }
 }
 
-/// Returns `(path, skipped)` where `skipped` is true only for regular
-/// files that matched the manifest and were not rewritten.
+/// Returns the restored path, plus the outcome for regular files.
 fn restore_entry<T: Read>(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<T>,
     manifest: Option<&RestoreManifest>,
-) -> Result<(AnchoredSystemPathBuf, bool), CacheError> {
+) -> Result<(AnchoredSystemPathBuf, Option<RegularRestore>), CacheError> {
     let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
     validate_restore_path(&processed_name)?;
     let header = entry.header();
 
     match header.entry_type() {
-        tar::EntryType::Directory => {
-            restore_directory(dir_cache, anchor, entry).map(|p| (p, false))
-        }
-        tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry, manifest),
-        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry).map(|p| (p, false)),
+        tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry).map(|p| (p, None)),
+        tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry, manifest)
+            .map(|(p, regular)| (p, Some(regular))),
+        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry).map(|p| (p, None)),
         ty => Err(CacheError::RestoreUnsupportedFileType(
             ty,
             Backtrace::capture(),

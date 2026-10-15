@@ -19,13 +19,16 @@ pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod devtools;
 pub(crate) mod docs;
+pub(crate) mod exec;
 pub(crate) mod generate;
 pub(crate) mod get_mfe_port;
+pub(crate) mod hook;
 pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;
 pub(crate) mod logout;
 pub(crate) mod ls;
+pub(crate) mod managed;
 pub(crate) mod prune;
 pub(crate) mod query;
 pub(crate) mod run;
@@ -96,6 +99,7 @@ impl CommandBase {
             opts: self.opts.clone(),
             version: self.version,
             api_auth: self.api_auth()?,
+            managed_environment: None,
         })
     }
 

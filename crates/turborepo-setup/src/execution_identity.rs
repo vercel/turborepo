@@ -1,6 +1,7 @@
 //! Pure selection and cache identity, not activation, tool verification or
-//! runtime platform detection. Future execution must consume this same owned
-//! selection; ignored installation inventory cannot reconstruct it yet.
+//! runtime platform detection. Execution consumes this same owned selection:
+//! turbo.lock, or the sealed `--no-lock` record of the selected generation,
+//! never a reconstruction from installation inventory.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -8,7 +9,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use turborepo_platform::{Architecture, OperatingSystem, Platform as HostPlatform};
 
-use crate::lock::{Artifact, Format, Installation, Lock, Platform};
+use crate::lock::{Artifact, Format, Installation, Lock, Platform, additional};
 
 pub const IDENTITY_DOMAIN: &str = "turborepo.setup.execution.v1";
 
@@ -100,6 +101,12 @@ impl ExecutionContext {
     pub fn artifact_platform(&self) -> Platform {
         self.artifact_platform
     }
+
+    /// musl Linux, which has no official managed artifacts: only
+    /// verify-system tools activate there.
+    pub fn musl(&self) -> bool {
+        matches!(self.libc, Libc::Musl { .. })
+    }
 }
 
 fn token(value: &str) -> bool {
@@ -164,6 +171,9 @@ pub struct ExecutionSnapshot {
     fingerprint: String,
 }
 
+/// Marks identities selected from a `turbo setup --no-lock` record.
+const CLONE_LOCAL: &str = "clone-local";
+
 impl ExecutionSnapshot {
     // Lock bounds, canonical option ordering and executable collision checks are
     // trusted here; adapter-specific semantic validation still precedes activation.
@@ -171,6 +181,27 @@ impl ExecutionSnapshot {
         lock: &Lock,
         context: ExecutionContext,
         selected_ids: &BTreeSet<String>,
+    ) -> Result<Self, Error> {
+        Self::select_with(lock, context, selected_ids, None)
+    }
+
+    /// `select` for a clone-local `turbo setup --no-lock` selection. Nothing
+    /// is committed, so no other machine is known to share it: the identity
+    /// says so and never equals the identity of the same tools selected by a
+    /// turbo.lock, while still binding the exact installed artifacts.
+    pub fn select_clone_local(
+        selection: &Lock,
+        context: ExecutionContext,
+        selected_ids: &BTreeSet<String>,
+    ) -> Result<Self, Error> {
+        Self::select_with(selection, context, selected_ids, Some(CLONE_LOCAL))
+    }
+
+    fn select_with(
+        lock: &Lock,
+        context: ExecutionContext,
+        selected_ids: &BTreeSet<String>,
+        resolution: Option<&'static str>,
     ) -> Result<Self, Error> {
         if selected_ids.is_empty() {
             return Err(Error::EmptySelection);
@@ -186,7 +217,22 @@ impl ExecutionSnapshot {
         let mut tools = BTreeMap::new();
         for id in selected_ids {
             let tool = lock.tools().get(id).ok_or(Error::MissingTool)?;
-            if !matches!(tool.adapter.as_str(), "node" | "npm" | "pnpm") {
+            // Additional tools share the managed projection: artifact digest,
+            // format, layout and executables, never the source URL.
+            if !matches!(
+                tool.adapter.as_str(),
+                "node"
+                    | "npm"
+                    | "pnpm"
+                    | "yarn"
+                    | "bun"
+                    | "rust"
+                    | "rustup"
+                    | "go"
+                    | "uv"
+                    | "python"
+                    | additional::ADAPTER
+            ) {
                 return Err(Error::UnsupportedAdapter);
             }
             let installation = match &tool.installation {
@@ -233,6 +279,7 @@ impl ExecutionSnapshot {
             .collect();
         let canonical = serde_json::to_vec(&Identity {
             domain: IDENTITY_DOMAIN,
+            resolution,
             execution: &context,
             tools: projected,
         })?;
@@ -262,6 +309,9 @@ impl ExecutionSnapshot {
 #[derive(Serialize)]
 struct Identity<'a> {
     domain: &'static str,
+    /// Absent for a committed turbo.lock, keeping those identities unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resolution: Option<&'static str>,
     execution: &'a ExecutionContext,
     tools: BTreeMap<&'a str, ToolIdentity<'a>>,
 }

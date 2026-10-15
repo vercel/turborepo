@@ -8,6 +8,19 @@ use turborepo_setup::test_support::{LoopbackServer, OwnedSetupFixture};
 use super::*;
 
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+/// The overrides managed `turbo run` applies from the committed root config
+/// and the fixture's trusted setup record, plus the managed bin first on PATH.
+fn run_overrides(
+    owned: &OwnedSetupFixture,
+) -> Result<(turborepo_run::EnvironmentVariableMap, PathBuf), String> {
+    use crate::commands::managed::{ManagedTools, context};
+    let root = owned.root();
+    let tools = ManagedTools::inspect(root, &root.join("turbo.json"), true, owned.home(), context)?
+        .ok_or("unmanaged")?;
+    let env = tools.revalidate()?;
+    let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
+    Ok((env, bin))
+}
 fn archive(root: &str, files: &[(&str, &str)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in files {
@@ -113,21 +126,39 @@ impl Fixture {
         Args::parse_args(words).unwrap()
     }
     fn run(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
+        self.run_with(upstream.origin(), None, flags)
+    }
+    fn run_with(
+        &self,
+        origin: &str,
+        cache: Option<&std::path::Path>,
+        flags: &[&str],
+    ) -> Result<i32, Error> {
         let args = self.args(flags);
+        let cache = cache.and_then(turborepo_setup::artifact_cache::ArtifactCache::new);
         crate::cli::dispatch_setup(&args, |args, setup_args| {
             run_with_policy(
                 args,
                 setup_args,
                 Some(provision::Transports {
-                    registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
+                    trust_base: Some(self.owned.home().to_owned()),
+                    registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
-                        upstream.origin(),
+                        origin,
                     )
-                    .unwrap(),
+                    .unwrap()
+                    .with_cache(cache.clone()),
                     pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(
-                        upstream.origin(),
+                        origin,
                     )
-                    .unwrap(),
+                    .unwrap()
+                    .with_cache(cache.clone()),
+                    uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin).unwrap(),
+                    rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(origin).unwrap(),
+                    python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
+                    artifact: Some(turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(origin).unwrap()),
+                    go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
+                    bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
                 }),
                 || {
                     Ok(self
@@ -191,16 +222,55 @@ fn track(root: &std::path::Path) {
             .success()
     );
 }
+#[path = "cache_tests.rs"]
+mod cache;
 #[path = "check_tests.rs"]
 mod checks;
+#[path = "cleanup_tests.rs"]
+mod cleanups;
+#[path = "plan_tests.rs"]
+mod plans;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "additional_tools_tests.rs"]
+mod additional_tools;
+#[path = "authorization_tests.rs"]
+mod authorization;
+#[path = "bun_tests.rs"]
+mod bun;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]
 mod force;
+#[path = "managed_exec_tests.rs"]
+mod managed_exec;
+#[path = "managed_run_tests.rs"]
+mod managed_run;
+#[path = "native_handoff_tests.rs"]
+mod native_handoff;
+#[path = "native_plain_run_tests.rs"]
+mod native_plain_run;
+#[path = "npm_tests.rs"]
+mod npm;
+#[path = "offline_tests.rs"]
+mod offline_repeat;
 #[path = "publication_guards.rs"]
 mod publication_guards;
+#[path = "rustup_tests.rs"]
+mod rustup;
+#[cfg(target_os = "macos")]
+#[path = "trust_acl_tests.rs"]
+mod trust_acl;
+#[path = "trust_publication_test.rs"]
+mod trust_publication;
+#[path = "trust_tests.rs"]
+mod trusted_roots;
+#[path = "unlocked_trust_tests.rs"]
+mod unlocked_trust;
+#[path = "uv_tests.rs"]
+mod uv;
+#[path = "yarn_tests.rs"]
+mod yarn;
 #[test]
 fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
     for algorithm in ["sha1", "sha256"] {
@@ -261,6 +331,7 @@ fn authoritative_pnpm_keeps_wrong_manager_advisories_in_frozen_local_and_check()
             FROZEN,
             &["--tools-only", "--no-frozen"],
             &["--check", "--tools-only", "--offline"],
+            &["--check"],
         ] {
             assert_eq!(f.run(&u, flags).unwrap(), 0);
             assert_eq!(publication_guards::state(f.owned.root()), before);
@@ -296,24 +367,113 @@ fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
     f.no_execution();
 }
 #[test]
+fn root_policy_and_cli_overrides_select_the_effective_setup() {
+    let configure = |f: &Fixture, flags: &str, setup: &str| {
+        let json =
+            format!(r#"{{"futureFlags":{{"experimentalSetup":true{flags}}},"setup":{setup}}}"#);
+        fs::write(f.owned.root().join("turbo.json"), json).unwrap();
+    };
+    // A repository-chosen tools-only setup needs no --tools-only.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"dependencies":"skip"}"#);
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--check"]).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // --tools-only overrides locked dependencies for one invocation.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"dependencies":"locked"}"#);
+    let u = Upstream::new(&f, false, None);
+    // Locked dependencies reach dependency setup instead of failing as
+    // pending; this fixture's pnpm installer reports itself as skipped.
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+
+    // Preserve the native managed adapters added after the original policy
+    // stack. System Rust remains unsupported and must fail before traffic.
+    let cargo = r#","experimentalCargoWorkspaces":true"#;
+    let f = Fixture::new();
+    configure(&f, cargo, r#"{"rust":{"tools":"verify-system"}}"#);
+    let u = Upstream::new(&f, false, None);
+    assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
+    assert_eq!(u.hits(), 0);
+    configure(&f, cargo, r#"{"tools":"managed"}"#);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // Explicitly skipped Rust is not interpreted while JavaScript proceeds.
+    let f = Fixture::new();
+    configure(&f, cargo, r#"{"rust":{"tools":"skip"}}"#);
+    fs::write(f.owned.root().join("rust-toolchain.toml"), "invalid = [").unwrap();
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // Skipped JavaScript tools prepare nothing and never hide locked tools.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"javascript":{"tools":"skip"}}"#);
+    let u = Upstream::new(&f, false, None);
+    assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
+    fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), 0);
+    assert!(!f.owned.root().join(".turbo").exists());
+    f.no_execution();
+}
+
+#[test]
 fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
     for flags in [
         vec!["--plan"],
         vec!["--check"],
         vec!["--no-frozen", "--tools-only"],
-        vec!["--no-lock", "--tools-only"],
+        vec!["--no-lock"],
+        vec!["--no-lock", "--tools-only", "--force"],
+        vec!["--no-lock", "--tools-only", "--plan"],
+        vec!["--no-lock", "--tools-only", "--offline"],
         vec!["--frozen"],
-        vec!["--plan", "--tools-only", "--force"],
+        vec!["--plan", "--tools-only", "--no-lock"],
         vec!["--frozen", "--tools-only", "--offline"],
-        vec!["--no-frozen", "--update-lock"],
+        vec!["--no-lock", "--offline"],
+        vec!["--frozen", "--offline"],
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        if flags == ["--no-frozen", "--tools-only"] {
+        if flags == ["--no-frozen", "--tools-only"] || flags == ["--frozen"] {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
+        } else if flags == ["--check"] {
+            // Like --check --tools-only: nothing installed is an error, read-only.
+            let result = f.run(&u, &flags);
+            assert!(result.is_err() && !matches!(result, Err(Error::NotImplemented)));
+            assert_eq!(u.hits(), 0);
+            assert!(!f.owned.root().join(".turbo").exists());
         } else {
-            assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+            let result = f.run(&u, &flags);
+            match flags.as_slice() {
+                // Neither can install locked dependencies (#14486, #14518).
+                ["--no-lock"] | ["--frozen", "--offline"] => {
+                    assert!(
+                        matches!(&result, Err(Error::Unsupported(_))),
+                        "{flags:?}: {result:?}"
+                    );
+                }
+                _ if flags.contains(&"--offline") && !flags.contains(&"--no-lock") => {
+                    assert!(
+                        matches!(&result, Err(Error::Offline(_))),
+                        "{flags:?}: {result:?}"
+                    );
+                }
+                _ => assert!(
+                    matches!(&result, Err(Error::NotImplemented)),
+                    "{flags:?}: {result:?}"
+                ),
+            }
             assert_eq!(u.hits(), 0);
             assert!(!f.owned.root().join(".turbo").exists());
         }

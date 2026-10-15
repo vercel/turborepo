@@ -64,6 +64,90 @@ pub fn spawn_child(
     Ok(shared_child)
 }
 
+/// Hands this process off to `command` (`turbo exec`'s program, or the turbo
+/// a global turbo defers to), so killing this process kills it too. This
+/// process becomes `command` (`execve`) and returns only if it cannot start:
+/// SIGKILL, every other signal, job control, and the exit status, including
+/// a signal death, reach or come from `command` as if it ran directly.
+#[cfg(unix)]
+pub fn hand_off(mut command: std::process::Command) -> io::Result<std::process::ExitStatus> {
+    use std::{io::Write, os::unix::process::CommandExt};
+    // Nothing buffered may be lost with the process image.
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+    Err(command.exec())
+}
+
+/// Hands this process off to `command`, so killing this process kills it too.
+/// Windows has no `execve`: `command` runs as a [`spawn_contained_child`], and
+/// its exit status, including an `NTSTATUS` value, is returned unchanged.
+#[cfg(windows)]
+pub fn hand_off(command: std::process::Command) -> io::Result<std::process::ExitStatus> {
+    spawn_contained_child(command)?.wait()
+}
+
+/// Starts `command` with its process tree tied to this process: terminating
+/// this process (CI cancellation, an IDE's stop button, `taskkill /F`) also
+/// terminates the program and every process it starts. Windows never
+/// cascades termination by itself. Ctrl+C is handled as in [`spawn_child`].
+///
+/// The program starts suspended, joins a kill-on-close job object, and only
+/// then runs, so even descendants it starts immediately are in the job. Like
+/// task jobs, this is best effort: a program that cannot join a job (for
+/// example under a parent job that forbids nesting) runs uncontained.
+#[cfg(windows)]
+pub fn spawn_contained_child(mut command: std::process::Command) -> io::Result<ContainedChild> {
+    use std::os::windows::{io::AsRawHandle, process::CommandExt};
+
+    // The child shares our console, which delivers Ctrl+C to it directly.
+    // Swallow the event so this process stays alive to report its status.
+    ctrlc::set_handler(|| {}).map_err(io::Error::other)?;
+    let job = job_object::JobObject::new()
+        .map_err(|err| debug!("failed to create a job object: {err}"))
+        .ok();
+    if job.is_some() {
+        command.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+    }
+    let mut child = command.spawn()?;
+    let job = match job {
+        Some(job) => match job.assign_suspended_process(child.as_raw_handle()) {
+            Ok(joined) => joined.then_some(job),
+            Err(err) => {
+                // Its threads could not be resumed, so the program never ran.
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(err);
+            }
+        },
+        None => None,
+    };
+    Ok(ContainedChild { child, job })
+}
+
+/// A program started by [`spawn_contained_child`].
+#[cfg(windows)]
+pub struct ContainedChild {
+    child: std::process::Child,
+    job: Option<job_object::JobObject>,
+}
+
+#[cfg(windows)]
+impl ContainedChild {
+    /// Waits for the program to exit on its own, then releases the job:
+    /// anything it deliberately left running (a daemon, an editor window)
+    /// outlives this process, as it would had the program run directly.
+    /// Only terminating this process while the program runs kills the tree.
+    pub fn wait(mut self) -> io::Result<std::process::ExitStatus> {
+        let status = self.child.wait()?;
+        if let Some(job) = &self.job
+            && let Err(err) = job.release_on_close()
+        {
+            debug!("failed to release the job object: {err}");
+        }
+        Ok(status)
+    }
+}
+
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned
 /// using `spawn`. When the manager is Closed, all currently-running children

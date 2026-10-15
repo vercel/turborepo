@@ -10,6 +10,7 @@ use crate::{
     NodeRequirements,
     lock::{Installation, Lock, Platform, Snapshot},
     node_provision::NodePlan,
+    npm_provision::NpmPlan,
     package_manager::{self, Declaration, Manager},
     pnpm_provision::PnpmPlan,
 };
@@ -39,6 +40,38 @@ pub struct NativeRecord {
 }
 
 impl NativeRecord {
+    /// Reject unsupported record provenance before resolution or writer/storage
+    /// initialization. Uses captured declarations, never rereads raw manifests.
+    pub fn preflight(snapshot: &Snapshot) -> Result<(), Error> {
+        snapshot.ensure_current()?;
+        if !snapshot.declarations().contains_key("node")
+            || snapshot
+                .declarations()
+                .keys()
+                .any(|id| !matches!(id.as_str(), "node" | "npm" | "pnpm"))
+        {
+            return Err(Error::Invalid);
+        }
+        let (_, manager) = provenance(snapshot.declarations())?;
+        if let Some(manager) = manager {
+            validated(crate::js_resolution::exact_manager(&manager))?;
+            if manager
+                .package_manager
+                .iter()
+                .chain(&manager.dev_engines)
+                .any(|r| {
+                    r.integrity
+                        .as_ref()
+                        .is_some_and(|pin| pin.algorithm != "sha256")
+                })
+            {
+                return Err(Error::Invalid);
+            }
+        }
+        snapshot.ensure_current()?;
+        Ok(())
+    }
+
     pub fn from_snapshot(snapshot: &Snapshot, selection: &Lock) -> Result<Self, Error> {
         snapshot.ensure_current()?;
         if !validated(selection.matches_native(snapshot.declarations()))? {
@@ -62,18 +95,24 @@ impl NativeRecord {
         self.manager.as_ref()
     }
 
-    fn decode(bytes: &[u8]) -> Result<Self, Error> {
+    /// Crate-private: activation reads only the record of the generation it
+    /// also checks, never caller bytes.
+    pub(crate) fn decode(bytes: &[u8]) -> Result<Self, Error> {
         let selection = validated(Lock::parse(bytes))?;
         if validated(selection.canonical_bytes())? != bytes
             || !selection.tools().contains_key("node")
-            || selection
-                .tools()
-                .iter()
-                .any(|(id, tool)| id != &tool.adapter || !matches!(id.as_str(), "node" | "pnpm"))
+            || selection.tools().iter().any(|(id, tool)| {
+                id != &tool.adapter || !matches!(id.as_str(), "node" | "npm" | "pnpm")
+            })
         {
             return Err(Error::Invalid);
         }
-        let (node, manager) = provenance(&selection)?;
+        let declarations = selection
+            .tools()
+            .iter()
+            .map(|(id, tool)| (id.clone(), tool.declarations.clone()))
+            .collect();
+        let (node, manager) = provenance(&declarations)?;
         let tool = &selection.tools()["node"];
         let version = validated(semver::Version::parse(&tool.version))?;
         if !node.matches_locked_version(&version) {
@@ -86,13 +125,26 @@ impl NativeRecord {
             validated(NodePlan::from_lock(&selection, *platform))?;
         }
         if let Some(manager) = &manager {
-            let pnpm = &selection.tools()["pnpm"];
-            if manager.manager != Manager::Pnpm
-                || validated(crate::js_resolution::exact_pnpm(manager))? != pnpm.version
+            let id = match manager.manager {
+                Manager::Pnpm => "pnpm",
+                Manager::Npm => "npm",
+                _ => return Err(Error::Invalid),
+            };
+            let tool = selection.tools().get(id).ok_or(Error::Invalid)?;
+            if selection.tools().len() != 2
+                || validated(crate::js_resolution::exact_manager(manager))? != tool.version
             {
                 return Err(Error::Invalid);
             }
-            validated(crate::js_resolution::validate_pnpm(pnpm, manager))?;
+            match &tool.installation {
+                // Node-bundled npm is bound to Node's own bytes; NpmPlan checks
+                // that binding wherever a platform is selected.
+                Installation::Bundled { owner } if id == "npm" && owner == "node" => {}
+                Installation::Managed { .. } => {
+                    validated(crate::js_resolution::validate_registry(tool, manager))?;
+                }
+                _ => return Err(Error::Invalid),
+            }
             // SHA-512 cannot be proven from archive SHA-256 bookkeeping. Never
             // invent byte-verification evidence for an unsupported record.
             if manager
@@ -138,7 +190,7 @@ impl Baseline {
         if snapshot.repository_root() != store.repository_root()? {
             return Err(Error::Invalid);
         }
-        let generation = store.generation()?;
+        let generation = store.generation().or_else(|_| store.repair_generation())?;
         let Some(current) = generation.current() else {
             return Ok(None);
         };
@@ -162,13 +214,7 @@ impl Baseline {
             }
             let mut tools = vec![node.inventory_tool().clone()];
             if let Some(manager) = &native.manager {
-                let pnpm = validated(PnpmPlan::from_declaration(
-                    &native.selection,
-                    *platform,
-                    &node,
-                    manager,
-                ))?;
-                tools.push(pnpm.inventory_tool().clone());
+                tools.extend(manager_tool(&native.selection, *platform, &node, manager)?);
             }
             tools.sort_by(|a, b| a.id.cmp(&b.id));
             if tools == current.tools {
@@ -177,41 +223,22 @@ impl Baseline {
             }
         }
         let node = desired.ok_or(Error::Invalid)?;
+        if !generation.healthy() {
+            let baseline = Self {
+                snapshot: snapshot.clone(),
+                generation,
+                native,
+            };
+            baseline.check(snapshot, store)?;
+            return Ok(Some(baseline));
+        }
         let tree = current
             .tool_tree(node.inventory_tool())
             .ok_or(Error::Invalid)?;
         validated(node.verify_bundled_npm(&tree))?;
-        if let Some(tool) = current.tools.iter().find(|t| t.id == "pnpm") {
+        for tool in current.tools.iter().filter(|tool| tool.id != "node") {
             let tree = current.tool_tree(tool).ok_or(Error::Invalid)?;
-            use std::io::Read;
-            let path = tree.join("package.json");
-            let metadata = std::fs::symlink_metadata(&path).map_err(|_| Error::Invalid)?;
-            if !metadata.is_file() || metadata.file_type().is_symlink() {
-                return Err(Error::Invalid);
-            }
-            let mut bytes = Vec::new();
-            std::fs::File::open(path)
-                .map_err(|_| Error::Invalid)?
-                .take(crate::registry_metadata::MAX_METADATA_BYTES as u64 + 1)
-                .read_to_end(&mut bytes)
-                .map_err(|_| Error::Invalid)?;
-            if bytes.len() > crate::registry_metadata::MAX_METADATA_BYTES {
-                return Err(Error::Invalid);
-            }
-            let crate::node_discovery::UniqueJson(package) =
-                serde_json::from_slice(&bytes).map_err(|_| Error::Invalid)?;
-            let bin = package["bin"].as_object().ok_or(Error::Invalid)?;
-            if package["name"] != "pnpm"
-                || package["version"] != tool.version
-                || tool.executables.keys().any(|name| !bin.contains_key(name))
-                || bin.iter().any(|(name, path)| match name.as_str() {
-                    "pnpm" => path != "bin/pnpm.cjs",
-                    "pnpx" => path != "bin/pnpx.cjs",
-                    _ => true,
-                })
-            {
-                return Err(Error::Invalid);
-            }
+            validated(crate::ephemeral_reconcile::verify_manager(&tree, tool))?;
         }
         let baseline = Self {
             snapshot: snapshot.clone(),
@@ -250,14 +277,39 @@ impl Baseline {
     }
 }
 
+/// The installed tool of the record's declared manager: pnpm, or npm unless
+/// Node bundles it.
+fn manager_tool(
+    selection: &Lock,
+    platform: Platform,
+    node: &NodePlan,
+    manager: &Declaration,
+) -> Result<Option<turborepo_tool_install::Tool>, Error> {
+    Ok(match manager.manager {
+        Manager::Npm => validated(NpmPlan::from_declaration(
+            selection, platform, node, manager,
+        ))?
+        .map(|npm| npm.inventory_tool().clone()),
+        _ => Some(
+            validated(PnpmPlan::from_declaration(
+                selection, platform, node, manager,
+            ))?
+            .inventory_tool()
+            .clone(),
+        ),
+    })
+}
+
 // Reconstruct only native declaration fields, never raw manifests, secrets or
 // disk inputs. Existing discovery revalidates grammar, OR/onFail and integrity;
 // exact provenance round-trip rejects invented fields, normalization and holes.
-fn provenance(selection: &Lock) -> Result<(NodeRequirements, Option<Declaration>), Error> {
+fn provenance(
+    declarations: &crate::lock::DeclarationMap,
+) -> Result<(NodeRequirements, Option<Declaration>), Error> {
     let mut manifest = json!({});
     let mut files = BTreeMap::new();
-    for (id, tool) in selection.tools() {
-        for source in &tool.declarations {
+    for (id, sources) in declarations {
+        for source in sources {
             if id == "node"
                 && matches!(source.file.as_str(), ".nvmrc" | ".node-version")
                 && source.field.is_none()
@@ -319,10 +371,18 @@ fn provenance(selection: &Lock) -> Result<(NodeRequirements, Option<Declaration>
     }
     let text = validated(serde_json::to_string(&manifest))?;
     files.insert("package.json".into(), text.clone());
-    let actual = validated(crate::lock::probe_native_with(|file, _| {
-        Ok(files.get(file).map(|s| s.as_bytes().to_vec()))
-    }))?;
-    if !validated(selection.matches_native(&actual))? {
+    let actual = validated(crate::lock::probe_native_with(
+        Default::default(),
+        |file, _| Ok(files.get(file).map(|s| s.as_bytes().to_vec())),
+    ))?;
+    if actual.len() != declarations.len()
+        || actual.iter().any(|(id, sources)| {
+            declarations.get(id).is_none_or(|expected| {
+                expected.len() != sources.len()
+                    || sources.iter().any(|source| !expected.contains(source))
+            })
+        })
+    {
         return Err(Error::Invalid);
     }
     let node = validated(NodeRequirements::from_sources(

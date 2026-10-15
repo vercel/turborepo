@@ -9,9 +9,7 @@ pub struct Error(#[from] std::io::Error);
 #[cfg(windows)]
 /// A listener for Windows Console Ctrl-C events
 pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
-    let wrapper_ctrl_c = wrapper_ctrl_c_fd_from_env(std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD"))
-        .map(wrapper_ctrl_c_receiver)
-        .transpose()?;
+    let wrapper_ctrl_c = wrapper_ctrl_c()?;
     let ctrl_c = if wrapper_ctrl_c.is_none() {
         Some(tokio::signal::windows::ctrl_c()?)
     } else {
@@ -31,6 +29,20 @@ pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
             Some((signal, (wrapper_ctrl_c, ctrl_c)))
         },
     ))
+}
+
+/// Ctrl+C relayed by the npm wrapper, which reads it in raw mode under a
+/// package manager terminal instead of letting a console event reach turbo.
+/// None when turbo receives console events directly. Each `Some(CtrlC)` is
+/// one keypress; `None` means the wrapper closed the pipe.
+#[cfg(windows)]
+pub fn wrapper_ctrl_c()
+-> Result<Option<tokio::sync::mpsc::UnboundedReceiver<Option<Signal>>>, Error> {
+    Ok(
+        wrapper_ctrl_c_fd_from_env(std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD"))
+            .map(wrapper_ctrl_c_receiver)
+            .transpose()?,
+    )
 }
 
 #[cfg(windows)]

@@ -5,6 +5,7 @@ use turborepo_tool_install::{Error as InstallError, Tool as InstalledTool};
 
 use super::*;
 use crate::{
+    ephemeral_reconcile::{Error as EphemeralError, stage},
     lock::{Artifact, Document, Format},
     node_resolution::PLATFORMS as TARGETS,
 };
@@ -147,22 +148,29 @@ fn strict_decode_rejects_noncanonical_unknown_duplicate_schema_and_oversized_rec
     let text = String::from_utf8(bytes.clone()).unwrap();
     let mut unknown = serde_json::to_value(lock.document()).unwrap();
     unknown["tools"]["node"]["extra"] = json!(true);
-    let schema = "\"schemaVersion\":0";
+    let schema = "\"schemaVersion\": 0";
     let cases = [
-        text.replace(schema, "\"schemaVersion\":1").into_bytes(),
+        text.replace(schema, "\"schemaVersion\": 1").into_bytes(),
         text.replace(schema, &format!("{schema},{schema}"))
             .into_bytes(),
         serde_json::to_vec(&unknown).unwrap(),
-        serde_json::to_vec_pretty(lock.document()).unwrap(),
+        serde_json::to_vec(lock.document()).unwrap(),
         bytes[..bytes.len() - 1].to_vec(),
         [b" ".as_slice(), &bytes].concat(),
         [bytes.as_slice(), b"{}"].concat(),
         vec![b' '; crate::lock::MAX_LOCK_BYTES + 1],
     ];
-    for bytes in cases {
-        assert!(NativeRecord::decode(&bytes).is_err());
-        if bytes.len() <= crate::lock::MAX_LOCK_BYTES {
-            publish(&mut store, &tools, bytes);
+    for (index, invalid_bytes) in cases.into_iter().enumerate() {
+        assert_ne!(
+            invalid_bytes, bytes,
+            "case {index} must alter canonical bytes"
+        );
+        assert!(
+            NativeRecord::decode(&invalid_bytes).is_err(),
+            "case {index} must be rejected"
+        );
+        if invalid_bytes.len() <= crate::lock::MAX_LOCK_BYTES {
+            publish(&mut store, &tools, invalid_bytes);
             assert_invalid(Baseline::capture(&snapshot, &store));
         }
     }
@@ -291,6 +299,17 @@ fn root_live_guard_real_lock_sources_and_generation_remain_bound() {
     assert!(Baseline::capture(&snapshot, &store).unwrap().is_none());
     store.reconcile(&tools, populate).unwrap();
     assert!(Baseline::capture(&snapshot, &store).unwrap().is_none());
+    let expected = store.generation().unwrap();
+    let result = stage(
+        &snapshot,
+        &store,
+        Platform::MacosArm64,
+        false,
+        |_| panic!("present unrecorded inventory must never resolve"),
+        || Ok(()),
+    );
+    assert!(matches!(result, Err(EphemeralError::Unsupported)));
+    store.check_generation(&expected).unwrap();
     publish(&mut store, &tools, lock.canonical_bytes().unwrap());
     let baseline = Baseline::capture(&snapshot, &store).unwrap().unwrap();
     let other_snapshot = Snapshot::capture(other.path()).unwrap();
@@ -361,7 +380,13 @@ fn selected_payload_inventory_and_corruption_cannot_be_replaced_by_caller_data()
             }
             assert!(baseline.check(&snapshot, &store).is_err());
         }
-        assert!(Baseline::capture(&snapshot, &store).is_err(), "case {case}");
+        if case >= 6 {
+            let repair = Baseline::capture(&snapshot, &store).unwrap().unwrap();
+            assert!(!repair.generation().healthy());
+            assert_eq!(repair.native(&snapshot, &store).unwrap().selection(), &lock);
+        } else {
+            assert!(Baseline::capture(&snapshot, &store).is_err(), "case {case}");
+        }
     }
 }
 

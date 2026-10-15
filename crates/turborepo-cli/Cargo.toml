@@ -21,6 +21,8 @@ rustls-tls = [
   "turborepo-watch/rustls-tls",
 ]
 heap-dhat = ["dep:dhat"]
+# Cross-crate fixtures only. Consumers must enable this via dev-dependencies.
+test-support = ["turborepo-setup/test-support"]
 pprof = ["turborepo-tracing/pprof"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -30,7 +32,6 @@ insta = { workspace = true }
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 serial_test = "3.0"
-sha2 = { workspace = true }
 tar = { version = "0.4.45", default-features = false }
 test-case = { workspace = true }
 tracing.workspace = true
@@ -51,6 +52,7 @@ console = { workspace = true }
 dhat = { workspace = true, optional = true }
 dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
 dirs-next = "2.0.0"
+dunce = { workspace = true }
 futures = { workspace = true }
 go-parse-duration = "0.1.1"
 humantime = "2.1.0"
@@ -65,6 +67,7 @@ same-file = "=1.0.6"
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 shared_child = "1.0.0"
 
 sysinfo = "0.27.7"
@@ -123,5 +126,12 @@ which = { workspace = true }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_SystemInformation",
   "Win32_System_Threading",
 ] }
+
+[target.'cfg(windows)'.dev-dependencies]
+windows-sys = { version = "0.59", features = ["Win32_System_Console"] }

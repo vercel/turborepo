@@ -194,6 +194,120 @@ function assertNoOldJobs(f) {
   );
 }
 
+const nativeStack = () => ({
+  base: { ref: "main", sha: "stack-base-sha" },
+  id: 2087113,
+  number: 14792,
+  position: 3,
+  size: 3
+});
+
+function makeStacked(f, baseRef = "stack-parent") {
+  f.pull.base.ref = baseRef;
+  f.pull.stack = nativeStack();
+  for (const run of [f.review, ...f.runs]) {
+    run.pull_requests[0].base.ref = baseRef;
+  }
+  f.jobs.set("100/1", [{ ...aggregate(), name: `Code checks (PR #42, ${baseRef})` }]);
+}
+
+for (const baseRef of ["main", "stack-parent"]) {
+  for (const empty of [false, true]) {
+    test(`accepts native stack rooted main, base ${baseRef}, associations ${empty ? "empty" : "present"}`, async (t) => {
+      const f = fixture(t);
+      makeStacked(f, baseRef);
+      if (empty) {
+        f.review.pull_requests = [];
+        f.runs[0].pull_requests = [];
+      }
+      assert.equal(await f.validate(), 100);
+    });
+  }
+}
+
+const invalidStacks = [
+  ["nondefault root", { ...nativeStack(), base: { ref: "release", sha: "sha" } }],
+  ["missing root", { ...nativeStack(), base: undefined }],
+  ["missing root ref", { ...nativeStack(), base: { sha: "sha" } }],
+  ["missing root SHA", { ...nativeStack(), base: { ref: "main" } }],
+  ["empty root SHA", { ...nativeStack(), base: { ref: "main", sha: "" } }],
+  ["non-string root SHA", { ...nativeStack(), base: { ref: "main", sha: 1 } }],
+  ["boolean metadata", true],
+  ["array metadata", []],
+  ["empty metadata", {}]
+];
+for (const field of ["id", "number", "position", "size"]) {
+  for (const value of [undefined, 0, -1, 1.5, "3", Number.MAX_SAFE_INTEGER + 1]) {
+    invalidStacks.push([`${field}=${String(value)}`, { ...nativeStack(), [field]: value }]);
+  }
+}
+invalidStacks.push(["position exceeds size", { ...nativeStack(), position: 4 }]);
+for (const [name, stack] of invalidStacks) {
+  for (const baseRef of ["main", "stack-parent"]) {
+    test(`rejects native stack ${name} with immediate base ${baseRef}`, async (t) => {
+      const f = fixture(t);
+      makeStacked(f, baseRef);
+      f.pull.stack = stack;
+      await assert.rejects(f.validate(), PULL_MISMATCH);
+      assert.equal(f.counts.get("workflow"), undefined);
+    });
+  }
+}
+
+const changedStackMutations = [
+  ["id", (f) => { f.pull.stack.id += 1; }],
+  ["number", (f) => { f.pull.stack.number += 1; }],
+  ["position", (f) => { f.pull.stack.position = 2; }],
+  ["size", (f) => { f.pull.stack.size += 1; }],
+  ["root SHA", (f) => { f.pull.stack.base.sha = "new-root-sha"; }],
+  ["root and default branch", (f) => {
+    f.pull.stack.base.ref = f.pull.base.repo.default_branch = "release";
+  }],
+  ["immediate base", (f) => { f.pull.base.ref = "another-parent"; }],
+  ["removed stack", (f) => { delete f.pull.stack; }],
+  ["null stack", (f) => { f.pull.stack = null; }],
+  ["malformed stack", (f) => { f.pull.stack.size = 0; }],
+  ["head SHA", (f) => { f.pull.head.sha = "new-head"; }]
+];
+for (const [name, mutate] of changedStackMutations) {
+  for (const phase of ["jobs", "waiting"]) {
+    // Use an immediate main base so stack removal stays eligible on its own:
+    // rejection must come from the pinned stack identity, not just eligibility.
+    test(`rejects native stack ${name} changed during ${phase}`, async (t) => {
+      const f = fixture(t);
+      makeStacked(f, "main");
+      if (phase === "jobs") {
+        f.onRequest = ({ kind }) => { if (kind === "jobs") mutate(f); };
+      } else {
+        f.runs[0].status = "queued";
+        f.jobs.set("100/1", []);
+        f.onWait = () => {
+          mutate(f);
+          f.runs[0].status = "completed";
+          f.jobs.set("100/1", [aggregate()]);
+        };
+      }
+      await assert.rejects(f.validate(), PULL_MISMATCH);
+    });
+  }
+}
+
+test("rejects joining a native stack during validation", async (t) => {
+  const f = fixture(t);
+  f.onRequest = ({ kind }) => { if (kind === "jobs") f.pull.stack = nativeStack(); };
+  await assert.rejects(f.validate(), PULL_MISMATCH);
+});
+
+for (const mismatch of ["association", "aggregate"]) {
+  test(`native stacks still require the immediate base ${mismatch}`, async (t) => {
+    const f = fixture(t);
+    makeStacked(f);
+    if (mismatch === "association") f.runs[0].pull_requests[0].base.ref = "main";
+    else f.jobs.set("100/1", [aggregate()]);
+    await assert.rejects(f.validate(), mismatch === "association" ? RUN_MISMATCH : BAD_AGGREGATE);
+  });
+}
+
 const RUN_MISMATCH = /CI run does not match/;
 const PULL_MISMATCH = /Pull request revision changed or is not eligible/;
 const BAD_AGGREGATE = /exactly one completed, successful aggregate/;

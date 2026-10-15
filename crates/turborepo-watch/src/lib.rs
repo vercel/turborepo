@@ -899,6 +899,7 @@ impl WatchClient {
                     version: self.base.version,
                     color_config: self.base.color_config,
                     api_auth: self.base.api_auth.clone(),
+                    managed_environment: None,
                 };
 
                 let signal_handler = self.handler.clone();
@@ -983,6 +984,7 @@ impl WatchClient {
                     version: self.base.version,
                     color_config: self.base.color_config,
                     api_auth: self.base.api_auth.clone(),
+                    managed_environment: None,
                 };
 
                 let mut run_builder = RunBuilder::new(base.clone(), None)?

@@ -20,8 +20,8 @@ use turborepo_watch::WatchClient;
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        CommandBase, bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link,
-        login, logout, ls, prune, query, run, setup, telemetry, unlink,
+        CommandBase, bin, boundaries, config, daemon, docs, exec, generate, get_mfe_port, hook,
+        info, link, login, logout, ls, managed, prune, query, run, setup, telemetry, unlink,
     },
     get_version,
 };
@@ -38,8 +38,8 @@ mod test;
 pub use args::{
     AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
     EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
-    GraphOutput, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat, OutputLogsModeArg,
-    QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
+    GraphOutput, HookShell, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat,
+    OutputLogsModeArg, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -276,6 +276,31 @@ fn inferred_package_root(
     (!relative_path.as_str().is_empty()).then(|| relative_path.to_string().replace('\\', "/"))
 }
 
+/// The shim's inferred root, else `--cwd`, else the process cwd.
+fn repo_root(
+    repo_state: Option<&RepoState>,
+    cli_args: &Args,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    let cwd = repo_state
+        .map(|state| state.root.as_path())
+        .or(cli_args.cwd.as_deref());
+
+    let repo_root = if let Some(cwd) = cwd {
+        AbsoluteSystemPathBuf::from_cwd(cwd)?
+    } else {
+        AbsoluteSystemPathBuf::cwd()?
+    };
+
+    // Windows has this annoying habit of abbreviating paths
+    // like `C:\Users\Admini~1` instead of `C:\Users\Administrator`
+    // We canonicalize to get the proper, full length path
+    Ok(if cfg!(windows) {
+        repo_root.to_realpath()?
+    } else {
+        repo_root
+    })
+}
+
 fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
     let run_args = cli_args.run_args().cloned().unwrap_or_default();
     let execution_args = cli_args
@@ -381,6 +406,18 @@ pub fn run(
     if let Some(result) = dispatch_setup(&cli_args, setup::run) {
         return result.map_err(Into::into);
     }
+    // Runs at every prompt: no telemetry, update checks, agent guidance,
+    // repository-local handoff, or worker runtimes.
+    if let Some(Command::Hook { shell, export }) = &cli_args.command {
+        return Ok(hook::run(*shell, *export));
+    }
+
+    // Exec leaves stdout, stderr, and the repository to the program: no
+    // version banner, telemetry, agent guidance, or worker runtimes.
+    if let Some(Command::Exec { command }) = &cli_args.command {
+        let repo_root = repo_root(repo_state.as_ref(), &cli_args)?;
+        return exec::run(&repo_root, &cli_args, command, color_config);
+    }
 
     // Initialize rayon's global pool before the tokio runtime so we
     // control thread count and avoid lazy initialization during a hot path.
@@ -426,14 +463,6 @@ async fn run_main(
 
     let version = get_version();
 
-    // Initialize telemetry immediately so events are captured from startup.
-    // The shared HTTP client is only activated if telemetry is actually
-    // enabled for this invocation.
-    let telemetry_handle = {
-        let _span = tracing::info_span!("telemetry_init").entered();
-        initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
-    };
-
     let mut command = get_command(&mut cli_args)?;
 
     // Skip the standalone version banner when the command reports the version
@@ -463,27 +492,19 @@ async fn run_main(
     // Apply repository mode and package inference to command execution flags.
     set_run_flags(&mut command, &repo_state, &mut cli_args)?;
 
-    let cwd = repo_state
-        .as_ref()
-        .map(|state| state.root.as_path())
-        .or(cli_args.cwd.as_deref());
-
-    let repo_root = if let Some(cwd) = cwd {
-        AbsoluteSystemPathBuf::from_cwd(cwd)?
-    } else {
-        AbsoluteSystemPathBuf::cwd()?
-    };
-
-    // Windows has this annoying habit of abbreviating paths
-    // like `C:\Users\Admini~1` instead of `C:\Users\Administrator`
-    // We canonicalize to get the proper, full length path
-    let repo_root = if cfg!(windows) {
-        repo_root.to_realpath()?
-    } else {
-        repo_root
-    };
+    let repo_root = repo_root(repo_state.as_ref(), &cli_args)?;
 
     cli_args.command = Some(command);
+    // Also guard direct/wrapper --skip-infer paths before telemetry activation
+    // or agent-file maintenance; shim handoff validation is not sufficient.
+    if matches!(cli_args.command, Some(Command::Run { .. })) {
+        let base = CommandBase::new(cli_args.clone(), repo_root.clone(), version, color_config)?;
+        managed::validate(&base)?;
+    }
+    let telemetry_handle = {
+        let _span = tracing::info_span!("telemetry_init").entered();
+        initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
+    };
 
     maintain_agent_guidance(&repo_root, &cli_args, repo_state.is_some());
 
@@ -507,7 +528,10 @@ async fn run_main(
     };
 
     let cli_result = match command {
-        Command::Setup { .. } => unreachable!("setup is dispatched before runtime startup"),
+        Command::Setup { .. } | Command::Hook { .. } => {
+            unreachable!("setup and the shell hook are dispatched before runtime startup")
+        }
+        Command::Exec { .. } => unreachable!("exec is dispatched before runtime startup"),
         Command::Bin => {
             CommandEventBuilder::new("bin")
                 .with_parent(&root_telemetry)

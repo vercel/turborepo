@@ -16,7 +16,7 @@
       ]
     },
     "agentGuidance": {
-      "description": "Controls whether turbo maintains a root `AGENTS.md` block for AI agents.\n\nDefaults to `true`. Set to `false` to opt out of future automatic updates.",
+      "description": "Controls whether turbo maintains a root `AGENTS.md` block for AI agents.\n\nDefaults to `false`. Set to `true` to opt in to future automatic updates.",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"
@@ -190,6 +190,17 @@
         }
       ]
     },
+    "setup": {
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SetupPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "tags": {
       "description": "Arbitrary string labels for this package. In the root configuration, these labels apply to the root package.",
       "anyOf": [
@@ -223,11 +234,88 @@
   "allowComments": true,
   "allowTrailingCommas": true,
   "definitions": {
+    "AdditionalTool": {
+      "description": "A tool that `turbo setup` downloads, verifies, and installs from explicit artifacts. The full installation tree is kept; no tool-provided scripts run.",
+      "type": "object",
+      "required": ["artifacts", "version"],
+      "properties": {
+        "artifacts": {
+          "description": "Artifacts keyed by platform, such as `linux-x64-gnu` or `macos-arm64`. Platforms without an artifact are unsupported for this tool.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/Map_of_AdditionalToolArtifact"
+            }
+          ]
+        },
+        "version": {
+          "description": "The exact version of the tool. Ranges and channels are not allowed.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        }
+      }
+    },
+    "AdditionalToolArtifact": {
+      "description": "One platform's artifact for an additional tool.",
+      "type": "object",
+      "required": ["executables", "format", "sha256", "url"],
+      "properties": {
+        "executables": {
+          "description": "Executable names mapped to paths relative to `rootPrefix`, or to the archive's top level without one. A binary has exactly one entry, which names where the file is installed.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/String"
+          }
+        },
+        "format": {
+          "description": "`binary` for a single executable file, or the archive format.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ArtifactFormat"
+            }
+          ]
+        },
+        "rootPrefix": {
+          "description": "The single top-level directory that contains every archive entry. Omit it for an archive whose entries sit at its top level. Not allowed for binaries.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sha256": {
+          "description": "Lowercase hex SHA-256 digest of the downloaded bytes. A digest pins the expected bytes; it does not establish that the publisher is trustworthy.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        },
+        "url": {
+          "description": "HTTPS download URL without credentials, a query, or a fragment.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        }
+      }
+    },
     "Array_of_String": {
       "type": "array",
       "items": {
         "$ref": "#/definitions/String"
       }
+    },
+    "ArtifactFormat": {
+      "description": "How an artifact is packaged. `binary` is a single executable file.",
+      "type": "string",
+      "enum": ["binary", "tar", "tar-gz", "zip"]
     },
     "Boolean": {
       "type": "boolean"
@@ -281,6 +369,11 @@
           ]
         }
       }
+    },
+    "DependencyPolicy": {
+      "description": "How `turbo setup` prepares a toolchain's dependencies. `locked` installs them from the committed ecosystem lockfile without changing it. `skip` does not install them.",
+      "type": "string",
+      "enum": ["locked", "skip"]
     },
     "EnvMode": {
       "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.\n\n- `strict`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`. - `loose`: Allow all environment variables for the process to be available.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#envmode",
@@ -508,6 +601,17 @@
             }
           ]
         }
+      }
+    },
+    "LifecycleScripts": {
+      "description": "Whether dependency setup lets package managers run lifecycle scripts. `native` keeps each package manager's defaults and committed allowlists or trust settings. `skip` passes the package manager's own flag for skipping them, and fails where the package manager has none.",
+      "type": "string",
+      "enum": ["native", "skip"]
+    },
+    "Map_of_AdditionalToolArtifact": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/AdditionalToolArtifact"
       }
     },
     "Map_of_TagRules": {
@@ -804,6 +908,190 @@
         }
       }
     },
+    "SetupMirrors": {
+      "description": "Credential-free HTTPS mirrors for `turbo setup` downloads. Each value is a base URL that serves the same paths as the official source.",
+      "type": "object",
+      "properties": {
+        "bun": {
+          "description": "Replaces the `https://github.com` origin for Bun release checksums and archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "go": {
+          "description": "Replaces both the `https://go.dev` and `https://dl.google.com` origins for Go's release index and archives. The mirror serves both official paths, `/dl/?mode=json&include=all` and `/go/<archive>`, beneath its base.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "node": {
+          "description": "Replaces `https://nodejs.org/dist` for Node.js release metadata and archives.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "npmRegistry": {
+          "description": "Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn package metadata and tarballs.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "python": {
+          "description": "Replaces the `https://releases.astral.sh` origin for CPython build checksums and archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rust": {
+          "description": "Replaces the `https://static.rust-lang.org` origin for rustup and Rust toolchain downloads, keeping their official paths, like `RUSTUP_DIST_SERVER`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uv": {
+          "description": "Replaces the `https://releases.astral.sh` origin for uv's version index and release archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "SetupPolicy": {
+      "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
+      "type": "object",
+      "properties": {
+        "additionalTools": {
+          "description": "Tools that no built-in adapter manages, keyed by tool ID. Each declares an exact version and explicit per-platform artifacts. `turbo setup` locks, verifies, and installs them without running tool-provided scripts.",
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "$ref": "#/definitions/AdditionalTool"
+          }
+        },
+        "dependencies": {
+          "description": "How `turbo setup` prepares dependencies for every toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DependencyPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "go": {
+          "description": "Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "javascript": {
+          "description": "Setup policy for the JavaScript toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lifecycleScripts": {
+          "description": "Whether dependency setup runs lifecycle scripts for every toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LifecycleScripts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mirrors": {
+          "description": "Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the official URLs, and environment variables override these values.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SetupMirrors"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "python": {
+          "description": "Setup policy for the Python toolchain. Requires `futureFlags.experimentalPythonWorkspaces`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rust": {
+          "description": "Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolchainSetupPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "description": "How `turbo setup` prepares tools for every toolchain.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "String": {
       "type": "string"
     },
@@ -881,6 +1169,50 @@
           "$ref": "#/definitions/StructuredInput"
         }
       ]
+    },
+    "ToolPolicy": {
+      "description": "How `turbo setup` prepares a toolchain's tools. `managed` provisions the locked version for this repository. `verify-system` uses an installed tool after verifying that it matches the locked version. `skip` neither provisions nor verifies the tool, which also skips the toolchain's dependencies.",
+      "type": "string",
+      "enum": ["managed", "verify-system", "skip"]
+    },
+    "ToolchainSetupPolicy": {
+      "description": "Setup policy for one toolchain. Omitted values use the root `setup` values, then the inferred default.",
+      "type": "object",
+      "properties": {
+        "dependencies": {
+          "description": "How `turbo setup` prepares this toolchain's dependencies.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DependencyPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "lifecycleScripts": {
+          "description": "Whether this toolchain's dependency setup runs lifecycle scripts.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LifecycleScripts"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tools": {
+          "description": "How `turbo setup` prepares this toolchain's tools.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ToolPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
     },
     "UI": {
       "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#ui",

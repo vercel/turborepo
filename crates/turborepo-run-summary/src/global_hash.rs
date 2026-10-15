@@ -26,7 +26,7 @@ pub struct GlobalEnvVarSummary<'a> {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalHashSummary<'a> {
-    pub root_key: &'static str,
+    pub root_key: &'a str,
     pub files: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: &'a str,
     pub hash_of_internal_dependencies: &'a str,
