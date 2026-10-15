@@ -1455,7 +1455,9 @@ mod tests {
         #[test_case::test_case("C:/Windows/Temp/evil.txt", tar::EntryType::Regular ; "file")]
         #[test_case::test_case("C:/Windows/Temp/evil/", tar::EntryType::Directory ; "directory")]
         #[test_case::test_case("C:/", tar::EntryType::Directory ; "drive root")]
-        fn test_windows_drive_absolute_path_rejected(
+        #[test_case::test_case("C:evil.txt", tar::EntryType::Regular ; "drive-relative file")]
+        #[test_case::test_case("C:evil/", tar::EntryType::Directory ; "drive-relative directory")]
+        fn test_windows_drive_prefixed_path_rejected(
             path: &str,
             entry_type: tar::EntryType,
         ) -> Result<()> {
@@ -1480,8 +1482,7 @@ mod tests {
                         _
                     ))
                 ),
-                "drive-qualified absolute path {path} should be rejected before restoration, got: \
-                 {result:?}"
+                "drive-prefixed path {path} should be rejected before restoration, got: {result:?}"
             );
             assert_eq!(fs::read_dir(output_dir.path())?.count(), 0);
 
