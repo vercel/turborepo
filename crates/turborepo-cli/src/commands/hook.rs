@@ -95,10 +95,8 @@ struct Saved {
     previous: Option<String>,
 }
 
-/// `1;<root id>;<stamp>;<status>;<bin>`, or with runtime variables
-/// `3;<root id>;<stamp>;<status>;<saved>;<bin>`. The bin is last because it
-/// may contain `;`. Version 2 (Windows Go only, with the set values implied by
-/// the bin) is still read so shells upgrade in place.
+/// `<root id>;<stamp>;<status>;<saved>;<bin>`. The bin is last because it
+/// may contain `;`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct State {
     root: String,
@@ -112,13 +110,7 @@ struct State {
 
 impl State {
     fn parse(value: &str) -> Option<Self> {
-        let (version, rest) = value.split_once(';')?;
-        let fields = match version {
-            "1" => 4,
-            "2" | "3" => 5,
-            _ => return None,
-        };
-        let mut fields = rest.splitn(fields, ';');
+        let mut fields = value.splitn(5, ';');
         let root = fields.next()?.to_owned();
         let stamp = fields.next()?.to_owned();
         let status = match fields.next()? {
@@ -129,18 +121,13 @@ impl State {
             "unsupported" => Status::Unsupported,
             _ => return None,
         };
-        let saved = match version {
-            "1" => None,
-            _ => Some(fields.next()?),
+        let saved = match fields.next()? {
+            "" => BTreeMap::new(),
+            saved => decode(saved)?,
         };
         let bin = Some(fields.next()?)
             .filter(|bin| !bin.is_empty())
             .map(str::to_owned);
-        let saved = match (version, saved) {
-            (_, None) => BTreeMap::new(),
-            ("2", Some(saved)) => legacy(saved, bin.as_deref())?,
-            (_, Some(saved)) => decode(saved)?,
-        };
         // Only variables the hook can set are restored, so a tampered state
         // cannot unset or overwrite any other variable.
         if !saved.keys().all(|name| HOOK_ENV.contains(&name.as_str())) {
@@ -165,14 +152,11 @@ impl State {
         };
         let bin = self.bin.as_deref().unwrap_or_default();
         let (root, stamp) = (&self.root, &self.stamp);
-        if self.saved.is_empty() {
-            return format!("1;{root};{stamp};{status};{bin}");
-        }
         let value = |value: &Option<String>| value.as_deref().map_or_else(|| "-".to_owned(), hex);
         let saved: Vec<_> = (self.saved.iter())
             .map(|(name, saved)| format!("{name}={}/{}", value(&saved.set), value(&saved.previous)))
             .collect();
-        format!("3;{root};{stamp};{status};{};{bin}", saved.join(","))
+        format!("{root};{stamp};{status};{};{bin}", saved.join(","))
     }
 }
 
@@ -191,35 +175,6 @@ fn decode(saved: &str) -> Option<BTreeMap<String, Saved>> {
                 previous: value(previous)?,
             };
             Some((name.to_owned(), saved))
-        })
-        .collect()
-}
-
-/// Version 2 recorded only what each variable replaced; the hook had set
-/// GOROOT to the Store's `tools/go` beside `bin`, and GOTOOLCHAIN=local.
-fn legacy(saved: &str, bin: Option<&str>) -> Option<BTreeMap<String, Saved>> {
-    let goroot = bin
-        .and_then(|bin| Path::new(bin).parent())
-        .and_then(|generation| {
-            generation
-                .join("tools")
-                .join("go")
-                .to_str()
-                .map(str::to_owned)
-        });
-    saved
-        .split(',')
-        .map(|entry| {
-            let (name, previous) = match entry.split_once('=') {
-                Some((name, hex)) => (name, Some(unhex(hex)?)),
-                None => (entry, None),
-            };
-            let set = match name {
-                "GOROOT" => goroot.clone(),
-                "GOTOOLCHAIN" => Some("local".to_owned()),
-                _ => return None,
-            };
-            Some((name.to_owned(), Saved { set, previous }))
         })
         .collect()
 }
@@ -926,17 +881,17 @@ mod tests {
         assert_eq!(quote(HookShell::PowerShell, ""), "''");
         let unicode = Changes {
             path: Some("C:\\J\u{fc}rgen\\bin;C:\\Windows".into()),
-            state: Some(Some("1;a;b;active;C:\\J\u{fc}rgen\\bin".into())),
+            state: Some(Some("a;b;active;;C:\\J\u{fc}rgen\\bin".into())),
             ..Default::default()
         };
         assert!(render(HookShell::PowerShell, &unicode).is_ascii());
         let state = Changes {
-            state: Some(Some("1;x".into())),
+            state: Some(Some("a;x".into())),
             ..Default::default()
         };
         assert_eq!(
             render(HookShell::PowerShell, &state),
-            "$env:__TURBO_HOOK_STATE = '1;x'\n"
+            "$env:__TURBO_HOOK_STATE = 'a;x'\n"
         );
         // Runtime variables sit between PATH and the state; `None` unsets.
         let env = Changes {
@@ -967,8 +922,7 @@ mod tests {
             saved: BTreeMap::new(),
             bin: Some("/repo;x/bin".into()),
         };
-        // Without runtime variables the state keeps its first format.
-        assert!(state.encode().starts_with("1;"));
+        assert_eq!(state.encode(), "abc;def;stale;;/repo;x/bin");
         assert_eq!(State::parse(&state.encode()), Some(state.clone()));
         state.saved = BTreeMap::from([
             (
@@ -994,37 +948,7 @@ mod tests {
                 },
             ),
         ]);
-        assert!(state.encode().starts_with("3;"));
         assert_eq!(State::parse(&state.encode()), Some(state));
-        // Version 2 recorded only the replaced values; the hook had set GOROOT
-        // beside the bin and GOTOOLCHAIN=local.
-        let bin = Path::new("/repo/generation-a").join("bin");
-        let goroot = Path::new("/repo/generation-a").join("tools").join("go");
-        let v2 = State::parse(&format!(
-            "2;a;b;active;GOROOT={},GOTOOLCHAIN;{}",
-            hex("/mine"),
-            bin.display()
-        ))
-        .unwrap();
-        assert_eq!(
-            v2.saved,
-            BTreeMap::from([
-                (
-                    "GOROOT".to_owned(),
-                    Saved {
-                        set: goroot.to_str().map(str::to_owned),
-                        previous: s("/mine"),
-                    },
-                ),
-                (
-                    "GOTOOLCHAIN".to_owned(),
-                    Saved {
-                        set: s("local"),
-                        previous: None,
-                    },
-                ),
-            ])
-        );
         // Only variables the hook sets, with valid values, are restored.
         for saved in [
             "PATH=-/-",
@@ -1033,13 +957,10 @@ mod tests {
             "GOROOT=zz/-",
             "GOROOT=ff/-",
         ] {
-            assert_eq!(State::parse(&format!("3;a;b;active;{saved};/bin")), None);
+            assert_eq!(State::parse(&format!("a;b;active;{saved};/bin")), None);
         }
-        for saved in ["PATH", "RUSTUP_HOME", "GOROOT=4", "GOROOT=ff"] {
-            assert_eq!(State::parse(&format!("2;a;b;active;{saved};/bin")), None);
-        }
-        assert_eq!(State::parse("3;a;b;active;/bin"), None);
-        assert_eq!(State::parse("1;a;b;bogus;"), None);
+        assert_eq!(State::parse("a;b;active;/bin"), None);
+        assert_eq!(State::parse("a;b;bogus;;"), None);
     }
 
     #[cfg(unix)]

@@ -328,10 +328,10 @@ fn printed(stdout: &str, key: &str) -> (BTreeMap<String, String>, bool) {
         })
         .map(|(name, value)| (name.to_owned(), value.to_owned()))
         .collect();
-    // Version 3 states record the runtime variables the hook manages.
+    // The state's fourth field records the runtime variables the hook manages.
     let saved = vars
         .remove("__TURBO_HOOK_STATE")
-        .is_some_and(|state| state.starts_with("3;"));
+        .is_some_and(|state| state.splitn(5, ';').nth(3).is_some_and(|f| !f.is_empty()));
     (vars, saved)
 }
 
