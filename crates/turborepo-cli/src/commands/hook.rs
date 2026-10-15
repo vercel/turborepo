@@ -863,7 +863,7 @@ mod tests {
         let unicode = Changes {
             path: Some("C:\\J\u{fc}rgen\\bin;C:\\Windows".into()),
             state: Some(Some("1;a;b;active;C:\\J\u{fc}rgen\\bin".into())),
-            notice: None,
+            ..Default::default()
         };
         assert!(render(HookShell::PowerShell, &unicode).is_ascii());
         let state = Changes {
