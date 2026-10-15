@@ -414,3 +414,6 @@ mod go;
 mod pnpm;
 #[path = "windows_yarn_tests.rs"]
 mod yarn;
+
+#[path = "windows_rust_tests.rs"]
+mod rust;

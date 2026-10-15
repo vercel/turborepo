@@ -55,14 +55,24 @@ pub struct RustupTransport {
     // Mirror and test transports change only the origin; lock provenance
     // remains official. The private rustup downloads from the same origin.
     origin: String,
+    /// Fixture-only stand-in runner and its leading arguments.
+    #[cfg(any(test, feature = "test-support"))]
+    runner: Option<(PathBuf, Vec<std::ffi::OsString>)>,
 }
 
 impl RustupTransport {
+    fn new(client: DownloadClient, origin: String) -> Self {
+        Self {
+            client,
+            origin,
+            #[cfg(any(test, feature = "test-support"))]
+            runner: None,
+        }
+    }
+
     pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
-        Ok(Self {
-            client: DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?,
-            origin: ORIGIN.into(),
-        })
+        let client = DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?;
+        Ok(Self::new(client, ORIGIN.into()))
     }
 
     /// Send the official rustup and `dist` paths to a validated mirror base,
@@ -72,20 +82,28 @@ impl RustupTransport {
         _policy: &crate::source_policy::OfficialSourcePolicy,
         mirror: &crate::mirror::Mirror,
     ) -> Result<Self, Error> {
-        Ok(Self {
-            client: mirror.client()?,
-            origin: mirror.base().into(),
-        })
+        Ok(Self::new(mirror.client()?, mirror.base().into()))
     }
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only, no env
     /// override.
     #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
-        Ok(Self {
-            client: DownloadClient::loopback_http_for_tests(origin)?,
-            origin: origin.trim_end_matches('/').into(),
-        })
+        let client = DownloadClient::loopback_http_for_tests(origin)?;
+        Ok(Self::new(client, origin.trim_end_matches('/').into()))
+    }
+
+    /// Fixture-only: run every private rustup as `<program> <args> <staged
+    /// rustup> <rustup arguments>`, so a stand-in can check the staged binary
+    /// and play rustup where the fixture image cannot.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn with_runner_for_tests(
+        mut self,
+        program: impl Into<PathBuf>,
+        args: impl IntoIterator<Item = impl Into<std::ffi::OsString>>,
+    ) -> Self {
+        self.runner = Some((program.into(), args.into_iter().map(Into::into).collect()));
+        self
     }
 
     pub(crate) async fn read(&self, path: &str, limit: usize) -> Result<Vec<u8>, Error> {
@@ -259,7 +277,10 @@ impl RustupPlan {
                 .reusable_tree(&self.tool, desired)?
                 .ok_or(Error::InventoryMismatch)?,
         };
-        Ok(tree.join(&self.tool.executables["rustup"]))
+        // Split components: Windows images must not carry a lock path's `/`
+        // (a `cmd.exe` image there cannot even run its own commands).
+        let path = self.tool.executables["rustup"].split('/');
+        Ok(path.fold(tree, |tree, part| tree.join(part)))
     }
 }
 
@@ -338,13 +359,26 @@ impl PrivateHomes {
     /// channel manifest; callers bind its `.tar.gz` entries to `turbo.lock`.
     pub fn command(&self, rustup: &Path, transport: &RustupTransport) -> Command {
         let origin = &transport.origin;
-        let mut command = Command::new(rustup);
-        // Under a canonical `\\?\` store, rustup gets the ordinary spelling
-        // unless only the verbatim one is exact.
+        // Under a canonical `\\?\` store, rustup's image and homes get the
+        // ordinary spelling unless only the verbatim one is exact.
         #[cfg(windows)]
-        let homes = [&self.rustup, &self.cargo].map(|home| dunce::simplified(home));
+        let (rustup, homes) = (
+            dunce::simplified(rustup),
+            [&self.rustup, &self.cargo].map(|home| dunce::simplified(home)),
+        );
         #[cfg(not(windows))]
         let homes = [&self.rustup, &self.cargo].map(PathBuf::as_path);
+        #[cfg(any(test, feature = "test-support"))]
+        let mut command = match &transport.runner {
+            Some((program, args)) => {
+                let mut command = Command::new(program);
+                command.args(args).arg(rustup);
+                command
+            }
+            None => Command::new(rustup),
+        };
+        #[cfg(not(any(test, feature = "test-support")))]
+        let mut command = Command::new(rustup);
         command
             .env("RUSTUP_HOME", homes[0])
             .env("CARGO_HOME", homes[1])

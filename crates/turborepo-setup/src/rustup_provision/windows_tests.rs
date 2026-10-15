@@ -79,6 +79,11 @@ async fn windows_x64_bootstrap_exports_one_hard_linked_rustup_exe() {
     assert_eq!(fs::read(&binary).unwrap(), INSTALLER);
     // Only the binary: no homes, proxies or toolchains.
     assert_eq!(fs::read_dir(&tree).unwrap().count(), 1);
+    // Toolchain installs run the selected binary by an all-backslash path.
+    let selected = plan.executable(&store, &desired, None, Path::new("unused"));
+    let selected = selected.unwrap();
+    assert!(!selected.to_string_lossy().contains('/'), "{selected:?}");
+    assert!(same_file::is_same_file(&selected, &binary).unwrap());
 
     // A healthy repeat downloads nothing; a corrupt fresh one keeps the
     // published generation selected.
@@ -127,7 +132,13 @@ fn private_homes_reach_rustup_with_ordinary_paths() {
     assert!(verbatim.to_string_lossy().starts_with(r"\\?\"));
     let homes = PrivateHomes::create(&verbatim).unwrap();
     let transport = RustupTransport::official(&fixture.policy().unwrap()).unwrap();
-    let command = homes.command(Path::new("rustup.exe"), &transport);
+    let command = homes.command(&verbatim.join("rustup.exe"), &transport);
+    let program = Path::new(command.get_program());
+    assert!(
+        !program.to_string_lossy().starts_with(r"\\?\"),
+        "{program:?}"
+    );
+    assert_eq!(program, dunce::simplified(&verbatim.join("rustup.exe")));
     let envs: BTreeMap<_, _> = command.get_envs().collect();
     for (name, home) in [
         ("RUSTUP_HOME", homes.rustup_home()),
