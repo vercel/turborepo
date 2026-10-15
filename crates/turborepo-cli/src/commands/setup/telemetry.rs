@@ -88,6 +88,7 @@ fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
         | Dependencies::Install(_)
         | Dependencies::Lifecycle(_)
         | Dependencies::Uv(_)
+        | Dependencies::Cargo(_)
         | Dependencies::Io(_) => SetupFailure::Dependencies,
     }
 }
@@ -321,6 +322,10 @@ mod tests {
             ),
             (
                 Dependencies::Uv(turborepo_setup::uv_sync::Error::Failed(2)),
+                SetupFailure::Dependencies,
+            ),
+            (
+                Dependencies::Cargo(turborepo_setup::cargo_prefetch::Error::StaleLock),
                 SetupFailure::Dependencies,
             ),
         ] {

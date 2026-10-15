@@ -51,8 +51,8 @@ fn locked_fetch_uses_the_private_home_and_honors_offline() {
     assert_eq!(mode & 0o777, 0o700);
     assert_eq!(cargo_home(root).unwrap(), home);
     let cargo = workspace.cargo("echo progress >&2");
-    prefetch(root, &cargo, &home, false).unwrap();
-    prefetch(root, &cargo, &home, true).unwrap();
+    prefetch(root, &cargo, &home, false, &BTreeMap::new()).unwrap();
+    prefetch(root, &cargo, &home, true, &BTreeMap::new()).unwrap();
     let cwd = root.canonicalize().unwrap();
     assert_eq!(
         workspace.calls(),
@@ -91,7 +91,8 @@ fn missing_stale_and_unreachable_locks_are_actionable() {
         ("echo '# rewritten' >> Cargo.lock", "LockChanged"),
     ] {
         fs::write(root.join("Cargo.lock"), LOCK).unwrap();
-        let error = prefetch(root, &workspace.cargo(body), &home, false).unwrap_err();
+        let error =
+            prefetch(root, &workspace.cargo(body), &home, false, &BTreeMap::new()).unwrap_err();
         assert_eq!(format!("{error:?}"), expected);
         assert!(error.to_string().contains("Cargo.lock") || expected.starts_with("Fetch"));
     }
@@ -99,7 +100,7 @@ fn missing_stale_and_unreachable_locks_are_actionable() {
     let calls = workspace.calls().len();
     let cargo = workspace.cargo("exit 0");
     assert!(matches!(
-        prefetch(root, &cargo, &home, false),
+        prefetch(root, &cargo, &home, false, &BTreeMap::new()),
         Err(Error::MissingLock)
     ));
     assert_eq!(workspace.calls().len(), calls);
