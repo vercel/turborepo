@@ -277,7 +277,10 @@ impl Journey {
         for args in DISCOVERY.iter().map(|(args, _)| *args).chain([devtools]) {
             let (code, text) = self.turbo("", args);
             assert_ne!(code, 0, "{args:?}: {text}");
-            for expected in ["repository-local CLI", "upgrade"] {
+            for expected in [
+                "repository-local turbo 2.5.0",
+                "Upgrade the repository's turbo dependency",
+            ] {
                 assert!(
                     squash(&text).contains(&squash(expected)),
                     "{args:?}: {text}"
