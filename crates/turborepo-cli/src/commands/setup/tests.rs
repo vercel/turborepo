@@ -193,6 +193,23 @@ impl Fixture {
         })
         .unwrap()
     }
+    /// A managed Node that appends the arguments after its script (the
+    /// package manager's CLI) to `record`, then runs `body` in its cwd.
+    fn record_node(&mut self, record: &str, body: &str) {
+        let prefix = self.node_path.rsplit('/').next().unwrap();
+        let prefix = prefix.trim_end_matches(".tar.gz").to_owned();
+        let node = format!("#!/bin/sh\nshift\necho \"$*\" >> {record}\n{body}\n");
+        self.node = archive(&prefix, &[("bin/node", &node), ("resource", "node")]);
+        let artifacts = &mut self.lock["tools"]["node"]["installation"]["artifacts"];
+        let parts = artifacts
+            .as_object_mut()
+            .unwrap()
+            .values_mut()
+            .next()
+            .unwrap();
+        parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&self.node)));
+        self.save();
+    }
     /// The effective dependency setup that `flags` select, without running it.
     fn dependencies(&self, flags: &[&str]) -> dependencies::Dependencies {
         let args = self.args(flags);

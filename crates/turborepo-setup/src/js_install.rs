@@ -59,6 +59,7 @@ impl Frozen {
         let (lockfiles, regenerate): (&'static [_], _) = match manager {
             Manager::Npm => (&["npm-shrinkwrap.json", "package-lock.json"], "npm install"),
             Manager::Pnpm => (&["pnpm-lock.yaml"], "pnpm install"),
+            Manager::Yarn => (&["yarn.lock"], "yarn install"),
             _ => return None,
         };
         Some(Self {
@@ -78,12 +79,15 @@ impl Frozen {
     }
 
     /// The native frozen command's arguments for the locked version.
-    pub fn args(self, _version: &Version) -> &'static [&'static str] {
+    pub fn args(self, version: &Version) -> &'static [&'static str] {
         match self.manager {
             // Installs exactly the lockfile and fails if package.json disagrees.
             Manager::Npm => &["ci"],
             // Installs the whole workspace and fails instead of updating the lock.
             Manager::Pnpm => &["install", "--frozen-lockfile"],
+            // Yarn classic and modern Yarn spell the same refusal differently.
+            Manager::Yarn if version.major < 2 => &["install", "--frozen-lockfile"],
+            Manager::Yarn => &["install", "--immutable"],
             _ => unreachable!("Frozen::new admits only adapted managers"),
         }
     }

@@ -7,19 +7,7 @@ const LOCK: &[u8] = b"lockfileVersion: '9.0'\n";
 /// records pnpm's arguments, then runs `body` in the workspace root.
 fn installing(body: &str) -> Fixture {
     let mut f = Fixture::new();
-    let prefix = f.node_path.rsplit('/').next().unwrap();
-    let prefix = prefix.trim_end_matches(".tar.gz").to_owned();
-    let node = format!("#!/bin/sh\nshift\necho \"$*\" >> pnpm-args\n{body}\n");
-    f.node = archive(&prefix, &[("bin/node", &node), ("resource", "node")]);
-    let artifacts = &mut f.lock["tools"]["node"]["installation"]["artifacts"];
-    let parts = artifacts
-        .as_object_mut()
-        .unwrap()
-        .values_mut()
-        .next()
-        .unwrap();
-    parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&f.node)));
-    f.save();
+    f.record_node("pnpm-args", body);
     let root = f.owned.root();
     fs::write(root.join("pnpm-workspace.yaml"), "packages:\n  - apps/*\n").unwrap();
     fs::write(root.join("pnpm-lock.yaml"), LOCK).unwrap();
