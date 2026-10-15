@@ -22,6 +22,7 @@ mod cleanup;
 mod dacl;
 mod dependencies;
 pub(crate) mod effective;
+mod installer;
 mod lock_diagnostics;
 #[cfg(windows)]
 mod msvc;
