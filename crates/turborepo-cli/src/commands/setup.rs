@@ -23,6 +23,8 @@ mod dacl;
 mod dependencies;
 pub(crate) mod effective;
 mod lock_diagnostics;
+#[cfg(windows)]
+mod msvc;
 mod no_lock;
 mod offline;
 mod plan;
@@ -405,6 +407,16 @@ fn run_reporting(
     }
     for line in plan.report() {
         println!("{line}");
+    }
+    // Managed Rust's Windows linker is an external prerequisite: reported,
+    // never installed, and never a failure.
+    #[cfg(windows)]
+    if plan
+        .toolchain(&ToolchainId::RUST)
+        .is_some_and(|t| t.tools.0 != ToolPolicy::Skip)
+        && snapshot.declarations().contains_key("rust")
+    {
+        msvc::report();
     }
     if javascript == ToolPolicy::Skip {
         // The current snapshot has no JavaScript enable switch. Never provision
