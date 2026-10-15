@@ -8,7 +8,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 use crate::{
     CacheError,
     cache_archive::{
-        restore_directory::{CachedDirTree, restore_directory},
+        restore_directory::{CachedDirTree, restore_directory, validate_restore_path},
         restore_manifest::RestoreManifest,
         restore_regular::{RegularRestore, restore_regular},
         restore_symlink::{
@@ -191,6 +191,8 @@ fn restore_entry<T: Read>(
     entry: &mut Entry<T>,
     manifest: Option<&RestoreManifest>,
 ) -> Result<(AnchoredSystemPathBuf, Option<RegularRestore>), CacheError> {
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
+    validate_restore_path(&processed_name)?;
     let header = entry.header();
 
     match header.entry_type() {
@@ -504,6 +506,131 @@ mod tests {
             .into_iter()
             .map(|item| AnchoredSystemPathBuf::try_from(Path::new(item)).unwrap())
             .collect()
+    }
+
+    #[test_case(".git"; "git_file")]
+    #[test_case(".git/hooks/post-checkout"; "hook")]
+    #[test_case("nested/.git/config"; "nested_repository")]
+    #[test_case(".GIT/hooks/post-checkout"; "uppercase")]
+    #[test_case("nested/.GiT/config"; "mixed_case")]
+    #[test_case(".g\u{200c}it/hooks/post-checkout"; "hfs_ignorable_character")]
+    #[cfg_attr(windows, test_case(".git./hooks/post-checkout"; "trailing_dot"))]
+    #[cfg_attr(windows, test_case(".git /hooks/post-checkout"; "trailing_space"))]
+    #[cfg_attr(windows, test_case(".git:payload"; "alternate_data_stream"))]
+    #[cfg_attr(windows, test_case("GIT~1/hooks/post-checkout"; "short_name"))]
+    fn restore_rejects_git_metadata_entries(path: &'static str) -> Result<()> {
+        for entry in [
+            RawTarEntry::File {
+                path,
+                body: b"malicious hook".to_vec(),
+            },
+            RawTarEntry::Directory { path },
+            // A missing target also exercises the deferred-symlink path.
+            RawTarEntry::Symlink {
+                link_path: path,
+                link_target: "missing",
+            },
+        ] {
+            let tar_bytes = generate_raw_tar(&[entry]);
+            let output_dir = tempdir()?;
+            let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+            let error = reader
+                .restore(&anchor, None)
+                .expect_err("Git metadata entry must be rejected");
+            assert!(
+                matches!(error, crate::CacheError::GitMetadataWrite(_, _))
+                    // The path parser already rejects some Windows aliases
+                    // before they reach the Git metadata check.
+                    || cfg!(windows) && matches!(error, crate::CacheError::PathError(_, _))
+            );
+            assert_eq!(fs::read_dir(output_dir.path())?.count(), 0);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn restore_preserves_existing_git_metadata() -> Result<()> {
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let hooks = output_dir.path().join(".git/hooks");
+        fs::create_dir_all(&hooks)?;
+        let hook = hooks.join("post-checkout");
+        fs::write(&hook, b"original hook")?;
+        let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+            path: ".git/hooks/post-checkout",
+            body: b"malicious hook".to_vec(),
+        }]);
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+        assert!(matches!(
+            reader.restore(&anchor, None),
+            Err(crate::CacheError::GitMetadataWrite(_, _))
+        ));
+        assert_eq!(fs::read(&hook)?, b"original hook");
+        Ok(())
+    }
+
+    #[test]
+    fn restore_rejects_git_metadata_writes_through_archive_symlink() -> Result<()> {
+        for entry in [
+            RawTarEntry::File {
+                path: "alias/hooks/post-checkout",
+                body: b"malicious hook".to_vec(),
+            },
+            RawTarEntry::Directory {
+                path: "alias/hooks",
+            },
+            RawTarEntry::Symlink {
+                link_path: "alias/hooks/post-checkout",
+                link_target: "../../target",
+            },
+        ] {
+            let output_dir = tempdir()?;
+            let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+            fs::create_dir(output_dir.path().join(".git"))?;
+            fs::write(output_dir.path().join("target"), b"target")?;
+            let tar_bytes = generate_raw_tar(&[
+                RawTarEntry::Symlink {
+                    link_path: "alias",
+                    link_target: ".git",
+                },
+                entry,
+            ]);
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+            assert!(matches!(
+                reader.restore(&anchor, None),
+                Err(crate::CacheError::GitMetadataWrite(_, _))
+            ));
+            // The symlink itself is harmless and must have been restored;
+            // rejection must happen at the subsequent write destination.
+            assert_eq!(
+                fs::read_link(output_dir.path().join("alias"))?,
+                Path::new(".git")
+            );
+            assert_eq!(fs::read_dir(output_dir.path().join(".git"))?.count(), 0);
+        }
+        Ok(())
+    }
+
+    #[test_case(".github/workflows/build.yml")]
+    #[test_case("dist/.gitignore")]
+    #[test_case("dist/.gitkeep")]
+    #[test_case("dist/file.git")]
+    fn restore_allows_non_metadata_git_names(path: &'static str) -> Result<()> {
+        let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+            path,
+            body: b"output".to_vec(),
+        }]);
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+        reader.restore(&anchor, None)?;
+        assert_eq!(fs::read(output_dir.path().join(path))?, b"output");
+        Ok(())
     }
 
     #[test]

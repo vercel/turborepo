@@ -96,6 +96,8 @@ pub enum CacheError {
     WindowsUnsafeName(String, #[backtrace] Backtrace),
     #[error("tar attempts to write outside of directory: {0}")]
     LinkOutsideOfDirectory(String, #[backtrace] Backtrace),
+    #[error("tar attempts to write Git metadata: {0}")]
+    GitMetadataWrite(String, #[backtrace] Backtrace),
     #[error("Invalid cache metadata file")]
     InvalidMetadata(serde_json::Error, #[backtrace] Backtrace),
     #[error("Failed to write cache metadata file")]

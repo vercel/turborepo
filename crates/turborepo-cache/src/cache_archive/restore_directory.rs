@@ -32,6 +32,41 @@ use turbopath::{
 
 use crate::CacheError;
 
+/// Cache artifacts must never modify Git metadata, including nested
+/// repositories and case variants on case-insensitive filesystems.
+pub(super) fn validate_restore_path(path: &AnchoredSystemPath) -> Result<(), CacheError> {
+    if path.components().any(|component| {
+        let name = component.as_str();
+        // Windows also accepts trailing dots/spaces, alternate data streams,
+        // and the short name of the .git directory.
+        #[cfg(windows)]
+        let name = name
+            .split(':')
+            .next()
+            .unwrap_or(name)
+            .trim_end_matches(['.', ' ']);
+        // HFS+ ignores these formatting characters when comparing names.
+        // Match conservatively on every platform so artifacts cannot disguise
+        // a .git component on the filesystem where they are restored.
+        let is_git = name
+            .chars()
+            .filter(|c| !matches!(c, '\u{200c}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{206a}'..='\u{206f}' | '\u{feff}'))
+            .map(|c| c.to_ascii_lowercase())
+            .eq(".git".chars());
+        let is_short_name = cfg!(windows)
+            && name.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("git~"))
+            && name.len() > 4
+            && name[4..].bytes().all(|b| b.is_ascii_digit());
+        is_git || is_short_name
+    }) {
+        return Err(CacheError::GitMetadataWrite(
+            path.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+    Ok(())
+}
+
 pub fn restore_directory(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
@@ -186,7 +221,9 @@ impl CachedDirTree {
         processed_name: &AnchoredSystemPath,
         mode: u32,
     ) -> Result<(), CacheError> {
+        validate_restore_path(processed_name)?;
         let expanded = self.expand_restored_symlinks(processed_name)?;
+        validate_restore_path(&expanded)?;
         self.open_or_create_directory(&expanded, mode)?;
         Ok(())
     }
@@ -198,6 +235,7 @@ impl CachedDirTree {
         &self,
         processed_name: &AnchoredSystemPath,
     ) -> Result<RestoreDestination, CacheError> {
+        validate_restore_path(processed_name)?;
         let file_name = processed_name
             .as_path()
             .file_name()
@@ -209,6 +247,7 @@ impl CachedDirTree {
             Some(parent) => self.expand_restored_symlinks(parent)?,
             None => AnchoredSystemPathBuf::default(),
         };
+        validate_restore_path(&expanded_parent)?;
         #[cfg(unix)]
         {
             let directory = self.open_or_create_directory(&expanded_parent, 0o755)?;
@@ -244,6 +283,7 @@ impl CachedDirTree {
             None => AnchoredSystemPathBuf::default(),
         };
         physical_path.push(file_name);
+        validate_restore_path(&physical_path)?;
         Ok(physical_path)
     }
 
@@ -375,6 +415,7 @@ impl CachedDirTree {
         processed_name: &AnchoredSystemPath,
         mode: u32,
     ) -> Result<(), CacheError> {
+        validate_restore_path(processed_name)?;
         let (mut calculated_anchor, start_idx) = self.get_starting_point(processed_name);
         let components: Vec<_> = processed_name.components().collect();
         let mut current_anchored: Option<AnchoredSystemPathBuf> = None;
