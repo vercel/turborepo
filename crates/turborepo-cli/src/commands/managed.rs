@@ -1,6 +1,7 @@
-//! Exact-root strict activation shared by `turbo run` and `turbo exec`.
-//! No provisioning, HTTP or ancestor inventory search. Only `turbo run`'s
-//! [`activate_probes`] changes the process environment, after selection.
+//! Exact-root strict activation shared by `turbo run`, `turbo exec` and the
+//! commands that discover the repository. No provisioning, HTTP or ancestor
+//! inventory search. Only [`activate_probes`] changes the process
+//! environment, after selection.
 
 use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 
@@ -13,7 +14,7 @@ use turborepo_setup::{
 };
 use turborepo_shim::capabilities::Requirement;
 use turborepo_tool_install::Store;
-use turborepo_turbo_json::{RawTurboJson, SetupPolicy};
+use turborepo_turbo_json::{FutureFlags, RawTurboJson, SetupPolicy};
 
 use crate::commands::setup::{
     authorization::{self, Authorization},
@@ -55,6 +56,44 @@ fn peer_requirement(snapshot: &ExecutionSnapshot) -> Requirement {
         lock::SCHEMA_VERSION,
         features.chain([clone_local]).flatten(),
     )
+}
+
+/// Whether repository discovery may run a tool that setup manages. Under their
+/// workspace flags, Cargo, uv and Go discovery run their toolchains on demand
+/// (`cargo metadata`, `uv workspace metadata`, `go env`), so selection comes
+/// before any discovery. JavaScript discovery runs no tool, so a
+/// JavaScript-only repository needs no managed selection.
+pub(crate) fn discovery_probes_tools(flags: &FutureFlags) -> bool {
+    flags.experimental_setup
+        && (flags.experimental_cargo_workspaces
+            || flags.experimental_python_workspaces
+            || flags.experimental_go_workspaces)
+}
+
+/// [`select`] for a command that discovers the repository without running
+/// tasks (`turbo ls`, `turbo query`, `turbo boundaries`, `turbo devtools` and
+/// the task listing): `None` unless its discovery may probe a tool.
+pub(crate) fn select_for_discovery(
+    base: &crate::commands::CommandBase,
+) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
+    if discovery_probes_tools(&base.opts.future_flags) {
+        select(base)
+    } else {
+        Ok(None)
+    }
+}
+
+/// [`select_for_discovery`], activated for turbo's own probes before any
+/// discovery exactly like `turbo run`. Missing, stale or damaged setup fails
+/// with `turbo setup` guidance instead of probing tools from the host PATH.
+pub(crate) fn activate_for_discovery(
+    base: &crate::commands::CommandBase,
+) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
+    let managed = select_for_discovery(base)?;
+    if let Some(tools) = &managed {
+        activate_probes(tools)?;
+    }
+    Ok(managed)
 }
 
 fn select_with(
@@ -373,6 +412,31 @@ fn host_libc(
             "cannot classify this Linux host's C library ({error}); managed run requires a glibc \
              host, or a musl host whose tools are all verify-system"
         )),
+    }
+}
+
+#[cfg(test)]
+mod discovery_tests {
+    use turborepo_turbo_json::FutureFlags;
+
+    #[test]
+    fn only_setup_with_cargo_python_or_go_discovery_needs_managed_tools() {
+        let setup = FutureFlags {
+            experimental_setup: true,
+            ..Default::default()
+        };
+        assert!(!super::discovery_probes_tools(&setup));
+        for enable in [
+            |f: &mut FutureFlags| f.experimental_cargo_workspaces = true,
+            |f: &mut FutureFlags| f.experimental_python_workspaces = true,
+            |f: &mut FutureFlags| f.experimental_go_workspaces = true,
+        ] {
+            let mut flags = setup;
+            enable(&mut flags);
+            assert!(super::discovery_probes_tools(&flags), "{flags:?}");
+            flags.experimental_setup = false;
+            assert!(!super::discovery_probes_tools(&flags), "{flags:?}");
+        }
     }
 }
 

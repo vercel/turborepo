@@ -579,6 +579,8 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
             .fails("run turbo setup")
             .offline();
     }
+    // JavaScript discovery runs no tool, so it needs no managed selection.
+    j.turbo(&j.web, &["ls"], &[]).succeeds().offline();
     j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
     assert_eq!(j.read("turbo.lock"), lock);
     j.build(&j.web, "strict", "24.0.0", &[]);

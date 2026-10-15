@@ -64,8 +64,8 @@ impl CommandBase {
         })
     }
 
-    // Used by link's in-module API integration test to inject a mock client.
-    #[cfg(test)]
+    // Used by devtools, which resolves fresh options for every rebuild, and by
+    // link's in-module API integration test to inject a mock client.
     pub fn from_opts(
         opts: Opts,
         repo_root: AbsoluteSystemPathBuf,
@@ -101,6 +101,16 @@ impl CommandBase {
             api_auth: self.api_auth()?,
             managed_environment: None,
         })
+    }
+
+    /// The run builder input for a command that discovers the repository
+    /// without running tasks. Like `turbo run`, managed tools are selected
+    /// and activated for turbo's own probes before any discovery.
+    pub fn discovery_builder_input(&self) -> Result<turborepo_run::RunBuilderInput, cli::Error> {
+        let managed = managed::activate_for_discovery(self)?;
+        let mut input = self.run_builder_input()?;
+        input.managed_environment = managed;
+        Ok(input)
     }
 
     // Getting all of the paths.
