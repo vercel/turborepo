@@ -322,47 +322,66 @@ esac
         }
     }
 
+    /// Hosts where `turbo` qualifies managed handoff to a repository-local CLI.
+    const HANDOFF: bool = cfg!(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(target_os = "linux", target_arch = "x86_64")
+    ));
+
+    /// Runs `case`, then, where handoff is qualified, again after the
+    /// repository installs `turbo`, so global turbo hands off to that copy.
+    fn with_handoff(repo: &Repo, launcher: &ProcessLauncher, mut case: impl FnMut(bool)) {
+        case(false);
+        if HANDOFF {
+            ProcessLauncher::install_package(repo.owned.root(), &launcher.standalone);
+            case(true);
+        }
+    }
+
     #[test]
     fn pipes_preserve_arguments_cwd_environment_streams_and_exit() {
         let repo = Repo::provisioned_with(NODE);
         let launcher = ProcessLauncher::new();
         let home = repo.owned.home().to_owned();
         let cwd = repo.owned.root().join("apps/web/src");
-        for code in ["0", "3"] {
-            let args = ["a b", "quote\"d", "$(echo no)", "ünïcode", ""];
-            let mut results = vec![];
-            for entry in ENTRIES {
-                let words = ["exec", "--", "node", "report", code];
-                let words: Vec<_> = words.iter().chain(&args).copied().collect();
-                let mut command = command(&repo, &launcher, entry, &words);
-                command
-                    .env("EXEC_PARITY", "")
-                    .env_remove("EXEC_UNSET")
-                    .stdin(Stdio::piped());
-                let mut process = CapturedProcess::spawn(&mut command);
-                let mut stdin = process.child.stdin.take().unwrap();
-                stdin.write_all(b"hello\n").unwrap();
-                drop(stdin);
-                let output = process.finish(TIMEOUT);
-                results.push((
-                    output.status.code(),
-                    String::from_utf8_lossy(&output.stdout).into_owned(),
-                    String::from_utf8_lossy(&output.stderr).into_owned(),
-                    take(&home.join("report")),
-                ));
+        with_handoff(&repo, &launcher, |handoff| {
+            for code in ["0", "3"] {
+                let args = ["a b", "quote\"d", "$(echo no)", "ünïcode", ""];
+                let mut results = vec![];
+                for entry in ENTRIES {
+                    let words = ["exec", "--", "node", "report", code];
+                    let words: Vec<_> = words.iter().chain(&args).copied().collect();
+                    let mut command = command(&repo, &launcher, entry, &words);
+                    command
+                        .env("EXEC_PARITY", "")
+                        .env_remove("EXEC_UNSET")
+                        .stdin(Stdio::piped());
+                    let mut process = CapturedProcess::spawn(&mut command);
+                    let mut stdin = process.child.stdin.take().unwrap();
+                    stdin.write_all(b"hello\n").unwrap();
+                    drop(stdin);
+                    let output = process.finish(TIMEOUT);
+                    results.push((
+                        output.status.code(),
+                        String::from_utf8_lossy(&output.stdout).into_owned(),
+                        String::from_utf8_lossy(&output.stderr).into_owned(),
+                        take(&home.join("report")),
+                    ));
+                }
+                let parity = format!("standalone vs npm wrapper, handoff={handoff}");
+                assert_eq!(results[0], results[1], "{parity}");
+                let (status, stdout, stderr, report) = &results[0];
+                assert_eq!(*status, Some(code.parse().unwrap()), "{stderr}");
+                assert_eq!(stdout, "to stdout\n");
+                assert_eq!(stderr, "to stderr\n");
+                let mut expected = format!("{}\n[report]\n[{code}]\n", cwd.display());
+                for arg in args {
+                    expected.push_str(&format!("[{arg}]\n"));
+                }
+                expected.push_str("env= unset=unset\nstdin=hello\nstdout=pipe\n");
+                assert_eq!(report, &expected);
             }
-            assert_eq!(results[0], results[1], "standalone vs npm wrapper");
-            let (status, stdout, stderr, report) = &results[0];
-            assert_eq!(*status, Some(code.parse().unwrap()), "{stderr}");
-            assert_eq!(stdout, "to stdout\n");
-            assert_eq!(stderr, "to stderr\n");
-            let mut expected = format!("{}\n[report]\n[{code}]\n", cwd.display());
-            for arg in args {
-                expected.push_str(&format!("[{arg}]\n"));
-            }
-            expected.push_str("env= unset=unset\nstdin=hello\nstdout=pipe\n");
-            assert_eq!(report, &expected);
-        }
+        });
     }
 
     #[test]
@@ -370,34 +389,40 @@ esac
         let repo = Repo::provisioned_with(NODE);
         let launcher = ProcessLauncher::new();
         let home = repo.owned.home().to_owned();
-        for (group, signal, code, record) in [
-            (false, Signal::SIGTERM, 5, "TERM\n"),
-            (true, Signal::SIGINT, 6, "INT\n"),
-        ] {
-            for entry in ENTRIES {
-                let words = ["exec", "--", "node", "wait"];
-                let mut process =
-                    CapturedProcess::spawn(&mut command(&repo, &launcher, entry, &words));
-                process.track_task(wait_for(&home.join("ready")));
-                // Let the npm wrapper finish starting before signaling.
-                thread::sleep(Duration::from_millis(200));
-                let target = Pid::from_raw(process.child.id() as i32);
-                if group {
-                    killpg(target, signal).unwrap();
-                } else {
-                    kill(target, signal).unwrap();
+        with_handoff(&repo, &launcher, |handoff| {
+            for (group, signal, code, record) in [
+                (false, Signal::SIGTERM, 5, "TERM\n"),
+                (true, Signal::SIGINT, 6, "INT\n"),
+            ] {
+                for entry in ENTRIES {
+                    let words = ["exec", "--", "node", "wait"];
+                    let mut process =
+                        CapturedProcess::spawn(&mut command(&repo, &launcher, entry, &words));
+                    process.track_task(wait_for(&home.join("ready")));
+                    // Let the npm wrapper finish starting before signaling.
+                    thread::sleep(Duration::from_millis(200));
+                    let target = Pid::from_raw(process.child.id() as i32);
+                    if group {
+                        killpg(target, signal).unwrap();
+                    } else {
+                        kill(target, signal).unwrap();
+                    }
+                    // finish() also waits until the managed command itself is gone.
+                    let output = process.finish(TIMEOUT);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    assert_eq!(
+                        output.status.code(),
+                        Some(code),
+                        "{entry:?} {signal} handoff={handoff}: {stderr}"
+                    );
+                    assert_eq!(
+                        take(&home.join("signals")),
+                        record,
+                        "{entry:?} {signal} handoff={handoff}"
+                    );
                 }
-                // finish() also waits until the managed command itself is gone.
-                let output = process.finish(TIMEOUT);
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                assert_eq!(
-                    output.status.code(),
-                    Some(code),
-                    "{entry:?} {signal}: {stderr}"
-                );
-                assert_eq!(take(&home.join("signals")), record, "{entry:?} {signal}");
             }
-        }
+        });
     }
 
     fn parent(pid: i32) -> i32 {
@@ -409,30 +434,38 @@ esac
     }
 
     /// TURBO-6424: exec becomes the managed command, so no turbo process is
-    /// left that SIGKILL could take down without it.
+    /// left that SIGKILL could take down without it. After a handoff, global
+    /// turbo became the local CLI, and that CLI became the command.
     #[test]
     fn sigkill_to_exec_leaves_no_command_running() {
         let repo = Repo::provisioned_with(NODE);
         let launcher = ProcessLauncher::new();
         let home = repo.owned.home().to_owned();
-        for entry in ENTRIES {
-            let words = ["exec", "--", "node", "wait"];
-            let mut process = CapturedProcess::spawn(&mut command(&repo, &launcher, entry, &words));
-            let pid = wait_for(&home.join("ready"));
-            process.track_task(pid);
-            let entrypoint = process.child.id() as i32;
-            // The wrapper is a Node parent; its native turbo became the command.
-            let exec = match entry {
-                Entrypoint::NpmWrapper => parent(pid),
-                _ => pid,
-            };
-            assert_eq!(exec, entrypoint, "{entry:?}: exec is not the command");
-            kill(Pid::from_raw(pid), Signal::SIGKILL).unwrap();
-            // finish() also waits until the managed command itself is gone.
-            let output = process.finish(TIMEOUT);
-            assert_eq!(output.status.signal(), Some(9), "{entry:?}");
-            assert_eq!(take(&home.join("signals")), "", "{entry:?}");
-        }
+        with_handoff(&repo, &launcher, |handoff| {
+            for entry in ENTRIES {
+                let words = ["-vv", "exec", "--", "node", "wait"];
+                let mut process =
+                    CapturedProcess::spawn(&mut command(&repo, &launcher, entry, &words));
+                let pid = wait_for(&home.join("ready"));
+                process.track_task(pid);
+                let entrypoint = process.child.id() as i32;
+                // The wrapper is a Node parent; its native turbo became the command.
+                let exec = match entry {
+                    Entrypoint::NpmWrapper => parent(pid),
+                    _ => pid,
+                };
+                let case = format!("{entry:?} handoff={handoff}");
+                assert_eq!(exec, entrypoint, "{case}: exec is not the command");
+                kill(Pid::from_raw(pid), Signal::SIGKILL).unwrap();
+                // finish() also waits until the managed command itself is gone.
+                let output = process.finish(TIMEOUT);
+                assert_eq!(output.status.signal(), Some(9), "{case}");
+                assert_eq!(take(&home.join("signals")), "", "{case}");
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                let handed_off = stderr.contains("Running local turbo binary in");
+                assert_eq!(handed_off, handoff, "{case}: {stderr}");
+            }
+        });
     }
 
     /// Runs `command` on a new terminal, optionally typing `keys` once the
@@ -484,27 +517,37 @@ esac
         let repo = Repo::provisioned_with(NODE);
         let launcher = ProcessLauncher::new();
         let home = repo.owned.home().to_owned();
-        for entry in ENTRIES {
-            let report = command(
-                &repo,
-                &launcher,
-                entry,
-                &["exec", "--", "node", "report", "0"],
-            );
-            assert_eq!(on_terminal(&report, None), Some(0), "{entry:?}");
-            let report = take(&home.join("report"));
-            assert!(
-                report.ends_with("stdin=tty\nstdout=tty\n"),
-                "{entry:?}: {report}"
-            );
-            let wait = command(&repo, &launcher, entry, &["exec", "--", "node", "wait"]);
-            let ready = home.join("ready");
-            assert_eq!(
-                on_terminal(&wait, Some((&ready, b"\x03"))),
-                Some(6),
-                "{entry:?}"
-            );
-            assert_eq!(take(&home.join("signals")), "INT\n", "{entry:?}");
-        }
+        with_handoff(&repo, &launcher, |handoff| {
+            for entry in ENTRIES {
+                let report = command(
+                    &repo,
+                    &launcher,
+                    entry,
+                    &["exec", "--", "node", "report", "0"],
+                );
+                assert_eq!(
+                    on_terminal(&report, None),
+                    Some(0),
+                    "{entry:?} handoff={handoff}"
+                );
+                let report = take(&home.join("report"));
+                assert!(
+                    report.ends_with("stdin=tty\nstdout=tty\n"),
+                    "{entry:?} handoff={handoff}: {report}"
+                );
+                let wait = command(&repo, &launcher, entry, &["exec", "--", "node", "wait"]);
+                let ready = home.join("ready");
+                assert_eq!(
+                    on_terminal(&wait, Some((&ready, b"\x03"))),
+                    Some(6),
+                    "{entry:?} handoff={handoff}"
+                );
+                assert_eq!(
+                    take(&home.join("signals")),
+                    "INT\n",
+                    "{entry:?} handoff={handoff}"
+                );
+            }
+        });
     }
 }
