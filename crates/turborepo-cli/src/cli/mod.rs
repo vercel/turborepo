@@ -497,7 +497,10 @@ async fn run_main(
     cli_args.command = Some(command);
     // Also guard direct/wrapper --skip-infer paths before telemetry activation
     // or agent-file maintenance; shim handoff validation is not sufficient.
-    if matches!(cli_args.command, Some(Command::Run { .. })) {
+    if matches!(
+        cli_args.command,
+        Some(Command::Run { .. } | Command::Watch { .. })
+    ) {
         let base = CommandBase::new(cli_args.clone(), repo_root.clone(), version, color_config)?;
         managed::validate(&base)?;
     }
@@ -836,9 +839,22 @@ async fn run_main(
                 return Ok(1);
             }
 
+            // Like `turbo run`: activate managed tools before any discovery,
+            // and reselect them for every rerun so drift fails with guidance.
+            let managed = managed::select(&base)?;
+            if let Some(tools) = &managed {
+                managed::activate_probes(tools)?;
+            }
+            let mut input = base.run_builder_input()?;
+            input.managed_environment = managed;
+            let select_managed: turborepo_watch::ManagedSelector = {
+                let base = base.clone();
+                Box::new(move || managed::select(&base))
+            };
             let verbosity: u8 = cli_args.verbosity.into();
             let mut client = WatchClient::new(
-                base.run_builder_input()?,
+                input,
+                select_managed,
                 *experimental_write_cache,
                 event,
                 query_server.clone(),
