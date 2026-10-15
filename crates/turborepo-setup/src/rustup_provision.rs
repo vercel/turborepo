@@ -291,6 +291,11 @@ pub struct PreparedRustup {
 }
 
 impl PreparedRustup {
+    /// Verified installer bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.bytes.len() as u64
+    }
+
     /// Callback for Store::reconcile: write the one owner-executable multicall
     /// binary. Toolchains, proxies and homes are never created here.
     pub fn stage(

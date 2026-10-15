@@ -470,6 +470,8 @@ pub(super) fn plans(
 }
 
 /// Aggregate results for the caller's report; no paths or versions.
+/// `downloaded_bytes` covers every verified artifact setup transferred itself,
+/// across all ecosystems; rustup's own toolchain downloads are not visible.
 #[derive(Debug, Default)]
 pub(super) struct Provisioned {
     pub downloaded_bytes: u64,
@@ -1114,16 +1116,29 @@ pub(super) fn run(
     // trusted. On failure, rerunning setup freshly verifies it before repair.
     before_publish()?;
     trust.publish(&store)?;
+    // Every adapter that transfers verified bytes itself. A Rust toolchain is
+    // fetched by the private rustup, so only its installer is counted.
     let mut provisioned = Provisioned {
-        downloaded_bytes: prepared_node
-            .as_ref()
-            .map_or(0, |node| node.downloaded_bytes())
-            + prepared_pnpm
-                .as_ref()
-                .map_or(0, |pnpm| pnpm.downloaded_bytes())
-            + prepared_npm
-                .as_ref()
-                .map_or(0, |npm| npm.downloaded_bytes()),
+        downloaded_bytes: [
+            prepared_node.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_pnpm.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_npm.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_yarn.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_bun.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_uv.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_python.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_rustup.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_go.as_ref().map(|p| p.downloaded_bytes()),
+        ]
+        .into_iter()
+        .flatten()
+        .chain(
+            prepared_artifacts
+                .iter()
+                .flatten()
+                .map(|p| p.downloaded_bytes()),
+        )
+        .sum(),
         ..Provisioned::default()
     };
     for tool in &desired {
