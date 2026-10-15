@@ -7,10 +7,11 @@ use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
 use turborepo_setup::{
     activation::External,
-    execution_identity::{ExecutionContext, Libc},
-    lock::Ecosystems,
+    execution_identity::{ExecutionContext, ExecutionSnapshot, Libc, SelectedInstallation},
+    lock::{self, Ecosystems},
     system_tool,
 };
+use turborepo_shim::capabilities::Requirement;
 use turborepo_tool_install::Store;
 use turborepo_turbo_json::{RawTurboJson, SetupPolicy};
 
@@ -28,7 +29,32 @@ pub(crate) fn select(
 /// Validates managed state like `select`, before local CLI handoff or
 /// telemetry, but leaves the verify-system probes to the run itself.
 pub(crate) fn validate(base: &crate::commands::CommandBase) -> Result<bool, turborepo_run::Error> {
-    Ok(select_with(base, false)?.is_some())
+    Ok(requirement(base)?.is_some())
+}
+
+/// [`validate`], reporting what a repository-local CLI must support to run
+/// the validated selection.
+pub(crate) fn requirement(
+    base: &crate::commands::CommandBase,
+) -> Result<Option<Requirement>, turborepo_run::Error> {
+    Ok(select_with(base, false)?.map(|run| peer_requirement(run.snapshot())))
+}
+
+/// The selection's lock schema, adapters, verify-system tools, and whether a
+/// `turbo setup --no-lock` record selected it, named as CLIs advertise them.
+fn peer_requirement(snapshot: &ExecutionSnapshot) -> Requirement {
+    let features = snapshot.tools().values().flat_map(|tool| {
+        let external = matches!(tool.installation, SelectedInstallation::VerifySystem { .. });
+        [
+            Some(tool.adapter.as_str()),
+            external.then_some("verify-system"),
+        ]
+    });
+    let clone_local = snapshot.clone_local().then_some("clone-local");
+    Requirement::new(
+        lock::SCHEMA_VERSION,
+        features.chain([clone_local]).flatten(),
+    )
 }
 
 fn select_with(
@@ -380,6 +406,70 @@ mod libc_tests {
                 Ok(Some(_)) => assert!(context.is_ok(), "{context:?}"),
                 _ => assert!(context.is_err()),
             }
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod requirement_tests {
+    use turborepo_platform::{Architecture, OperatingSystem, Platform};
+    use turborepo_setup::{
+        execution_identity::{ADAPTERS, ExecutionContext, ExecutionSnapshot, Libc},
+        lock::{Lock, SCHEMA_VERSION, additional},
+    };
+    use turborepo_shim::capabilities::{Capabilities, EXPERIMENTAL_LOCK_SCHEMA, FEATURES};
+
+    fn requirement(clone_local: bool) -> Vec<String> {
+        let tool = |adapter: &str, version: &str| {
+            serde_json::json!({"adapter": adapter, "version": version,
+                "declarations": [{"file": "package.json", "field": adapter}],
+                "installation": {"kind": "verify-system", "executables": [adapter]}})
+        };
+        let lock = serde_json::json!({"schemaVersion": 0, "tools": {
+            "node": tool("node", "24.0.0"), "pnpm": tool("pnpm", "10.0.0")}});
+        let lock = Lock::parse(&serde_json::to_vec(&lock).unwrap()).unwrap();
+        let context = ExecutionContext::new(
+            Platform::new(OperatingSystem::Linux, Architecture::X64),
+            Libc::Musl {
+                abi: "1.2.5".into(),
+            },
+            "x86_64-linux".into(),
+            ["baseline".into()].into(),
+        )
+        .unwrap();
+        let ids = ["node", "pnpm"].map(String::from).into();
+        let snapshot = if clone_local {
+            ExecutionSnapshot::select_clone_local(&lock, context, &ids).unwrap()
+        } else {
+            ExecutionSnapshot::select(&lock, context, &ids).unwrap()
+        };
+        let requirement = super::peer_requirement(&snapshot);
+        assert_eq!(requirement.schema(), SCHEMA_VERSION);
+        // This build advertises everything it selects: a same-build
+        // repository-local turbo is always compatible.
+        if super::context().is_ok() {
+            assert_eq!(Capabilities::current("v").shortfall(&requirement), None);
+        }
+        requirement.features().map(String::from).collect()
+    }
+
+    #[test]
+    fn requirements_name_adapters_verify_system_and_clone_local_selections() {
+        assert_eq!(requirement(false), ["node", "pnpm", "verify-system"]);
+        let clone_local = requirement(true);
+        assert_eq!(
+            clone_local,
+            ["clone-local", "node", "pnpm", "verify-system"]
+        );
+    }
+
+    #[test]
+    fn every_selectable_adapter_and_mode_is_advertised_for_the_lock_schema() {
+        assert_eq!(EXPERIMENTAL_LOCK_SCHEMA, SCHEMA_VERSION);
+        assert!(ADAPTERS.contains(&additional::ADAPTER));
+        for name in ADAPTERS.iter().chain(&["verify-system", "clone-local"]) {
+            assert!(FEATURES.contains(name), "{name} is not advertised");
         }
     }
 }
