@@ -37,6 +37,9 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
         ] {
             fs::write(f.owned.root().join(name), format!("{name} sentinel\n")).unwrap();
         }
+        if !flags.contains(&"--tools-only") {
+            fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
+        }
         let git = |args: &[&str]| {
             let output = std::process::Command::new("git")
                 .current_dir(f.owned.root())

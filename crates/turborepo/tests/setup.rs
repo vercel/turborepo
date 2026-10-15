@@ -1850,18 +1850,13 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
     monitor.set_nonblocking(true).unwrap();
     let proxy = format!("http://{}", monitor.local_addr().unwrap());
+    // pnpm installs need a pnpm-lock.yaml, so this repository skips them.
     // Plain --check checks the same tools and never claims dependency readiness.
+    let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
+    write(root, "turbo.json", policy);
     for (mode, outcome, skipped) in [
-        (
-            "--frozen",
-            "reused",
-            "pnpm dependency installation is not supported yet",
-        ),
-        (
-            "--check",
-            "ready",
-            "pnpm dependency installation is not supported yet",
-        ),
+        ("--frozen", "reused", "turbo.json setup policy"),
+        ("--check", "ready", "turbo.json setup policy"),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
             .env_clear()
