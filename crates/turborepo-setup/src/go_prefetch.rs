@@ -3,10 +3,11 @@
 //! `go.mod`, and `go.sum` files are read-only; if the go command changes one,
 //! it is restored and reported as missing checksum data. Callers run this only
 //! when dependency setup is enabled (never with `--tools-only`) and pass the
-//! provisioned `go` executable.
+//! provisioned `go` executable with the managed activation environment.
 
 use std::{
     collections::BTreeMap,
+    ffi::OsString,
     fs, io,
     path::{Path, PathBuf},
     process::{Command, Output, Stdio},
@@ -42,6 +43,9 @@ pub struct Prefetch<'a> {
     pub root: &'a Path,
     /// Disables module proxies so only the existing module cache is used.
     pub offline: bool,
+    /// Set over the inherited environment, such as the managed `PATH` and
+    /// `GOROOT`, so `go` uses its own verified standard library.
+    pub env: &'a BTreeMap<String, OsString>,
 }
 
 impl Prefetch<'_> {
@@ -101,6 +105,7 @@ impl Prefetch<'_> {
             .current_dir(root)
             .env("PWD", root)
             .args(args)
+            .envs(self.env)
             .stdin(Stdio::null());
         for (key, value) in crate::go_provision::RUNTIME_ENV {
             process.env(key, value);
