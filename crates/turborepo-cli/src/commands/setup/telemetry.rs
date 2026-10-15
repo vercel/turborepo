@@ -83,6 +83,9 @@ fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
         Dependencies::UndeclaredManager => SetupFailure::Discovery,
         Dependencies::Unlocked(_) | Dependencies::Sources(_) => SetupFailure::LockInvalid,
         Dependencies::NotInstalled(_) | Dependencies::Untrusted => SetupFailure::Readiness,
+        // Refused before any installer runs: these installers have no
+        // offline mode turbo can enforce.
+        Dependencies::OfflineUnsupported(_) => SetupFailure::Unsupported,
         Dependencies::Activation(error) => activation_failure(error),
         Dependencies::Host(_)
         | Dependencies::Install(_)
@@ -309,6 +312,10 @@ mod tests {
             (Dependencies::UndeclaredManager, SetupFailure::Discovery),
             (Dependencies::Unlocked("pnpm"), SetupFailure::LockInvalid),
             (Dependencies::Untrusted, SetupFailure::Readiness),
+            (
+                Dependencies::OfflineUnsupported("private installer detail".into()),
+                SetupFailure::Unsupported,
+            ),
             (
                 Dependencies::Activation(Activation::DeclarationDrift),
                 SetupFailure::LockStale,
