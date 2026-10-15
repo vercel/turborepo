@@ -172,6 +172,12 @@ impl AnchoredSystemPathBuf {
             }
         }
 
+        // Check before stripping the trailing slash: on Windows, `C:/` is
+        // absolute, but `C:` is drive-relative.
+        if Utf8Path::new(path).is_absolute() {
+            return Err(PathError::NotRelative(path.to_string()));
+        }
+
         // Remove trailing slash
         let stripped_path = path.strip_suffix('/').unwrap_or(path);
 
@@ -260,6 +266,17 @@ mod tests {
         let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
 
         assert_eq!(result, expected);
+    }
+
+    #[cfg(windows)]
+    #[test_case("C:/Windows/Temp/evil.txt" ; "drive-qualified file")]
+    #[test_case("C:/Windows/Temp/evil/" ; "drive-qualified directory")]
+    #[test_case("C:/" ; "drive root")]
+    fn test_from_system_path_rejects_windows_absolute_path(path: &str) {
+        assert!(matches!(
+            AnchoredSystemPathBuf::from_system_path(Path::new(path)),
+            Err(crate::PathError::NotRelative(_))
+        ));
     }
 
     #[test_case(Path::new("test.txt"), Ok("test.txt"), Ok("test.txt") ; "hello world")]
