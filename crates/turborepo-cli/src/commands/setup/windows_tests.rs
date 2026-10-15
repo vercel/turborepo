@@ -410,5 +410,7 @@ mod additional;
 mod bun;
 #[path = "windows_go_tests.rs"]
 mod go;
+#[path = "windows_pnpm_tests.rs"]
+mod pnpm;
 #[path = "windows_yarn_tests.rs"]
 mod yarn;
