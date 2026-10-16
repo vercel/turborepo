@@ -64,10 +64,10 @@ export const FACTORY_IMAGE_SPEC: FactoryImageSpec = {
   cargoHome: "/usr/local/cargo",
   checkoutPath: "/factory/turborepo",
   fxSha256: {
-    aarch64: "8bbcde6a41256c4fac4e0a022291cf02740419e27afabde3b8f45e7a4e393edb",
-    x86_64: "d5639d173267774aa8228a474baf619a7076ac41a91023915007c865143429b1"
+    aarch64: "78f6a8171193a1d2033f93d1b5a2940ea4a62147daf60a37ae670a9bf85f12e9",
+    x86_64: "53a3b30ce1541048f8fa4b42b7bc68161466bb2e3708db104449a58af3807430"
   },
-  fxVersion: "0.0.5",
+  fxVersion: "0.0.13",
   linkPaths: ["/workspace/turborepo", "/vercel/sandbox/turborepo"],
   nodeMajor: 24,
   performanceTools: [

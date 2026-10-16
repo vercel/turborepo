@@ -15,13 +15,16 @@ use super::*;
 use crate::{
     NodeArtifact, bundled_npm,
     lock::{
-        Snapshot,
+        Platform, Snapshot,
         reconcile::{self, Mode},
     },
     node::lock_target,
     node_resolution::PLATFORMS,
     source_policy::test_support::LoopbackServer,
 };
+
+mod ephemeral;
+mod npm;
 
 const PNPM_PATHS: [&str; 2] = ["/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"];
 
@@ -110,6 +113,7 @@ struct World {
     _server: LoopbackServer,
     node: NodeTransport,
     registry: RegistryTransport,
+    bun: crate::bun_provision::BunTransport,
     requests: Arc<Mutex<Vec<String>>>,
 }
 impl World {
@@ -124,6 +128,8 @@ impl World {
         Self {
             node: NodeTransport::loopback_http_for_tests(server.origin()).unwrap(),
             registry: RegistryTransport::loopback_http_for_tests(server.origin()).unwrap(),
+            bun: crate::bun_provision::BunTransport::loopback_http_for_tests(server.origin())
+                .unwrap(),
             _server: server,
             requests,
         }
@@ -169,7 +175,12 @@ fn apply(
     reconcile::reconcile(&snapshot, mode, offline, |request| {
         let before = lock_bytes(root);
         let manifest = fs::read(root.join("package.json")).unwrap();
-        let result = runtime.block_on(resolve(request, &world.node, &world.registry));
+        let result = runtime.block_on(resolve_with_bun(
+            request,
+            &world.node,
+            &world.registry,
+            &world.bun,
+        ));
         assert_eq!(lock_bytes(root), before); // Resolver never publishes.
         // Only explicit response-hook drift may change this sentinel.
         if result.is_ok() {
@@ -377,7 +388,6 @@ fn removed_bundled_npm_keeps_node_identity_and_export_ownership() {
 fn unsupported_scope_and_offline_misses_fail_before_traffic_or_publication() {
     let sha512 = format!("{:x}", Sha512::digest(pnpm_bytes()));
     for manifest in [
-        json!({"packageManager":"npm@11.6.1"}),
         json!({"packageManager":"pnpm@10.x"}),
         json!({"devEngines":{"packageManager":{"name":"pnpm"}}}),
         json!({"devEngines":{"packageManager":[
@@ -458,13 +468,100 @@ fn fresh_source_drift_revalidation_fails_before_publication_and_next_traffic() {
     assert!(
         reconcile::reconcile(&snapshot, Mode::Local, false, |request| {
             fs::write(p.join(".nvmrc"), "24.1.0").unwrap();
-            rt.block_on(resolve(request, &world.node, &world.registry))
-                .map_err(|e| reconcile::Error::Resolution(e.to_string()))
+            rt.block_on(resolve_with_bun(
+                request,
+                &world.node,
+                &world.registry,
+                &world.bun,
+            ))
+            .map_err(|e| reconcile::Error::Resolution(e.to_string()))
         })
         .is_err()
     );
     assert!(world.paths().is_empty());
     assert_eq!(lock_bytes(p).unwrap(), old);
+}
+
+#[test]
+fn portable_registry_validation_keeps_npm_and_pnpm_release_mappings() {
+    let repo = root(Some("24.0.0"), json!({"packageManager":"pnpm@10.0.0"}));
+    let locked = seed(repo.path());
+    for (id, version, bins) in [
+        (
+            "pnpm",
+            "10.0.0",
+            json!({"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}),
+        ),
+        (
+            "pnpm",
+            "11.28.2",
+            json!({"pnpm":"bin/pnpm.mjs","pnpx":"bin/pnpx.mjs",
+                "pn":"bin/pnpm.mjs","pnx":"bin/pnpx.mjs"}),
+        ),
+        (
+            "npm",
+            "11.6.1",
+            json!({"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}),
+        ),
+    ] {
+        write_manifest(
+            repo.path(),
+            json!({"packageManager":format!("{id}@{version}")}),
+        );
+        let declaration = Snapshot::capture(repo.path())
+            .unwrap()
+            .package_manager()
+            .unwrap()
+            .unwrap();
+        let mut tool = locked.tools()["pnpm"].clone();
+        tool.adapter = id.into();
+        tool.version = version.into();
+        let Installation::Managed { artifacts } = &mut tool.installation else {
+            panic!()
+        };
+        let mut artifact = artifacts[&Platform::Any]["package"].clone();
+        artifact.url = format!("https://registry.npmjs.org/{id}/-/{id}-{version}.tgz");
+        artifact.executables = serde_json::from_value(bins).unwrap();
+        *artifacts = BTreeMap::from([
+            (
+                Platform::Any,
+                BTreeMap::from([("package".into(), artifact.clone())]),
+            ),
+            (
+                Platform::WindowsArm64,
+                BTreeMap::from([("package".into(), artifact)]),
+            ),
+        ]);
+        assert!(
+            validate_registry(&tool, &declaration).is_ok(),
+            "{id}@{version}"
+        );
+        // Every variant is checked, including a non-host target. npm must
+        // retain npx; pnpm must reject another release's entry points.
+        let Installation::Managed { artifacts } = &mut tool.installation else {
+            panic!()
+        };
+        let executables = &mut artifacts
+            .get_mut(&Platform::WindowsArm64)
+            .unwrap()
+            .get_mut("package")
+            .unwrap()
+            .executables;
+        if id == "npm" {
+            executables.remove("npx");
+        } else {
+            let wrong = if version.starts_with("11.") {
+                "bin/pnpm.cjs"
+            } else {
+                "bin/pnpm.mjs"
+            };
+            executables.insert("pnpm".into(), wrong.into());
+        }
+        assert!(
+            validate_registry(&tool, &declaration).is_err(),
+            "{id}@{version}"
+        );
+    }
 }
 
 #[test]
@@ -475,6 +572,10 @@ fn preserved_payload_shapes_fail_before_either_transport() {
             ("format", json!("tar")),
             ("rootPrefix", json!("wrong")),
             ("destination", json!("nested")),
+            (
+                "alternates",
+                json!({"tar-xz":{"url":"https://example.invalid/a.tar.xz","sha256":"a".repeat(64)}}),
+            ),
             ("executables", json!({"other":"bin/other"})),
             ("system", json!({"kind":"verify-system","executables":[id]})),
         ] {

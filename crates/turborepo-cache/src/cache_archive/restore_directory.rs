@@ -1,4 +1,11 @@
 use std::{backtrace::Backtrace, io};
+#[cfg(unix)]
+use std::{
+    cell::RefCell,
+    ffi::CString,
+    os::unix::io::{AsRawFd, FromRawFd},
+    rc::Rc,
+};
 #[cfg(not(any(unix, windows)))]
 use std::{collections::HashSet, ffi::OsString};
 #[cfg(any(unix, windows))]
@@ -6,11 +13,6 @@ use std::{
     collections::{HashMap, VecDeque},
     fs::File,
     sync::atomic::{AtomicU64, Ordering},
-};
-#[cfg(unix)]
-use std::{
-    ffi::CString,
-    os::unix::io::{AsRawFd, FromRawFd},
 };
 #[cfg(windows)]
 use std::{
@@ -30,6 +32,41 @@ use turbopath::{
 
 use crate::CacheError;
 
+/// Cache artifacts must never modify Git metadata, including nested
+/// repositories and case variants on case-insensitive filesystems.
+pub(super) fn validate_restore_path(path: &AnchoredSystemPath) -> Result<(), CacheError> {
+    if path.components().any(|component| {
+        let name = component.as_str();
+        // Windows also accepts trailing dots/spaces, alternate data streams,
+        // and the short name of the .git directory.
+        #[cfg(windows)]
+        let name = name
+            .split(':')
+            .next()
+            .unwrap_or(name)
+            .trim_end_matches(['.', ' ']);
+        // HFS+ ignores these formatting characters when comparing names.
+        // Match conservatively on every platform so artifacts cannot disguise
+        // a .git component on the filesystem where they are restored.
+        let is_git = name
+            .chars()
+            .filter(|c| !matches!(c, '\u{200c}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{206a}'..='\u{206f}' | '\u{feff}'))
+            .map(|c| c.to_ascii_lowercase())
+            .eq(".git".chars());
+        let is_short_name = cfg!(windows)
+            && name.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("git~"))
+            && name.len() > 4
+            && name[4..].bytes().all(|b| b.is_ascii_digit());
+        is_git || is_short_name
+    }) {
+        return Err(CacheError::GitMetadataWrite(
+            path.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+    Ok(())
+}
+
 pub fn restore_directory(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
@@ -44,10 +81,21 @@ pub fn restore_directory(
 
 pub struct CachedDirTree {
     // Every supported platform derives restoration from a locked root directory.
-    #[cfg(any(unix, windows))]
+    #[cfg(unix)]
+    root: Rc<File>,
+    #[cfg(windows)]
     root: File,
     #[cfg(windows)]
     root_path: AbsoluteSystemPathBuf,
+    // Directories opened for the most recent restore path, outermost first.
+    // Archives list entries in walk order, so consecutive entries share most
+    // of their parents. Reusing the already-opened descriptors avoids
+    // re-walking every component from the root per entry. Each descriptor was
+    // opened beneath its parent without following symlinks, exactly as a
+    // fresh walk would; the chain is cleared whenever this restore changes
+    // which symlinks it has created, since that can retarget a cached path.
+    #[cfg(unix)]
+    open_chain: RefCell<Vec<(String, Rc<File>)>>,
     // Keys and targets are physical, root-relative locations. This preserves
     // archive-created internal symlinks without following their mutable paths.
     #[cfg(any(unix, windows))]
@@ -66,7 +114,8 @@ impl CachedDirTree {
         {
             let root = open_restore_root(&initial_anchor)?;
             Ok(Self {
-                root,
+                root: Rc::new(root),
+                open_chain: RefCell::new(Vec::new()),
                 restored_symlinks: HashMap::new(),
             })
         }
@@ -124,6 +173,10 @@ impl CachedDirTree {
         let physical_target = self.expand_restored_symlinks(&physical_target)?;
         self.restored_symlinks
             .insert(physical_path, physical_target.clone());
+        // The symlink about to be written may replace a directory held open
+        // in the chain.
+        #[cfg(unix)]
+        self.open_chain.get_mut().clear();
         Ok(physical_target)
     }
 
@@ -141,7 +194,13 @@ impl CachedDirTree {
     #[cfg(any(unix, windows))]
     pub fn forget_symlink(&mut self, path: &AnchoredSystemPath) -> Result<(), CacheError> {
         let physical_path = self.physical_entry_path(path)?;
-        self.restored_symlinks.remove(&physical_path);
+        #[cfg_attr(windows, allow(unused_variables))]
+        let removed = self.restored_symlinks.remove(&physical_path).is_some();
+        // Paths beneath the forgotten symlink no longer expand through it.
+        #[cfg(unix)]
+        if removed {
+            self.open_chain.get_mut().clear();
+        }
         Ok(())
     }
 
@@ -162,7 +221,9 @@ impl CachedDirTree {
         processed_name: &AnchoredSystemPath,
         mode: u32,
     ) -> Result<(), CacheError> {
+        validate_restore_path(processed_name)?;
         let expanded = self.expand_restored_symlinks(processed_name)?;
+        validate_restore_path(&expanded)?;
         self.open_or_create_directory(&expanded, mode)?;
         Ok(())
     }
@@ -174,6 +235,7 @@ impl CachedDirTree {
         &self,
         processed_name: &AnchoredSystemPath,
     ) -> Result<RestoreDestination, CacheError> {
+        validate_restore_path(processed_name)?;
         let file_name = processed_name
             .as_path()
             .file_name()
@@ -185,6 +247,7 @@ impl CachedDirTree {
             Some(parent) => self.expand_restored_symlinks(parent)?,
             None => AnchoredSystemPathBuf::default(),
         };
+        validate_restore_path(&expanded_parent)?;
         #[cfg(unix)]
         {
             let directory = self.open_or_create_directory(&expanded_parent, 0o755)?;
@@ -220,6 +283,7 @@ impl CachedDirTree {
             None => AnchoredSystemPathBuf::default(),
         };
         physical_path.push(file_name);
+        validate_restore_path(&physical_path)?;
         Ok(physical_path)
     }
 
@@ -264,14 +328,24 @@ impl CachedDirTree {
         &self,
         path: &AnchoredSystemPath,
         mode: u32,
-    ) -> Result<File, CacheError> {
-        let mut directory = self.root.try_clone()?;
-        for component in path.components() {
-            directory = open_or_create_directory_at(
+    ) -> Result<Rc<File>, CacheError> {
+        let mut chain = self.open_chain.borrow_mut();
+        let mut directory = self.root.clone();
+        for (depth, component) in path.components().enumerate() {
+            let component = component.as_str();
+            if let Some((name, cached)) = chain.get(depth)
+                && name == component
+            {
+                directory = cached.clone();
+                continue;
+            }
+            chain.truncate(depth);
+            directory = Rc::new(open_or_create_directory_at(
                 directory.as_raw_fd(),
-                component.as_str(),
+                component,
                 mode & 0o777,
-            )?;
+            )?);
+            chain.push((component.to_owned(), directory.clone()));
         }
         Ok(directory)
     }
@@ -341,6 +415,7 @@ impl CachedDirTree {
         processed_name: &AnchoredSystemPath,
         mode: u32,
     ) -> Result<(), CacheError> {
+        validate_restore_path(processed_name)?;
         let (mut calculated_anchor, start_idx) = self.get_starting_point(processed_name);
         let components: Vec<_> = processed_name.components().collect();
         let mut current_anchored: Option<AnchoredSystemPathBuf> = None;
@@ -483,13 +558,19 @@ fn remove_windows_entry(path: &AbsoluteSystemPath) -> io::Result<()> {
 
 #[cfg(unix)]
 pub(crate) struct RestoreDestination {
-    directory: File,
+    directory: Rc<File>,
     file_name: CString,
 }
 
 #[cfg(unix)]
 impl RestoreDestination {
-    pub fn write_regular(&self, reader: &mut impl io::Read, mode: u32) -> Result<(), CacheError> {
+    /// Writes the file and returns its metadata as of the final write, when
+    /// available, so callers need not stat the path again.
+    pub fn write_regular(
+        &self,
+        reader: &mut impl io::Read,
+        mode: u32,
+    ) -> Result<Option<std::fs::Metadata>, CacheError> {
         // Write a new inode and atomically replace the destination. Opening an
         // existing leaf directly could still modify an out-of-tree hardlink.
         let (mut file, temporary_name) = create_temporary_file(self.directory.as_raw_fd(), mode)?;
@@ -497,6 +578,7 @@ impl RestoreDestination {
             unlink_at(self.directory.as_raw_fd(), &temporary_name, 0).ok();
             return Err(error.into());
         }
+        let metadata = file.metadata().ok();
         drop(file);
 
         if let Err(error) = rename_at(
@@ -509,7 +591,7 @@ impl RestoreDestination {
             return Err(error.into());
         }
 
-        Ok(())
+        Ok(metadata)
     }
 
     pub fn write_symlink(&self, target: &str, _target_is_dir: bool) -> Result<(), CacheError> {
@@ -571,7 +653,12 @@ pub(crate) struct RestoreDestination {
 
 #[cfg(windows)]
 impl RestoreDestination {
-    pub fn write_regular(&self, reader: &mut impl io::Read, _mode: u32) -> Result<(), CacheError> {
+    /// Returns `None` for the metadata: callers stat the final path instead.
+    pub fn write_regular(
+        &self,
+        reader: &mut impl io::Read,
+        _mode: u32,
+    ) -> Result<Option<std::fs::Metadata>, CacheError> {
         let (mut file, temporary_path) = create_windows_temporary_file(&self.parent_path)?;
         if let Err(error) = io::copy(reader, &mut file) {
             drop(file);
@@ -586,7 +673,7 @@ impl RestoreDestination {
             return Err(error.into());
         }
 
-        Ok(())
+        Ok(None)
     }
 
     pub fn write_symlink(&self, target: &str, target_is_dir: bool) -> Result<(), CacheError> {

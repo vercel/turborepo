@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { setTimeout } from "node:timers/promises";
+import { reviewBaseIdentity } from "./review-base.mjs";
 
 const WORKFLOW_PATH = ".github/workflows/turborepo-test.yml";
 const POLL_INTERVAL_MS = 15_000;
@@ -83,10 +84,12 @@ export async function validateReviewCI({
 
   const repoId = currentRun.repository.id;
   let expected;
+  let expectedBaseIdentity;
   const matchesRepository = (repo) =>
     repo?.id === repoId && repo?.full_name === repository;
   async function checkPull() {
     const pull = await github(`${root}/pulls/${pullNumber}`);
+    const baseIdentity = reviewBaseIdentity(pull);
     if (
       pull?.number !== pullNumber ||
       pull.state !== "open" ||
@@ -97,9 +100,10 @@ export async function validateReviewCI({
       !nonemptyString(pull.head.ref) ||
       !matchesRepository(pull.base?.repo) ||
       !nonemptyString(pull.base?.ref) ||
-      pull.base.ref !== pull.base.repo.default_branch ||
+      baseIdentity === undefined ||
       (expected &&
-        (pull.head.repo.id !== expected.head.repo.id ||
+        (baseIdentity !== expectedBaseIdentity ||
+          pull.head.repo.id !== expected.head.repo.id ||
           pull.head.repo.full_name !== expected.head.repo.full_name ||
           pull.head.ref !== expected.head.ref ||
           pull.base.ref !== expected.base.ref))
@@ -107,6 +111,7 @@ export async function validateReviewCI({
       throw new Error("Pull request revision changed or is not eligible for review");
     }
     expected ??= pull;
+    expectedBaseIdentity ??= baseIdentity;
   }
 
   const matchesHead = (run, event = "pull_request") =>

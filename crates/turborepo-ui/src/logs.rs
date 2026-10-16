@@ -1,6 +1,6 @@
 use std::{
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufWriter, ErrorKind, Read, Write},
 };
 
 use tracing::debug;
@@ -95,10 +95,7 @@ impl<W: Write> Write for LogWriter<W> {
     }
 }
 
-pub fn replay_logs<W: Write>(
-    mut output: W,
-    log_file_name: &AbsoluteSystemPath,
-) -> Result<(), Error> {
+pub fn replay_logs<W: Write>(output: W, log_file_name: &AbsoluteSystemPath) -> Result<(), Error> {
     debug!("start replaying logs");
 
     let log_file = File::open(log_file_name).map_err(|err| {
@@ -110,28 +107,54 @@ pub fn replay_logs<W: Write>(
         Error::CannotReadLogs(err)
     })?;
 
-    let mut log_reader = BufReader::new(log_file);
-
-    let mut buffer = Vec::new();
-    loop {
-        let num_bytes = log_reader
-            .read_until(b'\n', &mut buffer)
-            .map_err(Error::CannotReadLogs)?;
-        if num_bytes == 0 {
-            break;
-        }
-
-        // If the log file doesn't end with a newline, then we add one to ensure the
-        // underlying writer receives a full line.
-        if !buffer.ends_with(b"\n") {
-            buffer.push(b'\n');
-        }
-        output.write_all(&buffer).map_err(Error::CannotReadLogs)?;
-
-        buffer.clear();
-    }
+    replay_lines(output, log_file).map_err(Error::CannotReadLogs)?;
 
     debug!("finish replaying logs");
+
+    Ok(())
+}
+
+/// Forward `reader` to `output` in large chunks that each end at a newline.
+///
+/// Every write to `output` is a run of whole lines, the same boundaries a
+/// line-at-a-time copy produces, so sinks that process each write on its own
+/// see identical input. A final line without a trailing newline gets one so
+/// the underlying writer always receives full lines.
+fn replay_lines<W: Write, R: Read>(mut output: W, mut reader: R) -> std::io::Result<()> {
+    const REPLAY_CHUNK_BYTES: usize = 64 * 1024;
+
+    let mut buffer = vec![0u8; REPLAY_CHUNK_BYTES];
+    // Bytes at the start of `buffer` that belong to an unfinished line.
+    let mut pending = 0;
+    loop {
+        if pending == buffer.len() {
+            // A single line longer than the buffer: grow until it fits.
+            buffer.resize(buffer.len() * 2, 0);
+        }
+        let read = match reader.read(&mut buffer[pending..]) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(err) if err.kind() == ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err),
+        };
+        let end = pending + read;
+        // `buffer[..pending]` has no newline, so only the new bytes need a scan.
+        match buffer[pending..end].iter().rposition(|&b| b == b'\n') {
+            Some(index) => {
+                let lines_end = pending + index + 1;
+                output.write_all(&buffer[..lines_end])?;
+                buffer.copy_within(lines_end..end, 0);
+                pending = end - lines_end;
+            }
+            None => pending = end,
+        }
+    }
+
+    if pending > 0 {
+        buffer.truncate(pending);
+        buffer.push(b'\n');
+        output.write_all(&buffer)?;
+    }
 
     Ok(())
 }
@@ -177,6 +200,63 @@ mod tests {
         let mut output = Vec::new();
         replay_logs(&mut output, &log_file_path)?;
         assert_eq!(String::from_utf8(output)?, "one fish\ntwo fish\n");
+        Ok(())
+    }
+
+    /// Records each write separately so tests can check chunk boundaries.
+    #[derive(Default)]
+    struct WriteRecorder(Vec<Vec<u8>>);
+
+    impl Write for WriteRecorder {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.push(buf.to_vec());
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// The previous line-at-a-time replay, used as the reference output.
+    fn replay_per_line(contents: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for line in contents.split_inclusive(|b| *b == b'\n') {
+            out.extend_from_slice(line);
+            if !line.ends_with(b"\n") {
+                out.push(b'\n');
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn test_replay_lines_writes_whole_lines_in_chunks() -> Result<()> {
+        let mut contents = Vec::new();
+        for i in 0..20_000 {
+            contents.extend_from_slice(format!("line {i}\r\n").as_bytes());
+            if i % 1000 == 0 {
+                // A line longer than the replay buffer.
+                contents.extend(std::iter::repeat_n(b'x', 150_000));
+                contents.push(b'\n');
+            }
+        }
+        contents.extend_from_slice(b"no trailing newline");
+
+        let mut recorder = WriteRecorder::default();
+        super::replay_lines(&mut recorder, contents.as_slice())?;
+
+        assert!(recorder.0.len() < 1000, "replay should write in chunks");
+        assert!(recorder.0.iter().all(|chunk| chunk.ends_with(b"\n")));
+        assert_eq!(recorder.0.concat(), replay_per_line(&contents));
+        Ok(())
+    }
+
+    #[test]
+    fn test_replay_lines_empty() -> Result<()> {
+        let mut recorder = WriteRecorder::default();
+        super::replay_lines(&mut recorder, &b""[..])?;
+        assert!(recorder.0.is_empty());
         Ok(())
     }
 

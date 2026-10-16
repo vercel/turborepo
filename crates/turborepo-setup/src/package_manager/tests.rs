@@ -234,12 +234,12 @@ fn malformed_fields_do_not_fallback_or_weaken_constraints() -> TestResult {
         ["/devEngines/packageManager", "/devEngines/packageManager", "", [null, 42, []]],
         ["/devEngines/packageManager", "/devEngines/packageManager/0", "", [[null]]],
         ["/devEngines/packageManager", "/devEngines/packageManager/0/name", "", [[{}]]],
-        ["/devEngines/packageManager/name", "/devEngines/packageManager/name", "", [null, 42, "", " pnpm", "PNPM", "yarn"]],
+        ["/devEngines/packageManager/name", "/devEngines/packageManager/name", "", [null, 42, "", " pnpm", "PNPM", "aube"]],
         ["/devEngines/packageManager/version", "/devEngines/packageManager/version", "", [null, 42, "", "latest", "01.2.3", "9 ||", ">2 <1"]],
         ["/devEngines/packageManager/onFail", "/devEngines/packageManager/onFail", "", [null, 42, "", "download", "Warn", []]],
         ["/devEngines/packageManager/version", "/devEngines/packageManager/version", "unsupported", ["https://example.com/pnpm.tgz", "file:pnpm.tgz", "npm:pnpm@9", "../pnpm.tgz", "git+ssh://example.com/pnpm"]],
         ["/packageManager", "/packageManager", "unsupported", ["pnpm@https://example.com/pnpm.tgz", "pnpm@file:pnpm.tgz", "pnpm@npm:pnpm@9", "pnpm@../pnpm.tgz", "pnpm@git+ssh://example.com/pnpm"]],
-        ["/packageManager", "/packageManager", "unsupported manager", ["bun@1.2.3"]]
+        ["/packageManager", "/packageManager", "unsupported manager", ["aube@1.2.3"]]
     ]"#,
     )?;
     for (path, location, message, variants) in groups {
@@ -419,14 +419,17 @@ fn alternative_and_request_limits_are_inclusive() -> TestResult {
 #[test]
 fn shared_families_do_not_expand_setup_capabilities() -> TestResult {
     for family in Manager::ALL {
-        let supported = matches!(family, Manager::Npm | Manager::Pnpm);
+        let supported = matches!(
+            family,
+            Manager::Npm | Manager::Pnpm | Manager::Yarn | Manager::Bun
+        );
         let top = json!({"packageManager": format!("{}@9.0.0", family.name())});
         if supported {
             let shared: turborepo_package_manager::Family = discover(top)?.manager;
             assert_eq!(shared, family);
             continue;
         }
-        invalid_at(top, TOP, "unsupported manager; setup supports npm and pnpm");
+        invalid_at(top, TOP, UNSUPPORTED_MANAGER);
         // Unsupported capabilities win over malformed versions and policies,
         // even with an authoritative pin or an ignored alternative.
         for version in [json!(null), json!(42), json!("latest")] {

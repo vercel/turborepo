@@ -98,7 +98,7 @@ impl TaskHashable<'_> {
 
 #[derive(Debug, Clone)]
 pub struct GlobalHashable<'a> {
-    pub global_cache_key: &'static str,
+    pub global_cache_key: &'a str,
     pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
     // These are None in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,

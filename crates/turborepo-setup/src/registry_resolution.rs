@@ -1,12 +1,14 @@
-//! Exact npm/pnpm → verified portable artifact. No installation, execution,
-//! repository I/O or platform-support claim. The coordinator owns declarations,
-//! Node binding and final lock validation/publication.
+//! Exact npm/pnpm/Yarn → verified portable artifact. No installation,
+//! execution, repository I/O or platform-support claim. The coordinator owns
+//! declarations, Node binding and final lock validation/publication.
+
+use std::collections::BTreeMap;
 
 use semver::Version;
 
 pub use crate::registry_provision::{Error, RegistryTransport};
 use crate::{
-    lock::Artifact,
+    lock::{Artifact, Platform},
     package_manager::{CorepackIntegrity, Manager},
     registry_metadata::{RegistryArtifact, RegistryMetadataError},
 };
@@ -20,14 +22,29 @@ pub struct ResolvedRegistry {
     version: Version,
     artifact: Artifact,
     integrity: CorepackIntegrity,
+    /// SHA-224 of the verified archive bytes, for older Corepack pins.
+    sha224: String,
+    natives: BTreeMap<Platform, Artifact>,
+    /// Modern Yarn `bin/yarn.js` SHA-256/SHA-512, which Corepack pins instead
+    /// of the registry tarball.
+    bundle: Option<(String, String)>,
 }
 impl ResolvedRegistry {
-    pub(crate) fn new(release: RegistryArtifact, artifact: Artifact) -> Self {
+    pub(crate) fn new(
+        release: RegistryArtifact,
+        artifact: Artifact,
+        natives: BTreeMap<Platform, Artifact>,
+        sha224: String,
+        bundle: Option<(String, String)>,
+    ) -> Self {
         Self {
             manager: release.manager,
             version: release.version,
             artifact,
             integrity: release.integrity,
+            sha224,
+            natives,
+            bundle,
         }
     }
     pub fn manager(&self) -> Manager {
@@ -36,6 +53,7 @@ impl ResolvedRegistry {
     pub fn version(&self) -> &Version {
         &self.version
     }
+    /// The registry package itself, which authored integrity pins describe.
     pub fn artifact(&self) -> &Artifact {
         &self.artifact
     }
@@ -45,31 +63,79 @@ impl ResolvedRegistry {
     pub fn integrity(&self) -> &CorepackIntegrity {
         &self.integrity
     }
+    /// SHA-256 covered by authored pins: the bundle for modern Yarn, otherwise
+    /// the locked archive. Pass this to Declaration::locked_integrity.
+    pub fn pinned_sha256(&self) -> &str {
+        self.bundle
+            .as_ref()
+            .map_or(&self.artifact.sha256, |(sha256, _)| sha256)
+    }
     /// Check a native pin selected AFTER byte-derived SHA-256 is available via
     /// Declaration::locked_integrity. No refetch, metadata-only proof or OR
     /// flattening.
     pub fn verify_authored(&self, authored: Option<&CorepackIntegrity>) -> Result<(), Error> {
         let Some(pin) = authored else { return Ok(()) };
-        let (length, actual) = match pin.algorithm {
-            "sha256" => (64, &self.artifact.sha256),
-            "sha512" => (128, &self.integrity.digest),
-            _ => return Err(RegistryMetadataError::InvalidIntegrity.into()),
-        };
-        if pin.digest.len() != length || !pin.digest.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return Err(RegistryMetadataError::InvalidIntegrity.into());
+        match &self.bundle {
+            // Bundle pins have no SHA-224 form; Corepack's SHA-224 pins name
+            // registry archives.
+            Some((sha256, sha512)) => check_pin(pin, None, sha256, sha512),
+            None => check_pin(
+                pin,
+                Some(&self.sha224),
+                &self.artifact.sha256,
+                &self.integrity.digest,
+            ),
         }
-        if !pin.digest.eq_ignore_ascii_case(actual) {
-            return Err(if pin.algorithm == "sha512" {
-                RegistryMetadataError::IntegrityConflict.into()
-            } else {
-                turborepo_download::Error::DigestMismatch.into()
-            });
-        }
-        Ok(())
     }
     pub fn into_artifact(self) -> Artifact {
         self.artifact
     }
+    /// Portable lock artifacts: the package for any platform, or, for native
+    /// pnpm, each platform's verified binary package beside the same package.
+    pub fn into_artifacts(self) -> BTreeMap<Platform, BTreeMap<String, Artifact>> {
+        if self.natives.is_empty() {
+            return BTreeMap::from([(
+                Platform::Any,
+                BTreeMap::from([("package".into(), self.artifact)]),
+            )]);
+        }
+        let package = self.artifact;
+        self.natives
+            .into_iter()
+            .map(|(platform, native)| {
+                let parts = [
+                    ("native".into(), native),
+                    ("package".into(), package.clone()),
+                ];
+                (platform, BTreeMap::from(parts))
+            })
+            .collect()
+    }
+}
+
+pub(crate) fn check_pin(
+    pin: &CorepackIntegrity,
+    sha224: Option<&str>,
+    sha256: &str,
+    sha512: &str,
+) -> Result<(), Error> {
+    let (length, actual) = match (pin.algorithm, sha224) {
+        ("sha224", Some(sha224)) => (56, sha224),
+        ("sha256", _) => (64, sha256),
+        ("sha512", _) => (128, sha512),
+        _ => return Err(RegistryMetadataError::InvalidIntegrity.into()),
+    };
+    if pin.digest.len() != length || !pin.digest.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(RegistryMetadataError::InvalidIntegrity.into());
+    }
+    if !pin.digest.eq_ignore_ascii_case(actual) {
+        return Err(if pin.algorithm == "sha512" {
+            RegistryMetadataError::IntegrityConflict.into()
+        } else {
+            turborepo_download::Error::DigestMismatch.into()
+        });
+    }
+    Ok(())
 }
 
 #[cfg(all(test, unix))]

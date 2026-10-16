@@ -97,6 +97,14 @@ impl Resolution {
         self.descriptor.ident.name()
     }
 
+    /// The ident of the depending package this resolution is scoped to
+    /// (`parent/dependency`), if any. Only scoped resolutions consult the
+    /// depending package's locator in [`Resolution::reduce_dependency`], and
+    /// they can only match a locator with this exact ident.
+    pub fn parent_ident(&self) -> Option<&Ident<'static>> {
+        self.from.as_ref().map(Specifier::ident)
+    }
+
     /// Returns a new descriptor if an override is applicable
     // reference: version that this resolution resolves to
     // locator: package that depends on the dependency

@@ -11,6 +11,24 @@ use std::{
     process::Output,
 };
 
+/// A Windows arm64 host, read from the system environment, which x64
+/// emulation does not rewrite (unlike this process's PROCESSOR_ARCHITECTURE).
+/// Independent of turbo's own host probe.
+pub fn windows_arm64_host() -> bool {
+    let Some(root) = std::env::var_os("SystemRoot") else {
+        return false;
+    };
+    std::process::Command::new(Path::new(&root).join(r"System32\reg.exe"))
+        .args([
+            "query",
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+            "/v",
+            "PROCESSOR_ARCHITECTURE",
+        ])
+        .output()
+        .is_ok_and(|output| String::from_utf8_lossy(&output.stdout).contains("ARM64"))
+}
+
 pub fn manifest_dir() -> PathBuf {
     match std::env::var("CARGO_MANIFEST_DIR") {
         Ok(dir) => PathBuf::from(dir),

@@ -7,6 +7,10 @@ pub mod boundaries;
 pub mod builder;
 pub mod engine_loader;
 mod error;
+mod managed;
+
+pub use managed::ManagedRun;
+pub use turborepo_task_graph::ManagedEnvironment;
 pub(crate) mod scope;
 #[cfg(test)]
 mod task_definition_test;
@@ -38,11 +42,13 @@ pub struct RunBuilderInput {
     pub opts: Opts,
     pub version: &'static str,
     pub api_auth: Option<APIAuth>,
+    /// Run-only opt-in. Other graph consumers leave this absent.
+    pub managed_environment: Option<Arc<ManagedRun>>,
 }
 
 use turborepo_ci::Vendor;
 use turborepo_engine::{Built, Engine};
-use turborepo_env::EnvironmentVariableMap;
+pub use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
@@ -50,7 +56,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode
 pub use turborepo_run_cache::RunCache;
 use turborepo_run_context::RepoContext;
 use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
-use turborepo_run_summary::{ObservabilityHandle, RunTracker};
+use turborepo_run_summary::{ObservabilityHandle, RunTracker, ScmStatePrefetch};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_access::TaskAccess;
@@ -132,6 +138,7 @@ pub(crate) struct ExecutionContext {
     pub(crate) start_at: DateTime<Local>,
     pub(crate) opts: Arc<Opts>,
     pub(crate) env_at_execution_start: EnvironmentVariableMap,
+    pub(crate) managed_environment: Option<Arc<ManagedRun>>,
     pub(crate) filtered_pkgs: HashSet<PackageName>,
     pub(crate) remote_cache_status: RemoteCacheStatus,
     pub(crate) engine: Arc<Engine<Built, TaskDefinition>>,
@@ -150,6 +157,9 @@ pub(crate) struct RunServices {
     pub(crate) run_cache: Arc<RunCache>,
     pub(crate) signal_handler: SignalHandler,
     pub(crate) repo_index: PendingRepoIndex,
+    /// The summary's SCM state, started during repo discovery for dry runs.
+    /// Taken by the first visitor; later visitors resolve it inline.
+    pub(crate) scm_state_prefetch: Arc<std::sync::Mutex<Option<ScmStatePrefetch>>>,
     pub(crate) observability_handle: Option<ObservabilityHandle>,
     // CLI and watch pass this in; keep it alive for the duration of the run
     // until query-server ownership and shutdown behavior are reviewed.
@@ -481,6 +491,20 @@ impl Run {
                         "packages"
                     }
                 ),
+            )
+            .emit();
+        }
+
+        // Honest about tools turbo did not install, such as verify-system ones.
+        for notice in self
+            .execution
+            .managed_environment
+            .iter()
+            .flat_map(|tools| tools.notices())
+        {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• Using {notice}"),
             )
             .emit();
         }
@@ -1062,6 +1086,16 @@ impl Run {
             tokio::sync::oneshot::Receiver<()>,
         )>,
     ) -> Result<i32, Error> {
+        // Dry runs start resolving the summary's SCM state (a git subprocess)
+        // during repo discovery. Hand it to the tracker so the summary
+        // doesn't spawn git after the visitor finishes.
+        let scm_state_prefetch = self
+            .services
+            .scm_state_prefetch
+            .lock()
+            .ok()
+            .and_then(|mut prefetch| prefetch.take());
+
         // Barrier for the untracked-file scan: file hashing below needs the
         // complete index. Nothing executes before this resolves, so hash
         // error semantics are unchanged from when `Run` construction waited.
@@ -1201,8 +1235,19 @@ impl Run {
             EnvMode::Strict => self.root_turbo_json().global_pass_through_env.as_deref(),
         };
 
+        // Bind every task to the selected portable snapshot, never the local
+        // generation path. Preserve the exact original key when unconfigured.
+        let managed_cache_key = self.execution.managed_environment.as_ref().map(|tools| {
+            format!(
+                "{GLOBAL_CACHE_KEY}:turborepo.setup.execution.v1:{}",
+                tools.snapshot().fingerprint()
+            )
+        });
+        if let Some(tools) = &self.execution.managed_environment {
+            tools.revalidate().map_err(Error::ManagedTools)?;
+        }
         let global_hash_inputs = GlobalHashableInputs {
-            global_cache_key: GLOBAL_CACHE_KEY,
+            global_cache_key: managed_cache_key.as_deref().unwrap_or(GLOBAL_CACHE_KEY),
             global_file_hash_map: global_file_inputs.global_file_hash_map,
             root_external_dependencies_hash: root_external_dependencies_hash.as_deref(),
             root_internal_dependencies_hash: root_internal_dependencies_hash.as_deref(),
@@ -1235,7 +1280,8 @@ impl Run {
             self.repo.version,
             Vendor::get_user(),
             self.services.observability_handle.clone(),
-        );
+        )
+        .with_scm_state_prefetch(scm_state_prefetch);
 
         drop(_setup_span);
 
@@ -1259,6 +1305,9 @@ impl Run {
         )
         .await?;
 
+        if let Some(tools) = &self.execution.managed_environment {
+            visitor = visitor.with_managed_environment(tools.clone());
+        }
         if self.execution.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
         }
