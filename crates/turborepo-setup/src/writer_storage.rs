@@ -9,26 +9,14 @@ use std::{
     fs::File,
     io::{self, Read, Write},
     path::Path,
-    process::Command,
 };
+
+use crate::git::Git;
 
 const MAX_BYTES: usize = 1024 * 1024;
 const WRITER: &str = "writer";
 const STAGED: &str = "staged";
 const TARGET: &str = "turbo.lock";
-
-/// Setup shells out to Git for ignore and worktree checks. Explain a missing
-/// executable instead of surfacing a bare "No such file or directory".
-pub fn git_spawn_error(error: io::Error) -> io::Error {
-    if error.kind() != io::ErrorKind::NotFound {
-        return error;
-    }
-    io::Error::new(
-        io::ErrorKind::NotFound,
-        "could not run `git`: it was not found on PATH. turbo setup uses Git to confirm that \
-         .turbo/ is ignored; install Git or add it to PATH, then retry",
-    )
-}
 
 /// True when no `.git` entry exists at or above `root`, so Git cannot track
 /// anything under it (for example, `turbo prune --docker` output). The ignore
@@ -257,12 +245,13 @@ impl Drop for WriterStorage {
 }
 
 impl WriterStorage {
-    pub fn acquire(root: &Path) -> io::Result<Self> {
-        Self::acquire_with(root, |_| Ok(()))
+    pub fn acquire(root: &Path, git: &dyn Git) -> io::Result<Self> {
+        Self::acquire_with(root, git, |_| Ok(()))
     }
 
     fn acquire_with(
         root: &Path,
+        git: &dyn Git,
         mut after_lock: impl FnMut(&mut AcquiredLock<'_>) -> io::Result<()>,
     ) -> io::Result<Self> {
         let root_path = root.canonicalize()?;
@@ -276,16 +265,8 @@ impl WriterStorage {
         after_lock(&mut root_lock)?;
         if !outside_git_repository(&root_path)? {
             let paths = [".turbo/setup-lock/writer", ".turbo/setup-lock/staged"];
-            let output = Command::new("git")
-                .current_dir(&root_path)
-                .env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE")
-                .args(["check-ignore", "--"])
-                .args(paths)
-                .output()
-                .map_err(git_spawn_error)?;
-            if !output.status.success()
+            let output = git.check_ignore(&root_path, &paths)?;
+            if !output.success()
                 || output.stdout != format!("{}\n{}\n", paths[0], paths[1]).as_bytes()
             {
                 return Err(io::Error::other(

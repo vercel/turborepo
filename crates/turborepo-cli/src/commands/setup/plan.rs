@@ -79,7 +79,7 @@ fn inspect_with(
     ))?;
     // Share frozen provisioning's native request, artifact and integrity gates.
     provision::plans(&sources, lock)?;
-    provision::storage(discovery.snapshot_root()?.as_std_path())?;
+    provision::storage(discovery.snapshot_root()?.as_std_path(), discovery.git())?;
     let action = match ActivationPlan::inspect_captured(&sources, context) {
         Ok(_) => "reuse (healthy installation)",
         Err(ReadinessError::MissingInventory) => "install (missing installation)",
@@ -119,7 +119,7 @@ fn propose(
     let check = || {
         preflight()?;
         revalidate(discovery)?;
-        provision::storage(root)
+        provision::storage(root, discovery.git())
     };
     check()?;
     let policy = preflight()?;
@@ -287,5 +287,5 @@ fn recheck(
     preflight()?;
     revalidate(discovery)?;
     sources.ensure_current()?;
-    provision::storage(discovery.snapshot_root()?.as_std_path())
+    provision::storage(discovery.snapshot_root()?.as_std_path(), discovery.git())
 }

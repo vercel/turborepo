@@ -52,14 +52,7 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
             fs::rename(root.join(".git"), root.join("gitdir")).unwrap();
             fs::write(root.join(".git"), "gitdir: gitdir\n").unwrap();
             fs::create_dir(root.join("second")).unwrap();
-            assert!(
-                std::process::Command::new("git")
-                    .current_dir(root.join("second"))
-                    .args(["init", "-q"])
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            turborepo_setup::git::fake_repository(&root.join("second")).unwrap();
             fs::rename(root.join("second/.git"), root.join("replacement-gitdir")).unwrap();
         } else {
             fs::write(root.join("workspace.yaml"), "packages: ['apps/*']\n").unwrap();
@@ -287,7 +280,7 @@ fn dispatch(
         artifact: None,
         go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
         bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin()).unwrap(),
-    }), || {
+    }), f.git.clone(), || {
         hook();
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     })).unwrap()
@@ -431,14 +424,7 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
                 }
                 _ => {
                     fs::write(root.join(".turbo/sentinel"), "untracked must stay ignored").unwrap();
-                    assert!(
-                        std::process::Command::new("git")
-                            .current_dir(root)
-                            .args(["add", "-f", ".turbo/sentinel"])
-                            .status()
-                            .unwrap()
-                            .success()
-                    );
+                    f.git.track(".turbo/sentinel");
                 }
             }
         });
@@ -467,7 +453,7 @@ fn local_writer_wait_rechecks_policy_git_and_workspace() {
             }
         })
         .unwrap();
-        let snapshot = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let snapshot = f.sources().unwrap();
         let guard = snapshot.guard().unwrap();
         std::thread::scope(|scope| {
             let pending = scope.spawn(|| f.run(&u, LOCAL));

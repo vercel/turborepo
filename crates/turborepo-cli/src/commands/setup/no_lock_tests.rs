@@ -395,7 +395,7 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
     for writer in [true, false] {
         let f = fresh();
         let root = f.owned.root();
-        let snapshot = turborepo_setup::lock::Snapshot::capture(root).unwrap();
+        let snapshot = f.sources().unwrap();
         let guard = writer.then(|| snapshot.guard().unwrap());
         let store = (!writer).then(|| Store::open(root).unwrap());
         let (tx, rx) = std::sync::mpsc::channel();

@@ -12,7 +12,7 @@ const CHECK: &[&str] = &["--check", "--tools-only"];
 
 fn fixture(flags: &str, request: &str) -> OwnedSetupFixture {
     let owned = OwnedSetupFixture::new().unwrap();
-    owned.init_git().unwrap();
+    owned.fake_git().unwrap();
     fs::write(owned.root().join("turbo.json"), flags).unwrap();
     fs::create_dir_all(owned.root().join("apps/web/src")).unwrap();
     declare(&owned, request);
@@ -88,6 +88,7 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
                     .unwrap(),
             }),
+            turborepo_setup::git::FakeGit::shared(),
             || Ok(owned.policy_at(&cwd)?),
         )
     })
@@ -188,7 +189,7 @@ fn telemetry_counts_downloaded_uv_bytes() {
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
                     .unwrap(),
             };
-            run_reporting(args, setup_args, Some(transports), &mut report, || {
+            run_reporting(args, setup_args, Some(transports), turborepo_setup::git::FakeGit::shared(), &mut report, || {
                 Ok(owned.policy_at(&cwd)?)
             })
         })
