@@ -14,6 +14,7 @@ use tokio::{
 
 use super::*;
 
+mod redirects;
 mod sha512;
 mod transport;
 

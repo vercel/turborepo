@@ -161,4 +161,9 @@ futureFlags?: FutureFlags,
  * like `inputs`, `env`, `ui`, etc. are placed here instead of at the
  * top level.
  */
-global?: GlobalConfig, };
+global?: GlobalConfig, 
+/**
+ * Repository policy for `turbo setup`. Only allowed in the root
+ * turbo.json and requires `futureFlags.experimentalSetup`.
+ */
+setup?: SetupPolicy, };

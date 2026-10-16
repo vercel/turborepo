@@ -11,14 +11,17 @@ use super::{
     },
     *,
 };
-use crate::{node_discovery::MAX_MANIFEST_BYTES, version_request::MAX_REQUEST_BYTES};
+use crate::{
+    git::FakeGit, lock::Ecosystems, node_discovery::MAX_MANIFEST_BYTES,
+    version_request::MAX_REQUEST_BYTES,
+};
 
 fn write_file(root: &Path, file: &str, bytes: impl AsRef<[u8]>) {
     fs::write(root.join(file), bytes).unwrap();
 }
 fn reject_oversized(root: &Path, file: &str, limit: usize) {
     write_file(root, file, vec![b'x'; limit + 1]);
-    assert!(Snapshot::capture(root).is_err());
+    assert!(Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared()).is_err());
 }
 
 fn root() -> tempfile::TempDir {
@@ -50,16 +53,18 @@ fn no_stage(root: &Path) {
 #[test]
 fn frozen_guard_serializes_writers_checks_drift_and_never_rewrites_lock() {
     let root = root();
-    let first = Snapshot::capture(root.path()).unwrap();
+    let first =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     first.commit(&candidate(&first, "24.0.0")).unwrap();
-    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     let before = fs::read(root.path().join(LOCK_NAME)).unwrap();
     let guard = snapshot.guard().unwrap();
     snapshot.check_guard(&guard).unwrap();
     let path = root.path().to_owned();
     let (tx, rx) = mpsc::channel();
     let writer = thread::spawn(move || {
-        let guard = WriterStorage::acquire(&path).unwrap();
+        let guard = WriterStorage::acquire(&path, &FakeGit::new()).unwrap();
         tx.send(()).unwrap();
         drop(guard);
     });
@@ -79,8 +84,9 @@ fn frozen_guard_serializes_writers_checks_drift_and_never_rewrites_lock() {
 fn frozen_guard_rejects_foreign_root_when_its_lock_misses_snapshot_lock_drift() {
     let a = root();
     let b = root();
-    let snapshot = Snapshot::capture(a.path()).unwrap();
-    let guard = WriterStorage::acquire(b.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(a.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let guard = WriterStorage::acquire(b.path(), &FakeGit::new()).unwrap();
     assert!(snapshot.previous_lock().is_none());
     assert!(guard.read_lock().unwrap().is_none());
     assert!(matches!(
@@ -105,9 +111,12 @@ fn frozen_guard_accepts_same_root_through_canonical_aliases() {
     let repo = root();
     fs::create_dir(repo.path().join("child")).unwrap();
     let check_alias = |alias: &Path| {
-        let snapshot = Snapshot::capture(repo.path()).unwrap();
-        let alias_snapshot = Snapshot::capture(alias).unwrap();
-        let guard = WriterStorage::acquire(alias).unwrap();
+        let snapshot =
+            Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
+        let alias_snapshot =
+            Snapshot::capture_with_git(alias, Ecosystems::default(), FakeGit::shared()).unwrap();
+        let guard = WriterStorage::acquire(alias, &FakeGit::new()).unwrap();
         snapshot.check_guard(&guard).unwrap();
         alias_snapshot.clone().check_guard(&guard).unwrap();
         snapshot.ensure_current().unwrap();
@@ -129,7 +138,8 @@ fn frozen_guard_accepts_same_root_through_canonical_aliases() {
 fn frozen_guard_rejects_a_replaced_directory_at_the_same_canonical_path() {
     let repo = root();
     let saved = tempfile::tempdir().unwrap();
-    let snapshot = Snapshot::capture(repo.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     let guard = snapshot.guard().unwrap();
     fs::rename(repo.path(), saved.path().join("original")).unwrap();
     fs::create_dir(repo.path()).unwrap();
@@ -138,7 +148,10 @@ fn frozen_guard_rejects_a_replaced_directory_at_the_same_canonical_path() {
             write_file(repo.path(), name, bytes);
         }
     }
-    assert_eq!(inputs(repo.path()).unwrap(), snapshot.inputs);
+    assert_eq!(
+        inputs(repo.path(), snapshot.ecosystems).unwrap(),
+        snapshot.inputs
+    );
     assert!(guard.read_lock().unwrap().is_none());
     assert!(matches!(
         snapshot.check_guard(&guard),
@@ -156,7 +169,8 @@ fn capture_and_resolver_inputs_are_read_only_immutable_and_redacted() {
     let root = root();
     write_file(root.path(), "package.json", json!({"description":"credential-secret",
         "packageManager":"npm@11.0.0","devEngines":{"runtime":{"name":"node","version":"24.x","onFail":"error"}}}).to_string());
-    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     assert!(snapshot.previous_lock().is_none());
     assert_eq!(snapshot.declarations(), &probe_native(root.path()).unwrap());
     assert!(!format!("{snapshot:?}").contains("credential-secret"));
@@ -183,11 +197,13 @@ fn capture_and_resolver_inputs_are_read_only_immutable_and_redacted() {
 #[test]
 fn missing_to_present_and_unchanged_keep_exact_expectations() {
     let root = root();
-    let absent = Snapshot::capture(root.path()).unwrap();
+    let absent =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     let first = candidate(&absent, "24.0.0");
     assert_eq!(absent.commit(&first).unwrap(), WriteOutcome::Written);
     assert_conflict(absent.commit(&first)); // Not unchanged: expected absence is stale.
-    let present = Snapshot::capture(root.path()).unwrap();
+    let present =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     assert_eq!(present.previous_lock().unwrap(), &first);
     let before = fs::metadata(root.path().join(LOCK_NAME)).unwrap();
     assert_eq!(present.commit(&first).unwrap(), WriteOutcome::Unchanged);
@@ -201,6 +217,29 @@ fn missing_to_present_and_unchanged_keep_exact_expectations() {
     fs::remove_file(root.path().join(LOCK_NAME)).unwrap();
     assert_conflict(present.commit(&candidate(&present, "25.0.0")));
     assert!(!root.path().join(LOCK_NAME).exists());
+    no_stage(root.path());
+}
+
+#[test]
+fn equivalent_compact_lock_stays_untouched_through_publication() {
+    let root = root();
+    let absent =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let compact = serde_json::to_vec(candidate(&absent, "24.0.0").document()).unwrap();
+    write_file(root.path(), LOCK_NAME, &compact);
+    let present =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let same = candidate(&present, "24.0.0");
+    assert_eq!(present.commit(&same).unwrap(), WriteOutcome::Unchanged);
+    let published = present.after_publication(&same).unwrap();
+    published.ensure_current().unwrap();
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), compact);
+    let next = candidate(&published, "25.0.0");
+    assert_eq!(published.commit(&next).unwrap(), WriteOutcome::Written);
+    assert_eq!(
+        fs::read(root.path().join(LOCK_NAME)).unwrap(),
+        next.canonical_bytes().unwrap()
+    );
     no_stage(root.path());
 }
 
@@ -223,9 +262,13 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
     .chain(CONFIG_FILES)
     {
         let root = root();
-        let initial = Snapshot::capture(root.path()).unwrap();
-        write(root.path(), &candidate(&initial, "24.0.0")).unwrap();
-        let snapshot = Snapshot::capture(root.path()).unwrap();
+        let initial =
+            Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
+        write(root.path(), &candidate(&initial, "24.0.0"), &FakeGit::new()).unwrap();
+        let snapshot =
+            Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
         match change {
             "lock-whitespace" => {
                 let mut bytes = snapshot.bytes.clone().unwrap();
@@ -270,7 +313,8 @@ fn changed_lock_bytes_and_sources_never_overwrite_new_state() {
 #[test]
 fn mismatched_candidate_and_extra_adapters_fail_before_storage_init() {
     let root = root();
-    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     let mut document = candidate(&snapshot, "24.0.0").document().clone();
     document.tools.get_mut("node").unwrap().declarations[0].request = Some("26.x".into());
     assert!(snapshot.commit(&Lock::new(document).unwrap()).is_err());
@@ -287,7 +331,8 @@ fn mismatched_candidate_and_extra_adapters_fail_before_storage_init() {
     // An existing extra adapter must not be silently dropped by a native-only
     // update.
     write_file(root.path(), LOCK_NAME, extra.canonical_bytes().unwrap());
-    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     assert!(snapshot.commit(&candidate(&snapshot, "24.0.0")).is_err());
     assert!(!root.path().join(".turbo").exists());
 }
@@ -296,7 +341,9 @@ fn mismatched_candidate_and_extra_adapters_fail_before_storage_init() {
 fn previous_aliases_and_uncovered_sources_are_preserved_without_writer_init() {
     for kind in ["alias", "mismatched-native-id", "uncovered-source"] {
         let root = root();
-        let initial = Snapshot::capture(root.path()).unwrap();
+        let initial =
+            Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
         let mut document = candidate(&initial, "24.0.0").document().clone();
         let mut tool = document.tools.remove("node").unwrap();
         let id = match kind {
@@ -310,7 +357,9 @@ fn previous_aliases_and_uncovered_sources_are_preserved_without_writer_init() {
         document.tools.insert(id.into(), tool);
         let bytes = Lock::new(document).unwrap().canonical_bytes().unwrap();
         fs::write(root.path().join(LOCK_NAME), &bytes).unwrap();
-        let snapshot = Snapshot::capture(root.path()).unwrap();
+        let snapshot =
+            Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
         assert!(snapshot.commit(&candidate(&snapshot, "25.0.0")).is_err());
         assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), bytes);
         assert!(!root.path().join(".turbo").exists());
@@ -331,11 +380,15 @@ fn final_post_flush_check_aborts_source_and_lock_races_and_failures() {
         "config-deleted",
     ] {
         let root = root();
-        let initial = Snapshot::capture(root.path()).unwrap();
+        let initial =
+            Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
         if change != "lock-created" {
-            write(root.path(), &candidate(&initial, "24.0.0")).unwrap();
+            write(root.path(), &candidate(&initial, "24.0.0"), &FakeGit::new()).unwrap();
         }
-        let snapshot = Snapshot::capture(root.path()).unwrap();
+        let snapshot =
+            Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
         let previous = snapshot.bytes.clone();
         let external = candidate(&snapshot, "27.0.0").canonical_bytes().unwrap();
         let result = snapshot.commit_checked(&candidate(&snapshot, "25.0.0"), || {
@@ -388,9 +441,11 @@ fn final_post_flush_check_aborts_source_and_lock_races_and_failures() {
 #[test]
 fn competing_resolver_candidates_cannot_publish_last_writer_wins() {
     let root = root();
-    let absent = Snapshot::capture(root.path()).unwrap();
-    write(root.path(), &candidate(&absent, "24.0.0")).unwrap();
-    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let absent =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    write(root.path(), &candidate(&absent, "24.0.0"), &FakeGit::new()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     let first_snapshot = snapshot.clone();
     let (staged_tx, staged_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
@@ -435,7 +490,8 @@ fn competing_resolver_candidates_cannot_publish_last_writer_wins() {
 #[test]
 fn checked_noop_and_post_publication_never_recapture_foreign_state() {
     let root = root();
-    let original = Snapshot::capture(root.path()).unwrap();
+    let original =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     let desired = candidate(&original, "24.0.0");
     original.commit(&desired).unwrap();
     let published = original.after_publication(&desired).unwrap();
@@ -472,9 +528,11 @@ fn checked_noop_and_post_publication_never_recapture_foreign_state() {
 #[test]
 fn checked_reconcile_noop_runs_consumer_check_under_writer_guard() {
     let root = root();
-    let first = Snapshot::capture(root.path()).unwrap();
+    let first =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     first.commit(&candidate(&first, "24.0.0")).unwrap();
-    let snapshot = Snapshot::capture(root.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
     let mut checks = 0;
     let result = crate::lock::reconcile::reconcile_checked(
         &snapshot,
@@ -507,7 +565,9 @@ fn capture_rejects_oversized_invalid_inputs_without_writer_state() {
     reject_oversized(root.path(), ".nvmrc", MAX_REQUEST_BYTES);
     write_file(root.path(), ".nvmrc", "24.x");
     write_file(root.path(), LOCK_NAME, "{invalid");
-    assert!(Snapshot::capture(root.path()).is_err());
+    assert!(
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).is_err()
+    );
     reject_oversized(root.path(), LOCK_NAME, MAX_LOCK_BYTES);
     assert!(!root.path().join(".turbo").exists());
 }
@@ -519,16 +579,22 @@ fn readonly_capture_and_symlink_replacement_never_write_or_follow_targets() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join(".nvmrc"), "24.x").unwrap();
     fs::set_permissions(root.path(), fs::Permissions::from_mode(0o555)).unwrap();
-    assert!(Snapshot::capture(root.path()).is_ok());
+    assert!(
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).is_ok()
+    );
     assert!(!root.path().join(".turbo").exists());
     fs::set_permissions(root.path(), fs::Permissions::from_mode(0o755)).unwrap();
     let outside = tempfile::tempdir().unwrap();
     fs::write(outside.path().join("source"), ">=24 <30").unwrap();
     fs::remove_file(root.path().join(".nvmrc")).unwrap();
     symlink(outside.path().join("source"), root.path().join(".nvmrc")).unwrap();
-    assert!(Snapshot::capture(root.path()).is_err());
+    assert!(
+        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).is_err()
+    );
     let writer = self::root();
-    let snapshot = Snapshot::capture(writer.path()).unwrap();
+    let snapshot =
+        Snapshot::capture_with_git(writer.path(), Ecosystems::default(), FakeGit::shared())
+            .unwrap();
     fs::remove_file(writer.path().join(".nvmrc")).unwrap();
     symlink(outside.path().join("source"), writer.path().join(".nvmrc")).unwrap();
     assert!(snapshot.commit(&candidate(&snapshot, "24.0.0")).is_err());

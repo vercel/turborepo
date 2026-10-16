@@ -18,6 +18,11 @@ pub struct RestoreManifest {
     pub order: Vec<String>,
 }
 
+/// Returned by [`RestoreManifest::read_at_most`] for a manifest over the
+/// caller's size limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ManifestTooLarge;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FileEntry {
     pub size: u64,
@@ -81,7 +86,16 @@ impl RestoreManifest {
         path: String,
         disk_path: &AbsoluteSystemPath,
     ) -> Result<(), CacheError> {
-        let meta = disk_path.symlink_metadata()?;
+        self.record_file_metadata(path, &disk_path.symlink_metadata()?)
+    }
+
+    /// Record a file that was just written to disk, using metadata already
+    /// obtained for it (e.g. from the open file handle after the last write).
+    pub fn record_file_metadata(
+        &mut self,
+        path: String,
+        meta: &std::fs::Metadata,
+    ) -> Result<(), CacheError> {
         let mtime_nanos = meta
             .modified()?
             .duration_since(UNIX_EPOCH)
@@ -156,6 +170,25 @@ impl RestoreManifest {
     pub fn read(path: &AbsoluteSystemPath) -> Option<Self> {
         let contents = std::fs::read_to_string(path.as_path()).ok()?;
         serde_json::from_str(&contents).ok()
+    }
+
+    /// Like [`Self::read`], but returns `Err(ManifestTooLarge)` without
+    /// reading the file when it is larger than `max_bytes`.
+    pub fn read_at_most(
+        path: &AbsoluteSystemPath,
+        max_bytes: u64,
+    ) -> Result<Option<Self>, ManifestTooLarge> {
+        let Ok(mut file) = std::fs::File::open(path.as_path()) else {
+            return Ok(None);
+        };
+        if file.metadata().is_ok_and(|meta| meta.len() > max_bytes) {
+            return Err(ManifestTooLarge);
+        }
+        let mut contents = String::new();
+        if std::io::Read::read_to_string(&mut file, &mut contents).is_err() {
+            return Ok(None);
+        }
+        Ok(serde_json::from_str(&contents).ok())
     }
 
     pub fn write_atomic(&self, path: &AbsoluteSystemPath) -> Result<(), CacheError> {

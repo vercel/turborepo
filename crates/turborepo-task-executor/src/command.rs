@@ -167,6 +167,7 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
     /// Lazily resolved package-manager binary path for JS framing.
     package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    managed_path: bool,
     /// Lazily resolved cargo binary path for Cargo framing.
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     /// Lazily resolved uv binary path for Python framing.
@@ -188,44 +189,67 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             mfe_configs,
             command_overrides,
             package_manager_binary: std::sync::OnceLock::new(),
+            managed_path: false,
             cargo_binary: std::sync::OnceLock::new(),
             uv_binary: std::sync::OnceLock::new(),
             go_binary: std::sync::OnceLock::new(),
         }
     }
 
-    fn package_manager_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
+    /// Use the caller's freshly authorized task PATH for managed dispatch only.
+    /// Ordinary repositories retain their original process-PATH lookup.
+    pub fn with_managed_path(mut self) -> Self {
+        self.managed_path = true;
+        self
+    }
+
+    /// Managed dispatch resolves only through the freshly authorized task
+    /// PATH, whose managed bin comes first, and never falls back to the host
+    /// PATH. On Windows the managed exports are `.exe` hard links and `.cmd`
+    /// forwarders, found through PATHEXT like any other PATH lookup.
+    fn lookup(
+        &self,
+        name: &str,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<std::path::PathBuf, which::Error> {
+        if self.managed_path {
+            which::which_in(
+                name,
+                environment.get("PATH"),
+                self.package_graph.repo_root().as_std_path(),
+            )
+        } else {
+            which::which(name)
+        }
+    }
+
+    fn package_manager_binary(
+        &self,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<&std::path::Path>, CommandProviderError> {
         let Some(package_manager) = self.package_graph.package_manager() else {
             return Ok(None);
         };
         match self
             .package_manager_binary
-            .get_or_init(|| which::which(package_manager.command()))
+            .get_or_init(|| self.lookup(package_manager.command(), environment))
         {
             Ok(path) => Ok(Some(path.as_path())),
             Err(error) => Err(CommandProviderError::Which(*error)),
         }
     }
 
-    fn cargo_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
-        match self.cargo_binary.get_or_init(|| which::which("cargo")) {
-            Ok(path) => Ok(Some(path.as_path())),
-            Err(_) => Ok(None),
-        }
-    }
-
-    fn uv_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
-        match self.uv_binary.get_or_init(|| which::which("uv")) {
-            Ok(path) => Ok(Some(path.as_path())),
-            Err(_) => Ok(None),
-        }
-    }
-
-    fn go_binary(&self) -> Result<Option<&std::path::Path>, CommandProviderError> {
-        match self.go_binary.get_or_init(|| which::which("go")) {
-            Ok(path) => Ok(Some(path.as_path())),
-            Err(_) => Ok(None),
-        }
+    /// Cargo, uv and Go stay optional here: a missing tool is reported by the
+    /// native command resolver with its own guidance.
+    fn tool_binary<'b>(
+        &self,
+        cell: &'b std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+        name: &str,
+        environment: &EnvironmentVariableMap,
+    ) -> Option<&'b std::path::Path> {
+        cell.get_or_init(|| self.lookup(name, environment))
+            .as_deref()
+            .ok()
     }
 
     fn package_context(
@@ -268,16 +292,17 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             } else {
                 match native_task.command().map(|command| &command.program) {
                     Some(NativeCommandProgram::PackageManager) => {
-                        (self.package_manager_binary()?, None)
+                        (self.package_manager_binary(environment)?, None)
                     }
-                    Some(NativeCommandProgram::Tool(tool)) if tool == "cargo" => {
-                        (None, self.cargo_binary()?)
-                    }
+                    Some(NativeCommandProgram::Tool(tool)) if tool == "cargo" => (
+                        None,
+                        self.tool_binary(&self.cargo_binary, tool, environment),
+                    ),
                     Some(NativeCommandProgram::Tool(tool)) if tool == "uv" => {
-                        (None, self.uv_binary()?)
+                        (None, self.tool_binary(&self.uv_binary, tool, environment))
                     }
                     Some(NativeCommandProgram::Tool(tool)) if tool == "go" => {
-                        (None, self.go_binary()?)
+                        (None, self.tool_binary(&self.go_binary, tool, environment))
                     }
                     Some(NativeCommandProgram::Tool(_)) | None => (None, None),
                 }
@@ -364,6 +389,7 @@ pub struct MicroFrontendProxyProvider<'a, M> {
     package_graph: &'a PackageGraph,
     tasks_in_graph: HashSet<TaskId<'a>>,
     mfe_configs: &'a M,
+    managed_path: bool,
 }
 
 impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
@@ -383,7 +409,15 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
             package_graph,
             tasks_in_graph: tasks_in_graph.cloned().collect(),
             mfe_configs: micro_frontends_configs,
+            managed_path: false,
         }
+    }
+
+    /// Resolve custom proxy launchers from the freshly authorized task PATH.
+    /// Ordinary repositories retain their existing process-global lookup.
+    pub fn with_managed_path(mut self) -> Self {
+        self.managed_path = true;
+        self
     }
 
     fn dev_tasks(&self, task_id: &TaskId) -> Option<Vec<(TaskId<'static>, String)>> {
@@ -535,8 +569,20 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             }
             args.extend(proxy_args);
 
-            let program =
-                which::which(package_manager.command()).map_err(CommandProviderError::from)?;
+            let program = if self.managed_path {
+                let path = environment
+                    .get("PATH")
+                    .ok_or(which::Error::CannotFindBinaryPath)
+                    .map_err(CommandProviderError::from)?;
+                which::which_in(
+                    package_manager.command(),
+                    Some(path),
+                    package_context.repository_root(),
+                )
+            } else {
+                which::which(package_manager.command())
+            }
+            .map_err(CommandProviderError::from)?;
             let mut cmd = Command::new(&program);
             cmd.current_dir(package_dir).args(args).open_stdin();
             apply_environment(&mut cmd, environment);
@@ -821,6 +867,153 @@ mod tests {
         };
         assert_eq!(task_id.package(), package);
         CommandProvider::<CommandProviderError>::command(&provider, &task_id, environment)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn custom_proxy_uses_authorized_lookup_path_and_never_host_fallback() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, package_dir) = create_test_repo();
+        let graph = package_graph(
+            &root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([("proxy".into(), Spanned::new("node proxy.js".into()))]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let launcher = bin.join_component("npm");
+        fs::write(
+            &launcher,
+            "#!/bin/sh\nprintf 'authorized-manager\\nALLOWED_VAR=%s\\n' \"$ALLOWED_VAR\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755)).unwrap();
+        let config = MockMfeConfig("configs/microfrontends.json");
+        let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
+        let provider =
+            MicroFrontendProxyProvider::new(&graph, tasks.iter(), &config).with_managed_path();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("PATH".into(), bin.to_string()),
+            ("ALLOWED_VAR".into(), "kept".into()),
+        ]));
+        let task = TaskId::new("web", "proxy");
+        let command =
+            CommandProvider::<CommandProviderError>::command(&provider, &task, &environment)
+                .unwrap()
+                .unwrap();
+        assert_eq!(command.program(), launcher.as_std_path().as_os_str());
+        assert_eq!(
+            command_stdout(command).await,
+            "authorized-manager\nALLOWED_VAR=kept\n"
+        );
+        assert!(
+            CommandProvider::<CommandProviderError>::command(
+                &provider,
+                &task,
+                &EnvironmentVariableMap::default()
+            )
+            .is_err()
+        );
+        fs::remove_file(launcher).unwrap();
+        assert!(
+            CommandProvider::<CommandProviderError>::command(&provider, &task, &environment)
+                .is_err()
+        );
+        // The authorized task PATH is not a new override for ordinary repos.
+        let ordinary = MicroFrontendProxyProvider::new(&graph, tasks.iter(), &config);
+        let result =
+            CommandProvider::<CommandProviderError>::command(&ordinary, &task, &environment);
+        match which::which("npm") {
+            Ok(host) => assert_eq!(result.unwrap().unwrap().program(), host.as_os_str()),
+            Err(_) => assert!(result.is_err()),
+        }
+    }
+
+    fn path_only(path: &str) -> EnvironmentVariableMap {
+        let mut environment = HashMap::from([("PATH".to_owned(), path.to_owned())]);
+        // cmd.exe runs `.cmd` exports; it needs these, and strict mode keeps them.
+        for name in ["SYSTEMROOT", "COMSPEC", "PATHEXT"] {
+            if let Ok(value) = std::env::var(name) {
+                environment.insert(name.to_owned(), value);
+            }
+        }
+        EnvironmentVariableMap::from(environment)
+    }
+
+    fn native_command(
+        provider: &ToolchainCommandProvider<'_, crate::NoMfeConfig>,
+        package: &str,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<Command>, CommandProviderError> {
+        let task = TaskId::new(package, "build");
+        CommandProvider::<CommandProviderError>::command(provider, &task, environment)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn managed_native_tools_resolve_only_through_the_authorized_task_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, _package_dir) = create_test_repo();
+        let graph = cargo_package_graph(&root).await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let cargo = bin.join_component("cargo");
+        fs::write(&cargo, "#!/bin/sh\necho managed-cargo \"$@\"\n").unwrap();
+        fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
+        let provider =
+            || ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new());
+        let managed = path_only(bin.as_str());
+        let command = native_command(&provider().with_managed_path(), "member", &managed)
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.program(), cargo.as_std_path().as_os_str());
+        assert!(command_stdout(command).await.starts_with("managed-cargo "));
+        // A managed task PATH without cargo never falls back to the host's.
+        let empty = path_only(root.as_str());
+        assert!(native_command(&provider().with_managed_path(), "member", &empty).is_err());
+        // Ordinary repositories keep the process-PATH lookup.
+        let ordinary = native_command(&provider(), "member", &managed);
+        match which::which("cargo") {
+            Ok(host) => assert_eq!(ordinary.unwrap().unwrap().program(), host.as_os_str()),
+            Err(_) => assert!(ordinary.is_err()),
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn managed_cmd_exports_resolve_through_pathext_on_the_task_path() {
+        let (_directory, root, package_dir) = create_test_repo();
+        let scripts = BTreeMap::from([("build".to_owned(), Spanned::new("build".to_owned()))]);
+        let package = PackageJson {
+            scripts,
+            ..Default::default()
+        };
+        let graph = package_graph(&root, &package_dir, package).await;
+        // Setup's Windows exports are `.exe` hard links and `.cmd` forwarders.
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let npm = bin.join_component("npm.cmd");
+        fs::write(&npm, "@echo managed-npm %*\r\n").unwrap();
+        let provider =
+            ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new())
+                .with_managed_path();
+        let command = native_command(&provider, "web", &path_only(bin.as_str()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.program(), npm.as_std_path().as_os_str());
+        assert!(
+            command_stdout(command)
+                .await
+                .starts_with("managed-npm run build")
+        );
+        let unmanaged =
+            ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new())
+                .with_managed_path();
+        assert!(native_command(&unmanaged, "web", &path_only(root.as_str())).is_err());
     }
 
     async fn command_stdout(cmd: Command) -> String {

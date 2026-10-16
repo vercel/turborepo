@@ -23,6 +23,15 @@
 //! ZIP input, total decoded payload, entry count and path work are bounded;
 //! metadata is borrowed from the bounded input, never allocated from ZIP
 //! counts. Native platform qualification is required before claiming support.
+//!
+//! An adapter may opt in to excluding fixed subtrees with compile-time
+//! (`'static`) names, never names from locks, metadata, or repository content.
+//! Matching is exact and case-sensitive on whole components below the layout
+//! root. Excluded entries are parsed and bounded but never written, and links
+//! cannot resolve into them. A PAX `path` record is accepted only to identify
+//! such a skipped entry; PAX is otherwise unsupported.
+//! An adapter may accept named quirks of its own upstream through
+//! [`Allowances`]; [`extract`] accepts none.
 
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
@@ -108,9 +117,32 @@ impl Limits {
 /// All entries must belong to this single root directory. Required file paths
 /// are relative to the root, exact/case-sensitive, and must be regular files.
 /// A nonempty required-files list is mandatory; other files within root are OK.
+/// An empty root accepts an archive whose entries sit at its top level, such
+/// as protoc's release zips. Those entries are staged below a synthetic root
+/// directory, so link containment and every path rule stay the same; a `./`
+/// or absolute entry is still rejected.
 pub struct Layout<'a> {
     pub root: &'a str,
     pub required_files: &'a [&'a str],
+}
+
+/// Upstream quirks an adapter accepts for its own official artifacts. Values
+/// are adapter constants (hence `'static`), never chosen by archive or
+/// repository content. The default accepts none.
+#[derive(Clone, Copy, Default)]
+pub struct Allowances {
+    /// Ignore bytes after the NUL that ends a TAR header's `name` field, where
+    /// every reader (this one included) stops. Tools that rename entries in a
+    /// reused header leave the old name's tail there. Link names and USTAR
+    /// prefixes stay strict.
+    pub tar_name_residue: bool,
+    /// On Linux, paths strictly below this root-relative directory keep their
+    /// exact case, so names that differ only by ASCII case (terminfo's
+    /// `E/Eterm` and `e/eterm`) extract as the distinct files a case-sensitive
+    /// filesystem stores. Exact duplicates and all other paths still conflict,
+    /// and creation still refuses existing names if staging folds case. Other
+    /// targets keep rejecting case-only collisions.
+    pub case_sensitive_dir: Option<&'static str>,
 }
 
 /// Owns cleanup; callers may inspect staging but promotion/installation is not
@@ -134,15 +166,89 @@ pub fn extract(
     limits: Limits,
     layout: Layout<'_>,
 ) -> Result<ExtractedArtifact, Error> {
+    extract_inner(artifact, format, limits, layout, &[], Allowances::default())
+}
+
+/// Like [`extract`], but never writes entries at or below the `excluded`
+/// directories, given relative to `layout.root`. The `'static` bound keeps the
+/// list a compile-time adapter constant. Required files cannot be excluded.
+pub fn extract_excluding(
+    artifact: &VerifiedArtifact,
+    format: Format,
+    limits: Limits,
+    layout: Layout<'_>,
+    excluded: &'static [&'static str],
+) -> Result<ExtractedArtifact, Error> {
+    extract_inner(
+        artifact,
+        format,
+        limits,
+        layout,
+        excluded,
+        Allowances::default(),
+    )
+}
+
+/// Like [`extract`], but accepts the adapter's named upstream [`Allowances`].
+pub fn extract_with(
+    artifact: &VerifiedArtifact,
+    format: Format,
+    limits: Limits,
+    layout: Layout<'_>,
+    allowances: Allowances,
+) -> Result<ExtractedArtifact, Error> {
+    extract_inner(artifact, format, limits, layout, &[], allowances)
+}
+
+fn extract_inner(
+    artifact: &VerifiedArtifact,
+    format: Format,
+    limits: Limits,
+    layout: Layout<'_>,
+    excluded: &'static [&'static str],
+    allowances: Allowances,
+) -> Result<ExtractedArtifact, Error> {
     if artifact.as_bytes().len() > limits.bytes {
         return Err(Error::LimitExceeded);
     }
-    let root = portable_path(layout.root.as_bytes(), false, limits)?;
+    let rootless = layout.root.is_empty();
+    // The synthetic directory does not spend the caller's budgets.
+    let limits = if rootless {
+        Limits {
+            bytes: limits.bytes,
+            entries: limits.entries + 1,
+            path_bytes: limits.path_bytes + SYNTHETIC_ROOT.len() + 1,
+            depth: limits.depth + 1,
+        }
+    } else {
+        limits
+    };
+    let root = match rootless {
+        true => SYNTHETIC_ROOT.to_owned(),
+        false => portable_path(layout.root.as_bytes(), false, limits)?,
+    };
     if root.contains('/') || layout.required_files.is_empty() {
         return Err(Error::LayoutMismatch);
     }
+    let case_sensitive = allowances
+        .case_sensitive_dir
+        .map(|dir| portable_path(format!("{root}/{dir}").as_bytes(), false, limits))
+        .transpose()?
+        .filter(|_| cfg!(target_os = "linux"));
     if layout.required_files.len() > limits.entries {
         return Err(Error::LimitExceeded);
+    }
+    let excluded = excluded
+        .iter()
+        .map(|dir| portable_path(format!("{root}/{dir}").as_bytes(), false, limits))
+        .collect::<Result<Vec<_>, _>>()?;
+    if layout.required_files.iter().any(|file| {
+        let path = format!("{root}/{file}");
+        excluded
+            .iter()
+            .any(|dir| path == *dir || path.starts_with(&format!("{dir}/")))
+    }) {
+        return Err(Error::LayoutMismatch);
     }
     let mut builder = tempfile::Builder::new();
     builder.prefix("turborepo-archive-");
@@ -155,9 +261,13 @@ pub fn extract(
     let mut tree = Tree {
         staging,
         root,
+        rootless,
         nodes: BTreeMap::new(),
         limits,
         bytes: 0,
+        excluded,
+        name_residue: allowances.tar_name_residue,
+        case_sensitive,
     };
     match format {
         Format::Tar => extract_tar(artifact, &mut tree)?,
@@ -177,9 +287,8 @@ pub fn extract(
     for file in layout.required_files {
         let path = portable_path(format!("{}/{file}", tree.root).as_bytes(), false, limits)?;
         if !tree
-            .nodes
-            .get(&path.to_ascii_lowercase())
-            .is_some_and(|n| n.path == path && !n.directory && n.link.is_none())
+            .node(&path)
+            .is_some_and(|n| !n.directory && n.link.is_none())
         {
             return Err(Error::LayoutMismatch);
         }
@@ -245,14 +354,68 @@ struct Node {
     explicit: bool,
     link: Option<String>,
 }
+/// Staging directory for the entries of an archive without a top-level one.
+const SYNTHETIC_ROOT: &str = "root";
+
 struct Tree {
     staging: TempDir,
     root: String,
+    /// Entry names are relative to the synthetic `root`, not below their own.
+    rootless: bool,
     nodes: BTreeMap<String, Node>,
     limits: Limits,
     bytes: usize,
+    excluded: Vec<String>,
+    name_residue: bool,
+    /// Root-prefixed `Allowances::case_sensitive_dir`, on Linux only.
+    case_sensitive: Option<String>,
 }
 impl Tree {
+    /// Whether a raw entry name lies inside an excluded subtree. Excluded
+    /// entries are skipped, so only traversal-free containment matters here.
+    fn excluded(&self, raw: &[u8]) -> bool {
+        let raw = self.rooted(raw);
+        let Ok(path) = std::str::from_utf8(&raw) else {
+            return false;
+        };
+        let path = path.strip_suffix('/').unwrap_or(path);
+        path.split('/').all(|c| !matches!(c, "" | "." | ".."))
+            && self.excluded.iter().any(|dir| {
+                path.strip_prefix(dir.as_str())
+                    .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+            })
+    }
+
+    /// A raw entry name below the staging root. Raw bytes are prefixed, never
+    /// normalized, so `./`, absolute, and traversal names stay rejected.
+    fn rooted<'a>(&self, raw: &'a [u8]) -> std::borrow::Cow<'a, [u8]> {
+        if self.rootless {
+            [SYNTHETIC_ROOT.as_bytes(), b"/", raw].concat().into()
+        } else {
+            raw.into()
+        }
+    }
+
+    /// Case-insensitive keys make case-only aliases conflict, except strictly
+    /// below the allowed case-sensitive directory.
+    fn key(&self, path: &str) -> String {
+        match &self.case_sensitive {
+            Some(dir)
+                if path
+                    .strip_prefix(dir.as_str())
+                    .is_some_and(|p| p.starts_with('/')) =>
+            {
+                path.to_owned()
+            }
+            _ => path.to_ascii_lowercase(),
+        }
+    }
+
+    /// The node spelled exactly `path`.
+    fn node(&self, path: &str) -> Option<&Node> {
+        self.nodes.get(&self.key(path)).filter(|n| n.path == path)
+    }
+
     fn entry(
         &mut self,
         raw: &[u8],
@@ -262,7 +425,8 @@ impl Tree {
         link: Option<&[u8]>,
         reader: impl Read,
     ) -> Result<(), Error> {
-        let path = portable_path(raw, directory, self.limits)?;
+        let raw = self.rooted(raw);
+        let path = portable_path(&raw, directory, self.limits)?;
         if path != self.root && !path.starts_with(&format!("{}/", self.root)) {
             return Err(Error::LayoutMismatch);
         }
@@ -291,7 +455,7 @@ impl Tree {
             prefix.push_str(component);
             let explicit = i + 1 == parts.len();
             let is_dir = !explicit || directory;
-            let key = prefix.to_ascii_lowercase();
+            let key = self.key(&prefix);
             if let Some(node) = self.nodes.get_mut(&key) {
                 if node.path != prefix || !node.directory || !is_dir || (explicit && node.explicit)
                 {
@@ -365,7 +529,7 @@ impl Tree {
                 incoming[index] += 1;
             }
             if let Some(target) = &node.link {
-                let target = link_target(&node.path, target, self.limits, Some(&self.nodes))?;
+                let target = link_target(&node.path, target, self.limits, Some(self))?;
                 let destination = indices[target.as_str()];
                 edges[index].push(destination);
                 incoming[destination] += 1;
@@ -414,7 +578,7 @@ fn link_target(
     path: &str,
     target: &str,
     limits: Limits,
-    nodes: Option<&BTreeMap<String, Node>>,
+    tree: Option<&Tree>,
 ) -> Result<String, Error> {
     if target.len() > limits.path_bytes || target.split('/').count() > limits.depth {
         return Err(Error::LimitExceeded);
@@ -424,14 +588,10 @@ fn link_target(
     for component in target.split('/') {
         // Check the original traversal, not just its normalized result: a/../b
         // cannot hide a symlink or regular-file intermediate component.
-        if let Some(nodes) = nodes {
-            let prefix = parts.join("/");
-            if !nodes
-                .get(&prefix.to_ascii_lowercase())
-                .is_some_and(|n| n.path == prefix && n.directory)
-            {
-                return Err(Error::UnsafeLink);
-            }
+        if let Some(tree) = tree
+            && !tree.node(&parts.join("/")).is_some_and(|n| n.directory)
+        {
+            return Err(Error::UnsafeLink);
         }
         match component {
             "" => return Err(Error::UnsafeLink),
@@ -450,10 +610,8 @@ fn link_target(
         portable_path(parts.join("/").as_bytes(), false, limits)?;
     }
     let resolved = parts.join("/");
-    if let Some(nodes) = nodes
-        && !nodes
-            .get(&resolved.to_ascii_lowercase())
-            .is_some_and(|n| n.path == resolved)
+    if let Some(tree) = tree
+        && tree.node(&resolved).is_none()
     {
         return Err(Error::UnsafeLink);
     }
@@ -466,6 +624,7 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
     }
     let mut archive = tar::Archive::new(Cursor::new(bytes));
     let mut pending = None;
+    let mut pax = false;
     for (i, entry) in archive
         .entries()
         .map_err(|_| Error::InvalidArchive)?
@@ -488,8 +647,37 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         if kind.is_symlink() {
             return Err(Error::UnsupportedSymlinkPlatform);
         }
+        if kind.is_pax_local_extensions() {
+            if pending.is_some() || pax {
+                return Err(Error::InvalidArchive);
+            }
+            if size > tree.limits.path_bytes as u64 + 32 {
+                return Err(Error::LimitExceeded);
+            }
+            // Raw iteration never applies PAX sizes or links, so only a lone
+            // `path` naming an excluded (never written) entry is safe.
+            let mut path = None;
+            for record in entry
+                .pax_extensions()
+                .map_err(|_| Error::InvalidArchive)?
+                .into_iter()
+                .flatten()
+            {
+                let record = record.map_err(|_| Error::InvalidArchive)?;
+                if record.key_bytes() != b"path"
+                    || path.replace(record.value_bytes().to_vec()).is_some()
+                {
+                    return Err(Error::UnsupportedEntry);
+                }
+            }
+            if !path.is_some_and(|path| tree.excluded(&path)) {
+                return Err(Error::UnsupportedEntry);
+            }
+            pax = true;
+            continue;
+        }
         if kind.is_gnu_longname() {
-            if pending.is_some() {
+            if pending.is_some() || pax {
                 return Err(Error::InvalidArchive);
             }
             if size > tree.limits.path_bytes as u64 + 1 {
@@ -509,16 +697,20 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
             return Err(Error::UnsupportedEntry);
         }
         // Check raw fields before tar erases NUL suffixes or USTAR backslashes.
-        check_tar_field(&entry.header().as_old().name)?;
+        check_tar_field(&entry.header().as_old().name, tree.name_residue)?;
         if let Some(ustar) = entry.header().as_ustar() {
-            check_tar_field(&ustar.prefix)?;
+            check_tar_field(&ustar.prefix, false)?;
         }
         let name = pending
             .take()
             .unwrap_or_else(|| entry.path_bytes().into_owned());
+        // A PAX-described entry is skipped without trusting its header name.
+        if std::mem::take(&mut pax) || tree.excluded(&name) {
+            continue;
+        }
         let mode = entry.header().mode().map_err(|_| Error::InvalidArchive)?;
         let link = if kind.is_symlink() {
-            check_tar_field(&entry.header().as_old().linkname)?;
+            check_tar_field(&entry.header().as_old().linkname, false)?;
             Some(
                 entry
                     .link_name_bytes()
@@ -539,6 +731,7 @@ fn extract_tar(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
     }
     let position = archive.into_inner().position() as usize;
     if pending.is_some()
+        || pax
         || bytes.len().saturating_sub(position) < 512
         || bytes[position..].iter().any(|b| *b != 0)
     {
@@ -570,9 +763,12 @@ fn checked_tar_size(raw: &[u8; 12]) -> Result<u64, Error> {
     }
 }
 
-fn check_tar_field(field: &[u8]) -> Result<(), Error> {
+/// tar's accessors stop at the first NUL, so bytes after it must be NUL
+/// unless this field's residue is allowed.
+fn check_tar_field(field: &[u8], residue: bool) -> Result<(), Error> {
     let end = field.iter().position(|b| *b == 0).unwrap_or(field.len());
-    if field.contains(&b'\\') || field[end..].iter().any(|b| *b != 0) {
+    let (value, rest) = field.split_at(end);
+    if value.contains(&b'\\') || (!residue && rest.iter().any(|b| *b != 0)) {
         return Err(Error::UnsafePath);
     }
     Ok(())

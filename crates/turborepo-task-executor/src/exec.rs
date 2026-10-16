@@ -164,6 +164,8 @@ pub enum SuccessOutcome {
 /// Internal errors that can occur during task execution.
 #[derive(Debug, thiserror::Error)]
 pub enum InternalError {
+    #[error("managed setup validation failed: {0}")]
+    ManagedTools(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("unable to determine why task exited")]
@@ -231,6 +233,7 @@ pub struct TaskExecutor<H, E, W, A> {
     pub cmd: Command,
     pub execution_env: EnvironmentVariableMap,
     pub manager: ProcessManager,
+    pub managed_environment: Option<Arc<dyn crate::ManagedEnvironment>>,
     pub takes_input: bool,
 
     // Configuration
@@ -379,6 +382,9 @@ where
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(InternalError::ManagedTools)?;
+        }
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -388,11 +394,13 @@ where
         }
 
         let tui_sender = task_output.sender();
-        let cache_result = self
-            .task_cache
-            .restore_outputs(task_handle, tui_sender, telemetry)
-            .instrument(tracing::info_span!("cache_restore", task = %self.task_id))
-            .await;
+        let cache_result = validated_restore(
+            self.task_cache
+                .restore_outputs(task_handle, tui_sender, telemetry)
+                .instrument(tracing::info_span!("cache_restore", task = %self.task_id)),
+            self.managed_environment.as_deref(),
+        )
+        .await?;
         match cache_result {
             Ok(Some(status)) => {
                 self.hash_tracker.insert_expanded_outputs(
@@ -429,6 +437,11 @@ where
         // and cache hits finish without ever starting.
         task_output.start(self.task_cache.output_logs().into());
 
+        // Recheck at the actual spawn boundary, after cache waits and serial
+        // group acquisition. Selection-time validation is not a lease.
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(InternalError::ManagedTools)?;
+        }
         // Spawn the process
         let cmd = self.cmd.clone();
         let mut process =
@@ -646,6 +659,19 @@ where
     }
 }
 
+/// Cache I/O can await a remote fetch or another setup transaction. A hit is
+/// not success until the original managed selection is current after that wait.
+async fn validated_restore<F: std::future::Future>(
+    restore: F,
+    tools: Option<&dyn crate::ManagedEnvironment>,
+) -> Result<F::Output, InternalError> {
+    let result = restore.await;
+    if let Some(tools) = tools {
+        tools.revalidate().map_err(InternalError::ManagedTools)?;
+    }
+    Ok(result)
+}
+
 fn stop_execution_for_task_error(continue_on_error: ContinueMode) -> Result<(), StopExecution> {
     match continue_on_error {
         ContinueMode::Always => Ok(()),
@@ -682,6 +708,75 @@ impl<H: HashTrackerProvider> DryRunExecutor<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ManagedEnvironment;
+
+    struct FileGeneration(std::path::PathBuf);
+    impl crate::ManagedEnvironment for FileGeneration {
+        fn revalidate(&self) -> Result<EnvironmentVariableMap, String> {
+            match std::fs::read(&self.0) {
+                Ok(bytes) if bytes == b"selected generation" => {
+                    Ok(EnvironmentVariableMap::default())
+                }
+                _ => Err("setup generation changed; run turbo setup".into()),
+            }
+        }
+        fn cache_identity(&self) -> &str {
+            "selected-snapshot"
+        }
+    }
+
+    #[tokio::test]
+    async fn delayed_cache_hit_rejects_ordinary_source_or_setup_generation_changes() {
+        for remove in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("generation");
+            std::fs::write(&path, b"selected generation").unwrap();
+            let tools = FileGeneration(path.clone());
+            tools.revalidate().unwrap(); // Selection before the restore wait.
+            let (started, waiting) = oneshot::channel();
+            let (resume, resumed) = oneshot::channel();
+            let restore = async {
+                started.send(()).unwrap();
+                resumed.await.unwrap();
+                Some("cache hit")
+            };
+            let edit = async {
+                waiting.await.unwrap();
+                if remove {
+                    std::fs::remove_file(path).unwrap();
+                } else {
+                    std::fs::write(path, b"new setup generation").unwrap();
+                }
+                resume.send(()).unwrap();
+            };
+            let (result, ()) = tokio::join!(validated_restore(restore, Some(&tools)), edit);
+            assert!(result.unwrap_err().to_string().contains("turbo setup"));
+        }
+    }
+
+    #[tokio::test]
+    async fn unchanged_and_unconfigured_cache_hits_preserve_results() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("generation");
+        std::fs::write(&path, b"selected generation").unwrap();
+        let tools = FileGeneration(path);
+        assert_eq!(
+            validated_restore(async { Some("hit") }, Some(&tools))
+                .await
+                .unwrap(),
+            Some("hit")
+        );
+        assert_eq!(
+            validated_restore(async { Some("hit") }, None)
+                .await
+                .unwrap(),
+            Some("hit")
+        );
+        assert_eq!(
+            validated_restore(async { None::<()> }, None).await.unwrap(),
+            None
+        );
+    }
 
     async fn assert_pending<F: Future>(mut future: std::pin::Pin<&mut F>) {
         std::future::poll_fn(|cx| {

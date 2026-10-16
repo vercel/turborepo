@@ -12,14 +12,21 @@ use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 
 use crate::{CacheError, cache_archive::restore_directory::CachedDirTree};
 
-/// Returns `(path, true)` when the file was skipped (matched manifest),
-/// or `(path, false)` when it was written to disk.
+/// The outcome of restoring one regular file.
+pub enum RegularRestore {
+    /// The file on disk matched the manifest and was not rewritten.
+    Skipped,
+    /// The file was written to disk. Carries its metadata when the writer
+    /// already had it, so callers need not stat the path again.
+    Written(Option<std::fs::Metadata>),
+}
+
 pub fn restore_regular(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<impl Read>,
     manifest: Option<&super::restore_manifest::RestoreManifest>,
-) -> Result<(AnchoredSystemPathBuf, bool), CacheError> {
+) -> Result<(AnchoredSystemPathBuf, RegularRestore), CacheError> {
     let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
     let resolved_path = anchor.resolve(&processed_name);
 
@@ -29,16 +36,17 @@ pub fn restore_regular(
         && manifest.file_matches(processed_name.as_str(), &resolved_path)
     {
         io::copy(entry, &mut io::sink())?;
-        return Ok((processed_name, true));
+        return Ok((processed_name, RegularRestore::Skipped));
     }
 
     #[cfg(any(unix, windows))]
-    {
+    let metadata = {
         let mode = sanitized_mode(entry.header().mode()?);
         let destination = dir_cache.destination(&processed_name)?;
-        destination.write_regular(entry, mode)?;
+        let metadata = destination.write_regular(entry, mode)?;
         dir_cache.forget_symlink(&processed_name)?;
-    }
+        metadata
+    };
 
     #[cfg(not(any(unix, windows)))]
     {
@@ -52,8 +60,10 @@ pub fn restore_regular(
         let mut file = open_for_restore(&resolved_path, sanitized_mode(0))?;
         io::copy(entry, &mut file)?;
     }
+    #[cfg(not(any(unix, windows)))]
+    let metadata = None;
 
-    Ok((processed_name, false))
+    Ok((processed_name, RegularRestore::Written(metadata)))
 }
 
 #[cfg(unix)]
@@ -168,6 +178,35 @@ mod tests {
                 .symlink_metadata()?
                 .is_symlink()
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_destination_writes_contents_and_reports_metadata() -> Result<()> {
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let dir_cache = CachedDirTree::new(anchor.clone())?;
+        for (name, len) in [
+            ("empty", 0),
+            ("small", 1),
+            ("medium", 20_000),
+            ("large", 700_001),
+        ] {
+            let contents: Vec<u8> = (0..len).map(|i| (i * 31 % 251) as u8).collect();
+            let path = AnchoredSystemPathBuf::from_raw(format!("nested/dir/{name}"))?;
+            let metadata = dir_cache
+                .destination(&path)?
+                .write_regular(&mut contents.as_slice(), 0o644)?
+                .expect("unix restores report metadata");
+            let restored = anchor.resolve(&path);
+            assert_eq!(std::fs::read(restored.as_path())?, contents);
+            assert_eq!(metadata.len(), len as u64);
+            assert_eq!(
+                metadata.modified()?,
+                restored.symlink_metadata()?.modified()?
+            );
+        }
 
         Ok(())
     }

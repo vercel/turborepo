@@ -3,7 +3,10 @@ use std::{fs, sync::mpsc, thread, time::Duration};
 use serde_json::json;
 
 use super::*;
-use crate::lock::{Document, SCHEMA_VERSION, Tool};
+use crate::{
+    git::FakeGit,
+    lock::{Document, SCHEMA_VERSION, Tool},
+};
 
 #[path = "edge_tests.rs"]
 mod edge_tests;
@@ -48,14 +51,7 @@ fn fixture(version: &str) -> Lock {
 
 pub(super) fn writer_root() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
-    assert!(
-        std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .arg(root.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    crate::git::fake_repository(root.path()).unwrap();
     fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
     root
 }
@@ -131,9 +127,15 @@ fn identical_write_does_not_touch_existing_file_and_changed_write_is_readable() 
     let root = writer_root();
     let first = fixture("24.0.0");
     assert!(Lock::read(root.path()).unwrap().is_none());
-    assert_eq!(write(root.path(), &first).unwrap(), WriteOutcome::Written);
+    assert_eq!(
+        write(root.path(), &first, &FakeGit::new()).unwrap(),
+        WriteOutcome::Written
+    );
     let metadata = fs::metadata(root.path().join(LOCK_NAME)).unwrap();
-    assert_eq!(write(root.path(), &first).unwrap(), WriteOutcome::Unchanged);
+    assert_eq!(
+        write(root.path(), &first, &FakeGit::new()).unwrap(),
+        WriteOutcome::Unchanged
+    );
     let after = fs::metadata(root.path().join(LOCK_NAME)).unwrap();
     assert_eq!(metadata.modified().unwrap(), after.modified().unwrap());
     #[cfg(unix)]
@@ -142,7 +144,7 @@ fn identical_write_does_not_touch_existing_file_and_changed_write_is_readable() 
         assert_eq!(metadata.ino(), after.ino());
     }
     assert_eq!(
-        write(root.path(), &fixture("25.0.0")).unwrap(),
+        write(root.path(), &fixture("25.0.0"), &FakeGit::new()).unwrap(),
         WriteOutcome::Written
     );
     assert_eq!(Lock::read(root.path()).unwrap().unwrap(), fixture("25.0.0"));
@@ -150,12 +152,59 @@ fn identical_write_does_not_touch_existing_file_and_changed_write_is_readable() 
 }
 
 #[test]
+fn writes_indented_json_and_leaves_an_equivalent_compact_lock_untouched() {
+    let golden = r#"{
+  "schemaVersion": 0,
+  "tools": {
+    "node": {
+      "adapter": "node",
+      "version": "24.0.0",
+      "declarations": [
+        {
+          "file": ".nvmrc",
+          "request": "lts/*"
+        }
+      ],
+      "installation": {
+        "kind": "verify-system",
+        "executables": [
+          "node"
+        ]
+      }
+    }
+  }
+}
+"#;
+    assert_eq!(
+        fixture("24.0.0").canonical_bytes().unwrap(),
+        golden.as_bytes()
+    );
+    let root = writer_root();
+    let compact = serde_json::to_vec(fixture("24.0.0").document()).unwrap();
+    fs::write(root.path().join(LOCK_NAME), &compact).unwrap();
+    assert_eq!(Lock::read(root.path()).unwrap().unwrap(), fixture("24.0.0"));
+    assert_eq!(
+        write(root.path(), &fixture("24.0.0"), &FakeGit::new()).unwrap(),
+        WriteOutcome::Unchanged
+    );
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), compact);
+    assert_eq!(
+        write(root.path(), &fixture("25.0.0"), &FakeGit::new()).unwrap(),
+        WriteOutcome::Written
+    );
+    assert_eq!(
+        fs::read(root.path().join(LOCK_NAME)).unwrap(),
+        golden.replace("24.0.0", "25.0.0").as_bytes()
+    );
+}
+
+#[test]
 fn publication_failure_preserves_previous_bytes_and_ignored_state() {
     let root = writer_root();
-    write(root.path(), &fixture("24.0.0")).unwrap();
+    write(root.path(), &fixture("24.0.0"), &FakeGit::new()).unwrap();
     let previous = fs::read(root.path().join(LOCK_NAME)).unwrap();
     assert!(
-        write_with(root.path(), &fixture("25.0.0"), || {
+        write_with(root.path(), &fixture("25.0.0"), &FakeGit::new(), || {
             Err(io::Error::other("injected failure"))
         })
         .is_err()
@@ -168,7 +217,7 @@ fn publication_failure_preserves_previous_bytes_and_ignored_state() {
     )
     .unwrap();
     assert_eq!(
-        write(root.path(), &fixture("24.0.0")).unwrap(),
+        write(root.path(), &fixture("24.0.0"), &FakeGit::new()).unwrap(),
         WriteOutcome::Unchanged
     );
     assert_writer_files(root.path());
@@ -177,12 +226,12 @@ fn publication_failure_preserves_previous_bytes_and_ignored_state() {
 #[test]
 fn writers_share_persistent_lock_and_readers_see_complete_previous_file() {
     let root = writer_root();
-    write(root.path(), &fixture("24.0.0")).unwrap();
+    write(root.path(), &fixture("24.0.0"), &FakeGit::new()).unwrap();
     let (staged_tx, staged_rx) = mpsc::channel();
     let (release_tx, release_rx) = mpsc::channel();
     let path = root.path().to_owned();
     let first = thread::spawn(move || {
-        write_with(&path, &fixture("25.0.0"), || {
+        write_with(&path, &fixture("25.0.0"), &FakeGit::new(), || {
             staged_tx.send(()).unwrap();
             release_rx.recv().unwrap();
             Ok(())
@@ -196,7 +245,7 @@ fn writers_share_persistent_lock_and_readers_see_complete_previous_file() {
     let path = root.path().to_owned();
     let second = thread::spawn(move || {
         started_tx.send(()).unwrap();
-        let result = write(&path, &fixture("25.0.0")).unwrap();
+        let result = write(&path, &fixture("25.0.0"), &FakeGit::new()).unwrap();
         done_tx.send(()).unwrap();
         result
     });
@@ -353,7 +402,7 @@ fn own_inputs_are_bounded_and_no_partial_probe_or_write_succeeds() {
     let oversized = vec![b'x'; MAX_LOCK_BYTES + 1];
     fs::write(root.path().join(LOCK_NAME), &oversized).unwrap();
     assert!(Lock::read(root.path()).is_err());
-    assert!(write(root.path(), &fixture("24.0.0")).is_err());
+    assert!(write(root.path(), &fixture("24.0.0"), &FakeGit::new()).is_err());
     assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), oversized);
     // 32 alternatives produce 96 locations, beyond the schema provenance bound.
     fs::remove_file(root.path().join(".node-version")).unwrap();
@@ -395,7 +444,7 @@ fn read_only_probe_and_symlink_directory_fifo_safety() {
         for target in ["target", "missing"] {
             symlink(outside.path().join(target), root.path().join(name)).unwrap();
             if name == LOCK_NAME {
-                assert!(write(root.path(), &fixture("24.0.0")).is_err());
+                assert!(write(root.path(), &fixture("24.0.0"), &FakeGit::new()).is_err());
                 assert!(Lock::read(root.path()).is_err());
             } else {
                 assert!(probe_native(root.path()).is_err());
@@ -418,7 +467,7 @@ fn read_only_probe_and_symlink_directory_fifo_safety() {
         assert!(if name == "package.json" {
             probe_native(root.path()).is_err()
         } else {
-            write(root.path(), &fixture("24.0.0")).is_err()
+            write(root.path(), &fixture("24.0.0"), &FakeGit::new()).is_err()
         });
         fs::remove_dir(root.path().join(name)).unwrap();
     }
@@ -429,4 +478,41 @@ fn read_only_probe_and_symlink_directory_fifo_safety() {
         .unwrap();
     assert!(status.success());
     assert!(probe_native(root.path()).is_err());
+}
+
+#[test]
+fn rust_toolchain_files_declare_rustup_only_when_enabled_and_unambiguous() {
+    let root = tempfile::tempdir().unwrap();
+    let rust = Ecosystems {
+        rust: true,
+        ..Default::default()
+    };
+    assert!(probe_native_in(root.path(), rust).unwrap().is_empty());
+    let channel = |file: &str, channel: &str| match file {
+        "rust-toolchain" => format!("{channel}\n"),
+        _ => format!("[toolchain]\nchannel = \"{channel}\"\n"),
+    };
+    for file in RUST_TOOLCHAIN_FILES {
+        fs::write(root.path().join(file), channel(file, "stable")).unwrap();
+        assert!(probe_native(root.path()).unwrap().is_empty());
+        let declared = probe_native_in(root.path(), rust).unwrap();
+        assert_eq!(
+            declared["rustup"],
+            [Declaration {
+                file: file.into(),
+                field: None,
+                request: None,
+            }]
+        );
+        // Content changes are the channel's provenance, not the installer's.
+        fs::write(root.path().join(file), channel(file, "nightly")).unwrap();
+        let changed = probe_native_in(root.path(), rust).unwrap();
+        assert_eq!(changed["rustup"], declared["rustup"]);
+        fs::remove_file(root.path().join(file)).unwrap();
+    }
+    for file in RUST_TOOLCHAIN_FILES {
+        fs::write(root.path().join(file), channel(file, "stable")).unwrap();
+    }
+    assert!(probe_native_in(root.path(), rust).is_err());
+    assert!(probe_native(root.path()).unwrap().is_empty());
 }

@@ -102,30 +102,37 @@ impl JobObject {
     /// Create a new anonymous Job Object that will kill all assigned processes
     /// when the handle is closed.
     pub fn new() -> io::Result<Self> {
+        let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        if handle.is_null() {
+            return Err(io::Error::last_os_error());
+        }
+        // Dropping the job on error closes the handle.
+        let job = Self { handle };
+        job.set_limit_flags(JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)?;
+        Ok(job)
+    }
+
+    /// Stop terminating the assigned processes when the job's last handle
+    /// closes. Processes that are still running then outlive this process.
+    pub fn release_on_close(&self) -> io::Result<()> {
+        self.set_limit_flags(0)
+    }
+
+    fn set_limit_flags(&self, flags: u32) -> io::Result<()> {
         unsafe {
-            let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if handle.is_null() {
-                return Err(io::Error::last_os_error());
-            }
-
             let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-
+            info.BasicLimitInformation.LimitFlags = flags;
             let result = SetInformationJobObject(
-                handle,
+                self.handle,
                 JobObjectExtendedLimitInformation,
                 &info as *const _ as *const _,
                 std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
             );
-
             if result == 0 {
-                let err = io::Error::last_os_error();
-                CloseHandle(handle);
-                return Err(err);
+                return Err(io::Error::last_os_error());
             }
-
-            Ok(Self { handle })
         }
+        Ok(())
     }
 
     /// Assign a process to this job object by its PID.

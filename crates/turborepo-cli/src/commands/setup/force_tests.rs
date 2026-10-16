@@ -21,7 +21,11 @@ fn assert_locked_traffic(f: &Fixture, u: &Upstream, rounds: usize) {
 
 #[test]
 fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
-    for flags in [FORCE, &["--force", "--tools-only", "--frozen"][..]] {
+    for flags in [
+        FORCE,
+        &["--force", "--tools-only", "--frozen"][..],
+        &["--force", "--no-frozen"][..],
+    ] {
         let mut f = Fixture::new();
         fs::write(f.owned.root().join(".nvmrc"), "24.x\n").unwrap();
         f.declare(json!({"packageManager":"pnpm@10.0.0"}));
@@ -33,30 +37,17 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
         ] {
             fs::write(f.owned.root().join(name), format!("{name} sentinel\n")).unwrap();
         }
-        let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
-                .current_dir(f.owned.root())
-                .env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE")
-                .args(args)
-                .output()
-                .unwrap();
-            assert!(output.status.success(), "{output:?}");
-            output.stdout
+        if !flags.contains(&"--tools-only") {
+            fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
+        }
+        // Everything outside the ignored storage: what `git status` would see.
+        let worktree = || {
+            let storage = f.owned.root().join(".turbo");
+            let mut state = super::publication_guards::state(f.owned.root());
+            state.retain(|(path, _)| !path.starts_with(&storage));
+            state
         };
-        git(&["add", "."]);
-        git(&[
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "commit",
-            "-qm",
-            "Fixture",
-        ]);
-        let tracked = git(&["status", "--porcelain"]);
-        assert!(tracked.is_empty());
+        let tracked = worktree();
         let u = Upstream::new(&f, false, None);
         f.run(&u, FROZEN).unwrap();
         let before = f.manifest().unwrap();
@@ -98,7 +89,7 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
         f.run(&u, FROZEN).unwrap();
         assert_locked_traffic(&f, &u, 2);
         assert_eq!(f.manifest().unwrap(), after);
-        assert_eq!(git(&["status", "--porcelain"]), tracked);
+        assert_eq!(worktree(), tracked);
         f.no_execution();
     }
 }
@@ -196,15 +187,25 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
 #[test]
 fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
     for flags in [
-        vec!["--force"],
+        vec!["--force", "--offline"],
         vec!["--force", "--tools-only", "--offline"],
-        vec!["--force", "--tools-only", "--plan"],
+        vec!["--force", "--tools-only", "--plan", "--no-lock"],
         vec!["--force", "--tools-only", "--no-lock"],
         vec!["--force", "--tools-only", "--no-frozen", "--update-lock"],
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+        let result = f.run(&u, &flags);
+        if flags.contains(&"--offline") && !flags.contains(&"--tools-only") {
+            // Offline dependency setup needs the fixture's missing
+            // pnpm-lock.yaml before anything else.
+            assert!(matches!(result, Err(Error::Dependencies(_))));
+        } else if flags.contains(&"--offline") {
+            // Nothing is installed, so offline force has no verified bytes.
+            assert!(matches!(result, Err(Error::Offline(_))));
+        } else {
+            assert!(matches!(result, Err(Error::NotImplemented)));
+        }
         assert_eq!(u.hits(), 0);
         assert!(!f.owned.root().join(".turbo").exists());
     }

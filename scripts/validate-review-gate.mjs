@@ -6,6 +6,8 @@ import {
   run as validateRelease,
 } from "./validate-release-pr.mjs";
 
+import { reviewBaseIdentity } from "./review-base.mjs";
+
 const WRITE_PERMISSIONS = new Set(["admin", "maintain", "write"]);
 
 function requiredEnv(name) {
@@ -104,7 +106,7 @@ export async function run() {
   const pull = await github(`/repos/${repository}/pulls/${pullNumber}`);
 
   if (
-    pull.base.ref !== pull.base.repo.default_branch ||
+    reviewBaseIdentity(pull) === undefined ||
     pull.base.repo.full_name !== repository ||
     pull.state !== "open" ||
     pull.draft
