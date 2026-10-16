@@ -41,6 +41,8 @@ mod absolute_system_path;
 mod absolute_system_path_buf;
 mod anchored_system_path;
 mod anchored_system_path_buf;
+mod file_realpath;
+pub use file_realpath::file_realpath;
 mod relative_unix_path;
 mod relative_unix_path_buf;
 

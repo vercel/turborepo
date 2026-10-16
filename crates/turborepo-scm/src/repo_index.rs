@@ -1,5 +1,5 @@
 use tracing::{debug, trace};
-use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
+use turbopath::RelativeUnixPathBuf;
 
 use crate::{
     Error, GitHashes, GitRepo, OidHash,
@@ -26,9 +26,6 @@ pub struct RepoGitIndex {
     /// Only populated by [`Self::populate_untracked_for_prefixes`] /
     /// [`Self::populate_all_untracked`].
     untracked_symlinks: Vec<RelativeUnixPathBuf>,
-    /// Separate from hash/provenance data. Backends without link-complete
-    /// discovery leave this absent so callers can fall back to walking.
-    symlink_catalog: Option<SymlinkCatalog>,
     unsupported_paths: Vec<UnsupportedGitPath>,
     untracked_entries_populated: bool,
     /// True when some condition prevents proving that `git diff HEAD` would
@@ -48,14 +45,6 @@ pub struct RepoGitIndex {
     cache_tree_root: Option<String>,
 }
 
-struct SymlinkCatalog {
-    root: AbsoluteSystemPathBuf,
-    /// Sorted index-mode symlinks, including modified/deleted entries.
-    tracked_paths: Vec<RelativeUnixPathBuf>,
-    /// Only present after a link-aware untracked walk completes.
-    untracked_scope: Option<UntrackedScope>,
-}
-
 impl RepoGitIndex {
     #[cfg(test)]
     pub(crate) fn new_for_testing(
@@ -67,7 +56,6 @@ impl RepoGitIndex {
             status_entries,
             unsupported_paths: Vec::new(),
             untracked_symlinks: Vec::new(),
-            symlink_catalog: None,
             untracked_entries_populated: true,
             diff_skip_blocked: true,
             eol_sensitive: false,
@@ -318,28 +306,11 @@ impl RepoGitIndex {
             cache_tree_root,
         );
 
-        // Entry modes identify tracked links without any extra filesystem I/O.
-        // Keep even missing links: these are candidate names, not resolved inputs.
-        let mut tracked_paths = Vec::new();
-        for entry in index.entries() {
-            if entry.mode == gix_index::entry::Mode::SYMLINK
-                && let Ok(path) = parse_git_path(entry.path(&index), "git index path")?
-            {
-                tracked_paths.push(path);
-            }
-        }
-        tracked_paths.dedup();
-
         Ok(Self {
             ls_tree_hashes,
             status_entries,
             unsupported_paths,
             untracked_symlinks: Vec::new(),
-            symlink_catalog: Some(SymlinkCatalog {
-                root: git.root.clone(),
-                tracked_paths,
-                untracked_scope: None,
-            }),
             untracked_entries_populated: false,
             diff_skip_blocked,
             eol_sensitive: eol_sensitive_count > 0,
@@ -471,8 +442,6 @@ impl RepoGitIndex {
             status_entries,
             unsupported_paths,
             untracked_symlinks: Vec::new(),
-            // ls-tree hashes have no modes, and the walk arm omits symlinks.
-            symlink_catalog: None,
             untracked_entries_populated: true,
             // The subprocess path has no per-entry verification or
             // cache-tree access; the dirty hash always runs the diff.
@@ -560,9 +529,6 @@ impl RepoGitIndex {
         }
         self.untracked_symlinks = untracked.symlink_paths;
         self.untracked_symlinks.sort();
-        if let Some(catalog) = &mut self.symlink_catalog {
-            catalog.untracked_scope = untracked.complete.then(|| UntrackedScope::new(prefixes));
-        }
 
         self.status_entries.sort_by(|a, b| a.path.cmp(&b.path));
         self.untracked_entries_populated = true;
@@ -654,92 +620,6 @@ impl RepoGitIndex {
         }
 
         has_untracked
-    }
-
-    /// Repo-relative candidate symlink names for default package inputs.
-    ///
-    /// `None` requires a fallback walk: the backend or untracked scope cannot
-    /// prove completeness. Index-mode links remain candidates even if deleted
-    /// or replaced by regular files; callers must resolve their current kind.
-    /// Only status entries within the package need filesystem kind checks, to
-    /// catch regular files replaced by links since index construction.
-    pub(crate) fn package_symlink_paths(
-        &self,
-        prefix: &RelativeUnixPath,
-    ) -> Option<Vec<RelativeUnixPathBuf>> {
-        let catalog = self.symlink_catalog.as_ref()?;
-        let scope = catalog.untracked_scope.as_ref()?;
-        if !self.untracked_entries_populated
-            || !scope.is_within_selected_prefix_bytes(prefix.as_str().as_bytes())
-        {
-            return None;
-        }
-
-        // A package itself can live behind a link. Descendant-only index
-        // ranges cannot describe that logical tree, so use confined discovery.
-        let mut directory = catalog.root.clone();
-        for component in prefix.as_str().split('/').filter(|part| !part.is_empty()) {
-            directory = directory.join_component(component);
-            let metadata = match std::fs::symlink_metadata(&directory) {
-                Ok(metadata) => metadata,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
-                Err(_) => return None,
-            };
-            if metadata.file_type().is_symlink() {
-                return None;
-            }
-            #[cfg(windows)]
-            {
-                use std::os::windows::fs::MetadataExt;
-                if metadata.file_attributes() & 0x400 != 0 {
-                    return None;
-                }
-            }
-        }
-
-        let (start, end) = if prefix.as_str().is_empty() {
-            (String::new(), String::new())
-        } else {
-            (
-                format!("{}/", prefix.as_str()),
-                format!("{}0", prefix.as_str()),
-            )
-        };
-        let range = |paths: &[RelativeUnixPathBuf]| {
-            if prefix.as_str().is_empty() {
-                0..paths.len()
-            } else {
-                paths.partition_point(|p| p.as_str() < start.as_str())
-                    ..paths.partition_point(|p| p.as_str() < end.as_str())
-            }
-        };
-        let mut paths = catalog.tracked_paths[range(&catalog.tracked_paths)].to_vec();
-        paths.extend_from_slice(&self.untracked_symlinks[range(&self.untracked_symlinks)]);
-
-        let statuses = if prefix.as_str().is_empty() {
-            &self.status_entries[..]
-        } else {
-            let lo = self
-                .status_entries
-                .partition_point(|e| e.path.as_str() < start.as_str());
-            let hi = self
-                .status_entries
-                .partition_point(|e| e.path.as_str() < end.as_str());
-            &self.status_entries[lo..hi]
-        };
-        for entry in statuses {
-            let path = catalog.root.join_unix_path_unchecked(&entry.path);
-            let potentially_link = match std::fs::symlink_metadata(path.as_std_path()) {
-                Ok(metadata) => metadata.file_type().is_symlink(),
-                Err(err) => err.kind() != std::io::ErrorKind::NotFound,
-            };
-            if potentially_link {
-                paths.push(entry.path.clone());
-            }
-        }
-        paths.sort();
-        paths.dedup();
-        Some(paths)
     }
 
     /// Extract hashes for a single package from the cached repo-wide data.
@@ -873,7 +753,6 @@ struct WalkedPaths {
     /// must still account for them (git treats symlinks as trackable).
     symlink_paths: Vec<RelativeUnixPathBuf>,
     unsupported_paths: Vec<UnsupportedGitPath>,
-    complete: bool,
 }
 
 impl WalkedPaths {
@@ -882,15 +761,11 @@ impl WalkedPaths {
             paths: Vec::new(),
             symlink_paths: Vec::new(),
             unsupported_paths: Vec::new(),
-            complete: true,
         }
     }
 
     fn is_empty(&self) -> bool {
-        self.complete
-            && self.paths.is_empty()
-            && self.symlink_paths.is_empty()
-            && self.unsupported_paths.is_empty()
+        self.paths.is_empty() && self.symlink_paths.is_empty() && self.unsupported_paths.is_empty()
     }
 }
 
@@ -980,7 +855,6 @@ fn walk_candidate_files_with_unsupported(
                     paths: std::mem::take(&mut self.batch.paths),
                     symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
                     unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
-                    complete: self.batch.complete,
                 };
                 let _ = self.tx.send(batch);
             }
@@ -997,10 +871,7 @@ fn walk_candidate_files_with_unsupported(
         Box::new(move |entry| {
             let entry = match entry {
                 Ok(e) => e,
-                Err(_) => {
-                    guard.batch.complete = false;
-                    return ignore::WalkState::Continue;
-                }
+                Err(_) => return ignore::WalkState::Continue,
             };
 
             // Skip anything that isn't a regular file (directories,
@@ -1012,10 +883,7 @@ fn walk_candidate_files_with_unsupported(
             let abs_path = entry.into_path();
             let rel_path = match abs_path.strip_prefix(root.as_path()) {
                 Ok(rel) => rel,
-                Err(_) => {
-                    guard.batch.complete = false;
-                    return ignore::WalkState::Continue;
-                }
+                Err(_) => return ignore::WalkState::Continue,
             };
 
             match parse_path(rel_path, "working tree path") {
@@ -1282,7 +1150,6 @@ fn find_untracked_files(
                     paths: std::mem::take(&mut self.batch.paths),
                     symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
                     unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
-                    complete: self.batch.complete,
                 };
                 let _ = self.tx.send(batch);
             }
@@ -1299,10 +1166,7 @@ fn find_untracked_files(
         Box::new(move |entry| {
             let entry = match entry {
                 Ok(e) => e,
-                Err(_) => {
-                    guard.batch.complete = false;
-                    return ignore::WalkState::Continue;
-                }
+                Err(_) => return ignore::WalkState::Continue,
             };
 
             // Regular files feed per-package hashing. Symlinks are trackable
@@ -1319,10 +1183,7 @@ fn find_untracked_files(
             let abs_path = entry.into_path();
             let rel_path = match abs_path.strip_prefix(root.as_path()) {
                 Ok(rel) => rel,
-                Err(_) => {
-                    guard.batch.complete = false;
-                    return ignore::WalkState::Continue;
-                }
+                Err(_) => return ignore::WalkState::Continue,
             };
 
             let path = match parse_path(rel_path, "working tree path") {
@@ -1331,10 +1192,7 @@ fn find_untracked_files(
                     guard.batch.unsupported_paths.push(path);
                     return ignore::WalkState::Continue;
                 }
-                Err(_) => {
-                    guard.batch.complete = false;
-                    return ignore::WalkState::Continue;
-                }
+                Err(_) => return ignore::WalkState::Continue,
             };
 
             let unix_str = path.as_str();
@@ -1360,7 +1218,6 @@ fn find_untracked_files(
 
     let mut untracked = WalkedPaths::new();
     for batch in rx.iter() {
-        untracked.complete &= batch.complete;
         untracked.paths.extend(batch.paths);
         untracked.symlink_paths.extend(batch.symlink_paths);
         untracked.unsupported_paths.extend(batch.unsupported_paths);
@@ -1934,7 +1791,6 @@ mod tests {
             status_entries,
             unsupported_paths: Vec::new(),
             untracked_symlinks: Vec::new(),
-            symlink_catalog: None,
             untracked_entries_populated: true,
             diff_skip_blocked: true,
             eol_sensitive: false,
@@ -1981,168 +1837,6 @@ mod tests {
             args,
             String::from_utf8_lossy(&output.stderr)
         );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_package_symlink_paths_tracked_untracked_and_missing() {
-        use std::os::unix::fs::symlink;
-
-        let tempdir = TempDir::new().unwrap();
-        let root = tempdir.path();
-        git(root, &["init"]);
-        write_file(root, "pkg/target", "target");
-        symlink("target", root.join("pkg/tracked")).unwrap();
-        symlink("missing", root.join("pkg/deleted")).unwrap();
-        git(root, &["add", "."]);
-        // Neither staged link exists in HEAD (there is no commit).
-        std::fs::remove_file(root.join("pkg/deleted")).unwrap();
-        symlink("missing", root.join("pkg/untracked")).unwrap();
-        symlink(".", root.join("pkg/directory-link")).unwrap();
-        write_file(root, "pkg-sibling/ordinary", "ordinary");
-        symlink("missing", root.join("pkg-sibling/link")).unwrap();
-        let index = RepoGitIndex::new(&test_git_repo(root)).unwrap();
-
-        let before = index.get_package_hashes(&path("pkg")).unwrap();
-        let dirty = || {
-            use sha2::Digest;
-            let mut hasher = sha2::Sha256::new();
-            assert!(index.append_dirty_status_to_hasher(&mut hasher));
-            hasher.finalize()
-        };
-        let before_dirty = dirty();
-        assert_eq!(
-            index.package_symlink_paths(&path("pkg")),
-            Some(vec![
-                path("pkg/deleted"),
-                path("pkg/directory-link"),
-                path("pkg/tracked"),
-                path("pkg/untracked"),
-            ])
-        );
-        assert_eq!(index.package_symlink_paths(&path("absent")), Some(vec![]));
-        assert_eq!(index.package_symlink_paths(&path("")).unwrap().len(), 5);
-        assert_eq!(index.get_package_hashes(&path("pkg")).unwrap(), before);
-        assert_eq!(dirty(), before_dirty);
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_package_symlink_paths_stale_status_type_changes() {
-        use std::os::unix::fs::symlink;
-
-        let tempdir = TempDir::new().unwrap();
-        let root = tempdir.path();
-        git(root, &["init"]);
-        write_file(root, "pkg/file", "original");
-        write_file(root, "pkg/deleted", "original");
-        symlink("file", root.join("pkg/link")).unwrap();
-        git(root, &["add", "."]);
-        write_file(root, "pkg/file", "modified content");
-        std::fs::remove_file(root.join("pkg/deleted")).unwrap();
-        std::fs::remove_file(root.join("pkg/link")).unwrap();
-        write_file(root, "pkg/link", "now regular");
-        let index = RepoGitIndex::new(&test_git_repo(root)).unwrap();
-
-        // Kind checks must use current status paths, not just index modes
-        // or the file kind observed while building the index.
-        std::fs::remove_file(root.join("pkg/file")).unwrap();
-        symlink("missing", root.join("pkg/file")).unwrap();
-        symlink("missing", root.join("pkg/deleted")).unwrap();
-        assert_eq!(
-            index.package_symlink_paths(&path("pkg")),
-            Some(vec![
-                path("pkg/deleted"),
-                path("pkg/file"),
-                path("pkg/link")
-            ])
-        );
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn test_package_symlink_paths_falls_back_for_linked_package_roots() {
-        let tempdir = TempDir::new().unwrap();
-        let root = tempdir.path();
-        git(root, &["init"]);
-        write_file(root, "actual/pkg/input", "input");
-        std::os::unix::fs::symlink("actual", root.join("linked")).unwrap();
-        git(root, &["add", "."]);
-        let index = RepoGitIndex::new(&test_git_repo(root)).unwrap();
-        assert!(index.package_symlink_paths(&path("linked")).is_none());
-        assert!(index.package_symlink_paths(&path("linked/pkg")).is_none());
-        assert_eq!(
-            index.package_symlink_paths(&path("actual/pkg")),
-            Some(vec![])
-        );
-    }
-
-    #[test]
-    fn test_package_symlink_paths_falls_back_after_incomplete_walk() {
-        let tempdir = TempDir::new().unwrap();
-        let root = tempdir.path().join("repo");
-        std::fs::create_dir(&root).unwrap();
-        git(&root, &["init"]);
-        write_file(&root, "pkg/input", "input");
-        git(&root, &["add", "."]);
-        let git_repo = test_git_repo(&root);
-        let mut index = RepoGitIndex::new_tracked(&git_repo).unwrap();
-        std::fs::rename(&root, tempdir.path().join("moved")).unwrap();
-        index.populate_all_untracked(&git_repo).unwrap();
-        assert!(index.package_symlink_paths(&path("pkg")).is_none());
-    }
-
-    #[test]
-    fn test_package_symlink_paths_requires_complete_scope() {
-        let tempdir = TempDir::new().unwrap();
-        let root = tempdir.path();
-        git(root, &["init"]);
-        write_file(root, "pkg/file", "ordinary");
-        git(root, &["add", "."]);
-        let git_repo = test_git_repo(root);
-        let mut index = RepoGitIndex::new_tracked(&git_repo).unwrap();
-        assert_eq!(index.package_symlink_paths(&path("pkg")), None);
-        index
-            .populate_untracked_for_prefixes(&git_repo, &[path("pkg")])
-            .unwrap();
-        assert_eq!(index.package_symlink_paths(&path("pkg")), Some(vec![]));
-        assert_eq!(
-            index.package_symlink_paths(&path("pkg/nested")),
-            Some(vec![])
-        );
-        assert_eq!(index.package_symlink_paths(&path("pkg-sibling")), None);
-        assert_eq!(index.package_symlink_paths(&path("")), None);
-
-        let mut index = RepoGitIndex::new_tracked(&git_repo).unwrap();
-        index.populate_untracked_from_candidates(vec![]);
-        assert_eq!(index.package_symlink_paths(&path("pkg")), None);
-    }
-
-    #[test]
-    fn test_package_symlink_paths_subprocess_requires_fallback() {
-        let tempdir = TempDir::new().unwrap();
-        let root = tempdir.path();
-        git(root, &["init"]);
-        write_file(root, "pkg/file", "ordinary");
-        git(root, &["add", "."]);
-        git(
-            root,
-            &[
-                "-c",
-                "user.name=Test",
-                "-c",
-                "user.email=test@example.com",
-                "commit",
-                "-m",
-                "initial",
-            ],
-        );
-        let mut git_repo = test_git_repo(root);
-        git_repo.bin = AbsoluteSystemPathBuf::try_from(which::which("git").unwrap()).unwrap();
-        let index = RepoGitIndex::new_from_subprocess_and_walk(&git_repo, &[path("pkg")]).unwrap();
-        assert_eq!(index.package_symlink_paths(&path("pkg")), None);
-        let index = RepoGitIndex::new_for_testing(vec![], vec![]);
-        assert_eq!(index.package_symlink_paths(&path("pkg")), None);
     }
 
     /// A tracked file whose raw size changed since `git add` must classify as

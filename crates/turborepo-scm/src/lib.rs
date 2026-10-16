@@ -32,7 +32,6 @@ pub mod package_deps;
 mod repo_index;
 pub mod slowest_files;
 mod status;
-mod symlink_inputs;
 pub mod worktree;
 
 #[cfg(test)]
