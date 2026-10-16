@@ -452,9 +452,7 @@ fn locked_cargo_dependencies_prefetch_with_the_managed_toolchain_and_home() {
     let root = repo.owned.root();
     fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
     let upstream = repo.upstream(false);
-    // Cargo runs no build scripts, so skipping them changes nothing, and
-    // tools-only setup never fetches.
-    for flags in [&["--frozen"][..], &["--frozen", "--ignore-scripts"], FROZEN] {
+    for flags in [&["--frozen"][..], &["--frozen"], FROZEN] {
         assert_eq!(repo.run(&upstream, flags).unwrap(), 0);
     }
     // A failed locked fetch passes cargo's exit status through.

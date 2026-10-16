@@ -119,27 +119,24 @@ fn locked_bun_dependencies_install_frozen_and_repeat_safely() {
     let root = f.owned.root();
     fs::write(root.join("bun.lock"), "{}\n").unwrap();
     assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
-    // A repeat reinstalls removed dependencies, and Bun's own flag skips
-    // scripts; tools-only setup never runs Bun.
     fs::remove_dir_all(root.join("node_modules")).unwrap();
-    assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
     assert!(root.join("node_modules").exists());
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(
         bun_args(&f),
-        [
-            "install --frozen-lockfile",
-            "install --frozen-lockfile --ignore-scripts"
-        ]
+        ["install --frozen-lockfile", "install --frozen-lockfile"]
     );
     assert_eq!(fs::read(root.join("bun.lock")).unwrap(), b"{}\n");
     let lock = fs::read(root.join("turbo.lock")).unwrap();
     let lock = turborepo_setup::lock::Lock::parse(&lock).unwrap();
     let plan = f.dependencies(&["--plan"]).plan(root, &lock).unwrap();
     assert_eq!(
-        plan[1],
-        "  bun 1.2.23: native bun policy; project scripts run; dependency scripts run only for \
-         trusted packages"
+        plan,
+        [
+            "javascript dependencies: bun install --frozen-lockfile from bun.lock with managed \
+             tools (bun.lock stays unchanged)"
+        ]
     );
     assert!(!root.join("task-ran").exists() && !root.join("hook-ran").exists());
 }

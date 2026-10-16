@@ -9,7 +9,8 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    fs, io,
+    fs,
+    io::{self, Read},
     path::Path,
     process::{Command, ExitStatus, Stdio},
 };
@@ -86,10 +87,6 @@ impl Frozen {
         })
     }
 
-    pub fn manager(self) -> Manager {
-        self.manager
-    }
-
     /// The managed executable's name, which is also its turbo.lock tool ID.
     pub fn program(self) -> &'static str {
         self.manager.name()
@@ -121,7 +118,7 @@ impl Frozen {
             // Modern Yarn has no flag, but `enableNetwork: false` blocks every
             // request, with its global or project cache alike. A per-host
             // `networkSettings` entry takes precedence over it.
-            Manager::Yarn => match crate::lifecycle::yarn_host_network(root) {
+            Manager::Yarn => match yarn_host_network(root) {
                 Ok(false) => Offline::Env(&[("YARN_ENABLE_NETWORK", "0")]),
                 Ok(true) => Offline::Unsupported(
                     ".yarnrc.yml enables the network for a host in networkSettings, which Yarn \
@@ -201,6 +198,41 @@ impl Frozen {
         }
         Ok(status)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("cannot read offline network settings from .yarnrc.yml; fix or remove it and retry")]
+struct YarnSettingsError;
+
+fn yarn_host_network(root: &Path) -> Result<bool, YarnSettingsError> {
+    const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
+    let path = root.join(".yarnrc.yml");
+    let mut text = String::new();
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.is_file() && metadata.len() <= MAX_SETTINGS_BYTES => {
+            fs::File::open(&path)
+                .and_then(|file| file.take(MAX_SETTINGS_BYTES + 1).read_to_string(&mut text))
+                .map_err(|_| YarnSettingsError)?;
+            if text.len() as u64 > MAX_SETTINGS_BYTES {
+                return Err(YarnSettingsError);
+            }
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        _ => return Err(YarnSettingsError),
+    }
+    let value: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(&text).map_err(|_| YarnSettingsError)?;
+    if !(value.is_mapping() || value.is_null()) {
+        return Err(YarnSettingsError);
+    }
+    Ok(value.get("networkSettings").is_some_and(|hosts| {
+        hosts.as_mapping().is_some_and(|hosts| {
+            hosts.values().any(|host| {
+                host.get("enableNetwork")
+                    .is_some_and(|enabled| !enabled.is_null() && enabled.as_bool() != Some(false))
+            })
+        })
+    }))
 }
 
 fn read(path: &Path) -> io::Result<Option<Vec<u8>>> {

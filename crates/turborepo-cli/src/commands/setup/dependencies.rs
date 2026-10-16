@@ -1,7 +1,6 @@
 //! Locked dependency setup after tool provisioning. Each enabled ecosystem
 //! runs its native frozen install with the managed tools that setup just
-//! installed and recorded, never a Turborepo task. The effective
-//! lifecycle-script policy is shown before each installer starts. Committed
+//! installed and recorded, never a Turborepo task. Committed
 //! ecosystem lockfiles are required and never rewritten. Repeats rerun the
 //! native command: an unchanged lockfile does not prove that installed
 //! dependencies are ready. `--offline` uses each manager's native offline
@@ -21,9 +20,8 @@ use turborepo_setup::{
     cargo_prefetch,
     go_prefetch::{self, Prefetch},
     js_install::{self, Frozen, Offline},
-    lifecycle::{self, Installer, Policy},
     lock::{Ecosystems, Lock, Snapshot},
-    uv_sync::{self, Builds, UvSync},
+    uv_sync::{self, UvSync},
 };
 use turborepo_turbo_json::{DependencyPolicy, ToolPolicy};
 
@@ -54,8 +52,6 @@ pub enum Error {
     #[error(transparent)]
     Install(#[from] js_install::Error),
     #[error(transparent)]
-    Lifecycle(#[from] lifecycle::Error),
-    #[error(transparent)]
     Uv(#[from] uv_sync::Error),
     #[error(transparent)]
     Cargo(#[from] cargo_prefetch::Error),
@@ -80,28 +76,22 @@ enum Adapter {
     Javascript {
         frozen: Frozen,
         lockfile: &'static str,
-        lifecycle: lifecycle::Request,
     },
-    /// `uv sync --locked`; skipping lifecycle scripts refuses source builds.
-    Uv { lifecycle: lifecycle::Request },
+    Uv,
     /// `cargo fetch --locked` into the clone's private Cargo home.
-    Cargo { lifecycle: lifecycle::Request },
+    Cargo,
     /// `go mod download` with read-only module files.
-    Go { lifecycle: lifecycle::Request },
+    Go,
 }
 
 /// One installer invocation for the locked versions.
 struct Run {
-    /// The managed program, its native frozen arguments, its offline
-    /// arguments, then exactly the lifecycle policy's arguments.
     command: Vec<&'static str>,
     /// Native offline settings, set over the managed environment.
     env: &'static [(&'static str, &'static str)],
     offline: bool,
     /// Why the installer cannot be kept off the network, when offline.
     blocked: Option<String>,
-    installer: Installer,
-    policy: Policy,
 }
 
 impl Run {
@@ -114,48 +104,28 @@ impl Run {
     }
 }
 
-fn uv_sync<'a>(
-    uv: &'a Path,
-    root: &'a Path,
-    offline: bool,
-    builds: Builds,
-    env: &'a BTreeMap<String, OsString>,
-) -> UvSync<'a> {
-    UvSync {
-        uv,
-        root,
-        offline,
-        builds,
-        env,
-    }
-}
-
 impl Adapter {
     fn lockfile(&self) -> &'static str {
         match self {
             Self::Javascript { lockfile, .. } => lockfile,
-            Self::Uv { .. } => "uv.lock",
-            Self::Cargo { .. } => "Cargo.lock",
-            Self::Go { .. } => "go.sum",
+            Self::Uv => "uv.lock",
+            Self::Cargo => "Cargo.lock",
+            Self::Go => "go.sum",
         }
     }
 
-    /// Reads committed lifecycle and offline settings; runs nothing. Offline,
+    /// Reads native offline settings; runs nothing. Offline,
     /// each manager uses its native mode that fails on anything missing from
     /// its cache instead of contacting a registry.
     fn run(&self, root: &Path, lock: &Lock, offline: bool) -> Result<Run, Error> {
         let (mut env, mut blocked): (&'static [_], _) = (&[], None);
-        let (installer, lifecycle, mut command): (_, _, Vec<_>) = match self {
-            Self::Javascript {
-                frozen, lifecycle, ..
-            } => {
+        let command = match self {
+            Self::Javascript { frozen, .. } => {
                 let id = frozen.program();
                 let version = lock
                     .tools()
                     .get(id)
                     .and_then(|tool| Version::parse(&tool.version).ok())
-                    .ok_or(Error::Unlocked(id))?;
-                let installer = Installer::javascript(frozen.manager(), version.clone())
                     .ok_or(Error::Unlocked(id))?;
                 let mut command: Vec<_> = std::iter::once(id)
                     .chain(frozen.args(&version).iter().copied())
@@ -166,38 +136,36 @@ impl Adapter {
                     Some(Offline::Env(vars)) => env = vars,
                     Some(Offline::Unsupported(reason)) => blocked = Some(reason),
                 }
-                (installer, *lifecycle, command)
+                command
             }
-            Self::Uv { lifecycle } => {
+            Self::Uv => {
                 let none = BTreeMap::new();
-                let sync = uv_sync(Path::new("uv"), root, offline, Builds::Native, &none).args();
-                (
-                    Installer::Uv,
-                    *lifecycle,
-                    std::iter::once("uv").chain(sync).collect(),
-                )
+                let sync = UvSync {
+                    uv: Path::new("uv"),
+                    root,
+                    offline,
+                    env: &none,
+                }
+                .args();
+                std::iter::once("uv").chain(sync).collect()
             }
-            Self::Cargo { lifecycle } => {
+            Self::Cargo => {
                 let mut command = vec!["cargo", "fetch", "--locked"];
                 command.extend(offline.then_some("--offline"));
-                (Installer::Cargo, *lifecycle, command)
+                command
             }
-            Self::Go { lifecycle } => {
+            Self::Go => {
                 if offline {
                     env = go_prefetch::OFFLINE_ENV;
                 }
-                (Installer::Go, *lifecycle, vec!["go", "mod", "download"])
+                vec!["go", "mod", "download"]
             }
         };
-        let policy = Policy::evaluate(root, installer.clone(), lifecycle)?;
-        command.extend(policy.args().iter().copied());
         Ok(Run {
             command,
             env,
             offline,
             blocked,
-            installer,
-            policy,
         })
     }
 
@@ -222,19 +190,22 @@ impl Adapter {
                 )?;
                 Ok((!status.success()).then(|| crate::commands::exec::exit_code(status)))
             }
-            Self::Uv { .. } => {
+            Self::Uv => {
                 let uv = env.program("uv")?;
-                let builds = match run.policy.args() {
-                    [] => Builds::Native,
-                    _ => Builds::Skip,
-                };
-                match uv_sync(&uv, root, offline, builds, vars).run() {
+                match (UvSync {
+                    uv: &uv,
+                    root,
+                    offline,
+                    env: vars,
+                })
+                .run()
+                {
                     Ok(()) => Ok(None),
                     Err(uv_sync::Error::Failed(code)) => Ok(Some(code)),
                     Err(error) => Err(error.into()),
                 }
             }
-            Self::Cargo { .. } => {
+            Self::Cargo => {
                 let cargo = env.program("cargo")?;
                 // Activation exposes this same home to tasks as CARGO_HOME.
                 let home = cargo_prefetch::cargo_home(root)?;
@@ -244,7 +215,7 @@ impl Adapter {
                     Err(error) => Err(error.into()),
                 }
             }
-            Self::Go { .. } => {
+            Self::Go => {
                 let go = env.program("go")?;
                 let prefetch = Prefetch {
                     go: &go,
@@ -293,17 +264,14 @@ impl Dependencies {
         for toolchain in plan.toolchains() {
             let (dependencies, source) = toolchain.dependencies;
             let id = &toolchain.id;
-            let lifecycle = request.lifecycle(discovery.policy().toolchain(id).lifecycle_scripts);
             let step = match toolchain.tools.0 {
                 _ if dependencies == DependencyPolicy::Skip => Step::Skip(source.label().into()),
                 ToolPolicy::Managed if *id == ToolchainId::JAVASCRIPT => {
-                    javascript(root, snapshot, lifecycle)?
+                    javascript(root, snapshot)?
                 }
-                ToolPolicy::Managed if *id == ToolchainId::PYTHON => {
-                    python(root, snapshot, lifecycle)?
-                }
-                ToolPolicy::Managed if *id == ToolchainId::RUST => rust(root, snapshot, lifecycle)?,
-                ToolPolicy::Managed if *id == ToolchainId::GO => go(snapshot, lifecycle),
+                ToolPolicy::Managed if *id == ToolchainId::PYTHON => python(root, snapshot)?,
+                ToolPolicy::Managed if *id == ToolchainId::RUST => rust(root, snapshot)?,
+                ToolPolicy::Managed if *id == ToolchainId::GO => go(snapshot),
                 ToolPolicy::Managed => Step::Skip(format!(
                     "{} dependency setup is not supported yet",
                     id.as_str()
@@ -381,9 +349,8 @@ impl Dependencies {
         }
         self.describe(root, lock, |run, lockfile| {
             format!(
-                "{} from {lockfile} with managed {} ({lockfile} stays unchanged)",
-                run.display(),
-                run.installer
+                "{} from {lockfile} with managed tools ({lockfile} stays unchanged)",
+                run.display()
             )
         })
     }
@@ -401,7 +368,7 @@ impl Dependencies {
             format!(
                 "not checked; turbo setup reruns {} from {lockfile}, because dependency readiness \
                  is not tracked",
-                run.command.join(" ")
+                run.display()
             )
         })?;
         lines.push("No tasks run.".into());
@@ -429,8 +396,6 @@ impl Dependencies {
                     }
                     let action = action(&run, adapter.lockfile());
                     lines.push(format!("{id} dependencies: {action}"));
-                    let policy = run.policy.report().into_iter();
-                    lines.extend(policy.map(|line| format!("  {line}")));
                 }
             }
         }
@@ -479,15 +444,10 @@ impl Dependencies {
             };
             let (run, lockfile) = (adapter.run(root, lock, self.offline)?, adapter.lockfile());
             let command = run.display();
-            // Reported before the installer can run any lifecycle script.
             println!(
-                "Installing {id} dependencies{offline} from {lockfile} with managed {}: {command} \
-                 (dependency installation, not a Turborepo task)",
-                run.installer
+                "Installing {id} dependencies{offline} from {lockfile} with managed tools: \
+                 {command} (dependency installation, not a Turborepo task)"
             );
-            for line in run.policy.report() {
-                println!("{line}");
-            }
             let env = Environment::recorded(root, &sources, &trust_base)?;
             if let Some(code) = adapter.execute(&run, root, &env)? {
                 if self.offline {
@@ -528,11 +488,7 @@ impl Dependencies {
     }
 }
 
-fn javascript(
-    root: &Path,
-    snapshot: &Snapshot,
-    lifecycle: lifecycle::Request,
-) -> Result<Step, Error> {
+fn javascript(root: &Path, snapshot: &Snapshot) -> Result<Step, Error> {
     let Some(declaration) = snapshot.package_manager()? else {
         if !root.join("package.json").exists() {
             return Ok(Step::Skip("no root package.json".into()));
@@ -548,11 +504,10 @@ fn javascript(
     Ok(Step::Install(Adapter::Javascript {
         lockfile: frozen.lockfile(root)?,
         frozen,
-        lifecycle,
     }))
 }
 
-fn python(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Result<Step, Error> {
+fn python(root: &Path, snapshot: &Snapshot) -> Result<Step, Error> {
     // uv syncs with the managed uv only, so it needs a uv declaration.
     if !snapshot.declarations().contains_key("uv") {
         let reason = "no managed uv; declare tool.uv.required-version or uv.toml";
@@ -561,10 +516,10 @@ fn python(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Re
     if !root.join("uv.lock").is_file() {
         return Err(uv_sync::Error::MissingLock.into());
     }
-    Ok(Step::Install(Adapter::Uv { lifecycle }))
+    Ok(Step::Install(Adapter::Uv))
 }
 
-fn rust(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Result<Step, Error> {
+fn rust(root: &Path, snapshot: &Snapshot) -> Result<Step, Error> {
     // Cargo fetches with the managed toolchain only, so it needs a toolchain file.
     if !snapshot.declarations().contains_key("rust") {
         let reason = "no managed Rust toolchain; declare one in rust-toolchain.toml";
@@ -573,16 +528,16 @@ fn rust(root: &Path, snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Resu
     if !root.join("Cargo.lock").is_file() {
         return Err(cargo_prefetch::Error::MissingLock.into());
     }
-    Ok(Step::Install(Adapter::Cargo { lifecycle }))
+    Ok(Step::Install(Adapter::Cargo))
 }
 
 /// Modules without dependencies have no go.sum, so go itself reports missing
 /// checksums rather than setup requiring the file.
-fn go(snapshot: &Snapshot, lifecycle: lifecycle::Request) -> Step {
+fn go(snapshot: &Snapshot) -> Step {
     if !snapshot.declarations().contains_key("go") {
         return Step::Skip("no managed Go toolchain; declare go in go.mod or go.work".into());
     }
-    Step::Install(Adapter::Go { lifecycle })
+    Step::Install(Adapter::Go)
 }
 
 /// Managed tools first on PATH plus their runtime variables, over the

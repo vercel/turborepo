@@ -863,24 +863,20 @@ fn offline_npm_dependencies_install_from_the_npm_cache_without_traffic() {
     assert_eq!(
         plan.unwrap()[0],
         "javascript dependencies: npm ci --offline --no-update-notifier from package-lock.json \
-         with managed npm 11.6.1 (package-lock.json stays unchanged)"
+         with managed tools (package-lock.json stays unchanged)"
     );
     n.no_tasks();
 }
 
 #[test]
-fn npm_plans_and_checks_report_the_install_and_policy_without_running_it() {
+fn npm_plans_and_checks_report_the_install_without_running_it() {
     let n = installing("touch hook-ran");
     let (root, lock) = (n.f.owned.root(), n.lock());
-    let disclosure = "  Permitted lifecycle scripts run package code that can start other \
-                      commands. turbo setup runs no Turborepo tasks.";
     assert_eq!(
         n.f.dependencies(&["--plan"]).plan(root, &lock).unwrap(),
         [
-            "javascript dependencies: npm ci from package-lock.json with managed npm 11.6.1 \
+            "javascript dependencies: npm ci from package-lock.json with managed tools \
              (package-lock.json stays unchanged)",
-            "  npm 11.6.1: native npm policy; project scripts run; dependency scripts run",
-            disclosure,
         ]
     );
     let check = n.f.dependencies(&["--check"]).check(root, &lock).unwrap();
@@ -890,14 +886,6 @@ fn npm_plans_and_checks_report_the_install_and_policy_without_running_it() {
          because dependency readiness is not tracked"
     );
     assert_eq!(check.last().unwrap(), "No tasks run.");
-    let skipped = n.f.dependencies(&["--plan", "--ignore-scripts"]);
-    assert_eq!(
-        skipped.plan(root, &lock).unwrap()[1..],
-        [
-            "  npm 11.6.1: lifecycle scripts skipped (--ignore-scripts); passing --ignore-scripts \
-             to npm"
-        ]
-    );
     assert_eq!(
         n.f.dependencies(&["--plan", "--tools-only"])
             .plan(root, &lock)
@@ -914,21 +902,13 @@ fn npm_plans_and_checks_report_the_install_and_policy_without_running_it() {
 }
 
 #[test]
-fn npm_lifecycle_skip_controls_pass_ignore_scripts_and_tools_only_skips_npm() {
+fn npm_tools_only_skips_the_native_install() {
     let n = installing("");
     let u = n.upstream();
     assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
     assert!(n.args().is_empty());
-    assert_eq!(n.f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
-    let skip = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"lifecycleScripts":"skip"}}"#;
-    fs::write(n.f.owned.root().join("turbo.json"), skip).unwrap();
     assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
-    fs::write(n.f.owned.root().join("turbo.json"), ENABLED).unwrap();
-    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
-    assert_eq!(
-        n.args(),
-        ["ci --ignore-scripts", "ci --ignore-scripts", "ci"]
-    );
+    assert_eq!(n.args(), ["ci"]);
     n.no_tasks();
 }
 
