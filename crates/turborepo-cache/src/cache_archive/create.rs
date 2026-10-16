@@ -261,13 +261,15 @@ impl<'a> CacheWriter<'a> {
     /// Get the archive with [`CacheWriter::finish_spooled`].
     pub(crate) fn spooled(memory_threshold: usize) -> Result<CacheWriter<'static>, CacheError> {
         let spool = BufWriter::new(tempfile::spooled_tempfile(memory_threshold));
-        let zw = zstd::Encoder::new(spool, 0)?;
+        let zw = archive_encoder(spool)?;
         Ok(CacheWriter {
             builder: tar::Builder::new(ArchiveSink::ZstdSpool(ZstdSink::new(zw))),
             temp_path: None,
             final_path: None,
             #[cfg(unix)]
             anchor: None,
+            #[cfg(unix)]
+            dir_stack: Vec::new(),
             #[cfg(windows)]
             windows_anchor: None,
         })
