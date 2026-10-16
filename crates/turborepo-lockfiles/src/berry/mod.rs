@@ -224,14 +224,27 @@ pub struct BerryManifest {
     package_extensions: Option<Map<String, Map<String, String>>>,
 }
 
-fn builtin_dependency_extension_is_needed(
+fn builtin_dependency_extension_is_needed<'a, 'b: 'a>(
     descriptor: &Descriptor,
-    package_names: &HashSet<String>,
+    mut reachable_packages: impl Iterator<Item = (&'a Locator<'b>, &'a BerryPackage)>,
 ) -> bool {
     // https://github.com/yarnpkg/berry/blob/master/packages/yarnpkg-extensions/sources/index.ts
     descriptor.ident.to_string() == "@babel/types"
         && descriptor.range == "npm:^7.8.3"
-        && package_names.contains("@babel/parser")
+        && reachable_packages.any(|(locator, package)| {
+            locator.ident.to_string() == "@babel/parser"
+                && !package.declares_dependency("@babel/types")
+        })
+}
+
+impl BerryPackage {
+    // Yarn applies a dependency package extension only to packages that don't
+    // already declare that dependency.
+    fn declares_dependency(&self, name: &str) -> bool {
+        self.dependencies
+            .as_ref()
+            .is_some_and(|dependencies| dependencies.contains_key(name))
+    }
 }
 
 impl BerryLockfile {
@@ -558,7 +571,6 @@ impl BerryLockfile {
         // dependency.
         {
             let mut dependency_names = HashSet::new();
-            let mut package_names = HashSet::new();
             let mut peer_descriptors = HashSet::new();
             let mut reachable_locators = Vec::new();
             for key in packages {
@@ -566,7 +578,6 @@ impl BerryLockfile {
                     && let Some(package) = self.locator_package.get(&package_locator)
                 {
                     reachable_locators.push(package_locator.clone());
-                    package_names.insert(package_locator.ident.to_string());
                     for (name, _) in package.dependencies.iter().flatten() {
                         dependency_names.insert(name.as_str());
                     }
@@ -600,27 +611,39 @@ impl BerryLockfile {
                 }
             }
 
+            let reachable_packages = || {
+                reachable_locators.iter().filter_map(|locator| {
+                    self.locator_package
+                        .get(locator)
+                        .map(|package| (locator, package))
+                })
+            };
+
             let project_extension_descriptors = self
                 .project_extensions
                 .iter()
-                .filter(|(selector, _)| {
-                    let Ok(range) = node_semver::Range::parse(Descriptor::strip_protocol(
+                .flat_map(|(selector, dependencies)| {
+                    let range = node_semver::Range::parse(Descriptor::strip_protocol(
                         selector.range.as_ref(),
-                    )) else {
-                        return false;
-                    };
-                    reachable_locators.iter().any(|locator| {
-                        locator.ident == selector.ident
-                            && self
-                                .locator_package
-                                .get(locator)
-                                .and_then(|package| {
-                                    node_semver::Version::parse(&package.version).ok()
+                    ))
+                    .ok();
+                    let extended_packages = reachable_packages()
+                        .filter(|(locator, package)| {
+                            locator.ident == selector.ident
+                                && range.as_ref().is_some_and(|range| {
+                                    node_semver::Version::parse(&package.version)
+                                        .is_ok_and(|version| range.satisfies(&version))
                                 })
-                                .is_some_and(|version| range.satisfies(&version))
+                        })
+                        .map(|(_, package)| package)
+                        .collect::<Vec<_>>();
+                    dependencies.iter().filter(move |dependency| {
+                        let name = dependency.ident.to_string();
+                        extended_packages
+                            .iter()
+                            .any(|package| !package.declares_dependency(&name))
                     })
                 })
-                .flat_map(|(_, dependencies)| dependencies)
                 .collect::<HashSet<_>>();
 
             for descriptor in project_extension_descriptors {
@@ -633,7 +656,7 @@ impl BerryLockfile {
                     || ident
                         .strip_prefix("@types/")
                         .is_some_and(|name| dependency_names.contains(name))
-                    || builtin_dependency_extension_is_needed(descriptor, &package_names);
+                    || builtin_dependency_extension_is_needed(descriptor, reachable_packages());
 
                 if needed {
                     self.add_extension_descriptor(descriptor, &mut resolutions)?;
@@ -1321,6 +1344,219 @@ mod test {
             !String::from_utf8(without_parser.encode().unwrap())
                 .unwrap()
                 .contains("@babel/types@npm:^7.8.3")
+        );
+    }
+
+    #[test]
+    fn test_prune_drops_babel_extension_when_parser_declares_types() {
+        // Trimmed from a lockfile yarn 4.13.0 wrote. `old` depends on
+        // @babel/parser 7.24.6, which has no dependencies, so Yarn's built-in
+        // extension adds @babel/types@^7.8.3. @babel/parser 7.29.0 declares
+        // @babel/types itself, so Yarn doesn't extend it.
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"@babel/helper-string-parser@npm:^7.29.7":
+  version: 7.29.7
+  resolution: "@babel/helper-string-parser@npm:7.29.7"
+  languageName: node
+  linkType: hard
+
+"@babel/helper-validator-identifier@npm:^7.29.7":
+  version: 7.29.7
+  resolution: "@babel/helper-validator-identifier@npm:7.29.7"
+  languageName: node
+  linkType: hard
+
+"@babel/parser@npm:7.24.6":
+  version: 7.24.6
+  resolution: "@babel/parser@npm:7.24.6"
+  languageName: node
+  linkType: hard
+
+"@babel/parser@npm:7.29.0":
+  version: 7.29.0
+  resolution: "@babel/parser@npm:7.29.0"
+  dependencies:
+    "@babel/types": "npm:^7.29.0"
+  languageName: node
+  linkType: hard
+
+"@babel/types@npm:^7.29.0, @babel/types@npm:^7.8.3":
+  version: 7.29.8
+  resolution: "@babel/types@npm:7.29.8"
+  dependencies:
+    "@babel/helper-string-parser": "npm:^7.29.7"
+    "@babel/helper-validator-identifier": "npm:^7.29.7"
+  languageName: node
+  linkType: hard
+
+"berry-babel-extension@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "berry-babel-extension@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"new@workspace:packages/new":
+  version: 0.0.0-use.local
+  resolution: "new@workspace:packages/new"
+  dependencies:
+    "@babel/parser": "npm:7.29.0"
+  languageName: unknown
+  linkType: soft
+
+"old@workspace:packages/old":
+  version: 0.0.0-use.local
+  resolution: "old@workspace:packages/old"
+  dependencies:
+    "@babel/parser": "npm:7.24.6"
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+        let new = lockfile
+            .subgraph(
+                &["packages/new".to_string()],
+                &[
+                    "@babel/parser@npm:7.29.0".to_string(),
+                    "@babel/types@npm:7.29.8".to_string(),
+                    "@babel/helper-string-parser@npm:7.29.7".to_string(),
+                    "@babel/helper-validator-identifier@npm:7.29.7".to_string(),
+                ],
+            )
+            .unwrap();
+        let old = lockfile
+            .subgraph(
+                &["packages/old".to_string()],
+                &["@babel/parser@npm:7.24.6".to_string()],
+            )
+            .unwrap();
+
+        let new = String::from_utf8(new.encode().unwrap()).unwrap();
+        assert!(new.contains("\n\"@babel/types@npm:^7.29.0\":\n"), "{new}");
+        assert!(!new.contains("@babel/types@npm:^7.8.3"), "{new}");
+        let old = String::from_utf8(old.encode().unwrap()).unwrap();
+        assert!(old.contains("\n\"@babel/types@npm:^7.8.3\":\n"), "{old}");
+    }
+
+    #[test]
+    fn test_prune_skips_project_extension_the_package_already_declares() {
+        // Trimmed from a lockfile yarn 4.13.0 wrote for the project extension
+        // `is-number@*` -> `kind-of@^6.0.0`. is-number 7.0.0 has no
+        // dependencies and gets the extension; is-number 3.0.0 declares
+        // kind-of itself, so Yarn leaves it alone.
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"berry-project-extension@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "berry-project-extension@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"is-buffer@npm:^1.1.5":
+  version: 1.1.6
+  resolution: "is-buffer@npm:1.1.6"
+  languageName: node
+  linkType: hard
+
+"is-number@npm:3.0.0":
+  version: 3.0.0
+  resolution: "is-number@npm:3.0.0"
+  dependencies:
+    kind-of: "npm:^3.0.2"
+  languageName: node
+  linkType: hard
+
+"is-number@npm:7.0.0":
+  version: 7.0.0
+  resolution: "is-number@npm:7.0.0"
+  languageName: node
+  linkType: hard
+
+"kind-of@npm:^3.0.2":
+  version: 3.2.2
+  resolution: "kind-of@npm:3.2.2"
+  dependencies:
+    is-buffer: "npm:^1.1.5"
+  languageName: node
+  linkType: hard
+
+"kind-of@npm:^6.0.0":
+  version: 6.0.3
+  resolution: "kind-of@npm:6.0.3"
+  languageName: node
+  linkType: hard
+
+"new@workspace:packages/new":
+  version: 0.0.0-use.local
+  resolution: "new@workspace:packages/new"
+  dependencies:
+    is-number: "npm:3.0.0"
+  languageName: unknown
+  linkType: soft
+
+"old@workspace:packages/old":
+  version: 0.0.0-use.local
+  resolution: "old@workspace:packages/old"
+  dependencies:
+    is-number: "npm:7.0.0"
+  languageName: unknown
+  linkType: soft
+"#;
+        let manifest = || {
+            BerryManifest::with_resolutions(Vec::new()).with_package_extensions([(
+                "is-number@*".to_string(),
+                [("kind-of".to_string(), "^6.0.0".to_string())],
+            )])
+        };
+        let new_packages = [
+            "is-number@npm:3.0.0".to_string(),
+            "kind-of@npm:3.2.2".to_string(),
+            "is-buffer@npm:1.1.6".to_string(),
+        ];
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest())).unwrap();
+        let new = lockfile
+            .subgraph(&["packages/new".to_string()], &new_packages)
+            .unwrap();
+        let old = lockfile
+            .subgraph(
+                &["packages/old".to_string()],
+                &["is-number@npm:7.0.0".to_string()],
+            )
+            .unwrap();
+
+        let new = String::from_utf8(new.encode().unwrap()).unwrap();
+        assert!(!new.contains("kind-of@npm:^6.0.0"), "{new}");
+        let old = String::from_utf8(old.encode().unwrap()).unwrap();
+        assert!(old.contains("\n\"kind-of@npm:^6.0.0\":\n"), "{old}");
+
+        // When every matching package declares the dependency, Yarn never
+        // resolves the extension's range, so it has no lockfile entry.
+        let redundant = yaml
+            .split("\n\n")
+            .filter(|entry| {
+                !entry.starts_with("\"is-number@npm:7.0.0\"")
+                    && !entry.starts_with("\"kind-of@npm:^6.0.0\"")
+                    && !entry.starts_with("\"old@")
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let data = LockfileData::from_bytes(redundant.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest())).unwrap();
+        let new = lockfile
+            .subgraph(&["packages/new".to_string()], &new_packages)
+            .unwrap();
+        assert!(
+            !String::from_utf8(new.encode().unwrap())
+                .unwrap()
+                .contains("kind-of@npm:^6.0.0")
         );
     }
 
