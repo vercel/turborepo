@@ -51,9 +51,11 @@ async function createHarness(
 
   const executable = join(artifactDir, "turbo");
   // Releases before the shell hook reject `turbo hook <shell>`.
-  const binaryContents = hookSupport
-    ? `#!/bin/sh\n[ "$1" = hook ] || exit 1\nprintf 'TURBO_HOOKED=%s\\n' "$2"\n`
-    : "#!/bin/sh\nexit 1\n";
+  const binaryContents = `#!/bin/sh\nprintf '%s\\n' "$*" >> "$TURBO_BINARY_LOG"\n${
+    hookSupport
+      ? '[ "$1" = hook ] || exit 1\nprintf "TURBO_HOOKED=%s\\n" "$2"\n'
+      : "exit 1\n"
+  }`;
   await writeFile(executable, binaryContents);
   await chmod(executable, 0o755);
 
@@ -117,6 +119,7 @@ esac
       SHELL: "/bin/zsh",
       GITHUB_PATH: "",
       TURBO_CURL_LOG: curlLog,
+      TURBO_BINARY_LOG: join(root, "turbo.log"),
       TURBO_NO_MODIFY_PATH: "0",
       TURBO_VERSION: "",
       TURBO_LATEST_FIXTURE: latest,
@@ -256,7 +259,10 @@ test("refuses an existing PATH shim before downloading or executing it", async (
     });
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /Found an existing turbo on PATH at/);
-    assert.match(result.stderr, /Uninstall it using the tool that installed it/);
+    assert.match(
+      result.stderr,
+      /Uninstall it using the tool that installed it/
+    );
     assert.match(
       result.stderr,
       /curl -fsSL https:\/\/turborepo\.dev\/install \| sh/
@@ -408,14 +414,6 @@ test("rejects unsafe version input before making a request", async (t) => {
 
 const HOOK_MARKER = "# Turborepo standalone installer shell hook";
 
-async function readIfExists(path) {
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    return null;
-  }
-}
-
 function hookLines(text) {
   return (text ?? "").split("\n").filter((line) => line.includes(HOOK_MARKER));
 }
@@ -434,63 +432,64 @@ async function withHarness(t, options, body) {
   }
 }
 
-test("adds the shell hook to zsh once and updates only its own line", (t) =>
-  withHarness(t, {}, async (root, env) => {
-    // Upgrades must write through a dotfile manager's symlink.
-    const dotfile = join(root, "dotfiles-zshrc");
-    const stale = `eval "$('/old/turbo' hook zsh)" ${HOOK_MARKER}`;
-    await writeFile(dotfile, `# mine\n${stale}\n# also mine\n${stale}\n`);
-    await symlink(dotfile, join(env.HOME, ".zshrc"));
-    for (let run = 0; run < 2; run++) {
-      const result = runInstaller(env);
-      assert.equal(result.status, 0, result.stderr);
-      assert.match(result.stdout, /Added the turbo shell hook/);
-    }
-    assert.ok((await lstat(join(env.HOME, ".zshrc"))).isSymbolicLink());
-    const lines = (await readFile(dotfile, "utf8")).split("\n");
-    assert.equal(lines[0], "# mine");
-    assert.equal(lines[2], "# also mine");
-    assert.deepEqual(hookLines(lines.join("\n")), [lines[1]]);
-    assert.deepEqual(
-      hookLines(await readIfExists(join(env.HOME, ".zprofile"))),
-      []
-    );
-    const hooked = spawnSync(
-      "/bin/sh",
-      ["-c", '. "$1"; printf %s "$TURBO_HOOKED"', "sh", dotfile],
-      { encoding: "utf8", env: { PATH: "/usr/bin:/bin", HOME: env.HOME } }
-    );
-    assert.equal(hooked.stdout, "zsh", hooked.stderr);
-  }));
+for (const shell of ["/bin/zsh", "/bin/bash", "/usr/bin/fish"]) {
+  for (const hookSupport of [true, false]) {
+    test(`install and upgrade do not activate shell hooks for ${shell} (hook support: ${hookSupport})`, (t) =>
+      withHarness(t, { hookSupport }, async (_root, env) => {
+        const shellEnv = { ...env, SHELL: shell };
+        for (let run = 0; run < 2; run++) {
+          const result = runInstaller(shellEnv);
+          assert.equal(result.status, 0, result.stderr);
+          assert.doesNotMatch(result.stdout, /shell hook|hook fish/);
+          for (const contents of Object.values(
+            await snapshotProfiles(env.HOME)
+          )) {
+            assert.deepEqual(hookLines(contents?.toString()), []);
+          }
+          await assert.rejects(readFile(env.TURBO_BINARY_LOG));
+        }
+        if (shell.endsWith("fish")) {
+          assert.deepEqual(await readdir(env.HOME), []);
+        } else {
+          const profile = shell.endsWith("zsh") ? ".zshrc" : ".bashrc";
+          assert.match(
+            await readFile(join(env.HOME, profile), "utf8"),
+            /Turborepo standalone installer PATH/
+          );
+        }
+      }));
+  }
+}
 
-for (const loginProfile of [".bash_profile", null]) {
-  test(`adds the shell hook to bash profiles (${loginProfile ?? "no login profile"}) but never ~/.profile`, (t) =>
-    withHarness(t, {}, async (_root, env) => {
-      if (loginProfile) {
-        await writeFile(join(env.HOME, loginProfile), "# login\n");
+for (const shell of ["zsh", "bash"]) {
+  test(`upgrades leave existing ${shell} hooks untouched through symlinked profiles`, (t) =>
+    withHarness(t, {}, async (root, env) => {
+      const dotfile = join(root, "dotfile");
+      const profile = join(env.HOME, shell === "zsh" ? ".zshrc" : ".bashrc");
+      const marked = `eval "$('/old/turbo' hook ${shell})" ${HOOK_MARKER}`;
+      const manual = `eval "$(turbo hook ${shell})"`;
+      const original = `# mine\n${marked}\n${manual}\n${marked}\n`;
+      await writeFile(dotfile, original);
+      await symlink(dotfile, profile);
+      for (let run = 0; run < 2; run++) {
+        const result = runInstaller({ ...env, SHELL: `/bin/${shell}` });
+        assert.equal(result.status, 0, result.stderr);
+        const contents = await readFile(dotfile, "utf8");
+        assert.ok(contents.startsWith(original));
+        assert.deepEqual(hookLines(contents), [marked, marked]);
+        assert.ok((await lstat(profile)).isSymbolicLink());
+        await assert.rejects(readFile(env.TURBO_BINARY_LOG));
       }
-      const result = runInstaller({ ...env, SHELL: "/bin/bash" });
-      assert.equal(result.status, 0, result.stderr);
-      const read = (name) => readIfExists(join(env.HOME, name));
-      assert.equal(hookLines(await read(".bashrc")).length, 1);
-      assert.match(hookLines(await read(".bashrc"))[0], / hook bash\)"/);
-      if (loginProfile) {
-        assert.equal(hookLines(await read(loginProfile)).length, 1);
-      }
-      assert.deepEqual(hookLines(await read(".profile")), []);
     }));
 }
 
 for (const scenario of [
-  { name: "--no-shell-hook", args: ["--no-shell-hook"], path: true },
-  { name: "TURBO_NO_SHELL_HOOK=1", env: { TURBO_NO_SHELL_HOOK: "1" }, path: true },
-  { name: "an older release", hookSupport: false, path: true },
-  { name: "--no-modify-path", args: ["--no-modify-path"], path: false },
-  { name: "TURBO_NO_MODIFY_PATH=1", env: { TURBO_NO_MODIFY_PATH: "1" }, path: false },
-  { name: "GitHub Actions", github: true, path: false }
+  { name: "--no-modify-path", args: ["--no-modify-path"] },
+  { name: "TURBO_NO_MODIFY_PATH=1", env: { TURBO_NO_MODIFY_PATH: "1" } },
+  { name: "GitHub Actions", github: true }
 ]) {
-  test(`does not add the shell hook for ${scenario.name}`, (t) =>
-    withHarness(t, { hookSupport: scenario.hookSupport ?? true }, async (root, env) => {
+  test(`does not edit shell profiles for ${scenario.name}`, (t) =>
+    withHarness(t, {}, async (root, env) => {
       const githubPath = join(root, "github-path");
       if (scenario.github) {
         await writeFile(githubPath, "");
@@ -505,25 +504,10 @@ for (const scenario of [
       );
       assert.equal(result.status, 0, result.stderr);
       assert.doesNotMatch(result.stdout, /shell hook/);
-      const zshrc = await readIfExists(join(env.HOME, ".zshrc"));
-      assert.deepEqual(hookLines(zshrc), []);
-      assert.equal(
-        (zshrc ?? "").includes("Turborepo standalone installer PATH"),
-        scenario.path
-      );
+      assert.deepEqual(await readdir(env.HOME), []);
+      await assert.rejects(readFile(env.TURBO_BINARY_LOG));
     }));
 }
-
-test("prints the fish hook line instead of editing fish config", (t) =>
-  withHarness(t, {}, async (_root, env) => {
-    const fish = { ...env, SHELL: "/usr/bin/fish" };
-    const result = runInstaller(fish);
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /config\.fish:\n {2}'.+\/turbo' hook fish \| source\n/);
-    await assert.rejects(lstat(join(env.HOME, ".config")));
-    const optedOut = runInstaller(fish, ["--no-shell-hook"]);
-    assert.doesNotMatch(optedOut.stdout, /hook fish/);
-  }));
 
 const PROFILES = [
   ".profile",
@@ -608,17 +592,39 @@ for (const scenario of [
       assert.equal(result.status, 0, result.stderr);
       assert.deepEqual(await snapshotProfiles(env.HOME), before);
       if (scenario.symlink) {
-        assert.ok((await lstat(join(env.HOME, scenario.symlink))).isSymbolicLink());
+        assert.ok(
+          (await lstat(join(env.HOME, scenario.symlink))).isSymbolicLink()
+        );
       }
       const binary = join(env.TURBO_INSTALL_DIR, "turbo");
       await assert.rejects(lstat(binary));
       assert.ok(result.stdout.includes(`Removed ${binary}\n`), result.stdout);
       if (!scenario.shell.endsWith("fish")) {
         assert.match(result.stdout, /Removed the turbo PATH entry from /);
-        assert.match(result.stdout, /Removed the turbo shell hook from /);
       }
       assert.doesNotMatch(result.stdout, /Left /);
       assert.equal(await readFile(env.TURBO_CURL_LOG, "utf8"), requests);
+    }));
+}
+
+for (const shell of ["zsh", "bash"]) {
+  test(`uninstall still removes legacy installer-owned ${shell} hooks`, (t) =>
+    withHarness(t, {}, async (root, env) => {
+      const destination = join(env.TURBO_INSTALL_DIR, "turbo");
+      const manual = `eval "$(turbo hook ${shell})"\n`;
+      const legacy = `eval "$(${shellQuote(destination)} hook ${shell})" ${HOOK_MARKER}`;
+      const dotfile = join(root, "dotfile");
+      const profile = join(env.HOME, shell === "zsh" ? ".zshrc" : ".bashrc");
+      await writeFile(dotfile, `${manual}\n${legacy}\n`);
+      await symlink(dotfile, profile);
+
+      const result = runInstaller(env, ["--uninstall"]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, /Removed the turbo shell hook from /);
+      assert.equal(await readFile(dotfile, "utf8"), manual);
+      assert.ok((await lstat(profile)).isSymbolicLink());
+      await assert.rejects(readFile(env.TURBO_CURL_LOG));
+      await assert.rejects(readFile(env.TURBO_BINARY_LOG));
     }));
 }
 
