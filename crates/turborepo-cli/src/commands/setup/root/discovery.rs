@@ -165,14 +165,6 @@ impl Discovery {
         })
     }
 
-    pub fn git(&self) -> &dyn Git {
-        &*self.git
-    }
-    /// For a Snapshot whose writer guard asks the same Git.
-    pub fn shared_git(&self) -> Arc<dyn Git> {
-        self.git.clone()
-    }
-
     pub fn root_path(&self) -> &AbsoluteSystemPath {
         &self.root.path
     }

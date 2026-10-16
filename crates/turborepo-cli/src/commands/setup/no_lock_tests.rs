@@ -293,13 +293,7 @@ fn no_lock_names_a_missing_node_declaration_or_unsupported_tool_before_any_chang
 #[test]
 fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_download() {
     for existing in [false, true] {
-        for name in [
-            "turbo.lock",
-            ".nvmrc",
-            "turbo.json",
-            "pnpm-workspace.yaml",
-            ".gitignore",
-        ] {
+        for name in ["turbo.lock", ".nvmrc", "turbo.json", "pnpm-workspace.yaml"] {
             let f = fresh();
             if existing {
                 let seed = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();

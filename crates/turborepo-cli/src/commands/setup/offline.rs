@@ -92,9 +92,7 @@ fn inspect(
         .join("\n");
     // Diagnostics come from the validated lock, not unsafe storage or repo
     // inventory. Retain the storage cause and the complete artifact set.
-    let storage = || {
-        provision::storage(root, discovery.git()).map_err(|error| unavailable(error, &artifacts))
-    };
+    let storage = || provision::storage(root).map_err(|error| unavailable(error, &artifacts));
     storage()?;
     // The only fixture override is already private to setup's test transport
     // seam. Production always uses the caller's user data directory, never a
