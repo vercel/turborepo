@@ -235,7 +235,7 @@ mod tests {
         while out.len() < len {
             state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             out.extend_from_slice(words[(state >> 29) as usize].as_bytes());
-            if state % 7 == 0 {
+            if state.is_multiple_of(7) {
                 out.extend_from_slice(format!("{state:x}").as_bytes());
             }
         }

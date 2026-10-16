@@ -172,6 +172,16 @@ impl AnchoredSystemPathBuf {
             }
         }
 
+        // Reject prefixes as well as roots: Windows drive-relative paths like
+        // `C:foo` replace the anchor during joins despite not being absolute.
+        // Check before stripping the trailing slash so `C:/` stays rooted.
+        if Utf8Path::new(path)
+            .components()
+            .any(|component| matches!(component, Utf8Component::Prefix(_) | Utf8Component::RootDir))
+        {
+            return Err(PathError::NotRelative(path.to_string()));
+        }
+
         // Remove trailing slash
         let stripped_path = path.strip_suffix('/').unwrap_or(path);
 
@@ -260,6 +270,19 @@ mod tests {
         let result = AnchoredSystemPathBuf::relative_path_between(&root, &target);
 
         assert_eq!(result, expected);
+    }
+
+    #[cfg(windows)]
+    #[test_case("C:/Windows/Temp/evil.txt" ; "drive-qualified file")]
+    #[test_case("C:/Windows/Temp/evil/" ; "drive-qualified directory")]
+    #[test_case("C:/" ; "drive root")]
+    #[test_case("C:evil.txt" ; "drive-relative file")]
+    #[test_case("C:evil/" ; "drive-relative directory")]
+    fn test_from_system_path_rejects_windows_prefixed_path(path: &str) {
+        assert!(matches!(
+            AnchoredSystemPathBuf::from_system_path(Path::new(path)),
+            Err(crate::PathError::NotRelative(_))
+        ));
     }
 
     #[test_case(Path::new("test.txt"), Ok("test.txt"), Ok("test.txt") ; "hello world")]

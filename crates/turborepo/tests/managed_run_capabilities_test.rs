@@ -76,7 +76,7 @@ fn assert_empty_report(output: &Output) {
     assert!(output.stderr.is_empty(), "{output:?}");
     assert!(output.stdout.len() <= MAX_RESPONSE_BYTES);
     let version = include_str!("../../../version.txt").lines().next().unwrap();
-    let expected = Capabilities::unsupported(version).encode().unwrap();
+    let expected = Capabilities::current(version).encode().unwrap();
     assert_eq!(output.stdout, expected);
     let report = Capabilities::parse(&output.stdout).unwrap();
     assert_eq!(report.cli_version(), version);

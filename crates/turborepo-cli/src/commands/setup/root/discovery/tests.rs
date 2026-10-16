@@ -377,10 +377,17 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
     };
     assert!(matches!(
         dispatch(&["--frozen", "--tools-only"]),
-        Err(setup::Error::Unsupported(_))
+        Err(setup::Error::LockDiagnostics(
+            setup::lock_diagnostics::Error::Missing
+        )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.
     ));
-    for flags in [&["--plan"][..], &["--check"], &["--__test-run"]] {
-        assert!(matches!(dispatch(flags), Err(setup::Error::NotImplemented)));
+    assert!(matches!(
+        dispatch(&["--__test-run"]),
+        Err(setup::Error::NotImplemented)
+    ));
+    // Plain plans and checks are read-only; this fixture has no lock.
+    for flags in [&["--plan"][..], &["--check"]] {
+        assert!(matches!(dispatch(flags), Err(e) if !matches!(e, setup::Error::NotImplemented)));
     }
     assert!(
         Args::parse_args(
@@ -394,7 +401,7 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
     let custom = f.root.join_component("custom.json");
     custom.create_with_contents(ENABLED).unwrap();
     assert!(matches!(
-        dispatch(&["--root-turbo-json", custom.as_str()]),
+        dispatch(&["--__test-run", "--root-turbo-json", custom.as_str()]),
         Err(setup::Error::NotImplemented)
     ));
     f.root

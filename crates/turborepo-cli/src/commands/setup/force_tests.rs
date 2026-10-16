@@ -21,7 +21,11 @@ fn assert_locked_traffic(f: &Fixture, u: &Upstream, rounds: usize) {
 
 #[test]
 fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
-    for flags in [FORCE, &["--force", "--tools-only", "--frozen"][..]] {
+    for flags in [
+        FORCE,
+        &["--force", "--tools-only", "--frozen"][..],
+        &["--force", "--no-frozen"][..],
+    ] {
         let mut f = Fixture::new();
         fs::write(f.owned.root().join(".nvmrc"), "24.x\n").unwrap();
         f.declare(json!({"packageManager":"pnpm@10.0.0"}));
@@ -32,6 +36,9 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
             "bun.lock",
         ] {
             fs::write(f.owned.root().join(name), format!("{name} sentinel\n")).unwrap();
+        }
+        if !flags.contains(&"--tools-only") {
+            fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
         }
         let git = |args: &[&str]| {
             let output = std::process::Command::new("git")
@@ -196,15 +203,25 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
 #[test]
 fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
     for flags in [
-        vec!["--force"],
+        vec!["--force", "--offline"],
         vec!["--force", "--tools-only", "--offline"],
-        vec!["--force", "--tools-only", "--plan"],
+        vec!["--force", "--tools-only", "--plan", "--no-lock"],
         vec!["--force", "--tools-only", "--no-lock"],
         vec!["--force", "--tools-only", "--no-frozen", "--update-lock"],
     ] {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        assert!(matches!(f.run(&u, &flags), Err(Error::NotImplemented)));
+        let result = f.run(&u, &flags);
+        if flags.contains(&"--offline") && !flags.contains(&"--tools-only") {
+            // Offline dependency setup needs the fixture's missing
+            // pnpm-lock.yaml before anything else.
+            assert!(matches!(result, Err(Error::Dependencies(_))));
+        } else if flags.contains(&"--offline") {
+            // Nothing is installed, so offline force has no verified bytes.
+            assert!(matches!(result, Err(Error::Offline(_))));
+        } else {
+            assert!(matches!(result, Err(Error::NotImplemented)));
+        }
         assert_eq!(u.hits(), 0);
         assert!(!f.owned.root().join(".turbo").exists());
     }

@@ -14,6 +14,8 @@ const TOP: &str = "package.json#/packageManager";
 const DEV: &str = "package.json#/devEngines/packageManager";
 const MAX_ALTERNATIVES: usize = 32;
 const MAX_VERSION_FIELD_BYTES: usize = MAX_REQUEST_BYTES + "+sha512.".len() + 128;
+pub(crate) const UNSUPPORTED_MANAGER: &str =
+    "unsupported manager; setup supports npm, pnpm, Yarn, and Bun";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Precedence {
@@ -114,11 +116,8 @@ fn invalid(source: &str, message: impl Into<String>) -> Error {
 
 fn manager(family: Manager, source: &str) -> Result<Manager, Error> {
     match family {
-        Manager::Npm | Manager::Pnpm => Ok(family),
-        Manager::Aube | Manager::Bun | Manager::Nub | Manager::Yarn => Err(invalid(
-            source,
-            "unsupported manager; setup supports npm and pnpm",
-        )),
+        Manager::Npm | Manager::Pnpm | Manager::Yarn | Manager::Bun => Ok(family),
+        Manager::Aube | Manager::Nub => Err(invalid(source, UNSUPPORTED_MANAGER)),
     }
 }
 
@@ -197,6 +196,11 @@ fn request(
         }
     }
     let request = VersionRequest::parse(body).map_err(|e| bad(e.to_string()))?;
+    if integrity.is_some() && manager == Manager::Bun {
+        return Err(bad(
+            "Bun has no Corepack integrity; remove the checksum".into()
+        ));
+    }
     if integrity.is_some() && !request.is_exact() {
         return Err(bad(
             "Corepack integrity requires a single exact version".into()
@@ -225,7 +229,7 @@ fn dev_request(value: &Value, source: &str) -> Result<Request, Error> {
                 "required string"
             }
             EntryError::EmptyName | EntryError::NameWhitespace | EntryError::UnknownName => {
-                "unsupported manager; setup supports npm and pnpm"
+                UNSUPPORTED_MANAGER
             }
         };
         invalid(&pointer, message)
@@ -271,9 +275,7 @@ pub fn discover_package_manager(root: &Value) -> Result<Option<Declaration>, Err
                     TOP,
                     match error {
                         SpecError::ExpectedNameAtVersion => "expected name@version string",
-                        SpecError::UnknownName => {
-                            "unsupported manager; setup supports npm and pnpm"
-                        }
+                        SpecError::UnknownName => UNSUPPORTED_MANAGER,
                     },
                 )
             })?;

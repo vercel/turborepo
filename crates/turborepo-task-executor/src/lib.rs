@@ -21,7 +21,10 @@
 
 mod command;
 mod exec;
+mod managed;
 mod output;
+
+pub use managed::ManagedEnvironment;
 mod visitor;
 
 pub use command::{
