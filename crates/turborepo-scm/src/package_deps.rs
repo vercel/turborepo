@@ -519,18 +519,22 @@ impl GitRepo {
         // repo-root-relative space as the exclusion globs before matching.
         // `<literal>/**` exclusions (one per path dependency for Cargo crates)
         // are matched by prefix comparison instead of compiling a wax regex
-        // per exclusion and matching every key against each of them.
+        // per exclusion and matching every key against each of them, and
+        // `**/<literal>/**`-style exclusions are matched by path segment.
         let mut exclude_trees: Vec<&str> = Vec::new();
+        let mut exclude_segments: Vec<globwalk::LiteralSegmentGlob<'_>> = Vec::new();
         let mut exclude_globs: Vec<wax::Glob<'static>> = Vec::new();
         for input in excludes.iter().filter(|input| !input.escapes_repo_root()) {
             if let Some(prefix) = globwalk::literal_tree_prefix(input.as_str()) {
                 exclude_trees.push(prefix);
+            } else if let Some(segment) = globwalk::literal_segment_glob(input.as_str()) {
+                exclude_segments.push(segment);
             } else if let Ok(glob) = wax::Glob::new(input.as_str()) {
                 exclude_globs.push(glob.into_owned());
             }
         }
 
-        if !exclude_trees.is_empty() || !exclude_globs.is_empty() {
+        if !exclude_trees.is_empty() || !exclude_segments.is_empty() || !exclude_globs.is_empty() {
             hashes.retain(|key, _| {
                 let Some(repo_path) =
                     globwalk::resolve_package_path(package_unix_path, key.as_str())
@@ -540,6 +544,9 @@ impl GitRepo {
                 !exclude_trees
                     .iter()
                     .any(|prefix| globwalk::matches_literal_tree(&repo_path, prefix))
+                    && !exclude_segments
+                        .iter()
+                        .any(|segment| segment.is_match(&repo_path))
                     && !exclude_globs
                         .iter()
                         .any(|glob| wax::Program::is_match(glob, repo_path.as_ref()))
