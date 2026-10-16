@@ -151,16 +151,58 @@ pub enum Error {
     ResolutionPath(#[from] turbopath::PathError),
 }
 
-fn package_resolution(
-    package: impl Into<String>,
-    identities: &HashSet<turborepo_lockfiles::Package>,
-) -> PackageResolution {
-    PackageResolution::new(
-        package,
-        identities.iter().map(|identity| {
-            ExternalPackageIdentity::new(identity.key.clone(), identity.version.clone())
-        }),
-    )
+/// Builds package resolutions from indexed lockfile closures. Members'
+/// closures overlap heavily, so each external identity is materialized and
+/// ordered once and shared by every resolution that contains it.
+struct ResolutionIdentities {
+    /// Every closure identity, in [`ExternalPackageIdentity`] order.
+    sorted: Vec<ExternalPackageIdentity>,
+    /// Position in `sorted` of each closure package index.
+    rank: Vec<usize>,
+    compiler: Option<ExternalPackageIdentity>,
+}
+
+impl ResolutionIdentities {
+    fn new(
+        packages: &[turborepo_lockfiles::Package],
+        compiler: Option<&turborepo_lockfiles::Package>,
+    ) -> Self {
+        let identity = |package: &turborepo_lockfiles::Package| {
+            ExternalPackageIdentity::new(package.key.as_str(), package.version.as_str())
+        };
+        let identities: Vec<_> = packages.iter().map(identity).collect();
+        let mut order: Vec<usize> = (0..identities.len()).collect();
+        order.sort_by(|&a, &b| identities[a].cmp(&identities[b]));
+        let mut rank = vec![0; identities.len()];
+        for (position, &idx) in order.iter().enumerate() {
+            rank[idx] = position;
+        }
+        Self {
+            sorted: order
+                .into_iter()
+                .map(|idx| identities[idx].clone())
+                .collect(),
+            rank,
+            compiler: compiler.map(identity),
+        }
+    }
+
+    /// The resolution of `package`: its closure plus the compiler identity.
+    fn resolution(
+        &self,
+        package: impl Into<String>,
+        closure: impl IntoIterator<Item = usize>,
+    ) -> PackageResolution {
+        let mut ranks: Vec<usize> = closure.into_iter().map(|idx| self.rank[idx]).collect();
+        ranks.sort_unstable();
+        PackageResolution::new(
+            package,
+            ranks
+                .into_iter()
+                .map(|rank| self.sorted[rank].clone())
+                .chain(self.compiler.clone()),
+        )
+    }
 }
 
 fn parse_rustc_info(stdout: &[u8]) -> Result<(turborepo_lockfiles::Package, String), Error> {
@@ -248,8 +290,8 @@ fn read_lockfile(repo_root: &AbsoluteSystemPath) -> Result<String, Error> {
 fn external_closures_from_lockfile(
     contents: &str,
     members: &[String],
-) -> Result<HashMap<String, HashSet<turborepo_lockfiles::Package>>, Error> {
-    Ok(turborepo_lockfiles::cargo_external_closures(
+) -> Result<turborepo_lockfiles::CargoExternalClosures, Error> {
+    Ok(turborepo_lockfiles::cargo_external_closure_indices(
         contents, members,
     )?)
 }
@@ -1846,7 +1888,7 @@ impl RepositoryContributor for CargoContributor {
                 let closures = external_closures_from_lockfile(&lockfile, &all_names)?;
                 Ok::<_, Error>((lockfile, closures))
             });
-            let (lockfile, mut closures, resolution_incomplete) = match resolution_result {
+            let (lockfile, closures, resolution_incomplete) = match resolution_result {
                 Ok((lockfile, closures)) => (Ok(lockfile), closures, None),
                 Err(error) => {
                     if !error.supports_lockfile_fallback() {
@@ -1859,7 +1901,7 @@ impl RepositoryContributor for CargoContributor {
                     );
                     (
                         Err(message.clone()),
-                        HashMap::new(),
+                        turborepo_lockfiles::CargoExternalClosures::default(),
                         Some(crate::external_resolution::ResolutionIncompleteReason::new(
                             "cargo-lockfile-unavailable",
                             message,
@@ -1907,12 +1949,18 @@ impl RepositoryContributor for CargoContributor {
                     manifest_alters_profile_dirs: manifest_alters_profile_dirs(&self.repo_root),
                 }
             });
-            let workspace_externals: HashSet<turborepo_lockfiles::Package> = closures
-                .values()
-                .flatten()
-                .cloned()
-                .chain(rustc.cloned())
+            let resolution_identities = ResolutionIdentities::new(&closures.packages, rustc);
+            // The workspace aggregate's closure is the union of its crates'.
+            let mut in_workspace_closure = vec![false; closures.packages.len()];
+            for &idx in closures.closures.values().flatten() {
+                in_workspace_closure[idx] = true;
+            }
+            let workspace_closure: Vec<usize> = in_workspace_closure
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, &included)| included.then_some(idx))
                 .collect();
+            let mut closures = closures.closures;
 
             let fallback_inputs = std::iter::once(
                 AnchoredSystemPathBuf::from_raw(CARGO_TOML).expect("static path is valid"),
@@ -1942,15 +1990,9 @@ impl RepositoryContributor for CargoContributor {
                     details.clone(),
                     workspace_contract_details.clone(),
                 );
-                let external_dependencies: HashSet<turborepo_lockfiles::Package> = closures
-                    .remove(&cargo_crate.name)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .chain(rustc.cloned())
-                    .collect();
-                resolutions.push(package_resolution(
+                resolutions.push(resolution_identities.resolution(
                     cargo_crate.name.clone(),
-                    &external_dependencies,
+                    closures.remove(&cargo_crate.name).unwrap_or_default(),
                 ));
                 crate_names.push(cargo_crate.name.clone());
                 packages.push(
@@ -1989,10 +2031,9 @@ impl RepositoryContributor for CargoContributor {
                     .into_iter()
                     .map(|name| Relationship::internal(name, DependencyKind::Production))
                     .collect();
-                resolutions.push(package_resolution(
-                    workspace_name.clone(),
-                    &workspace_externals,
-                ));
+                resolutions.push(
+                    resolution_identities.resolution(workspace_name.clone(), workspace_closure),
+                );
                 packages.push(
                     DiscoveredPackage::aggregate(
                         workspace_name,
