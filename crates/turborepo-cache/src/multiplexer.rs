@@ -332,6 +332,25 @@ impl CacheMultiplexer {
         Ok(None)
     }
 
+    /// Starts downloading the remote artifacts for `keys` (in order) ahead of
+    /// the tasks that will fetch them, so remote round trips overlap instead
+    /// of waiting for each task's dependencies. `keys` is only called when the
+    /// remote cache is readable. Keys with a local cache entry are skipped,
+    /// since `fetch` restores those locally.
+    pub fn prefetch_remote(&self, keys: impl FnOnce() -> Vec<String>, concurrency: usize) {
+        if !self.cache_config.remote.read {
+            return;
+        }
+        let Some(http) = self.get_http_cache() else {
+            return;
+        };
+        let fs = self.fs.clone().filter(|_| self.cache_config.local.read);
+        http.prefetch(keys(), concurrency, move |key| {
+            fs.as_ref()
+                .is_some_and(|fs| matches!(fs.exists(key), Ok(Some(_))))
+        });
+    }
+
     /// Whether [`Self::batch_exists`] could ever consult the remote cache.
     /// When this is false a batch reduces to independent local lookups, so
     /// there is nothing to gain from waiting for other keys.
