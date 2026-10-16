@@ -20,6 +20,8 @@ Flags:
       --offline                   Use cached artifacts only; never make HTTP
                                   requests
       --tools-only                Skip dependency installation
+      --ignore-scripts            Skip dependency lifecycle scripts with each
+                                  package manager's own flag
       --no-lock                   Provision without writing turbo.lock;
                                   overrides CI-inferred frozen mode
       --update-lock               Refresh floating requests and provision

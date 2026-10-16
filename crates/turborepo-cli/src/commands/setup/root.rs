@@ -8,7 +8,7 @@ use turborepo_repository::{
     package_json::PackageJson,
     package_manager::PackageManager,
 };
-use turborepo_turbo_json::{FutureFlags, RawTurboJson};
+use turborepo_turbo_json::{FutureFlags, RawTurboJson, SetupPolicy};
 
 mod discovery;
 pub(super) use discovery::Discovery;
@@ -80,6 +80,7 @@ pub enum Error {
 struct SetupRoot {
     path: AbsoluteSystemPathBuf,
     flags: FutureFlags,
+    policy: SetupPolicy,
     config: Option<AbsoluteSystemPathBuf>,
 }
 
@@ -155,6 +156,7 @@ fn infer(
         .future_flags
         .map(|flags| *flags.as_inner())
         .unwrap_or_default();
+    let policy = SetupPolicy::from_raw(raw.setup.as_ref(), &flags)?;
     if flags.experimental_setup {
         let Ok(serde_json::Value::Object(serialized_flags)) = serde_json::to_value(flags) else {
             unreachable!("FutureFlags serializes to a JSON object");
@@ -189,6 +191,7 @@ fn infer(
     Ok(SetupRoot {
         path,
         flags,
+        policy,
         config: selected_config,
     })
 }

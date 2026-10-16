@@ -706,7 +706,7 @@ impl ConfigurationOptions {
     }
 
     pub fn agent_guidance(&self) -> bool {
-        self.agent_guidance.unwrap_or(true)
+        self.agent_guidance.unwrap_or(false)
     }
 
     pub fn sso_login_callback_port(&self) -> Option<u16> {

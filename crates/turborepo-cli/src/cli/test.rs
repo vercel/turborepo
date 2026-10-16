@@ -338,6 +338,7 @@ fn setup_parser_keeps_controls_separate_from_tasks() {
         "--no-frozen",
         "--offline",
         "--tools-only",
+        "--ignore-scripts",
         "--no-lock",
         "--update-lock",
     ] {
@@ -439,6 +440,192 @@ fn setup_global_classification_uses_the_command_grammar() {
             .collect();
         assert_eq!(Args::is_setup_command(&words), expected, "{words:?}");
     }
+}
+
+fn exec(command: &[&str]) -> Option<Command> {
+    Some(Command::Exec {
+        command: command.iter().map(OsString::from).collect(),
+    })
+}
+
+#[test]
+fn exec_preserves_every_word_after_the_separator() {
+    for command in [
+        vec!["node"],
+        vec!["-x"],
+        vec!["pnpm", "--filter", "web", "build"],
+        vec!["run", "build", "--", "--force", "config"],
+        vec!["setup", "--update-lock", "--frozen"],
+        vec!["tool", "--help", "-h", "--version", "--single-package"],
+        vec![
+            "tool",
+            "--cwd",
+            "elsewhere",
+            "--color=true",
+            "--preflight=false",
+        ],
+        vec!["tool", "--cwd", "a", "--cwd", "b", "--", "--"],
+        vec!["tool", "a b", "", "*", "$HOME"],
+    ] {
+        let words = ["turbo", "exec", "--"].into_iter().chain(command.clone());
+        let args = parse_args(words).unwrap();
+        assert_eq!(args.command, exec(&command), "{command:?}");
+        assert!(!args.single_package && args.cwd.is_none(), "{command:?}");
+        assert!(args.run_args().is_none() && args.execution_args().is_none());
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn exec_preserves_non_utf8_arguments() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let word = OsString::from_vec(vec![b'a', 0xff, b'z']);
+    let args = parse_args([
+        OsString::from("turbo"),
+        "exec".into(),
+        "--".into(),
+        word.clone(),
+    ])
+    .unwrap();
+    assert_eq!(
+        args.command,
+        Some(Command::Exec {
+            command: vec![word]
+        })
+    );
+}
+
+#[test]
+fn exec_accepts_global_options_before_the_separator() {
+    for words in [
+        vec!["--cwd", "repo", "exec", "--verbosity=2", "--", "node"],
+        vec!["exec", "--cwd=repo", "--verbosity", "2", "--", "node"],
+        vec![
+            "--verbosity=2",
+            "exec",
+            "--cwd",
+            "repo",
+            "--no-color",
+            "--",
+            "node",
+        ],
+    ] {
+        let args = parse_args(["turbo"].into_iter().chain(words.clone())).unwrap();
+        assert_eq!(args.command, exec(&["node"]), "{words:?}");
+        assert_eq!(args.cwd, Some("repo".into()), "{words:?}");
+        assert_eq!(args.verbosity.verbosity, Some(2), "{words:?}");
+    }
+    let args = parse_args([
+        "turbo",
+        "--root-turbo-json",
+        "exec",
+        "exec",
+        "--token=t",
+        "--team",
+        "team",
+        "--skip-infer",
+        "--no-update-notifier",
+        "--single-package",
+        "-vv",
+        "--",
+        "node",
+    ])
+    .unwrap();
+    assert_eq!(args.command, exec(&["node"]));
+    assert_eq!(args.root_turbo_json, Some("exec".into()));
+    assert_eq!(args.token.as_deref(), Some("t"));
+    assert_eq!(args.team.as_deref(), Some("team"));
+    assert!(args.skip_infer && args.no_update_notifier && args.single_package);
+    assert_eq!(args.verbosity.v, 2);
+}
+
+#[test]
+fn exec_rejects_missing_programs_and_turbo_controls() {
+    for (tail, expected) in [
+        (vec![], "required arguments were not provided"),
+        (vec!["--"], "required arguments were not provided"),
+        (
+            vec!["--verbosity=1"],
+            "required arguments were not provided",
+        ),
+        (vec!["--", ""], "`turbo exec` requires a command after `--`"),
+        // The separator is required, so the program is never read as turbo input.
+        (vec!["node"], "can only be given after '--'"),
+        (
+            vec!["node", "--", "--version"],
+            "can only be given after '--'",
+        ),
+    ] {
+        let error = parse_args(["turbo", "exec"].into_iter().chain(tail.clone())).unwrap_err();
+        assert!(error.contains(expected), "{tail:?}: {error}");
+    }
+    for tail in [
+        // No setup, installation, or lock controls.
+        vec!["--plan", "--", "node"],
+        vec!["--check", "--", "node"],
+        vec!["--force", "--", "node"],
+        vec!["--frozen", "--", "node"],
+        vec!["--no-frozen", "--", "node"],
+        vec!["--offline", "--", "node"],
+        vec!["--tools-only", "--", "node"],
+        vec!["--no-lock", "--", "node"],
+        vec!["--update-lock", "--", "node"],
+        // No task selection or run controls.
+        vec!["--filter", "web", "--", "node"],
+        vec!["-F", "web", "--", "node"],
+        vec!["--affected", "--", "node"],
+        vec!["--dry", "--", "node"],
+        vec!["--env-mode=strict", "--", "node"],
+        vec!["--force", "config"],
+        // Existing global option validation still applies before the separator.
+        vec!["--color=true", "--", "node"],
+        vec!["--cwd", "a", "--cwd", "b", "--", "node"],
+    ] {
+        assert!(
+            parse_args(["turbo", "exec"].into_iter().chain(tail.clone())).is_err(),
+            "{tail:?}"
+        );
+    }
+}
+
+#[test]
+fn exec_is_a_command_distinct_from_tasks_and_aliases() {
+    for (words, tasks, pass_through) in [
+        (vec!["run", "exec"], vec!["exec"], vec![]),
+        (vec!["build", "exec"], vec!["build", "exec"], vec![]),
+        (vec!["build", "--", "exec"], vec!["build"], vec!["exec"]),
+        (vec!["run", "-F", "web", "exec"], vec!["exec"], vec![]),
+    ] {
+        let args = parse_args(["turbo"].into_iter().chain(words.clone())).unwrap();
+        let execution_args = args.execution_args().expect("run arguments");
+        assert_eq!(execution_args.tasks, tasks, "{words:?}");
+        assert_eq!(execution_args.pass_through_args, pass_through, "{words:?}");
+    }
+    // A named command keeps its own flag scope; leading run flags do not
+    // turn it into a task.
+    assert!(parse_args(["turbo", "-F", "web", "exec", "--", "node"]).is_err());
+    for alias in ["g", "gen", "generate"] {
+        assert!(matches!(
+            parse_args(["turbo", alias]).unwrap().command,
+            Some(Command::Generate { .. })
+        ));
+        assert_eq!(
+            parse_args(["turbo", "exec", "--", alias]).unwrap().command,
+            exec(&[alias])
+        );
+    }
+    // Exec follows the normal local CLI handoff, unlike global-only setup.
+    let words: Vec<_> = ["turbo", "exec", "--", "setup"]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+    assert!(!Args::is_setup_command(&words));
+}
+
+#[test]
+fn exec_short_help() {
+    assert_snapshot!(Args::render_help(get_subcommand("exec"), false).unwrap());
 }
 
 #[test]

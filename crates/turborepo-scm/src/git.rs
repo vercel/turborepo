@@ -609,13 +609,31 @@ impl GitRepo {
         // commits, HEAD doesn't exist and git exits with code 128. Fall back
         // to `git diff --cached` which diffs the index against an empty tree,
         // correctly capturing staged file content without needing HEAD.
+        //
+        // Both commands disable Git's opportunistic index refresh. The dirty
+        // hash is metadata, so collecting it must not mutate the repository or
+        // contend with a concurrent Git command for .git/index.lock.
         let diff_has_content = match self.stream_diff_into_hasher(
-            &["diff", "HEAD", "--no-ext-diff", "--no-color"],
+            &[
+                "-c",
+                "diff.autoRefreshIndex=false",
+                "diff",
+                "HEAD",
+                "--no-ext-diff",
+                "--no-color",
+            ],
             &mut hasher,
         ) {
             Some(has_content) => has_content,
             None => match self.stream_diff_into_hasher(
-                &["diff", "--cached", "--no-ext-diff", "--no-color"],
+                &[
+                    "-c",
+                    "diff.autoRefreshIndex=false",
+                    "diff",
+                    "--cached",
+                    "--no-ext-diff",
+                    "--no-color",
+                ],
                 &mut hasher,
             ) {
                 Some(has_content) => has_content,
@@ -1014,6 +1032,36 @@ mod tests {
 
         let path = repo_root.path().to_path_buf();
         Ok((repo_root, path))
+    }
+
+    #[test]
+    fn dirty_hash_does_not_refresh_git_index() -> Result<(), Error> {
+        let (_repo, path) = setup_repository(Some("main"))?;
+        fs::write(path.join(".gitattributes"), "*.txt text\n")?;
+        fs::write(path.join("file.txt"), "contents\n")?;
+        run_git(&path, &["add", "."]);
+        run_git(&path, &["commit", "-m", "Initial"]);
+
+        let root = AbsoluteSystemPathBuf::try_from(path.as_path())?;
+        let scm = SCM::new(&root);
+        let repo_index = scm
+            .build_repo_index_eager()
+            .expect("failed to build repo index");
+        let index_path = root.join_components(&[".git", "index"]);
+        let index_before = fs::read(index_path.as_std_path())?;
+
+        // Make the working tree stat-dirty without changing file content. The
+        // .gitattributes file forces the dirty-hash path to run git diff rather
+        // than using the repo-index clean-tree shortcut.
+        let file = root.join_component("file.txt");
+        fs::write(file.as_std_path(), "contents\n")?;
+        let file_handle = fs::File::options().write(true).open(file.as_std_path())?;
+        file_handle
+            .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(1))?;
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_none());
+        assert_eq!(index_before, fs::read(index_path.as_std_path())?);
+        Ok(())
     }
 
     #[test]

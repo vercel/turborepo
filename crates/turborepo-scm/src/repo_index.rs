@@ -155,6 +155,14 @@ impl RepoGitIndex {
 
         let attrs = git.git_attrs();
 
+        // On Windows a per-entry stat opens a handle to every tracked file
+        // (CreateFileW, a metadata query, and CloseHandle), which dominates this
+        // pass on NTFS. A directory listing returns every field gix's Windows
+        // `Stat` uses, so list each parent directory once instead. Entries a
+        // listing doesn't cover, or that don't match it, take the per-file path.
+        #[cfg(windows)]
+        let listed_stats = listed_stats(&git.root, &index);
+
         // Classify entries in parallel: stat each file, compare with index,
         // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
         // hex String. Hex conversion uses a thread-local stack buffer to avoid
@@ -169,15 +177,25 @@ impl RepoGitIndex {
         let classified: Vec<Result<EntryClassification, Error>> = index
             .entries()
             .par_iter()
-            .filter(|e| !e.mode.is_submodule())
+            .enumerate()
+            .filter(|(_, e)| !e.mode.is_submodule())
             .map_init(
                 || attrs.map(|a| a.new_outcome()),
-                |attr_outcome, e| {
+                |attr_outcome, (_entry_index, e)| {
                     let path_bytes = e.path(&index);
                     let rel_path = match parse_git_path(path_bytes, "git index path")? {
                         Ok(path) => path,
                         Err(path) => return Ok(EntryClassification::Unsupported(path)),
                     };
+
+                    #[cfg(windows)]
+                    if let Some(fs_stat) = &listed_stats[_entry_index]
+                        && e.stat.matches(fs_stat, stat_opts)
+                        && !e.stat.is_racy(index_timestamp, stat_opts)
+                    {
+                        return clean_entry(e, rel_path);
+                    }
+
                     // Git index paths are normalized repo-relative paths, so avoid
                     // per-entry path_clean normalization before stat calls.
                     let abs_path = git.root.join_unix_path_unchecked(&rel_path);
@@ -207,17 +225,7 @@ impl RepoGitIndex {
                                 ));
                             }
 
-                            let mut hex_buf = [0u8; 40];
-                            hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).map_err(|err| {
-                                Error::git_error(format!(
-                                    "failed to encode object id for {rel_path}: {err}"
-                                ))
-                            })?;
-                            Ok(EntryClassification::Clean {
-                                path: rel_path,
-                                oid: OidHash::from_hex_buf(hex_buf),
-                                diff_safe: DiffSafety::Safe,
-                            })
+                            clean_entry(e, rel_path)
                         }
                         Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
                     }
@@ -1518,6 +1526,104 @@ enum EntryClassification {
     Unsupported(UnsupportedGitPath),
 }
 
+/// Classifies an index entry whose working-tree stat matches the index.
+fn clean_entry(
+    entry: &gix_index::Entry,
+    rel_path: RelativeUnixPathBuf,
+) -> Result<EntryClassification, Error> {
+    let mut hex_buf = [0u8; 40];
+    hex::encode_to_slice(entry.id.as_bytes(), &mut hex_buf).map_err(|err| {
+        Error::git_error(format!("failed to encode object id for {rel_path}: {err}"))
+    })?;
+    Ok(EntryClassification::Clean {
+        path: rel_path,
+        oid: OidHash::from_hex_buf(hex_buf),
+        diff_safe: DiffSafety::Safe,
+    })
+}
+
+/// Working-tree stats for index entries, read from one listing of each parent
+/// directory, indexed like `index.entries()`. `None` means the listing didn't
+/// produce the entry (missing, renamed by case only, or unreadable directory),
+/// so the caller falls back to a per-file stat.
+#[cfg(windows)]
+fn listed_stats(
+    root: &turbopath::AbsoluteSystemPath,
+    index: &gix_index::File,
+) -> Vec<Option<gix_index::entry::Stat>> {
+    use std::collections::HashMap;
+
+    use rayon::prelude::*;
+
+    let entries = index.entries();
+    let mut by_dir: HashMap<&[u8], Vec<usize>> = HashMap::new();
+    for (i, entry) in entries.iter().enumerate() {
+        if entry.mode.is_submodule() {
+            continue;
+        }
+        let path: &[u8] = entry.path(index);
+        let dir = path
+            .iter()
+            .rposition(|&b| b == b'/')
+            .map_or(&path[..0], |slash| &path[..slash]);
+        by_dir.entry(dir).or_default().push(i);
+    }
+
+    let listed: Vec<(usize, gix_index::entry::Stat)> = by_dir
+        .par_iter()
+        .flat_map_iter(|(dir, indices)| {
+            let mut found = Vec::new();
+            let Ok(dir) = std::str::from_utf8(dir) else {
+                return found;
+            };
+            let abs_dir = root.as_std_path().join(dir.replace('/', "\\"));
+            let Ok(read_dir) = std::fs::read_dir(&abs_dir) else {
+                return found;
+            };
+            // `DirEntry::metadata` comes from the listing itself on Windows and,
+            // like `symlink_metadata`, describes links rather than their targets.
+            let listing: HashMap<std::ffi::OsString, gix_index::entry::Stat> = read_dir
+                .flatten()
+                .filter_map(|dir_entry| {
+                    let stat = listed_stat(&dir_entry.metadata().ok()?)?;
+                    Some((dir_entry.file_name(), stat))
+                })
+                .collect();
+            for &i in indices {
+                let path: &[u8] = entries[i].path(index);
+                let name = path.rsplit(|&b| b == b'/').next().unwrap_or(path);
+                if let Ok(name) = std::str::from_utf8(name)
+                    && let Some(stat) = listing.get(std::ffi::OsStr::new(name))
+                {
+                    found.push((i, *stat));
+                }
+            }
+            found
+        })
+        .collect();
+
+    let mut stats = vec![None; entries.len()];
+    for (i, stat) in listed {
+        stats[i] = Some(stat);
+    }
+    stats
+}
+
+/// Mirrors `gix_index::entry::Stat::from_fs` on Windows, which only uses the
+/// last-write time, creation time, and size.
+#[cfg(windows)]
+fn listed_stat(metadata: &std::fs::Metadata) -> Option<gix_index::entry::Stat> {
+    Some(gix_index::entry::Stat {
+        mtime: metadata.modified().ok()?.try_into().ok()?,
+        ctime: metadata.created().ok()?.try_into().ok()?,
+        dev: 0,
+        ino: 0,
+        uid: 0,
+        gid: 0,
+        size: metadata.len() as u32,
+    })
+}
+
 /// Content-verify a stat-stale (or racy) index entry against its recorded
 /// oid. Returns `Clean` when the working-tree content still hashes to the
 /// index oid, `Modified` otherwise — including every case we can't verify
@@ -2539,5 +2645,51 @@ mod tests {
         index.populate_untracked_from_candidates(vec![path("pkg/new-c.ts")]);
         let (_, to_hash_after_second_populate) = index.get_package_hashes(&path("pkg")).unwrap();
         assert_eq!(to_hash_after_second_populate, to_hash);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod listed_stats_tests {
+    use super::*;
+    use crate::test_utils::{commit_all, init_repo, tmp_dir};
+
+    #[test]
+    fn listed_stats_match_per_file_stats() {
+        let (_tmp, root) = tmp_dir();
+        init_repo(&root);
+        root.join_component("root.txt")
+            .create_with_contents("root")
+            .unwrap();
+        root.join_components(&["a", "b"]).create_dir_all().unwrap();
+        root.join_components(&["a", "b", "nested.txt"])
+            .create_with_contents("nested")
+            .unwrap();
+        root.join_components(&["a", "sibling.txt"])
+            .create_with_contents("sibling")
+            .unwrap();
+        root.join_component("deleted.txt")
+            .create_with_contents("deleted")
+            .unwrap();
+        commit_all(&root);
+        root.join_component("deleted.txt").remove_file().unwrap();
+
+        let index = gix_index::File::at(
+            root.join_components(&[".git", "index"]).as_std_path(),
+            gix_index::hash::Kind::Sha1,
+            true,
+            gix_index::decode::Options::default(),
+        )
+        .unwrap();
+        let listed = listed_stats(&root, &index);
+        assert_eq!(listed.len(), index.entries().len());
+        for (entry, listed) in index.entries().iter().zip(&listed) {
+            let rel = std::str::from_utf8(entry.path(&index)).unwrap();
+            let abs = root.as_std_path().join(rel.replace('/', "\\"));
+            let per_file = gix_index::fs::Metadata::from_path_no_follow(&abs)
+                .ok()
+                .map(|meta| gix_index::entry::Stat::from_fs(&meta).unwrap());
+            assert_eq!(*listed, per_file, "{rel}");
+        }
+        assert_eq!(listed.iter().filter(|stat| stat.is_none()).count(), 1);
     }
 }

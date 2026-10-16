@@ -250,9 +250,18 @@ pub enum TransitiveEdgeResolution {
     WorkspaceSensitive,
 }
 
-/// See [`Lockfile::transitive_edge_resolver`].
-pub trait TransitiveEdgeResolver {
+/// See [`Lockfile::transitive_edge_resolver`]. Edges are resolved from rayon
+/// workers, so resolvers must be shareable across threads.
+pub trait TransitiveEdgeResolver: Sync {
     fn resolve_edge(&self, name: &str, version: &str) -> Result<TransitiveEdgeResolution, Error>;
+
+    /// Whether resolution (`resolve_package`, `all_dependencies`, and
+    /// `resolve_edge`) is costly enough per call that the shared DP should
+    /// run it on rayon workers. Cheap formats lose more to pool round-trips
+    /// than they gain.
+    fn parallel(&self) -> bool {
+        false
+    }
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,

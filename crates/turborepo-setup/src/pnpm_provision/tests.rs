@@ -9,7 +9,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha224, Sha256, Sha512};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
@@ -18,7 +18,7 @@ use turborepo_download::Error as DownloadError;
 use turborepo_tool_install::Outcome;
 
 use super::*;
-use crate::pnpm_provision::PnpmTransport;
+use crate::{pnpm_provision::PnpmTransport, source_policy::test_support::LoopbackServer};
 
 const TARGET: Platform = Platform::MacosArm64;
 
@@ -36,6 +36,13 @@ async fn serve(metadata: Value, bytes: Vec<u8>) -> Registry {
     serve_raw(serde_json::to_vec(&metadata).unwrap(), bytes).await
 }
 async fn serve_raw(metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
+    serve_version("10.0.0", metadata, bytes).await
+}
+async fn serve_version(version: &str, metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
+    let (metadata_path, tarball_path) = (
+        format!("/pnpm/{version}"),
+        format!("/pnpm/-/pnpm-{version}.tgz"),
+    );
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let transport = PnpmTransport::loopback_http_for_tests(&format!(
         "http://{}",
@@ -57,8 +64,8 @@ async fn serve_raw(metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
                 .to_owned();
             log.lock().unwrap().push(path.clone());
             let body = match path.as_str() {
-                "/pnpm/10.0.0" => &metadata,
-                "/pnpm/-/pnpm-10.0.0.tgz" => &bytes,
+                p if p == metadata_path => &metadata,
+                p if p == tarball_path => &bytes,
                 _ => panic!("unexpected registry request: {path}"),
             };
             let header = format!(
@@ -76,8 +83,11 @@ async fn serve_raw(metadata: Vec<u8>, bytes: Vec<u8>) -> Registry {
     }
 }
 fn metadata(bytes: &[u8]) -> Value {
-    json!({"name":"pnpm","version":"10.0.0","dist":{
-        "tarball":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz",
+    metadata_for("10.0.0", bytes)
+}
+fn metadata_for(version: &str, bytes: &[u8]) -> Value {
+    json!({"name":"pnpm","version":version,"dist":{
+        "tarball":format!("https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"),
         "integrity":format!("sha512-{}", STANDARD.encode(Sha512::digest(bytes)))
     }})
 }
@@ -85,22 +95,22 @@ fn package() -> Value {
     json!({"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"},
         "scripts":{"install":"touch should-never-run"}})
 }
+const HOOK: &str = "#!/usr/bin/env node\nthrow new Error('not a bootstrap hook');\n";
 fn archive(package: &str, entry: &str) -> Vec<u8> {
-    let mut tar = tar::Builder::new(Vec::new());
-    for (path, data, mode) in [
+    archive_files(&[
         ("package.json", package, 0o644),
-        (
-            entry,
-            "#!/usr/bin/env node\nthrow new Error('not a bootstrap hook');\n",
-            0o644,
-        ),
+        (entry, HOOK, 0o644),
         ("bin/pnpx.cjs", "#!/usr/bin/env node\n", 0o644),
         (
             "dist/templates/config.json",
             "adjacent runtime resource",
             0o640,
         ),
-    ] {
+    ])
+}
+fn archive_files(files: &[(&str, &str, u32)]) -> Vec<u8> {
+    let mut tar = tar::Builder::new(Vec::new());
+    for &(path, data, mode) in files {
         let mut header = tar::Header::new_gnu();
         header.set_size(data.len() as u64);
         header.set_mode(mode);
@@ -544,4 +554,328 @@ async fn authored_pins_and_bounded_metadata_fail_before_artifacts() {
         Err(Error::Download(DownloadError::TooLarge))
     ));
     assert_eq!(manifest(repo.path()), snapshot);
+}
+
+#[tokio::test]
+async fn corepack_sha224_pins_check_downloaded_bytes_in_addition_to_sha512() {
+    let bytes = archive(&package().to_string(), "bin/pnpm.cjs");
+    let value = fixture(&bytes);
+    let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+    let (node, unpinned) = plans(&value);
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = seeded(repo.path(), &node);
+    let snapshot = manifest(repo.path());
+    let pin = |digest: String| CorepackIntegrity {
+        algorithm: "sha224",
+        digest,
+    };
+    let good = pin(format!("{:x}", Sha224::digest(&bytes)));
+    for (authored, document, expected) in [
+        // The pin is checked against the bytes the registry SHA-512 accepted.
+        (
+            pin("00".repeat(28)),
+            metadata(&bytes),
+            DownloadError::DigestMismatch,
+        ),
+        // A matching pin never replaces the mandatory registry SHA-512.
+        (
+            good.clone(),
+            metadata(b"other bytes"),
+            DownloadError::Sha512DigestMismatch,
+        ),
+    ] {
+        let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&authored)).unwrap();
+        let registry = serve(document, bytes.clone()).await;
+        let result = install(&mut store, &node, &pnpm, &registry).await;
+        assert!(matches!(&result, Err(Error::Download(error))
+            if std::mem::discriminant(error) == std::mem::discriminant(&expected)));
+        assert_eq!(registry.requests.lock().unwrap().len(), 2);
+        assert_eq!(manifest(repo.path()), snapshot);
+    }
+    let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&good)).unwrap();
+    assert_ne!(pnpm.inventory_tool(), unpinned.inventory_tool());
+    let registry = serve(metadata(&bytes), bytes.clone()).await;
+    install(&mut store, &node, &pnpm, &registry).await.unwrap();
+    assert_ne!(manifest(repo.path()), snapshot);
+}
+
+#[tokio::test]
+async fn pnpm_11_module_entry_points_and_aliases_run_on_managed_node() {
+    let version = "11.28.2";
+    let bins = json!({"pn":"bin/pnpm.mjs","pnpm":"bin/pnpm.mjs","pnpx":"bin/pnpx.mjs",
+        "pnx":"bin/pnpx.mjs"});
+    let package = json!({"name":"pnpm","version":version,"type":"module","bin":bins}).to_string();
+    // Mirrors the published tarball: `.cjs` Corepack shims beside the entries.
+    let shim = "#!/usr/bin/env node\nimport('./pnpm.mjs')\n";
+    let bytes = archive_files(&[
+        ("package.json", &package, 0o644),
+        ("bin/pnpm.cjs", shim, 0o755),
+        ("bin/pnpx.cjs", shim, 0o755),
+        ("bin/pnpm.mjs", HOOK, 0o755),
+        ("bin/pnpx.mjs", HOOK, 0o755),
+        ("dist/pnpm.mjs", "bundle", 0o644),
+    ]);
+    let registry = serve_version(
+        version,
+        serde_json::to_vec(&metadata_for(version, &bytes)).unwrap(),
+        bytes.clone(),
+    )
+    .await;
+    let mut value = fixture(&bytes);
+    let tool = &mut value["tools"]["pnpm"];
+    tool["version"] = json!(version);
+    tool["declarations"][0]["request"] = json!(format!("pnpm@{version}"));
+    let artifact = &mut tool["installation"]["artifacts"]["any"]["package"];
+    artifact["url"] = json!(format!(
+        "https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"
+    ));
+    artifact["executables"] = bins;
+    let (node, pnpm) = plans(&value);
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = seeded(repo.path(), &node);
+    install(&mut store, &node, &pnpm, &registry).await.unwrap();
+    let bin = store.current().unwrap().unwrap().bin;
+    for (name, entry) in [
+        ("pn", "pnpm"),
+        ("pnpm", "pnpm"),
+        ("pnpx", "pnpx"),
+        ("pnx", "pnpx"),
+    ] {
+        let output = Command::new(bin.join(name))
+            .arg("--version")
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(19));
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(stdout.starts_with("managed-node\n<"), "{stdout}");
+        assert!(
+            stdout.ends_with(&format!("/pnpm/bin/{entry}.mjs>\n<--version>\n")),
+            "{stdout}"
+        );
+    }
+    // pnpm 10's entry points are not this release's layout, and pnpm 12 is
+    // never provisioned from a JS package shape.
+    for (version, legacy) in [("11.28.2", true), ("12.11.2", false)] {
+        let mut changed = value.clone();
+        let tool = &mut changed["tools"]["pnpm"];
+        tool["version"] = json!(version);
+        let artifact = &mut tool["installation"]["artifacts"]["any"]["package"];
+        artifact["url"] = json!(format!(
+            "https://registry.npmjs.org/pnpm/-/pnpm-{version}.tgz"
+        ));
+        if legacy {
+            artifact["executables"] = json!({"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"});
+        }
+        let lock = Lock::parse(&serde_json::to_vec(&changed).unwrap()).unwrap();
+        let result = PnpmPlan::from_lock(&lock, TARGET, &node, None);
+        assert!(matches!(result, Err(Error::InvalidLock)), "{version}");
+    }
+}
+
+#[tokio::test]
+async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
+    use crate::{
+        package_manager::discover_package_manager, registry_provision::native_fixture as fx,
+    };
+    let (wrapper, natives) = (fx::wrapper(&[]), fx::natives());
+    let server = LoopbackServer::new(fx::routes(&wrapper, &natives), |_| {}).unwrap();
+    let transport = PnpmTransport::loopback_http_for_tests(server.origin()).unwrap();
+    let selected = transport
+        .resolve_exact(Manager::Pnpm, fx::VERSION, None)
+        .await
+        .unwrap();
+    let mut value = fixture(&wrapper);
+    value["tools"]["pnpm"]["version"] = json!(fx::VERSION);
+    value["tools"]["pnpm"]["installation"]["artifacts"] =
+        serde_json::to_value(selected.into_artifacts()).unwrap();
+    let (node, pnpm) = plans(&value);
+    let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+    // Authored pins describe the wrapper, never the platform package.
+    let parts = value["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"].clone();
+    let wrapper_sha256 = format!("{:x}", Sha256::digest(&wrapper));
+    for (digest, valid) in [
+        (wrapper_sha256.as_str(), true),
+        (parts["native"]["sha256"].as_str().unwrap(), false),
+    ] {
+        let manager = discover_package_manager(
+            &json!({"packageManager":format!("pnpm@{}+sha256.{digest}", fx::VERSION)}),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            PnpmPlan::from_declaration(&lock, TARGET, &node, &manager).is_ok(),
+            valid
+        );
+    }
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = seeded(repo.path(), &node);
+    let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    let prepared = pnpm
+        .prepare_if_needed(&store, &desired, &transport)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .reconcile(&desired, |tool, path| {
+            if tool == node.inventory_tool() {
+                node_stage(tool, path)
+            } else {
+                prepared.stage(tool, path)
+            }
+        })
+        .unwrap();
+    let current = store.current().unwrap().unwrap();
+    for (name, dlx) in [
+        ("pn", ""),
+        ("pnpm", ""),
+        ("pnpx", "<dlx>\n"),
+        ("pnx", "<dlx>\n"),
+    ] {
+        let output = Command::new(current.bin.join(name))
+            .arg("--version")
+            .env("PATH", "/nonexistent")
+            .output()
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            format!("native:pnpm-native\n{dlx}<--version>\n")
+        );
+        assert_eq!(output.status.code(), Some(0));
+    }
+    // The wrapper's placeholders stay as published; its hooks never run.
+    let root = current.bin.parent().unwrap().join("tools/pnpm");
+    assert_eq!(
+        fs::read_to_string(root.join("pnpm")).unwrap(),
+        fx::PLACEHOLDER
+    );
+    let hits = server.hits();
+    assert!(
+        pnpm.prepare_if_needed(&store, &desired, &transport)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(server.hits(), hits);
+    // Each part is verified against its own locked SHA-256 before staging, and
+    // only qualified hosts provision.
+    let mut tampered = value.clone();
+    tampered["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"]["native"]["sha256"] =
+        json!("00".repeat(32));
+    let (_, tampered) = plans(&tampered);
+    let repo = tempfile::tempdir().unwrap();
+    let store = seeded(repo.path(), &node);
+    let desired = [
+        node.inventory_tool().clone(),
+        tampered.inventory_tool().clone(),
+    ];
+    let result = tampered
+        .prepare_if_needed(&store, &desired, &transport)
+        .await;
+    assert!(matches!(
+        result,
+        Err(Error::Download(DownloadError::DigestMismatch))
+    ));
+    for platform in [Platform::WindowsX64, Platform::LinuxX64Musl] {
+        assert!(matches!(
+            PnpmPlan::from_lock(&lock, platform, &node, None),
+            Err(Error::UnsupportedTarget)
+        ));
+    }
+    for (part, field, bad) in [
+        (
+            "native",
+            "url",
+            json!("https://registry.npmjs.org/@pnpm/exe.linux-x64/-/exe.linux-x64-12.11.2.tgz"),
+        ),
+        (
+            "native",
+            "destination",
+            json!("node_modules/@pnpm/exe.darwin-arm64"),
+        ),
+        (
+            "package",
+            "executables",
+            parts["native"]["executables"].clone(),
+        ),
+    ] {
+        let mut changed = value.clone();
+        changed["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"][part][field] = bad;
+        let lock = Lock::parse(&serde_json::to_vec(&changed).unwrap());
+        assert!(
+            lock.is_err()
+                || matches!(
+                    PnpmPlan::from_lock(&lock.unwrap(), TARGET, &node, None),
+                    Err(Error::InvalidLock)
+                ),
+            "{part}.{field}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn native_pnpm_cache_reuses_and_reverifies_both_locked_parts_across_repositories() {
+    use crate::registry_provision::native_fixture as fx;
+    let (wrapper, natives) = (fx::wrapper(&[]), fx::natives());
+    let server = LoopbackServer::new(fx::routes(&wrapper, &natives), |_| {}).unwrap();
+    let base = tempfile::tempdir().unwrap();
+    let cache = ArtifactCache::new(base.path()).unwrap();
+    let transport = PnpmTransport::loopback_http_for_tests(server.origin())
+        .unwrap()
+        .with_cache(Some(cache.clone()));
+    let selected = transport
+        .resolve_exact(Manager::Pnpm, fx::VERSION, None)
+        .await
+        .unwrap();
+    let mut value = fixture(&wrapper);
+    value["tools"]["pnpm"]["version"] = json!(fx::VERSION);
+    value["tools"]["pnpm"]["installation"]["artifacts"] =
+        serde_json::to_value(selected.into_artifacts()).unwrap();
+    let (node, pnpm) = plans(&value);
+    let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    let native_sha = value["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"]["native"]
+        ["sha256"]
+        .as_str()
+        .unwrap();
+    let wrapper_sha = format!("{:x}", Sha256::digest(&wrapper));
+    let before = server.hits();
+    for (index, expected_hits, cached) in [(0, 4, false), (1, 4, true), (2, 6, false)] {
+        if index == 2 {
+            let entry = base
+                .path()
+                .join("turborepo/setup-artifacts/v1/macos-arm64")
+                .join(native_sha);
+            fs::remove_file(&entry).unwrap();
+            fs::write(&entry, b"torn native archive").unwrap();
+        }
+        let repo = tempfile::tempdir().unwrap();
+        let mut store = seeded(repo.path(), &node);
+        let prepared = pnpm
+            .prepare(&store, &desired, &transport, crate::Preparation::Fresh)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(prepared.from_cache(), cached);
+        assert_eq!(server.hits() - before, expected_hits);
+        assert!(cache.get(TARGET, &wrapper_sha, PACKAGE_LIMIT).is_some());
+        assert!(cache.get(TARGET, native_sha, PACKAGE_LIMIT).is_some());
+        store
+            .reconcile(&desired, |tool, path| {
+                if tool == node.inventory_tool() {
+                    node_stage(tool, path)
+                } else {
+                    prepared.stage(tool, path)
+                }
+            })
+            .unwrap();
+        let current = store.current().unwrap().unwrap();
+        assert_eq!(
+            fs::read_to_string(current.bin.parent().unwrap().join("tools/pnpm/pnpm-native"))
+                .unwrap(),
+            fx::BINARY
+        );
+        assert_eq!(
+            fs::read_to_string(current.bin.parent().unwrap().join("tools/pnpm/pnpm")).unwrap(),
+            fx::PLACEHOLDER
+        );
+    }
 }

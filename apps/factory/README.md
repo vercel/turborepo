@@ -65,6 +65,25 @@ pnpm --filter examples-agent factory ssh ws_...
 The same workspace remains available from the web while the local terminal is
 attached.
 
+The homepage and **Factory image** page show a **Copy command** button for
+
+```sh
+sandbox create --snapshot <published-snapshot-id> --vcpus 8 --timeout 45m --connect \
+  --env "GH_TOKEN=$(gh auth token)" \
+  --env "AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY:?Set AI_GATEWAY_API_KEY locally first}"
+```
+
+The command uses the same published pointer as the agents and updates when the
+pages poll for a newer image. A copied command pins that snapshot. Authenticate
+the Sandbox CLI and select the Factory's Vercel project, log into GitHub with
+`gh auth login` locally, and set `AI_GATEWAY_API_KEY` locally before running the
+command. Once connected, run `cd turborepo`.
+
+Credential expressions resolve in your local shell at execution time. The page
+and shared snapshot do not contain your credentials. Expanded credentials are
+passed as CLI arguments and may be visible to local process inspection. A
+missing or empty AI Gateway key stops the command before sandbox creation.
+
 ## Factory image
 
 Every agent in this app runs against the same sandbox base layer, the

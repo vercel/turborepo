@@ -359,7 +359,7 @@ async fn checksum_and_extraction_failures_never_publish_or_damage_prior_install(
 }
 
 #[tokio::test]
-async fn zip_matrix_prepares_full_windows_tree_without_claiming_promotion() {
+async fn zip_matrix_prepares_full_windows_trees_and_promotes_only_native_x64() {
     for (platform, arch) in [
         (Platform::WindowsX64, "x64"),
         (Platform::WindowsArm64, "arm64"),
@@ -370,10 +370,17 @@ async fn zip_matrix_prepares_full_windows_tree_without_claiming_promotion() {
         let plan = plan(&fixture(platform, &bytes), platform).unwrap();
         let prepared = plan.download(&transport).await.unwrap();
         let destination = tempfile::tempdir().unwrap();
-        assert!(matches!(
-            prepared.stage(plan.inventory_tool(), destination.path()),
-            Err(turborepo_tool_install::Error::UnsupportedPlatform)
-        ));
+        let promotes = cfg!(windows) && platform == Platform::WindowsX64;
+        let staged = prepared.stage(plan.inventory_tool(), destination.path());
+        if promotes {
+            staged.unwrap();
+            assert!(destination.path().join("node.exe").is_file());
+        } else {
+            assert!(matches!(
+                staged,
+                Err(turborepo_tool_install::Error::UnsupportedPlatform)
+            ));
+        }
         assert!(
             prepared
                 .tree
@@ -391,17 +398,19 @@ async fn zip_matrix_prepares_full_windows_tree_without_claiming_promotion() {
             .unwrap(),
             b"fixture"
         );
-        #[cfg(unix)]
-        {
-            let repo = tempfile::tempdir().unwrap();
-            let store = Store::open(repo.path()).unwrap();
-            assert!(matches!(
-                plan.prepare_if_needed(&store, &[plan.inventory_tool().clone()], &transport)
-                    .await,
-                Err(Error::UnsupportedTarget)
-            ));
-            assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
+        // Unqualified targets fail before any further download.
+        let repo = tempfile::tempdir().unwrap();
+        let store = Store::open(repo.path()).unwrap();
+        let prepared = plan
+            .prepare_if_needed(&store, &[plan.inventory_tool().clone()], &transport)
+            .await;
+        if promotes {
+            assert!(prepared.unwrap().is_some());
+        } else {
+            assert!(matches!(prepared, Err(Error::UnsupportedTarget)));
         }
+        let requests = upstream.requests.load(Ordering::SeqCst);
+        assert_eq!(requests, if promotes { 2 } else { 1 });
     }
 }
 
@@ -414,6 +423,10 @@ fn adapter_rejects_nonofficial_metadata_and_unavailable_targets() {
         ("rootPrefix", json!("node-v23.0.0-darwin-arm64")),
         ("format", json!("zip")),
         ("destination", json!("other")),
+        (
+            "alternates",
+            json!({"tar-xz":{"url":"https://evil.test/node.tar.xz","sha256":"a".repeat(64)}}),
+        ),
         (
             "executables",
             json!({"node":"bin/node","corepack":"bin/corepack"}),

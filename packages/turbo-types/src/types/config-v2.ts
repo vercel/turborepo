@@ -6,6 +6,19 @@ export type OutputLogs =
   | "errors-only";
 export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
+export type ToolPolicy = "managed" | "verify-system" | "skip";
+export type DependencyPolicy = "locked" | "skip";
+export type LifecycleScripts = "native" | "skip";
+export type ArtifactPlatform =
+  | "macos-x64"
+  | "macos-arm64"
+  | "linux-x64-gnu"
+  | "linux-arm64-gnu"
+  | "linux-x64-musl"
+  | "linux-arm64-musl"
+  | "windows-x64"
+  | "windows-arm64";
+export type ArtifactFormat = "binary" | "tar" | "tar-gz" | "zip";
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
@@ -71,9 +84,9 @@ export interface RootSchema extends BaseSchema {
 
   /**
    * Controls whether turbo maintains a root AGENTS.md block for AI agents.
-   * Set to false to opt out of future automatic updates.
+   * Set to true to opt in to future automatic updates.
    *
-   * @defaultValue `true`
+   * @defaultValue `false`
    */
   agentGuidance?: boolean;
 
@@ -241,6 +254,12 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `{}`
    */
   futureFlags?: FutureFlags;
+
+  /**
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
+   * and requires `futureFlags.experimentalSetup`.
+   */
+  setup?: SetupPolicy;
 }
 
 export interface FutureFlags {
@@ -525,6 +544,118 @@ export interface GlobalConfig {
    * @defaultValue `false`
    */
   noUpdateNotifier?: boolean;
+}
+
+export interface SetupPolicy {
+  /**
+   * How `turbo setup` prepares tools for every toolchain.
+   *
+   * - `"managed"`: Provision the locked version for this repository.
+   * - `"verify-system"`: Use an installed tool after verifying that it matches the locked version.
+   * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
+   *
+   * Without `setup`, `turbo setup` infers what to prepare from native
+   * declaration files, and detected tools are managed. Toolchain keys
+   * override root values.
+   */
+  tools?: ToolPolicy;
+
+  /**
+   * How `turbo setup` prepares dependencies for every toolchain.
+   *
+   * - `"locked"`: Install from the committed ecosystem lockfile without changing it.
+   * - `"skip"`: Do not install dependencies.
+   */
+  dependencies?: DependencyPolicy;
+
+  /**
+   * Whether dependency setup runs package-manager lifecycle scripts for every
+   * toolchain.
+   *
+   * - `"native"`: Keep each package manager's defaults and committed allowlists or trust settings.
+   * - `"skip"`: Skip them with the package manager's own flag, or fail where it has none.
+   */
+  lifecycleScripts?: LifecycleScripts;
+
+  /** Setup policy for the JavaScript toolchain. */
+  javascript?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`. */
+  rust?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Python toolchain. Requires `futureFlags.experimentalPythonWorkspaces`. */
+  python?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`. */
+  go?: ToolchainSetupPolicy;
+
+  /** Tools that no built-in adapter manages, keyed by tool ID. */
+  additionalTools?: Record<string, AdditionalTool>;
+
+  /**
+   * Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the
+   * official URLs, and environment variables override these values.
+   */
+  mirrors?: SetupMirrors;
+}
+
+export interface SetupMirrors {
+  /** Replaces `https://nodejs.org/dist` for Node.js release metadata and archives. */
+  node?: string;
+
+  /** Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn packages. */
+  npmRegistry?: string;
+
+  /** Replaces the `https://github.com` origin for Bun releases, keeping official paths. */
+  bun?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for uv, keeping official paths. */
+  uv?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for CPython, keeping official paths. */
+  python?: string;
+
+  /** Replaces `https://go.dev` and `https://dl.google.com` for Go, keeping official paths. */
+  go?: string;
+
+  /** Replaces the `https://static.rust-lang.org` origin for rustup and Rust, keeping official paths. */
+  rust?: string;
+}
+
+export interface AdditionalTool {
+  /** The exact version of the tool. Ranges and channels are not allowed. */
+  version: string;
+
+  /** Artifacts keyed by platform. Platforms without an artifact are unsupported. */
+  artifacts: Partial<Record<ArtifactPlatform, AdditionalToolArtifact>>;
+}
+
+export interface AdditionalToolArtifact {
+  /** HTTPS download URL without credentials, a query, or a fragment. */
+  url: string;
+
+  /** Lowercase hex SHA-256 digest of the downloaded bytes. */
+  sha256: string;
+
+  /** `binary` for a single executable file, or the archive format. */
+  format: ArtifactFormat;
+
+  /** The single top-level archive directory. Omit it for archives without one. */
+  rootPrefix?: string;
+
+  /** Executable names mapped to paths relative to `rootPrefix` or the archive top level. */
+  executables: Record<string, string>;
+}
+
+export interface ToolchainSetupPolicy {
+  /** How `turbo setup` prepares this toolchain's tools. */
+  tools?: ToolPolicy;
+
+  /** How `turbo setup` prepares this toolchain's dependencies. */
+  dependencies?: DependencyPolicy;
+
+  /** Whether this toolchain's dependency setup runs lifecycle scripts. */
+  lifecycleScripts?: LifecycleScripts;
 }
 
 export interface StartupInput {

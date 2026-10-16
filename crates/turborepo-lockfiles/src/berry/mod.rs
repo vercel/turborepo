@@ -146,6 +146,7 @@ impl<'de> Deserialize<'de> for BerryResolutionMap {
 
 #[derive(Debug)]
 pub struct BerryLockfile {
+    // Lockfile metadata only: packages are moved into `locator_package`.
     data: LockfileData,
     resolutions: Map<Descriptor<'static>, Locator<'static>>,
     // A mapping from descriptors without protocols to a range with a protocol
@@ -246,23 +247,25 @@ impl BerryLockfile {
         let mut descriptor_locator = Map::new();
         let mut resolver = DescriptorResolver::default();
         let mut workspace_path_to_locator = HashMap::new();
-        for (key, package) in &lockfile.packages {
-            let locator = Locator::try_from(package.resolution.as_str())?;
+        // Packages move into `locator_package`, the only place they are read
+        // after construction; `data` keeps just the metadata. `lockfile()`
+        // rebuilds the on-disk package map from `locator_package` for encoding.
+        let LockfileData { metadata, packages } = lockfile;
+        for (key, package) in packages {
+            let locator = Locator::try_from(package.resolution.as_str())?.as_owned();
 
             if locator.patch_file().is_some() {
                 let original_locator = locator
                     .patched_locator()
-                    .ok_or_else(|| Error::PatchMissingOriginalLocator(locator.as_owned()))?;
-                patches.insert(original_locator.as_owned(), locator.as_owned());
+                    .ok_or_else(|| Error::PatchMissingOriginalLocator(locator.clone()))?;
+                patches.insert(original_locator.as_owned(), locator.clone());
             }
-
-            locator_package.insert(locator.as_owned(), package.clone());
 
             if let Some(path) = locator.reference.strip_prefix("workspace:") {
-                workspace_path_to_locator.insert(path.to_string(), locator.as_owned());
+                workspace_path_to_locator.insert(path.to_string(), locator.clone());
             }
 
-            for descriptor in Descriptor::from_lockfile_key(key) {
+            for descriptor in Descriptor::from_lockfile_key(&key) {
                 let descriptor = descriptor?;
                 if let Some(other) = resolver.insert(&descriptor) {
                     Err(Error::DescriptorCollision {
@@ -270,8 +273,10 @@ impl BerryLockfile {
                         other,
                     })?;
                 }
-                descriptor_locator.insert(descriptor.into_owned(), locator.as_owned());
+                descriptor_locator.insert(descriptor.into_owned(), locator.clone());
             }
+
+            locator_package.insert(locator, package);
         }
 
         let (overrides, catalogs, package_extensions) = if let Some(manifest) = manifest {
@@ -281,7 +286,10 @@ impl BerryLockfile {
         };
 
         let mut this = Self {
-            data: lockfile,
+            data: LockfileData {
+                metadata,
+                packages: Map::new(),
+            },
             resolutions: descriptor_locator,
             locator_package,
             resolver,
@@ -300,7 +308,9 @@ impl BerryLockfile {
     }
 
     fn populate_extensions(&mut self) -> Result<(), Error> {
-        let mut possible_extensions: HashSet<_> = self
+        // Only membership matters (the survivors feed the unordered
+        // `extensions` set), so a fast hash is safe here.
+        let mut possible_extensions: rustc_hash::FxHashSet<_> = self
             .resolutions
             .keys()
             .filter(|descriptor| matches!(descriptor.protocol(), Some("npm")))
@@ -701,6 +711,41 @@ impl BerryLockfile {
         Ok(dependency.into_owned())
     }
 
+    /// Resolves a dependency declared by the package at `locator` to its
+    /// lockfile package.
+    fn resolve_package_from(
+        &self,
+        locator: &Locator,
+        name: &str,
+        version: &str,
+    ) -> Result<Option<crate::Package>, crate::Error> {
+        let dependency = self.resolve_dependency(locator, name, version)?;
+
+        let Some(resolved) = self.resolutions.get(&dependency) else {
+            return Ok(None);
+        };
+
+        let package = self
+            .locator_package
+            .get(resolved)
+            .ok_or_else(|| crate::Error::MissingPackage(dependency.to_string()))?;
+
+        Ok(Some(crate::Package {
+            key: resolved.to_string(),
+            version: package.version.clone(),
+        }))
+    }
+
+    /// Every locator [`BerryLockfile::locator_for_workspace_path`] can return
+    /// for some workspace path (possibly with repeats).
+    fn workspace_locators(&self) -> impl Iterator<Item = &Locator<'static>> {
+        self.workspace_path_to_locator.values().chain(
+            self.locator_package
+                .keys()
+                .filter(|locator| locator.reference.starts_with("workspace:")),
+        )
+    }
+
     fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator<'_>> {
         self.workspace_path_to_locator
             .get(workspace_path)
@@ -729,6 +774,85 @@ fn group_overrides_by_name(overrides: Vec<(Resolution, String)>) -> OverridesByN
     by_name
 }
 
+/// Resolves transitive dependency edges for the shared closure DP.
+///
+/// The per-workspace closure walk resolves every transitive edge through
+/// [`Lockfile::resolve_package`], which applies root `resolutions` overrides
+/// with the *workspace's* locator as the depending package. Catalog lookup,
+/// protocol inference, and descriptor resolution ignore that locator, and
+/// unscoped overrides never consult it. Only a parent-scoped override
+/// (`parent/dependency`) does, and it can only match a locator whose ident is
+/// its parent ident. An edge is therefore workspace-independent unless its
+/// override bucket holds a scoped override whose parent is a workspace ident;
+/// such edges are reported as sensitive and the DP falls back to the walk.
+struct BerryEdgeResolver<'a> {
+    lockfile: &'a BerryLockfile,
+    // Any workspace locator. Every workspace resolves a non-sensitive edge
+    // identically, so resolving through this one is representative.
+    workspace_locator: &'a Locator<'static>,
+    // Override buckets (by unscoped target name) holding a parent-scoped
+    // override whose parent ident belongs to a workspace.
+    sensitive_targets: HashSet<&'a str>,
+}
+
+impl<'a> BerryEdgeResolver<'a> {
+    fn new(lockfile: &'a BerryLockfile) -> Option<Self> {
+        let workspace_locator = lockfile.workspace_locators().next()?;
+        let mut sensitive_targets = HashSet::new();
+        let mut workspace_idents: Option<HashSet<&Ident<'static>>> = None;
+        for (target, candidates) in lockfile.overrides.iter() {
+            for resolution in candidates.iter().map(|(resolution, _)| resolution) {
+                let Some(parent_ident) = resolution.parent_ident() else {
+                    continue;
+                };
+                let workspace_idents = workspace_idents.get_or_insert_with(|| {
+                    lockfile
+                        .workspace_locators()
+                        .map(|locator| &locator.ident)
+                        .collect()
+                });
+                if workspace_idents.contains(parent_ident) {
+                    sensitive_targets.insert(target.as_str());
+                    break;
+                }
+            }
+        }
+        Some(Self {
+            lockfile,
+            workspace_locator,
+            sensitive_targets,
+        })
+    }
+}
+
+impl crate::TransitiveEdgeResolver for BerryEdgeResolver<'_> {
+    // Descriptor/version parsing and string-keyed map lookups make each
+    // resolution expensive enough to benefit from parallelism.
+    fn parallel(&self) -> bool {
+        true
+    }
+
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        // Overrides are bucketed by the unscoped name of the dependency's
+        // ident, which `resolve_dependency` derives from `name` alone. An
+        // unparseable name fails identically below for every workspace.
+        if !self.sensitive_targets.is_empty()
+            && let Ok(ident) = Ident::try_from(name)
+            && self.sensitive_targets.contains(ident.name())
+        {
+            return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
+        }
+        Ok(crate::TransitiveEdgeResolution::Global(
+            self.lockfile
+                .resolve_package_from(self.workspace_locator, name, version)?,
+        ))
+    }
+}
+
 impl Lockfile for BerryLockfile {
     #[tracing::instrument(skip(self))]
     fn resolve_package(
@@ -745,21 +869,7 @@ impl Lockfile for BerryLockfile {
             .locator_for_workspace_path(workspace_path)
             .ok_or_else(|| crate::Error::MissingWorkspace(workspace_path.to_string()))?;
 
-        let dependency = self.resolve_dependency(workspace_locator, name, version)?;
-
-        let Some(locator) = self.resolutions.get(&dependency) else {
-            return Ok(None);
-        };
-
-        let package = self
-            .locator_package
-            .get(locator)
-            .ok_or_else(|| crate::Error::MissingPackage(dependency.to_string()))?;
-
-        Ok(Some(crate::Package {
-            key: locator.to_string(),
-            version: package.version.clone(),
-        }))
+        self.resolve_package_from(workspace_locator, name, version)
     }
 
     #[tracing::instrument(skip(self))]
@@ -857,6 +967,10 @@ impl Lockfile for BerryLockfile {
 
     fn format_version(&self) -> Option<String> {
         Some(self.data.metadata.version.clone())
+    }
+
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        Some(Box::new(BerryEdgeResolver::new(self)?))
     }
 }
 

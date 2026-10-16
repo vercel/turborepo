@@ -181,7 +181,17 @@ impl ArtifactMetadata {
 pub struct Checksums(BTreeMap<String, String>);
 impl Checksums {
     pub fn parse(bytes: &[u8]) -> Result<Self, Error> {
-        if bytes.len() > MAX_CHECKSUM_BYTES {
+        Self::parse_bounded(bytes, MAX_CHECKSUM_BYTES, MAX_CHECKSUM_ENTRIES)
+    }
+
+    /// The same sha256sum format with caller limits for larger official
+    /// manifests (python-build-standalone publishes every build variant).
+    pub(crate) fn parse_bounded(
+        bytes: &[u8],
+        max_bytes: usize,
+        max_entries: usize,
+    ) -> Result<Self, Error> {
+        if bytes.len() > max_bytes {
             return Err(Error::Limit);
         }
         let text = std::str::from_utf8(bytes).map_err(|_| Error::Checksums)?;
@@ -208,7 +218,7 @@ impl Checksums {
             {
                 return Err(Error::Checksums);
             }
-            if checksums.len() > MAX_CHECKSUM_ENTRIES {
+            if checksums.len() > max_entries {
                 return Err(Error::Limit);
             }
         }
@@ -216,6 +226,12 @@ impl Checksums {
             return Err(Error::Checksums);
         }
         Ok(Self(checksums))
+    }
+
+    /// Lowercase SHA-256 for an exact published filename. The sha256sum format
+    /// is shared by other official release manifests (for example uv's).
+    pub(crate) fn sha256(&self, filename: &str) -> Option<&str> {
+        self.0.get(filename).map(String::as_str)
     }
 }
 
