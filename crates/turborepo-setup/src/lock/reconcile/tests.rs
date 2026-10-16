@@ -1,10 +1,7 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 use super::*;
-use crate::{
-    git::FakeGit,
-    lock::{Artifact, Document, Ecosystems, Format, Platform, SCHEMA_VERSION},
-};
+use crate::lock::{Artifact, Document, Ecosystems, Format, Platform, SCHEMA_VERSION};
 
 fn root(manager: Option<&str>) -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
@@ -26,7 +23,7 @@ fn manifest(root: &Path, manager: Option<&str>) {
     .unwrap();
 }
 fn snapshot(root: &Path) -> Snapshot {
-    Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared()).unwrap()
+    Snapshot::capture_with(root, Ecosystems::default()).unwrap()
 }
 fn selection(snapshot: &Snapshot, version: &str) -> Lock {
     Lock::new(Document {
@@ -575,8 +572,6 @@ fn unknown_adapters_aliases_sources_and_unsupported_managers_fail_closed() {
         }
     }
     let root = root(Some("aube@4.0.0"));
-    assert!(
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).is_err()
-    );
+    assert!(Snapshot::capture_with(root.path(), Ecosystems::default()).is_err());
     assert!(!root.path().join(".turbo").exists());
 }

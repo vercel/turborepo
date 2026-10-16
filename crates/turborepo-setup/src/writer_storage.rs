@@ -1,7 +1,4 @@
 //! Writer-only bookkeeping; readers must not acquire or initialize storage.
-//! Inside a Git repository, requires Git-proven ignore coverage. Missing
-//! coverage is reported before creating anything; the setup command owns any
-//! explicit ignore-file edits.
 
 #[cfg(windows)]
 use std::{fs, path::PathBuf};
@@ -11,27 +8,10 @@ use std::{
     path::Path,
 };
 
-use crate::git::Git;
-
 const MAX_BYTES: usize = 1024 * 1024;
 const WRITER: &str = "writer";
 const STAGED: &str = "staged";
 const TARGET: &str = "turbo.lock";
-
-/// True when no `.git` entry exists at or above `root`, so Git cannot track
-/// anything under it (for example, `turbo prune --docker` output). The ignore
-/// checks are then vacuous and are skipped without running Git. Any `.git`
-/// file, directory, or link, even a broken one, keeps the strict checks.
-pub fn outside_git_repository(root: &Path) -> io::Result<bool> {
-    for dir in root.canonicalize()?.ancestors() {
-        match std::fs::symlink_metadata(dir.join(".git")) {
-            Ok(_) => return Ok(false),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e),
-        }
-    }
-    Ok(true)
-}
 
 struct Directory {
     file: File,
@@ -245,13 +225,12 @@ impl Drop for WriterStorage {
 }
 
 impl WriterStorage {
-    pub fn acquire(root: &Path, git: &dyn Git) -> io::Result<Self> {
-        Self::acquire_with(root, git, |_| Ok(()))
+    pub fn acquire(root: &Path) -> io::Result<Self> {
+        Self::acquire_with(root, |_| Ok(()))
     }
 
     fn acquire_with(
         root: &Path,
-        git: &dyn Git,
         mut after_lock: impl FnMut(&mut AcquiredLock<'_>) -> io::Result<()>,
     ) -> io::Result<Self> {
         let root_path = root.canonicalize()?;
@@ -263,18 +242,6 @@ impl WriterStorage {
         let mut root_lock = AcquiredLock::acquire(&root.file)?;
         #[cfg(unix)]
         after_lock(&mut root_lock)?;
-        if !outside_git_repository(&root_path)? {
-            let paths = [".turbo/setup-lock/writer", ".turbo/setup-lock/staged"];
-            let output = git.check_ignore(&root_path, &paths)?;
-            if !output.success()
-                || output.stdout != format!("{}\n{}\n", paths[0], paths[1]).as_bytes()
-            {
-                return Err(io::Error::other(
-                    "setup storage must be untracked and ignored by Git; explicitly add /.turbo/ \
-                     to .gitignore",
-                ));
-            }
-        }
         let cache = root.child(".turbo")?;
         let storage = cache.child("setup-lock")?;
         #[cfg(unix)]
@@ -363,7 +330,7 @@ impl WriterStorage {
             self.storage.promote(&self.root)
         })();
         if result.is_err() {
-            // Cleanup failure leaves only ignored owned state for next acquire.
+            // Cleanup failure leaves only owned state for next acquire.
             let _ = self.storage.remove_stage();
         }
         result
