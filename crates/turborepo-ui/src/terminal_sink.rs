@@ -25,6 +25,10 @@ pub(crate) fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
 /// Append `bytes` to `out`, converting lone `\n` to `\r\n`. Same output as
 /// [`normalize_newlines`] for a single call.
 fn normalize_newlines_into(out: &mut Vec<u8>, bytes: &[u8]) {
+    if !has_bare_lf(bytes) {
+        out.extend_from_slice(bytes);
+        return;
+    }
     let mut prev_cr = false;
     for &b in bytes {
         if b == b'\n' && !prev_cr {
@@ -32,6 +36,27 @@ fn normalize_newlines_into(out: &mut Vec<u8>, bytes: &[u8]) {
         }
         out.push(b);
         prev_cr = b == b'\r';
+    }
+}
+
+/// Whether `bytes` contains a `\n` that isn't preceded by `\r` (a `\n` at the
+/// very start counts), i.e. whether newline normalization would change it.
+///
+/// Output read from a PTY normally has none, because the kernel already
+/// turns `\n` into `\r\n`. The scan is branch-free so it vectorizes.
+pub(crate) fn has_bare_lf(bytes: &[u8]) -> bool {
+    match bytes.first() {
+        None => false,
+        Some(b'\n') => true,
+        Some(_) => {
+            bytes[1..]
+                .iter()
+                .zip(bytes)
+                .fold(0u8, |found, (&b, &prev)| {
+                    found | u8::from((b == b'\n') & (prev != b'\r'))
+                })
+                != 0
+        }
     }
 }
 
@@ -560,6 +585,29 @@ mod tests {
             buf, b"a\r\nb\r\n",
             "lone \\n becomes \\r\\n, existing \\r\\n untouched"
         );
+    }
+
+    #[test]
+    fn has_bare_lf_matches_normalization() {
+        for (bytes, bare) in [
+            (&b""[..], false),
+            (b"\n", true),
+            (b"\r\n", false),
+            (b"\r", false),
+            (b"a\r\nb\r\n", false),
+            (b"a\r\nb\n", true),
+            (b"\nb\r\n", true),
+            (b"\r\r\n\n", true),
+            (b"no newline", false),
+        ] {
+            assert_eq!(has_bare_lf(bytes), bare, "{bytes:?}");
+            assert_eq!(normalize_newlines(bytes) != bytes, bare, "{bytes:?}");
+        }
+        // Long input exercises the vectorized scan, with the only bare LF last.
+        let mut long = b"line\r\n".repeat(10_000);
+        assert!(!has_bare_lf(&long));
+        long.push(b'\n');
+        assert!(has_bare_lf(&long));
     }
 
     #[test]
