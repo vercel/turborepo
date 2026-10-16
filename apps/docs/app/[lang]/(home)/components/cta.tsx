@@ -12,8 +12,8 @@ export const CTA = ({ title, href, cta }: CTAProps) => (
     <h2 className="font-semibold text-xl tracking-tight sm:text-2xl md:text-3xl lg:text-[40px]">
       {title}
     </h2>
-    <Button asChild size="lg">
-      <DynamicLink href={`/[lang]${href}`}>{cta}</DynamicLink>
+    <Button Component={DynamicLink} href={`/[lang]${href}`} size="large">
+      {cta}
     </Button>
   </section>
 );
