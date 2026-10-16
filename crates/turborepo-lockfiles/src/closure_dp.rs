@@ -41,8 +41,7 @@ use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    Error, IndexedClosures, Lockfile, Package, SortedClosures, TransitiveEdgeResolution,
-    TransitiveEdgeResolver,
+    Error, IndexedClosures, Lockfile, Package, TransitiveEdgeResolution, TransitiveEdgeResolver,
 };
 
 /// Upper bound for one chunk's closure bitsets. 64MiB of transient memory
@@ -74,27 +73,9 @@ fn par_map<T: Sync, R: Send>(
     }
 }
 
-/// Compute all workspace closures via the shared DP. Returns `Ok(None)`
-/// when the graph contains a workspace-sensitive edge (caller must use the
-/// legacy walk).
-pub(crate) fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
-    lockfile: &L,
-    resolver: &dyn TransitiveEdgeResolver,
-    workspaces: &HashMap<String, BTreeMap<String, String>>,
-    ignore_missing_packages: bool,
-) -> Result<Option<SortedClosures>, Error> {
-    Ok(
-        all_transitive_closures_dp_indexed(
-            lockfile,
-            resolver,
-            workspaces,
-            ignore_missing_packages,
-        )?
-        .map(IndexedClosures::into_sorted),
-    )
-}
-
-/// [`all_transitive_closures_dp`] in index form: one package table sorted by
+/// Compute all workspace closures via the shared DP in index form. Returns
+/// `Ok(None)` when the graph contains a workspace-sensitive edge (caller must
+/// use the legacy walk). The result has one package table sorted by
 /// `(key, version)` and each workspace's closure as ascending indices into
 /// it, so consumers that only need membership never touch per-member `Arc`s.
 pub(crate) fn all_transitive_closures_dp_indexed<L: Lockfile + ?Sized>(
@@ -493,7 +474,23 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     use super::*;
-    use crate::PnpmLockfile;
+    use crate::{PnpmLockfile, SortedClosures};
+
+    /// Materialize the indexed DP result for comparisons with the legacy walk.
+    fn all_transitive_closures_dp<L: Lockfile + ?Sized>(
+        lockfile: &L,
+        resolver: &dyn TransitiveEdgeResolver,
+        workspaces: &HashMap<String, BTreeMap<String, String>>,
+        ignore_missing_packages: bool,
+    ) -> Result<Option<SortedClosures>, Error> {
+        Ok(all_transitive_closures_dp_indexed(
+            lockfile,
+            resolver,
+            workspaces,
+            ignore_missing_packages,
+        )?
+        .map(IndexedClosures::into_sorted))
+    }
 
     /// The DP must agree with the legacy per-workspace walk. The legacy
     /// walk is invoked directly (single-workspace entry point never uses
