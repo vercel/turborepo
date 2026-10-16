@@ -19,7 +19,7 @@ const MAX_VERSION_BYTES: usize = 256;
 pub enum RegistryMetadataError {
     #[error("registry metadata byte limit exceeded")]
     TooLarge,
-    #[error("registry metadata supports only npm and pnpm")]
+    #[error("registry metadata supports only npm, pnpm, and Yarn")]
     UnsupportedManager,
     #[error("an exact canonical published version is required")]
     InvalidVersion,
@@ -44,7 +44,9 @@ pub struct RegistryArtifact {
     pub version: Version,
     pub tarball: String,
     pub integrity: CorepackIntegrity,
-    pub additional_sha256: Option<CorepackIntegrity>,
+    /// Authored SHA-256 or SHA-224 that registry SHA-512 cannot prove. Callers
+    /// must verify it against the downloaded bytes.
+    pub byte_pin: Option<CorepackIntegrity>,
 }
 
 #[derive(Deserialize)]
@@ -83,10 +85,54 @@ pub fn parse_release(
     exact_version: &str,
     authored: Option<&CorepackIntegrity>,
 ) -> Result<RegistryArtifact, RegistryMetadataError> {
+    parse_release_from(bytes, manager, exact_version, authored, None)
+}
+
+/// A mirror may point `dist.tarball` at its own canonical path. The returned
+/// tarball is always the public registry URL, so locks never record mirrors.
+pub(crate) fn parse_release_from(
+    bytes: &[u8],
+    manager: Manager,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+    mirror: Option<&str>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
     if bytes.len() > MAX_METADATA_BYTES {
         return Err(RegistryMetadataError::TooLarge);
     }
-    let (name, version) = validate_selection(manager, exact_version)?;
+    let (name, _) = validate_selection(manager, exact_version)?;
+    match mirror {
+        Some(base) => parse_package_from(bytes, manager, name, exact_version, authored, Some(base)),
+        None => parse_package(bytes, manager, name, exact_version, authored),
+    }
+}
+
+/// Like `parse_release`, for an adapter-owned registry package name such as
+/// pnpm's `@pnpm/exe.<target>` platform binaries.
+pub(crate) fn parse_package(
+    bytes: &[u8],
+    manager: Manager,
+    name: &str,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
+    parse_package_from(bytes, manager, name, exact_version, authored, None)
+}
+
+/// Accept only the exact public or selected mirror tarball path; retain
+/// canonical public lock provenance for scoped native packages as well.
+pub(crate) fn parse_package_from(
+    bytes: &[u8],
+    manager: Manager,
+    name: &str,
+    exact_version: &str,
+    authored: Option<&CorepackIntegrity>,
+    mirror: Option<&str>,
+) -> Result<RegistryArtifact, RegistryMetadataError> {
+    if bytes.len() > MAX_METADATA_BYTES {
+        return Err(RegistryMetadataError::TooLarge);
+    }
+    let (_, version) = validate_selection(manager, exact_version)?;
     // Typed deserialization rejects duplicate security-relevant fields; ignore
     // unrelated upstream enrichment within the bounded complete JSON document.
     let mut deserializer = serde_json::Deserializer::from_slice(bytes);
@@ -99,17 +145,20 @@ pub fn parse_release(
         return Err(RegistryMetadataError::IdentityMismatch);
     }
     // Compare the literal decoded string, not a URL parser's normalized form.
-    let tarball = format!("{PUBLIC_NPM_REGISTRY}/{name}/-/{name}-{exact_version}.tgz");
-    if document.dist.tarball != tarball {
+    let path = tarball_path(name, exact_version);
+    let tarball = format!("{PUBLIC_NPM_REGISTRY}/{path}");
+    let mirrored = mirror.map(|base| format!("{base}/{path}"));
+    if document.dist.tarball != tarball && Some(&document.dist.tarball) != mirrored.as_ref() {
         return Err(RegistryMetadataError::InvalidTarball);
     }
     let integrity = sri_sha512(&document.dist.integrity)?;
-    let additional_sha256 = match authored {
+    let byte_pin = match authored {
         None => None,
         Some(pin) => {
             let length = match pin.algorithm {
                 "sha512" => 128,
                 "sha256" => 64,
+                "sha224" => 56,
                 _ => return Err(RegistryMetadataError::InvalidIntegrity),
             };
             if pin.digest.len() != length || !pin.digest.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -125,8 +174,8 @@ pub fn parse_release(
                 }
                 None
             } else {
-                // Registry SHA-512 cannot prove a SHA-256 pin. Preserve it for
-                // mandatory verification against actual artifact bytes later.
+                // Registry SHA-512 cannot prove a SHA-256/SHA-224 pin. Preserve
+                // it for mandatory verification against actual artifact bytes.
                 Some(pin)
             }
         }
@@ -136,19 +185,26 @@ pub fn parse_release(
         version,
         tarball,
         integrity,
-        additional_sha256,
+        byte_pin,
     })
 }
 
+/// Registry-relative tarball path; scoped packages drop the scope from the
+/// file name (`@pnpm/exe.linux-x64/-/exe.linux-x64-12.0.0.tgz`).
+pub(crate) fn tarball_path(name: &str, version: &str) -> String {
+    let file = name.rsplit_once('/').map_or(name, |(_, file)| file);
+    format!("{name}/-/{file}-{version}.tgz")
+}
+
+/// Registry package name for an exact selection, validated before traffic.
+/// Like Corepack, Yarn 2+ is the single-file `@yarnpkg/cli-dist` bundle.
 pub(crate) fn validate_selection(
     manager: Manager,
     exact_version: &str,
 ) -> Result<(&'static str, Version), RegistryMetadataError> {
-    let name = match manager {
-        Manager::Npm => "npm",
-        Manager::Pnpm => "pnpm",
-        _ => return Err(RegistryMetadataError::UnsupportedManager),
-    };
+    if !matches!(manager, Manager::Npm | Manager::Pnpm | Manager::Yarn) {
+        return Err(RegistryMetadataError::UnsupportedManager);
+    }
     if exact_version.len() > MAX_VERSION_BYTES {
         return Err(RegistryMetadataError::InvalidVersion);
     }
@@ -157,7 +213,18 @@ pub(crate) fn validate_selection(
     if !is_valid_release(&version) || version.to_string() != exact_version {
         return Err(RegistryMetadataError::InvalidVersion);
     }
+    let name = match manager {
+        Manager::Npm => "npm",
+        Manager::Pnpm => "pnpm",
+        _ if is_modern_yarn(manager, &version) => "@yarnpkg/cli-dist",
+        _ => "yarn",
+    };
     Ok((name, version))
+}
+
+/// Modern Yarn authored integrity covers `bin/yarn.js`, not the tarball.
+pub(crate) fn is_modern_yarn(manager: Manager, version: &Version) -> bool {
+    manager == Manager::Yarn && version.major >= 2
 }
 
 fn sri_sha512(value: &str) -> Result<CorepackIntegrity, RegistryMetadataError> {

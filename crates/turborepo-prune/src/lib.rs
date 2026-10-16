@@ -348,136 +348,160 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
     } else {
         Vec::new()
     };
-    let mut planned_domains = HashSet::new();
-    for workspace in workspaces {
-        let context = prune.package_context(&workspace)?;
+    // Rendering the pruned lockfile and root manifest only reads the original
+    // repository and is independent of the files copied below, so it runs
+    // alongside the copies instead of after them.
+    let planned_domains = std::thread::scope(|scope| -> Result<HashSet<PruneDomainId>, Error> {
+        let render = match prune.package_graph.package_manager() {
+            Some(package_manager) => {
+                let original_lockfile = prune
+                    .package_graph
+                    .lockfile()
+                    .ok_or(Error::MissingLockfile)?;
+                let root_definition = prune
+                    .package_graph
+                    .package_definition_path(&PackageName::Root)
+                    .ok_or_else(|| Error::MissingPackageDefinition(PackageName::Root))?;
+                let root_package_json = PackageJson::load(&prune.root.resolve(root_definition))?;
+                let original_root_contents =
+                    prune.root.resolve(root_definition).read_to_string()?;
+                let workspace_paths = &workspace_paths;
+                let lockfile_keys = &lockfile_keys;
+                let excluded_dev_workspaces = &excluded_dev_workspaces;
+                let repo_root = &prune.root;
+                let uses_per_workspace_lockfiles = prune.uses_per_workspace_lockfiles;
+                let handle = scope.spawn(move || {
+                    render_javascript_prune(JavaScriptPruneRenderInput {
+                        package_manager,
+                        root_package_json: &root_package_json,
+                        original_lockfile,
+                        workspace_paths,
+                        lockfile_keys,
+                        excluded_dev_workspaces,
+                        repo_root,
+                        original_root_package_json_contents: &original_root_contents,
+                        uses_per_workspace_lockfiles,
+                    })
+                });
+                Some((root_definition, handle))
+            }
+            None => None,
+        };
 
-        // We don't want to do any copying for the root workspace
-        if let PackageName::Other(workspace) = workspace {
-            let mode = context
-                .task_contract()
-                .prune_package_mode()
-                .cloned()
-                .ok_or_else(|| Error::MissingPrunePackageMode(context.package().clone()))?;
-            let definition_path = prune.package_definition_path(&context)?;
-            if matches!(
-                mode,
-                PrunePackageMode::NativeCopy | PrunePackageMode::NativeDomain(_)
-            ) {
-                // A package anchored at the repo root (the synthetic Cargo
-                // workspace package) has no directory of its own; its
-                // workspace-level files come from the toolchain's prune
-                // plan below.
-                if context.kind() == PackageTaskContextKind::Aggregate
-                    || context.directory().components().next().is_none()
-                {
-                    if input.future_flags.affected_using_task_inputs {
-                        // No directory copy does not mean no task namespace:
-                        // preserve configured tasks and native task overrides.
-                        // The aggregate's install closure retains its members,
-                        // which seed the domain plan below (not the aggregate,
-                        // which is not itself a lockfile package).
-                        workspace_names.push(workspace);
+        let mut planned_domains = HashSet::new();
+        for workspace in workspaces {
+            let context = prune.package_context(&workspace)?;
+
+            // We don't want to do any copying for the root workspace
+            if let PackageName::Other(workspace) = workspace {
+                let mode = context
+                    .task_contract()
+                    .prune_package_mode()
+                    .cloned()
+                    .ok_or_else(|| Error::MissingPrunePackageMode(context.package().clone()))?;
+                let definition_path = prune.package_definition_path(&context)?;
+                if matches!(
+                    mode,
+                    PrunePackageMode::NativeCopy | PrunePackageMode::NativeDomain(_)
+                ) {
+                    // A package anchored at the repo root (the synthetic Cargo
+                    // workspace package) has no directory of its own; its
+                    // workspace-level files come from the toolchain's prune
+                    // plan below.
+                    if context.kind() == PackageTaskContextKind::Aggregate
+                        || context.directory().components().next().is_none()
+                    {
+                        if input.future_flags.affected_using_task_inputs {
+                            // No directory copy does not mean no task namespace:
+                            // preserve configured tasks and native task overrides.
+                            // The aggregate's install closure retains its members,
+                            // which seed the domain plan below (not the aggregate,
+                            // which is not itself a lockfile package).
+                            workspace_names.push(workspace);
+                        }
+                        continue;
                     }
+                    prune.copy_package_dir(context.directory(), definition_path)?;
+                    println!(" - Added {workspace}");
+                    // Non-JS packages participate in turbo.json task pruning,
+                    // but not in the JS lockfile subgraph or package.json
+                    // workspaces.
+                    workspace_names.push(workspace);
                     continue;
                 }
-                prune.copy_package_dir(context.directory(), definition_path)?;
+                prune.copy_workspace(
+                    context.package(),
+                    context.directory(),
+                    definition_path,
+                    &excluded_dev_workspaces,
+                )?;
+
                 println!(" - Added {workspace}");
-                // Non-JS packages participate in turbo.json task pruning,
-                // but not in the JS lockfile subgraph or package.json
-                // workspaces.
                 workspace_names.push(workspace);
-                continue;
-            }
-            prune.copy_workspace(
-                context.package(),
-                context.directory(),
-                definition_path,
-                &excluded_dev_workspaces,
-            )?;
-
-            println!(" - Added {workspace}");
-            workspace_names.push(workspace);
-        }
-    }
-
-    // Project plans from immutable knowledge captured by this graph's
-    // discovery generation; live toolchains retain no prune authority.
-    let native_plans = plan_native_domains(&prune.package_graph, &selection.native_domains)?;
-    for (domain, plan) in native_plans {
-        planned_domains.insert(domain.clone());
-        for extra in plan.extra_packages {
-            let name = PackageName::Other(extra.clone());
-            let context = prune.package_context(&name)?;
-            let definition_path = prune.package_definition_path(&context)?;
-            prune.copy_package_dir(context.directory(), definition_path)?;
-            println!(" - Added {extra} (required by kept packages)");
-            workspace_names.push(extra);
-        }
-        for (path, contents) in plan.root_files {
-            let rel = RelativeUnixPath::new(&path)?.to_anchored_system_path_buf();
-            let full_path = prune.full_directory.resolve(&rel);
-            full_path.ensure_dir()?;
-            full_path.create_with_contents(&contents)?;
-            if docker {
-                let docker_path = prune.docker_directory().resolve(&rel);
-                docker_path.ensure_dir()?;
-                docker_path.create_with_contents(&contents)?;
             }
         }
-        for path in plan.copy_paths {
-            let rel = RelativeUnixPath::new(&path)?.to_anchored_system_path_buf();
-            prune.copy_file(&rel, Some(CopyDestination::Docker))?;
+
+        // Project plans from immutable knowledge captured by this graph's
+        // discovery generation; live toolchains retain no prune authority.
+        let native_plans = plan_native_domains(&prune.package_graph, &selection.native_domains)?;
+        for (domain, plan) in native_plans {
+            planned_domains.insert(domain.clone());
+            for extra in plan.extra_packages {
+                let name = PackageName::Other(extra.clone());
+                let context = prune.package_context(&name)?;
+                let definition_path = prune.package_definition_path(&context)?;
+                prune.copy_package_dir(context.directory(), definition_path)?;
+                println!(" - Added {extra} (required by kept packages)");
+                workspace_names.push(extra);
+            }
+            for (path, contents) in plan.root_files {
+                let rel = RelativeUnixPath::new(&path)?.to_anchored_system_path_buf();
+                let full_path = prune.full_directory.resolve(&rel);
+                full_path.ensure_dir()?;
+                full_path.create_with_contents(&contents)?;
+                if docker {
+                    let docker_path = prune.docker_directory().resolve(&rel);
+                    docker_path.ensure_dir()?;
+                    docker_path.create_with_contents(&contents)?;
+                }
+            }
+            for path in plan.copy_paths {
+                let rel = RelativeUnixPath::new(&path)?.to_anchored_system_path_buf();
+                prune.copy_file(&rel, Some(CopyDestination::Docker))?;
+            }
         }
-    }
-    prune.copy_file_dependencies(&workspace_names)?;
+        prune.copy_file_dependencies(&workspace_names)?;
 
-    trace!("new workspaces: {}", workspace_paths.join(", "));
-    trace!("lockfile keys: {}", lockfile_keys.join(", "));
+        trace!("new workspaces: {}", workspace_paths.join(", "));
+        trace!("lockfile keys: {}", lockfile_keys.join(", "));
 
-    // Files carried into every pruned repository regardless of toolchain.
-    // These do not depend on the JavaScript lockfile subgraph, so they run
-    // for a pure Cargo workspace too.
-    for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
-        let path = relative_path.to_anchored_system_path_buf();
-        prune.copy_file(&path, *required_for_install)?;
-    }
+        // Files carried into every pruned repository regardless of toolchain.
+        // These do not depend on the JavaScript lockfile subgraph, so they run
+        // for a pure Cargo workspace too.
+        for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
+            let path = relative_path.to_anchored_system_path_buf();
+            prune.copy_file(&path, *required_for_install)?;
+        }
 
-    for (relative_path, required_for_install) in ADDITIONAL_DIRECTORIES.as_slice() {
-        let path = relative_path.to_anchored_system_path_buf();
-        prune.copy_directory(&path, *required_for_install)?;
-    }
+        for (relative_path, required_for_install) in ADDITIONAL_DIRECTORIES.as_slice() {
+            let path = relative_path.to_anchored_system_path_buf();
+            prune.copy_directory(&path, *required_for_install)?;
+        }
 
-    prune.copy_turbo_json(&workspace_names, managed_setup.enabled())?;
-    prune.copy_global_dependencies()?;
+        prune.copy_turbo_json(&workspace_names, managed_setup.enabled())?;
+        prune.copy_global_dependencies()?;
 
-    // Distinct JavaScript rendering + materialization: core already selected
-    // closures and laid out packages. Format rewriting lives entirely in
-    // `render_javascript_prune`; orchestration only writes the artifacts.
-    if let Some(package_manager) = prune.package_graph.package_manager() {
-        let original_lockfile = prune
-            .package_graph
-            .lockfile()
-            .ok_or(Error::MissingLockfile)?;
-        let root_definition = prune
-            .package_graph
-            .package_definition_path(&PackageName::Root)
-            .ok_or_else(|| Error::MissingPackageDefinition(PackageName::Root))?;
-        let root_package_json = PackageJson::load(&prune.root.resolve(root_definition))?;
-        let original_root_contents = prune.root.resolve(root_definition).read_to_string()?;
-        let rendered = render_javascript_prune(JavaScriptPruneRenderInput {
-            package_manager,
-            root_package_json: &root_package_json,
-            original_lockfile,
-            workspace_paths: &workspace_paths,
-            lockfile_keys: &lockfile_keys,
-            excluded_dev_workspaces: &excluded_dev_workspaces,
-            repo_root: &prune.root,
-            original_root_package_json_contents: &original_root_contents,
-            uses_per_workspace_lockfiles: prune.uses_per_workspace_lockfiles,
-        })?;
-        prune.materialize_javascript_render(root_definition, &rendered)?;
-    }
+        // Distinct JavaScript rendering + materialization: core already selected
+        // closures and laid out packages. Format rewriting lives entirely in
+        // `render_javascript_prune`; orchestration only writes the artifacts.
+        if let Some((root_definition, handle)) = render {
+            let rendered = handle
+                .join()
+                .unwrap_or_else(|panic| std::panic::resume_unwind(panic))?;
+            prune.materialize_javascript_render(root_definition, &rendered)?;
+        }
+        Ok(planned_domains)
+    })?;
 
     // The pruned output is complete; let each planned generation-owned domain
     // polish its own files in place (e.g. Cargo canonicalizes its lockfile).

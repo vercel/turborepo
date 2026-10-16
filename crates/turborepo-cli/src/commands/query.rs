@@ -77,7 +77,30 @@ async fn execute_query_and_print(
 /// Prepend a `version` key to a JSON object so the output stays a single
 /// parseable document (the version banner is suppressed for query output).
 /// Non-object or unparseable input is returned unchanged.
+///
+/// `result_json` is serde_json's pretty rendering of a GraphQL response, so
+/// re-rendering it reproduces the same bytes. When it is a non-empty pretty
+/// object without a top-level `version` key, the key is spliced into the text
+/// instead of parsing and re-rendering the whole (possibly very large)
+/// response. JSON strings cannot hold a raw newline, so `\n  "version": ` can
+/// only be a top-level key.
 fn with_version_key(result_json: &str, version: &str) -> String {
+    if let Some(fields) = result_json.strip_prefix("{\n")
+        && fields.starts_with("  \"")
+        && !result_json.contains("\n  \"version\": ")
+        && let Ok(version) = serde_json::to_string(version)
+    {
+        let mut output = String::with_capacity(result_json.len() + version.len() + 16);
+        output.push_str("{\n  \"version\": ");
+        output.push_str(&version);
+        output.push_str(",\n");
+        output.push_str(fields);
+        return output;
+    }
+    with_version_key_reserialized(result_json, version)
+}
+
+fn with_version_key_reserialized(result_json: &str, version: &str) -> String {
     match serde_json::from_str::<serde_json::Value>(result_json) {
         Ok(serde_json::Value::Object(fields)) => {
             let mut output = serde_json::Map::with_capacity(fields.len() + 1);
@@ -142,7 +165,7 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run_builder = RunBuilder::new(base.run_builder_input()?, None)?
+    let run_builder = RunBuilder::new(base.discovery_builder_input()?, None)?
         .add_all_tasks()
         .do_not_validate_engine();
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
@@ -229,6 +252,35 @@ pub async fn run(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn spliced_version_key_matches_reserialized_output() {
+        let responses = [
+            serde_json::json!({ "data": { "packages": { "items": [
+                { "name": "a", "version": "1.0.0", "path": "packages/a" },
+                { "name": "b\u{1b}\"\\\n\tü", "count": 3, "ratio": 0.5, "big": 18446744073709551615u64,
+                  "empty": [], "obj": {} },
+            ] } } }),
+            serde_json::json!({ "data": null, "errors": [
+                { "message": "bad", "locations": [{ "line": 1, "column": 9 }] },
+            ] }),
+            serde_json::json!({ "data": { "version": "2.0.0" }, "extensions": { "x": 1 } }),
+            serde_json::json!({ "version": "stale", "data": {} }),
+            serde_json::json!({}),
+            serde_json::json!([1, 2]),
+        ];
+        for response in responses {
+            let result_json = serde_json::to_string_pretty(&response).unwrap();
+            for version in ["2.11.8-canary.2", "v\"q\\"] {
+                assert_eq!(
+                    super::with_version_key(&result_json, version),
+                    super::with_version_key_reserialized(&result_json, version),
+                    "{result_json}"
+                );
+            }
+        }
+        assert_eq!(super::with_version_key("not json", "1"), "not json");
+    }
+
     #[derive(Default)]
     struct RecordingRun(std::sync::atomic::AtomicUsize);
 

@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 use node_semver::{Range, Version};
 use serde::Deserialize;
@@ -223,7 +226,7 @@ pub fn get_configured_workspace_globs_from_path(
     if pnpm_workspace.packages.is_empty() {
         None
     } else {
-        Some(pnpm_workspace.packages)
+        Some(pnpm_workspace.packages.clone())
     }
 }
 
@@ -254,14 +257,33 @@ enum LinkWorkspacePackages {
     Str(String),
 }
 
+/// The most recently parsed `pnpm-workspace.yaml`, keyed by its contents.
+///
+/// A single command reads the workspace file several times: repository
+/// inference, workspace discovery, and the catalog and `linkWorkspacePackages`
+/// lookups. The file is still read every time, so a change on disk is always
+/// picked up, but identical contents are parsed only once. Parse errors are
+/// not cached.
+static LAST_PARSED_WORKSPACE: Mutex<Option<(String, Arc<PnpmWorkspace>)>> = Mutex::new(None);
+
 impl PnpmWorkspace {
     pub fn from_file(
         repo_root: &AbsoluteSystemPath,
         workspace_configuration_path: &str,
-    ) -> Result<Self, Error> {
+    ) -> Result<Arc<Self>, Error> {
         let workspace_yaml_path = repo_root.join_component(workspace_configuration_path);
         let workspace_yaml = workspace_yaml_path.read_to_string()?;
-        Ok(serde_yaml_ng::from_str(&workspace_yaml)?)
+        if let Ok(last) = LAST_PARSED_WORKSPACE.lock()
+            && let Some((contents, workspace)) = last.as_ref()
+            && *contents == workspace_yaml
+        {
+            return Ok(Arc::clone(workspace));
+        }
+        let workspace: Arc<Self> = Arc::new(serde_yaml_ng::from_str(&workspace_yaml)?);
+        if let Ok(mut last) = LAST_PARSED_WORKSPACE.lock() {
+            *last = Some((workspace_yaml, Arc::clone(&workspace)));
+        }
+        Ok(workspace)
     }
 
     fn link_workspace_packages(&self) -> Option<bool> {
@@ -290,8 +312,8 @@ pub fn read_catalogs_from_path(
         return None;
     }
     Some(PnpmCatalogs {
-        default: workspace.catalog,
-        named: workspace.catalogs,
+        default: workspace.catalog.clone(),
+        named: workspace.catalogs.clone(),
     })
 }
 

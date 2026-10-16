@@ -55,6 +55,7 @@ fn selection(snapshot: &Snapshot, version: &str) -> Lock {
                                         url: format!("https://example.test/{id}-{version}.tgz"),
                                         sha256: "a".repeat(64),
                                         format: Format::TarGz,
+                                        alternates: BTreeMap::new(),
                                         root_prefix: Some("package".into()),
                                         destination: None,
                                         executables: BTreeMap::from([(
@@ -192,6 +193,64 @@ fn no_lock_first_selection_is_ephemeral_and_resolution_failure_preserves_state()
         assert_eq!(bytes(root.path()), before);
         assert!(!root.path().join(".turbo/setup-lock/staged").exists());
     }
+}
+
+#[test]
+fn proposals_select_like_local_and_refresh_but_never_write() {
+    let root = root(Some("pnpm@24.0.0"));
+    let source = snapshot(root.path());
+    let created = propose(
+        &source,
+        Mode::Local,
+        false,
+        |input| {
+            assert_eq!(input.version_ids().len(), 2);
+            Ok(selection(input.snapshot(), "24.0.0"))
+        },
+        |_| Ok(()),
+        || Ok(()),
+    )
+    .unwrap();
+    assert_eq!(created.publication, None);
+    assert!(!root.path().join("turbo.lock").exists());
+    assert!(!root.path().join(".turbo").exists());
+
+    let old = first(root.path());
+    let before = bytes(root.path());
+    let newer = edit(&old, |doc| {
+        doc.tools.get_mut("node").unwrap().version = "24.1.0".into()
+    });
+    let refreshed = propose(
+        &snapshot(root.path()),
+        Mode::Refresh,
+        false,
+        |input| {
+            assert_eq!(input.version_ids().len(), 2);
+            Ok(newer.clone())
+        },
+        |_| Ok(()),
+        || Ok(()),
+    )
+    .unwrap();
+    assert_eq!((refreshed.lock, refreshed.publication), (newer, None));
+    // Targeted drift keeps unaffected bytes, and validation still gates.
+    fs::write(root.path().join(".nvmrc"), "25.x").unwrap();
+    let source = snapshot(root.path());
+    let mut candidate = selection(&source, "25.0.0").document().clone();
+    candidate
+        .tools
+        .insert("pnpm".into(), old.tools()["pnpm"].clone());
+    let candidate = Lock::new(candidate).unwrap();
+    let resolve = |input: Resolution<'_>| {
+        assert_eq!(input.version_ids(), &BTreeSet::from(["node".into()]));
+        Ok(candidate.clone())
+    };
+    let drifted = propose(&source, Mode::Local, false, resolve, |_| Ok(()), || Ok(())).unwrap();
+    assert_eq!(drifted.lock.tools()["pnpm"], old.tools()["pnpm"]);
+    let invalid = |_: &Lock| Err(std::io::Error::other("host plan rejected"));
+    assert!(propose(&source, Mode::Local, false, resolve, invalid, || Ok(())).is_err());
+    assert_eq!(bytes(root.path()), before);
+    assert!(!root.path().join(".turbo/setup-lock/staged").exists());
 }
 
 #[test]
@@ -439,14 +498,13 @@ fn reordered_provenance_preserves_pins_and_native_removal_preserves_other_tool()
     let reordered = edit(&old, |doc| {
         doc.tools.get_mut("node").unwrap().declarations.reverse()
     });
-    fs::write(
-        root.path().join("turbo.lock"),
-        serde_json::to_vec(reordered.document()).unwrap(),
-    )
-    .unwrap();
+    let compact = serde_json::to_vec(reordered.document()).unwrap();
+    fs::write(root.path().join("turbo.lock"), &compact).unwrap();
     for mode in [Mode::Frozen, Mode::NoLock, Mode::Local] {
         let result = reconcile(&snapshot(root.path()), mode, true, never).unwrap();
         assert_eq!(result.lock.tools()["node"].version, "24.0.0");
+        // An equivalent compact lock is never rewritten for formatting alone.
+        assert_eq!(bytes(root.path()), compact);
     }
     fs::remove_file(root.path().join(".nvmrc")).unwrap();
     fs::remove_file(root.path().join(".node-version")).unwrap();
@@ -520,7 +578,7 @@ fn unknown_adapters_aliases_sources_and_unsupported_managers_fail_closed() {
             assert!(!root.path().join(".turbo").exists());
         }
     }
-    let root = root(Some("yarn@4.0.0"));
+    let root = root(Some("aube@4.0.0"));
     assert!(Snapshot::capture(root.path()).is_err());
     assert!(!root.path().join(".turbo").exists());
 }

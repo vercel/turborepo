@@ -150,6 +150,53 @@ fn identical_write_does_not_touch_existing_file_and_changed_write_is_readable() 
 }
 
 #[test]
+fn writes_indented_json_and_leaves_an_equivalent_compact_lock_untouched() {
+    let golden = r#"{
+  "schemaVersion": 0,
+  "tools": {
+    "node": {
+      "adapter": "node",
+      "version": "24.0.0",
+      "declarations": [
+        {
+          "file": ".nvmrc",
+          "request": "lts/*"
+        }
+      ],
+      "installation": {
+        "kind": "verify-system",
+        "executables": [
+          "node"
+        ]
+      }
+    }
+  }
+}
+"#;
+    assert_eq!(
+        fixture("24.0.0").canonical_bytes().unwrap(),
+        golden.as_bytes()
+    );
+    let root = writer_root();
+    let compact = serde_json::to_vec(fixture("24.0.0").document()).unwrap();
+    fs::write(root.path().join(LOCK_NAME), &compact).unwrap();
+    assert_eq!(Lock::read(root.path()).unwrap().unwrap(), fixture("24.0.0"));
+    assert_eq!(
+        write(root.path(), &fixture("24.0.0")).unwrap(),
+        WriteOutcome::Unchanged
+    );
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), compact);
+    assert_eq!(
+        write(root.path(), &fixture("25.0.0")).unwrap(),
+        WriteOutcome::Written
+    );
+    assert_eq!(
+        fs::read(root.path().join(LOCK_NAME)).unwrap(),
+        golden.replace("24.0.0", "25.0.0").as_bytes()
+    );
+}
+
+#[test]
 fn publication_failure_preserves_previous_bytes_and_ignored_state() {
     let root = writer_root();
     write(root.path(), &fixture("24.0.0")).unwrap();
@@ -429,4 +476,41 @@ fn read_only_probe_and_symlink_directory_fifo_safety() {
         .unwrap();
     assert!(status.success());
     assert!(probe_native(root.path()).is_err());
+}
+
+#[test]
+fn rust_toolchain_files_declare_rustup_only_when_enabled_and_unambiguous() {
+    let root = tempfile::tempdir().unwrap();
+    let rust = Ecosystems {
+        rust: true,
+        ..Default::default()
+    };
+    assert!(probe_native_in(root.path(), rust).unwrap().is_empty());
+    let channel = |file: &str, channel: &str| match file {
+        "rust-toolchain" => format!("{channel}\n"),
+        _ => format!("[toolchain]\nchannel = \"{channel}\"\n"),
+    };
+    for file in RUST_TOOLCHAIN_FILES {
+        fs::write(root.path().join(file), channel(file, "stable")).unwrap();
+        assert!(probe_native(root.path()).unwrap().is_empty());
+        let declared = probe_native_in(root.path(), rust).unwrap();
+        assert_eq!(
+            declared["rustup"],
+            [Declaration {
+                file: file.into(),
+                field: None,
+                request: None,
+            }]
+        );
+        // Content changes are the channel's provenance, not the installer's.
+        fs::write(root.path().join(file), channel(file, "nightly")).unwrap();
+        let changed = probe_native_in(root.path(), rust).unwrap();
+        assert_eq!(changed["rustup"], declared["rustup"]);
+        fs::remove_file(root.path().join(file)).unwrap();
+    }
+    for file in RUST_TOOLCHAIN_FILES {
+        fs::write(root.path().join(file), channel(file, "stable")).unwrap();
+    }
+    assert!(probe_native_in(root.path(), rust).is_err());
+    assert!(probe_native(root.path()).unwrap().is_empty());
 }

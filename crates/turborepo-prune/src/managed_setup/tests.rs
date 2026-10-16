@@ -199,9 +199,12 @@ async fn native_and_additional_provenance_is_copied_without_adapter_allowlists()
         ];
         for (id, file, contents) in files {
             write(temp.path(), file, contents)?;
-            document
-                .tools
-                .insert(id.into(), tool(id, vec![declaration(file)]));
+            let mut tool = tool(id, vec![declaration(file)]);
+            if id == "go" {
+                // The lock requires canonical Go toolchain identities.
+                tool.version = "1.25.0".into();
+            }
+            document.tools.insert(id.into(), tool);
         }
         // A real managed artifact also remains byte-identical: no resolution or
         // integrity metadata is synthesized by prune.
@@ -218,6 +221,7 @@ async fn native_and_additional_provenance_is_copied_without_adapter_allowlists()
                         url: "https://example.com/tool.tar.gz".into(),
                         sha256: "a".repeat(64),
                         format: lock::Format::TarGz,
+                        alternates: BTreeMap::new(),
                         root_prefix: Some("tool".into()),
                         destination: None,
                         executables: BTreeMap::from([("custom".into(), "bin/custom".into())]),
@@ -246,9 +250,14 @@ async fn native_and_additional_provenance_is_copied_without_adapter_allowlists()
 
 #[tokio::test]
 async fn unconfigured_prune_ignores_locks_and_undeclared_version_files() -> TestResult {
-    for (flag, lock_exists) in [(false, true), (true, false)] {
+    for (flag, lock_exists, docker) in [
+        (false, true, false),
+        (false, true, true),
+        (true, false, false),
+        (true, false, true),
+    ] {
         let temp = tempfile::tempdir()?;
-        let mut input = fixture(temp.path(), true)?;
+        let mut input = fixture(temp.path(), docker)?;
         input.future_flags.experimental_setup = flag;
         if lock_exists {
             write(temp.path(), "turbo.lock", "not a lock")?;
@@ -256,7 +265,11 @@ async fn unconfigured_prune_ignores_locks_and_undeclared_version_files() -> Test
             fs::remove_file(temp.path().join("turbo.lock"))?;
         }
         prune(input, CommandEventBuilder::new("prune")).await?;
-        for layout in ["out/full", "out/json"] {
+        for layout in if docker {
+            vec!["out/full", "out/json"]
+        } else {
+            vec!["out"]
+        } {
             let output = temp.path().join(layout);
             assert!(!output.join("turbo.lock").exists());
             assert!(!output.join(".nvmrc").exists());
