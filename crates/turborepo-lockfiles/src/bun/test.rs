@@ -2489,6 +2489,99 @@ fn test_scoped_package_name_not_mistaken_for_nested_entry() {
     );
 }
 
+// A workspace named like an npm package that a dependency also pulls in owns
+// the top-level key, so bun nests the npm copy under its dependent
+// ("debug/ms"). Promotion must not move that nested copy onto the workspace's
+// key: bun then sees two "ms" paths and rejects the lockfile.
+#[test]
+fn test_subgraph_keeps_workspace_named_like_nested_package() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 2,
+        "configVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "apps/web": {
+                "name": "web",
+                "dependencies": { "debug": "4.4.3", "ms": "workspace:*" }
+            },
+            "packages/ms": { "name": "ms", "version": "0.0.0-local" }
+        },
+        "packages": {
+            "debug": ["debug@4.4.3", "", { "dependencies": { "ms": "^2.1.3" } }, "sha512-debug"],
+            "ms": ["ms@workspace:packages/ms"],
+            "web": ["web@workspace:apps/web"],
+            "debug/ms": ["ms@2.1.3", "", {}, "sha512-ms"]
+        }
+    }))
+    .unwrap();
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let deps = std::collections::BTreeMap::from([
+        ("debug".to_string(), "4.4.3".to_string()),
+        ("ms".to_string(), "workspace:*".to_string()),
+    ]);
+    let closure = crate::transitive_closure(&lockfile, "apps/web", deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+    let subgraph = lockfile
+        .subgraph(&["apps/web".into(), "packages/ms".into()], &package_idents)
+        .unwrap();
+    let pruned =
+        BunLockfile::from_str(&String::from_utf8(subgraph.encode().unwrap()).unwrap()).unwrap();
+
+    let ident_of = |key: &str| {
+        pruned
+            .data
+            .packages
+            .get(key)
+            .map(|entry| entry.ident.as_str())
+    };
+    assert_eq!(ident_of("ms"), Some("ms@workspace:packages/ms"));
+    assert_eq!(ident_of("debug/ms"), Some("ms@2.1.3"));
+}
+
+// Same shape with an npm alias holding the top-level key. Bun accepts a
+// lockfile where the nested copy replaced the alias, so the pruned install
+// silently gives `web` ms@2.1.3 instead of the aliased package.
+#[test]
+fn test_subgraph_keeps_alias_named_like_nested_package() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 2,
+        "configVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "apps/web": {
+                "name": "web",
+                "dependencies": { "debug": "4.4.3", "ms": "npm:is-number@7.0.0" }
+            }
+        },
+        "packages": {
+            "debug": ["debug@4.4.3", "", { "dependencies": { "ms": "^2.1.3" } }, "sha512-debug"],
+            "ms": ["is-number@7.0.0", "", {}, "sha512-is-number"],
+            "web": ["web@workspace:apps/web"],
+            "debug/ms": ["ms@2.1.3", "", {}, "sha512-ms"]
+        }
+    }))
+    .unwrap();
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let pruned = prune_to_string(
+        &lockfile,
+        "apps/web",
+        &[("debug", "4.4.3"), ("ms", "npm:is-number@7.0.0")],
+    );
+    let pruned = BunLockfile::from_str(&pruned).unwrap();
+
+    let ident_of = |key: &str| {
+        pruned
+            .data
+            .packages
+            .get(key)
+            .map(|entry| entry.ident.as_str())
+    };
+    assert_eq!(ident_of("ms"), Some("is-number@7.0.0"));
+    assert_eq!(ident_of("debug/ms"), Some("ms@2.1.3"));
+}
+
 // Regression test for https://github.com/vercel/turborepo/issues/13233
 // When a dependency is resolved from an ancestor scope of its source key
 // (e.g. `@headlessui/react/@floating-ui/react/@floating-ui/utils` providing

@@ -701,9 +701,9 @@ impl BunLockfile {
 
         loop {
             // Find the first nested entry (by sorted key order) whose package
-            // name has no top-level entry. We promote one package per iteration
-            // because promotion renames children, which may expose further
-            // entries that need promotion.
+            // name has no top-level entry and whose top-level key is free. We
+            // promote one package per iteration because promotion renames
+            // children, which may expose further entries that need promotion.
             let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
             for (key, entry) in &pruned_data.packages {
                 if let Some(parent) = parent_of(key) {
@@ -725,7 +725,13 @@ impl BunLockfile {
                 if patched_pkg_names.contains(&pkg_name) {
                     continue;
                 }
-                if !top_level_pkg_names.contains_key(&pkg_name) {
+                // A workspace mapping, which the top-level counts skip, or an
+                // npm alias of another package can hold this key. Bun nested
+                // this entry because the key was taken, so promoting it would
+                // overwrite the holder.
+                if !top_level_pkg_names.contains_key(&pkg_name)
+                    && !pruned_data.packages.contains_key(&pkg_name)
+                {
                     promote_target = Some((pkg_name, key.clone()));
                     break;
                 }
