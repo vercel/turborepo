@@ -16,6 +16,9 @@ use fs_err as fs;
 use ignore::WalkBuilder;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
+mod repository_read;
+pub use repository_read::RepositoryReader;
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]

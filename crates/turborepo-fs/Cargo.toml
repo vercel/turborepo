@@ -16,6 +16,15 @@ rayon = "1"
 thiserror = { workspace = true }
 turbopath = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
+
 [dev-dependencies]
 tempfile = { workspace = true }
 test-case = { workspace = true }

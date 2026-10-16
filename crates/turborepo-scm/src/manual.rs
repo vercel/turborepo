@@ -6,6 +6,7 @@ use tracing::info;
 use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix, RelativeUnixPath,
 };
+use turborepo_fs::RepositoryReader;
 use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes, OidHash};
@@ -54,6 +55,7 @@ pub(crate) fn hash_files(
     attrs_root: Option<&AbsoluteSystemPath>,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
+    let reader = RepositoryReader::open(root_path)?;
     let effective_attrs_root = attrs_root.unwrap_or(root_path);
     let mut owned_attrs = None;
     let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
@@ -63,7 +65,7 @@ pub(crate) fn hash_files(
         let path = root_path.resolve(anchored);
         let root_relative = anchored.to_unix();
         let attr_path = effective_attrs_root.anchor(&path)?.to_unix();
-        match hash_file_with_attrs(&path, attr_path.as_str(), attrs) {
+        match hash_file_with_attrs(&reader, root_path, &path, attr_path.as_str(), attrs) {
             Ok(hash) => hashes.insert(root_relative, hash),
             Err(Error::Io(ref io_error, _))
                 if allow_missing && io_error.kind() == ErrorKind::NotFound =>
@@ -87,6 +89,8 @@ pub(crate) fn hash_files(
 /// the package-relative path used for hash map insertion — callers must
 /// compute the correct root-relative path.
 fn hash_file_with_attrs(
+    reader: &RepositoryReader,
+    boundary_root: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
     attr_path: &str,
     attrs: Option<&crate::crlf::GitAttrs>,
@@ -95,10 +99,27 @@ fn hash_file_with_attrs(
         .map(|a| a.resolve_text_attr(attr_path))
         .unwrap_or(crate::crlf::TextAttr::Unspecified);
 
-    crate::crlf::manual_hash_file_maybe_normalized(path, text_attr)
+    match crate::crlf::hash_file_as_git_blob_with_explicit_metadata(
+        reader,
+        boundary_root,
+        path,
+        text_attr,
+    )? {
+        Some(hash) => Ok(hash),
+        None => {
+            let kind = if std::fs::metadata(path)?.is_dir() {
+                ErrorKind::IsADirectory
+            } else {
+                ErrorKind::InvalidInput
+            };
+            Err(std::io::Error::new(kind, format!("{path}: not a regular file")).into())
+        }
+    }
 }
 
 fn hash_discovered_file(
+    reader: &RepositoryReader,
+    boundary_root: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
     attr_path: &str,
     attrs: Option<&crate::crlf::GitAttrs>,
@@ -106,7 +127,12 @@ fn hash_discovered_file(
     let text_attr = attrs
         .map(|attrs| attrs.resolve_text_attr(attr_path))
         .unwrap_or(crate::crlf::TextAttr::Unspecified);
-    match crate::crlf::hash_file_as_git_blob(path, text_attr) {
+    match crate::crlf::hash_file_as_git_blob_with_explicit_metadata(
+        reader,
+        boundary_root,
+        path,
+        text_attr,
+    ) {
         Ok(Some(hash)) => Ok(Some(hash)),
         Ok(None) => {
             info!(%path, "skipping non-regular hash candidate");
@@ -126,6 +152,7 @@ pub(crate) fn hash_discovered_files(
     attrs_root: Option<&AbsoluteSystemPath>,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
+    let reader = RepositoryReader::open(root_path)?;
     let effective_attrs_root = attrs_root.unwrap_or(root_path);
     let mut owned_attrs = None;
     let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
@@ -134,7 +161,9 @@ pub(crate) fn hash_discovered_files(
         let anchored = file.as_ref();
         let path = root_path.resolve(anchored);
         let attr_path = effective_attrs_root.anchor(&path)?.to_unix();
-        if let Some(hash) = hash_discovered_file(&path, attr_path.as_str(), attrs)? {
+        if let Some(hash) =
+            hash_discovered_file(&reader, root_path, &path, attr_path.as_str(), attrs)?
+        {
             hashes.insert(anchored.to_unix(), hash);
         }
     }
@@ -149,6 +178,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     git_root: Option<&AbsoluteSystemPath>,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
+    let reader = RepositoryReader::open(turbo_root)?;
     let full_package_path = turbo_root.resolve(package_path);
     let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
@@ -196,7 +226,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             let attr_path =
                 AnchoredSystemPathBuf::relative_path_between(effective_attrs_root, file_path)
                     .to_unix();
-            if let Some(hash) = hash_discovered_file(file_path, attr_path.as_str(), attrs)? {
+            if let Some(hash) =
+                hash_discovered_file(&reader, turbo_root, file_path, attr_path.as_str(), attrs)?
+            {
                 hashes.insert(relative_path, hash);
             }
         }
@@ -296,7 +328,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         }
 
         let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-        if let Some(hash) = hash_discovered_file(path, attr_path.as_str(), attrs)? {
+        if let Some(hash) =
+            hash_discovered_file(&reader, turbo_root, path, attr_path.as_str(), attrs)?
+        {
             hashes.insert(relative_path, hash);
         }
     }
@@ -352,7 +386,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             }
 
             let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-            if let Some(hash) = hash_discovered_file(path, attr_path.as_str(), attrs)? {
+            if let Some(hash) =
+                hash_discovered_file(&reader, turbo_root, path, attr_path.as_str(), attrs)?
+            {
                 default_file_hashes.insert(relative_path, hash);
             }
         }
@@ -451,6 +487,66 @@ mod tests {
             hash(&[source_input, "./pyproject.toml", "!./src/ignored.py"]),
             expected
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_hash_files_reject_external_symlink_ancestors() {
+        let (_tmp, git_root) = tmp_dir();
+        let turbo_root = git_root.join_component("workspace");
+        turbo_root.create_dir_all().unwrap();
+        let outside = git_root.join_component("outside");
+        outside.create_dir_all().unwrap();
+        outside
+            .join_component("secret.txt")
+            .create_with_contents("secret")
+            .unwrap();
+        turbo_root
+            .join_component("alias")
+            .symlink_to_dir(outside.to_string())
+            .unwrap();
+        let files = [AnchoredSystemPathBuf::from_raw("alias/secret.txt").unwrap()];
+        for allow_missing in [false, true] {
+            let error = hash_files(
+                &turbo_root,
+                files.iter(),
+                allow_missing,
+                Some(&git_root),
+                None,
+            )
+            .unwrap_err();
+            assert!(matches!(error, Error::HashFile { source, .. }
+                if source.kind() == ErrorKind::PermissionDenied));
+        }
+        let error =
+            hash_discovered_files(&turbo_root, files.iter(), Some(&git_root), None).unwrap_err();
+        assert!(matches!(error, Error::HashFile { source, .. }
+            if source.kind() == ErrorKind::PermissionDenied));
+    }
+
+    #[test]
+    fn test_package_fallback_confines_to_turbo_root_not_attrs_root() {
+        let (_tmp, git_root) = tmp_dir();
+        let turbo_root = git_root.join_component("workspace");
+        turbo_root.create_dir_all().unwrap();
+        let outside_package = git_root.join_component("outside-package");
+        outside_package.create_dir_all().unwrap();
+        outside_package
+            .join_component("secret.txt")
+            .create_with_contents("secret")
+            .unwrap();
+        let package_path = AnchoredSystemPathBuf::from_raw("../outside-package").unwrap();
+        let error = get_package_file_hashes_without_git::<&str>(
+            &turbo_root,
+            &package_path,
+            &[],
+            false,
+            Some(&git_root),
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::HashFile { source, .. }
+            if source.kind() == ErrorKind::PermissionDenied));
     }
 
     #[test]

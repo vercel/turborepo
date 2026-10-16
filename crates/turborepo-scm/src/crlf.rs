@@ -18,6 +18,7 @@ use gix_attributes::{Search, search::MetadataCollection};
 use sha1::{Digest, Sha1};
 use tracing::warn;
 use turbopath::AbsoluteSystemPath;
+use turborepo_fs::RepositoryReader;
 
 use crate::OidHash;
 
@@ -70,27 +71,35 @@ impl GitAttrs {
         };
 
         let gitattributes_path = root.join_component(".gitattributes");
-        let added = match search.add_patterns_file(
+        let contents = (|| -> std::io::Result<bool> {
+            let reader = RepositoryReader::open(root)?;
+            let Some(mut file) = reader.open_file(&gitattributes_path)? else {
+                return Ok(false);
+            };
+            buf.clear();
+            file.read_to_end(&mut buf)?;
+            Ok(true)
+        })();
+        match contents {
+            Ok(true) => {}
+            Ok(false) => return None,
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    warn!(
+                        path = %gitattributes_path,
+                        "failed to read .gitattributes, CRLF normalization will be skipped: {e}"
+                    );
+                }
+                return None;
+            }
+        }
+        search.add_patterns_buffer(
+            &buf,
             gitattributes_path.as_std_path().into(),
-            false,
             Some(root.as_std_path()),
-            &mut buf,
             &mut collection,
             true,
-        ) {
-            Ok(added) => added,
-            Err(e) => {
-                warn!(
-                    path = %gitattributes_path,
-                    "failed to parse .gitattributes, CRLF normalization will be skipped: {e}"
-                );
-                false
-            }
-        };
-
-        if !added {
-            return None;
-        }
+        );
 
         Some(Self { search, collection })
     }
@@ -286,8 +295,8 @@ fn stream_normalized(reader: &mut impl Read, mut update: impl FnMut(&[u8])) -> s
 
 /// Incrementally computes a git blob oid using the `sha1` crate, which
 /// dispatches to hardware SHA extensions at runtime (SHA-NI on x86, the
-/// crypto extensions on aarch64). Both [`hash_file_as_git_blob`] and
-/// [`manual_hash_file_maybe_normalized`] delegate to
+/// crypto extensions on aarch64). Both [`hash_file_as_git_blob_in_repo`] and
+/// [`hash_file_for_verification`] delegate to
 /// [`hash_file_normalized`], which drives this hasher.
 struct BlobHasher(Sha1);
 
@@ -428,7 +437,7 @@ pub(crate) fn is_env_local(path: &str) -> bool {
 // Keep cache-specific normalization separate from Git verification:
 // verification must compare the actual working-tree content with Git's blob
 // IDs.
-fn hash_file_for_cache(
+pub(crate) fn hash_file_for_cache(
     path: &AbsoluteSystemPath,
     file: &mut std::fs::File,
     file_len: u64,
@@ -478,6 +487,7 @@ fn hash_file_for_cache(
 /// place a crafted collision pair in the repo can already modify the build
 /// itself. Outputs are bit-identical to git for all non-colliding inputs,
 /// enforced by differential tests against `git hash-object` below.
+#[cfg(test)]
 pub(crate) fn hash_file_as_git_blob(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
@@ -501,6 +511,57 @@ pub(crate) fn hash_file_as_git_blob(
     )?))
 }
 
+/// Hash only the handle authorized by the repository boundary, including when
+/// a file or one of its ancestors is a symlink.
+pub(crate) fn hash_file_as_git_blob_in_repo(
+    reader: &RepositoryReader,
+    path: &AbsoluteSystemPath,
+    attr: TextAttr,
+) -> Result<Option<OidHash>, std::io::Error> {
+    let Some(mut file) = reader.open_file(path)? else {
+        return Ok(None);
+    };
+    let file_len = file.metadata()?.len();
+    Ok(Some(hash_file_for_cache(path, &mut file, file_len, attr)?))
+}
+
+/// Preserve authored Git metadata inputs, but never grant this exception to a
+/// symlink route. All ordinary package content uses the repository reader.
+pub(crate) fn hash_file_as_git_blob_with_explicit_metadata(
+    reader: &RepositoryReader,
+    boundary_root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+    attr: TextAttr,
+) -> Result<Option<OidHash>, std::io::Error> {
+    use std::path::Component;
+
+    if path
+        .as_std_path()
+        .components()
+        .any(|component| component == Component::Normal(std::ffi::OsStr::new(".git")))
+    {
+        // Authored parent inputs may name the containing repository's metadata.
+        // Traverse from the common ancestor, with link following disabled for
+        // every component. This exception never authorizes a metadata alias.
+        let common: std::path::PathBuf = boundary_root
+            .as_std_path()
+            .components()
+            .zip(path.as_std_path().components())
+            .take_while(|(left, right)| left == right)
+            .map(|(component, _)| component.as_os_str())
+            .collect();
+        let common = AbsoluteSystemPath::from_std_path(&common)
+            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidInput, error))?;
+        let direct_reader = RepositoryReader::open(common)?;
+        let Some(mut file) = direct_reader.open_file_without_links(path)? else {
+            return Ok(None);
+        };
+        let len = file.metadata()?.len();
+        return Ok(Some(hash_file_for_cache(path, &mut file, len, attr)?));
+    }
+    hash_file_as_git_blob_in_repo(reader, path, attr)
+}
+
 /// Hash a working-tree file and report how the hash was produced. Used by the
 /// repo-index verification pass.
 pub(crate) fn hash_file_for_verification(
@@ -513,7 +574,8 @@ pub(crate) fn hash_file_for_verification(
     hash_file_normalized(&mut file, metadata.len(), attr)
 }
 
-/// Hash via the manual code path (used after `turbo prune` removes `.git/`).
+/// Unconfined manual hashing retained for normalization parity tests.
+#[cfg(test)]
 pub(crate) fn manual_hash_file_maybe_normalized(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
@@ -537,6 +599,82 @@ mod tests {
             .to_realpath()
             .unwrap();
         (tmp, dir)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_repository_hash_preserves_symlink_normalization_and_rejects_metadata_routes() {
+        let (_tmp, root) = tmp_dir();
+        root.join_component("target.txt")
+            .create_with_contents("line\r\n")
+            .unwrap();
+        root.join_component("alias.txt")
+            .symlink_to_file("target.txt")
+            .unwrap();
+        root.join_component(".git").create_dir_all().unwrap();
+        root.join_components(&[".git", "config"])
+            .create_with_contents("authored metadata\n")
+            .unwrap();
+        root.join_component("metadata")
+            .symlink_to_dir(".git")
+            .unwrap();
+        root.join_component("source").create_dir_all().unwrap();
+        root.join_component("source-alias")
+            .symlink_to_dir("source")
+            .unwrap();
+        root.join_components(&["source", ".git"])
+            .create_dir_all()
+            .unwrap();
+        root.join_components(&["source", ".git", "config"])
+            .create_with_contents("metadata\n")
+            .unwrap();
+        let reader = RepositoryReader::open(&root).unwrap();
+        let hash = hash_file_as_git_blob_in_repo(
+            &reader,
+            &root.join_component("alias.txt"),
+            TextAttr::Set,
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(hash, hash_bytes_as_blob(b"line\n").unwrap());
+        let config = root.join_components(&[".git", "config"]);
+        assert_eq!(
+            hash_file_as_git_blob_with_explicit_metadata(
+                &reader,
+                &root,
+                &config,
+                TextAttr::Unspecified
+            )
+            .unwrap()
+            .unwrap(),
+            hash_bytes_as_blob(b"authored metadata\n").unwrap(),
+        );
+        for path in ["metadata/config", "source-alias/.git/config"] {
+            let error = hash_file_as_git_blob_with_explicit_metadata(
+                &reader,
+                &root,
+                &root.join_unix_path(turbopath::RelativeUnixPath::new(path).unwrap()),
+                TextAttr::Unspecified,
+            )
+            .unwrap_err();
+            assert!(matches!(
+                error.kind(),
+                std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotADirectory
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_gitattributes_cannot_read_external_symlink() {
+        let (_tmp, root) = tmp_dir();
+        let (_outside_tmp, outside) = tmp_dir();
+        let external = outside.join_component("attributes");
+        external.create_with_contents("*.txt text\n").unwrap();
+        root.join_component(".gitattributes")
+            .symlink_to_file(external.to_string())
+            .unwrap();
+        assert!(GitAttrs::load(&root).is_none());
     }
 
     #[test]

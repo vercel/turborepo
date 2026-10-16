@@ -56,6 +56,28 @@ pub use relative_unix_path::RelativeUnixPath;
 pub use relative_unix_path_buf::{RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 use thiserror::Error;
 
+/// Whether a path component names Git metadata, including filesystem aliases.
+pub fn is_git_metadata_component(name: &str) -> bool {
+    #[cfg(windows)]
+    let name = name
+        .split(':')
+        .next()
+        .unwrap_or(name)
+        .trim_end_matches(['.', ' ']);
+    let is_git = name
+        .chars()
+        .filter(|c| !matches!(c, '\u{200c}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{206a}'..='\u{206f}' | '\u{feff}'))
+        .map(|c| c.to_ascii_lowercase())
+        .eq(".git".chars());
+    let is_short_name = cfg!(windows)
+        && name
+            .get(..4)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("git~"))
+        && name.len() > 4
+        && name[4..].bytes().all(|b| b.is_ascii_digit());
+    is_git || is_short_name
+}
+
 // Lets windows know that we're going to be reading this file sequentially
 #[cfg(windows)]
 pub const FILE_FLAG_SEQUENTIAL_SCAN: u32 = 0x08000000;

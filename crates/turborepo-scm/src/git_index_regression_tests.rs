@@ -363,7 +363,7 @@ fn test_index_and_no_index_agree_on_mixed_state() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_symlink_file_skipped() {
+fn test_symlink_file_contents_are_hashed() {
     let repo = TestRepo::new();
 
     repo.create_file("my-pkg/real-file.ts", "real content");
@@ -376,7 +376,7 @@ fn test_symlink_file_skipped() {
     let hashes = repo.get_hashes("my-pkg");
     assert!(hashes.contains_key(&path("real-file.ts")));
     assert!(hashes.contains_key(&path("package.json")));
-    // Symlinks should not cause errors — that's the important invariant
+    assert_eq!(hashes.get(&path("link")), hashes.get(&path("real-file.ts")));
 }
 
 #[test]

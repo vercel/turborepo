@@ -32,11 +32,14 @@ pub mod package_deps;
 mod repo_index;
 pub mod slowest_files;
 mod status;
+mod symlink_inputs;
 pub mod worktree;
 
 #[cfg(test)]
 mod git_index_regression_tests;
 mod git_path;
+#[cfg(test)]
+mod symlink_inputs_tests;
 #[cfg(test)]
 mod test_utils;
 

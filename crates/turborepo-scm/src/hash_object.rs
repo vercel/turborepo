@@ -1,6 +1,7 @@
 use rayon::prelude::*;
 use tracing::{debug, info};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
+use turborepo_fs::RepositoryReader;
 
 use crate::{Error, GitHashes, OidHash};
 
@@ -46,8 +47,9 @@ fn is_too_many_open_files(e: &std::io::Error) -> bool {
 /// `cached_attrs` reuses a pre-loaded [`crate::crlf::GitAttrs`] when
 /// available (e.g. from the `GitRepo`'s `OnceLock`). When `None`, attrs
 /// are loaded per-batch from `git_root`.
-#[tracing::instrument(skip(git_root, hashes, to_hash, cached_attrs))]
-pub(crate) fn hash_objects(
+#[tracing::instrument(skip(boundary_root, git_root, hashes, to_hash, cached_attrs))]
+pub(crate) fn hash_objects_in_repo(
+    boundary_root: &AbsoluteSystemPath,
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
@@ -56,6 +58,7 @@ pub(crate) fn hash_objects(
     slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
     hash_objects_inner(
+        boundary_root,
         git_root,
         pkg_path,
         to_hash,
@@ -66,7 +69,8 @@ pub(crate) fn hash_objects(
     )
 }
 
-pub(crate) fn hash_discovered_objects(
+pub(crate) fn hash_discovered_objects_in_repo(
+    boundary_root: &AbsoluteSystemPath,
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
@@ -75,6 +79,7 @@ pub(crate) fn hash_discovered_objects(
     slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
     hash_objects_inner(
+        boundary_root,
         git_root,
         pkg_path,
         to_hash,
@@ -85,7 +90,9 @@ pub(crate) fn hash_discovered_objects(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn hash_objects_inner(
+    boundary_root: &AbsoluteSystemPath,
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
@@ -94,6 +101,7 @@ fn hash_objects_inner(
     cached_attrs: Option<&crate::crlf::GitAttrs>,
     slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
+    let reader = with_emfile_retry(|| RepositoryReader::open(boundary_root))?;
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
 
     let mut owned_attrs = None;
@@ -117,7 +125,12 @@ fn hash_objects_inner(
 
                 let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
-                    crate::crlf::hash_file_as_git_blob(&full_file_path, text_attr)
+                    crate::crlf::hash_file_as_git_blob_with_explicit_metadata(
+                        &reader,
+                        boundary_root,
+                        &full_file_path,
+                        text_attr,
+                    )
                 });
                 drop(_guard);
 
@@ -168,7 +181,7 @@ fn hash_objects_inner(
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
-    use super::{hash_discovered_objects, hash_objects};
+    use super::{hash_discovered_objects_in_repo, hash_objects_in_repo};
     use crate::{GitHashes, OidHash, find_git_root};
 
     #[test]
@@ -221,7 +234,16 @@ mod test {
             let expected_hashes = GitHashes::from_iter(file_hashes);
             let mut hashes = GitHashes::new();
             let to_hash = expected_hashes.keys().map(|k| pkg_prefix.join(k)).collect();
-            hash_objects(&git_root, pkg_path, to_hash, &mut hashes, None, None).unwrap();
+            hash_objects_in_repo(
+                &git_root,
+                &git_root,
+                pkg_path,
+                to_hash,
+                &mut hashes,
+                None,
+                None,
+            )
+            .unwrap();
             assert_eq!(hashes, expected_hashes);
         }
     }
@@ -239,7 +261,75 @@ mod test {
         candidate.remove().unwrap();
 
         let mut hashes = GitHashes::new();
-        hash_discovered_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
+        hash_discovered_objects_in_repo(
+            &git_root,
+            &git_root,
+            &git_root,
+            to_hash,
+            &mut hashes,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(hashes.is_empty());
+    }
+
+    #[test]
+    fn test_discovered_objects_use_repository_boundary_not_attrs_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let boundary_root = git_root.join_component("workspace");
+        boundary_root.create_dir_all().unwrap();
+        git_root
+            .join_component("outside.txt")
+            .create_with_contents("outside")
+            .unwrap();
+        let mut hashes = GitHashes::new();
+        let error = hash_discovered_objects_in_repo(
+            &boundary_root,
+            &git_root,
+            &boundary_root,
+            vec![RelativeUnixPathBuf::new("outside.txt").unwrap()],
+            &mut hashes,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(error, crate::Error::HashFile { source, .. }
+            if source.kind() == std::io::ErrorKind::PermissionDenied));
+        assert!(hashes.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_hash_objects_reject_external_symlink_ancestors() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let boundary = root.join_component("workspace");
+        boundary.create_dir_all().unwrap();
+        let outside = root.join_component("outside");
+        outside.create_dir_all().unwrap();
+        outside
+            .join_component("secret.txt")
+            .create_with_contents("secret")
+            .unwrap();
+        boundary
+            .join_component("alias")
+            .symlink_to_dir(outside.to_string())
+            .unwrap();
+        let mut hashes = GitHashes::new();
+        let error = hash_objects_in_repo(
+            &boundary,
+            &boundary,
+            &boundary,
+            vec![RelativeUnixPathBuf::new("alias/secret.txt").unwrap()],
+            &mut hashes,
+            None,
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(error, crate::Error::HashFile { source, .. }
+            if source.kind() == std::io::ErrorKind::PermissionDenied));
         assert!(hashes.is_empty());
     }
 
@@ -250,8 +340,16 @@ mod test {
         let missing = RelativeUnixPathBuf::new("missing.json").unwrap();
 
         let mut hashes = GitHashes::new();
-        let error =
-            hash_objects(&git_root, &git_root, vec![missing], &mut hashes, None, None).unwrap_err();
+        let error = hash_objects_in_repo(
+            &git_root,
+            &git_root,
+            &git_root,
+            vec![missing],
+            &mut hashes,
+            None,
+            None,
+        )
+        .unwrap_err();
 
         assert!(error.to_string().contains("missing.json"));
     }
@@ -269,7 +367,8 @@ mod test {
         link.symlink_to_file(socket.to_string()).unwrap();
 
         let mut hashes = GitHashes::new();
-        hash_objects(
+        hash_objects_in_repo(
+            &git_root,
             &git_root,
             &git_root,
             vec![RelativeUnixPathBuf::new("socket-link").unwrap()],
@@ -348,7 +447,16 @@ mod test {
             .map(|(name, _)| RelativeUnixPathBuf::new(*name).unwrap())
             .collect();
         let mut actual = GitHashes::new();
-        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual, None, None).unwrap();
+        hash_objects_in_repo(
+            &tmp_path,
+            &tmp_path,
+            &tmp_path,
+            to_hash,
+            &mut actual,
+            None,
+            None,
+        )
+        .unwrap();
 
         assert_eq!(actual, expected, "blob hashes must match git hash-object");
     }
