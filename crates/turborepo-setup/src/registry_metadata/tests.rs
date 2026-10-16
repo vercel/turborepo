@@ -58,28 +58,34 @@ fn exact_npm_and_pnpm_documents_retain_native_integrity() {
                         digest: SHA512.into()
                     }
                 );
-                assert!(artifact.additional_sha256.is_none());
+                assert!(artifact.byte_pin.is_none());
             }
         }
     }
 }
 
 #[test]
-fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
+fn authored_sha256_and_sha224_are_byte_pins_not_a_registry_or_weak_hash_fallback() {
     let value = document("pnpm", "9.15.9");
+    for (algorithm, digest) in [("sha256", SHA256), ("sha224", &SHA256[..56])] {
+        let pin = CorepackIntegrity {
+            algorithm,
+            digest: digest.to_uppercase(),
+        };
+        let artifact = parse(&value, Manager::Pnpm, "9.15.9", Some(&pin)).unwrap();
+        assert_eq!(
+            artifact.byte_pin,
+            Some(CorepackIntegrity {
+                algorithm,
+                digest: digest.into()
+            })
+        );
+        assert_eq!(artifact.integrity.digest, SHA512);
+    }
     let pin = CorepackIntegrity {
         algorithm: "sha256",
-        digest: SHA256.to_uppercase(),
+        digest: SHA256.into(),
     };
-    let artifact = parse(&value, Manager::Pnpm, "9.15.9", Some(&pin)).unwrap();
-    assert_eq!(
-        artifact.additional_sha256,
-        Some(CorepackIntegrity {
-            algorithm: "sha256",
-            digest: SHA256.into()
-        })
-    );
-    assert_eq!(artifact.integrity.digest, SHA512);
     let wrong = CorepackIntegrity {
         algorithm: "sha512",
         digest: "0".repeat(128),
@@ -88,7 +94,7 @@ fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
         parse(&value, Manager::Pnpm, "9.15.9", Some(&wrong)),
         Err(IntegrityConflict)
     );
-    for algorithm in ["sha1", "sha224", "sha384", "SHA512", "unknown"] {
+    for algorithm in ["sha1", "sha384", "SHA512", "unknown"] {
         let pin = CorepackIntegrity {
             algorithm,
             digest: SHA512.into(),
@@ -98,7 +104,7 @@ fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
             Err(InvalidIntegrity)
         );
     }
-    for (algorithm, length) in [("sha512", 128), ("sha256", 64)] {
+    for (algorithm, length) in [("sha512", 128), ("sha256", 64), ("sha224", 56)] {
         for digest in [
             "".into(),
             "0".repeat(length - 1),
@@ -124,12 +130,16 @@ fn authored_sha256_is_an_additional_pin_not_a_registry_or_weak_hash_fallback() {
 #[test]
 fn names_exact_versions_and_manager_families_cannot_be_substituted() {
     let valid = document("npm", "10.8.2");
-    for manager in [Manager::Yarn, Manager::Bun, Manager::Nub, Manager::Aube] {
+    for manager in [Manager::Bun, Manager::Nub, Manager::Aube] {
         assert_eq!(
             parse(&valid, manager, "10.8.2", None),
             Err(UnsupportedManager)
         );
     }
+    assert_eq!(
+        parse(&valid, Manager::Yarn, "10.8.2", None),
+        Err(IdentityMismatch)
+    );
     for version in [
         "",
         "latest",
@@ -325,4 +335,71 @@ fn byte_bounds_malformed_duplicate_fields_and_redaction() {
         assert!(!diagnostic.contains(secret));
     }
     assert!(error.source().is_none());
+}
+
+#[test]
+fn mirror_tarballs_are_accepted_only_for_their_mirror_and_never_recorded() {
+    let mut value = document("pnpm", "10.0.0");
+    value["dist"]["tarball"] = json!("https://mirror.example/npm/pnpm/-/pnpm-10.0.0.tgz");
+    let bytes = serde_json::to_vec(&value).unwrap();
+    let mirrored = |base| parse_release_from(&bytes, Manager::Pnpm, "10.0.0", None, base);
+    assert_eq!(
+        mirrored(Some("https://mirror.example/npm"))
+            .unwrap()
+            .tarball,
+        "https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz"
+    );
+    for base in [
+        None,
+        Some("https://mirror.example"),
+        Some("https://other.example/npm"),
+    ] {
+        assert_eq!(mirrored(base).unwrap_err(), InvalidTarball);
+    }
+    // Canonical metadata stays valid through a mirror.
+    let canonical = serde_json::to_vec(&document("pnpm", "10.0.0")).unwrap();
+    let mirror = Some("https://mirror.example/npm");
+    assert!(parse_release_from(&canonical, Manager::Pnpm, "10.0.0", None, mirror).is_ok());
+}
+
+#[test]
+fn scoped_native_tarballs_keep_exact_mirror_paths_identity_and_canonical_provenance() {
+    let (name, version, base) = (
+        "@pnpm/exe.linux-x64",
+        "12.11.2",
+        "https://mirror.example/npm",
+    );
+    let path = tarball_path(name, version);
+    let mut value = document(name, version);
+    value["dist"]["tarball"] = json!(format!("{base}/{path}"));
+    let bytes = serde_json::to_vec(&value).unwrap();
+    let parsed =
+        parse_package_from(&bytes, Manager::Pnpm, name, version, None, Some(base)).unwrap();
+    assert_eq!(parsed.tarball, format!("https://registry.npmjs.org/{path}"));
+    assert_eq!(parsed.integrity.digest, SHA512);
+    for mirror in [
+        None,
+        Some("https://other.example/npm"),
+        Some("https://mirror.example"),
+    ] {
+        assert_eq!(
+            parse_package_from(&bytes, Manager::Pnpm, name, version, None, mirror).unwrap_err(),
+            InvalidTarball
+        );
+    }
+    assert_eq!(
+        parse_package_from(
+            &bytes,
+            Manager::Pnpm,
+            "@pnpm/exe.darwin-arm64",
+            version,
+            None,
+            Some(base)
+        )
+        .unwrap_err(),
+        IdentityMismatch
+    );
+    value["dist"]["tarball"] = json!(format!("https://registry.npmjs.org/{path}"));
+    let canonical = serde_json::to_vec(&value).unwrap();
+    assert!(parse_package_from(&canonical, Manager::Pnpm, name, version, None, Some(base)).is_ok());
 }

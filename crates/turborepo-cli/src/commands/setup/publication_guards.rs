@@ -151,6 +151,8 @@ fn resolved_candidate_missing_current_host_is_rejected_before_publication_or_sto
             u.origin(),
         )
         .unwrap();
+    let bun =
+        turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin()).unwrap();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -163,8 +165,8 @@ fn resolved_candidate_missing_current_host_is_rejected_before_publication_or_sto
         false,
         |request| {
             runtime
-                .block_on(turborepo_setup::js_resolution::resolve(
-                    request, &node, &registry,
+                .block_on(turborepo_setup::js_resolution::resolve_with_bun(
+                    request, &node, &registry, &bun,
                 ))
                 .map_err(|e| reconcile::Error::Resolution(e.to_string()))
         },

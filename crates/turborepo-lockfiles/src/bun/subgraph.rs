@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    ops::Bound,
+};
 
 use semver::{Version, VersionReq};
 
@@ -6,6 +9,20 @@ use super::{
     BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent, PackageIndex,
     PackageInfo, PackageKey, data::WorkspaceEntry,
 };
+
+/// The entries of `packages` whose keys start with `prefix`, in key order.
+///
+/// Keys sharing a prefix are contiguous in a sorted map and sort at or after
+/// the prefix itself, so this visits exactly the entries a full scan filtered
+/// by `starts_with` would, without touching the rest of the lockfile.
+fn keys_with_prefix<'a>(
+    packages: &'a Map<String, PackageEntry>,
+    prefix: &'a str,
+) -> impl Iterator<Item = (&'a String, &'a PackageEntry)> + 'a {
+    packages
+        .range::<str, _>((Bound::Included(prefix), Bound::Unbounded))
+        .take_while(move |(key, _)| key.starts_with(prefix))
+}
 
 fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
     if version == "*" {
@@ -147,6 +164,42 @@ impl BunLockfile {
             .filter_map(|ws_path| self.data.workspaces.get(ws_path).map(|ws| ws.name.clone()))
             .collect();
 
+        // Every lockfile key for each ident, in key order. Looking idents up here
+        // instead of scanning all packages per requested ident keeps this linear
+        // in the size of the lockfile.
+        let mut keys_by_ident: HashMap<&str, Vec<&String>> = HashMap::new();
+        for (lockfile_key, entry) in &self.data.packages {
+            keys_by_ident
+                .entry(entry.ident.as_str())
+                .or_default()
+                .push(lockfile_key);
+        }
+        let workspace_names: HashSet<&str> = self
+            .data
+            .workspaces
+            .values()
+            .map(|ws| ws.name.as_str())
+            .collect();
+        let include_keys_for_ident = |keys_to_include: &mut HashSet<String>, pkg: &str| {
+            for lockfile_key in keys_by_ident.get(pkg).into_iter().flatten() {
+                if let Some(slash_pos) = lockfile_key.find('/') {
+                    let prefix = &lockfile_key[..slash_pos];
+
+                    let is_workspace_prefix = workspace_names.contains(prefix);
+
+                    if is_workspace_prefix {
+                        if target_workspace_names.contains(prefix) {
+                            keys_to_include.insert((*lockfile_key).clone());
+                        }
+                    } else {
+                        keys_to_include.insert((*lockfile_key).clone());
+                    }
+                } else {
+                    keys_to_include.insert((*lockfile_key).clone());
+                }
+            }
+        };
+
         // When idents map to multiple lockfile keys, only include workspace-specific
         // entries for target workspaces to avoid pulling in unrelated workspace
         // versions
@@ -168,51 +221,9 @@ impl BunLockfile {
                     // "storybook/storybook")
                 }
 
-                for (lockfile_key, entry) in &self.data.packages {
-                    if &entry.ident != pkg {
-                        continue;
-                    }
-
-                    if let Some(slash_pos) = lockfile_key.find('/') {
-                        let prefix = &lockfile_key[..slash_pos];
-
-                        let is_workspace_prefix =
-                            self.data.workspaces.values().any(|ws| ws.name == prefix);
-
-                        if is_workspace_prefix {
-                            if target_workspace_names.contains(prefix) {
-                                keys_to_include.insert(lockfile_key.clone());
-                            }
-                        } else {
-                            keys_to_include.insert(lockfile_key.clone());
-                        }
-                    } else {
-                        keys_to_include.insert(lockfile_key.clone());
-                    }
-                }
+                include_keys_for_ident(&mut keys_to_include, pkg);
             } else {
-                for (lockfile_key, entry) in &self.data.packages {
-                    if &entry.ident != pkg {
-                        continue;
-                    }
-
-                    if let Some(slash_pos) = lockfile_key.find('/') {
-                        let prefix = &lockfile_key[..slash_pos];
-
-                        let is_workspace_prefix =
-                            self.data.workspaces.values().any(|ws| ws.name == prefix);
-
-                        if is_workspace_prefix {
-                            if target_workspace_names.contains(prefix) {
-                                keys_to_include.insert(lockfile_key.clone());
-                            }
-                        } else {
-                            keys_to_include.insert(lockfile_key.clone());
-                        }
-                    } else {
-                        keys_to_include.insert(lockfile_key.clone());
-                    }
-                }
+                include_keys_for_ident(&mut keys_to_include, pkg);
             }
         }
 
@@ -394,14 +405,14 @@ impl BunLockfile {
                 if pruned_key != *key {
                     let old_prefix = format!("{key}/");
                     let new_prefix = format!("{pruned_key}/");
-                    for (descendant_key, descendant_entry) in &self.data.packages {
-                        if descendant_key.starts_with(&old_prefix) {
-                            let renamed_key =
-                                format!("{}{}", new_prefix, &descendant_key[old_prefix.len()..]);
-                            pruned_data
-                                .packages
-                                .insert(renamed_key, descendant_entry.clone());
-                        }
+                    for (descendant_key, descendant_entry) in
+                        keys_with_prefix(&self.data.packages, &old_prefix)
+                    {
+                        let renamed_key =
+                            format!("{}{}", new_prefix, &descendant_key[old_prefix.len()..]);
+                        pruned_data
+                            .packages
+                            .insert(renamed_key, descendant_entry.clone());
                     }
                 }
 
@@ -424,7 +435,9 @@ impl BunLockfile {
                 // and have "bundled": true in their info
                 // Note: We search using the original key from the source lockfile
                 let bundled_prefix = format!("{key}/");
-                for (lockfile_key, bundled_entry) in &self.data.packages {
+                for (lockfile_key, bundled_entry) in
+                    keys_with_prefix(&self.data.packages, &bundled_prefix)
+                {
                     if lockfile_key.starts_with(&bundled_prefix)
                         && let Some(bundled_info) = &bundled_entry.info
                         && bundled_info

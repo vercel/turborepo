@@ -4,6 +4,16 @@ use sha2::Sha512;
 use super::*;
 
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
+#[path = "ci_tests.rs"]
+mod ci;
+#[path = "go_tests.rs"]
+mod go;
+#[path = "manager_lock_tests.rs"]
+mod managers;
+#[path = "mirror_tests.rs"]
+mod mirror;
+#[path = "no_lock_tests.rs"]
+mod no_lock;
 #[path = "refresh.rs"]
 mod refresh;
 #[test]
@@ -82,23 +92,30 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
         untouched(&f);
     }
 }
-fn bundled(prefix: &str) -> Vec<u8> {
+const TRAP: &str = "#!/bin/sh\ntouch probe-ran\nexit 91\n";
+pub(super) fn bundled(prefix: &str) -> Vec<u8> {
+    node_release(prefix, TRAP, NEVER)
+}
+const NEVER: &str = "throw new Error('never execute');";
+/// A Node release whose bundled npm and npx CLIs are `cli`.
+pub(super) fn bundled_with(prefix: &str, cli: &str) -> Vec<u8> {
+    node_release(prefix, TRAP, cli)
+}
+/// A Node release whose `bin/node` is `node`.
+fn bundled_node(prefix: &str, node: &str) -> Vec<u8> {
+    node_release(prefix, node, NEVER)
+}
+fn node_release(prefix: &str, node: &str, cli: &str) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in [
-        ("bin/node", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
+        ("bin/node", node),
         ("resource", "complete Node resource"),
         (
             "lib/node_modules/npm/package.json",
             r#"{"name":"npm","version":"11.6.1","bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}"#,
         ),
-        (
-            "lib/node_modules/npm/bin/npm-cli.js",
-            "throw new Error('never execute');",
-        ),
-        (
-            "lib/node_modules/npm/bin/npx-cli.js",
-            "throw new Error('never execute');",
-        ),
+        ("lib/node_modules/npm/bin/npm-cli.js", cli),
+        ("lib/node_modules/npm/bin/npx-cli.js", cli),
     ] {
         let mut h = tar::Header::new_gnu();
         h.set_size(body.len() as u64);
@@ -122,7 +139,7 @@ fn bundled(prefix: &str) -> Vec<u8> {
     gzip.write_all(&tar.into_inner().unwrap()).unwrap();
     gzip.finish().unwrap()
 }
-fn base64(bytes: &[u8]) -> String {
+pub(super) fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut encoded = String::new();
     for chunk in bytes.chunks(3) {
@@ -139,7 +156,20 @@ fn base64(bytes: &[u8]) -> String {
     }
     encoded
 }
-fn routes(f: &Fixture, node_version: &str, manager_version: &str) -> Vec<(String, Vec<u8>)> {
+pub(super) fn routes(
+    f: &Fixture,
+    node_version: &str,
+    manager_version: &str,
+) -> Vec<(String, Vec<u8>)> {
+    routes_with(f, node_version, manager_version, TRAP)
+}
+/// `routes` whose Node archives run `node` as `bin/node`.
+pub(super) fn routes_with(
+    f: &Fixture,
+    node_version: &str,
+    manager_version: &str,
+    node: &str,
+) -> Vec<(String, Vec<u8>)> {
     let index = json!([{"version":format!("v{node_version}"),"npm":"11.6.1","lts":"Krypton",
         "files":["osx-x64-tar","osx-arm64-tar","linux-x64","linux-arm64","win-x64-zip","win-arm64-zip"]}]);
     let mut result = vec![(
@@ -167,7 +197,7 @@ fn routes(f: &Fixture, node_version: &str, manager_version: &str) -> Vec<(String
         let bytes = if windows {
             b"PK\x05\x06\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0".to_vec()
         } else {
-            bundled(&prefix)
+            bundled_node(&prefix, node)
         };
         let filename = format!("{prefix}.{}", if windows { "zip" } else { "tar.gz" });
         sums.push_str(&format!("{:x}  {filename}\n", Sha256::digest(&bytes)));
@@ -204,7 +234,7 @@ fn routes(f: &Fixture, node_version: &str, manager_version: &str) -> Vec<(String
     result.push((format!("/pnpm/-/pnpm-{manager_version}.tgz"), pnpm));
     result
 }
-fn fresh() -> Fixture {
+pub(super) fn fresh() -> Fixture {
     let f = Fixture::new();
     fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
     for name in [
@@ -247,9 +277,16 @@ fn dispatch(
 ) -> Result<i32, Error> {
     let args = f.args(flags);
     crate::cli::dispatch_setup(&args, |args, setup_args| run_with_policy(args, setup_args, Some(provision::Transports {
+        trust_base: Some(f.owned.home().to_owned()),
         node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        artifact: None,
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin()).unwrap(),
     }), || {
         hook();
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
@@ -265,6 +302,8 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     let initial = selected(&f);
     let manifest = f.manifest().unwrap();
     let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+    assert!(lock.starts_with(b"{\n  \"schemaVersion\": 0,\n  \"tools\": {\n    \"node\": {\n"));
+    assert!(lock.ends_with(b"\n  }\n}\n"));
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     assert_eq!(f.run(&empty, LOCAL).unwrap(), 0);
     assert_eq!(empty.hits(), 0); // Unchanged floating Node never refreshes.
@@ -309,15 +348,41 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     untouched(&f);
 }
 #[test]
+fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
+    let mut outcomes = vec![];
+    for flags in [LOCAL, &["--no-frozen"]] {
+        let f = fresh();
+        fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+        // Plain setup would also run pnpm, which this fixture's Node cannot.
+        fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
+        let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+        assert_eq!(f.run(&u, flags).unwrap(), 0);
+        assert_eq!(u.hits(), 7);
+        // Repeats, including frozen plain setup, are traffic-free no-ops.
+        let manifest = f.manifest().unwrap();
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        for flags in [flags, &["--frozen"]] {
+            assert_eq!(f.run(&empty, flags).unwrap(), 0);
+        }
+        assert_eq!(empty.hits(), 0);
+        assert_eq!(f.manifest().unwrap(), manifest);
+        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let tools = store.current().unwrap().unwrap().tools;
+        outcomes.push((fs::read(f.owned.root().join("turbo.lock")).unwrap(), tools));
+        untouched(&f);
+    }
+    assert_eq!(outcomes[0], outcomes[1]);
+}
+#[test]
 fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
     for case in 0..7 {
         let f = fresh();
         let u = LoopbackServer::new([], |_| {}).unwrap();
         match case {
             0 => fs::remove_file(f.owned.root().join(".nvmrc")).unwrap(),
-            1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.6.1"}"#).unwrap(),
+            1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.x"}"#).unwrap(),
             2 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.x"}"#).unwrap(),
-            3 => fs::write(f.owned.root().join(".npmrc"), "").unwrap(),
+            3 => fs::write(f.owned.root().join(".npmrc"), "registry=https://private.invalid").unwrap(),
             4 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
             5 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
             _ => {},
@@ -407,7 +472,12 @@ fn local_writer_wait_rechecks_policy_git_and_workspace() {
         std::thread::scope(|scope| {
             let pending = scope.spawn(|| f.run(&u, LOCAL));
             rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            fs::write(f.owned.root().join(name), "").unwrap();
+            let rejected = if name.ends_with(".npmrc") {
+                "registry=https://private.invalid"
+            } else {
+                ""
+            };
+            fs::write(f.owned.root().join(name), rejected).unwrap();
             drop(guard);
             assert!(pending.join().unwrap().is_err());
         });
@@ -498,7 +568,11 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
                         foreign["tools"]["node"]["version"] = json!("24.9.0");
                         fs::write(root.join("turbo.lock"), foreign.to_string()).unwrap();
                     }
-                    _ => fs::write(root.join("apps/web/.npmrc"), "").unwrap(),
+                    _ => fs::write(
+                        root.join("apps/web/.npmrc"),
+                        "registry=https://private.invalid",
+                    )
+                    .unwrap(),
                 }
             }
         })
@@ -509,4 +583,29 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
         assert_eq!(store.current().unwrap().unwrap().tools.len(), 2);
         untouched(&f);
     }
+}
+#[test]
+fn local_older_corepack_sha224_pins_bind_the_downloaded_pnpm_bytes() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let r = routes(&f, "24.0.0", "10.0.0");
+    let pnpm = &r.iter().find(|(p, _)| p.ends_with(".tgz")).unwrap().1;
+    let good = format!("pnpm@10.0.0+sha224.{:x}", sha2::Sha224::digest(pnpm));
+    let u = LoopbackServer::new(r.clone(), |_| {}).unwrap();
+    let package = f.owned.root().join("package.json");
+    let wrong = format!("pnpm@10.0.0+sha224.{}", "0".repeat(56));
+    fs::write(&package, json!({ "packageManager": wrong }).to_string()).unwrap();
+    assert!(f.run(&u, LOCAL).is_err());
+    assert!(!f.owned.root().join("turbo.lock").exists());
+    fs::write(&package, json!({ "packageManager": good }).to_string()).unwrap();
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    assert_eq!(selected(&f).tools()["pnpm"].version, "10.0.0");
+    let manifest = f.manifest().unwrap();
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    for flags in [LOCAL, &["--check", "--tools-only"]] {
+        assert_eq!(f.run(&empty, flags).unwrap(), 0);
+    }
+    assert_eq!(empty.hits(), 0);
+    assert_eq!(f.manifest().unwrap(), manifest);
+    untouched(&f);
 }

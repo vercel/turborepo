@@ -103,7 +103,7 @@ pub async fn run(
     let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
         || !base.opts.scope_opts.filter_patterns.is_empty();
     let run_builder =
-        RunBuilder::new(base.run_builder_input()?, None)?.skip_repo_index_and_scm_state();
+        RunBuilder::new(base.discovery_builder_input()?, None)?.skip_repo_index_and_scm_state();
     // Package details and task-based scope selection need the complete graph.
     // Listing has no requested tasks, so include all tasks before filtering.
     let needs_task_graph = !packages.is_empty() || run_builder.needs_task_graph_for_scope();

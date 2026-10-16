@@ -24,19 +24,87 @@ use super::{DependencyMeta, Entry};
 /// Attempt to parse a Berry lockfile into raw entries. `None` means the
 /// input is outside the fast subset and the serde path must decide.
 pub(crate) fn parse(input: &str) -> Option<BTreeMap<String, Entry>> {
+    let mut entries = BTreeMap::new();
+    if input.len() >= PARALLEL_PARSE_MIN_BYTES {
+        let chunks = entry_chunks(input, rayon::current_num_threads().max(2));
+        if chunks.len() > 1 {
+            use rayon::prelude::*;
+            let parsed = chunks
+                .into_par_iter()
+                .map(|chunk| {
+                    let mut chunk_entries = Vec::new();
+                    parse_entries(chunk, |key, entry| chunk_entries.push((key, entry)))?;
+                    Some(chunk_entries)
+                })
+                .collect::<Option<Vec<_>>>()?;
+            // Chunk order is document order, so later duplicates still win.
+            for (key, entry) in parsed.into_iter().flatten() {
+                entries.insert(key, entry);
+            }
+            return Some(entries);
+        }
+    }
+    parse_entries(input, |key, entry| {
+        entries.insert(key, entry);
+    })?;
+    Some(entries)
+}
+
+/// Minimum input size before splitting into parallel chunks; below this
+/// rayon dispatch costs more than the sequential scan.
+const PARALLEL_PARSE_MIN_BYTES: usize = 256 * 1024;
+
+/// Parses consecutive top-level entries, handing each to `emit` in document
+/// order. `None` means the input is outside the fast subset.
+fn parse_entries(input: &str, mut emit: impl FnMut(String, Entry)) -> Option<()> {
     let mut parser = Parser {
         rest: input,
         line: None,
     };
-    let mut entries = BTreeMap::new();
     while let Some((indent, _)) = parser.peek_line()? {
         if indent != 0 {
             return None;
         }
         let (key, entry) = parser.parse_entry()?;
-        entries.insert(key, entry);
+        emit(key, entry);
     }
-    Some(entries)
+    Some(())
+}
+
+/// Splits `input` into about `chunk_count` slices; every slice after the
+/// first begins at a top-level entry line (column zero, not blank, a comment,
+/// or whitespace).
+///
+/// A column-zero content line always ends the previous entry and starts a
+/// new one in [`parse_entries`], so the parser carries no state across such
+/// a boundary: parsing the chunks independently and concatenating their
+/// entries is identical to one sequential pass, including which inputs bail.
+fn entry_chunks(input: &str, chunk_count: usize) -> Vec<&str> {
+    let bytes = input.as_bytes();
+    let target = input.len() / chunk_count;
+    let mut chunks = Vec::with_capacity(chunk_count);
+    let mut begin = 0;
+    while input.len() - begin > target {
+        let mut search = begin + target;
+        let split = loop {
+            let Some(offset) = memchr::memchr(b'\n', &bytes[search..]) else {
+                break None;
+            };
+            let next = search + offset + 1;
+            match bytes.get(next) {
+                None => break None,
+                Some(b' ' | b'\n' | b'\r' | b'\t' | b'#') => search = next,
+                Some(_) => break Some(next),
+            }
+        };
+        let Some(split) = split else {
+            break;
+        };
+        chunks.push(&input[begin..split]);
+        begin = split;
+    }
+    chunks.push(&input[begin..]);
+    chunks
 }
 
 struct Parser<'a> {
@@ -434,6 +502,59 @@ mod tests {
         ));
         // CRLF input.
         assert_falls_back("__metadata:\r\n  version: 8\r\n");
+    }
+
+    /// A lockfile large enough for the chunked path, with nested maps and
+    /// comments/blank lines around entry boundaries.
+    fn large_lockfile() -> String {
+        let mut input = HEADER.to_string();
+        let mut i = 0;
+        while input.len() < 2 * PARALLEL_PARSE_MIN_BYTES {
+            input.push_str(&format!(
+                "\"pkg-{i}@npm:^1.0.0, pkg-{i}@npm:^1.1.0\":\n  version: 1.1.{i}\n  resolution: \
+                 \"pkg-{i}@npm:1.1.{i}\"\n  dependencies:\n    dep-a: \"npm:^{i}.0.0\"\n    \
+                 dep-b: \"npm:~2\"\n  dependenciesMeta:\n    dep-a:\n      optional: true\n  \
+                 checksum: 10c0/{i:08x}\n  languageName: node\n  linkType: hard\n\n"
+            ));
+            if i % 97 == 0 {
+                input.push_str("# interleaved comment\n\n");
+            }
+            i += 1;
+        }
+        input
+    }
+
+    #[test]
+    fn test_chunked_parse_matches_sequential_and_serde() {
+        let input = large_lockfile();
+        let chunks = entry_chunks(&input, 8);
+        assert!(chunks.len() > 1, "input must exercise the chunked path");
+        assert_eq!(chunks.concat(), input, "chunks must tile the input");
+        for chunk in &chunks[1..] {
+            assert!(chunk.starts_with('"'), "chunks start at entry lines");
+        }
+
+        let mut sequential = BTreeMap::new();
+        parse_entries(&input, |key, entry| {
+            sequential.insert(key, entry);
+        })
+        .expect("sequential parse");
+        let chunked = parse(&input).expect("chunked parse");
+        assert_eq!(chunked.len(), sequential.len());
+        let chunked = LockfileData::try_from(chunked).expect("chunked entries convert");
+        let sequential = LockfileData::try_from(sequential).expect("sequential entries convert");
+        assert_eq!(chunked.metadata, sequential.metadata);
+        assert_eq!(chunked.packages, sequential.packages);
+        assert_fast_matches_serde(&input);
+    }
+
+    #[test]
+    fn test_chunked_parse_bails_like_sequential() {
+        // A rejected line in a later chunk must reject the whole document.
+        let mut input = large_lockfile();
+        input.push_str("\"late@npm:^1\":\n  version: 1.0.0\n\tresolution: \"late@npm:1.0.0\"\n");
+        assert!(entry_chunks(&input, 8).len() > 1);
+        assert_falls_back(&input);
     }
 
     #[test]

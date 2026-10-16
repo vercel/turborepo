@@ -612,3 +612,5 @@ async fn injected_builder_cannot_disable_certificate_or_hostname_verification() 
     }
     Ok(())
 }
+
+mod https_redirects;

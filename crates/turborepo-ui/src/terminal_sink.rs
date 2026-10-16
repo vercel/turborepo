@@ -578,7 +578,7 @@ mod tests {
             format!("\r{long}\r\n{long}\r"),
         ];
         for input in &inputs {
-            for needle in [b'\n', b'\r'] {
+            for needle in *b"\n\r" {
                 let bytes = input.as_bytes();
                 let ours: Vec<&[u8]> = split_inclusive_byte(bytes, needle).collect();
                 let std: Vec<&[u8]> = bytes.split_inclusive(|b| *b == needle).collect();

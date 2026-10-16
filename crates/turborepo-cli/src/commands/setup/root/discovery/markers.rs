@@ -149,7 +149,8 @@ impl Inputs {
                 .env_remove("GIT_WORK_TREE")
                 .env_remove("GIT_INDEX_FILE")
                 .args(["rev-parse", "--show-toplevel"])
-                .output()?;
+                .output()
+                .map_err(turborepo_setup::writer_storage::git_spawn_error)?;
             if !output.status.success() {
                 return Err(io::Error::other("cannot guard effective Git worktree"));
             }

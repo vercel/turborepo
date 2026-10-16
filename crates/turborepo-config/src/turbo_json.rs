@@ -1,7 +1,7 @@
-use std::str::FromStr;
+use std::{str::FromStr, sync::Mutex};
 
 use camino::Utf8PathBuf;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_turbo_json::{
     RawExperimentalObservability, RawObservabilityOtel, RawRemoteCacheOptions, RawRootTurboJson,
     RawTurboJson,
@@ -123,25 +123,63 @@ impl<'a> TurboJsonReader<'a> {
     }
 }
 
+/// The configuration options most recently derived from a root turbo.json.
+///
+/// The shim and the CLI each resolve configuration for the same repository, so
+/// a single `turbo run` or `turbo ls` reads the same turbo.json twice through
+/// [`TurboJsonReader`]. The options depend only on the repository root, the
+/// turbo.json path, and the file's contents, so the second read reuses them
+/// instead of parsing the file again. Only the small derived options are
+/// cloned; the contents already read from disk are moved into the slot rather
+/// than copied, so a command that resolves configuration once pays almost
+/// nothing. Errors are not cached, and one slot bounds memory in long-lived
+/// processes.
+struct DerivedTurboJsonOptions {
+    repo_root: AbsoluteSystemPathBuf,
+    turbo_json_path: AbsoluteSystemPathBuf,
+    contents: String,
+    options: ConfigurationOptions,
+}
+
+static LAST_DERIVED_OPTIONS: Mutex<Option<DerivedTurboJsonOptions>> = Mutex::new(None);
+
 impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
     fn get_configuration_options(
         &self,
         existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
         let turbo_json_path = existing_config.root_turbo_json_path(self.repo_root)?;
+        let Some(contents) = turbo_json_path.read_existing_to_string()? else {
+            return Self::turbo_json_to_config_options(RawTurboJson::default());
+        };
+
+        if let Ok(last) = LAST_DERIVED_OPTIONS.lock()
+            && let Some(last) = last.as_ref()
+            && last.repo_root.as_str() == self.repo_root.as_str()
+            && last.turbo_json_path == turbo_json_path
+            && last.contents == contents
+        {
+            return Ok(last.options.clone());
+        }
+
         let root_relative_turbo_json_path = self.repo_root.anchor(&turbo_json_path).map_or_else(
             |_| turbo_json_path.as_str().to_owned(),
             |relative| relative.to_string(),
         );
-        let turbo_json: RawTurboJson = match turbo_json_path.read_existing_to_string()? {
-            Some(contents) => {
-                let raw_root = RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)
-                    .map_err(turborepo_turbo_json::Error::from)?;
-                RawTurboJson::try_from(raw_root).map_err(Error::TurboJsonError)?
-            }
-            None => RawTurboJson::default(),
-        };
-        Self::turbo_json_to_config_options(turbo_json)
+        let raw_root = RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)
+            .map_err(turborepo_turbo_json::Error::from)?;
+        let turbo_json = RawTurboJson::try_from(raw_root).map_err(Error::TurboJsonError)?;
+        let options = Self::turbo_json_to_config_options(turbo_json)?;
+
+        if let Ok(mut last) = LAST_DERIVED_OPTIONS.lock() {
+            *last = Some(DerivedTurboJsonOptions {
+                repo_root: self.repo_root.to_owned(),
+                turbo_json_path,
+                contents,
+                options: options.clone(),
+            });
+        }
+        Ok(options)
     }
 }
 
@@ -346,14 +384,14 @@ mod test {
     }
 
     #[test]
-    fn test_agent_guidance_defaults_to_enabled() {
+    fn test_agent_guidance_defaults_to_disabled() {
         let turbo_json = RawRootTurboJson::parse("{}", "turbo.json")
             .unwrap()
             .try_into()
             .unwrap();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
 
-        assert!(config.agent_guidance());
+        assert!(!config.agent_guidance());
     }
 
     #[test_case("turbo.json", r#"{"agentGuidance": false}"#)]

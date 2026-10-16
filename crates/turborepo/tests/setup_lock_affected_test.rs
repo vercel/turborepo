@@ -86,15 +86,31 @@ fn assert_selection(dir: &Path, managed: bool, base: &str, head: &str) {
     } else {
         format!("--filter=[{base}...{head}]")
     };
+    // A flagged root lock makes `turbo run` managed. Without setup evidence it
+    // fails instead of using host tools; `turbo query` still reports selection.
+    let config: serde_json::Value =
+        serde_json::from_slice(&fs::read(dir.join("turbo.json")).unwrap()).unwrap();
+    let managed_run =
+        config["futureFlags"]["experimentalSetup"] == true && dir.join("turbo.lock").exists();
     for args in [
         vec!["run", "build", "--affected", "--dry=json"],
         vec!["run", "build", &filter, "--dry=json"],
     ] {
-        let result = json(run_turbo_with_env(
+        let output = run_turbo_with_env(
             dir,
             &args,
             &[("TURBO_SCM_BASE", base), ("TURBO_SCM_HEAD", head)],
-        ));
+        );
+        if managed_run {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(!output.status.success(), "{args:?}: {stderr}");
+            assert!(
+                stderr.contains("managed setup validation failed"),
+                "{stderr}"
+            );
+            continue;
+        }
+        let result = json(output);
         let selected: BTreeSet<_> = result["tasks"]
             .as_array()
             .unwrap()
@@ -208,17 +224,15 @@ fn package_local_setup_lock_is_not_global() {
         fs::write(dir.join("packages/a/turbo.lock"), "local resolution\n").unwrap();
         // Narrow task inputs exclude this package-local file. Package-level
         // affectedness may select a, but must not select the unrelated b.
-        let result = json(run_turbo_with_env(
-            dir,
-            &["run", "build", "--affected", "--dry=json"],
-            &[("TURBO_SCM_BASE", "HEAD"), ("TURBO_SCM_HEAD", "")],
-        ));
+        // Managed runs need setup, so observe selection through query.
+        let query = r#"{ affectedTasks(base: "HEAD") { items { fullName } } }"#;
+        let result = json(run_turbo(dir, &["query", query]));
         assert!(
-            result["tasks"]
+            result["data"]["affectedTasks"]["items"]
                 .as_array()
                 .unwrap()
                 .iter()
-                .all(|task| { task["taskId"].as_str().unwrap() != "b#build" })
+                .all(|task| { task["fullName"].as_str().unwrap() != "b#build" })
         );
     }
 }

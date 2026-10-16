@@ -1790,6 +1790,109 @@ fn test_all_transitive_closures_deterministic_with_workspace_scoped_packages() {
         prev_app_a = Some(app_a_pkgs.clone());
         prev_app_b = Some(app_b_pkgs.clone());
     }
+
+    // `lib` is nested under workspace names, so its edges must be reported
+    // as workspace-sensitive (forcing the per-workspace walk above).
+    let resolver = lockfile
+        .transitive_edge_resolver()
+        .expect("bun supports edge resolution");
+    assert!(matches!(
+        resolver.resolve_edge("lib", ">=1.0.0").unwrap(),
+        crate::TransitiveEdgeResolution::WorkspaceSensitive
+    ));
+    assert!(matches!(
+        resolver.resolve_edge("shared", "^1.0.0").unwrap(),
+        crate::TransitiveEdgeResolution::Global(Some(_))
+    ));
+}
+
+// Without workspace-scoped entries every transitive edge resolves the same way
+// for every workspace, so closures come from the shared DP. They must match
+// independent per-workspace walks, including nested, overridden, and
+// workspace-protocol edges.
+#[test]
+fn test_all_transitive_closures_dp_matches_per_workspace_walk() {
+    use std::collections::{BTreeMap, HashMap, HashSet};
+
+    let lockfile_content = r#"{
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": { "name": "test-monorepo" },
+                "apps/app-a": {
+                    "name": "app-a",
+                    "dependencies": { "shared": "^1.0.0", "pkg-b": "workspace:packages/pkg-b" }
+                },
+                "apps/app-b": {
+                    "name": "app-b",
+                    "dependencies": { "chalk": "^4.0.0", "lib": "^2.0.0" }
+                },
+                "packages/pkg-b": {
+                    "name": "pkg-b",
+                    "version": "0.1.0"
+                }
+            },
+            "overrides": { "pinned": "1.0.0" },
+            "packages": {
+                "app-a": ["app-a@workspace:apps/app-a"],
+                "app-b": ["app-b@workspace:apps/app-b"],
+                "pkg-b": ["pkg-b@workspace:packages/pkg-b"],
+                "shared": ["shared@1.0.0", "", {
+                    "dependencies": { "lib": ">=1.0.0", "pinned": "^2.0.0", "cycle-a": "^1.0.0" }
+                }, "sha512-shared"],
+                "lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "pinned": ["pinned@1.0.0", "", {}, "sha512-pinned"],
+                "cycle-a": ["cycle-a@1.0.0", "", { "dependencies": { "cycle-b": "^1.0.0" } }, "sha512-a"],
+                "cycle-b": ["cycle-b@1.0.0", "", { "dependencies": { "cycle-a": "^1.0.0" } }, "sha512-b"],
+                "chalk": ["chalk@4.1.2", "", { "dependencies": { "ansi-styles": "^4.1.0" } }, "sha512-chalk"],
+                "ansi-styles": ["ansi-styles@6.2.1", "", {}, "sha512-ansi6"],
+                "chalk/ansi-styles": ["ansi-styles@4.3.0", "", {}, "sha512-ansi4"]
+            }
+        }"#;
+
+    let lockfile = BunLockfile::from_str(lockfile_content).unwrap();
+    let workspaces: HashMap<String, BTreeMap<String, String>> = [
+        (
+            "apps/app-a",
+            &[("shared", "^1.0.0"), ("pkg-b", "workspace:packages/pkg-b")][..],
+        ),
+        ("apps/app-b", &[("chalk", "^4.0.0"), ("lib", "^2.0.0")][..]),
+    ]
+    .into_iter()
+    .map(|(ws, deps)| {
+        (
+            ws.to_string(),
+            deps.iter()
+                .map(|(name, range)| (name.to_string(), range.to_string()))
+                .collect(),
+        )
+    })
+    .collect();
+
+    let sorted =
+        crate::all_transitive_closures_sorted(&lockfile, workspaces.clone(), false).unwrap();
+    // The DP interns packages, so the shared `lib@2.0.0` is one allocation.
+    let lib_in = |ws: &str| {
+        sorted[ws]
+            .iter()
+            .find(|pkg| pkg.key == "lib@2.0.0")
+            .cloned()
+            .unwrap_or_else(|| panic!("{ws} must contain lib@2.0.0"))
+    };
+    assert!(
+        std::sync::Arc::ptr_eq(&lib_in("apps/app-a"), &lib_in("apps/app-b")),
+        "closures must come from the shared DP"
+    );
+
+    for (ws, deps) in workspaces {
+        let legacy = crate::transitive_closure(&lockfile, &ws, deps, false).unwrap();
+        let dp: HashSet<crate::Package> = sorted[&ws].iter().map(|pkg| (**pkg).clone()).collect();
+        assert_eq!(dp, legacy, "closure mismatch for {ws}");
+    }
+    let app_b: Vec<&str> = sorted["apps/app-b"]
+        .iter()
+        .map(|pkg| pkg.key.as_str())
+        .collect();
+    assert!(app_b.contains(&"ansi-styles@4.3.0") && !app_b.contains(&"ansi-styles@6.2.1"));
 }
 
 // Regression test for https://github.com/vercel/turborepo/issues/12816

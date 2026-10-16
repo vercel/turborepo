@@ -488,6 +488,10 @@ impl WithMetadata for RawRootTurboJson {
         self.no_update_notifier.add_text(text.clone());
         self.concurrency.add_text(text.clone());
         self.future_flags.add_text(text.clone());
+        self.setup.add_text(text.clone());
+        if let Some(setup) = &mut self.setup {
+            setup.value.add_text(text.clone());
+        }
         self.global.add_text(text.clone());
         if let Some(global) = &mut self.global {
             global.value.add_text(text);
@@ -521,6 +525,10 @@ impl WithMetadata for RawRootTurboJson {
         self.no_update_notifier.add_path(path.clone());
         self.concurrency.add_path(path.clone());
         self.future_flags.add_path(path.clone());
+        self.setup.add_path(path.clone());
+        if let Some(setup) = &mut self.setup {
+            setup.value.add_path(path.clone());
+        }
         self.global.add_path(path.clone());
         if let Some(global) = &mut self.global {
             global.value.add_path(path);
@@ -541,12 +549,14 @@ impl WithMetadata for RawPackageTurboJson {
             boundaries.value.add_text(text.clone());
         }
         self.tasks.add_text(text.clone());
+        self.setup.add_text(text.clone());
         self.pipeline.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
         self.extends.add_path(path.clone());
+        self.setup.add_path(path.clone());
         self.tags.add_path(path.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_path(path.clone());
@@ -735,9 +745,10 @@ mod tests {
     }
 
     #[test]
-    fn test_experimental_setup_does_not_add_setup_configuration() {
+    fn test_experimental_setup_enables_setup_configuration() {
         let json = r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#;
-        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
+        let raw = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert!(RawTurboJson::try_from(raw).unwrap().setup.is_some());
     }
 
     #[test]
@@ -870,7 +881,7 @@ mod tests {
     }
 
     #[test]
-    fn test_agent_guidance_parses_and_defaults_to_true() {
+    fn test_agent_guidance_parses_as_optional() {
         let default = RawRootTurboJson::parse(r#"{"tasks": {}}"#, "turbo.json").unwrap();
         assert_eq!(default.agent_guidance, None);
         let enabled = RawRootTurboJson::parse(r#"{"agentGuidance": true}"#, "turbo.json").unwrap();
