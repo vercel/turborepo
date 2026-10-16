@@ -6,8 +6,9 @@ use super::{super::checks::snapshot, *};
 const CHECK: &[&str] = super::super::checks::CHECK;
 
 fn plan(f: &Fixture) -> String {
-    let discovery = root::Discovery::capture(&f.args(&["--plan", "--tools-only"])).unwrap();
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let discovery =
+        root::Discovery::capture(&f.args(&["--plan", "--tools-only"]), f.git.clone()).unwrap();
+    let sources = f.sources().unwrap();
     plan::inspect(&discovery, sources, false, || {
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     })

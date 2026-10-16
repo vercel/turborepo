@@ -19,7 +19,7 @@ fn record(f: &Fixture) -> (PathBuf, Value) {
     (path, value)
 }
 fn seed(f: &Fixture, git: bool) {
-    let lock = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let lock = f.sources().unwrap();
     let plans = provision::plans(&lock, lock.previous_lock().unwrap()).unwrap();
     let mut tools = vec![
         plans.node.unwrap().inventory_tool().clone(),
@@ -105,7 +105,7 @@ fn repository_inventory_is_never_promoted_to_trust_or_executed() {
                 .exists()
         );
         if tracked {
-            track(f.owned.root());
+            track(&f.git);
         }
         let u = Upstream::new(&f, false, None);
         let result = f.run(&u, FROZEN);

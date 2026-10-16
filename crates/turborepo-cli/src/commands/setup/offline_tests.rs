@@ -342,7 +342,7 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
                 rustup: turborepo_setup::rustup_provision::RustupTransport::official(&policy).unwrap(),
                 python: turborepo_setup::python_resolution::PythonTransport::official(&policy).unwrap(),
                 go: turborepo_setup::go_resolution::GoTransport::official(&policy).unwrap(),
-            }), || {
+            }), f.git.clone(), || {
                 called.set(called.get() + 1);
                 if called.get() == 2 {
                     match case {
@@ -370,7 +370,7 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
 fn offline_repeat_does_not_wait_for_writer_or_store_guards() {
     let f = installed();
     let empty = LoopbackServer::new([], |_| {}).unwrap();
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = Store::open(f.owned.root()).unwrap();
     std::thread::scope(|scope| {

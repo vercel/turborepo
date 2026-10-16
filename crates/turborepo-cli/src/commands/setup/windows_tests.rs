@@ -129,7 +129,7 @@ impl Fixture {
     fn new(locked: bool) -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
-        owned.init_git().unwrap();
+        owned.fake_git().unwrap();
         fs::write(root.join("turbo.json"), ENABLED).unwrap();
         fs::write(root.join(".nvmrc"), "24.x\n").unwrap();
         fs::write(
@@ -235,6 +235,7 @@ impl Fixture {
                     bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
                     artifact: Some(turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(origin).unwrap()),
                 }),
+                turborepo_setup::git::FakeGit::shared(),
                 || Ok(self.owned.policy_at(&self.owned.root().join("apps/web/src"))?),
             )
         })
