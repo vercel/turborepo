@@ -161,7 +161,10 @@ impl CacheMultiplexer {
                 .await??
             });
 
-            {
+            // Install the archive locally and upload it at the same time.
+            // Both read the body independently, and neither depends on the
+            // other.
+            let install = {
                 let fs = fs.clone();
                 let anchor = anchor.to_owned();
                 let key = key.to_owned();
@@ -170,9 +173,10 @@ impl CacheMultiplexer {
                 tokio::task::spawn_blocking(move || {
                     fs.put_archive(&anchor, &key, &files, &body, duration)
                 })
-                .await??;
-            }
-            let http_result = http.put_body(key, body, duration).await;
+            };
+            let (install_result, http_result) =
+                tokio::join!(install, http.put_body(key, body, duration));
+            install_result??;
 
             return match http_result {
                 Err(CacheError::ApiClientError(
