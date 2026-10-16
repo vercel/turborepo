@@ -4,8 +4,8 @@ const PLAN: &[&str] = &["--plan", "--tools-only"];
 
 impl Fixture {
     fn plan_report(&self, force: bool) -> Result<String, Error> {
-        let discovery = root::Discovery::capture(&self.args(PLAN))?;
-        let sources = turborepo_setup::lock::Snapshot::capture(self.owned.root())?;
+        let discovery = root::Discovery::capture(&self.args(PLAN), self.git.clone())?;
+        let sources = self.sources()?;
         plan::inspect(&discovery, sources, force, || {
             Ok(self
                 .owned
@@ -71,7 +71,7 @@ fn locked_plans_report_missing_reuse_and_force_in_every_readonly_mode() {
         assert_eq!(f.owned.root().join(".turbo").exists(), installed);
     }
     assert_eq!(u.hits(), 3);
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
     std::thread::scope(|scope| {
@@ -205,7 +205,7 @@ fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
             }
             let edit = || {
                 if installed {
-                    track(f.owned.root());
+                    track(&f.git);
                 } else {
                     fs::write(f.owned.root().join(".gitignore"), "").unwrap();
                 }
@@ -214,8 +214,8 @@ fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
                 edit();
             }
             let expected = std::cell::RefCell::new(snapshot(f.owned.root().parent().unwrap()));
-            let discovery = root::Discovery::capture(&f.args(PLAN)).unwrap();
-            let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+            let discovery = root::Discovery::capture(&f.args(PLAN), f.git.clone()).unwrap();
+            let sources = f.sources().unwrap();
             let calls = std::cell::Cell::new(0);
             let result = plan::inspect(&discovery, sources, installed, || {
                 calls.set(calls.get() + 1);
@@ -379,9 +379,12 @@ impl Fixture {
         crate::cli::dispatch_setup(&self.args(flags), |args, setup_args| {
             let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
             validate_request(&request)?;
-            let discovery = root::Discovery::capture(args)?;
-            let sources =
-                turborepo_setup::lock::Snapshot::capture_with(self.owned.root(), ecosystems)?;
+            let discovery = root::Discovery::capture(args, self.git.clone())?;
+            let sources = turborepo_setup::lock::Snapshot::capture_with_git(
+                self.owned.root(),
+                ecosystems,
+                self.git.clone(),
+            )?;
             let transports = Some(loopback(self, upstream));
             report = Some(plan::report(
                 &discovery,
@@ -563,8 +566,8 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
     for case in 0..7 {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        let discovery = root::Discovery::capture(&f.args(PLAN)).unwrap();
-        let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let discovery = root::Discovery::capture(&f.args(PLAN), f.git.clone()).unwrap();
+        let sources = f.sources().unwrap();
         let calls = std::cell::Cell::new(0);
         let edited = std::cell::RefCell::new(None);
         let result = plan::inspect(&discovery, sources, false, || {

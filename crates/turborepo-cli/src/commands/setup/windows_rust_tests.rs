@@ -48,7 +48,7 @@ impl Repo {
     fn new() -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
-        owned.init_git().unwrap();
+        owned.fake_git().unwrap();
         fs::write(root.join("turbo.json"), RUST).unwrap();
         fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
         fs::write(root.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
@@ -161,6 +161,7 @@ impl Repo {
                     artifact: None,
                     trust_base: Some(self.owned.home().to_owned()),
                 }),
+                turborepo_setup::git::FakeGit::shared(),
                 || Ok(self.owned.policy_at(self.owned.root())?),
             )
         })

@@ -4,6 +4,7 @@ mod restore_directory;
 mod restore_manifest;
 mod restore_regular;
 mod restore_symlink;
+mod zstd_sink;
 
 pub(crate) use create::ArchivedEntry;
 pub use create::CacheWriter;

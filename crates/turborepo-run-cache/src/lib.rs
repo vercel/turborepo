@@ -230,6 +230,20 @@ impl RunCache {
         })
     }
 
+    /// Starts downloading remote artifacts for the task hashes from `hashes`
+    /// (in the order tasks are expected to run), so their round trips overlap
+    /// earlier tasks. Each task still restores its own artifact when it runs.
+    /// `hashes` is only called when a prefetch can happen.
+    pub fn prefetch_remote(&self, hashes: impl FnOnce() -> Vec<String>, concurrency: usize) {
+        // Never fetch where `restore_outputs` wouldn't: with reads disabled,
+        // in dry runs, or with an output watcher, which can skip the fetch
+        // when outputs are unchanged.
+        if self.reads_disabled || self.is_dry_run || self.output_watcher.is_some() {
+            return;
+        }
+        self.cache.prefetch_remote(hashes, concurrency);
+    }
+
     pub async fn shutdown_cache(
         &self,
     ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {

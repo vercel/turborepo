@@ -1,9 +1,13 @@
 #![allow(clippy::unwrap_used)]
-use std::{fs, io::Write, path::PathBuf};
+use std::{fs, io::Write, path::PathBuf, sync::Arc};
 
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use turborepo_setup::test_support::{LoopbackServer, OwnedSetupFixture};
+use turborepo_setup::{
+    git::FakeGit,
+    lock::{Ecosystems, Snapshot, StorageError},
+    test_support::{LoopbackServer, OwnedSetupFixture},
+};
 
 use super::*;
 
@@ -40,6 +44,8 @@ fn archive(root: &str, files: &[(&str, &str)]) -> Vec<u8> {
 }
 struct Fixture {
     owned: OwnedSetupFixture,
+    /// Answers every Git question of this fixture's setup runs.
+    git: Arc<FakeGit>,
     lock: Value,
     node: Vec<u8>,
     pnpm: Vec<u8>,
@@ -49,7 +55,7 @@ impl Fixture {
     fn new() -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
-        owned.init_git().unwrap();
+        owned.fake_git().unwrap();
         fs::write(root.join("turbo.json"), ENABLED).unwrap();
         fs::write(root.join(".nvmrc"), "24.0.0\n").unwrap();
         fs::write(
@@ -100,6 +106,7 @@ impl Fixture {
         }});
         let f = Self {
             owned,
+            git: FakeGit::shared(),
             lock,
             node,
             pnpm,
@@ -184,6 +191,7 @@ impl Fixture {
                 args,
                 setup_args,
                 Some(self.transports(origin, cache.clone())),
+                self.git.clone(),
                 || {
                     Ok(self
                         .owned
@@ -217,11 +225,15 @@ impl Fixture {
             unreachable!("setup words");
         };
         let request = SetupRequest::new(setup_args, false).unwrap();
-        let discovery = root::Discovery::capture(&args).unwrap();
+        let discovery = root::Discovery::capture(&args, self.git.clone()).unwrap();
         let javascript = [turborepo_repository::toolchain::ToolchainId::JAVASCRIPT];
         let plan = effective::Plan::new(discovery.policy(), javascript, request.tools_only);
-        let snapshot = turborepo_setup::lock::Snapshot::capture(self.owned.root()).unwrap();
+        let snapshot = self.sources().unwrap();
         dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request).unwrap()
+    }
+    /// The fixture root's Snapshot, guarded through this fixture's Git.
+    fn sources(&self) -> Result<Snapshot, StorageError> {
+        Snapshot::capture_with_git(self.owned.root(), Ecosystems::default(), self.git.clone())
     }
     fn manifest(&self) -> Option<Vec<u8>> {
         fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
@@ -241,6 +253,7 @@ impl std::ops::Deref for Upstream {
 }
 impl Upstream {
     fn new(f: &Fixture, corrupt: bool, drift: Option<(PathBuf, String)>) -> Self {
+        let git = f.git.clone();
         Self(
             LoopbackServer::node_pnpm(
                 f.node_path.clone(),
@@ -252,7 +265,7 @@ impl Upstream {
                         && let Some((path, body)) = &drift
                     {
                         if body == "track" {
-                            track(path);
+                            track(&git);
                         } else {
                             fs::write(path, body).unwrap();
                         }
@@ -263,18 +276,9 @@ impl Upstream {
         )
     }
 }
-fn track(root: &std::path::Path) {
-    assert!(
-        std::process::Command::new("git")
-            .current_dir(root)
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .args(["add", "-f", ".turbo/tools/manifest.json"])
-            .status()
-            .unwrap()
-            .success()
-    );
+/// `git add -f` of the installed manifest, as the fixture's Git sees it.
+fn track(git: &FakeGit) {
+    git.track(".turbo/tools/manifest.json");
 }
 #[path = "cache_tests.rs"]
 mod cache;
@@ -368,7 +372,7 @@ fn authoritative_pnpm_keeps_wrong_manager_advisories_in_frozen_local_and_check()
                 "name":"npm","version":"11.6.1","onFail":on_fail
             }}}),
         );
-        let snapshot = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let snapshot = f.sources().unwrap();
         let declaration = snapshot.package_manager().unwrap().unwrap();
         assert_eq!(
             declaration.manager,
@@ -600,17 +604,30 @@ fn git_storage_drift_while_waiting_for_store_lock_never_reuses_or_downloads() {
         f.run(&u, FROZEN).unwrap();
         let before = f.manifest().unwrap();
         let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
-        std::thread::scope(|scope| {
-            let pending = scope.spawn(|| f.run(&u, FROZEN));
-            turborepo_setup::test_support::wait_for_writer(f.owned.root()).unwrap();
-            if indexed {
-                track(f.owned.root());
-            } else {
-                fs::write(f.owned.root().join(".gitignore"), "").unwrap();
+        // Drift exactly when the run asks Git again under its writer lock.
+        let fired = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (git, root, drifted) = (
+            Arc::downgrade(&f.git),
+            f.owned.root().to_owned(),
+            fired.clone(),
+        );
+        f.git.on_query(move || {
+            if drifted.load(std::sync::atomic::Ordering::SeqCst)
+                || !turborepo_setup::test_support::writer_held(&root).unwrap()
+            {
+                return;
             }
-            drop(store);
-            assert!(pending.join().unwrap().is_err());
+            drifted.store(true, std::sync::atomic::Ordering::SeqCst);
+            match git.upgrade() {
+                Some(git) if indexed => track(&git),
+                _ => fs::write(root.join(".gitignore"), "").unwrap(),
+            }
         });
+        // The ignore recheck under the writer fails before Store is tried.
+        let error = f.run(&u, FROZEN).unwrap_err();
+        assert!(fired.load(std::sync::atomic::Ordering::SeqCst));
+        assert!(format!("{error:?}").contains("to .gitignore"), "{error:?}");
+        drop(store);
         assert_eq!(u.hits(), 3);
         assert_eq!(f.manifest().unwrap(), before);
     }
@@ -699,9 +716,14 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
         let mut report = telemetry::Report::default();
         let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
             let transports = f.transports(u.origin(), None);
-            run_reporting(args, setup_args, Some(transports), &mut report, || {
-                Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
-            })
+            run_reporting(
+                args,
+                setup_args,
+                Some(transports),
+                f.git.clone(),
+                &mut report,
+                || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
+            )
         })
         .unwrap();
         (result.map_err(|error| telemetry::failure(&error)), report)

@@ -80,6 +80,18 @@ pub fn wait_for_writer(root: &Path) -> io::Result<()> {
     }
 }
 
+/// Whether a setup writer holds `root`'s lock right now. Like
+/// `wait_for_writer`, but never waits, so a Git hook on the writer's own
+/// thread can ask.
+pub fn writer_held(root: &Path) -> io::Result<bool> {
+    let file = fs::File::open(root)?;
+    match file.try_lock() {
+        Err(fs::TryLockError::WouldBlock) => Ok(true),
+        Err(fs::TryLockError::Error(error)) => Err(error),
+        Ok(()) => file.unlock().map(|()| false),
+    }
+}
+
 use super::*;
 
 /// Keeps every preflight input alive inside one ephemeral, canonical directory.
@@ -130,6 +142,13 @@ impl OwnedSetupFixture {
         if !status.success() {
             return Err(io::Error::other("fixture git init failed"));
         }
+        fs::write(self.root.join(".gitignore"), "/.turbo/\n")
+    }
+
+    /// `init_git` without running Git: the `.git` entries setup's filesystem
+    /// checks read, for a [`crate::git::FakeGit`] to answer about.
+    pub fn fake_git(&self) -> io::Result<()> {
+        crate::git::fake_repository(&self.root)?;
         fs::write(self.root.join(".gitignore"), "/.turbo/\n")
     }
 

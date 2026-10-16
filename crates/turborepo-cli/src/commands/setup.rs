@@ -2,12 +2,15 @@
 //! with the managed tools, plus read-only checks/plans. Never runs Turborepo
 //! tasks.
 
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::toolchain::ToolchainId;
-use turborepo_setup::source_policy::OfficialSourcePolicy;
+use turborepo_setup::{
+    git::{Git, GitCli},
+    source_policy::OfficialSourcePolicy,
+};
 use turborepo_turbo_json::ToolPolicy;
 use turborepo_ui::ColorConfig;
 
@@ -259,20 +262,21 @@ pub fn run_with_telemetry(
 ) -> Result<i32, Error> {
     let started = Instant::now();
     let mut report = telemetry::Report::default();
-    let result = run_observed(args, setup_args, &mut report);
+    let result = run_observed(args, setup_args, Arc::new(GitCli), &mut report);
     telemetry::record(&report, &result, started.elapsed(), color_config);
     result
 }
 
 /// Production setup without telemetry, so tests never initialize it.
 #[cfg(test)]
-pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
-    run_observed(args, setup_args, &mut telemetry::Report::default())
+pub fn run(args: &Args, setup_args: &SetupArgs, git: Arc<dyn Git>) -> Result<i32, Error> {
+    run_observed(args, setup_args, git, &mut telemetry::Report::default())
 }
 
 fn run_observed(
     args: &Args,
     setup_args: &SetupArgs,
+    git: Arc<dyn Git>,
     report: &mut telemetry::Report,
 ) -> Result<i32, Error> {
     #[cfg(windows)]
@@ -281,7 +285,7 @@ fn run_observed(
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
     };
-    run_reporting(args, setup_args, None, report, || {
+    run_reporting(args, setup_args, None, git, report, || {
         Ok(OfficialSourcePolicy::inspect(
             invocation.as_std_path(),
             None,
@@ -322,12 +326,14 @@ fn run_with_policy(
     args: &Args,
     setup_args: &SetupArgs,
     transports: Option<provision::Transports>,
+    git: Arc<dyn Git>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     run_reporting(
         args,
         setup_args,
         transports,
+        git,
         &mut telemetry::Report::default(),
         preflight,
     )
@@ -337,12 +343,13 @@ fn run_reporting(
     args: &Args,
     setup_args: &SetupArgs,
     transports: Option<provision::Transports>,
+    git: Arc<dyn Git>,
     report: &mut telemetry::Report,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     // Discovery reads files/Git metadata: no language-tool probes, environment
     // config pipeline, graph, package manager detection, or local CLI handoff.
-    let discovery = root::Discovery::capture(args)?;
+    let discovery = root::Discovery::capture(args, git)?;
     tracing::debug!("setup root: {}", discovery.root_path());
     if !discovery.flags().experimental_setup {
         return Err(Error::Disabled);
@@ -383,11 +390,12 @@ fn run_reporting(
         .map_or(ToolPolicy::Skip, |t| t.tools.0);
     // Preserve current workspace gating, with explicit policy skips disabling
     // interpretation of that ecosystem's declarations.
-    let snapshot = turborepo_setup::lock::Snapshot::capture_with(
+    let snapshot = turborepo_setup::lock::Snapshot::capture_with_git(
         discovery.snapshot_root()?.as_std_path(),
         // Python declarations are captured only when experimentalPythonWorkspaces
         // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
         ecosystems,
+        discovery.shared_git(),
     )?;
     if snapshot.previous_lock().is_some_and(|lock| {
         lock.tools().values().any(|tool| {
@@ -600,11 +608,12 @@ pub fn setup_for_tests(
         bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
             .map_err(|e| e.to_string())?,
     };
-    // Like run_with_policy, never telemetry.
+    // Like run_with_policy, never telemetry. Binary tests run real Git.
     run_reporting(
         &args,
         setup_args,
         Some(transports),
+        Arc::new(GitCli),
         &mut telemetry::Report::default(),
         || Ok(policy()?),
     )
@@ -672,6 +681,38 @@ mod tests {
 
     use super::*;
     use crate::cli::Command;
+
+    #[test]
+    fn storage_distinguishes_git_failures_from_missing_ignore_rules() {
+        use turborepo_setup::git::{Failure, FakeGit, fake_repository};
+        let root = tempfile::tempdir().unwrap();
+        fake_repository(root.path()).unwrap();
+        let git = FakeGit::new();
+        let message = |git: &FakeGit| {
+            provision::storage(root.path(), git)
+                .unwrap_err()
+                .to_string()
+        };
+        assert!(message(&git).contains("add /.turbo/ to .gitignore"));
+        std::fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
+        provision::storage(root.path(), &git).unwrap();
+        git.track(".turbo/tools/manifest.json");
+        assert!(message(&git).contains("add /.turbo/ to .gitignore"));
+        git.fail(Some(Failure::Fatal("fatal: not a git repository\n".into())));
+        assert_eq!(
+            message(&git),
+            "Git could not check whether .turbo/ is ignored (fatal: not a git repository); run \
+             turbo setup inside the repository's Git checkout"
+        );
+        git.fail(Some(Failure::Spawn));
+        assert!(message(&git).contains("`git`: it was not found on PATH"));
+        // Outside any repository nothing can be committed, so Git is not asked.
+        let outside = tempfile::tempdir().unwrap();
+        provision::storage(outside.path(), &git).unwrap();
+        let queries = git.queries();
+        provision::storage(outside.path(), &git).unwrap();
+        assert_eq!(git.queries(), queries);
+    }
 
     fn request(flags: &[&str], ci: bool) -> Result<SetupRequest, Error> {
         let words = ["turbo", "setup"].into_iter().chain(flags.iter().copied());

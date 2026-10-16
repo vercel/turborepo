@@ -50,7 +50,7 @@ impl Repo {
     fn new(uv_binary: &str) -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
-        owned.init_git().unwrap();
+        owned.fake_git().unwrap();
         fs::write(root.join("turbo.json"), PYTHON).unwrap();
         fs::write(
             root.join("pyproject.toml"),
@@ -108,6 +108,7 @@ impl Repo {
                     bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
                     artifact: None,
                 }),
+                turborepo_setup::git::FakeGit::shared(),
                 || Ok(self.owned.policy_at(&cwd)?),
             )
         })

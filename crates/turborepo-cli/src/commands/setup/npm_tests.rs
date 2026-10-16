@@ -26,9 +26,14 @@ fn npm_telemetry_counts_managed_owners_and_artifact_bytes() {
             let mut report = telemetry::Report::default();
             let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
                 let transports = f.transports(u.origin(), None);
-                run_reporting(args, setup_args, Some(transports), &mut report, || {
-                    Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
-                })
+                run_reporting(
+                    args,
+                    setup_args,
+                    Some(transports),
+                    f.git.clone(),
+                    &mut report,
+                    || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
+                )
             })
             .unwrap();
             assert_eq!(result.unwrap(), 0);
@@ -174,8 +179,8 @@ impl NpmFixture {
         crate::cli::dispatch_setup(&self.f.args(flags), |args, setup_args| {
             let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
             validate_request(&request)?;
-            let discovery = root::Discovery::capture(args)?;
-            let sources = turborepo_setup::lock::Snapshot::capture(self.f.owned.root())?;
+            let discovery = root::Discovery::capture(args, self.f.git.clone())?;
+            let sources = self.f.sources()?;
             let transports = provision::Transports {
                 trust_base: Some(self.f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
@@ -728,7 +733,7 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
     for bundled in [false, true] {
         let n = NpmFixture::new(bundled);
         n.f.run(&n.upstream(), FROZEN).unwrap();
-        let sources = turborepo_setup::lock::Snapshot::capture(n.f.owned.root()).unwrap();
+        let sources = n.f.sources().unwrap();
         let writer = sources.guard().unwrap();
         let store = turborepo_tool_install::Store::open(n.f.owned.root()).unwrap();
         std::thread::scope(|scope| {
