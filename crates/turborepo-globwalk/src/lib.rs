@@ -1208,6 +1208,10 @@ fn try_decompose_shallow_wildcard(
     Some((prefix, suffix))
 }
 
+/// Below this many shallow-wildcard candidates, they are checked on the calling
+/// thread instead of the rayon pool.
+const PARALLEL_STAT_MIN_CANDIDATES: usize = 32;
+
 fn walk_compiled_globs(
     compiled: &CompiledGlobs,
     walk_type: WalkType,
@@ -1298,37 +1302,48 @@ fn walk_compiled_globs(
 
     let ex_patterns = &compiled.ex_patterns;
     let plain_exclusions = &compiled.plain_exclusions;
-    let shallow_results: Vec<AbsoluteSystemPathBuf> = shallow_candidates
-        .par_iter()
-        .filter_map(|candidate| {
-            let meta = candidate.symlink_metadata().ok()?;
-            let dominated = match walk_type {
-                WalkType::Files => meta.is_file() || meta.is_symlink(),
-                WalkType::Folders => meta.is_dir(),
-                WalkType::All => true,
-            };
-            if !dominated {
+    let shallow_match = |candidate: &PathBuf| -> Option<AbsoluteSystemPathBuf> {
+        let meta = candidate.symlink_metadata().ok()?;
+        let dominated = match walk_type {
+            WalkType::Files => meta.is_file() || meta.is_symlink(),
+            WalkType::Folders => meta.is_dir(),
+            WalkType::All => true,
+        };
+        if !dominated {
+            return None;
+        }
+        if excluded_by_plain(plain_exclusions, candidate) {
+            return None;
+        }
+        // Check exclusion patterns. Exclusion globs are compiled from
+        // absolute paths (e.g. `/repo/**/node_modules/**`), so match
+        // against the full candidate path using slash-normalized form for
+        // cross-platform correctness.
+        if !ex_patterns.is_empty() {
+            let candidate_str = candidate.to_slash_lossy();
+            if ex_patterns
+                .iter()
+                .any(|ex| ex.is_match(candidate_str.as_ref()))
+            {
                 return None;
             }
-            if excluded_by_plain(plain_exclusions, candidate) {
-                return None;
-            }
-            // Check exclusion patterns. Exclusion globs are compiled from
-            // absolute paths (e.g. `/repo/**/node_modules/**`), so match
-            // against the full candidate path using slash-normalized form for
-            // cross-platform correctness.
-            if !ex_patterns.is_empty() {
-                let candidate_str = candidate.to_slash_lossy();
-                if ex_patterns
-                    .iter()
-                    .any(|ex| ex.is_match(candidate_str.as_ref()))
-                {
-                    return None;
-                }
-            }
-            AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
-        })
-        .collect();
+        }
+        AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
+    };
+    // A handful of stats is faster on the calling thread than fanned out
+    // across the rayon pool, which wakes every worker.
+    let shallow_results: Vec<AbsoluteSystemPathBuf> =
+        if shallow_candidates.len() < PARALLEL_STAT_MIN_CANDIDATES {
+            shallow_candidates
+                .iter()
+                .filter_map(shallow_match)
+                .collect()
+        } else {
+            shallow_candidates
+                .par_iter()
+                .filter_map(shallow_match)
+                .collect()
+        };
 
     let mut results: HashSet<AbsoluteSystemPathBuf> = variant_globs
         .par_iter()
@@ -3856,6 +3871,40 @@ mod plain_exclusion_test {
             "crates/[a]/**",
         ] {
             assert_eq!(literal_tree_prefix(pattern), None, "{pattern}");
+        }
+    }
+
+    #[test]
+    fn shallow_exclusions_apply_on_both_sides_of_parallel_threshold() {
+        for count in [
+            PARALLEL_STAT_MIN_CANDIDATES - 1,
+            PARALLEL_STAT_MIN_CANDIDATES,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            let mut expected = HashSet::new();
+            for index in 0..count {
+                let path = tmp
+                    .path()
+                    .join(format!("packages/pkg-{index}/package.json"));
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(&path, "{}").unwrap();
+                if index > 1 {
+                    expected.insert(AbsoluteSystemPathBuf::try_from(path).unwrap());
+                }
+            }
+            let include = [ValidatedGlob::from_str("packages/*/package.json").unwrap()];
+            let exclude = [
+                ValidatedGlob::from_str("packages/pkg-0/package.json").unwrap(),
+                ValidatedGlob::from_str("packages/pkg-1/**").unwrap(),
+            ];
+            for walk_type in [WalkType::Files, WalkType::All] {
+                assert_eq!(
+                    globwalk(&root, &include, &exclude, walk_type).unwrap(),
+                    expected,
+                    "{count} candidates, {walk_type:?}"
+                );
+            }
         }
     }
 
