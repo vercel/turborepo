@@ -359,7 +359,7 @@ fn locked_go_modules_prefetch_with_the_managed_goroot_and_read_only_sums() {
     let u = LoopbackServer::new(go_routes_with(&["1.22.12"], go), |_| {}).unwrap();
     assert_eq!(f.run(&u, &["--no-frozen"]).unwrap(), 0);
     // Go module setup runs no package code; tools-only setup never prefetches.
-    assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     // A failed download passes go's exit status through.
     fs::write(root.join("stale"), "").unwrap();

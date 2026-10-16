@@ -91,21 +91,18 @@ fn toolchain_values_override_root_values() {
 }
 
 #[test]
-fn lifecycle_scripts_resolve_per_toolchain() {
-    let policy =
-        parse(r#"{"lifecycleScripts":"skip","python":{"lifecycleScripts":"native"}}"#).unwrap();
-    assert!(policy.is_configured());
-    let scripts = |id| policy.toolchain(&id).lifecycle_scripts;
-    assert_eq!(
-        scripts(ToolchainId::JAVASCRIPT),
-        Some(LifecycleScripts::Skip)
-    );
-    assert_eq!(scripts(ToolchainId::PYTHON), Some(LifecycleScripts::Native));
-    let unset = parse(r#"{"javascript":{"tools":"managed"}}"#).unwrap();
-    assert_eq!(
-        unset.toolchain(&ToolchainId::JAVASCRIPT).lifecycle_scripts,
-        None
-    );
+fn removed_lifecycle_controls_are_rejected() {
+    for value in ["native", "skip"] {
+        for setup in [
+            format!(r#"{{"lifecycleScripts":"{value}"}}"#),
+            format!(r#"{{"javascript":{{"lifecycleScripts":"{value}"}}}}"#),
+            format!(r#"{{"python":{{"lifecycleScripts":"{value}"}}}}"#),
+            format!(r#"{{"rust":{{"lifecycleScripts":"{value}"}}}}"#),
+            format!(r#"{{"go":{{"lifecycleScripts":"{value}"}}}}"#),
+        ] {
+            assert!(parse(&setup).is_err(), "{setup}");
+        }
+    }
 }
 
 #[test]

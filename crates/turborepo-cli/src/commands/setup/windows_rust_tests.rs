@@ -350,7 +350,7 @@ fn locked_cargo_dependencies_prefetch_through_the_managed_proxy_and_home() {
         .unwrap()
         .code();
     // Setup prefetches with that proxy and passes its status through.
-    for flags in [&["--frozen"][..], &["--frozen", "--ignore-scripts"]] {
+    for flags in [&["--frozen"][..], &["--frozen"]] {
         assert_eq!(repo.run(&upstream, flags).ok(), proxy, "{flags:?}");
     }
     assert!(root.join(".turbo").join("cargo-home").is_dir());

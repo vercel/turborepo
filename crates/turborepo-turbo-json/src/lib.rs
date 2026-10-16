@@ -52,7 +52,7 @@ pub use raw::{
     RawTaskDefinition, RawTurboJson,
 };
 pub use setup::{
-    ArtifactFormat, ArtifactPlatform, DependencyPolicy, LifecycleScripts, RawAdditionalTool,
+    ArtifactFormat, ArtifactPlatform, DependencyPolicy, RawAdditionalTool,
     RawAdditionalToolArtifact, RawSetupMirrors, RawSetupPolicy, RawToolchainSetupPolicy,
     SetupMirrors, SetupPolicy, ToolPolicy, ToolchainSetupPolicy,
 };

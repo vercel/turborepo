@@ -1,7 +1,7 @@
 //! Native Windows x64 dependency installs through the real setup path: each
 //! manager's frozen command through its Windows entrypoint (`npm.cmd`,
 //! `pnpm.cmd` and `yarn.cmd` launchers on the managed node.exe, `bun.exe`),
-//! lifecycle skip flags, exit-status pass-through, and restored lockfiles.
+//! exit-status pass-through and restored lockfiles.
 //! Every fixture tool is the host's node.exe running a recording script.
 use super::*;
 
@@ -101,8 +101,8 @@ fn host_node() -> Vec<u8> {
 }
 
 /// Local setup locks and installs tools, then runs `command`. A repeat after
-/// removing `node_modules` reruns it with the manager's own `skip` flag.
-fn installs_and_repeats(manager: &str, lockfile: &str, command: &str, skip: &str) {
+/// removing `node_modules` reruns the native frozen command.
+fn installs_and_repeats(manager: &str, lockfile: &str, command: &str) {
     if unqualified_host() {
         return;
     }
@@ -110,49 +110,40 @@ fn installs_and_repeats(manager: &str, lockfile: &str, command: &str, skip: &str
     let root = f.owned.root();
     assert_eq!(f.run(&u, &["--no-frozen"]).unwrap(), 0);
     fs::remove_dir_all(root.join("node_modules")).unwrap();
-    assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
     assert!(root.join("node_modules").is_dir());
-    assert_eq!(
-        installs(&f),
-        [command.to_owned(), format!("{command} {skip}")]
-    );
+    assert_eq!(installs(&f), [command, command]);
     assert_eq!(fs::read(root.join(lockfile)).unwrap(), b"committed lock\n");
 }
 
 #[test]
 fn npm_ci_runs_through_the_bundled_npm_cmd() {
     let command = "node.exe npm-cli.js ci";
-    installs_and_repeats(
-        "npm@11.6.1",
-        "package-lock.json",
-        command,
-        "--ignore-scripts",
-    );
+    installs_and_repeats("npm@11.6.1", "package-lock.json", command);
 }
 
 #[test]
 fn pnpm_installs_frozen_through_its_cmd_launcher() {
     let command = "node.exe pnpm.cjs install --frozen-lockfile";
-    installs_and_repeats("pnpm@10.0.0", "pnpm-lock.yaml", command, "--ignore-scripts");
+    installs_and_repeats("pnpm@10.0.0", "pnpm-lock.yaml", command);
 }
 
 #[test]
 fn yarn_classic_installs_frozen_through_its_cmd_launcher() {
     let command = "node.exe yarn.js install --frozen-lockfile";
-    installs_and_repeats("yarn@1.22.22", "yarn.lock", command, "--ignore-scripts");
+    installs_and_repeats("yarn@1.22.22", "yarn.lock", command);
 }
 
 #[test]
-fn modern_yarn_installs_immutably_and_skips_builds_through_its_cmd_launcher() {
-    // `--mode=skip-build` reaches Yarn intact through cmd.exe's quoting.
+fn modern_yarn_installs_immutably_through_its_cmd_launcher() {
     let command = "node.exe yarn.js install --immutable";
-    installs_and_repeats("yarn@4.5.0", "yarn.lock", command, "--mode=skip-build");
+    installs_and_repeats("yarn@4.5.0", "yarn.lock", command);
 }
 
 #[test]
 fn bun_installs_frozen_through_bun_exe() {
     let command = "bun.exe install --frozen-lockfile";
-    installs_and_repeats("bun@1.2.23", "bun.lock", command, "--ignore-scripts");
+    installs_and_repeats("bun@1.2.23", "bun.lock", command);
 }
 
 /// A failing installer's status becomes setup's. A lockfile the installer

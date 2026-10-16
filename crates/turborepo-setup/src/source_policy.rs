@@ -467,7 +467,7 @@ fn bundled_prefix(bytes: &[u8]) -> Option<PathBuf> {
 /// shape, including an empty policy, is not applied yet.
 fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
     use jsonc_parser::ast::Value;
-    const VALUES: [&str; 3] = ["tools", "dependencies", "lifecycleScripts"];
+    const VALUES: [&str; 2] = ["tools", "dependencies"];
     const TOOLCHAINS: [&str; 4] = ["javascript", "rust", "python", "go"];
     const MIRRORS: [&str; 7] = ["node", "npmRegistry", "bun", "uv", "python", "go", "rust"];
     let strings = |keys: &[&str], value: &Value| {

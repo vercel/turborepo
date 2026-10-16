@@ -384,12 +384,11 @@ fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
                 Some(Error::Configured(ConfigOwner::RootPolicy))
             );
         }
-        // Setup applies tool, dependency, and lifecycle policy, none of which
+        // Setup applies tool and dependency policy, neither of which
         // configures download sources.
         fs::write(
             &path,
-            "{\"setup\":{\"tools\":\"managed\",\"dependencies\":\"skip\",\"lifecycleScripts\":\"\
-             skip\",\"rust\":{},\"javascript\":{\"tools\":\"verify-system\"}}}",
+            r#"{"setup":{"tools":"managed","dependencies":"skip","rust":{},"javascript":{"tools":"verify-system"}}}"#,
         )?;
         assert!(fixture.check(&[]).is_ok());
         // Setup applies additional tools too, alone or with other policy.
