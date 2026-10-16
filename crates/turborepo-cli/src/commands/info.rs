@@ -26,9 +26,11 @@ pub async fn run(base: CommandBase) {
     let package_manager = PackageJson::load(&base.repo_root.join_component("package.json"))
         .ok()
         .and_then(|package_json| {
-            PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root).ok()
+            PackageManager::read_or_detect_package_manager_info(&package_json, &base.repo_root)
+                .ok()
+                .map(|info| info.to_string())
         })
-        .map_or_else(|| "Not found".to_owned(), |pm| pm.name().to_string());
+        .unwrap_or_else(|| "Not found".to_owned());
 
     println!("CLI:");
     println!("   Version: {}", base.version);
