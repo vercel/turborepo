@@ -9,7 +9,7 @@ use thiserror::Error;
 use turborepo_repository::toolchain::ToolchainId;
 use turborepo_setup::{
     git::{Git, GitCli},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 use turborepo_turbo_json::ToolPolicy;
 use turborepo_ui::ColorConfig;
@@ -286,10 +286,7 @@ fn run_observed(
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
     };
     run_reporting(args, setup_args, None, git, report, || {
-        Ok(OfficialSourcePolicy::inspect(
-            invocation.as_std_path(),
-            None,
-        )?)
+        Ok(ToolDownloadPolicy::inspect(invocation.as_std_path())?)
     })
 }
 
@@ -327,7 +324,7 @@ fn run_with_policy(
     setup_args: &SetupArgs,
     transports: Option<provision::Transports>,
     git: Arc<dyn Git>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
     run_reporting(
         args,
@@ -345,7 +342,7 @@ fn run_reporting(
     transports: Option<provision::Transports>,
     git: Arc<dyn Git>,
     report: &mut telemetry::Report,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
     // Discovery reads files/Git metadata: no language-tool probes, environment
     // config pipeline, graph, package manager detection, or local CLI handoff.
@@ -553,7 +550,7 @@ pub fn frozen_tools_for_tests(
     invocation: &std::path::Path,
     user_base: &std::path::Path,
     origin: &str,
-    policy: impl Fn() -> Result<OfficialSourcePolicy, turborepo_setup::source_policy::Error>,
+    policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
 ) -> Result<i32, String> {
     setup_for_tests(
         invocation,
@@ -572,7 +569,7 @@ pub fn setup_for_tests(
     user_base: &std::path::Path,
     origin: &str,
     flags: &[&str],
-    policy: impl Fn() -> Result<OfficialSourcePolicy, turborepo_setup::source_policy::Error>,
+    policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
 ) -> Result<i32, String> {
     use turborepo_setup::{
         node_provision::NodeTransport, pnpm_provision::PnpmTransport,

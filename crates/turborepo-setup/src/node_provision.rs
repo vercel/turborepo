@@ -60,7 +60,7 @@ pub struct NodeTransport {
     offline: bool,
 }
 impl NodeTransport {
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             dist: "https://nodejs.org/dist".into(),
@@ -71,7 +71,7 @@ impl NodeTransport {
 
     /// Send the same official requests to a validated `/dist` mirror.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {

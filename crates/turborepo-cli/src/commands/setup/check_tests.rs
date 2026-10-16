@@ -190,7 +190,7 @@ fn check_damage_declaration_inventory_and_lock_drift_are_actionable_readonly_fai
 
 #[test]
 fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
-    for case in 0..7 {
+    for case in 0..5 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         match case {
@@ -200,17 +200,11 @@ fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            2 => fs::write(
-                f.owned.root().join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap(),
-            3 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
-            4 => {
+            2 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");
                 f.save();
             }
-            5 => {
+            3 => {
                 fs::write(f.owned.root().join("turbo.json"), r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#).unwrap();
                 fs::write(f.owned.root().join("Cargo.toml"), "not probed").unwrap();
             }
@@ -271,7 +265,7 @@ fn check_revalidates_captured_discovery_sources_and_policy_before_success() {
                             f.owned.root().join("apps/web/.git"),
                             "gitdir: /not-probed".into(),
                         ),
-                        6 => (f.owned.home().join(".npmrc"), "".into()),
+                        6 => (f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into()),
                         7 => (
                             f.owned.root().join("turbo.json"),
                             r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#.into(),

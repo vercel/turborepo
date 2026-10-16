@@ -17,7 +17,7 @@ use std::{
     net::TcpListener,
     os::unix::process::ExitStatusExt,
     path::{Path, PathBuf},
-    process::{Command, Output},
+    process::Command,
     sync::mpsc,
     thread,
     time::{Duration, Instant},
@@ -131,8 +131,7 @@ fn state(root: &Path) -> (BTreeMap<String, Vec<u8>>, Vec<String>) {
 
 fn command(launcher: &ProcessLauncher, entry: Entrypoint, root: &Path, proxy: &str) -> Command {
     let mut command = launcher.command(entry, root);
-    // The official source policy rejects npm configuration in the environment,
-    // so start clean like the standalone setup tests. PATH provides only Git.
+    // Isolate child-process configuration like the standalone setup tests.
     let home = root.parent().unwrap().join("home");
     command
         .env_clear()
@@ -151,19 +150,12 @@ fn command(launcher: &ProcessLauncher, entry: Entrypoint, root: &Path, proxy: &s
     command
 }
 
-fn system_policy_blocked(output: &Output) -> bool {
-    let text = combined_output(output).replace([' ', '\n', '|'], "");
-    text.contains("official-onlysetuprejectsSystemconfiguration")
-        || text.contains("cannotsafelyinspectSystemconfiguration")
-}
-
-/// Starts setup and returns once it is blocked on the Node download, or None
-/// if host npm configuration keeps official-only setup from starting.
+/// Starts setup and returns once it is blocked on the Node download.
 fn start_blocked(
     launcher: &ProcessLauncher,
     entry: Entrypoint,
     root: &Path,
-) -> Option<(CapturedProcess, Vec<i32>, Vec<TaskTreeGuard>)> {
+) -> (CapturedProcess, Vec<i32>, Vec<TaskTreeGuard>) {
     let (proxy, requests) = stalled_proxy();
     let mut process = CapturedProcess::spawn(&mut command(launcher, entry, root, &proxy));
     let start = Instant::now();
@@ -173,10 +165,6 @@ fn start_blocked(
         }
         if process.child.try_wait().unwrap().is_some() {
             let output = process.finish(TIMEOUT);
-            if system_policy_blocked(&output) {
-                eprintln!("Setup cancellation skipped: host System npm configuration blocks it.");
-                return None;
-            }
             panic!(
                 "setup exited before downloading\n{}",
                 combined_output(&output)
@@ -203,7 +191,7 @@ fn start_blocked(
         }
     }
     let guards = pids.iter().map(|pid| TaskTreeGuard::new(*pid)).collect();
-    Some((process, pids, guards))
+    (process, pids, guards)
 }
 
 fn stop(process: &CapturedProcess, request: Signal) {
@@ -227,9 +215,7 @@ fn interrupted_download_releases_locks_and_leaves_resumable_state() {
             let root: PathBuf = temp.path().canonicalize().unwrap().join("repo");
             fixture(&root);
             let (before, _) = state(&root);
-            let Some((process, pids, mut guards)) = start_blocked(&launcher, entry, &root) else {
-                return;
-            };
+            let (process, pids, mut guards) = start_blocked(&launcher, entry, &root);
             let entrypoint = process.child.id() as i32;
             // The download runs inside the setup transaction.
             assert!(matches!(
@@ -269,7 +255,7 @@ fn interrupted_download_releases_locks_and_leaves_resumable_state() {
 
             // A retry reaches the download again instead of waiting on a stale
             // writer lock or rejecting the interrupted state.
-            let (retry, pids, mut guards) = start_blocked(&launcher, entry, &root).unwrap();
+            let (retry, pids, mut guards) = start_blocked(&launcher, entry, &root);
             let retry_pid = retry.child.id() as i32;
             stop(&retry, Signal::SIGTERM);
             retry.finish(TIMEOUT);

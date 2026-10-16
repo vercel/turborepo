@@ -70,7 +70,7 @@ impl RustupTransport {
         }
     }
 
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         let client = DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?;
         Ok(Self::new(client, ORIGIN.into()))
     }
@@ -79,7 +79,7 @@ impl RustupTransport {
     /// which also becomes the private rustup's `RUSTUP_DIST_SERVER`. No
     /// redirect leaves its origin.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &crate::mirror::Mirror,
     ) -> Result<Self, Error> {
         Ok(Self::new(mirror.client()?, mirror.base().into()))

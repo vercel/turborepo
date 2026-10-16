@@ -4,7 +4,7 @@
 //! executable probe.
 use turborepo_setup::{
     lock::{Installation, Platform, Snapshot},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 
 use super::{Error as SetupError, authorization::Authorization, check, provision, root::Discovery};
@@ -35,7 +35,7 @@ fn inspect(
     discovery: &Discovery,
     sources: &Snapshot,
     transports: Option<&provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, SetupError>,
     force: bool,
 ) -> Result<Vec<String>, SetupError> {
     let context = check::context()?;
@@ -147,7 +147,7 @@ pub(super) fn run(
     sources: Snapshot,
     request: &super::SetupRequest,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, SetupError>,
 ) -> Result<provision::Provisioned, SetupError> {
     let checked = inspect(
         discovery,

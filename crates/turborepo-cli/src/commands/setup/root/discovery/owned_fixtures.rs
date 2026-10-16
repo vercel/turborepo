@@ -67,10 +67,7 @@ fn owned_policy_reaches_actual_parser_root_and_executor_without_success_or_write
         )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.
     ));
     fs::write(f.home().join(".npmrc"), "")?;
-    assert_eq!(
-        f.policy().err(),
-        Some(PolicyError::Configured(ConfigOwner::User))
-    );
+    assert!(f.policy().is_ok());
     assert!(!f.root().join(".turbo").exists());
     assert!(!f.root().join("turbo.lock").exists());
     Ok(())

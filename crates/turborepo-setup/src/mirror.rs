@@ -4,6 +4,12 @@
 //! canonical provenance URLs and locked bytes are still verified against lock
 //! digests. Values are never echoed in errors because a mistyped value can
 //! contain a secret.
+//!
+//! These mirrors apply only to tool provisioning, across all supported
+//! ecosystems. Native package-manager configuration (npmrc files, Python
+//! indexes, Cargo sources, Go proxies, and their environment settings) neither
+//! selects nor blocks these downloads. Dependency installers retain their
+//! native configuration; setup does not interpret their dependency sources.
 
 use std::ffi::OsString;
 

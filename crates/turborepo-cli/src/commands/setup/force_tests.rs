@@ -96,7 +96,7 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
 
 #[test]
 fn force_missing_stale_no_host_and_unsupported_locks_fail_before_mutation() {
-    for case in 0..9 {
+    for case in 0..8 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         match case {
@@ -122,11 +122,6 @@ fn force_missing_stale_no_host_and_unsupported_locks_fail_before_mutation() {
             .unwrap(),
             5 => fs::write(f.owned.root().join(".node-version"), "26.0.0").unwrap(),
             6 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            7 => fs::write(
-                f.owned.root().join(".npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap(),
             _ => {
                 let pin = format!("pnpm@10.0.0+sha256.{}", "0".repeat(64));
                 f.declare(json!({"packageManager":pin}));
@@ -156,7 +151,7 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
             2 => Some((f.owned.root().join(".nvmrc"), "26.0.0".into())),
             3 => Some((f.owned.root().join("turbo.lock"), format!("{} ", f.lock))),
             4 => Some((f.owned.root().join("apps/web/turbo.json"), ENABLED.into())),
-            5 => Some((f.owned.home().join(".npmrc"), "".into())),
+            5 => Some((f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into())),
             6 => Some((f.owned.root().join(".gitignore"), "".into())),
             7 => Some((f.owned.root().to_owned(), "track".into())),
             _ => None,

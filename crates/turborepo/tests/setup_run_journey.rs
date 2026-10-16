@@ -294,21 +294,6 @@ impl Outcome {
         self
     }
 
-    /// Host npm configuration outside the fixture (for example Homebrew's
-    /// bundled npmrc) is rejected by setup's official-source preflight. Like
-    /// the other binary setup tests, report it rather than weaken the policy.
-    fn host_policy_blocked(&self) -> bool {
-        let blocked = contains(
-            &self.text,
-            "official-only setup rejects System configuration",
-        ) || contains(&self.text, "cannot safely inspect System configuration");
-        if blocked {
-            assert_ne!(self.code, 0, "{}", self.text);
-            eprintln!("Journey blocked by host System npm configuration; policy was not bypassed.");
-        }
-        blocked
-    }
-
     /// Fails before any task runs, with the expected guidance.
     fn fails(&self, expected: &str) -> &Self {
         assert_ne!(self.code, 0, "{}", self.text);
@@ -553,9 +538,6 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
 
     // First setup from a subdirectory creates the lock and asks for a commit.
     let first = j.turbo(&j.web, TOOLS_ONLY, &[]);
-    if first.host_policy_blocked() {
-        return;
-    }
     first.succeeds();
     assert!(contains(&first.text, "Commit turbo.lock"), "{}", first.text);
     assert!(!first.connects.is_empty() && !first.text.contains("fixture-"));
@@ -610,13 +592,113 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
     j.build(&j.web, "loose", "24.1.0", &[]);
 }
 
+/// Tool acquisition ignores npm's ambient configuration: first setup still
+/// uses verified official fixture downloads, and installed repeats stay
+/// offline. All environment overrides belong to child commands, never the test
+/// process.
+#[test]
+fn ambient_npm_configuration_does_not_affect_tool_downloads_or_installed_repeats() {
+    let clean = Journey::new();
+    clean.turbo(&clean.root, TOOLS_ONLY, &[]).succeeds();
+    let expected_lock = clean.read("turbo.lock");
+    let mut expected_requests = clean.upstream.origin.requests();
+    expected_requests.sort();
+    assert!(!expected_requests.is_empty());
+
+    let j = Journey::new();
+    let npmrc = "registry=https://registry.example.invalid/\n\
+                 proxy=http://127.0.0.1:1\nhttps-proxy=http://127.0.0.1:1\n\
+                 cafile=/nonexistent/npm-ca.pem\nstrict-ssl=false\noffline=true\n";
+    let global = j.temp.path().join("global.npmrc");
+    let user = j.home.join(".npmrc");
+    let prefix = j.temp.path().join("npm-prefix");
+    fs::create_dir_all(prefix.join("etc")).unwrap();
+    fs::create_dir_all(prefix.join("lib/node_modules/npm")).unwrap();
+    for path in [
+        j.temp.path().join(".npmrc"),
+        j.root.join(".npmrc"),
+        j.web.join(".npmrc"),
+        user.clone(),
+        global.clone(),
+        prefix.join("etc/npmrc"),
+        prefix.join("lib/node_modules/npm/npmrc"),
+    ] {
+        fs::write(path, npmrc).unwrap();
+    }
+    let ambient = [
+        ("npm_config_registry", "https://lowercase.example.invalid/"),
+        ("NPM_CONFIG_REGISTRY", "https://uppercase.example.invalid/"),
+        ("npm_config_userconfig", user.to_str().unwrap()),
+        ("NPM_CONFIG_GLOBALCONFIG", global.to_str().unwrap()),
+        ("npm_config_prefix", prefix.to_str().unwrap()),
+        ("npm_config_global_prefix", prefix.to_str().unwrap()),
+        ("npm_config_proxy", "http://127.0.0.1:1"),
+        ("npm_config_https_proxy", "http://127.0.0.1:1"),
+        ("npm_config_cafile", "/nonexistent/npm-ca.pem"),
+        ("npm_config_strict_ssl", "false"),
+        ("npm_config_offline", "true"),
+        ("npm_config_unrecognized_setting", "ignored"),
+        ("COREPACK_NPM_REGISTRY", "https://corepack.example.invalid/"),
+        ("DESTDIR", "/nonexistent/ambient-prefix"),
+        ("UV_INDEX_URL", "https://python.example.invalid/simple"),
+        ("PIP_INDEX_URL", "https://pip.example.invalid/simple"),
+        ("GOPROXY", "https://go.example.invalid"),
+        ("RUSTUP_DIST_SERVER", "https://rust.example.invalid"),
+        ("NODE_MIRROR", "https://node-mirror.example.invalid/"),
+        (
+            "NODEJS_ORG_MIRROR",
+            "https://nodejs-mirror.example.invalid/",
+        ),
+        (
+            "NVM_NODEJS_ORG_MIRROR",
+            "https://nvm-mirror.example.invalid/",
+        ),
+    ];
+    let first = j.turbo(&j.web, TOOLS_ONLY, &ambient);
+    first.succeeds();
+    assert!(!first.connects.is_empty(), "{}", first.text);
+    assert!(!first.text.contains("fixture-"), "{}", first.text);
+    assert_eq!(j.read("turbo.lock"), expected_lock);
+    let mut requests = j.upstream.origin.requests();
+    requests.sort();
+    assert_eq!(requests, expected_requests);
+    // Store inspection verifies the published installation, not just exit status.
+    let installed = turborepo_tool_install::Store::inspect(&j.root)
+        .unwrap()
+        .expect("verified managed installation");
+    assert!(installed.bin.join("node").exists());
+    assert!(installed.bin.join("pnpm").exists());
+    let manifest = j.read(".turbo/tools/manifest.json");
+
+    // Unresolved npm interpolation is also irrelevant to tools-only reuse.
+    fs::write(
+        j.root.join(".npmrc"),
+        "not an npm setting = ${UNSET_NPM_VALUE}\n",
+    )
+    .unwrap();
+    let mut ci = ambient.to_vec();
+    ci.push(("CI", "1"));
+    for args in [
+        TOOLS_ONLY,
+        &["setup", "--tools-only", "--offline"][..],
+        &["setup", "--tools-only", "--check", "--offline"][..],
+    ] {
+        j.turbo(&j.root, args, &ci).succeeds().offline();
+        assert_eq!(j.read("turbo.lock"), expected_lock);
+        assert_eq!(j.read(".turbo/tools/manifest.json"), manifest);
+        assert!(
+            turborepo_tool_install::Store::inspect(&j.root)
+                .unwrap()
+                .is_some()
+        );
+    }
+    assert_eq!(j.upstream.origin.requests().len(), requests.len());
+}
+
 #[test]
 fn repository_local_cli_pins_after_global_setup() {
     let j = Journey::new();
     let first = j.turbo(&j.root, TOOLS_ONLY, &[]);
-    if first.host_policy_blocked() {
-        return;
-    }
     first.succeeds();
     // No pin: the global CLI runs the guarded managed pipeline itself.
     j.build(&j.web, "strict", "24.0.0", &[]);
@@ -690,9 +772,6 @@ fn repository_local_cli_pins_after_global_setup() {
 fn watch_uses_managed_tools_and_fails_on_drift() {
     let j = Journey::new();
     let first = j.turbo(&j.root, TOOLS_ONLY, &[]);
-    if first.host_policy_blocked() {
-        return;
-    }
     first.succeeds();
     let commit = |message: &str| {
         common::git(&j.root, &["add", "."]);
@@ -739,9 +818,6 @@ fn watch_uses_managed_tools_and_fails_on_drift() {
 fn policy_mirrors_route_downloads_and_environment_overrides_them() {
     let official = Journey::new();
     let first = official.turbo(&official.root, TOOLS_ONLY, &[]);
-    if first.host_policy_blocked() {
-        return;
-    }
     first.succeeds();
     let lock = official.read("turbo.lock");
     let policy = r#"{"node":"https://registry.npmjs.org/policy/node/","npmRegistry":"https://nodejs.org/policy/npm"}"#;

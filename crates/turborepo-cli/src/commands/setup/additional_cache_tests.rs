@@ -120,7 +120,7 @@ fn the_artifact_mirror_serves_host_prefixed_paths_with_canonical_provenance() {
         artifact: mirror("/mirror/artifacts/"),
         ..Mirrors::default()
     };
-    let policy = || -> Result<OfficialSourcePolicy, Error> {
+    let policy = || -> Result<ToolDownloadPolicy, Error> {
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     };
     let run = |flags: &[&str]| {
