@@ -248,13 +248,11 @@ impl std::hash::Hasher for IndexHasher {
     }
 
     fn write(&mut self, bytes: &[u8]) {
-        let mut chunks = bytes.chunks_exact(8);
-        for chunk in &mut chunks {
-            let mut word = [0u8; 8];
-            word.copy_from_slice(chunk);
-            self.write_u64(u64::from_le_bytes(word));
+        let (chunks, remainder) = bytes.as_chunks::<8>();
+        for &chunk in chunks {
+            self.write_u64(u64::from_le_bytes(chunk));
         }
-        for &byte in chunks.remainder() {
+        for &byte in remainder {
             self.write_u64(u64::from(byte));
         }
     }
@@ -270,6 +268,35 @@ impl std::hash::Hasher for IndexHasher {
 }
 
 type IndexHashBuilder = std::hash::BuildHasherDefault<IndexHasher>;
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher;
+
+    use super::IndexHasher;
+
+    #[test]
+    fn index_hasher_preserves_byte_hashes_for_all_remainders_and_alignments() {
+        let bytes: Vec<u8> = (0..136).map(|i| (i * 73) as u8).collect();
+        for start in 0..8 {
+            for len in 0..=128 {
+                let bytes = &bytes[start..start + len];
+                let mut hasher = IndexHasher::default();
+                hasher.write(bytes);
+
+                let whole_bytes = bytes.len() / 8 * 8;
+                let words = bytes[..whole_bytes]
+                    .chunks(8)
+                    .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()));
+                let tail = bytes[whole_bytes..].iter().copied().map(u64::from);
+                let expected = words.chain(tail).fold(0u64, |hash, value| {
+                    hash.wrapping_add(value).wrapping_mul(0xf135_7aea_2e62_a9c5)
+                });
+                assert_eq!(hasher.finish(), expected.rotate_left(26));
+            }
+        }
+    }
+}
 
 fn resolution_data(
     generation: &ExternalResolutionGeneration,
