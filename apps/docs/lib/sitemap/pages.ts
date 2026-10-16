@@ -1,6 +1,15 @@
 import { docs, blogDocs, openapiDocs, extraDocs } from "@/.source/server";
 
 /**
+ * A content file's path as a URL slug. A folder's `index` page is served at the
+ * folder's URL, so `core-concepts/index.mdx` is `core-concepts` and a top-level
+ * `index.mdx` is the empty slug.
+ */
+function toSlug(path: string): string {
+  return path.replace(/\.mdx?$/, "").replace(/(^|\/)index$/, "");
+}
+
+/**
  * Collect all page URLs for the sitemap.
  *
  * Accesses fumadocs source data directly from .source/server to avoid
@@ -16,12 +25,8 @@ export function getAllPageUrls(): Array<string> {
 
   // Docs pages - access the docs array directly
   for (const doc of docs.docs) {
-    const slug = doc.info.path.replace(/\.mdx?$/, "");
-    if (slug === "index") {
-      urlSet.add("/docs");
-    } else {
-      urlSet.add(`/docs/${slug}`);
-    }
+    const slug = toSlug(doc.info.path);
+    urlSet.add(slug ? `/docs/${slug}` : "/docs");
   }
 
   // Blog pages
@@ -32,12 +37,8 @@ export function getAllPageUrls(): Array<string> {
 
   // OpenAPI pages
   for (const doc of openapiDocs) {
-    const slug = doc.info.path.replace(/\.mdx?$/, "");
-    if (slug === "index") {
-      urlSet.add("/docs/openapi");
-    } else {
-      urlSet.add(`/docs/openapi/${slug}`);
-    }
+    const slug = toSlug(doc.info.path);
+    urlSet.add(slug ? `/docs/openapi/${slug}` : "/docs/openapi");
   }
 
   // Extra pages (governance, terms, etc.)
