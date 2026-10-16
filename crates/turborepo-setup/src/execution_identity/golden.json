@@ -67,10 +67,18 @@
       "version": "10.9.0",
       "options": {},
       "installation": {
-        "kind": "verify-system",
-        "executables": [
-          "pnpm"
-        ]
+        "kind": "managed",
+        "parts": {
+          "distribution": {
+            "sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "format": "tar-gz",
+            "rootPrefix": "node-v24",
+            "destination": null,
+            "executables": {
+              "pnpm": "bin/pnpm"
+            }
+          }
+        }
       }
     }
   }

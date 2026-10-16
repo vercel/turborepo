@@ -308,7 +308,7 @@ impl Dependencies {
                     "{} dependency setup is not supported yet",
                     id.as_str()
                 )),
-                _ => Step::Skip("not supported yet with verify-system tools".into()),
+                ToolPolicy::Skip => Step::Skip("tools are skipped".into()),
             };
             steps.push((id.clone(), step));
         }
@@ -605,11 +605,7 @@ impl Environment {
         let mut vars = plan.runtime_env().clone();
         let path = plan.path(std::env::var_os("PATH").as_deref())?;
         vars.insert("PATH".into(), path);
-        // Dependency setup runs only with managed tools, never verify-system.
-        let bin = plan
-            .path_prepend()
-            .ok_or(Error::NotInstalled("package manager"))?
-            .to_owned();
+        let bin = plan.path_prepend().to_owned();
         Ok(Self { bin, vars })
     }
 

@@ -5,7 +5,7 @@ use std::{
     path::Path,
 };
 
-use super::{Declaration, Error, Installation, Lock, MAX_LOCK_BYTES, declarations};
+use super::{Declaration, Error, Lock, MAX_LOCK_BYTES, declarations};
 use crate::{
     NodeDiscoveryError, NodeRequirements, git::Git, node_discovery::UniqueJson, package_manager,
     writer_storage::WriterStorage,
@@ -80,9 +80,6 @@ impl Lock {
         let mut document = self.document().clone();
         for tool in document.tools.values_mut() {
             sort_declarations(&mut tool.declarations);
-            if let Installation::VerifySystem { executables } = &mut tool.installation {
-                executables.sort();
-            }
         }
         let mut bytes = serde_json::to_vec_pretty(&document).map_err(|_| Error::Json)?;
         bytes.push(b'\n');

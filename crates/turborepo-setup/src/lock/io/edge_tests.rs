@@ -37,9 +37,7 @@ fn canonical_output_byte_limit_fails_before_any_write() {
     for index in 0..4 {
         let mut tool = template.clone();
         tool.adapter = "generic-download".into();
-        tool.installation = Installation::VerifySystem {
-            executables: vec![format!("tool-{index}")],
-        };
+        tool.installation = serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{format!("tool-{index}"):"bin/tool"}}}}})).unwrap();
         tool.declarations = (0..64)
             .map(|source| Declaration {
                 file: format!("source-{source}"),

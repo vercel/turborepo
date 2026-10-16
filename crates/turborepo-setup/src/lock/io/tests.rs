@@ -5,7 +5,7 @@ use serde_json::json;
 use super::*;
 use crate::{
     git::FakeGit,
-    lock::{Document, SCHEMA_VERSION, Tool},
+    lock::{Document, Installation, SCHEMA_VERSION, Tool},
 };
 
 #[path = "edge_tests.rs"]
@@ -24,9 +24,7 @@ pub(super) fn selection(declarations: DeclarationMap, version: &str) -> Lock {
                         version: version.into(),
                         declarations,
                         options: BTreeMap::new(),
-                        installation: Installation::VerifySystem {
-                            executables: vec![name],
-                        },
+                        installation: serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{name.clone():"bin/tool"}}}}})).unwrap(),
                     },
                 )
             })
@@ -83,15 +81,10 @@ fn stable_bytes_include_canonical_provenance_platforms_and_no_credentials() {
                 "windows-x64":{"distribution":{"url":"https://example.test/node.zip", "sha256":"b".repeat(64),
                     "format":"zip","executables":{"node":"node.exe"}}}}}},
         "rust":{"adapter":"rust","version":"1.90.0","declarations":[{"file":"rust-toolchain.toml"}],
-            "installation":{"kind":"verify-system","executables":["rustc","cargo"]}}
+            "installation":{"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/rust.tgz", "sha256":"c".repeat(64), "format":"tar-gz", "executables":{"rustc":"bin/rustc","cargo":"bin/cargo"}}}}}}
     }})).unwrap();
     let bytes = Lock::new(doc.clone()).unwrap().canonical_bytes().unwrap();
     doc.tools.get_mut("node").unwrap().declarations.reverse();
-    if let Installation::VerifySystem { executables } =
-        &mut doc.tools.get_mut("rust").unwrap().installation
-    {
-        executables.reverse();
-    }
     assert_eq!(
         bytes,
         Lock::new(doc.clone()).unwrap().canonical_bytes().unwrap()
@@ -166,10 +159,19 @@ fn writes_indented_json_and_leaves_an_equivalent_compact_lock_untouched() {
         }
       ],
       "installation": {
-        "kind": "verify-system",
-        "executables": [
-          "node"
-        ]
+        "kind": "managed",
+        "artifacts": {
+          "any": {
+            "distribution": {
+              "url": "https://example.test/tool.tgz",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "format": "tar-gz",
+              "executables": {
+                "node": "bin/tool"
+              }
+            }
+          }
+        }
       }
     }
   }

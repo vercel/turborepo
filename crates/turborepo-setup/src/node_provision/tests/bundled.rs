@@ -262,7 +262,7 @@ fn inconsistent_owners_identity_platforms_and_collisions_are_rejected() {
         ("/tools/node/options", json!({"bundled-npm":["11.x"]})),
         (
             "/tools/node/installation",
-            json!({"kind":"verify-system","executables":["node","npm","npx"]}),
+            json!({"kind":"bundled","owner":"npm"}),
         ),
         (
             "/tools/node/installation/artifacts/linux-x64-gnu/distribution/executables",
@@ -283,9 +283,7 @@ fn inconsistent_owners_identity_platforms_and_collisions_are_rejected() {
     assert!(Lock::new(bad).is_err());
     let mut bad = good.document().clone();
     let mut sibling = bad.tools["npm"].clone();
-    sibling.installation = Installation::VerifySystem {
-        executables: vec!["NPM".into()],
-    };
+    sibling.installation = serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{"NPM":"bin/tool"}}}}})).unwrap();
     bad.tools.insert("fixture".into(), sibling);
     assert!(Lock::new(bad).is_err());
     let mut bad = good.document().clone();

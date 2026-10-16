@@ -129,7 +129,7 @@ fn root_json_and_jsonc_applied_policy_shapes_pass() -> TestResult {
         for contents in [
             "{}",
             "{ // normal configuration\n \"futureFlags\": {\"experimentalSetup\":true}, }",
-            r#"{"setup":{"tools":"managed","dependencies":"skip","lifecycleScripts":"skip","rust":{},"javascript":{"tools":"verify-system"}}}"#,
+            r#"{"setup":{"tools":"managed","dependencies":"skip","lifecycleScripts":"skip","rust":{},"javascript":{"tools":"skip"}}}"#,
             r#"{"setup":{"python":{"dependencies":"skip"},"go":{"lifecycleScripts":"skip"}}}"#,
             r#"{"setup":{"additionalTools":{},"tools":"skip"}}"#,
             r#"{"setup":{"additionalTools":{}}}"#,

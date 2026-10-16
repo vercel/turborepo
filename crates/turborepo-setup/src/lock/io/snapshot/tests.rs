@@ -321,9 +321,7 @@ fn mismatched_candidate_and_extra_adapters_fail_before_storage_init() {
     let mut document = candidate(&snapshot, "24.0.0").document().clone();
     let mut extra = document.tools["node"].clone();
     extra.adapter = "generic-download".into();
-    extra.installation = super::super::Installation::VerifySystem {
-        executables: vec!["extra".into()],
-    };
+    extra.installation = serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{"extra":"bin/tool"}}}}})).unwrap();
     document.tools.insert("extra".into(), extra);
     let extra = Lock::new(document).unwrap();
     assert!(snapshot.commit(&extra).is_err());

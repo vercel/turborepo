@@ -112,7 +112,6 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         }
         Error::LockDiagnostics(super::lock_diagnostics::Error::Drift(_)) => SetupFailure::LockStale,
         Error::Offline(_) => SetupFailure::Readiness,
-        Error::SystemTool(_) => SetupFailure::Readiness,
         Error::OfflineMissing(_) => SetupFailure::Download,
         Error::Unsupported(message) => match *message {
             "managed promotion requires macOS or GNU Linux"

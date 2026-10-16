@@ -36,7 +36,6 @@ mod provision;
 mod root;
 mod telemetry;
 pub(crate) mod trust;
-mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -69,10 +68,7 @@ pub enum Error {
     #[error("managed tools are not supported on musl Linux hosts such as Alpine")]
     #[diagnostic(
         code(turbo::setup::musl_host),
-        help(
-            "Managed setup installs official glibc builds. On musl hosts, install the \
-             repository's tools in the image and use verify-system for them."
-        )
+        help("Managed setup requires a supported macOS, GNU Linux or Windows x64 host.")
     )]
     MuslHost,
     #[error("cannot classify this Linux host's C library: {0}")]
@@ -81,8 +77,7 @@ pub enum Error {
         help(
             "turbo reads the ELF interpreter of /bin/sh, then the libc.so.6 beside a glibc loader \
              or the release a musl loader embeds, without running them. Managed setup requires a \
-             glibc host with those files; otherwise install the tools yourself and use \
-             verify-system."
+             glibc host with those files."
         )
     )]
     UnclassifiedLibc(turborepo_platform::LibcError),
@@ -160,8 +155,6 @@ pub enum Error {
     GoResolution(#[from] turborepo_setup::go_resolution::Error),
     #[error(transparent)]
     Bun(#[from] turborepo_setup::bun_provision::Error),
-    #[error(transparent)]
-    SystemTool(#[from] turborepo_setup::system_tool::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
@@ -375,9 +368,6 @@ fn run_reporting(
     // Rust, Python and Go have managed setup adapters; a skip policy ignores
     // their declarations. Managed run derives the same ecosystems.
     let ecosystems = effective::ecosystems(&discovery.flags(), discovery.policy());
-    if plan.unsupported() {
-        return Err(Error::Unsupported("verify-system non-JavaScript tools"));
-    }
     let skipped = |id: &ToolchainId| {
         plan.toolchain(id)
             .is_some_and(|t| t.tools.0 == ToolPolicy::Skip)
@@ -460,28 +450,10 @@ fn run_reporting(
     // Decided before any download, so a missing ecosystem lockfile fails first.
     let dependencies = dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request)?;
     let ecosystems = snapshot.ecosystems();
-    let resolution = if request.update_lock {
-        turborepo_setup::lock::reconcile::Mode::Refresh
-    } else {
-        turborepo_setup::lock::reconcile::Mode::Local
-    };
     let trust_base = transports
         .as_ref()
         .map(provision::Transports::trust_base)
         .transpose()?;
-    if javascript == ToolPolicy::VerifySystem {
-        return match request.mode {
-            Mode::Check => verify_system::check(&discovery, snapshot),
-            Mode::Plan => Err(Error::Unsupported("verify-system setup plans")),
-            Mode::Provision => verify_system::provision(
-                &discovery,
-                snapshot,
-                request.lock,
-                resolution,
-                request.force,
-            ),
-        };
-    }
     if request.mode == Mode::Check {
         return check::run(&discovery, snapshot, &dependencies, preflight);
     }

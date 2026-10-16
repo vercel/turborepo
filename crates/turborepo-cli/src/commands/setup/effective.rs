@@ -83,25 +83,17 @@ impl Toolchain {
         }
         let tools = match tools {
             ToolPolicy::Managed => "managed",
-            ToolPolicy::VerifySystem => "verify-system",
             ToolPolicy::Skip => "skipped",
         };
         let dependencies = match dependencies {
             DependencyPolicy::Locked => "locked",
             DependencyPolicy::Skip => "skipped",
         };
-        let mut line = format!(
+        format!(
             "{id}: tools {tools} ({}); dependencies {dependencies} ({})",
             tools_source.label(),
             dependencies_source.label()
-        );
-        if self.tools.0 == ToolPolicy::VerifySystem {
-            line.push_str(
-                "; turbo setup verifies the installed tools against turbo.lock but does not \
-                 install them, so consistency depends on each machine",
-            );
-        }
-        line
+        )
     }
 }
 
@@ -143,14 +135,6 @@ impl Plan {
         self.0
             .iter()
             .all(|toolchain| toolchain.dependencies.0 == DependencyPolicy::Skip)
-    }
-
-    /// Native managed adapters exist for every eligible toolchain; system
-    /// verification currently supports JavaScript only.
-    pub fn unsupported(&self) -> bool {
-        self.0.iter().any(|toolchain| {
-            toolchain.id != ToolchainId::JAVASCRIPT && toolchain.tools.0 == ToolPolicy::VerifySystem
-        })
     }
 
     pub fn all_tools_skipped(&self) -> bool {
@@ -195,12 +179,9 @@ mod tests {
     #[test]
     fn cli_overrides_policy_which_overrides_inference() {
         let inferred = plan("{}", false);
-        assert!(!inferred.tools_only() && !inferred.unsupported());
+        assert!(!inferred.tools_only());
         assert!(inferred.report().is_empty());
         assert!(plan("{}", true).report().is_empty());
-        // Preserve the native adapters that landed after this policy stack:
-        // managed Rust remains supported, but system Rust is still fail-closed.
-        assert!(plan(r#"{"rust":{"tools":"verify-system"}}"#, false).unsupported());
         let javascript = inferred.toolchain(&ToolchainId::JAVASCRIPT).unwrap();
         assert_eq!(javascript.tools, (ToolPolicy::Managed, Source::Inferred));
         assert_eq!(
@@ -210,7 +191,7 @@ mod tests {
 
         // A repository can choose tools-only setup without the CLI flag.
         let repository = plan(r#"{"dependencies":"skip","rust":{"tools":"skip"}}"#, false);
-        assert!(repository.tools_only() && !repository.unsupported());
+        assert!(repository.tools_only());
         // --tools-only overrides a locked repository policy for one invocation.
         let cli = plan(r#"{"dependencies":"locked","rust":{"tools":"skip"}}"#, true);
         assert!(cli.tools_only());
@@ -265,16 +246,5 @@ mod tests {
             ..all
         };
         assert_eq!(ecosystems(&disabled, &policy("{}")), Ecosystems::default());
-    }
-
-    #[test]
-    fn verify_system_is_reported_as_policy() {
-        let plan = plan(r#"{"javascript":{"tools":"verify-system"}}"#, true);
-        assert_eq!(
-            plan.report()[0],
-            "javascript: tools verify-system (turbo.json setup policy); dependencies skipped \
-             (--tools-only); turbo setup verifies the installed tools against turbo.lock but does \
-             not install them, so consistency depends on each machine"
-        );
     }
 }

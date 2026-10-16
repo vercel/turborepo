@@ -1,8 +1,3 @@
-//! Managed `turbo run` with no repository-local turbo, a compatible one (this
-//! build, copied into `node_modules`), and incompatible ones, natively on
-//! every CI platform. A verify-system lock needs no downloads or trust
-//! records, so the journey is the same on macOS, Linux and Windows (and on
-//! musl hosts, where only verify-system tools activate).
 #![cfg(any(
     all(
         any(target_os = "macos", target_os = "linux"),
@@ -25,33 +20,13 @@ use turborepo_shim::TurboState;
 
 const CONFIG: &str = r#"{"futureFlags":{"experimentalSetup":true},"agentGuidance":false,
     "noUpdateNotifier":true,"tasks":{"build":{"cache":false}},
-    "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#;
-
-/// A system tool on PATH that reports `version` and echoes other calls.
-fn tool(bin: &Path, name: &str, version: &str) {
-    if cfg!(windows) {
-        let script =
-            format!("@if \"%1\"==\"--version\" (echo {version}) else (echo system-{name} %*)\r\n");
-        fs::write(bin.join(format!("{name}.cmd")), script).unwrap();
-        return;
-    }
-    let path = bin.join(name);
-    let script = format!(
-        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo {version}; else echo \"system-{name} \
-         $*\"; fi\n"
-    );
-    fs::write(&path, script).unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-    }
-}
+    "setup":{"dependencies":"skip","javascript":{"tools":"managed"}}}"#;
 
 struct Repo {
     _temp: tempfile::TempDir,
     root: PathBuf,
     path: OsString,
+    trust: PathBuf,
 }
 
 impl Repo {
@@ -60,8 +35,6 @@ impl Repo {
         let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
         fs::create_dir_all(root.join("apps/web")).unwrap();
         fs::create_dir_all(&bin).unwrap();
-        tool(&bin, "node", "v24.0.0");
-        tool(&bin, "pnpm", "10.0.0");
         for (name, contents) in [
             ("turbo.json", CONFIG),
             (".nvmrc", "24.0.0\n"),
@@ -89,10 +62,85 @@ impl Repo {
             dirs.push(Path::new(&system).join("System32"));
         }
         let path = std::env::join_paths(dirs).unwrap();
+        use turborepo_setup::{
+            lock::{Lock, Platform},
+            node_provision::NodePlan,
+            pnpm_provision::PnpmPlan,
+        };
+        let (platform, spelling) = match (std::env::consts::OS, std::env::consts::ARCH) {
+            ("macos", "aarch64") => (Platform::MacosArm64, "darwin-arm64"),
+            ("macos", _) => (Platform::MacosX64, "darwin-x64"),
+            ("linux", "aarch64") => (Platform::LinuxArm64Gnu, "linux-arm64"),
+            ("linux", _) => (Platform::LinuxX64Gnu, "linux-x64"),
+            _ => (Platform::WindowsX64, "win-x64"),
+        };
+        let prefix = format!("node-v24.0.0-{spelling}");
+        let node_bin = if cfg!(windows) {
+            "node.exe"
+        } else {
+            "bin/node"
+        };
+        let format = if cfg!(windows) { "zip" } else { "tar-gz" };
+        let extension = if cfg!(windows) { "zip" } else { "tar.gz" };
+        let platform_key = serde_json::to_value(platform).unwrap();
+        let lock = serde_json::json!({"schemaVersion":0,"tools":{
+            "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
+                "installation":{"kind":"managed","artifacts":{platform_key.as_str().unwrap():{"distribution":{
+                    "url":format!("https://nodejs.org/dist/v24.0.0/{prefix}.{extension}"),"sha256":"a".repeat(64),
+                    "format":format,"rootPrefix":prefix,"executables":{"node":node_bin}}}}}},
+            "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
+                "installation":{"kind":"managed","artifacts":{"any":{"package":{
+                    "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"b".repeat(64),
+                    "format":"tar-gz","rootPrefix":"package","executables":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}}}}}
+        }});
+        fs::write(root.join("turbo.lock"), lock.to_string()).unwrap();
+        let lock = Lock::parse(lock.to_string().as_bytes()).unwrap();
+        let node = NodePlan::from_lock(&lock, platform).unwrap();
+        let pnpm = PnpmPlan::from_lock(&lock, platform, &node, None).unwrap();
+        let tools = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+        turborepo_tool_install::Store::open(&root)
+            .unwrap()
+            .reconcile(&tools, |tool, tree| {
+                for relative in tool.executables.values() {
+                    let target = tree.join(relative);
+                    fs::create_dir_all(target.parent().unwrap())?;
+                    if tool.id == "node" {
+                        fs::copy(env!("CARGO_BIN_EXE_echo_args"), &target)?;
+                    } else {
+                        let script = if cfg!(windows) {
+                            "@echo managed-pnpm %*\r\n"
+                        } else {
+                            "#!/bin/sh\necho managed-pnpm \"$@\"\n"
+                        };
+                        fs::write(&target, script)?;
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::PermissionsExt;
+                            fs::set_permissions(&target, fs::Permissions::from_mode(0o755))?;
+                        }
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+        let home = root.parent().unwrap().join("home");
+        let user_base = if cfg!(target_os = "macos") {
+            home.join("Library/Application Support")
+        } else if cfg!(windows) {
+            home.join("AppData/Local")
+        } else {
+            home.join("data")
+        };
+        let trust = turborepo_cli::test_support::record_trust_for_tests(
+            &root,
+            (!cfg!(windows)).then_some(user_base.as_path()),
+        )
+        .unwrap();
         Self {
             _temp: temp,
             root,
             path,
+            trust,
         }
     }
 
@@ -178,29 +226,31 @@ fn host_target() -> String {
 #[test]
 fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
     let repo = Repo::new();
-    let (code, text) = repo.turbo(&["setup", "--no-frozen"]);
-    assert_eq!(code, 0, "{text}");
-    assert!(repo.root.join("turbo.lock").exists(), "{text}");
     let build = ["run", "build", "--ui=stream", "--verbosity=2"];
+    if matches!(
+        turborepo_platform::host_libc(),
+        Ok(Some(turborepo_platform::Libc::Musl { .. }))
+    ) {
+        let (code, text) = repo.turbo(&build);
+        assert_eq!(code, 1, "{text}");
+        assert!(text.contains("musl"), "{text}");
+        assert!(!text.contains("managed-pnpm run"), "{text}");
+        return;
+    }
 
     // No repository-local turbo: the global CLI runs the selection itself.
     let (code, text) = repo.turbo(&build);
     assert_eq!(code, 0, "{text}");
-    assert!(text.contains("system-pnpm run build"), "{text}");
+    assert!(text.contains("managed-pnpm run build"), "{text}");
     assert!(!text.contains("Running local turbo binary"), "{text}");
 
-    // Incompatible pins stop before any task with upgrade guidance: one that
-    // predates the handshake, and one without verify-system support.
     let lacking = format!(
-        r#"{{"abiVersion":1,"cliVersion":"9.9.9","managedRunSchemas":[],"experimentalSetup":{{"lockSchema":0,"target":"{}","features":["node","pnpm"]}}}}"#,
+        r#"{{"abiVersion":1,"cliVersion":"9.9.9","managedRunSchemas":[],"experimentalSetup":{{"lockSchema":0,"target":"{}","features":["node"]}}}}"#,
         host_target()
     );
     for (report, reason) in [
         ("stderr", "does not report managed-run support"),
-        (
-            lacking.as_str(),
-            "lacks managed-run support for verify-system",
-        ),
+        (lacking.as_str(), "lacks managed-run support for pnpm"),
     ] {
         let pinned = repo.pin(Path::new(env!("CARGO_BIN_EXE_echo_args")), "9.9.9");
         fs::write(pinned.with_file_name("capability-peer.txt"), report).unwrap();
@@ -208,7 +258,7 @@ fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
         assert_ne!(code, 0, "{text}");
         for expected in [
             "repository-local turbo 9.9.9 at",
-            "cannot run turbo.lock schema 0 (node, pnpm, verify-system)",
+            "cannot run turbo.lock schema 0 (node, pnpm)",
             reason,
             "Upgrade the repository's turbo dependency",
         ] {
@@ -217,7 +267,7 @@ fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
                 "{expected}: {text}"
             );
         }
-        assert!(!text.contains("system-pnpm run"), "a task ran: {text}");
+        assert!(!text.contains("managed-pnpm run"), "a task ran: {text}");
     }
 
     // This build copied into the repository is compatible: managed run hands
@@ -231,5 +281,11 @@ fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
         .find(|line| line.contains("Running local turbo binary in"));
     let package = TurboState::scoped_platform_package_dir();
     assert!(handoff.is_some_and(|line| line.contains(package)), "{text}");
-    assert!(text.contains("system-pnpm run build"), "{text}");
+    assert!(text.contains("managed-pnpm run build"), "{text}");
+}
+
+impl Drop for Repo {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.trust);
+    }
 }

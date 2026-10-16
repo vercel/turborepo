@@ -72,8 +72,7 @@ fn unsupported_unchanged_plans_fail_before_any_writes_in_both_consumers() {
             0 => {
                 fs::write(f.owned.root().join("package.json"), "{}").unwrap();
                 f.lock["tools"].as_object_mut().unwrap().remove("pnpm");
-                f.lock["tools"]["node"]["installation"] =
-                    json!({"kind":"verify-system","executables":["node"]});
+                f.lock["tools"]["node"]["installation"] = json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/node.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{"node":"bin/node"}}}}});
             }
             1 => {
                 f.lock["tools"]["node"]["options"] = json!({"unsupported":["true"]});

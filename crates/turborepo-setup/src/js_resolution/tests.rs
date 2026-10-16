@@ -575,22 +575,17 @@ fn preserved_payload_shapes_fail_before_either_transport() {
                 json!({"tar-xz":{"url":"https://example.invalid/a.tar.xz","sha256":"a".repeat(64)}}),
             ),
             ("executables", json!({"other":"bin/other"})),
-            ("system", json!({"kind":"verify-system","executables":[id]})),
         ] {
             let repo = root(Some("24.x"), json!({"packageManager":"pnpm@10.0.0"}));
             let p = repo.path();
             let mut document = serde_json::to_value(seed(p).document()).unwrap();
             let tool = &mut document["tools"][id];
-            if field == "system" {
-                tool["installation"] = bad;
+            let (platform, part) = if id == "node" {
+                ("windows-arm64", "distribution")
             } else {
-                let (platform, part) = if id == "node" {
-                    ("windows-arm64", "distribution")
-                } else {
-                    ("any", "package")
-                };
-                tool["installation"]["artifacts"][platform][part][field] = bad;
-            }
+                ("any", "package")
+            };
+            tool["installation"]["artifacts"][platform][part][field] = bad;
             let previous = Lock::parse(&serde_json::to_vec(&document).unwrap()).unwrap();
             save(p, &previous);
             if id == "node" {
