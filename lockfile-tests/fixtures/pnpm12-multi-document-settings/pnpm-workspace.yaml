@@ -1,0 +1,13 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+lockfile:
+  includeResolutionSettings: true
+
+minimumReleaseAge: 0
+
+autoDedupe: true
+dedupeInjectedDeps: true
+dedupePeerDependents: true
+linkWorkspacePackages: true
