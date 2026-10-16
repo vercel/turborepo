@@ -5,6 +5,7 @@
 //! `turbo run` stays strict.
 
 use std::{
+    collections::BTreeMap,
     fmt::Write as _,
     fs,
     io::Write,
@@ -13,6 +14,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use turbopath::AbsoluteSystemPath;
+use turborepo_setup::activation::HOOK_ENV;
 use turborepo_turbo_json::RawTurboJson;
 
 use crate::{cli::HookShell, commands::setup::trust::TrustStore};
@@ -81,67 +83,61 @@ enum Status {
     Unsupported,
 }
 
-/// Runtime variables the hook may set beside PATH (see `runtime`).
-const RUNTIME: [&str; 2] = ["GOROOT", "GOTOOLCHAIN"];
-
 /// Runtime variables by name, with a value or `None` for unset.
 type Vars = Vec<(String, Option<String>)>;
 
-/// `1;<root id>;<stamp>;<status>;<bin>`, or with runtime variables
-/// `2;<root id>;<stamp>;<status>;<saved>;<bin>`. The bin is last because it
-/// may contain `;`.
+/// One runtime variable the hook manages: the value it set and the one it
+/// replaced (`None` when unset). `set` is `None` once the user changed the
+/// variable inside the repository: it is theirs until the shell leaves.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Saved {
+    set: Option<String>,
+    previous: Option<String>,
+}
+
+/// `<root id>;<stamp>;<status>;<saved>;<bin>`. The bin is last because it
+/// may contain `;`. States written by an earlier turbo (see [`legacy`]) are
+/// still read, so a shell activated before an upgrade still removes the bin it
+/// added when it leaves.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct State {
     root: String,
     stamp: String,
     status: Status,
-    /// Each runtime variable the hook set, with its value from before the
-    /// hook first set it (`None` when it was unset). Encoded as `,`-separated
-    /// `NAME` or `NAME=<hex>` entries.
-    saved: Vars,
+    /// Each runtime variable the hook manages. Encoded as `,`-separated
+    /// `NAME=<set>/<previous>` entries, each value `-` for none or hex.
+    saved: BTreeMap<String, Saved>,
     bin: Option<String>,
 }
 
 impl State {
     fn parse(value: &str) -> Option<Self> {
-        let (version, rest) = value.split_once(';')?;
-        let saved = match version {
-            "1" => false,
-            "2" => true,
-            _ => return None,
-        };
-        let mut fields = rest.splitn(if saved { 5 } else { 4 }, ';');
+        // A root id is a 16-digit hex digest, never `1` or `2`.
+        if let Some(state) = legacy(value) {
+            return Some(state);
+        }
+        let mut fields = value.splitn(5, ';');
         let root = fields.next()?.to_owned();
         let stamp = fields.next()?.to_owned();
-        let status = match fields.next()? {
-            "off" => Status::Off,
-            "active" => Status::Active,
-            "stale" => Status::Stale,
-            "missing" => Status::Missing,
-            "unsupported" => Status::Unsupported,
-            _ => return None,
+        let status = status(fields.next()?)?;
+        let saved = match fields.next()? {
+            "" => BTreeMap::new(),
+            saved => decode(saved)?,
         };
-        let saved = match saved {
-            true => fields
-                .next()?
-                .split(',')
-                .map(|entry| {
-                    let (name, value) = match entry.split_once('=') {
-                        Some((name, hex)) => (name, Some(unhex(hex)?)),
-                        None => (entry, None),
-                    };
-                    RUNTIME.contains(&name).then(|| (name.to_owned(), value))
-                })
-                .collect::<Option<_>>()?,
-            false => Vec::new(),
-        };
-        let bin = Some(fields.next()?).filter(|bin| !bin.is_empty());
+        let bin = Some(fields.next()?)
+            .filter(|bin| !bin.is_empty())
+            .map(str::to_owned);
+        // Only variables the hook can set are restored, so a tampered state
+        // cannot unset or overwrite any other variable.
+        if !saved.keys().all(|name| HOOK_ENV.contains(&name.as_str())) {
+            return None;
+        }
         Some(Self {
             root,
             stamp,
             status,
             saved,
-            bin: bin.map(str::to_owned),
+            bin,
         })
     }
 
@@ -155,19 +151,104 @@ impl State {
         };
         let bin = self.bin.as_deref().unwrap_or_default();
         let (root, stamp) = (&self.root, &self.stamp);
-        if self.saved.is_empty() {
-            return format!("1;{root};{stamp};{status};{bin}");
-        }
-        let saved: Vec<_> = self
-            .saved
-            .iter()
-            .map(|(name, value)| match value {
-                Some(value) => format!("{name}={}", hex(value)),
-                None => name.clone(),
-            })
+        let value = |value: &Option<String>| value.as_deref().map_or_else(|| "-".to_owned(), hex);
+        let saved: Vec<_> = (self.saved.iter())
+            .map(|(name, saved)| format!("{name}={}/{}", value(&saved.set), value(&saved.previous)))
             .collect();
-        format!("2;{root};{stamp};{status};{};{bin}", saved.join(","))
+        format!("{root};{stamp};{status};{};{bin}", saved.join(","))
     }
+}
+
+fn status(value: &str) -> Option<Status> {
+    Some(match value {
+        "off" => Status::Off,
+        "active" => Status::Active,
+        "stale" => Status::Stale,
+        "missing" => Status::Missing,
+        "unsupported" => Status::Unsupported,
+        _ => return None,
+    })
+}
+
+/// The states earlier turbo releases wrote: `1;<root>;<stamp>;<status>;<bin>`,
+/// or `2;<root>;<stamp>;<status>;<saved>;<bin>` where `<saved>` lists only
+/// what each variable replaced (`NAME` when unset, else `NAME=<hex>`). Those
+/// hooks set only Windows Go's GOROOT, at the Store's `tools/go` beside `bin`,
+/// and GOTOOLCHAIN=local, so the set values follow from the bin. Read so that
+/// leaving after an upgrade still removes the bin and restores the variables.
+/// Any change to the current format must keep reading the one before it.
+fn legacy(value: &str) -> Option<State> {
+    let (version, rest) = value.split_once(';')?;
+    let fields = match version {
+        "1" => 4,
+        "2" => 5,
+        _ => return None,
+    };
+    let mut fields = rest.splitn(fields, ';');
+    let root = fields.next()?.to_owned();
+    let stamp = fields.next()?.to_owned();
+    let status = status(fields.next()?)?;
+    let saved = (version == "2").then(|| fields.next()).flatten();
+    if version == "2" && saved.is_none() {
+        return None;
+    }
+    let bin = Some(fields.next()?)
+        .filter(|bin| !bin.is_empty())
+        .map(str::to_owned);
+    let goroot = bin
+        .as_deref()
+        .and_then(|bin| Path::new(bin).parent())
+        .and_then(|generation| {
+            generation
+                .join("tools")
+                .join("go")
+                .to_str()
+                .map(str::to_owned)
+        });
+    let saved = match saved {
+        None => BTreeMap::new(),
+        Some(saved) => saved
+            .split(',')
+            .map(|entry| {
+                let (name, previous) = match entry.split_once('=') {
+                    Some((name, hex)) => (name, Some(unhex(hex)?)),
+                    None => (entry, None),
+                };
+                let set = match name {
+                    "GOROOT" => goroot.clone(),
+                    "GOTOOLCHAIN" => Some("local".to_owned()),
+                    _ => return None,
+                };
+                Some((name.to_owned(), Saved { set, previous }))
+            })
+            .collect::<Option<_>>()?,
+    };
+    Some(State {
+        root,
+        stamp,
+        status,
+        saved,
+        bin,
+    })
+}
+
+fn decode(saved: &str) -> Option<BTreeMap<String, Saved>> {
+    let value = |value: &str| match value {
+        "-" => Some(None),
+        hex => unhex(hex).map(Some),
+    };
+    saved
+        .split(',')
+        .map(|entry| {
+            let (name, values) = entry.split_once('=')?;
+            let (set, previous) = values.split_once('/')?;
+            let saved = Saved {
+                set: value(set)?,
+                previous: value(previous)?,
+            };
+            Some((name.to_owned(), saved))
+        })
+        .collect()
 }
 
 fn hex(value: &str) -> String {
@@ -185,61 +266,56 @@ fn unhex(hex: &str) -> Option<String> {
     String::from_utf8(bytes).ok()
 }
 
-/// What the hook sets beside PATH for a recorded installation. Windows exports
-/// `go.exe` as a hard link that finds its tree only through GOROOT, so it gets
-/// the activation's GOROOT (the Store's `tools/go` beside `bin`) and
-/// GOTOOLCHAIN, as `turbo run` and `turbo exec` do. Unix exports are symlinks
-/// that find their own tree, and their hook output is unchanged.
-fn runtime(bin: &str, go: bool) -> Vec<(&'static str, String)> {
-    let goroot = Path::new(bin).parent().and_then(|generation| {
-        generation
-            .join("tools")
-            .join("go")
-            .to_str()
-            .map(str::to_owned)
-    });
-    match goroot {
-        Some(goroot) if cfg!(windows) && go => std::iter::once(("GOROOT", goroot))
-            .chain(
-                turborepo_setup::go_provision::RUNTIME_ENV
-                    .iter()
-                    .map(|(name, value)| (*name, (*value).to_owned())),
-            )
-            .collect(),
-        _ => Vec::new(),
+/// Apply `recorded` over what this hook set before (`saved`), given the
+/// shell's current values; returns the edits and what to save next. Entering
+/// saves each value the hook replaces, set or unset, and leaving restores it
+/// while the variable still holds the hook's value. A variable the user
+/// changed inside the repository is theirs until the shell leaves it: never
+/// restored or set again, as with PATH entries. Moving straight to another
+/// repository (`!same_root`) is leaving, then entering.
+fn env_changes(
+    saved: &BTreeMap<String, Saved>,
+    recorded: &BTreeMap<String, String>,
+    same_root: bool,
+    current: &dyn Fn(&str) -> Option<String>,
+) -> (Vars, BTreeMap<String, Saved>) {
+    let mut changes = Vec::new();
+    let mut next = BTreeMap::new();
+    let names: std::collections::BTreeSet<_> = saved.keys().chain(recorded.keys()).collect();
+    for name in names {
+        let now = current(name);
+        let underlying = match saved.get(name) {
+            Some(old) if old.set.is_some() && old.set == now => old.previous.clone(),
+            Some(_) if same_root => {
+                next.insert(name.clone(), Saved::default());
+                continue;
+            }
+            _ => now.clone(),
+        };
+        let target = match recorded.get(name) {
+            Some(value) => {
+                let saved = Saved {
+                    set: Some(value.clone()),
+                    previous: underlying,
+                };
+                next.insert(name.clone(), saved);
+                Some(value.clone())
+            }
+            None => underlying,
+        };
+        if target != now {
+            changes.push((name.clone(), target));
+        }
     }
+    (changes, next)
 }
 
-/// Runtime variable edits from the previous activation to `wanted`, and what
-/// to restore later. Like PATH edits, a variable the user changed since the
-/// hook set it is left alone.
-fn runtime_changes(
-    previous: Option<&State>,
-    wanted: &[(&'static str, String)],
-    vars: &impl Fn(&str) -> Option<String>,
-) -> (Vars, Vars) {
-    let saved = previous.map_or(&[][..], |previous| &previous.saved[..]);
-    let set = previous
-        .and_then(|previous| previous.bin.as_deref())
-        .map(|bin| runtime(bin, true))
-        .unwrap_or_default();
-    let ours = |name: &str| set.iter().find(|(n, _)| *n == name).map(|(_, v)| v.clone());
-    let mut edits = Vec::new();
-    for (name, before) in saved {
-        if !wanted.iter().any(|(n, _)| *n == name.as_str()) && vars(name) == ours(name) {
-            edits.push((name.clone(), before.clone()));
-        }
-    }
-    let mut keep = Vec::new();
-    for (name, value) in wanted {
-        let before = saved.iter().find(|(n, _)| n.as_str() == *name);
-        if before.is_none() || ours(name).as_ref() != Some(value) {
-            edits.push((name.to_string(), Some(value.clone())));
-        }
-        let before = before.map_or_else(|| vars(name), |(_, before)| before.clone());
-        keep.push((name.to_string(), before));
-    }
-    (edits, keep)
+/// The recorded runtime variables as values the shell can hold, or `None`
+/// when one is not UTF-8.
+fn exports(env: BTreeMap<String, std::ffi::OsString>) -> Option<BTreeMap<String, String>> {
+    env.into_iter()
+        .map(|(name, value)| Some((name, value.into_string().ok()?)))
+        .collect()
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -372,7 +448,7 @@ fn changes(
         // Outside every repository: remove only what the hook added.
         return previous.map_or_else(Changes::default, |previous| Changes {
             path: previous.bin.as_deref().map(|bin| remove(path, bin)),
-            env: runtime_changes(Some(&previous), &[], &vars).0,
+            env: env_changes(&previous.saved, &BTreeMap::new(), false, &vars).0,
             state: Some(None),
             notice: None,
         });
@@ -407,14 +483,15 @@ fn changes(
     // user's `turbo setup --no-lock` record opts a clone in, so an unrecorded
     // lockless clone stays off quietly too.
     let locked = fs::symlink_metadata(root.join("turbo.lock")).is_ok();
-    let (status, bin, go, reason) = if !cfg!(any(unix, windows))
+    let none = BTreeMap::new;
+    let (status, bin, wanted, reason) = if !cfg!(any(unix, windows))
         || !host.qualified
         || !enabled(&root)
         || (locked && external(&root))
     {
         // Like `turbo run`, verify-system tools stay on the caller's PATH and
         // need no setup record: there is nothing to activate.
-        (Status::Off, None, false, None)
+        (Status::Off, None, none(), None)
     } else if musl() {
         // Like `turbo run`, musl hosts never activate managed artifacts.
         let status = if locked {
@@ -422,29 +499,38 @@ fn changes(
         } else {
             Status::Off
         };
-        (status, None, false, None)
+        (status, None, none(), None)
     } else {
         match trust.and_then(|trust| trust.recorded().map_err(|e| e.to_string())) {
-            Ok(Some(recorded)) => match path_entry(recorded.bin) {
-                None => (
+            Ok(Some(recorded)) => match (path_entry(recorded.bin), exports(recorded.env)) {
+                (None, _) => (
                     Status::Missing,
                     None,
-                    false,
+                    none(),
                     Some(Reason::Setup("its path cannot be added to PATH".to_owned())),
                 ),
-                Some(bin) => match host
+                (Some(_), None) => (
+                    Status::Missing,
+                    None,
+                    none(),
+                    Some(Reason::Setup(
+                        "its runtime variables cannot be exported".to_owned(),
+                    )),
+                ),
+                (Some(bin), Some(env)) => match host
                     .pathext
                     .as_deref()
                     .and_then(|pathext| unresolvable(&recorded.targets, pathext))
                 {
-                    Some(types) => (Status::Missing, None, false, Some(Reason::Pathext(types))),
-                    None if recorded.stale => (Status::Stale, Some(bin), recorded.go, None),
-                    None => (Status::Active, Some(bin), recorded.go, None),
+                    Some(types) => (Status::Missing, None, none(), Some(Reason::Pathext(types))),
+                    // Stale tools stay active, with their variables.
+                    None if recorded.stale => (Status::Stale, Some(bin), env, None),
+                    None => (Status::Active, Some(bin), env, None),
                 },
             },
-            _ if !locked => (Status::Off, None, false, None),
-            Ok(None) => (Status::Missing, None, false, None),
-            Err(reason) => (Status::Missing, None, false, Some(Reason::Setup(reason))),
+            _ if !locked => (Status::Off, None, none(), None),
+            Ok(None) => (Status::Missing, None, none(), None),
+            Err(reason) => (Status::Missing, None, none(), Some(Reason::Setup(reason))),
         }
     };
 
@@ -460,8 +546,13 @@ fn changes(
     let notice = entered_or_changed
         .then(|| notice(status, reason.as_ref()))
         .flatten();
-    let wanted = bin.as_deref().map_or_else(Vec::new, |bin| runtime(bin, go));
-    let (env, saved) = runtime_changes(previous.as_ref(), &wanted, &vars);
+    let saved = previous.as_ref().map(|p| &p.saved);
+    let (env, saved) = env_changes(
+        saved.unwrap_or(&BTreeMap::new()),
+        &wanted,
+        same_root.is_some(),
+        &vars,
+    );
     let state = State {
         root: id,
         stamp: finish(&stamp, bin.as_deref()),
@@ -862,17 +953,17 @@ mod tests {
         assert_eq!(quote(HookShell::PowerShell, ""), "''");
         let unicode = Changes {
             path: Some("C:\\J\u{fc}rgen\\bin;C:\\Windows".into()),
-            state: Some(Some("1;a;b;active;C:\\J\u{fc}rgen\\bin".into())),
+            state: Some(Some("a;b;active;;C:\\J\u{fc}rgen\\bin".into())),
             ..Default::default()
         };
         assert!(render(HookShell::PowerShell, &unicode).is_ascii());
         let state = Changes {
-            state: Some(Some("1;x".into())),
+            state: Some(Some("a;x".into())),
             ..Default::default()
         };
         assert_eq!(
             render(HookShell::PowerShell, &state),
-            "$env:__TURBO_HOOK_STATE = '1;x'\n"
+            "$env:__TURBO_HOOK_STATE = 'a;x'\n"
         );
         // Runtime variables sit between PATH and the state; `None` unsets.
         let env = Changes {
@@ -895,28 +986,53 @@ mod tests {
 
     #[test]
     fn state_round_trips_and_rejects_unknown_formats() {
+        let s = |value: &str| Some(value.to_owned());
         let mut state = State {
             root: "abc".into(),
             stamp: "def".into(),
             status: Status::Stale,
-            saved: Vec::new(),
+            saved: BTreeMap::new(),
             bin: Some("/repo;x/bin".into()),
         };
-        // Without runtime variables the state keeps its first format.
-        assert!(state.encode().starts_with("1;"));
+        assert_eq!(state.encode(), "abc;def;stale;;/repo;x/bin");
         assert_eq!(State::parse(&state.encode()), Some(state.clone()));
-        state.saved = vec![
-            ("GOROOT".into(), Some(r"C:\Go;x,y=z".into())),
-            ("GOTOOLCHAIN".into(), None),
-        ];
-        assert!(state.encode().starts_with("2;"));
+        state.saved = BTreeMap::from([
+            (
+                "GOROOT".to_owned(),
+                Saved {
+                    set: s("/a/go"),
+                    previous: s(r"C:\Go;x,y=z/w"),
+                },
+            ),
+            (
+                "GOTOOLCHAIN".to_owned(),
+                Saved {
+                    set: s("local"),
+                    previous: None,
+                },
+            ),
+            // Set but empty before entering, and released by the user.
+            (
+                "UV_PYTHON".to_owned(),
+                Saved {
+                    set: None,
+                    previous: s(""),
+                },
+            ),
+        ]);
         assert_eq!(State::parse(&state.encode()), Some(state));
-        // Only known variables with valid saved values are restored.
-        for saved in ["PATH", "GOROOT=4", "GOROOT=+f", "GOROOT=zz", "GOROOT=ff"] {
-            assert_eq!(State::parse(&format!("2;a;b;active;{saved};/bin")), None);
+        // Only variables the hook sets, with valid values, are restored.
+        for saved in [
+            "PATH=-/-",
+            "GOROOT=-",
+            "GOROOT=4/-",
+            "GOROOT=zz/-",
+            "GOROOT=ff/-",
+        ] {
+            assert_eq!(State::parse(&format!("a;b;active;{saved};/bin")), None);
         }
-        assert_eq!(State::parse("2;a;b;active;/bin"), None);
-        assert_eq!(State::parse("1;a;b;bogus;"), None);
+        assert_eq!(State::parse("a;b;active;/bin"), None);
+        assert_eq!(State::parse("a;b;bogus;;"), None);
     }
 
     #[cfg(unix)]
@@ -1125,74 +1241,208 @@ mod tests {
     }
 
     #[test]
-    fn only_windows_go_activations_set_runtime_variables() {
-        let bin = r"C:\repo\.turbo\tools\generation-a\bin";
-        let goroot = r"C:\repo\.turbo\tools\generation-a\tools\go".to_owned();
-        assert!(runtime(bin, false).is_empty());
-        if !cfg!(windows) {
-            assert!(runtime(bin, true).is_empty());
-            return;
+    fn leaving_after_an_upgrade_still_removes_what_an_earlier_hook_added() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = Some(temp.path());
+        let id = digest(b"/repo");
+        // An earlier turbo's state without runtime variables. Repository-chosen
+        // exports must never keep PATH precedence outside the repository.
+        let v1 = State::parse(&format!("1;{id};s;active;/repo/gen/bin")).unwrap();
+        assert_eq!(v1.root, id);
+        assert_eq!(v1.bin.as_deref(), Some("/repo/gen/bin"));
+        let left = changes(
+            Some(v1),
+            &p("/repo/gen/bin:/usr/bin"),
+            outside,
+            None,
+            || false,
+        );
+        assert_eq!(left.path, Some(p("/usr/bin")));
+        assert_eq!(left.state, Some(None));
+
+        // With Windows Go variables: what each replaced, set or unset.
+        let goroot = Path::new("/repo/gen").join("tools").join("go");
+        let goroot = goroot.to_str().unwrap();
+        let v2 = format!(
+            "2;{id};s;active;GOROOT={},GOTOOLCHAIN;/repo/gen/bin",
+            hex("/mine")
+        );
+        let v2 = State::parse(&v2).unwrap();
+        let host = Host {
+            qualified: true,
+            pathext: None,
+        };
+        let shell = |name: &str| match name {
+            "GOROOT" => Some(goroot.to_owned()),
+            "GOTOOLCHAIN" => Some("local".to_owned()),
+            _ => None,
+        };
+        let left = super::changes(
+            Some(v2),
+            &p("/repo/gen/bin:/usr/bin"),
+            outside,
+            None,
+            &host,
+            || false,
+            shell,
+        );
+        assert_eq!(left.path, Some(p("/usr/bin")));
+        assert_eq!(
+            left.env,
+            [
+                ("GOROOT".to_owned(), Some("/mine".to_owned())),
+                ("GOTOOLCHAIN".to_owned(), None),
+            ]
+        );
+        assert_eq!(left.state, Some(None));
+
+        // Earlier states stay as strict as the current one.
+        for state in [
+            format!("2;{id};s;active;PATH;/bin"),
+            format!("2;{id};s;active;GOROOT=ff;/bin"),
+            format!("2;{id};s;active;/bin"),
+            format!("1;{id};s;bogus;/bin"),
+            format!("3;{id};s;active;;/bin"),
+        ] {
+            assert_eq!(State::parse(&state), None, "{state}");
         }
-        let wanted = runtime(bin, true);
-        assert_eq!(
-            wanted,
-            [
-                ("GOROOT", goroot.clone()),
-                ("GOTOOLCHAIN", "local".to_owned())
-            ]
-        );
-        let s = |value: &str| Some(value.to_owned());
-        // Entering saves the shell's values, set or not, then sets both.
-        let shell = |name: &str| (name == "GOROOT").then(|| r"C:\Go".to_owned());
-        let (edits, saved) = runtime_changes(None, &wanted, &shell);
-        assert_eq!(
-            edits,
-            [
-                ("GOROOT".to_owned(), s(&goroot)),
-                ("GOTOOLCHAIN".to_owned(), s("local"))
-            ]
-        );
-        assert_eq!(
-            saved,
-            [
-                ("GOROOT".to_owned(), s(r"C:\Go")),
-                ("GOTOOLCHAIN".to_owned(), None)
-            ]
-        );
-        let state = State {
-            bin: Some(bin.into()),
-            saved,
-            ..Default::default()
+    }
+
+    #[test]
+    fn variables_are_set_then_restored_exactly_and_user_edits_win() {
+        use std::{cell::RefCell, collections::HashMap};
+        let vars = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
+            pairs
+                .iter()
+                .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+                .collect()
         };
-        // An unchanged activation keeps the user's own edit inside the repo,
-        // and leaving restores only what still holds the hook's value.
-        let edited = |name: &str| {
-            s(if name == "GOROOT" {
-                r"D:\mine"
-            } else {
-                "local"
-            })
+        // Set, set but empty, and unset before entering.
+        let before: HashMap<_, _> = vars(&[("CARGO_HOME", "/me/.cargo"), ("GOROOT", "")])
+            .into_iter()
+            .collect();
+        let shell = RefCell::new(before.clone());
+        let saved = RefCell::new(BTreeMap::new());
+        let a = vars(&[
+            ("CARGO_HOME", "/a/cargo"),
+            ("GOROOT", "/a/go"),
+            ("RUSTUP_HOME", "/a/rust"),
+        ]);
+        let b = vars(&[("GOROOT", "/b/go"), ("RUSTUP_HOME", "/b/rust")]);
+        let none = BTreeMap::new();
+        // Apply one prompt's changes to the shell, as `eval` would.
+        let step = |recorded: &BTreeMap<String, String>, stayed: bool| {
+            let current = |name: &str| shell.borrow().get(name).cloned();
+            let (env, next) = env_changes(&saved.borrow(), recorded, stayed, &current);
+            *saved.borrow_mut() = next;
+            let mut shell = shell.borrow_mut();
+            for (name, value) in env.iter().cloned() {
+                match value {
+                    Some(value) => shell.insert(name, value),
+                    None => shell.remove(&name),
+                };
+            }
+            env
         };
-        let (edits, kept) = runtime_changes(Some(&state), &wanted, &edited);
-        assert!(edits.is_empty());
-        assert_eq!(kept, state.saved);
-        let (edits, kept) = runtime_changes(Some(&state), &[], &edited);
-        assert_eq!(edits, [("GOTOOLCHAIN".to_owned(), None)]);
-        assert!(kept.is_empty());
-        let activated = |name: &str| {
-            s(if name == "GOROOT" {
-                goroot.as_str()
-            } else {
-                "local"
-            })
-        };
-        let (edits, _) = runtime_changes(Some(&state), &[], &activated);
+        let get = |name: &str| shell.borrow().get(name).cloned();
+        assert_eq!(step(&a, false).len(), 3);
+        assert_eq!(get("GOROOT").as_deref(), Some("/a/go"));
+        // Unchanged values need no output.
+        assert!(step(&a, true).is_empty());
+        // Leaving restores each previous value and removes what was unset.
+        step(&none, false);
+        assert_eq!(*shell.borrow(), before);
+        assert!(saved.borrow().is_empty());
+        // A variable the user changes inside stays theirs: no later prompt in
+        // the same repository sets it again.
+        step(&a, false);
+        shell
+            .borrow_mut()
+            .insert("RUSTUP_HOME".into(), "/mine".into());
+        for _ in 0..2 {
+            assert!(step(&a, true).is_empty());
+        }
+        assert_eq!(get("RUSTUP_HOME").as_deref(), Some("/mine"));
+        // Moving straight to another repository is leaving, then entering.
+        step(&b, false);
+        assert_eq!(get("CARGO_HOME").as_deref(), Some("/me/.cargo"));
+        assert_eq!(get("GOROOT").as_deref(), Some("/b/go"));
+        assert_eq!(get("RUSTUP_HOME").as_deref(), Some("/b/rust"));
+        // Leaving that one restores the user's own value too.
+        step(&none, false);
+        assert!(saved.borrow().is_empty());
+        assert_eq!(shell.borrow_mut().remove("RUSTUP_HOME").unwrap(), "/mine");
+        assert_eq!(*shell.borrow(), before);
+        // Without recorded or saved variables there is nothing to do.
+        let none = |_: &str| None;
         assert_eq!(
-            edits,
-            [
-                ("GOROOT".to_owned(), s(r"C:\Go")),
-                ("GOTOOLCHAIN".to_owned(), None)
-            ]
+            env_changes(&BTreeMap::new(), &BTreeMap::new(), true, &none),
+            (vec![], BTreeMap::new())
         );
+    }
+
+    #[test]
+    fn runtime_variables_cover_rust_go_and_uv_on_every_platform() {
+        use turborepo_setup::activation::runtime_env;
+        let windows = cfg!(windows);
+        let platform = if windows {
+            "windows-x64"
+        } else {
+            "linux-x64-gnu"
+        };
+        let tool = |id: &str, version: &str| turborepo_tool_install::Tool {
+            id: id.into(),
+            version: version.into(),
+            platform: platform.into(),
+            artifact_sha256: "a".repeat(64),
+            executables: BTreeMap::new(),
+        };
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let generation = root.join(".turbo").join("tools").join("generation-a");
+        let bin = generation.join("bin");
+        let tools = [
+            tool("go", "1.23.0"),
+            tool("node", "24.0.0"),
+            tool("python", "3.12.12"),
+            tool("rust", "1.90.0"),
+            tool("uv", "0.9.0"),
+        ];
+        assert!(runtime_env(root, &bin, &tools[1..2]).unwrap().is_empty());
+        let env = runtime_env(root, &bin, &tools).unwrap();
+        let names: Vec<_> = env.keys().map(String::as_str).collect();
+        let expected: Vec<_> = (HOOK_ENV.into_iter())
+            .filter(|name| windows || *name != "RUSTUP_AUTO_INSTALL")
+            .collect();
+        assert_eq!(names, expected);
+        let tree = |id: &str| generation.join("tools").join(id).into_os_string();
+        let (host, key) = if windows {
+            (
+                "x86_64-pc-windows-msvc",
+                "cpython-3.12.12-windows-x86_64-none",
+            )
+        } else {
+            (
+                "x86_64-unknown-linux-gnu",
+                "cpython-3.12.12-linux-x86_64-gnu",
+            )
+        };
+        let cargo_home = root.join(".turbo").join("cargo-home");
+        assert_eq!(env["CARGO_HOME"], cargo_home.clone().into_os_string());
+        assert_eq!(env["GOROOT"], tree("go"));
+        assert_eq!(env["GOTOOLCHAIN"], "local");
+        assert_eq!(env["RUSTUP_HOME"], tree("rust"));
+        assert_eq!(env["RUSTUP_TOOLCHAIN"], format!("1.90.0-{host}").as_str());
+        assert_eq!(env["UV_PYTHON"], key);
+        assert_eq!(env["UV_PYTHON_DOWNLOADS"], "never");
+        assert_eq!(env["UV_PYTHON_INSTALL_DIR"], tree("python"));
+        assert_eq!(env["UV_PYTHON_PREFERENCE"], "only-managed");
+        // uv without Python requests no interpreter.
+        let uv = runtime_env(root, &bin, &tools[4..]).unwrap();
+        assert!(uv.contains_key("UV_PYTHON_INSTALL_DIR") && !uv.contains_key("UV_PYTHON"));
+        // Like managed run, never a Cargo home that is not a plain directory.
+        fs::create_dir_all(root.join(".turbo")).unwrap();
+        fs::write(&cargo_home, "").unwrap();
+        assert!(runtime_env(root, &bin, &tools).is_err());
     }
 }
