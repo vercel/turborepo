@@ -326,16 +326,25 @@ fn lexical_and_canonical_invocation_ancestors_are_both_checked() -> TestResult {
 fn invalid_locations_and_owned_boundary_escapes_are_rejected() -> TestResult {
     let fixture = Fixture::new()?;
     let outside = tempfile::tempdir()?;
+    // PathBuf::join normalizes `..` on Windows verbatim paths; keep the traversal
+    // literal.
+    let parent_traversal = |base: &Path| {
+        let mut path = base.as_os_str().to_os_string();
+        path.push(std::path::MAIN_SEPARATOR_STR);
+        path.push("..");
+        PathBuf::from(path)
+    };
     for invocation in [
         PathBuf::from("relative"),
         fixture.root.join("missing"),
         outside.path().to_path_buf(),
-        fixture.boundary.join("../repo"),
-        fixture.root.join(".."),
+        parent_traversal(&fixture.boundary),
+        parent_traversal(&fixture.root),
     ] {
         assert_eq!(
             inspect_inputs(&invocation, Some(&fixture.boundary)).err(),
-            Some(Error::Locations)
+            Some(Error::Locations),
+            "invocation: {invocation:?}"
         );
     }
     for boundary in [PathBuf::from("relative"), fixture.boundary.join("missing")] {
