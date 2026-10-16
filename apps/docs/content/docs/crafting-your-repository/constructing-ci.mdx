@@ -205,6 +205,20 @@ irm https://turborepo.dev/install.ps1 | iex
   Standalone releases start at 2.11.5. To use an older version, install it with your package manager instead.
 </Callout>
 
+### Managed toolchains in CI
+
+In a repository with [managed toolchains](/docs/core-concepts/managed-toolchains), install the standalone `turbo` binary, then run [`turbo setup`](/docs/reference/setup) before your tasks. Your CI image doesn't need Node.js or a package manager:
+
+```yaml title=".github/workflows/ci.yml"
+steps:
+  - uses: actions/checkout@v4
+  - run: curl -fsSL https://turborepo.dev/install | sh
+  - run: turbo setup
+  - run: turbo run build test
+```
+
+In CI, `turbo setup` installs exactly what `turbo.lock` records, and fails if `turbo.lock` doesn't match your declarations. See [Using `turbo setup` in CI](/docs/core-concepts/managed-toolchains#using-turbo-setup-in-ci).
+
 ### Use `turbo run` in CI
 
 `turbo run` is the most common command you will use when working in your Turborepo so it is aliased to `turbo` for convenience. While this is great for working locally, there are other subcommands for `turbo` like [`turbo prune`](/docs/reference/prune) and [`turbo generate`](/docs/reference/generate).

@@ -1,0 +1,127 @@
+---
+title: "Introducing turbo setup"
+date: 2026/11/03
+description: "From clone to running tasks with one command, on the exact toolchain versions your repository pins"
+product: turborepo
+type: overview
+summary: Announcing turbo setup and managed toolchains, which install the Node.js, package manager, Rust, Python, and Go versions that a repository declares, verify every download against turbo.lock, install dependencies, and run every task with those exact tools.
+tag: "web development"
+---
+
+import { Authors } from "@/components/blog/authors";
+import { Date } from "@/components/blog/date";
+
+# Introducing `turbo setup`
+
+<Date>Tuesday, November 3rd, 2026</Date>
+
+<Authors authors={["anthonyshew"]} />
+
+Getting a repository running starts with a question that Turborepo couldn't answer for you: do you have the right versions of the tools? The right Node.js, the right pnpm, the right Rust toolchain. When the answer is "almost," you get builds that pass on one machine and fail on the next, and cache misses that nobody can explain.
+
+Today, `turbo setup` takes a repository from a fresh clone to running tasks with one command, using the exact toolchain versions that the repository pins:
+
+- [**One command to set up a repository**](#one-command): Install the toolchains your repository declares, then its dependencies
+- [**`turbo.lock`**](#turbolock): Exact versions and verified downloads, committed with your code
+- [**Every task uses the managed tools**](#every-task-uses-the-managed-tools): `turbo run`, `turbo exec`, and your shell
+- [**Ready for CI, Docker, and dependency bots**](#ready-for-ci-docker-and-dependency-bots): Frozen installs, offline repeats, and lock updates from dependency bots
+- [**Additional tools**](#additional-tools): Pin any command-line tool by URL and digest
+
+Install the [standalone `turbo` binary](/docs/getting-started/installation#global-installation), and run `turbo setup` in your repository:
+
+```bash title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh
+turbo setup
+```
+
+## One command
+
+`turbo setup` reads the versions your repository already declares, in the files you already use: `.nvmrc` or `.node-version`, `engines` and `devEngines` in `package.json`, and `packageManager`. Rust, Python, and Go repositories can use `rust-toolchain.toml`, `.python-version`, `pyproject.toml`, and `go.mod`. There's no new version file to keep in sync.
+
+It downloads those versions into the repository's `.turbo/tools` directory, verifies them, and then installs your dependencies with the package manager it just installed:
+
+```txt title="Terminal"
+javascript: tools managed (inferred); dependencies locked (inferred)
+turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
+node: locked 24.21.0
+pnpm: locked 10.18.0
+node 24.21.0: installed
+pnpm 10.18.0: installed
+Managed tools use 218.9 MB in this clone's .turbo/tools.
+Shared download cache: 125.5 MB.
+Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
+pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
+...
+Dependencies: javascript installed. No Turborepo tasks run.
+```
+
+`turbo setup` never changes your global toolchain, your shell profile, or your system. Dependencies install from your lockfile without changing it, and lifecycle scripts follow your package manager's own rules for which packages may run them. To see what `turbo setup` would do without doing it, run `turbo setup --plan`.
+
+[Learn more in the documentation](/docs/core-concepts/managed-toolchains).
+
+## `turbo.lock`
+
+Version ranges like `24` or `stable` are convenient to write, but they resolve to different versions over time. The first `turbo setup` records exactly what each declaration resolved to in `turbo.lock`, with the URL and SHA-256 digest of every download for every supported platform. Commit it, and every developer and CI job installs the same bytes.
+
+`turbo.lock` only changes when your declarations do. When you change `.nvmrc`, the next `turbo setup` re-resolves only Node.js and tells you what changed. Downloads come from each tool's official source by default and are verified before anything runs, and [mirrors](/docs/reference/setup-policy#mirrors) work for networks that can't reach them.
+
+[Learn more in the documentation](/docs/core-concepts/managed-toolchains#turbolock).
+
+## Every task uses the managed tools
+
+In a repository with `turbo.lock`, `turbo run` and `turbo watch` run every task with the managed tools, and `turbo run` includes their exact identities in each task's hash. If the tools are missing or out of date, `turbo run` stops before running anything and tells you to run `turbo setup`, instead of quietly using whatever is on your machine.
+
+For everything else, there are two more ways to use the same tools:
+
+- **[`turbo exec`](/docs/reference/exec)** runs any command with them, such as `turbo exec -- pnpm add react`.
+- **[The shell hook](/docs/reference/hook)** puts them first on `PATH`, with the same variables your tasks get, while you're in the repository, in bash, zsh, fish, and PowerShell. It restores your own values when you leave. The standalone installer adds it for you.
+
+## Ready for CI, Docker, and dependency bots
+
+In CI, `turbo setup` uses frozen mode: it installs exactly what `turbo.lock` records, and fails without writing anything if your declarations changed without a lock update. After the first run, `turbo setup --offline` repeats a setup from the shared download cache without network access.
+
+- **Docker**: `turbo prune --docker` includes `turbo.lock` and its declarations, so your build image only needs the standalone `turbo` binary. See the [Docker guide](/docs/guides/tools/docker#managed-toolchains).
+- **Renovate and Dependabot**: When Renovate updates your Node.js or package manager version, it can run `turbo setup` to update `turbo.lock` in the same pull request. For Dependabot, update `turbo.lock` on its branch with one command. See [Updating `turbo.lock` with dependency bots](/docs/guides/updating-turbo-lock).
+
+## Additional tools
+
+Repositories often depend on command-line tools that no language toolchain provides, like `protoc` or an internal CLI. Declare them in `turbo.json` with an exact version and, for each platform, a download URL and SHA-256 digest:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "setup": {
+    "additionalTools": {
+      "protoc": {
+        "version": "28.3",
+        "artifacts": {
+          "linux-x64-gnu": {
+            "url": "https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip",
+            "sha256": "0ad949f04a6a174da83cdcbdb36dee0a4925272a5b6d83f79a6bf9852076d53f",
+            "format": "zip",
+            "executables": { "protoc": "bin/protoc" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+`turbo setup` installs them next to the rest of your toolchain, and they're available to your tasks, `turbo exec`, and the shell hook.
+
+[Learn more in the documentation](/docs/reference/additional-tools).
+
+## Platforms
+
+Managed toolchains are qualified on macOS with Apple silicon and on Linux x64 with glibc. On Windows x64, Node.js and pnpm are qualified, and the rest is implemented and pending qualification, as are Intel Macs and Linux arm64. Alpine and other musl-based distributions can verify the tools installed in their images with [`verify-system`](/docs/reference/setup-policy#verify-system). See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms) for the details.
+
+Rust, Python, and Go setup is available in repositories that enable Turborepo's experimental support for those languages.
+
+## Upgrading
+
+If you tried managed toolchains during their experimental release, remove `futureFlags.experimentalSetup` from your root `turbo.json`. Setting it is now an error, and a root `turbo.lock` is all a repository needs.
+
+## Thank you
+
+Thank you to everyone who tried `turbo setup` during its experimental release and told us what broke. Try it in your repository, and [let us know what you think](https://github.com/vercel/turborepo/discussions).
