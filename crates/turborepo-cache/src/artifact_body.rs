@@ -49,20 +49,13 @@ impl ArtifactBody {
         anchor: &AbsoluteSystemPath,
         files: &[AnchoredSystemPathBuf],
     ) -> Result<Self, CacheError> {
-        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
-        {
-            let mut buffered = std::io::BufWriter::new(&mut spool);
-            let mut cache_archive = CacheWriter::from_writer(&mut buffered, true)?;
-            for file in files {
-                cache_archive.add_file(anchor, file)?;
-            }
-            // finish() writes the tar footer; dropping then auto-finishes the
-            // zstd stream into the buffer.
-            cache_archive.finish()?;
-            // BufWriter's Drop ignores flush errors; flush explicitly so a
-            // failed final write cannot be reused as a truncated artifact.
-            buffered.flush()?;
+        let mut cache_archive = CacheWriter::spooled(ARTIFACT_MEMORY_THRESHOLD)?;
+        for file in files {
+            cache_archive.add_file(anchor, file)?;
         }
+        // Finishing completes the zstd frame and flushes it into the spool,
+        // so a failed final write cannot be reused as a truncated artifact.
+        let mut spool = cache_archive.finish_spooled()?;
         spool.seek(SeekFrom::Start(0))?;
         Self::from_spool(spool)
     }
@@ -178,8 +171,74 @@ mod tests {
     use std::io::Write;
 
     use anyhow::Result;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+
+    /// Archives `files` with the single-pass writer, for comparison.
+    fn single_pass_archive(
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> Result<Vec<u8>> {
+        let mut archive = Vec::new();
+        {
+            let mut cache_archive = CacheWriter::from_writer(&mut archive, true)?;
+            for file in files {
+                cache_archive.add_file(anchor, file)?;
+            }
+            cache_archive.finish()?;
+        }
+        Ok(archive)
+    }
+
+    #[test]
+    fn from_files_matches_single_pass_archive() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(dir.path())?;
+        let dist = anchor.join_component("dist");
+        dist.create_dir_all()?;
+
+        // Compressible output: compressed on a worker thread, small enough
+        // compressed to stay in memory.
+        let text: String = (0..300_000)
+            .map(|line| format!("export const value_{line} = {};\n", line * 31 % 977))
+            .collect();
+        dist.join_component("bundle.js")
+            .create_with_contents(&text)?;
+        let files = vec![
+            AnchoredSystemPathBuf::from_raw("dist")?,
+            AnchoredSystemPathBuf::from_raw("dist/bundle.js")?,
+        ];
+        let body = ArtifactBody::from_files(&anchor, &files)?;
+        assert!(matches!(body, ArtifactBody::InMemory(_)));
+        let mut built = Vec::new();
+        body.reader()?.read_to_end(&mut built)?;
+        assert!(built == single_pass_archive(&anchor, &files)?);
+
+        // Incompressible output: large enough compressed to spill to disk.
+        let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
+        let noise: Vec<u8> = (0..ARTIFACT_MEMORY_THRESHOLD + (2 << 20))
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state as u8
+            })
+            .collect();
+        dist.join_component("blob.bin")
+            .create_with_contents(&noise)?;
+        let files = vec![
+            AnchoredSystemPathBuf::from_raw("dist")?,
+            AnchoredSystemPathBuf::from_raw("dist/blob.bin")?,
+            AnchoredSystemPathBuf::from_raw("dist/bundle.js")?,
+        ];
+        let body = ArtifactBody::from_files(&anchor, &files)?;
+        assert!(matches!(body, ArtifactBody::OnDisk(_)));
+        let mut built = Vec::new();
+        body.reader()?.read_to_end(&mut built)?;
+        assert!(built == single_pass_archive(&anchor, &files)?);
+        Ok(())
+    }
 
     #[test]
     fn signing_disk_artifact_after_local_copy_includes_body() -> Result<()> {

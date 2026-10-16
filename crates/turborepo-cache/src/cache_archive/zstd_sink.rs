@@ -1,8 +1,8 @@
-//! zstd output stage for archives written to the local cache.
+//! zstd output stage for cache archives.
 //!
 //! Compressing an archive with large outputs on one thread is the longest
 //! part of a cache write, and it can't start on a chunk until the files in
-//! it have been read. [`ZstdFileSink`] writes small archives straight into
+//! it have been read. [`ZstdSink`] writes small archives straight into
 //! the encoder. Once an archive has grown past [`PIPELINE_THRESHOLD`], it
 //! moves the encoder to a dedicated thread and feeds it 1 MiB chunks, so
 //! reading files and building tar entries overlaps with compression.
@@ -13,8 +13,7 @@
 //! is never flushed before it is finished.
 
 use std::{
-    fs::File,
-    io::{self, BufWriter, Write},
+    io::{self, Write},
     sync::mpsc::{self, Receiver, Sender, SyncSender},
     thread::JoinHandle,
 };
@@ -28,40 +27,40 @@ pub(crate) const PIPELINE_THRESHOLD: usize = 4 << 20;
 /// compressing, so a short queue keeps the thread busy while bounding memory.
 const PIPELINE_DEPTH: usize = 2;
 
-type Encoder = zstd::Encoder<'static, BufWriter<File>>;
+type Encoder<W> = zstd::Encoder<'static, W>;
 
-enum Message {
-    Start(Encoder),
+enum Message<W: Write> {
+    Start(Encoder<W>),
     Data(Vec<u8>),
     Finish,
 }
 
-enum State {
+enum State<W: Write> {
     Inline {
-        encoder: Encoder,
+        encoder: Encoder<W>,
         written: usize,
     },
     Threaded {
         staged: Vec<u8>,
-        messages: SyncSender<Message>,
+        messages: SyncSender<Message<W>>,
         recycled: Receiver<Vec<u8>>,
-        worker: JoinHandle<io::Result<()>>,
+        worker: JoinHandle<io::Result<Option<W>>>,
     },
     Done,
 }
 
-/// Compresses a tar stream into a file. See the module documentation.
-pub(crate) struct ZstdFileSink {
-    state: State,
+/// Compresses a tar stream into `W`. See the module documentation.
+pub(crate) struct ZstdSink<W: Write + Send + 'static> {
+    state: State<W>,
     threshold: usize,
 }
 
-impl ZstdFileSink {
-    pub(crate) fn new(encoder: Encoder) -> Self {
+impl<W: Write + Send + 'static> ZstdSink<W> {
+    pub(crate) fn new(encoder: Encoder<W>) -> Self {
         Self::with_threshold(encoder, PIPELINE_THRESHOLD)
     }
 
-    pub(crate) fn with_threshold(encoder: Encoder, threshold: usize) -> Self {
+    pub(crate) fn with_threshold(encoder: Encoder<W>, threshold: usize) -> Self {
         Self {
             state: State::Inline {
                 encoder,
@@ -72,10 +71,15 @@ impl ZstdFileSink {
     }
 
     /// Compresses everything written so far, ends the zstd frame, and flushes
-    /// the file. The archive is complete on disk when this returns `Ok`.
-    pub(crate) fn finish(&mut self) -> io::Result<()> {
+    /// and returns the destination. The archive is complete in it when this
+    /// returns `Ok`.
+    pub(crate) fn finish(&mut self) -> io::Result<W> {
         match std::mem::replace(&mut self.state, State::Done) {
-            State::Inline { encoder, .. } => encoder.finish()?.flush(),
+            State::Inline { encoder, .. } => {
+                let mut writer = encoder.finish()?;
+                writer.flush()?;
+                Ok(writer)
+            }
             State::Threaded {
                 staged,
                 messages,
@@ -85,14 +89,12 @@ impl ZstdFileSink {
                 let sent = (staged.is_empty() || messages.send(Message::Data(staged)).is_ok())
                     && messages.send(Message::Finish).is_ok();
                 drop(messages);
-                join(worker)?;
-                if sent {
-                    Ok(())
-                } else {
-                    Err(io::Error::other("cache compression thread stopped early"))
+                match join(worker)? {
+                    Some(writer) if sent => Ok(writer),
+                    _ => Err(io::Error::other("cache compression thread stopped early")),
                 }
             }
-            State::Done => Ok(()),
+            State::Done => Err(io::Error::other("cache archive already finished")),
         }
     }
 
@@ -147,7 +149,7 @@ impl ZstdFileSink {
     }
 }
 
-impl Write for ZstdFileSink {
+impl<W: Write + Send + 'static> Write for ZstdSink<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         match &mut self.state {
             State::Inline { encoder, written } => {
@@ -171,7 +173,7 @@ impl Write for ZstdFileSink {
         }
     }
 
-    /// Does nothing: data is committed by [`ZstdFileSink::finish`]. Flushing
+    /// Does nothing: data is committed by [`ZstdSink::finish`]. Flushing
     /// the encoder mid-stream would end a zstd block early and change the
     /// archive's bytes.
     fn flush(&mut self) -> io::Result<()> {
@@ -179,7 +181,7 @@ impl Write for ZstdFileSink {
     }
 }
 
-impl Drop for ZstdFileSink {
+impl<W: Write + Send + 'static> Drop for ZstdSink<W> {
     fn drop(&mut self) {
         // Abandoned without `finish` (an error path): stop the worker without
         // completing the archive, and wait so it doesn't outlive the writer.
@@ -193,9 +195,14 @@ impl Drop for ZstdFileSink {
     }
 }
 
-fn compress(messages: Receiver<Message>, recycle: Sender<Vec<u8>>) -> io::Result<()> {
+/// The compression thread. Returns the destination once the archive is
+/// finished, or `None` if the writer abandoned it.
+fn compress<W: Write>(
+    messages: Receiver<Message<W>>,
+    recycle: Sender<Vec<u8>>,
+) -> io::Result<Option<W>> {
     let Ok(Message::Start(mut encoder)) = messages.recv() else {
-        return Ok(());
+        return Ok(None);
     };
     loop {
         match messages.recv() {
@@ -204,14 +211,18 @@ fn compress(messages: Receiver<Message>, recycle: Sender<Vec<u8>>) -> io::Result
                 chunk.clear();
                 let _ = recycle.send(chunk);
             }
-            Ok(Message::Finish) => return encoder.finish()?.flush(),
+            Ok(Message::Finish) => {
+                let mut writer = encoder.finish()?;
+                writer.flush()?;
+                return Ok(Some(writer));
+            }
             // The writer was dropped without finishing: abandon the archive.
-            Ok(Message::Start(_)) | Err(_) => return Ok(()),
+            Ok(Message::Start(_)) | Err(_) => return Ok(None),
         }
     }
 }
 
-fn join(worker: JoinHandle<io::Result<()>>) -> io::Result<()> {
+fn join<W>(worker: JoinHandle<io::Result<Option<W>>>) -> io::Result<Option<W>> {
     worker
         .join()
         .map_err(|_| io::Error::other("cache compression thread panicked"))?
@@ -219,7 +230,10 @@ fn join(worker: JoinHandle<io::Result<()>>) -> io::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Read;
+    use std::{
+        fs::File,
+        io::{BufWriter, Read},
+    };
 
     use anyhow::Result;
 
@@ -247,12 +261,12 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("out.tar.zst");
         let file = BufWriter::new(File::create(&path)?);
-        let mut sink = ZstdFileSink::with_threshold(zstd::Encoder::new(file, 0)?, threshold);
+        let mut sink = ZstdSink::with_threshold(zstd::Encoder::new(file, 0)?, threshold);
         // Write in tar-like pieces that don't line up with chunk boundaries.
         for piece in data.chunks(8 * 1024 + 17) {
             sink.write_all(piece)?;
         }
-        sink.finish()?;
+        drop(sink.finish()?);
         Ok(std::fs::read(&path)?)
     }
 
@@ -290,7 +304,7 @@ mod tests {
     fn abandoned_sink_stops_its_worker() -> Result<()> {
         let dir = tempfile::tempdir()?;
         let file = BufWriter::new(File::create(dir.path().join("out.tar.zst"))?);
-        let mut sink = ZstdFileSink::with_threshold(zstd::Encoder::new(file, 0)?, 0);
+        let mut sink = ZstdSink::with_threshold(zstd::Encoder::new(file, 0)?, 0);
         sink.write_all(&sample(3 * CHUNK_SIZE))?;
         assert!(matches!(sink.state, State::Threaded { .. }));
         // Dropping without `finish` must not hang or panic.

@@ -10,7 +10,7 @@ use std::{
 use tar::{EntryType, Header};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, IntoUnix};
 
-use super::zstd_sink::ZstdFileSink;
+use super::zstd_sink::ZstdSink;
 use crate::CacheError;
 
 /// Most worker threads zstd uses to compress one cache archive.
@@ -163,7 +163,10 @@ enum ArchiveSink<'a> {
     Writer(Box<dyn Write + 'a>),
     /// Compressed archives written to the local cache. Must be finished
     /// explicitly; see [`CacheWriter::finish`].
-    ZstdFile(ZstdFileSink),
+    ZstdFile(ZstdSink<BufWriter<fs::File>>),
+    /// Compressed archives built in a spool for upload; see
+    /// [`CacheWriter::spooled`].
+    ZstdSpool(ZstdSink<BufWriter<tempfile::SpooledTempFile>>),
 }
 
 impl Write for ArchiveSink<'_> {
@@ -171,6 +174,7 @@ impl Write for ArchiveSink<'_> {
         match self {
             ArchiveSink::Writer(writer) => writer.write(buf),
             ArchiveSink::ZstdFile(sink) => sink.write(buf),
+            ArchiveSink::ZstdSpool(sink) => sink.write(buf),
         }
     }
 
@@ -178,6 +182,7 @@ impl Write for ArchiveSink<'_> {
         match self {
             ArchiveSink::Writer(writer) => writer.flush(),
             ArchiveSink::ZstdFile(sink) => sink.flush(),
+            ArchiveSink::ZstdSpool(sink) => sink.flush(),
         }
     }
 }
@@ -230,8 +235,10 @@ impl<'a> CacheWriter<'a> {
         // rename, so the final path never names a partially written file.
         // Other writers' zstd encoders (if used) have `auto_finish()`, which
         // finalizes compression when the encoder is dropped.
-        if let ArchiveSink::ZstdFile(sink) = self.builder.get_mut() {
-            sink.finish()?;
+        match self.builder.get_mut() {
+            ArchiveSink::ZstdFile(sink) => drop(sink.finish()?),
+            ArchiveSink::ZstdSpool(sink) => drop(sink.finish()?),
+            ArchiveSink::Writer(_) => {}
         }
 
         // Take the paths before the rename. If rename succeeds, Drop won't try
@@ -246,6 +253,43 @@ impl<'a> CacheWriter<'a> {
 
         // Drop runs here - temp_path is None so no cleanup attempted
         Ok(())
+    }
+
+    /// Makes a compressed archive in memory that moves to an anonymous
+    /// temporary file once it exceeds `memory_threshold` bytes. Large archives
+    /// are compressed on a dedicated thread like [`CacheWriter::create`]'s.
+    /// Get the archive with [`CacheWriter::finish_spooled`].
+    pub(crate) fn spooled(memory_threshold: usize) -> Result<CacheWriter<'static>, CacheError> {
+        let spool = BufWriter::new(tempfile::spooled_tempfile(memory_threshold));
+        let zw = archive_encoder(spool)?;
+        Ok(CacheWriter {
+            builder: tar::Builder::new(ArchiveSink::ZstdSpool(ZstdSink::new(zw))),
+            temp_path: None,
+            final_path: None,
+            #[cfg(unix)]
+            anchor: None,
+            #[cfg(unix)]
+            dir_stack: Vec::new(),
+            #[cfg(windows)]
+            windows_anchor: None,
+        })
+    }
+
+    /// Finishes an archive made by [`CacheWriter::spooled`] and returns the
+    /// complete compressed archive, positioned at its end.
+    pub(crate) fn finish_spooled(mut self) -> Result<tempfile::SpooledTempFile, CacheError> {
+        self.builder.finish()?;
+        let ArchiveSink::ZstdSpool(sink) = self.builder.get_mut() else {
+            return Err(std::io::Error::other(
+                "finish_spooled called on an archive not made by CacheWriter::spooled",
+            )
+            .into());
+        };
+        let spool = sink
+            .finish()?
+            .into_inner()
+            .map_err(|err| err.into_error())?;
+        Ok(spool)
     }
 
     pub fn from_writer(writer: impl Write + 'a, use_compression: bool) -> Result<Self, CacheError> {
@@ -301,7 +345,7 @@ impl<'a> CacheWriter<'a> {
             let zw = archive_encoder(file_buffer)?;
 
             Ok(CacheWriter {
-                builder: tar::Builder::new(ArchiveSink::ZstdFile(ZstdFileSink::new(zw))),
+                builder: tar::Builder::new(ArchiveSink::ZstdFile(ZstdSink::new(zw))),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
                 #[cfg(unix)]
