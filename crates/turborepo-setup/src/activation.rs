@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use turborepo_tool_install::{Current, Record, Store, Tool, Verification};
+use turborepo_tool_install::{Record, Store, Tool, Verification};
 
 use crate::{
     artifact_provision::{self, ArtifactPlan},
@@ -106,8 +106,8 @@ pub struct ActivationPlan {
     bin: Option<PathBuf>,
     tools: Vec<Tool>,
     external: Vec<External>,
-    // Managed Rust, Go and uv/Python values derive only from the generation,
-    // the lock and private clone paths, never from host or user settings.
+    // Rust, Go and uv/Python settings derived from this generation alone; see
+    // [`runtime_env`].
     runtime_env: BTreeMap<String, OsString>,
 }
 
@@ -353,8 +353,7 @@ impl ActivationPlan {
             }
         }
         // Inventory records tools in ID order.
-        let uv = lock.tools().contains_key("uv");
-        if uv {
+        if lock.tools().contains_key("uv") {
             let plan = UvPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             let requirement = sources.uv_requirement()?.ok_or(Error::DeclarationDrift)?;
             if !requirement.matches(&version(plan.inventory_tool())?) {
@@ -362,7 +361,7 @@ impl ActivationPlan {
             }
             tools.push(plan.inventory_tool().clone());
         }
-        let python = if lock.tools().contains_key("python") {
+        if lock.tools().contains_key("python") {
             let plan = PythonPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             let requirement = sources
                 .python_requirement()?
@@ -371,26 +370,21 @@ impl ActivationPlan {
                 return Err(Error::DeclarationDrift);
             }
             tools.push(plan.inventory_tool().clone());
-            Some(plan)
-        } else {
-            None
-        };
+        }
         // The Store records a generation's tools in id order.
-        let rust = match lock.tools().get("rust") {
-            None => None,
-            Some(_) if !lock.tools().contains_key("rustup") => return Err(Error::InvalidLock),
-            Some(tool) => {
-                // Same semantic binding as setup: the exact channel and options
-                // must still satisfy the captured root toolchain file.
-                let toolchain = sources.rust_toolchain()?.ok_or(Error::DeclarationDrift)?;
-                if !rust_provision::satisfies(&toolchain, tool) {
-                    return Err(Error::DeclarationDrift);
-                }
-                let rust = RustPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
-                tools.push(rust.inventory_tool().clone());
-                Some(rust)
+        if let Some(tool) = lock.tools().get("rust") {
+            if !lock.tools().contains_key("rustup") {
+                return Err(Error::InvalidLock);
             }
-        };
+            // Same semantic binding as setup: the exact channel and options
+            // must still satisfy the captured root toolchain file.
+            let toolchain = sources.rust_toolchain()?.ok_or(Error::DeclarationDrift)?;
+            if !rust_provision::satisfies(&toolchain, tool) {
+                return Err(Error::DeclarationDrift);
+            }
+            let rust = RustPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+            tools.push(rust.inventory_tool().clone());
+        }
         if lock.tools().contains_key("rustup") {
             let rustup = RustupPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             tools.push(rustup.inventory_tool().clone());
@@ -457,58 +451,8 @@ impl ActivationPlan {
             node.verify_bundled_npm(&tree)
                 .map_err(|_| Error::StaleInventory)?;
         }
-        let mut runtime_env = uv_env(&current, uv, python.as_ref())?;
-        if let Some(rust) = &rust {
-            // Shims run the toolchain binaries directly. These variables keep
-            // a task's rustup and Cargo on this private, installed toolchain
-            // and per-clone Cargo home, never the user's homes or overrides.
-            let home = current
-                .tool_tree(rust.inventory_tool())
-                .ok_or(Error::StaleInventory)?;
-            let cargo_home = crate::cargo_prefetch::cargo_home_path(repo);
-            // Cargo creates a missing home on first use; never create it here.
-            match std::fs::symlink_metadata(&cargo_home) {
-                Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
-                    return Err(Error::UnsafeCargoHome(cargo_home));
-                }
-                Err(e) if e.kind() != io::ErrorKind::NotFound => {
-                    return Err(StorageError::from(e).into());
-                }
-                _ => {}
-            }
-            // On Windows every Rust export is a rustup proxy that reads these:
-            // give them the PATH entry's ordinary spelling, and never let a
-            // proxy auto-install into the selected generation.
-            #[cfg(windows)]
-            let (home, cargo_home) = (
-                dunce::simplified(&home).to_path_buf(),
-                dunce::simplified(&cargo_home).to_path_buf(),
-            );
-            if cfg!(windows) {
-                runtime_env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
-            }
-            runtime_env.insert("RUSTUP_HOME".into(), home.into_os_string());
-            runtime_env.insert("RUSTUP_TOOLCHAIN".into(), rust.toolchain().into());
-            runtime_env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
-        }
-        if let Some(go) = &go {
-            // `GOTOOLCHAIN=local` stops toolchain switches and downloads. The
-            // caller's GOROOT reaches loose-mode tasks and strict-mode Go tasks,
-            // so pin it to this verified tree; otherwise the locked `go` would
-            // build with another release's standard library and tools.
-            for (key, value) in crate::go_provision::RUNTIME_ENV {
-                runtime_env.insert(key.to_owned(), OsString::from(value));
-            }
-            let root = current
-                .tool_tree(go.inventory_tool())
-                .ok_or(Error::StaleInventory)?;
-            // Windows exports `go.exe` as a hard link, which cannot find this
-            // tree from its own path, so GOROOT is required there. Like `bin`,
-            // use the ordinary spelling Go and its tools print and compare.
-            #[cfg(windows)]
-            let root = dunce::simplified(&root).to_path_buf();
-            runtime_env.insert("GOROOT".to_owned(), root.into_os_string());
-        }
+        // The shell hook derives the same values from its trusted record.
+        let runtime_env = runtime_env(repo, &current.bin, &tools)?;
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
@@ -561,31 +505,100 @@ impl ActivationPlan {
     }
 }
 
-/// The uv launchers' settings, for uv processes that do not start through
-/// them (every Windows uv: its `.exe` exports have no launcher), plus the
-/// locked interpreter as uv's request. Uses uv's download key
-/// rather than a path: a path request makes `uv pip` install into the managed
-/// interpreter itself instead of the project's virtual environment.
-fn uv_env(
-    current: &Current,
-    uv: bool,
-    python: Option<&PythonPlan>,
+/// Every variable [`runtime_env`] may set, sorted. The shell hook restores only
+/// these from its saved state, so a tampered state cannot unset or overwrite
+/// any other variable.
+pub const HOOK_ENV: [&str; 10] = [
+    "CARGO_HOME",
+    "GOROOT",
+    "GOTOOLCHAIN",
+    "RUSTUP_AUTO_INSTALL",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "UV_PYTHON",
+    "UV_PYTHON_DOWNLOADS",
+    "UV_PYTHON_INSTALL_DIR",
+    "UV_PYTHON_PREFERENCE",
+];
+
+/// The variables an installed generation's tools need beside PATH, from its
+/// `bin` and inventory tools alone. Managed run and exec set exactly these,
+/// and the shell hook derives them from its trusted record without reading the
+/// Store, so the prompt and tasks always agree. Never inherited or
+/// host-dependent settings:
+///
+/// - Rust: the generation's private `RUSTUP_HOME`, the exact `RUSTUP_TOOLCHAIN`
+///   and the clone's `CARGO_HOME`, never the user's homes or overrides. Windows
+///   exports are rustup proxies, which must never auto-install into the
+///   generation.
+/// - Go: `GOTOOLCHAIN=local` stops toolchain switches and downloads, and
+///   `GOROOT` pins this verified tree, so the locked `go` never builds with
+///   another release's standard library and tools. Windows `go.exe` is a hard
+///   link that finds its tree only through `GOROOT`.
+/// - uv/Python: the uv launchers' settings, for uv processes that do not start
+///   through them (every Windows uv), plus the locked interpreter as uv's
+///   request. That is uv's download key rather than a path: a path request
+///   makes `uv pip` install into the managed interpreter itself instead of the
+///   project's virtual environment.
+///
+/// Node and Bun are self-contained, and pnpm/Yarn shims launch the selected
+/// managed Node by path, so they need none.
+pub fn runtime_env(
+    root: &Path,
+    bin: &Path,
+    tools: &[Tool],
 ) -> Result<BTreeMap<String, OsString>, Error> {
     let mut env = BTreeMap::new();
-    if !uv && python.is_none() {
+    let tool = |id: &str| tools.iter().find(|tool| tool.id == id);
+    let (rust, go, uv, python) = (tool("rust"), tool("go"), tool("uv"), tool("python"));
+    if rust.is_none() && go.is_none() && uv.is_none() && python.is_none() {
         return Ok(env);
     }
-    let generation = current.bin.parent().ok_or(Error::StaleInventory)?;
-    let python_dir = generation.join("tools").join("python");
-    // Like the bin directory, give uv and the virtual environments it creates
-    // the ordinary spelling rather than a verbatim `\\?\` path.
-    #[cfg(windows)]
-    let python_dir = dunce::simplified(&python_dir).to_path_buf();
-    env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
-    env.insert("UV_PYTHON_INSTALL_DIR".into(), python_dir.into_os_string());
+    let generation = bin.parent().ok_or(Error::StaleInventory)?;
+    // Like `bin`, the ordinary spelling tools print and compare, never a
+    // verbatim `\\?\` path.
+    let plain = |path: PathBuf| {
+        #[cfg(windows)]
+        let path = dunce::simplified(&path).to_path_buf();
+        path.into_os_string()
+    };
+    let tree = |id: &str| plain(generation.join("tools").join(id));
+    if let Some(rust) = rust {
+        let host = crate::rustup::host(&rust.platform).ok_or(Error::InvalidLock)?;
+        let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
+        // Cargo creates a missing home on first use; never create it here.
+        match std::fs::symlink_metadata(&cargo_home) {
+            Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
+                return Err(Error::UnsafeCargoHome(cargo_home));
+            }
+            Err(e) if e.kind() != io::ErrorKind::NotFound => {
+                return Err(StorageError::from(e).into());
+            }
+            _ => {}
+        }
+        if cfg!(windows) {
+            env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+        }
+        env.insert("RUSTUP_HOME".into(), tree("rust"));
+        let toolchain = format!("{}-{host}", rust.version);
+        env.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
+        env.insert("CARGO_HOME".into(), plain(cargo_home));
+    }
+    if go.is_some() {
+        for (key, value) in crate::go_provision::RUNTIME_ENV {
+            env.insert(key.to_owned(), OsString::from(value));
+        }
+        env.insert("GOROOT".into(), tree("go"));
+    }
+    if uv.is_some() || python.is_some() {
+        env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
+        env.insert("UV_PYTHON_INSTALL_DIR".into(), tree("python"));
+    }
     if let Some(python) = python {
+        let key = crate::python_resolution::installed_key(&python.version, &python.platform)
+            .ok_or(Error::InvalidLock)?;
         env.insert("UV_PYTHON_PREFERENCE".into(), "only-managed".into());
-        env.insert("UV_PYTHON".into(), python.key().into());
+        env.insert("UV_PYTHON".into(), key.into());
     }
     Ok(env)
 }

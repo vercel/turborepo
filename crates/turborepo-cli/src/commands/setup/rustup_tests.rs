@@ -89,7 +89,7 @@ impl Repo {
     fn new(flags: &str) -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
-        owned.init_git().unwrap();
+        owned.fake_git().unwrap();
         fs::write(root.join("turbo.json"), flags).unwrap();
         fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
         fs::write(root.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
@@ -114,6 +114,18 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
             path: format!("/rustup/archive/1.29.1/{}/rustup-init", triple()),
             installer,
         }
+    }
+    /// The installed toolchain's `cargo` records its arguments and managed
+    /// environment, then runs `body`. Call before `lock`.
+    fn record_cargo(&mut self, body: &str) {
+        let outside = self.owned.root().parent().unwrap().to_owned();
+        let cargo = format!(
+            "#!/bin/sh\necho \"$* ${{RUSTUP_TOOLCHAIN:+toolchain}} ${{CARGO_HOME##*/}}\" >> \
+             cargo-args\n{body}\n"
+        );
+        fs::write(outside.join("cargo"), cargo).unwrap();
+        let copy = format!("cp '{}/cargo' \"$tc/bin/cargo\"\n", outside.display());
+        self.installer.push_str(&copy);
     }
     fn lock(&self) {
         let platform = serde_json::to_value(provision::platform().unwrap()).unwrap();
@@ -175,6 +187,7 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
                 }),
+                turborepo_setup::git::FakeGit::shared(),
                 || Ok(self.owned.policy_at(self.owned.root())?),
             )
         })
@@ -429,4 +442,32 @@ fn local_setup_creates_targets_and_refreshes_rust_selections() {
             installs.replace("VERSION", "1.100.0") + " --component rust-src",
         ]
     );
+}
+
+#[test]
+fn locked_cargo_dependencies_prefetch_with_the_managed_toolchain_and_home() {
+    let mut repo = Repo::new(FLAGS);
+    repo.record_cargo("[ -f stale ] && exit 101\ntrue");
+    repo.lock();
+    let root = repo.owned.root();
+    fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+    let upstream = repo.upstream(false);
+    // Cargo runs no build scripts, so skipping them changes nothing, and
+    // tools-only setup never fetches.
+    for flags in [&["--frozen"][..], &["--frozen", "--ignore-scripts"], FROZEN] {
+        assert_eq!(repo.run(&upstream, flags).unwrap(), 0);
+    }
+    // A failed locked fetch passes cargo's exit status through.
+    fs::write(root.join("stale"), "").unwrap();
+    assert_eq!(repo.run(&upstream, &["--frozen"]).unwrap(), 101);
+    let args = fs::read_to_string(root.join("cargo-args")).unwrap();
+    let fetch = "fetch --locked toolchain cargo-home";
+    assert_eq!(args.lines().collect::<Vec<_>>(), [fetch; 3]);
+    assert!(root.join(".turbo/cargo-home").is_dir());
+    assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), b"version = 4\n");
+
+    fs::remove_file(root.join("Cargo.lock")).unwrap();
+    let error = repo.run(&upstream, &["--frozen"]).unwrap_err().to_string();
+    assert!(error.contains("requires a committed Cargo.lock"), "{error}");
+    assert!(!root.join("Cargo.lock").exists());
 }

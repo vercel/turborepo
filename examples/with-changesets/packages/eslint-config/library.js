@@ -1,34 +1,37 @@
-const { resolve } = require("node:path");
+const js = require("@eslint/js");
+const { defineConfig } = require("eslint/config");
+const babelParser = require("@babel/eslint-parser").default;
+const globals = require("globals");
+const turbo = require("eslint-config-turbo/flat").default;
+const prettier = require("eslint-config-prettier/flat");
 
-const project = resolve(process.cwd(), "tsconfig.json");
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ["eslint:recommended", "prettier", "turbo"],
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
+module.exports = defineConfig(
+  { ignores: ["dist/**", ".next/**", "node_modules/**", "next-env.d.ts"] },
+  {
+    files: ["**/*.{js,cjs,mjs,ts,mts,tsx}"],
+    extends: [js.configs.recommended, turbo, prettier],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
   },
-  env: {
-    node: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
+  {
+    files: ["**/*.{ts,mts,tsx}"],
+    languageOptions: {
+      // Babel parses TypeScript syntax without relying on the compiler's JS API.
+      parser: babelParser,
+      parserOptions: {
+        requireConfigFile: false,
+        babelOptions: {
+          babelrc: false,
+          configFile: false,
+          parserOpts: { plugins: ["typescript", "jsx"] },
+        },
       },
     },
-  },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-    "dist/",
-  ],
-  overrides: [
-    {
-      files: ["*.js?(x)", "*.ts?(x)"],
+    rules: {
+      // check-types handles TypeScript names and unused declarations, including JSX.
+      "no-undef": "off",
+      "no-unused-vars": "off",
     },
-  ],
-};
+  },
+);

@@ -53,6 +53,13 @@ fn key(version: &Version, platform: Platform) -> Option<String> {
     Some(format!("cpython-{version}-{os}-{arch}-{libc}"))
 }
 
+/// [`key`] for an installed tool's exact version and lock platform spelling.
+/// Every locked build's destination is this key (see [`is_official`]).
+pub(crate) fn installed_key(version: &str, platform: &str) -> Option<String> {
+    let platform = serde_json::from_value(Value::String(platform.to_owned())).ok()?;
+    key(&exact_release(version)?, platform)
+}
+
 /// The only artifact shape setup records or installs for a CPython build.
 pub(crate) fn official_artifact(
     version: &Version,

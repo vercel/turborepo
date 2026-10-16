@@ -12,7 +12,7 @@ const CHECK: &[&str] = &["--check", "--tools-only"];
 
 fn fixture(flags: &str, request: &str) -> OwnedSetupFixture {
     let owned = OwnedSetupFixture::new().unwrap();
-    owned.init_git().unwrap();
+    owned.fake_git().unwrap();
     fs::write(owned.root().join("turbo.json"), flags).unwrap();
     fs::create_dir_all(owned.root().join("apps/web/src")).unwrap();
     declare(&owned, request);
@@ -88,6 +88,7 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
                     .unwrap(),
             }),
+            turborepo_setup::git::FakeGit::shared(),
             || Ok(owned.policy_at(&cwd)?),
         )
     })
@@ -130,6 +131,80 @@ fn python_only_local_setup_locks_installs_and_repeats_without_traffic() {
     assert_eq!(publication_guards::state(owned.root()), before);
     assert_eq!(upstream.hits(), 3);
     assert!(!owned.root().join("probe-ran").exists());
+}
+
+#[test]
+fn telemetry_counts_downloaded_uv_bytes() {
+    let owned = fixture(PYTHON, ">=0.12, <0.14");
+    let upstream = upstream(&["0.12.24", "0.13.0", "0.14.0"]);
+    let platform = provision::platform().unwrap();
+    let official =
+        UvArtifact::for_platform(&semver::Version::parse("0.13.0").unwrap(), platform).unwrap();
+    let artifact = archive(
+        &format!("uv-{}", official.target()),
+        &[
+            ("uv", "#!/bin/sh\ntouch probe-ran\n"),
+            ("uvx", "#!/bin/sh\nexit 1\n"),
+        ],
+    )
+    .len() as u64;
+    let cwd = owned.root().join("apps/web/src");
+    let report = |flags: &[&str]| {
+        let mut words = vec![
+            "turbo".into(),
+            "setup".into(),
+            "--cwd".into(),
+            cwd.clone().into_os_string(),
+        ];
+        words.extend(flags.iter().map(std::ffi::OsString::from));
+        let args = Args::parse_args(words).unwrap();
+        let origin = upstream.origin();
+        let mut report = telemetry::Report::default();
+        let code = crate::cli::dispatch_setup(&args, |args, setup_args| {
+            let transports = provision::Transports {
+                trust_base: Some(owned.home().to_owned()),
+                node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+                pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+                registry:
+                    turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
+                uv: UvTransport::loopback_http_for_tests(origin).unwrap(),
+                rustup:
+                    turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
+                bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+                python:
+                    turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(
+                        origin,
+                    )
+                    .unwrap(),
+                artifact: None,
+                go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
+                    .unwrap(),
+            };
+            run_reporting(args, setup_args, Some(transports), turborepo_setup::git::FakeGit::shared(), &mut report, || {
+                Ok(owned.policy_at(&cwd)?)
+            })
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(code, 0);
+        (
+            report.downloaded_bytes,
+            report.tools_installed,
+            report.tools_reused,
+        )
+    };
+    // A uv-only repository transfers its verified archive once, then reuses it.
+    assert_eq!(report(LOCAL), (artifact, 1, 0));
+    assert_eq!(report(LOCAL), (0, 0, 1));
 }
 
 #[test]
@@ -340,4 +415,55 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
     let lock = locked(&owned).unwrap();
     assert_eq!(lock.tools()["python"].version, "3.13.1");
     assert_eq!(uv_version(&owned), "0.13.0");
+}
+
+const UV_LOCK: &[u8] = b"version = 1\n";
+
+#[test]
+fn locked_uv_workspaces_sync_with_the_managed_uv_and_its_environment() {
+    let owned = fixture(PYTHON, ">=0.12");
+    let root = owned.root();
+    fs::write(root.join("uv.lock"), UV_LOCK).unwrap();
+    // Records its arguments and an activation variable, then syncs.
+    let uv = "#!/bin/sh\necho \"$* $UV_PYTHON_DOWNLOADS\" >> uv-args\n[ -f stale ] && exit \
+              2\nmkdir -p .venv\n";
+    let u = upstream_with(&["0.12.24"], uv, Vec::new());
+    assert_eq!(run(&owned, &u, &["--no-frozen"]).unwrap(), 0);
+    assert!(root.join(".venv").exists());
+    // A repeat resyncs a removed environment; skipping scripts refuses builds.
+    fs::remove_dir_all(root.join(".venv")).unwrap();
+    assert_eq!(
+        run(&owned, &u, &["--frozen", "--ignore-scripts"]).unwrap(),
+        0
+    );
+    assert!(root.join(".venv").exists());
+    // uv's refusal of a stale lock passes its exit status through, and
+    // tools-only setup never syncs.
+    fs::write(root.join("stale"), "").unwrap();
+    assert_eq!(run(&owned, &u, &["--frozen"]).unwrap(), 2);
+    assert_eq!(run(&owned, &u, &["--frozen", "--tools-only"]).unwrap(), 0);
+    let args = fs::read_to_string(root.join("uv-args")).unwrap();
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        [
+            "sync --locked --all-packages never",
+            "sync --locked --all-packages --no-build never",
+            "sync --locked --all-packages never",
+        ]
+    );
+    assert_eq!(fs::read(root.join("uv.lock")).unwrap(), UV_LOCK);
+    assert!(!root.join("probe-ran").exists());
+}
+
+#[test]
+fn python_dependencies_need_a_committed_uv_lock_before_any_download() {
+    let owned = fixture(PYTHON, ">=0.12");
+    let u = upstream(&["0.12.24"]);
+    for flags in [&["--no-frozen"][..], &["--plan"]] {
+        let error = run(&owned, &u, flags).unwrap_err().to_string();
+        assert!(error.contains("uv.lock is missing"), "{error}");
+    }
+    assert_eq!(u.hits(), 0);
+    assert!(!owned.root().join("uv.lock").exists());
+    assert!(!owned.root().join("turbo.lock").exists());
 }

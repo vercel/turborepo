@@ -3,7 +3,7 @@
 //! Offline uses only trusted healthy installs and verified cached artifacts.
 //! No probes, dependency execution or activation. Declared additional tools
 //! install through the generic artifact adapter.
-use std::{fs, io, path::Path, process::Command};
+use std::{fs, io, path::Path};
 
 use turborepo_setup::{
     artifact_cache::ArtifactCache,
@@ -243,7 +243,7 @@ pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error
     Ok(())
 }
 
-pub(super) fn storage(root: &Path) -> Result<(), Error> {
+pub(super) fn storage(root: &Path, git: &dyn turborepo_setup::git::Git) -> Result<(), Error> {
     for path in [
         root.join(".turbo"),
         root.join(".turbo/tools"),
@@ -263,20 +263,10 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
     if turborepo_setup::writer_storage::outside_git_repository(root)? {
         return Ok(());
     }
-    let git = |arguments: &[&str]| {
-        Command::new("git")
-            .current_dir(root)
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .args(arguments)
-            .output()
-            .map_err(turborepo_setup::writer_storage::git_spawn_error)
-    };
-    let ignored = git(&["check-ignore", "--", ".turbo/"])?;
+    let ignored = git.check_ignore(root, &[".turbo/"])?;
     // Exit 128 is a Git failure (for example, a broken or untrusted `.git`), not
     // a missing ignore rule; editing .gitignore would not help.
-    if ignored.status.code() == Some(128) {
+    if ignored.code == Some(128) {
         return Err(io::Error::other(format!(
             "Git could not check whether .turbo/ is ignored ({}); run turbo setup inside the \
              repository's Git checkout",
@@ -284,10 +274,10 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
         ))
         .into());
     }
-    let tracked = git(&["ls-files", "--", ".turbo/"])?;
-    if !ignored.status.success()
+    let tracked = git.ls_files(root, &[".turbo/"])?;
+    if !ignored.success()
         || ignored.stdout != b".turbo/\n"
-        || !tracked.status.success()
+        || !tracked.success()
         || !tracked.stdout.is_empty()
     {
         return Err(Error::Unsupported(
@@ -469,6 +459,16 @@ pub(super) fn plans(
     })
 }
 
+/// Aggregate results for the caller's report; no paths or versions.
+/// `downloaded_bytes` covers every verified artifact setup transferred itself,
+/// across all ecosystems; rustup's own toolchain downloads are not visible.
+#[derive(Debug, Default)]
+pub(super) struct Provisioned {
+    pub downloaded_bytes: u64,
+    pub installed: usize,
+    pub reused: usize,
+}
+
 pub(super) fn lock_report(
     previous: Option<&turborepo_setup::lock::Lock>,
     current: &turborepo_setup::lock::Lock,
@@ -562,7 +562,7 @@ pub(super) fn run(
     request: &super::SetupRequest,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
-) -> Result<i32, Error> {
+) -> Result<Provisioned, Error> {
     let (force, offline) = (request.force, request.offline);
     let resolution_mode = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
@@ -629,7 +629,7 @@ pub(super) fn run(
         // user state; none of these checks creates a writer or downloads tools.
         preflight()?;
         revalidate(discovery)?;
-        storage(root)?;
+        storage(root, discovery.git())?;
         let base = trust_base
             .clone()
             .or_else(dirs_next::data_local_dir)
@@ -647,7 +647,7 @@ pub(super) fn run(
             trust.preflight()?;
             preflight()?;
             revalidate(discovery)?;
-            storage(root)?;
+            storage(root, discovery.git())?;
             Ok::<_, Error>(())
         };
         check()?;
@@ -771,14 +771,14 @@ pub(super) fn run(
         }
     });
     revalidate(discovery)?;
-    storage(root)?;
+    storage(root, discovery.git())?;
     snapshot.ensure_current()?;
     // Fixed acquisition order: writer, then Store. Both remain held through the
     // final precondition and manifest selection, including unchanged results.
     let guard = snapshot.guard()?;
-    storage(root)?;
+    storage(root, discovery.git())?;
     let mut store = Store::open(root)?;
-    storage(root)?;
+    storage(root, discovery.git())?;
     // Locks may have waited behind another transaction: recheck before traffic.
     preflight()?;
     revalidate(discovery)?;
@@ -1091,7 +1091,7 @@ pub(super) fn run(
     };
     let before_publish = || {
         trust.preflight()?;
-        storage(root).map_err(io::Error::other)?;
+        storage(root, discovery.git()).map_err(io::Error::other)?;
         preflight().map_err(io::Error::other)?;
         revalidate(discovery).map_err(io::Error::other)?;
         snapshot.check_guard(&guard).map_err(io::Error::other)?;
@@ -1106,6 +1106,31 @@ pub(super) fn run(
     // trusted. On failure, rerunning setup freshly verifies it before repair.
     before_publish()?;
     trust.publish(&store)?;
+    // Every adapter that transfers verified bytes itself. A Rust toolchain is
+    // fetched by the private rustup, so only its installer is counted.
+    let mut provisioned = Provisioned {
+        downloaded_bytes: [
+            prepared_node.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_pnpm.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_npm.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_yarn.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_bun.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_uv.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_python.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_rustup.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_go.as_ref().map(|p| p.downloaded_bytes()),
+        ]
+        .into_iter()
+        .flatten()
+        .chain(
+            prepared_artifacts
+                .iter()
+                .flatten()
+                .map(|p| p.downloaded_bytes()),
+        )
+        .sum(),
+        ..Provisioned::default()
+    };
     for tool in &desired {
         let (reused, source) = match additional(tool) {
             Some((plan, prepared)) => (prepared.is_none(), format!(" ({})", plan.source())),
@@ -1123,6 +1148,11 @@ pub(super) fn run(
                 String::new(),
             ),
         };
+        if reused {
+            provisioned.reused += 1;
+        } else {
+            provisioned.installed += 1;
+        }
         let from_cache = match tool.id.as_str() {
             _ if additional(tool).is_some() => additional(tool)
                 .and_then(|(_, prepared)| prepared)
@@ -1163,5 +1193,5 @@ pub(super) fn run(
     if turborepo_setup::writer_storage::outside_git_repository(root)? {
         println!("No Git repository found; skipped checking that .turbo/ is Git-ignored.");
     }
-    Ok(0)
+    Ok(provisioned)
 }

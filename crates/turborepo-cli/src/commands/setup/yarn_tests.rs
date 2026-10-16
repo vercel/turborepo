@@ -4,7 +4,19 @@ use sha2::Sha512;
 use super::{first_lock::base64, *};
 
 fn yarn(version: &str, package: &str) -> (Fixture, LoopbackServer) {
+    yarn_installing(version, package, None)
+}
+
+/// With `install`, the managed Node records Yarn's arguments, then runs it.
+fn yarn_installing(
+    version: &str,
+    package: &str,
+    install: Option<&str>,
+) -> (Fixture, LoopbackServer) {
     let mut f = Fixture::new();
+    if let Some(body) = install {
+        f.record_node("yarn-args", body);
+    }
     let base = package.rsplit('/').next().unwrap();
     let tarball = format!("/{package}/-/{base}-{version}.tgz");
     let manifest = json!({"name":package,"version":version,
@@ -156,4 +168,77 @@ fn yarn_check_failures_are_readonly_and_actionable() {
         };
         super::checks::assert_manager_check_failures(installed, "yarn", "bun@1.2.23");
     }
+}
+
+const YARN_LOCK: &[u8] = b"# yarn lockfile\n";
+
+fn yarn_args(f: &Fixture) -> Vec<String> {
+    let args = fs::read_to_string(f.owned.root().join("yarn-args")).unwrap_or_default();
+    args.lines().map(str::to_owned).collect()
+}
+
+#[test]
+fn locked_yarn_classic_and_modern_install_immutably_and_repeat_safely() {
+    for (version, package, frozen, skipped) in [
+        ("1.22.22", "yarn", "--frozen-lockfile", "--ignore-scripts"),
+        (
+            "4.5.0",
+            "@yarnpkg/cli-dist",
+            "--immutable",
+            "--mode=skip-build",
+        ),
+    ] {
+        let (f, u) = yarn_installing(version, package, Some("mkdir -p node_modules"));
+        let root = f.owned.root();
+        fs::write(root.join("yarn.lock"), YARN_LOCK).unwrap();
+        assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+        // A repeat reinstalls removed dependencies, with Yarn's own skip flag.
+        fs::remove_dir_all(root.join("node_modules")).unwrap();
+        assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+        assert!(root.join("node_modules").exists());
+        assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+        let install = format!("install {frozen}");
+        assert_eq!(
+            yarn_args(&f),
+            [install.clone(), format!("{install} {skipped}")]
+        );
+        assert_eq!(fs::read(root.join("yarn.lock")).unwrap(), YARN_LOCK);
+        for path in ["task-ran", "hook-ran", "probe-ran"] {
+            assert!(!root.join(path).exists(), "{path}");
+        }
+    }
+}
+
+#[test]
+fn yarn_failures_missing_locks_and_unsupported_skips_are_actionable() {
+    // Yarn's refusal of a stale lock passes its exit status through.
+    let (f, u) = yarn_installing("1.22.22", "yarn", Some("[ -f stale ] && exit 1\ntrue"));
+    fs::write(f.owned.root().join("yarn.lock"), YARN_LOCK).unwrap();
+    fs::write(f.owned.root().join("stale"), "").unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 1);
+    fs::remove_file(f.owned.root().join("stale")).unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+
+    let (f, u) = yarn("4.5.0", "@yarnpkg/cli-dist");
+    let error = f.run(&u, &["--frozen"]).unwrap_err().to_string();
+    assert!(
+        error.contains("yarn dependency setup requires a committed yarn.lock"),
+        "{error}"
+    );
+    assert_eq!(u.hits(), 0);
+    assert!(!f.owned.root().join("yarn.lock").exists());
+
+    // Yarn 2 has no skip flag: setup reports it rather than claiming a skip.
+    let (f, _) = yarn("2.4.3", "@yarnpkg/cli-dist");
+    fs::write(f.owned.root().join("yarn.lock"), YARN_LOCK).unwrap();
+    let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+    let lock = turborepo_setup::lock::Lock::parse(&lock).unwrap();
+    let skip = f.dependencies(&["--plan", "--ignore-scripts"]);
+    let error = skip.plan(f.owned.root(), &lock).unwrap_err().to_string();
+    assert!(error.contains("Yarn 2 has no --mode=skip-build"), "{error}");
+    let native = f
+        .dependencies(&["--plan"])
+        .plan(f.owned.root(), &lock)
+        .unwrap();
+    assert!(native[0].contains("yarn install --immutable"), "{native:?}");
 }

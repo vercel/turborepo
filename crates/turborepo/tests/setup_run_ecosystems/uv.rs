@@ -122,9 +122,11 @@ fn uv_setup_then_plain_run_uses_the_locked_uv_and_python_without_host_python() {
     for probe in ["uv --version", "uv python find", "python --version"] {
         assert!(calls.contains(probe), "{probe}: {calls}");
     }
+    journey.discovers_managed("uv workspace metadata");
 
     fs::remove_file(bin.join("uv")).unwrap();
     journey.fails("build", "run turbo setup to repair the installation");
+    journey.discovery_fails("run turbo setup to repair the installation", &[]);
     journey.setup("", &["--frozen", "--tools-only"]);
     let version = journey.root().join(".python-version");
     fs::write(&version, "3.13\n").unwrap();

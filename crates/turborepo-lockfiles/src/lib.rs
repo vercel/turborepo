@@ -32,14 +32,15 @@ use std::{
 pub use berry::{Error as BerryError, *};
 pub use bun::{BunLockfile, bun_global_change};
 pub use cargo::{
-    Error as CargoLockError, PrunedCargoLock, cargo_external_closures, cargo_prune_lock,
+    CargoExternalClosures, Error as CargoLockError, PrunedCargoLock,
+    cargo_external_closure_indices, cargo_external_closures, cargo_prune_lock,
 };
 use dashmap::DashMap;
 pub use error::Error;
 pub use npm::*;
 pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
 use rayon::prelude::*;
-use rustc_hash::{FxBuildHasher, FxHashSet};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
 pub use uv::{
@@ -295,22 +296,128 @@ pub fn all_transitive_closures_sorted<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<SortedClosures, Error> {
-    // Shared DP fast path: computes each closure once over the global
-    // package graph instead of once per workspace. Only sound when the
-    // lockfile proves every transitive edge resolves identically across
-    // workspaces; any sensitive edge falls through to the walk below.
-    if workspaces.len() > 1
-        && let Some(resolver) = lockfile.transitive_edge_resolver()
-        && let Some(closures) = closure_dp::all_transitive_closures_dp(
-            lockfile,
-            resolver.as_ref(),
-            &workspaces,
-            ignore_missing_packages,
-        )?
-    {
-        return Ok(closures);
+    if let Some(closures) = shared_dp_closures(lockfile, &workspaces, ignore_missing_packages)? {
+        return Ok(closures.into_sorted());
+    }
+    legacy_sorted_closures(lockfile, workspaces, ignore_missing_packages)
+}
+
+/// Per-workspace transitive closures in index form: one package table sorted
+/// by `Package`'s `(key, version)` ordering, and each workspace's closure as
+/// ascending indices into it (so also in that order, duplicate-free).
+#[derive(Debug, Default)]
+pub struct IndexedClosures {
+    /// Every package in any closure, sorted and duplicate-free.
+    pub packages: Vec<Arc<Package>>,
+    /// Workspace directory -> ascending indices into `packages`.
+    pub closures: HashMap<String, Vec<u32>>,
+}
+
+impl IndexedClosures {
+    /// Materialize each closure as shared `Arc<Package>` members.
+    pub fn into_sorted(self) -> SortedClosures {
+        let Self { packages, closures } = self;
+        closures
+            .into_iter()
+            .map(|(ws, ids)| {
+                let members = ids
+                    .into_iter()
+                    .map(|id| Arc::clone(&packages[id as usize]))
+                    .collect();
+                (ws, members)
+            })
+            .collect()
     }
 
+    /// Convert the legacy walk's per-workspace closures. They allocate their
+    /// members per workspace, so dedupe by value with one hash lookup per
+    /// member and sort only the distinct table; ranks are monotone in value,
+    /// so each (sorted) closure maps to ascending indices.
+    fn from_sorted(closures: SortedClosures) -> Self {
+        let mut slot_of: FxHashMap<&Package, u32> = FxHashMap::default();
+        let mut unique: Vec<&Arc<Package>> = Vec::new();
+        let slots: Vec<(&String, Vec<u32>)> = closures
+            .iter()
+            .map(|(ws, members)| {
+                let ids = members
+                    .iter()
+                    .map(|member| {
+                        *slot_of.entry(member.as_ref()).or_insert_with(|| {
+                            unique.push(member);
+                            (unique.len() - 1) as u32
+                        })
+                    })
+                    .collect();
+                (ws, ids)
+            })
+            .collect();
+        let mut order: Vec<u32> = (0..unique.len() as u32).collect();
+        order.sort_unstable_by(|&a, &b| unique[a as usize].cmp(unique[b as usize]));
+        let mut rank = vec![0u32; unique.len()];
+        for (position, &slot) in order.iter().enumerate() {
+            rank[slot as usize] = position as u32;
+        }
+        let packages = order
+            .iter()
+            .map(|&slot| Arc::clone(unique[slot as usize]))
+            .collect();
+        let closures = slots
+            .into_iter()
+            .map(|(ws, ids)| {
+                let ids = ids.into_iter().map(|slot| rank[slot as usize]).collect();
+                (ws.clone(), ids)
+            })
+            .collect();
+        Self { packages, closures }
+    }
+}
+
+/// Like [`all_transitive_closures_sorted`], in index form. Consumers that only
+/// need membership (grouping identical closures, building per-closure lists
+/// from a per-package table) avoid an `Arc` clone and drop per closure member.
+pub fn all_transitive_closures_indexed<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<IndexedClosures, Error> {
+    if let Some(closures) = shared_dp_closures(lockfile, &workspaces, ignore_missing_packages)? {
+        return Ok(closures);
+    }
+    Ok(IndexedClosures::from_sorted(legacy_sorted_closures(
+        lockfile,
+        workspaces,
+        ignore_missing_packages,
+    )?))
+}
+
+/// Shared DP fast path: computes each closure once over the global package
+/// graph instead of once per workspace. Only sound when the lockfile proves
+/// every transitive edge resolves identically across workspaces; any
+/// sensitive edge returns `None` so callers fall through to the legacy walk.
+fn shared_dp_closures<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: &HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<Option<IndexedClosures>, Error> {
+    if workspaces.len() <= 1 {
+        return Ok(None);
+    }
+    let Some(resolver) = lockfile.transitive_edge_resolver() else {
+        return Ok(None);
+    };
+    closure_dp::all_transitive_closures_dp_indexed(
+        lockfile,
+        resolver.as_ref(),
+        workspaces,
+        ignore_missing_packages,
+    )
+}
+
+fn legacy_sorted_closures<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<SortedClosures, Error> {
     let resolve_cache: ResolveCache = DashMap::default();
     let deps_cache: DepsCache = DashMap::default();
     let interner = PackageInterner::default();

@@ -4,7 +4,8 @@ use super::*;
 use crate::{
     bundled_npm,
     execution_identity::{ExecutionContext, ExecutionSnapshot, Libc, SelectedInstallation},
-    lock::{Document, Snapshot, WriteOutcome, reconcile},
+    git::FakeGit,
+    lock::{Document, Ecosystems, Snapshot, WriteOutcome, reconcile},
     node_resolution::{ChecksumManifest, resolve},
 };
 
@@ -19,7 +20,7 @@ fn capture(root: &Path, manifest: Value) -> Snapshot {
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
-    Snapshot::capture(root).unwrap()
+    Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared()).unwrap()
 }
 fn node(snapshot: &Snapshot, bytes: &[u8]) -> lock::Tool {
     let index = serde_json::to_vec(
@@ -79,14 +80,7 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
         json!({"devEngines":{"packageManager":{"name":"npm","version":"11.6.1"}}}),
     ] {
         let repo = tempfile::tempdir().unwrap();
-        assert!(
-            std::process::Command::new("git")
-                .args(["init", "--quiet"])
-                .arg(repo.path())
-                .status()
-                .unwrap()
-                .success()
-        );
+        crate::git::fake_repository(repo.path()).unwrap();
         fs::write(repo.path().join(".gitignore"), "/.turbo/\n").unwrap();
         let captured = capture(repo.path(), manifest);
         let bytes = archive(PACKAGE);
@@ -107,7 +101,9 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
             matches!(&committed.tools()["npm"].installation, Installation::Bundled { owner } if owner == "node")
         );
         let before = fs::read(repo.path().join("turbo.lock")).unwrap();
-        let frozen = Snapshot::capture(repo.path()).unwrap();
+        let frozen =
+            Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared())
+                .unwrap();
         reconcile::reconcile(&frozen, reconcile::Mode::Frozen, true, |_| {
             panic!("no resolution")
         })

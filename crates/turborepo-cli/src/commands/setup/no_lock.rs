@@ -17,7 +17,7 @@ pub(super) fn run(
     snapshot: Snapshot,
     transports: Option<provision::Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
-) -> Result<i32, Error> {
+) -> Result<provision::Provisioned, Error> {
     let platform = provision::platform()?;
     // Name what is missing or unsupported instead of the record's generic
     // rejection; both fail before transports, writers, or Store.
@@ -54,7 +54,7 @@ pub(super) fn run(
         trust.preflight()?;
         preflight()?;
         provision::revalidate(discovery)?;
-        provision::storage(root)?;
+        provision::storage(root, discovery.git())?;
         snapshot.ensure_current()?;
         Ok::<_, Error>(())
     };
@@ -182,18 +182,28 @@ pub(super) fn run(
     // turbo.lock or, without one, by its sealed clone-local selection.
     checked()?;
     trust.publish(&store)?;
+    let mut provisioned = provision::Provisioned {
+        downloaded_bytes: prepared_node
+            .as_ref()
+            .map_or(0, |node| node.downloaded_bytes())
+            + prepared_manager
+                .as_ref()
+                .map_or(0, |manager| manager.downloaded_bytes()),
+        ..Default::default()
+    };
     for tool in &desired {
+        let reused = (tool.id == "node" && prepared_node.is_none())
+            || (tool.id != "node" && prepared_manager.is_none());
+        if reused {
+            provisioned.reused += 1;
+        } else {
+            provisioned.installed += 1;
+        }
         println!(
             "{} {}: {}",
             tool.id,
             tool.version,
-            if (tool.id == "node" && prepared_node.is_none())
-                || (tool.id != "node" && prepared_manager.is_none())
-            {
-                "reused"
-            } else {
-                "installed"
-            }
+            if reused { "reused" } else { "installed" }
         );
     }
     if let Some(npm) = bundled_npm {
@@ -204,5 +214,5 @@ pub(super) fn run(
          reproducibility or frozen readiness."
     );
     println!("turbo run uses these tools in this clone only.");
-    Ok(0)
+    Ok(provisioned)
 }

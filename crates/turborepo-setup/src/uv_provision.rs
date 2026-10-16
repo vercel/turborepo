@@ -247,6 +247,9 @@ impl UvPlan {
         Ok(PreparedUv {
             tree,
             tool: self.tool.clone(),
+            // uv has no shared download cache. Archive bytes retained from
+            // resolution were still transferred during this setup run.
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             launch_directory: self.launch_directory.clone(),
             entrypoints: self.artifact.executables.clone(),
         })
@@ -254,6 +257,11 @@ impl UvPlan {
 }
 
 impl PreparedUv {
+    /// Verified archive bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// The verified extracted uv binary, for offline queries during
     /// resolution only. Its private scratch tree is removed on drop.
     pub fn binary(&self) -> std::path::PathBuf {
@@ -264,6 +272,7 @@ impl PreparedUv {
 pub struct PreparedUv {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
     launch_directory: Option<String>,
     entrypoints: std::collections::BTreeMap<String, String>,
 }

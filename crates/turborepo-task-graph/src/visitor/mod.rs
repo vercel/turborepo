@@ -576,11 +576,19 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         Ok(())
     }
 
+    /// Outside dry runs, also returns the task IDs in the order they were
+    /// hashed: by topological level, dependencies first.
     fn precompute_task_hashes(
         &self,
         engine: &Engine,
         telemetry: &GenericEventBuilder,
-    ) -> Result<HashMap<TaskId<'static>, PrecomputedTask>, Error> {
+    ) -> Result<
+        (
+            HashMap<TaskId<'static>, PrecomputedTask>,
+            Vec<TaskId<'static>>,
+        ),
+        Error,
+    > {
         use petgraph::algo::toposort;
         use rayon::prelude::*;
         let graph = engine.task_graph();
@@ -618,6 +626,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
 
         let mut results: HashMap<TaskId<'static>, PrecomputedTask> =
             HashMap::with_capacity(sorted.len());
+        let mut order: Vec<TaskId<'static>> = Vec::with_capacity(sorted.len());
         // Task IDs that resolved to `PrecomputedTask::Deferred` so far.
         // Deferral is rare (JIT inputs or dependency-output inputs), so
         // most runs never insert here and the per-task dependency scan
@@ -695,12 +704,15 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                     if matches!(precomputed, PrecomputedTask::Deferred) {
                         deferred.insert(task_id.clone());
                     }
+                    if !self.dry {
+                        order.push(task_id.clone());
+                    }
                     results.insert(task_id, precomputed);
                 }
             }
         }
 
-        Ok(results)
+        Ok((results, order))
     }
 
     #[tracing::instrument(skip_all)]
@@ -718,7 +730,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         // task's dependency hashes are available before it is hashed.
         // This replaces the per-task serial hashing that was inside the
         // dispatch loop.
-        let mut precomputed = turborepo_rayon_compat::block_in_place(|| {
+        let (mut precomputed, hash_order) = turborepo_rayon_compat::block_in_place(|| {
             let _span = tracing::info_span!("precompute_task_hashes").entered();
             self.precompute_task_hashes(&engine, telemetry)
         })?;
@@ -735,6 +747,30 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         let span = Span::current();
 
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
+
+        // Every hash that isn't deferred is known now, so start downloading
+        // remote artifacts instead of waiting for each task's dependencies to
+        // finish. Only tasks that will try a cache restore when dispatched are
+        // included: caching enabled and a command to run.
+        if !self.dry {
+            self.run_cache.prefetch_remote(
+                || {
+                    hash_order
+                        .iter()
+                        .filter_map(|task_id| {
+                            let PrecomputedTask::Ready { task_hash, .. } =
+                                precomputed.get(task_id)?
+                            else {
+                                return None;
+                            };
+                            let caches = engine.task_definition(task_id)?.cache;
+                            (caches && factory.has_command(task_id)).then(|| task_hash.clone())
+                        })
+                        .collect()
+                },
+                concurrency,
+            );
+        }
 
         // Errors from the dispatch loop are captured here rather than returned
         // immediately. This ensures we always drain the FuturesUnordered below,

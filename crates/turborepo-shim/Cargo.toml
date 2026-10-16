@@ -47,6 +47,7 @@ libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 crossterm = "0.27"
+turborepo-process = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

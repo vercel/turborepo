@@ -380,7 +380,7 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
             }
         });
         assert!(fired.get());
-        assert!(result.is_err());
+        assert!(result.is_err(), "case {case}");
         assert_eq!(f.manifest(), before);
         assert_eq!(current(&f).bin, old.bin);
         assert_eq!(
@@ -395,7 +395,7 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
     for writer in [true, false] {
         let f = fresh();
         let root = f.owned.root();
-        let snapshot = turborepo_setup::lock::Snapshot::capture(root).unwrap();
+        let snapshot = f.sources().unwrap();
         let guard = writer.then(|| snapshot.guard().unwrap());
         let store = (!writer).then(|| Store::open(root).unwrap());
         let (tx, rx) = std::sync::mpsc::channel();

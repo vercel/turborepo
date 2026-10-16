@@ -92,7 +92,9 @@ fn inspect(
         .join("\n");
     // Diagnostics come from the validated lock, not unsafe storage or repo
     // inventory. Retain the storage cause and the complete artifact set.
-    let storage = || provision::storage(root).map_err(|error| unavailable(error, &artifacts));
+    let storage = || {
+        provision::storage(root, discovery.git()).map_err(|error| unavailable(error, &artifacts))
+    };
     storage()?;
     // The only fixture override is already private to setup's test transport
     // seam. Production always uses the caller's user data directory, never a
@@ -129,10 +131,15 @@ fn inspect(
     Ok(lines)
 }
 
-fn report(lines: Vec<String>) -> i32 {
+/// Trusted reuse touches no tools; the caller reports dependencies, which
+/// may still install offline from the native caches.
+fn report(lines: Vec<String>) -> provision::Provisioned {
     println!("{}", lines.join("\n"));
-    println!("No resolution, downloads, writes, probes, or tasks run.");
-    0
+    println!("Tools: no resolution, downloads, writes, or probes.");
+    provision::Provisioned {
+        reused: lines.len(),
+        ..Default::default()
+    }
 }
 
 pub(super) fn run(
@@ -141,7 +148,7 @@ pub(super) fn run(
     request: &super::SetupRequest,
     transports: Option<provision::Transports>,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
-) -> Result<i32, SetupError> {
+) -> Result<provision::Provisioned, SetupError> {
     let checked = inspect(
         discovery,
         &sources,

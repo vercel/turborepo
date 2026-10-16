@@ -18,10 +18,11 @@ use turborepo_lockfiles::Lockfile;
 use crate::{
     discovery::LocalPackageDiscoveryBuilder,
     external_resolution::{
-        ExternalDeclarations, ExternalPackageIdentity, ExternalResolutionData,
-        ExternalResolutionDomainId, ExternalResolutionGeneration, JAVASCRIPT_RESOLUTION_DOMAIN,
-        PYTHON_RESOLUTION_DOMAIN, PackageExternalDeclarations, PackageResolutionState,
-        ResolutionFingerprint,
+        CARGO_RESOLUTION_DOMAIN, ExternalDeclarations, ExternalPackageIdentity,
+        ExternalResolutionChanges, ExternalResolutionData, ExternalResolutionDomainId,
+        ExternalResolutionGeneration, JAVASCRIPT_RESOLUTION_DOMAIN, PYTHON_RESOLUTION_DOMAIN,
+        PackageExternalDeclarations, PackageResolution, PackageResolutionState,
+        ResolutionCompleteness, ResolutionFingerprint, compare_resolution_data,
     },
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     package_json::PackageJson,
@@ -1185,6 +1186,9 @@ impl PackageGraph {
         path: &AnchoredSystemPath,
         previous_contents: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
+        if path.as_str() == crate::cargo::CARGO_LOCK {
+            return self.changed_cargo_packages_from_lockfile_contents(previous_contents);
+        }
         if path.as_str() != "uv.lock" {
             return self.changed_javascript_packages_from_lockfile_contents(previous_contents);
         }
@@ -1245,6 +1249,113 @@ impl PackageGraph {
             });
         }
         Ok(changes)
+    }
+
+    /// Resolves the previous and current Cargo.lock into per-crate external
+    /// closures and compares them, so only crates whose closure changed (and
+    /// the workspace aggregate, which carries every crate's externals) are
+    /// affected. The compiler identity is left out of both sides: it does not
+    /// come from the lockfile, so it cannot differ between them.
+    fn changed_cargo_packages_from_lockfile_contents(
+        &self,
+        previous_contents: &[u8],
+    ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
+        let previous = std::str::from_utf8(previous_contents)
+            .map_err(|_| ChangedPackagesError::NonUtf8Lockfile)?;
+        let current = self
+            .repo_root()
+            .join_component(crate::cargo::CARGO_LOCK)
+            .read_to_string()
+            .map_err(crate::package_manager::Error::Io)?;
+
+        let (crates, aggregates): (Vec<String>, Vec<String>) =
+            {
+                let resolution = self
+                    .external_resolution
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let domain = resolution
+                    .generation
+                    .as_deref()
+                    .and_then(|generation| generation.domain(&CARGO_RESOLUTION_DOMAIN))
+                    .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
+                // A domain resolved without the lockfile has no closures to
+                // compare against.
+                if !matches!(
+                    domain.data(),
+                    ExternalResolutionData::Resolved {
+                        completeness: ResolutionCompleteness::Complete,
+                        ..
+                    }
+                ) {
+                    return Err(ChangedPackagesError::ResolutionUnavailable);
+                }
+                domain.members().iter().cloned().partition(|member| {
+                    !self.is_aggregate_scope(&PackageName::from(member.as_str()))
+                })
+            };
+
+        fn to_identities<'a>(
+            packages: impl IntoIterator<Item = &'a turborepo_lockfiles::Package>,
+        ) -> Vec<ExternalPackageIdentity> {
+            packages
+                .into_iter()
+                .map(|package| {
+                    ExternalPackageIdentity::new(package.key.clone(), package.version.clone())
+                })
+                .collect()
+        }
+        let resolve = |contents: &str| -> Result<ExternalResolutionData, ChangedPackagesError> {
+            let closures = turborepo_lockfiles::cargo_external_closures(contents, &crates)?;
+            let workspace_identities = to_identities(closures.values().flatten());
+            let mut packages = closures
+                .iter()
+                .map(|(name, closure)| PackageResolution::new(name.clone(), to_identities(closure)))
+                .chain(aggregates.iter().map(|name| {
+                    PackageResolution::new(name.clone(), workspace_identities.iter().cloned())
+                }))
+                .collect::<Vec<_>>();
+            packages.sort_by(|a, b| a.package().cmp(b.package()));
+            Ok(ExternalResolutionData::Resolved {
+                completeness: ResolutionCompleteness::Complete,
+                packages,
+            })
+        };
+        let changes = compare_resolution_data(
+            &resolve(&current)?,
+            &resolve(previous)?,
+            false,
+            ROOT_PKG_NAME,
+        )
+        .map_err(|_| ChangedPackagesError::ResolutionUnavailable)?;
+        let ExternalResolutionChanges::Packages(changes) = changes else {
+            return Err(ChangedPackagesError::ResolutionUnavailable);
+        };
+
+        let to_lockfile_package = |identity: ExternalPackageIdentity| {
+            turborepo_lockfiles::Package::new(identity.key(), identity.version())
+        };
+        changes
+            .into_iter()
+            .map(|change| {
+                let name = PackageName::from(change.package);
+                let context = self
+                    .package_task_context(&name)
+                    .ok_or(ChangedPackagesError::ResolutionUnavailable)?;
+                Ok(ExternalDependencyChange {
+                    package: WorkspacePackage {
+                        name,
+                        path: context.directory().to_owned(),
+                    },
+                    added: change.added.into_iter().map(to_lockfile_package).collect(),
+                    removed: change
+                        .removed
+                        .into_iter()
+                        .map(to_lockfile_package)
+                        .collect(),
+                })
+            })
+            .collect()
     }
 
     pub fn package_resolution_states(&self) -> HashMap<String, PackageResolutionState> {
@@ -4008,6 +4119,122 @@ version = "0.1.0"
             .package_task_context(&PackageName::Root)
             .expect("root Turbo namespace always has a context");
         assert_eq!(root_context.repository_root(), root.as_ref());
+    }
+
+    /// A Cargo.lock change is attributed to the crates whose external closure
+    /// changed, the same way JavaScript and uv lockfile changes are, instead of
+    /// failing detection and marking every package changed.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_cargo_lockfile_change_affects_only_crates_whose_closure_changed() {
+        let (_tmp, root) = canonical_tempdir();
+        let write = |rel: &[&str], contents: &str| {
+            let path = root.join_components(rel);
+            std::fs::create_dir_all(path.parent().unwrap().as_std_path()).unwrap();
+            std::fs::write(path.as_std_path(), contents).unwrap();
+        };
+        write(
+            &["Cargo.toml"],
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+             \"2\"\n\n[workspace.metadata]\nname = \"acme\"\n",
+        );
+        for (name, dependency) in [("app", "reg-a"), ("lib", "reg-b")] {
+            write(
+                &["crates", name, "Cargo.toml"],
+                &format!(
+                    "[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \
+                     \"2021\"\n\n[dependencies]\n{dependency} = \"1\"\n"
+                ),
+            );
+            write(&["crates", name, "src", "lib.rs"], "");
+        }
+        let lockfile = |reg_a_version: &str| {
+            format!(
+                r#"version = 4
+
+[[package]]
+name = "app"
+version = "0.1.0"
+dependencies = ["reg-a"]
+
+[[package]]
+name = "lib"
+version = "0.1.0"
+dependencies = ["reg-b"]
+
+[[package]]
+name = "reg-a"
+version = "{reg_a_version}"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "reg-a-{reg_a_version}"
+
+[[package]]
+name = "reg-b"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "reg-b-1.0.0"
+"#
+            )
+        };
+        let initial_lock = lockfile("1.0.0");
+        let lock_path = AnchoredSystemPathBuf::from_raw("Cargo.lock").unwrap();
+
+        let classify = |current: String| {
+            let root = root.clone();
+            let lock_path = lock_path.clone();
+            let previous_contents = initial_lock.as_bytes().to_vec();
+            async move {
+                root.join_component("Cargo.lock")
+                    .create_with_contents(&current)
+                    .unwrap();
+                let graph = PackageGraph::builder_optional(&root, None)
+                    .with_contributor(
+                        crate::cargo::CargoContributor::new_without_external_dependencies(
+                            root.clone(),
+                        ),
+                    )
+                    .build()
+                    .await
+                    .unwrap();
+                let detector =
+                    GlobalDepsPackageChangeMapper::new(&graph, std::iter::empty::<&str>()).unwrap();
+                ChangeMapper::new(&graph, Vec::new(), detector)
+                    .changed_packages(
+                        HashSet::from([lock_path.clone()]),
+                        LockfileContents::Changed {
+                            path: lock_path,
+                            previous_contents,
+                        },
+                    )
+                    .unwrap()
+            }
+        };
+        let changed_names = |changes: PackageChanges| match changes {
+            PackageChanges::Some(changes) => changes
+                .into_keys()
+                .map(|package| package.name)
+                .collect::<HashSet<_>>(),
+            PackageChanges::All(reason) => {
+                panic!("a Cargo.lock change must not invalidate every package: {reason:?}")
+            }
+        };
+
+        let comment_only = changed_names(classify(format!("{initial_lock}\n# comment\n")).await);
+        assert_eq!(
+            comment_only,
+            HashSet::from([PackageName::Root]),
+            "a Cargo.lock edit that changes no closure affects no crate"
+        );
+
+        let upgraded = changed_names(classify(lockfile("1.0.1")).await);
+        assert!(upgraded.contains(&PackageName::from("app")), "{upgraded:?}");
+        assert!(
+            upgraded.contains(&PackageName::from("acme")),
+            "the workspace aggregate depends on every crate: {upgraded:?}"
+        );
+        assert!(
+            !upgraded.contains(&PackageName::from("lib")),
+            "lib's closure did not change: {upgraded:?}"
+        );
     }
 
     /// A crate and a JS package sharing a name is a hard error, like any

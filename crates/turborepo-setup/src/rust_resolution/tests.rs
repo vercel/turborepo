@@ -4,7 +4,8 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 use crate::{
-    lock::Platform, rust_metadata::tests::fixture, source_policy::test_support::LoopbackServer,
+    git::FakeGit, lock::Platform, rust_metadata::tests::fixture,
+    source_policy::test_support::LoopbackServer,
 };
 
 fn toolchain(body: &str) -> Toolchain {
@@ -180,7 +181,7 @@ async fn official_resolution_reads_only_the_requested_channel_manifest() {
 }
 
 mod lock_updates {
-    use std::{fs, path::Path, process::Command};
+    use std::{fs, path::Path};
 
     use super::*;
     use crate::lock::{
@@ -216,12 +217,13 @@ mod lock_updates {
 
     fn update(root: &Path, server: &LoopbackServer, mode: Mode) -> Lock {
         let transport = RustupTransport::loopback_http_for_tests(server.origin()).unwrap();
-        let snapshot = Snapshot::capture_with(
+        let snapshot = Snapshot::capture_with_git(
             root,
             Ecosystems {
                 rust: true,
                 ..Default::default()
             },
+            FakeGit::shared(),
         )
         .unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -244,11 +246,7 @@ mod lock_updates {
     #[test]
     fn edits_keep_the_locked_release_until_an_explicit_refresh() {
         let root = tempfile::tempdir().unwrap();
-        let git = Command::new("git")
-            .args(["init", "--quiet"])
-            .arg(root.path())
-            .status();
-        assert!(git.unwrap().success());
+        crate::git::fake_repository(root.path()).unwrap();
         fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
         let file = root.path().join("rust-toolchain.toml");
         fs::write(
@@ -293,14 +291,7 @@ mod lock_updates {
     #[test]
     fn rust_creation_and_removal_preserve_locked_uv_without_uv_traffic() {
         let root = tempfile::tempdir().unwrap();
-        assert!(
-            Command::new("git")
-                .args(["init", "--quiet"])
-                .arg(root.path())
-                .status()
-                .unwrap()
-                .success()
-        );
+        crate::git::fake_repository(root.path()).unwrap();
         fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
         fs::write(
             root.path().join("uv.toml"),
@@ -312,7 +303,8 @@ mod lock_updates {
             python: true,
             go: false,
         };
-        let snapshot = Snapshot::capture_with(root.path(), ecosystems).unwrap();
+        let snapshot =
+            Snapshot::capture_with_git(root.path(), ecosystems, FakeGit::shared()).unwrap();
         let requirement = snapshot.uv_requirement().unwrap().unwrap();
         let platform = crate::lock::Platform::LinuxX64Gnu;
         let official =
@@ -365,7 +357,8 @@ mod lock_updates {
             if remove {
                 fs::remove_file(&file).unwrap();
             }
-            let snapshot = Snapshot::capture_with(root.path(), ecosystems).unwrap();
+            let snapshot =
+                Snapshot::capture_with_git(root.path(), ecosystems, FakeGit::shared()).unwrap();
             let selected = reconcile::reconcile(&snapshot, Mode::Local, false, |request| {
                 runtime
                     .block_on(crate::native_resolution::resolve_with_rust(

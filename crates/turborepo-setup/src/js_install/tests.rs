@@ -46,6 +46,26 @@ fn missing_lock_is_an_error_not_permission_to_create_one() {
 }
 
 #[test]
+fn pnpm_installs_frozen_from_pnpm_lock_yaml() {
+    let f = Fixture::new();
+    let pnpm = Frozen::new(Manager::Pnpm).unwrap();
+    let error = pnpm.lockfile(&f.root()).unwrap_err().to_string();
+    assert!(
+        error.contains("committed pnpm-lock.yaml") && error.contains("`pnpm install`"),
+        "{error}"
+    );
+    fs::write(f.root().join("pnpm-lock.yaml"), "lockfileVersion: '9.0'\n").unwrap();
+    assert_eq!(pnpm.lockfile(&f.root()).unwrap(), "pnpm-lock.yaml");
+    let args = pnpm.args(&Version::new(10, 0, 0));
+    assert_eq!(args, ["install", "--frozen-lockfile"]);
+    let rewrite = f.npm("echo rewritten > pnpm-lock.yaml");
+    let error = pnpm.run(&rewrite, args, &f.root(), &BTreeMap::new(), Command::status);
+    assert!(matches!(error, Err(Error::LockChanged { .. })));
+    let lock = fs::read(f.root().join("pnpm-lock.yaml")).unwrap();
+    assert_eq!(lock, b"lockfileVersion: '9.0'\n");
+}
+
+#[test]
 fn runs_the_frozen_command_with_the_given_environment_and_returns_its_status() {
     let f = Fixture::new();
     fs::write(f.root().join("package-lock.json"), "lock").unwrap();
@@ -56,7 +76,10 @@ fn runs_the_frozen_command_with_the_given_environment_and_returns_its_status() {
             ("MANAGED".to_owned(), OsString::from("yes")),
             ("CODE".to_owned(), OsString::from(code.to_string())),
         ]);
-        let status = f.frozen.run(&npm, args, &f.root(), &env).unwrap();
+        let status = f
+            .frozen
+            .run(&npm, args, &f.root(), &env, Command::status)
+            .unwrap();
         assert_eq!(status.code(), Some(code));
         let ran = fs::read_to_string(f.root().join("ran")).unwrap();
         assert_eq!(ran, "ci yes\n");
@@ -76,7 +99,9 @@ fn rewritten_or_created_lockfiles_are_restored_and_fail() {
         let f = Fixture::new();
         fs::write(f.root().join("package-lock.json"), "lock").unwrap();
         let npm = f.npm(body);
-        let error = f.frozen.run(&npm, &["ci"], &f.root(), &BTreeMap::new());
+        let error = f
+            .frozen
+            .run(&npm, &["ci"], &f.root(), &BTreeMap::new(), Command::status);
         let message = error.unwrap_err().to_string();
         assert!(
             message.contains("`npm ci` changed the committed") && message.contains("restored"),
@@ -88,4 +113,75 @@ fn rewritten_or_created_lockfiles_are_restored_and_fail() {
         );
         assert!(!f.root().join("npm-shrinkwrap.json").exists());
     }
+}
+
+#[test]
+fn yarn_classic_and_modern_refuse_lock_updates_their_own_way() {
+    let f = Fixture::new();
+    let yarn = Frozen::new(Manager::Yarn).unwrap();
+    let error = yarn.lockfile(&f.root()).unwrap_err().to_string();
+    assert!(error.contains("committed yarn.lock"), "{error}");
+    fs::write(f.root().join("yarn.lock"), "# yarn lockfile v1\n").unwrap();
+    assert_eq!(yarn.lockfile(&f.root()).unwrap(), "yarn.lock");
+    let classic = yarn.args(&Version::new(1, 22, 22));
+    assert_eq!(classic, ["install", "--frozen-lockfile"]);
+    assert_eq!(
+        yarn.args(&Version::new(4, 5, 0)),
+        ["install", "--immutable"]
+    );
+}
+
+#[test]
+fn bun_installs_frozen_from_either_lock_and_never_migrates_it() {
+    let f = Fixture::new();
+    let bun = Frozen::new(Manager::Bun).unwrap();
+    let error = bun.lockfile(&f.root()).unwrap_err().to_string();
+    assert!(error.contains("committed bun.lock or bun.lockb"), "{error}");
+    fs::write(f.root().join("bun.lockb"), "binary").unwrap();
+    assert_eq!(bun.lockfile(&f.root()).unwrap(), "bun.lockb");
+    let args = bun.args(&Version::new(1, 2, 23));
+    assert_eq!(args, ["install", "--frozen-lockfile"]);
+    // A text lock written beside the committed binary one is removed.
+    let migrate = f.npm("echo text > bun.lock");
+    let error = bun.run(&migrate, args, &f.root(), &BTreeMap::new(), Command::status);
+    assert!(matches!(error, Err(Error::LockChanged { .. })));
+    assert!(!f.root().join("bun.lock").exists());
+    assert_eq!(fs::read(f.root().join("bun.lockb")).unwrap(), b"binary");
+}
+
+#[test]
+fn offline_modes_follow_each_manager_and_locked_version() {
+    let f = Fixture::new();
+    let offline = |manager, version: &str| {
+        let version = Version::parse(version).unwrap();
+        Frozen::new(manager).unwrap().offline(&version, &f.root())
+    };
+    let flag = Offline::Args(&["--offline"]);
+    assert_eq!(
+        offline(Manager::Npm, "11.6.1"),
+        Offline::Args(&["--offline", "--no-update-notifier"])
+    );
+    assert_eq!(offline(Manager::Pnpm, "10.18.0"), flag);
+    assert_eq!(offline(Manager::Yarn, "1.22.22"), flag);
+    assert_eq!(offline(Manager::Bun, "1.4.1"), flag);
+    let Offline::Unsupported(bun) = offline(Manager::Bun, "1.4.0") else {
+        panic!("Bun 1.4.0 has no --offline");
+    };
+    assert!(bun.contains("needs Bun 1.4.1 or newer"), "{bun}");
+    // Modern Yarn reads enableNetwork from its environment, unless a host
+    // entry in the committed .yarnrc.yml takes precedence.
+    let network = Offline::Env(&[("YARN_ENABLE_NETWORK", "0")]);
+    assert_eq!(offline(Manager::Yarn, "4.9.2"), network);
+    let rc = f.root().join(".yarnrc.yml");
+    let host = "networkSettings:\n  \"*.example\":\n    enableNetwork:";
+    for (value, kept_offline) in [(" false", true), (" true", false), (" \"true\"", false)] {
+        fs::write(&rc, format!("{host}{value}\n")).unwrap();
+        let mode = offline(Manager::Yarn, "4.9.2");
+        assert_eq!(mode == network, kept_offline, "{value}: {mode:?}");
+    }
+    fs::write(&rc, "networkSettings: [").unwrap();
+    assert!(matches!(
+        offline(Manager::Yarn, "3.8.7"),
+        Offline::Unsupported(reason) if reason.contains(".yarnrc.yml")
+    ));
 }
