@@ -621,11 +621,7 @@ fn npm_failed_integrity_or_late_drift_never_publishes_a_partial_generation() {
             if p.ends_with(".tgz") {
                 match case {
                     2 => fs::write(root.join("package.json"), "{}").unwrap(),
-                    3 => fs::write(
-                        root.join("apps/web/.npmrc"),
-                        "registry=https://private.invalid",
-                    )
-                    .unwrap(),
+                    3 => fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                     _ => {}
                 }
             }

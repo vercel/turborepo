@@ -276,19 +276,14 @@ fn coherent_repository_only_forgery_is_healthy_but_never_authorized_offline() {
 #[test]
 fn declaration_drift_missing_lock_and_unsupported_offline_controls_never_resolve() {
     let empty = LoopbackServer::new([], |_| {}).unwrap();
-    for case in 0..4 {
+    for case in 0..3 {
         let f = installed();
         match case {
             0 => fs::remove_file(f.owned.root().join("turbo.lock")).unwrap(),
             1 => fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap(),
-            2 => fs::write(
+            _ => fs::write(
                 f.owned.root().join("package.json"),
                 r#"{"packageManager":"pnpm@11.0.0"}"#,
-            )
-            .unwrap(),
-            _ => fs::write(
-                f.owned.root().join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
             )
             .unwrap(),
         }

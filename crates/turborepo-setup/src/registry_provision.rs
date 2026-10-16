@@ -68,7 +68,7 @@ pub struct RegistryTransport {
 impl RegistryTransport {
     // A configured mirror uses `mirrored` instead; neither falls back to
     // public npm or forwards credentials across origins.
-    pub fn official(policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
             origin: policy.registry().into(),
@@ -80,7 +80,7 @@ impl RegistryTransport {
 
     /// Send the same registry requests to a validated mirror base only.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {

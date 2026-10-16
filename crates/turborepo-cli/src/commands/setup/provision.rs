@@ -21,7 +21,7 @@ use turborepo_setup::{
     python_resolution::PythonTransport,
     rust_provision::RustPlan,
     rustup_provision::{RustupPlan, RustupTransport},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
     uv_provision::UvPlan,
     uv_resolution::UvTransport,
     yarn_provision::YarnPlan,
@@ -50,7 +50,7 @@ pub(super) struct Transports {
 impl Transports {
     /// Official sources, unless `TURBO_SETUP_*` variables or the root
     /// `setup.mirrors` policy select a mirror, in that order.
-    pub fn official(policy: &OfficialSourcePolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
+    pub fn official(policy: &ToolDownloadPolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
         // Verified archive bytes are shared through the user's cache directory;
         // extraction and activation stay in each repository's .turbo/tools.
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
@@ -58,7 +58,7 @@ impl Transports {
     }
 
     pub fn configured(
-        policy: &OfficialSourcePolicy,
+        policy: &ToolDownloadPolicy,
         mirrors: &Mirrors,
         cache: Option<ArtifactCache>,
     ) -> Result<Self, Error> {
@@ -561,7 +561,7 @@ pub(super) fn run(
     snapshot: Snapshot,
     request: &super::SetupRequest,
     transports: Option<Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<Provisioned, Error> {
     let (force, offline) = (request.force, request.offline);
     let resolution_mode = if request.update_lock {

@@ -341,7 +341,7 @@ pub struct PythonTransport {
 }
 
 impl PythonTransport {
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?,
             origin: ORIGIN.into(),
@@ -350,7 +350,7 @@ impl PythonTransport {
 
     /// Send the official build paths to a validated mirror base.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &crate::mirror::Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {

@@ -6,7 +6,7 @@ use turborepo_setup::{
     Preparation, ephemeral_reconcile,
     lock::{Installation, Snapshot, reconcile},
     native_baseline::NativeRecord,
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 use turborepo_tool_install::Store;
 
@@ -16,7 +16,7 @@ pub(super) fn run(
     discovery: &root::Discovery,
     snapshot: Snapshot,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<provision::Provisioned, Error> {
     let platform = provision::platform()?;
     // Name what is missing or unsupported instead of the record's generic

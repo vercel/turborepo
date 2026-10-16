@@ -3,7 +3,7 @@ use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::{ExecutionContext, Libc},
     lock::{Platform, Snapshot},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 
 use super::{Error, root::Discovery};
@@ -30,7 +30,7 @@ pub(super) fn run(
     discovery: &Discovery,
     sources: Snapshot,
     dependencies: &super::dependencies::Dependencies,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
     let context = context()?;
     preflight()?;

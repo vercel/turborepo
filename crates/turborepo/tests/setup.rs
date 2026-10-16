@@ -249,58 +249,8 @@ fn failure(root: &Path, words: &[&str], ci: bool, expected: &str) -> String {
     text
 }
 
-/// The official source policy's fixed System npmrc locations, plus the bundled
-/// npm config under each prefix. Production has no override for these.
-fn host_system_npm_config() -> Option<std::path::PathBuf> {
-    [
-        "/etc/npmrc",
-        "/usr/etc/npmrc",
-        "/usr/local/etc/npmrc",
-        "/opt/homebrew/etc/npmrc",
-    ]
-    .into_iter()
-    .map(Path::new)
-    .flat_map(|config| {
-        let bundled = config
-            .parent()
-            .and_then(Path::parent)
-            .map(|prefix| prefix.join("lib/node_modules/npm/npmrc"));
-        std::iter::once(config.to_owned()).chain(bundled)
-    })
-    .find(|path| fs::symlink_metadata(path).is_ok())
-}
-
-fn external_system_policy_blocked(code: i32, text: &str) -> bool {
-    let blocked = diagnostic_contains(text, "official-only setup rejects System configuration")
-        || diagnostic_contains(text, "cannot safely inspect System configuration");
-    if blocked {
-        assert_eq!(code, 1);
-        assert!(!text.contains(": ready"), "{text}");
-        // Contributor hosts may carry npm policy; CI runner images must qualify.
-        assert!(
-            std::env::var_os("CI").is_none(),
-            "host npm configuration blocked setup in CI: {text}"
-        );
-        // A clean host must prove readiness; only real host state may block it.
-        let Some(config) = host_system_npm_config() else {
-            panic!("System policy blocked readiness without host System npm configuration: {text}");
-        };
-        eprintln!(
-            "Native readiness qualification blocked by external System npm configuration at {}; \
-             policy was not bypassed.",
-            config.display()
-        );
-    }
-    blocked
-}
-
 fn check_failure(root: &Path, words: &[&str], ci: bool, expected: &str) {
-    let (code, text) = invoke(root, words, ci);
-    assert_eq!(code, 1, "{text}");
-    assert!(
-        diagnostic_contains(&text, expected) || external_system_policy_blocked(code, &text),
-        "{text}"
-    );
+    failure(root, words, ci, expected);
 }
 
 /// Setup qualification follows the host C library, not this test's target.
@@ -1013,7 +963,7 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
         )
     };
     write(root, "turbo.json", &config("skip"));
-    // The source preflight accepts the policy, which makes this a tools-only
+    // The tool-download preflight accepts the policy, which makes this a tools-only
     // check without --tools-only and lifts the unsupported Rust ecosystem.
     let (code, text) = invoke(root, &["setup", "--check"], false);
     assert_eq!(code, 1, "{text}");
@@ -1023,8 +973,7 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             target_os = "macos",
             all(target_os = "linux", target_env = "gnu")
         )
-    )) && !external_system_policy_blocked(code, &text)
-    {
+    )) {
         assert!(
             diagnostic_contains(&text, "managed activation requires turbo.lock"),
             "{text}"
@@ -1049,8 +998,7 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
             target_os = "macos",
             all(target_os = "linux", target_env = "gnu")
         )
-    )) && !external_system_policy_blocked(code, &text)
-    {
+    )) {
         assert!(
             diagnostic_contains(&text, "managed activation requires turbo.lock"),
             "{text}"
@@ -1067,7 +1015,7 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
     any(target_arch = "x86_64", target_arch = "aarch64"),
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
-fn npm_and_pnpm_wrapper_environments_reach_setup_but_custom_registries_do_not() {
+fn npm_and_pnpm_wrapper_environments_and_custom_registries_do_not_affect_setup() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
@@ -1110,8 +1058,7 @@ fn npm_and_pnpm_wrapper_environments_reach_setup_but_custom_registries_do_not() 
         let (code, text) = invoke_with(root, &words, false, env);
         assert_eq!(code, 1, "{text}");
         assert!(
-            diagnostic_contains(&text, "managed activation requires turbo.lock")
-                || external_system_policy_blocked(code, &text),
+            diagnostic_contains(&text, "managed activation requires turbo.lock"),
             "{text}"
         );
         let mut custom = env.clone();
@@ -1119,7 +1066,7 @@ fn npm_and_pnpm_wrapper_environments_reach_setup_but_custom_registries_do_not() 
         let (code, text) = invoke_with(root, &words, false, &custom);
         assert_eq!(code, 1, "{text}");
         assert!(
-            diagnostic_contains(&text, "rejects npm configuration environment"),
+            diagnostic_contains(&text, "managed activation requires turbo.lock"),
             "{text}"
         );
         assert!(!text.contains("private.invalid"), "{text}");
@@ -1261,31 +1208,14 @@ fn prune(root: &Path, output: &Path, docker: bool) {
 ))]
 #[test]
 fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
-    use turborepo_setup::{
-        activation::ActivationPlan,
-        execution_identity::{ExecutionContext, Libc},
-        test_support::OwnedSetupFixture,
-    };
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     let tools = managed_fixture(root);
-    // Typed fallback only for hosts whose System npm config blocks the CLI.
-    let fallback = OwnedSetupFixture::new().unwrap();
-    let context = ExecutionContext::new(
-        turborepo_platform::Platform::current(),
-        if cfg!(target_os = "linux") {
-            Libc::Gnu { abi: "gnu".into() }
-        } else {
-            Libc::None
-        },
-        "host-readiness".into(),
-        ["unprobed".into()].into(),
-    )
-    .unwrap();
+    let pruned_outputs = tempfile::tempdir().unwrap();
     let mut proven = 0;
     for docker in [false, true] {
-        let output = fallback
-            .root()
+        let output = pruned_outputs
+            .path()
             .join(if docker { "docker" } else { "plain" });
         prune(root, &output, docker);
         let layouts = if docker {
@@ -1320,13 +1250,6 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
                     &["setup", "--check", "--tools-only", "--cwd=apps/web"],
                 ] {
                     let (code, text) = invoke(&pruned, words, ci);
-                    if external_system_policy_blocked(code, &text) {
-                        // Not a pass: the same inspection through owned policy.
-                        fallback.policy_at(&pruned).unwrap();
-                        let plan = ActivationPlan::inspect(&pruned, context.clone()).unwrap();
-                        assert_eq!(plan.tools(), tools);
-                        continue;
-                    }
                     assert_eq!(code, 0, "{}: {words:?}: {text}", pruned.display());
                     assert!(
                         text.contains("node 24.0.0: ready")
@@ -1348,7 +1271,7 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
         }
     }
     eprintln!("Real pruned setup checks passed: {proven} of 18");
-    assert!(proven == 18 || host_system_npm_config().is_some());
+    assert_eq!(proven, 18);
 }
 
 #[cfg(all(
@@ -1356,14 +1279,14 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
 #[test]
-fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
+fn repository_npmrc_does_not_affect_tool_download_policy() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
     let layout = "auto-install-peers = true\nhoist-pattern[]=react\nresolution-mode=highest\n";
     write(root, ".npmrc", layout);
     let words = ["setup", "--check", "--tools-only"];
-    // The policy passed, so check reaches its lock requirement.
+    // Ambient npm settings are irrelevant, so check reaches its lock requirement.
     check_failure(
         root,
         &words,
@@ -1379,7 +1302,7 @@ fn repository_npmrc_with_only_layout_settings_passes_the_source_policy() {
         root,
         &words,
         false,
-        "official-only setup rejects line 4 of the Repository .npmrc",
+        "managed activation requires turbo.lock",
     );
 }
 
@@ -1479,7 +1402,6 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         Ok::<_, turborepo_tool_install::Error>(())
     };
     let positives = std::cell::Cell::new(0);
-    let blocked = std::cell::Cell::new(0);
     let assert_plans = |installed: bool| {
         for ci in [false, true] {
             for extra in [
@@ -1495,11 +1417,6 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                         words.push("--force");
                     }
                     let (code, stdout, stderr) = invoke_raw(root, &words, ci);
-                    if external_system_policy_blocked(code, &stderr) {
-                        assert_eq!(stdout, "");
-                        blocked.set(blocked.get() + 1);
-                        continue;
-                    }
                     let action = if force {
                         "reinstall (--force)"
                     } else if installed {
@@ -1530,11 +1447,10 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
     drop(store);
     assert_plans(true);
     eprintln!(
-        "Native locked-plan qualification: {}/32 positive, {} blocked",
-        positives.get(),
-        blocked.get()
+        "Native locked-plan qualification: {}/32 positive",
+        positives.get()
     );
-    assert_eq!(positives.get() + blocked.get(), 32);
+    assert_eq!(positives.get(), 32);
     for ci in [false, true] {
         let (code, text) = invoke(
             root,
@@ -1547,9 +1463,6 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
             ],
             ci,
         );
-        if external_system_policy_blocked(code, &text) {
-            continue;
-        }
         assert_eq!(code, 0, "{text}");
         assert!(
             text.contains("node 24.0.0: ready") && text.contains("pnpm 10.0.0: ready"),
@@ -1638,15 +1551,8 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     &["setup", "--check", "--tools-only", "--offline"],
                     true,
                 );
-                if external_system_policy_blocked(code, &text) {
-                    eprintln!(
-                        "TURBO-6277: real pruned fixture check success remains blocked by \
-                         external System npm configuration."
-                    );
-                } else {
-                    assert_eq!(code, 0, "{text}");
-                    assert!(text.contains("Dependencies skipped"), "{text}");
-                }
+                assert_eq!(code, 0, "{text}");
+                assert!(text.contains("Dependencies skipped"), "{text}");
                 // Owned policy is a test-only typed seam, never a production opt-out.
                 // Inspect the actual prune output and all fixture state without locks.
                 let before = snapshot(pruned.root().parent().unwrap());
@@ -1693,12 +1599,11 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                 words.push("--force");
             }
             let (code, stdout, stderr) = invoke_raw(root, &words, true);
-            if external_system_policy_blocked(code, &stderr) || corrupt_manifest {
+            if corrupt_manifest {
                 assert_eq!(code, 1, "{stderr}");
                 assert_eq!(stdout, "");
                 assert!(
-                    diagnostic_contains(&stderr, "managed installation is damaged or unsafe")
-                        || external_system_policy_blocked(code, &stderr),
+                    diagnostic_contains(&stderr, "managed installation is damaged or unsafe"),
                     "{stderr}"
                 );
             } else {
@@ -1876,9 +1781,6 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         .collect::<Vec<_>>()
         .join(" ");
         let code = output.status.code().unwrap();
-        if external_system_policy_blocked(code, &text) {
-            return;
-        }
         assert_eq!(code, 0, "{text}");
         assert!(
             text.contains(&format!("node 24.0.0: {outcome}"))
@@ -2206,10 +2108,7 @@ fn version_manager_declarations_are_reported_as_ignored_never_silently() {
     ] {
         let (code, text) = invoke(root, words, ci);
         assert_eq!(code, 1, "{text}");
-        assert!(
-            diagnostic_contains(&text, expected) || external_system_policy_blocked(code, &text),
-            "{text}"
-        );
+        assert!(diagnostic_contains(&text, expected), "{text}");
         for ignored in [
             IGNORED,
             ".tool-versions (asdf/mise): nodejs 20.11.0 (native node declaration takes \
@@ -2332,13 +2231,13 @@ fn native_locked_plan_missing_lock_refresh_and_policy_remain_explicit_errors() {
     write(root, "turbo.json", "{}");
     failure(root, &["setup", "--plan", "--tools-only"], true, DISABLED);
     write(root, "turbo.json", ENABLED);
-    write(root, "turbo.lock", r#"{"schemaVersion":0,"tools":{}}"#);
+    fs::remove_file(root.join("turbo.lock")).unwrap();
     write(root, ".npmrc", "registry=https://private.invalid");
     check_failure(
         root,
         &["setup", "--plan", "--tools-only"],
         true,
-        "official-only setup rejects line 1 of the Repository .npmrc",
+        "frozen setup requires turbo.lock",
     );
     assert!(!root.join(".turbo").exists());
 }

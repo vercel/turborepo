@@ -5,7 +5,7 @@ use std::{cell::Cell, io};
 use turborepo_setup::{
     activation::{ActivationPlan, Error as ReadinessError},
     lock::{Installation, Platform, Snapshot, Tool, reconcile},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 use turborepo_tool_install::Store;
 
@@ -21,7 +21,7 @@ pub(super) fn report(
     request: &SetupRequest,
     dependencies: &Dependencies,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let proposed = request.update_lock
         || match sources.previous_lock() {
@@ -58,7 +58,7 @@ pub(super) fn inspect(
     discovery: &Discovery,
     sources: Snapshot,
     force: bool,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let dependencies = Dependencies::tools_only();
     inspect_with(discovery, sources, force, &dependencies, preflight)
@@ -69,7 +69,7 @@ fn inspect_with(
     sources: Snapshot,
     force: bool,
     dependencies: &Dependencies,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let context = check::context()?;
     let platform = context.artifact_platform();
@@ -110,7 +110,7 @@ fn propose(
     request: &SetupRequest,
     dependencies: &Dependencies,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let platform = provision::platform()?;
     let root = discovery.snapshot_root()?.as_std_path();
@@ -282,7 +282,7 @@ fn revalidate(discovery: &Discovery) -> Result<(), Error> {
 fn recheck(
     discovery: &Discovery,
     sources: &Snapshot,
-    preflight: &impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: &impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<(), Error> {
     preflight()?;
     revalidate(discovery)?;

@@ -12,6 +12,9 @@ use turborepo_setup::{
 use super::*;
 
 const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+/// Unsupported download policy for fail-closed revalidation races.
+const UNSUPPORTED_SETUP: &str =
+    r#"{"futureFlags":{"experimentalSetup":true},"setup":{"unknown":true}}"#;
 /// The overrides managed `turbo run` applies from the committed root config
 /// and the fixture's trusted setup record, plus the managed bin first on PATH.
 fn run_overrides(
@@ -549,23 +552,93 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
         }
         f.no_execution();
     }
-    for path in [".npmrc", "apps/web/.npmrc", "turbo.json"] {
-        let f = Fixture::new();
-        let u = Upstream::new(&f, false, None);
-        fs::write(
-            f.owned.root().join(path),
-            if path == "turbo.json" {
-                r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#
-            } else {
-                "registry=https://private.invalid"
-            },
-        )
-        .unwrap();
-        assert!(f.run(&u, FROZEN).is_err());
-        assert_eq!(u.hits(), 0);
-        assert!(!f.owned.root().join(".turbo").exists());
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    fs::write(f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP).unwrap();
+    assert!(f.run(&u, FROZEN).is_err());
+    assert_eq!(u.hits(), 0);
+    assert!(!f.owned.root().join(".turbo").exists());
+}
+#[test]
+fn ambient_npmrc_drift_during_locked_downloads_keeps_official_sources_and_lock() {
+    for flags in [FROZEN, &["--force", "--tools-only", "--no-frozen"][..]] {
+        for location in ["root", "nested", "home"] {
+            let f = Fixture::new();
+            let path = match location {
+                "root" => f.owned.root().join(".npmrc"),
+                "nested" => f.owned.root().join("apps/web/.npmrc"),
+                _ => f.owned.home().join(".npmrc"),
+            };
+            fs::write(&path, "registry=https://before.invalid\n").unwrap();
+            let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+            let u = Upstream::new(
+                &f,
+                false,
+                Some((path.clone(), "registry=https://after.invalid\n".into())),
+            );
+            assert_eq!(f.run(&u, flags).unwrap(), 0, "{flags:?} {location}");
+            assert_eq!(u.hits(), 3);
+            assert_eq!(
+                fs::read_to_string(&path).unwrap(),
+                "registry=https://after.invalid\n"
+            );
+            assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+            assert!(f.manifest().is_some());
+            f.no_execution();
+        }
     }
 }
+
+#[test]
+fn readonly_modes_accept_late_ambient_npmrc_drift_without_traffic_or_mutation() {
+    for flags in [
+        &["--check", "--tools-only"][..],
+        &["--plan", "--tools-only"],
+        &["--offline", "--tools-only"],
+    ] {
+        for location in ["root", "nested", "home"] {
+            let f = Fixture::new();
+            let u = Upstream::new(&f, false, None);
+            f.run(&u, FROZEN).unwrap();
+            let path = match location {
+                "root" => f.owned.root().join(".npmrc"),
+                "nested" => f.owned.root().join("apps/web/.npmrc"),
+                _ => f.owned.home().join(".npmrc"),
+            };
+            fs::write(&path, "registry=https://before.invalid\n").unwrap();
+            let calls = std::cell::Cell::new(0);
+            let expected = std::cell::RefCell::new(None);
+            let args = f.args(flags);
+            let result = crate::cli::dispatch_setup(&args, |args, setup| {
+                run_with_policy(
+                    args,
+                    setup,
+                    Some(f.transports(u.origin(), None)),
+                    f.git.clone(),
+                    || {
+                        calls.set(calls.get() + 1);
+                        if calls.get() == 2 {
+                            fs::write(&path, "registry=https://after.invalid\n").unwrap();
+                            *expected.borrow_mut() =
+                                Some(checks::snapshot(f.owned.root().parent().unwrap()));
+                        }
+                        Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
+                    },
+                )
+            })
+            .unwrap();
+            assert_eq!(result.unwrap(), 0, "{flags:?} {location}");
+            assert!(calls.get() >= 2);
+            assert_eq!(
+                checks::snapshot(f.owned.root().parent().unwrap()),
+                expected.into_inner().unwrap()
+            );
+            assert_eq!(u.hits(), 3);
+            f.no_execution();
+        }
+    }
+}
+
 #[test]
 fn missing_stale_non_native_or_wrong_exact_lock_never_mutates() {
     for case in 0..7 {
@@ -671,7 +744,7 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
                 f.owned.root().join("apps/web/.git"),
                 "gitdir: /not-probed\n".into(),
             )),
-            6 => Some((f.owned.home().join(".npmrc"), "".into())),
+            6 => Some((f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into())),
             7 => Some((f.owned.root().join("package.json"), "{}".into())),
             8 => Some((
                 f.owned.root().join("apps/web/package.json"),
