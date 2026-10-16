@@ -721,16 +721,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 }
             }
 
-            let combined_env_patterns: Vec<String> = task_definition
-                .env()
-                .iter()
-                .chain(
-                    self.global_env_patterns
-                        .iter()
-                        .filter(|p| p.starts_with('!')),
-                )
-                .cloned()
-                .collect();
+            // `globalEnv` exclusions opt every package out of the inferred
+            // variables they match. They only filter inference: a variable the
+            // task lists in its own `env` stays in its hash, as it does in a
+            // package without a detected framework.
+            computed_wildcards.extend(
+                self.global_env_patterns
+                    .iter()
+                    .filter(|p| p.starts_with('!'))
+                    .cloned(),
+            );
 
             let inference = self
                 .wildcard_cache
@@ -741,7 +741,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 })?;
             let user_env_var_set = self
                 .wildcard_cache
-                .get_or_compute(self.env_at_execution_start, &combined_env_patterns)
+                .get_or_compute(self.env_at_execution_start, task_definition.env())
                 .map_err(|err| Error::EnvPattern {
                     task_id: task_id.clone().into_owned(),
                     err,
@@ -1475,6 +1475,102 @@ mod test {
         );
         assert!(other_framework.is_none());
         assert!(other_env_vars.all.is_empty());
+    }
+
+    #[tokio::test]
+    async fn global_env_exclusions_opt_out_of_inference_but_keep_task_env() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = nextjs_graph_at(&repo_root).await;
+        let external_hashes = compute_external_deps_hashes(&graph).unwrap();
+
+        let task_id = TaskId::new("web", "build").into_owned();
+        let other_task_id = TaskId::new("other", "build").into_owned();
+        // Opt out of inferred NEXT_PUBLIC_* globally, but declare one of them
+        // explicitly on the task.
+        let global_env_patterns = vec!["!NEXT_PUBLIC_*".to_string()];
+        let definition = TaskDefinition {
+            env: vec!["NEXT_PUBLIC_API_URL".to_string()],
+            ..Default::default()
+        };
+        let file_hash = FileHashes(Vec::new()).hash();
+
+        let calculate = |api_url: &str, deferred: bool| {
+            let opts = InferenceOpts(true);
+            let env = EnvironmentVariableMap::from(HashMap::from([
+                ("NEXT_PUBLIC_API_URL".to_string(), api_url.to_string()),
+                ("NEXT_PUBLIC_INFERRED".to_string(), "inferred".to_string()),
+            ]));
+            let mut hasher = TaskHasher::new(
+                PackageInputsHashes {
+                    hashes: HashMap::from([
+                        (task_id.clone(), file_hash.clone()),
+                        (other_task_id.clone(), file_hash.clone()),
+                    ]),
+                    expanded_hashes: HashMap::new(),
+                },
+                &opts,
+                &env,
+                "global-hash",
+                &repo_root,
+                EnvironmentVariableMap::default(),
+                &global_env_patterns,
+            );
+            hasher.set_external_deps_hash_cache(external_hashes.clone());
+            let mut hashes = HashMap::new();
+            for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
+                let context = graph
+                    .package_task_context(&PackageName::from(package))
+                    .unwrap();
+                if deferred {
+                    hasher
+                        .insert_deferred_hash(id, &definition, EnvMode::Strict, &context)
+                        .unwrap();
+                } else {
+                    let hash = hasher
+                        .calculate_task_hash(
+                            id,
+                            &definition,
+                            EnvMode::Strict,
+                            &context,
+                            &[],
+                            PackageTaskEventBuilder::new(package, "build"),
+                        )
+                        .unwrap();
+                    hashes.insert(package, hash);
+                }
+            }
+            let tracker = hasher.task_hash_tracker();
+            (
+                hashes,
+                tracker.framework(&task_id),
+                tracker.env_vars(&task_id).unwrap(),
+                tracker.env_vars(&other_task_id).unwrap(),
+            )
+        };
+
+        let (first, framework, env_vars, other_env_vars) = calculate("preview", false);
+        let (second, _, _, _) = calculate("production", false);
+        let (_, _, deferred_env_vars, _) = calculate("preview", true);
+
+        assert_eq!(framework.unwrap().as_str(), "nextjs");
+        // The global exclusion still opts the package out of inference...
+        assert!(env_vars.by_source.matching.is_empty());
+        // ...but the variable the task declares stays in its hash, exactly as
+        // it does in a package without a detected framework.
+        for projection in [&env_vars, &other_env_vars, &deferred_env_vars] {
+            assert_eq!(
+                projection.all.to_hashable(),
+                ["NEXT_PUBLIC_API_URL=preview"]
+            );
+            assert_eq!(
+                projection.by_source.explicit.names(),
+                ["NEXT_PUBLIC_API_URL"]
+            );
+        }
+        assert_ne!(first["web"], second["web"]);
+        assert_ne!(first["other"], second["other"]);
     }
 
     const FIXTURE_RUSTC_VERSION: &str = concat!(
