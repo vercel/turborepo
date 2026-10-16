@@ -1,11 +1,13 @@
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use super::identifiers::{Descriptor, Ident};
 
 /// A data structure for resolving descriptors when the protocol isn't known
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DescriptorResolver {
-    mapping: HashMap<Key, Entry>,
+    // Only probed by key (never iterated), so the fast non-DoS-resistant hash
+    // cannot affect results; it is filled once per lockfile descriptor.
+    mapping: FxHashMap<Key, Entry>,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]

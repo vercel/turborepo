@@ -18,15 +18,21 @@ use crate::{ColorConfig, ColorSelector};
 /// output) and by the TUI's virtual terminal emulator.
 pub(crate) fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
     let mut result = Vec::with_capacity(bytes.len());
+    normalize_newlines_into(&mut result, bytes);
+    result
+}
+
+/// Append `bytes` to `out`, converting lone `\n` to `\r\n`. Same output as
+/// [`normalize_newlines`] for a single call.
+fn normalize_newlines_into(out: &mut Vec<u8>, bytes: &[u8]) {
     let mut prev_cr = false;
     for &b in bytes {
         if b == b'\n' && !prev_cr {
-            result.push(b'\r');
+            out.push(b'\r');
         }
-        result.push(b);
+        out.push(b);
         prev_cr = b == b'\r';
     }
-    result
 }
 
 const MODE_DISABLED: u8 = 0;
@@ -179,16 +185,13 @@ impl TerminalSink {
         }
     }
 
-    /// Generate the current prefix string for a task.
-    fn task_prefix(&self, base_prefix: &str) -> String {
-        base_prefix.to_string()
-    }
-
     /// Write task output bytes to stdout with per-line prefix.
     ///
     /// Buffers partial lines. On each complete line (ending with `\n`),
-    /// writes `prefix + line` to stdout. Handles `\r` for progress
-    /// bars by rewriting the prefix at the start of the line.
+    /// renders `prefix + line`. Handles `\r` for progress bars by
+    /// rewriting the prefix at the start of the line. All complete lines
+    /// in `bytes` are rendered into one buffer and written to stdout with
+    /// a single write, instead of one line-buffered write per line.
     fn write_task_output(&self, task: &str, bytes: &[u8]) {
         let mut tasks = self
             .tasks
@@ -202,36 +205,48 @@ impl TerminalSink {
             return;
         };
 
-        let stdout = io::stdout();
-        let mut handle = stdout.lock();
+        let raw = self.raw_terminal.load(Ordering::Relaxed);
+        let mut rendered = Vec::with_capacity(bytes.len() + bytes.len() / 2);
 
-        // Split on newlines. For each complete line, write prefix + line.
+        // Split on newlines. For each complete line, render prefix + line.
         for line in bytes.split_inclusive(|c| *c == b'\n') {
             if line.ends_with(b"\n") {
                 if state.line_buffer.is_empty() {
-                    self.write_prefixed_line(&mut handle, &state.prefix, line);
+                    render_prefixed_line(&mut rendered, &state.prefix, line, raw);
                 } else {
                     state.line_buffer.extend_from_slice(line);
-                    let buffered = std::mem::take(&mut state.line_buffer);
-                    self.write_prefixed_line(&mut handle, &state.prefix, &buffered);
+                    render_prefixed_line(&mut rendered, &state.prefix, &state.line_buffer, raw);
+                    state.line_buffer.clear();
                 }
             } else {
                 state.line_buffer.extend_from_slice(line);
             }
         }
-    }
 
-    /// Write a complete line with per-chunk prefix handling for `\r`.
-    fn write_prefixed_line(&self, handle: &mut io::StdoutLock<'_>, base_prefix: &str, line: &[u8]) {
-        let mut is_first = true;
-        for chunk in line.split_inclusive(|c| *c == b'\r') {
-            if is_first || chunk != b"\n" {
-                let prefix = self.task_prefix(base_prefix);
-                let _ = handle.write_all(prefix.as_bytes());
-            }
-            self.write_bytes(handle, chunk);
-            is_first = false;
+        if !rendered.is_empty() {
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+            let _ = handle.write_all(&rendered);
         }
+    }
+}
+
+/// Render a complete line with per-chunk prefix handling for `\r`.
+///
+/// Under raw mode each `\r`-delimited chunk is newline-normalized on its
+/// own, exactly as if it had been written separately.
+fn render_prefixed_line(out: &mut Vec<u8>, prefix: &str, line: &[u8], raw: bool) {
+    let mut is_first = true;
+    for chunk in line.split_inclusive(|c| *c == b'\r') {
+        if is_first || chunk != b"\n" {
+            out.extend_from_slice(prefix.as_bytes());
+        }
+        if raw {
+            normalize_newlines_into(out, chunk);
+        } else {
+            out.extend_from_slice(chunk);
+        }
+        is_first = false;
     }
 }
 
@@ -510,6 +525,23 @@ mod tests {
             buf, b"a\r\nb\r\n",
             "lone \\n becomes \\r\\n, existing \\r\\n untouched"
         );
+    }
+
+    #[test]
+    fn render_prefixed_line_matches_per_chunk_writes() {
+        let render = |line: &[u8], raw: bool| {
+            let mut out = Vec::new();
+            render_prefixed_line(&mut out, "P:", line, raw);
+            out
+        };
+        assert_eq!(render(b"a\n", false), b"P:a\n");
+        assert_eq!(render(b"b\r\n", false), b"P:b\r\n");
+        assert_eq!(render(b"x\ry\n", false), b"P:x\rP:y\n");
+        assert_eq!(render(b"a\n", true), b"P:a\r\n");
+        // Each `\r`-delimited chunk is normalized on its own, as when the
+        // chunks were written separately.
+        assert_eq!(render(b"b\r\n", true), b"P:b\r\r\n");
+        assert_eq!(render(b"x\ry\n", true), b"P:x\rP:y\r\n");
     }
 
     #[test]

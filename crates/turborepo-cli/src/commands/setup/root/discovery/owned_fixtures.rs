@@ -61,7 +61,9 @@ fn owned_policy_reaches_actual_parser_root_and_executor_without_success_or_write
     setup::validate_request(&request)?;
     assert!(matches!(
         setup::run(&args, setup_args),
-        Err(setup::Error::Unsupported(_))
+        Err(setup::Error::LockDiagnostics(
+            setup::lock_diagnostics::Error::Missing
+        )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.
     ));
     fs::write(f.home().join(".npmrc"), "")?;
     assert_eq!(
@@ -246,7 +248,9 @@ async fn unsupported_unix_artifact_targets_fail_before_loopback_traffic_or_stora
     };
     assert!(matches!(
         setup::run(&args, setup_args),
-        Err(setup::Error::Unsupported(_))
+        Err(setup::Error::LockDiagnostics(
+            setup::lock_diagnostics::Error::Missing
+        )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.
     ));
     assert!(
         tokio::time::timeout(Duration::from_millis(50), listener.accept())

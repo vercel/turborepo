@@ -8,7 +8,7 @@ use turborepo_setup::{
 
 use super::{Error, root::Discovery};
 
-fn context() -> Result<ExecutionContext, Error> {
+pub(super) fn context() -> Result<ExecutionContext, Error> {
     // Share provisioning's qualification: notably no Windows/musl fallback.
     let platform = super::provision::platform()?;
     let libc = match platform {
@@ -29,11 +29,13 @@ fn context() -> Result<ExecutionContext, Error> {
 pub(super) fn run(
     discovery: &Discovery,
     sources: Snapshot,
+    dependencies: &super::dependencies::Dependencies,
     preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
 ) -> Result<i32, Error> {
     let context = context()?;
     preflight()?;
-    let plan = ActivationPlan::inspect(discovery.snapshot_root()?.as_std_path(), context)?;
+    // Keep the original captured sources and their workspace-flag gating.
+    let plan = ActivationPlan::verify_captured(&sources, context)?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.
     preflight()?;
@@ -46,9 +48,28 @@ pub(super) fn run(
     for tool in plan.tools() {
         println!("{} {}: ready", tool.id, tool.version);
     }
-    println!(
-        "Dependencies skipped (--tools-only); dependency readiness was not checked. No tasks run."
-    );
+    if let Some(npm) = sources
+        .previous_lock()
+        .and_then(|lock| lock.tools().get("npm"))
+        && matches!(
+            npm.installation,
+            turborepo_setup::lock::Installation::Bundled { .. }
+        )
+    {
+        println!("npm {}: ready (bundled with managed Node)", npm.version);
+    }
+    // Reports what setup would clean up; checks never remove anything.
+    let root = discovery.snapshot_root()?.as_std_path();
+    for line in super::cleanup::inspect(root) {
+        println!("{line}");
+    }
+    // The activation plan above already required turbo.lock. Dependency
+    // readiness is never claimed.
+    if let Some(lock) = sources.previous_lock() {
+        for line in dependencies.check(root, lock)? {
+            println!("{line}");
+        }
+    }
     Ok(0)
 }
 

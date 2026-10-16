@@ -7,6 +7,53 @@ use std::path::Component;
 mod loopback;
 pub use loopback::LoopbackServer;
 
+fn crc32(data: &[u8]) -> u32 {
+    !data.iter().fold(!0u32, |crc, &byte| {
+        (0..8).fold(crc ^ u32::from(byte), |crc, _| {
+            (crc >> 1) ^ (0xEDB8_8320 & 0u32.wrapping_sub(crc & 1))
+        })
+    })
+}
+fn put(out: &mut Vec<u8>, fields: &[(u64, usize)]) {
+    for &(value, width) in fields {
+        out.extend(&value.to_le_bytes()[..width]);
+    }
+}
+/// One stored Unix-executable entry, like vendor release zips such as Bun.
+pub fn stored_zip(path: &str, data: &[u8]) -> Vec<u8> {
+    stored_zip_entries(&[(path, data)])
+}
+
+/// Stored Unix-executable entries in order. Non-ASCII names set the UTF-8
+/// flag, as Go's `go/test` fixtures do. Adjacent zero fields (method, times,
+/// comments) are packed.
+pub fn stored_zip_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
+    let (mut zip, mut central) = (Vec::new(), Vec::new());
+    for &(path, data) in entries {
+        let (crc, size) = (u64::from(crc32(data)), data.len() as u64);
+        let name = path.len() as u64; // Name length followed by a zero extra length.
+        let flags = if path.is_ascii() { 0 } else { 0x800 };
+        let offset = zip.len() as u64;
+        put(&mut zip, &[(0x04034b50, 4), (20, 2), (flags, 2), (0, 6)]);
+        put(&mut zip, &[(crc, 4), (size, 4), (size, 4), (name, 4)]);
+        zip.extend(path.as_bytes());
+        zip.extend(data);
+        put(
+            &mut central,
+            &[(0x02014b50, 4), (0x0014_0314, 4), (flags, 2)],
+        );
+        put(&mut central, &[(0, 6), (crc, 4), (size, 4), (size, 4)]);
+        put(&mut central, &[(name, 4), (0, 6), (0o100755 << 16, 4)]);
+        put(&mut central, &[(offset, 4)]);
+        central.extend(path.as_bytes());
+    }
+    let (start, size, count) = (zip.len() as u64, central.len() as u64, entries.len() as u64);
+    zip.extend(central);
+    put(&mut zip, &[(0x06054b50, 4), (0, 4), (count, 2), (count, 2)]);
+    put(&mut zip, &[(size, 4), (start, 4), (0, 2)]);
+    zip
+}
+
 /// Observe the real writer's root lock, without arbitrary sleeps or changing
 /// the contributor's environment. Only used by owned concurrent CLI fixtures.
 #[cfg(unix)]
@@ -105,9 +152,9 @@ impl OwnedSetupFixture {
 
     /// Re-runs the production fail-closed npmrc/root-policy checks at an owned
     /// invocation. Neither lexical traversal nor symlink escape can extend the
-    /// ancestor scan outside this fixture. Non-Unix hosts stay unqualified.
+    /// ancestor scan outside this fixture. Other hosts stay unqualified.
     pub fn policy_at(&self, invocation: &Path) -> Result<OfficialSourcePolicy, Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedHost);
         }
         let boundary = fs::canonicalize(self.directory.path()).map_err(|_| Error::Locations)?;
@@ -151,7 +198,7 @@ mod tests {
     use super::*;
     type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     #[test]
     fn owned_inventory_uses_the_same_fail_closed_policy_and_is_ephemeral() -> TestResult {
         let fixture = OwnedSetupFixture::new()?;
@@ -177,17 +224,22 @@ mod tests {
             (root.join("turbo.json"), ConfigOwner::RootPolicy),
         ] {
             fs::create_dir_all(path.parent().ok_or("parent")?)?;
+            let project = matches!(owner, ConfigOwner::Repository | ConfigOwner::Ancestor);
             fs::write(
                 &path,
-                if owner == ConfigOwner::RootPolicy {
-                    "{\"setup\":{}}"
-                } else {
-                    ""
+                match owner {
+                    ConfigOwner::RootPolicy => "{\"setup\":{}}",
+                    _ if project => "registry=https://npm.example.test/",
+                    _ => "",
                 },
             )?;
             assert_eq!(
                 fixture.policy_at(&nested).err(),
-                Some(Error::Configured(owner))
+                Some(if project {
+                    Error::Setting(owner, 1)
+                } else {
+                    Error::Configured(owner)
+                })
             );
             fs::remove_file(path)?;
         }
@@ -255,7 +307,7 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     #[test]
     fn fixture_does_not_qualify_unsupported_hosts() -> TestResult {
         let fixture = OwnedSetupFixture::new()?;

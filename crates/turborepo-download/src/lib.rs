@@ -38,7 +38,11 @@
 
 use std::{error::Error as StdError, time::Duration};
 
-use reqwest::{Client, ClientBuilder, header::ACCEPT_ENCODING, redirect::Policy};
+use reqwest::{
+    Client, ClientBuilder,
+    header::{ACCEPT_ENCODING, LOCATION},
+    redirect::Policy,
+};
 use sha2::{Digest, Sha256, Sha512};
 use url::{Host, Origin, Url};
 
@@ -75,7 +79,7 @@ pub enum Error {
     TimedOut,
     #[error("download byte limit exceeded")]
     TooLarge,
-    #[error("download redirects are forbidden")]
+    #[error("download redirect is not to an approved HTTPS origin, or exceeds the hop limit")]
     RedirectRejected,
     #[error("download returned HTTP status {0}")]
     HttpStatus(u16),
@@ -114,13 +118,8 @@ impl ApprovedOrigin {
             return Err(Error::InvalidOrigin);
         }
         let url = parse_url(origin)?;
-        let loopback = match url.host() {
-            Some(Host::Ipv4(ip)) => ip.is_loopback(),
-            Some(Host::Ipv6(ip)) => ip.is_loopback(),
-            _ => false,
-        };
         let scheme_allowed = if allow_loopback_http {
-            url.scheme() == "http" && loopback
+            url.scheme() == "http" && loopback(&url)
         } else {
             url.scheme() == "https"
         };
@@ -277,11 +276,23 @@ impl VerifiedArtifact {
     }
 }
 
+/// Redirect hops a client with approved redirect targets will follow.
+const MAX_REDIRECTS: usize = 3;
+
 /// Reusable HTTP transport. Intentionally no `Debug` that could expose URLs.
 #[derive(Clone)]
 pub struct DownloadClient {
     client: Client,
     origins: Vec<ApprovedOrigin>,
+    redirects: Redirects,
+}
+
+#[derive(Clone)]
+enum Redirects {
+    /// Only to one of these exactly approved origins.
+    Approved(Vec<ApprovedOrigin>),
+    /// Verified downloads only, to any HTTPS origin.
+    Https,
 }
 
 impl DownloadClient {
@@ -350,7 +361,33 @@ impl DownloadClient {
         Ok(Self {
             client,
             origins: origins.into_iter().collect(),
+            redirects: Redirects::Approved(Vec::new()),
         })
+    }
+
+    /// Follow at most three redirects, each only to one of these exactly
+    /// approved origins (for example a vendor's release CDN). Request origins
+    /// are not implicit redirect targets. Digests and limits still bind the
+    /// final response; approval never makes metadata trusted.
+    #[must_use]
+    pub fn with_redirect_origins(
+        mut self,
+        origins: impl IntoIterator<Item = ApprovedOrigin>,
+    ) -> Self {
+        self.redirects = Redirects::Approved(origins.into_iter().collect());
+        self
+    }
+
+    /// Let digest-verified downloads follow at most three redirects to any
+    /// HTTPS origin, for artifacts whose hosting CDN is not known in advance.
+    /// Because the caller's digest pins the bytes, the final host is never
+    /// trusted for anything else. A redirect never downgrades to HTTP, and
+    /// each hop is a fresh request without credentials, cookies, or a referer.
+    /// Unverified metadata reads still follow no redirects.
+    #[must_use]
+    pub fn with_https_redirects(mut self) -> Self {
+        self.redirects = Redirects::Https;
+        self
     }
 
     /// Read bounded, unverified metadata. Consumers must parse and validate it;
@@ -407,18 +444,23 @@ impl DownloadClient {
             .checked_add(limits.timeout)
             .ok_or(Error::InvalidLimits)?;
         tokio::time::timeout_at(deadline, async {
-            let mut response = self
-                .client
-                .get(url)
-                .header(ACCEPT_ENCODING, "identity")
-                .timeout(limits.timeout)
-                .send()
-                .await
-                .map_err(http_error)?;
+            let (mut url, mut hops) = (url, 0);
+            let mut response = loop {
+                let response = self
+                    .client
+                    .get(url.clone())
+                    .header(ACCEPT_ENCODING, "identity")
+                    .timeout(limits.timeout)
+                    .send()
+                    .await
+                    .map_err(http_error)?;
+                if !response.status().is_redirection() {
+                    break response;
+                }
+                hops += 1;
+                url = self.redirect(&url, &response, hops, verification.is_some())?;
+            };
             let status = response.status();
-            if status.is_redirection() {
-                return Err(Error::RedirectRejected);
-            }
             if status == reqwest::StatusCode::PROXY_AUTHENTICATION_REQUIRED {
                 return Err(Error::ProxyAuthenticationRequired);
             }
@@ -453,6 +495,45 @@ impl DownloadClient {
         })
         .await
         .map_err(|_| Error::TimedOut)?
+    }
+
+    fn redirect(
+        &self,
+        from: &Url,
+        response: &reqwest::Response,
+        hops: usize,
+        verified: bool,
+    ) -> Result<Url, Error> {
+        let next = response
+            .headers()
+            .get(LOCATION)
+            .and_then(|location| location.to_str().ok())
+            .and_then(|location| from.join(location).ok())
+            .ok_or(Error::RedirectRejected)?;
+        // Joined targets obey the same credential and authority rules.
+        let next = parse_url(next.as_str()).map_err(|_| Error::RedirectRejected)?;
+        let allowed = match &self.redirects {
+            Redirects::Approved(origins) => origins.iter().any(|o| o.0 == next.origin()),
+            // Only a loopback fixture request starts on HTTP, and it may only
+            // stay on loopback; everything else must be HTTPS.
+            Redirects::Https => {
+                verified
+                    && (next.scheme() == "https" || (from.scheme() == "http" && loopback(&next)))
+            }
+        };
+        if hops > MAX_REDIRECTS || !allowed {
+            return Err(Error::RedirectRejected);
+        }
+        Ok(next)
+    }
+}
+
+/// A literal loopback IP; DNS names, including `localhost`, never qualify.
+fn loopback(url: &Url) -> bool {
+    match url.host() {
+        Some(Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(Host::Ipv6(ip)) => ip.is_loopback(),
+        _ => false,
     }
 }
 

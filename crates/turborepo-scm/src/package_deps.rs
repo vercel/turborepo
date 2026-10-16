@@ -517,26 +517,32 @@ impl GitRepo {
         // we already know all the paths from the combined index + includes.
         // Hash keys are package-relative, so resolve them into the same
         // repo-root-relative space as the exclusion globs before matching.
-        let exclude_globs: Vec<wax::Glob<'static>> = excludes
-            .iter()
-            .filter(|input| !input.escapes_repo_root())
-            .filter_map(|input| {
-                wax::Glob::new(input.as_str())
-                    .ok()
-                    .map(|glob| glob.into_owned())
-            })
-            .collect();
+        // `<literal>/**` exclusions (one per path dependency for Cargo crates)
+        // are matched by prefix comparison instead of compiling a wax regex
+        // per exclusion and matching every key against each of them.
+        let mut exclude_trees: Vec<&str> = Vec::new();
+        let mut exclude_globs: Vec<wax::Glob<'static>> = Vec::new();
+        for input in excludes.iter().filter(|input| !input.escapes_repo_root()) {
+            if let Some(prefix) = globwalk::literal_tree_prefix(input.as_str()) {
+                exclude_trees.push(prefix);
+            } else if let Ok(glob) = wax::Glob::new(input.as_str()) {
+                exclude_globs.push(glob.into_owned());
+            }
+        }
 
-        if !exclude_globs.is_empty() {
+        if !exclude_trees.is_empty() || !exclude_globs.is_empty() {
             hashes.retain(|key, _| {
                 let Some(repo_path) =
                     globwalk::resolve_package_path(package_unix_path, key.as_str())
                 else {
                     return true;
                 };
-                !exclude_globs
+                !exclude_trees
                     .iter()
-                    .any(|glob| wax::Program::is_match(glob, repo_path.as_ref()))
+                    .any(|prefix| globwalk::matches_literal_tree(&repo_path, prefix))
+                    && !exclude_globs
+                        .iter()
+                        .any(|glob| wax::Program::is_match(glob, repo_path.as_ref()))
             });
         }
 

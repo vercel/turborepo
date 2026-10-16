@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
 };
 
 use semver::Version;
@@ -306,5 +306,52 @@ impl Lockfile for BunLockfile {
 
     fn format_version(&self) -> Option<String> {
         Some(self.data.lockfile_version.to_string())
+    }
+
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        let workspace_path = self.data.workspaces.keys().next()?;
+        let workspace_names: HashSet<&str> = self
+            .data
+            .workspaces
+            .values()
+            .map(|workspace| workspace.name.as_str())
+            .collect();
+        Some(Box::new(BunEdgeResolver {
+            lockfile: self,
+            workspace_path,
+            sensitive_names: self.index.names_scoped_under(&workspace_names),
+        }))
+    }
+}
+
+/// Resolves transitive dependency edges for the shared closure DP.
+///
+/// [`Lockfile::resolve_package`] consults the workspace only through the
+/// workspace-scoped index (`<workspace name>/<dependency>` entries, checked by
+/// `find_matching_version` and `find_package`); catalog, override, workspace
+/// protocol, hoisted, and nested lookups ignore it. A dependency name with no
+/// entry nested under any workspace name therefore resolves identically for
+/// every workspace. Names that do have one are reported as sensitive so the
+/// DP falls back to the per-workspace walk.
+struct BunEdgeResolver<'a> {
+    lockfile: &'a BunLockfile,
+    // Any workspace: non-sensitive edges resolve identically for all of them.
+    workspace_path: &'a str,
+    sensitive_names: HashSet<&'a str>,
+}
+
+impl crate::TransitiveEdgeResolver for BunEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        if self.sensitive_names.contains(name) {
+            return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
+        }
+        Ok(crate::TransitiveEdgeResolution::Global(
+            self.lockfile
+                .resolve_package(self.workspace_path, name, version)?,
+        ))
     }
 }

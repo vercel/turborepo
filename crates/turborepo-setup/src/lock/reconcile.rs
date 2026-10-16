@@ -4,7 +4,8 @@
 //! needs an npm Tool even when its version matches Node's bundled npm. This
 //! coordinator validates provenance and preserves unaffected exact selections;
 //! it does not fetch metadata, install, or infer bundled npm release
-//! identities.
+//! identities. Declared additional tools are exact, so they are always the
+//! snapshot's projection and never reach the resolver.
 
 use std::collections::BTreeSet;
 
@@ -30,7 +31,7 @@ pub enum Error {
     Lock(#[from] super::Error),
     #[error("frozen setup requires turbo.lock; run setup locally and commit it")]
     Missing,
-    #[error("native declarations changed for {0:?}; run setup locally and commit turbo.lock")]
+    #[error("tool declarations changed for {0:?}; run `turbo setup` locally and commit turbo.lock")]
     Drift(BTreeSet<String>),
     #[error("resolver changed unaffected locked selection {0}")]
     Unaffected(String),
@@ -46,13 +47,19 @@ pub enum Error {
 /// Offline resolvers must use approved cached metadata or return an error.
 pub struct Resolution<'a> {
     snapshot: &'a Snapshot,
+    previous: Option<&'a Lock>,
     version_ids: BTreeSet<String>,
     ownership_ids: BTreeSet<String>,
     offline: bool,
+    refresh: bool,
 }
 impl Resolution<'_> {
     pub fn snapshot(&self) -> &Snapshot {
         self.snapshot
+    }
+    /// Semantic previous selection; never changes Snapshot's real disk CAS.
+    pub fn previous_selection(&self) -> Option<&Lock> {
+        self.previous
     }
     pub fn version_ids(&self) -> &BTreeSet<String> {
         &self.version_ids
@@ -62,6 +69,10 @@ impl Resolution<'_> {
     }
     pub fn offline(&self) -> bool {
         self.offline
+    }
+    /// Explicit `--update-lock`: unchanged floating requests may move too.
+    pub fn refresh(&self) -> bool {
+        self.refresh
     }
 }
 
@@ -114,22 +125,88 @@ pub fn reconcile_checked(
     offline: bool,
     resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
     validate: impl FnOnce(&Lock) -> std::io::Result<()>,
+    check: impl FnMut() -> std::io::Result<()>,
+) -> Result<Outcome, Error> {
+    coordinate(
+        snapshot,
+        snapshot.previous_lock(),
+        mode,
+        offline,
+        resolve,
+        validate,
+        check,
+        true,
+    )
+}
+
+/// Read-only `--plan`: the same validated candidate `reconcile_checked` would
+/// select, but Local/Refresh never take a writer, stage or publish. Callers
+/// report `previous_lock` → `lock` as the proposed change; `publication` is
+/// always None.
+pub fn propose(
+    snapshot: &Snapshot,
+    mode: Mode,
+    offline: bool,
+    resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
+    validate: impl FnOnce(&Lock) -> std::io::Result<()>,
+    check: impl FnMut() -> std::io::Result<()>,
+) -> Result<Outcome, Error> {
+    coordinate(
+        snapshot,
+        snapshot.previous_lock(),
+        mode,
+        offline,
+        resolve,
+        validate,
+        check,
+        false,
+    )
+}
+
+// Only the sealed baseline consumer can supply a nondisk previous selection.
+pub(crate) fn reconcile_previous(
+    snapshot: &Snapshot,
+    previous: Option<&Lock>,
+    mode: Mode,
+    offline: bool,
+    resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
+    validate: impl FnOnce(&Lock) -> std::io::Result<()>,
+    check: impl FnMut() -> std::io::Result<()>,
+) -> Result<Outcome, Error> {
+    coordinate(
+        snapshot, previous, mode, offline, resolve, validate, check, true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn coordinate(
+    snapshot: &Snapshot,
+    previous: Option<&Lock>,
+    mode: Mode,
+    offline: bool,
+    resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, Error>,
+    validate: impl FnOnce(&Lock) -> std::io::Result<()>,
     mut check: impl FnMut() -> std::io::Result<()>,
+    publish: bool,
 ) -> Result<Outcome, Error> {
     check().map_err(StorageError::from)?;
     snapshot.check_native_coverage(None)?;
     snapshot.ensure_current()?;
-    let previous = snapshot.previous_lock();
     let current = snapshot.declarations();
+    let additional = snapshot.additional_tools();
     let mut changed = BTreeSet::new();
     for id in current
         .keys()
+        .chain(additional.keys())
         .chain(previous.into_iter().flat_map(|lock| lock.tools().keys()))
     {
         let old = previous.and_then(|lock| lock.tools().get(id));
         // Provenance is a set, not declaration precedence. A noncanonical
         // existing lock must not cause a floating version to refresh.
+        // Additional tools record their whole declaration, so any edit to a
+        // source, digest, layout, or platform list is drift.
         let same = match (old, current.get(id)) {
+            _ if additional.contains_key(id) => old == additional.get(id),
             (Some(tool), Some(values)) => {
                 tool.declarations.len() == values.len()
                     && tool.declarations.iter().all(|value| values.contains(value))
@@ -143,7 +220,8 @@ pub fn reconcile_checked(
     if mode == Mode::Frozen && previous.is_none() {
         return Err(Error::Missing);
     }
-    if !changed.is_empty() && (mode == Mode::Frozen || (mode == Mode::NoLock && previous.is_some()))
+    if !changed.is_empty()
+        && (mode == Mode::Frozen || (mode == Mode::NoLock && snapshot.previous_lock().is_some()))
     {
         return Err(Error::Drift(changed));
     }
@@ -162,34 +240,41 @@ pub fn reconcile_checked(
     } else {
         BTreeSet::new()
     };
-    let candidate = if version_ids.is_empty() && ownership_ids.is_empty() {
-        let tools = previous
+    let mut tools = if version_ids.is_empty() && ownership_ids.is_empty() {
+        previous
             .into_iter()
             .flat_map(|lock| lock.tools())
             .filter(|(id, _)| current.contains_key(*id))
             .map(|(id, tool)| (id.clone(), tool.clone()))
-            .collect();
-        Lock::new(Document {
-            schema_version: SCHEMA_VERSION,
-            tools,
-        })?
+            .collect()
     } else {
         resolve(Resolution {
             snapshot,
+            previous,
             version_ids: version_ids.clone(),
             ownership_ids: ownership_ids.clone(),
             offline,
+            refresh: mode == Mode::Refresh,
         })?
+        .document()
+        .tools
+        .clone()
     };
+    tools.extend(additional.clone());
+    // Revalidates the merged cohort, including executable collisions.
+    let candidate = Lock::new(Document {
+        schema_version: SCHEMA_VERSION,
+        tools,
+    })?;
     snapshot.check_native_coverage(Some(&candidate))?;
-    if !candidate.matches_native(current)? {
+    if !candidate.matches_native(current)? || !snapshot.matches_additional(&candidate) {
         return Err(
             super::Error::Invalid("candidate provenance does not match captured sources").into(),
         );
     }
     if let Some(previous) = previous {
         for (id, tool) in candidate.tools() {
-            if version_ids.contains(id) {
+            if version_ids.contains(id) || additional.contains_key(id) {
                 continue;
             }
             let old = &previous.tools()[id];
@@ -207,8 +292,8 @@ pub fn reconcile_checked(
     // must pass the consumer's host/plan validation BEFORE any writer exists.
     validate(&candidate).map_err(StorageError::from)?;
     let publication = match mode {
-        Mode::Local | Mode::Refresh => Some(snapshot.commit_checked(&candidate, check)?),
-        Mode::Frozen | Mode::NoLock => {
+        Mode::Local | Mode::Refresh if publish => Some(snapshot.commit_checked(&candidate, check)?),
+        Mode::Local | Mode::Refresh | Mode::Frozen | Mode::NoLock => {
             check().map_err(StorageError::from)?;
             snapshot.ensure_current()?;
             None

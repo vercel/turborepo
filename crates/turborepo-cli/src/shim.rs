@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use miette::Diagnostic;
-use shared_child::SharedChild;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::inference::RepoState;
@@ -55,12 +54,85 @@ impl TurboRunner for TurboCliRunner<'_> {
     type Error = cli::Error;
 
     fn is_global_command(&self) -> bool {
-        cli::Args::is_setup_command(&std::env::args_os().collect::<Vec<_>>())
+        let words: Vec<_> = std::env::args_os().collect();
+        cli::Args::is_setup_command(&words) || cli::Args::is_hook_command(&words)
+    }
+
+    fn managed_run_requirement(
+        &self,
+        root: &AbsoluteSystemPath,
+        ui: ColorConfig,
+    ) -> Result<Option<turborepo_shim::capabilities::Requirement>, Self::Error> {
+        // Without a root lock, or a `turbo setup --no-lock` selection in its
+        // place, the repository is unmanaged: keep existing routing, including
+        // a local CLI's own argument diagnostics. Unreadable inventory is left
+        // to managed selection to report.
+        let lock = std::fs::symlink_metadata(root.join_component("turbo.lock").as_std_path());
+        if lock.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            && turborepo_tool_install::Store::selects_record(root.as_std_path())
+                .is_ok_and(|selected| !selected)
+        {
+            return Ok(None);
+        }
+        let words: Vec<_> = std::env::args_os().collect();
+        let args = match managed_run_args(words.clone()) {
+            Ok(Some(args)) => args,
+            Ok(None) => return Ok(None),
+            Err(_) => {
+                // Never hand unparseable arguments to an unvalidated local CLI.
+                // Args::new reports them exactly like the normal CLI, then exits.
+                cli::Args::new(words);
+                unreachable!("Args::new exits for arguments that fail to parse");
+            }
+        };
+        let discovers = discovers_only(args.command.as_ref());
+        let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
+        // Without a probe that needs a managed tool, routing is unchanged.
+        if discovers && !crate::commands::managed::discovery_probes_tools(&base.opts.future_flags) {
+            return Ok(None);
+        }
+        crate::commands::managed::requirement(&base).map_err(Into::into)
     }
 
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
         cli::run(repo_state, self.subscriber, ui, self.query_server.clone())
     }
+}
+
+/// Preserve Args::new's informational exits before inspecting managed setup.
+/// A forwarded task argument after `--` is not a CLI help request.
+fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>, String> {
+    if words.len() <= 1
+        || words
+            .iter()
+            .take_while(|word| *word != "--")
+            .any(|word| matches!(word.to_str(), Some("-h" | "--help")))
+    {
+        return Ok(None);
+    }
+    let args = cli::Args::parse_args(words)?;
+    // Exec, watch and the discovery commands follow run's local CLI policy:
+    // validate before any handoff.
+    let guarded = discovers_only(args.command.as_ref())
+        || matches!(
+            args.command,
+            Some(cli::Command::Run { .. } | cli::Command::Exec { .. } | cli::Command::Watch { .. })
+        );
+    Ok((!args.version && guarded).then_some(args))
+}
+
+/// Commands that discover the repository, which may probe its toolchains,
+/// without running tasks.
+fn discovers_only(command: Option<&cli::Command>) -> bool {
+    matches!(
+        command,
+        Some(
+            cli::Command::Ls { .. }
+                | cli::Command::Query { .. }
+                | cli::Command::Boundaries { .. }
+                | cli::Command::Devtools { .. }
+        )
+    )
 }
 
 /// Implementation of `ConfigProvider` that uses `turborepo-cli`'s configuration
@@ -160,13 +232,17 @@ impl VersionProvider for TurboVersionProvider {
     }
 }
 
-/// Implementation of `ChildSpawner` that uses `turborepo-cli`'s spawn_child
-/// function.
+/// Hands off to another turbo (a repository's local CLI) so that killing this
+/// turbo kills it and everything it started: on Unix this process becomes it,
+/// and on Windows it runs in a kill-on-close job object.
 struct TurboChildSpawner;
 
 impl ChildSpawner for TurboChildSpawner {
-    fn spawn(&self, command: std::process::Command) -> std::io::Result<Arc<SharedChild>> {
-        turborepo_process::spawn_child(command)
+    fn hand_off(
+        &self,
+        command: std::process::Command,
+    ) -> std::io::Result<std::process::ExitStatus> {
+        turborepo_process::hand_off(command)
     }
 }
 
@@ -223,8 +299,10 @@ pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> R
     // Parse args to get verbosity and color config for the subscriber
     let args = ShimArgs::parse().map_err(turborepo_shim::Error::from)?;
 
-    // Setup must not write profiles, even for help or rejected task-only flags.
-    let is_setup = cli::Args::is_setup_command(&std::env::args_os().collect::<Vec<_>>());
+    // Setup and the shell hook must not write profiles, even for help or
+    // rejected task-only flags.
+    let words: Vec<_> = std::env::args_os().collect();
+    let is_setup = cli::Args::is_setup_command(&words) || cli::Args::is_hook_command(&words);
     #[cfg(feature = "heap-dhat")]
     if !is_setup && let Some(heap_profile_file) = args.heap_profile_file() {
         crate::heap_profile::start_global(heap_profile_file);
@@ -268,7 +346,63 @@ mod tests {
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use super::read_no_update_notifier_from_turbo_json;
+    use super::{managed_run_args, read_no_update_notifier_from_turbo_json};
+
+    fn words(args: &[&str]) -> Vec<std::ffi::OsString> {
+        args.iter().map(std::ffi::OsString::from).collect()
+    }
+
+    #[test]
+    fn managed_preflight_leaves_help_and_version_to_normal_cli_parsing() {
+        for args in [
+            vec!["turbo"],
+            vec!["turbo", "--help"],
+            vec!["turbo", "run", "--help"],
+            vec!["turbo", "run", "build", "-h"],
+            vec!["turbo", "--version"],
+            vec!["turbo", "run", "build", "--version"],
+        ] {
+            assert!(
+                managed_run_args(words(&args)).unwrap().is_none(),
+                "{args:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn managed_preflight_does_not_treat_forwarded_help_as_an_info_exit() {
+        let args = managed_run_args(words(&["turbo", "run", "build", "--", "--help"]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(args.execution_args().unwrap().pass_through_args, ["--help"]);
+    }
+
+    #[test]
+    fn managed_preflight_retains_errors_and_excludes_other_commands() {
+        assert!(managed_run_args(words(&["turbo", "run", "build", "--unknown-option"])).is_err());
+        assert!(
+            managed_run_args(words(&["turbo", "setup", "--tools-only"]))
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn managed_preflight_covers_every_task_running_and_discovery_command() {
+        for args in [
+            &["turbo", "run", "build"][..],
+            &["turbo", "run"],
+            &["turbo", "watch", "build"],
+            &["turbo", "exec", "--", "node"],
+            &["turbo", "ls"],
+            &["turbo", "query", "query { packages { items { name } } }"],
+            &["turbo", "query", "affected"],
+            &["turbo", "boundaries"],
+            &["turbo", "devtools", "--no-open"],
+        ] {
+            assert!(managed_run_args(words(args)).unwrap().is_some(), "{args:?}");
+        }
+    }
 
     #[test]
     fn fallback_reads_true_from_turbo_json() {
