@@ -28,7 +28,7 @@ use wax::{
 
 mod package_input;
 
-pub use package_input::{PackageInput, resolve_package_path};
+pub use package_input::{PACKAGE_CONFIG_INPUTS, PackageInput, resolve_package_path};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -231,7 +231,10 @@ fn collapse_path(path: &str) -> Option<(Cow<'_, str>, usize)> {
     }
 }
 
-fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
+/// Adds the patterns the walker matches for the exclusion `glob`. Unless it
+/// already ends in `/**`, an exclusion also excludes everything under the
+/// paths it matches (`X` becomes `X` and `X/**`).
+pub fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
     if let Some(stripped) = glob.strip_suffix('/') {
         if stripped.ends_with("**") {
             exclude_paths.push(stripped.to_string());
@@ -248,10 +251,15 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
     }
 }
 
+/// Whether the walker expands the inclusion `glob` to `glob/**` when it names
+/// a directory. Inclusions containing any character that `wax` may treat as
+/// syntax are never read as a file path, so they are not expanded.
+pub fn expands_directory_inclusion(glob: &str) -> bool {
+    !regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(glob)
+}
+
 fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
-    // If the glob has a glob literal in it e.g. *
-    // then skip trying to read it as a file path.
-    if regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(&*glob) {
+    if !expands_directory_inclusion(glob) {
         return;
     }
 

@@ -12,9 +12,18 @@
 //!
 //! # Glob precedence
 //!
-//! Within each input mode, exclusions are evaluated first. If an exclusion
-//! pattern matches a file, the file is rejected from that mode regardless of
-//! inclusion patterns. Startup and JIT inputs are then combined as a union.
+//! Each input mode mirrors how the git file hasher resolves it, so pattern
+//! order never matters:
+//!
+//! - With `$TURBO_DEFAULT$`, package files are matched unless an exclusion
+//!   matches them as written. Files outside the package also need an inclusion,
+//!   as below.
+//! - Otherwise, a file matches when it is a literal inclusion (the walker reads
+//!   those with a single `stat`, and exclusions never remove them), or when it
+//!   matches a glob inclusion or is inside a literal directory inclusion and no
+//!   exclusion matches it or one of its parent directories.
+//!
+//! Startup and JIT inputs are then combined as a union.
 
 use globwalk::PackageInput;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
@@ -26,24 +35,43 @@ use crate::TaskInputs;
 ///
 /// Created via [`compile_globs`] for a specific package. Globs are resolved
 /// against the package directory into repo-root-relative patterns, so they are
-/// only valid for matching files on behalf of that package. Exclusions take
-/// priority over inclusions within each input mode (see
-/// [`check_compiled_globs`] for precedence rules). When a mode's default is
-/// true, all in-package files match unless excluded.
+/// only valid for matching files on behalf of that package. Each input mode
+/// applies exclusions the way the git file hasher does (see the module docs
+/// for precedence rules). When a mode's default is true, all in-package files
+/// match unless excluded.
 pub struct CompiledGlobs {
-    inclusions: Vec<wax::Glob<'static>>,
-    exclusions: Vec<wax::Glob<'static>>,
-    jit_inclusions: Vec<wax::Glob<'static>>,
-    jit_exclusions: Vec<wax::Glob<'static>>,
-    /// True when `$TURBO_DEFAULT$` was present in the task's inputs,
-    /// meaning all files within the package directory match by default.
-    default: bool,
-    jit_default: bool,
+    startup: ModeGlobs,
+    jit: ModeGlobs,
     eager: bool,
-    /// True when any resolved glob can reach outside the package directory
-    /// (e.g. from `$TURBO_ROOT$` expansion or `../` references).
+    /// The package's [`globwalk::PACKAGE_CONFIG_INPUTS`] when either input
+    /// mode lists globs without its default files. The hashers add these files
+    /// to such inputs, and exclusions do not remove them.
+    config_inputs: Vec<wax::Glob<'static>>,
+}
+
+/// One input mode (startup or JIT), compiled the way the git file hasher
+/// resolves it.
+#[derive(Default)]
+struct ModeGlobs {
+    /// Inclusions resolved with a single `stat`. The walker never applies
+    /// exclusions to them.
+    literals: Vec<wax::Glob<'static>>,
+    /// Glob inclusions, plus `<literal>/**` for literal inclusions the walker
+    /// expands when they name a directory. Walked files are filtered by
+    /// `walk_exclusions`.
+    walked: Vec<wax::Glob<'static>>,
+    /// Exclusions as written. With `$TURBO_DEFAULT$`, the hasher removes files
+    /// matching these from the hash after walking.
+    exclusions: Vec<wax::Glob<'static>>,
+    /// Exclusions as the walker applies them: each also excludes everything
+    /// under the paths it matches.
+    walk_exclusions: Vec<wax::Glob<'static>>,
+    /// True when `$TURBO_DEFAULT$` was present in the mode's inputs, meaning
+    /// all files within the package directory match unless excluded.
+    default: bool,
+    /// True when any resolved inclusion can reach outside the package
+    /// directory (e.g. from `$TURBO_ROOT$` expansion or `../` references).
     has_traversal_globs: bool,
-    jit_has_traversal_globs: bool,
 }
 
 #[derive(Debug)]
@@ -75,47 +103,65 @@ impl std::error::Error for InvalidTaskInputGlob {
 ///
 /// When `inputs` has no globs and `default` is false (representing either
 /// `inputs: []` or a missing `inputs` key), the compiled result will match
-/// all files — see [`check_compiled_globs`] for details.
+/// all files in the package.
 pub fn compile_globs(
     inputs: &TaskInputs,
     package_unix_path: &str,
 ) -> Result<CompiledGlobs, InvalidTaskInputGlob> {
-    let (inclusions, exclusions, has_traversal_globs) =
-        compile_patterns(&inputs.globs, package_unix_path)?;
-    let (jit_inclusions, jit_exclusions, jit_has_traversal_globs) =
-        compile_patterns(&inputs.jit_globs, package_unix_path)?;
+    let startup = compile_patterns(&inputs.globs, inputs.default, package_unix_path)?;
+    let jit = compile_patterns(&inputs.jit_globs, inputs.jit_default, package_unix_path)?;
+
+    // Mirrors the hashers: a mode with explicit globs and no default files is
+    // hashed from those globs plus the package's configuration files.
+    let lists_files = |globs: &[String], default: bool| !globs.is_empty() && !default;
+    let config_inputs = if lists_files(&inputs.globs, inputs.default)
+        || lists_files(&inputs.jit_globs, inputs.jit_default)
+    {
+        globwalk::PACKAGE_CONFIG_INPUTS
+            .iter()
+            .map(|file| compile_glob(file, resolve_input(package_unix_path, file)?.as_str()))
+            .collect::<Result<_, _>>()?
+    } else {
+        Vec::new()
+    };
 
     Ok(CompiledGlobs {
-        inclusions,
-        exclusions,
-        jit_inclusions,
-        jit_exclusions,
-        default: inputs.default,
-        jit_default: inputs.jit_default,
+        startup,
+        jit,
         eager: inputs.eager,
-        has_traversal_globs,
-        jit_has_traversal_globs,
+        config_inputs,
+    })
+}
+
+fn compile_glob(raw: &str, resolved: &str) -> Result<wax::Glob<'static>, InvalidTaskInputGlob> {
+    wax::Glob::new(resolved)
+        .map(wax::Glob::into_owned)
+        .map_err(|error| InvalidTaskInputGlob {
+            glob: raw.to_string(),
+            error: Box::new(error),
+        })
+}
+
+fn resolve_input(package_unix_path: &str, raw: &str) -> Result<PackageInput, InvalidTaskInputGlob> {
+    PackageInput::resolve(package_unix_path, raw).map_err(|error| InvalidTaskInputGlob {
+        glob: raw.to_string(),
+        error: Box::new(error),
     })
 }
 
 fn compile_patterns(
     globs: &[String],
+    default: bool,
     package_unix_path: &str,
-) -> Result<(Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool), InvalidTaskInputGlob> {
-    let mut inclusions = Vec::new();
-    let mut exclusions = Vec::new();
-    let mut has_traversal_globs = false;
+) -> Result<ModeGlobs, InvalidTaskInputGlob> {
+    let mut mode = ModeGlobs {
+        default,
+        ..Default::default()
+    };
 
     for glob_str in globs {
-        let invalid = |error: Box<dyn std::error::Error + Send + Sync>| InvalidTaskInputGlob {
-            glob: glob_str.clone(),
-            error,
-        };
-        let input = PackageInput::resolve(package_unix_path, glob_str)
-            .map_err(|error| invalid(Box::new(error)))?;
-        let glob = wax::Glob::new(input.as_str())
-            .map_err(|error| invalid(Box::new(error)))?
-            .into_owned();
+        let input = resolve_input(package_unix_path, glob_str)?;
+        let glob = compile_glob(glob_str, input.as_str())?;
 
         // Changed files are always repo-root-relative, so globs that escape
         // the repository root can never match.
@@ -123,15 +169,52 @@ fn compile_patterns(
             continue;
         }
 
+        let resolved = input.as_str();
         if input.is_exclusion() {
-            exclusions.push(glob);
+            // The walker excludes `X` and `X/**` (`globwalk`'s
+            // `add_trailing_double_star`) on the absolute path, so the
+            // repository root itself (`!.` in the root package) and everything
+            // under it (`!**`) exclude `<root>/**`. Expanding the relative `**`
+            // would produce `**/**`, which `wax` rejects.
+            let mut walk_exclusions = Vec::with_capacity(2);
+            match resolved {
+                "" | "." | "**" => walk_exclusions.push("**".to_string()),
+                _ => globwalk::add_trailing_double_star(&mut walk_exclusions, resolved),
+            }
+            for walk_exclusion in walk_exclusions {
+                mode.walk_exclusions
+                    .push(compile_glob(glob_str, &walk_exclusion)?);
+            }
+            mode.exclusions.push(glob);
+            continue;
+        }
+
+        mode.has_traversal_globs |= input.reaches_outside_package();
+        // The walker expands a literal inclusion that names a directory to
+        // everything inside it, unless it contains a character `wax` may treat
+        // as syntax (`globwalk`'s `add_doublestar_to_dir`). Match both forms,
+        // since the path may be a directory in only one of the compared
+        // revisions.
+        if globwalk::expands_directory_inclusion(resolved) {
+            let directory = match resolved.trim_end_matches('/') {
+                "" | "." => "**".to_string(),
+                literal => format!("{literal}/**"),
+            };
+            mode.walked.push(compile_glob(glob_str, &directory)?);
+        }
+        // The walker resolves inclusions without `wax` wildcards with a single
+        // `stat` and does not apply exclusions to them. With
+        // `$TURBO_DEFAULT$`, the hasher also stats inputs without glob
+        // metacharacters itself, even when `wax` reads one (e.g. `$`) as a
+        // wildcard.
+        if glob.variance().is_invariant() || (default && input.is_literal()) {
+            mode.literals.push(glob);
         } else {
-            has_traversal_globs |= input.reaches_outside_package();
-            inclusions.push(glob);
+            mode.walked.push(glob);
         }
     }
 
-    Ok((inclusions, exclusions, has_traversal_globs))
+    Ok(mode)
 }
 
 /// Checks whether a changed file matches pre-compiled task input globs.
@@ -176,79 +259,59 @@ pub fn file_matches_compiled_inputs(
     if !in_package {
         // Defaults only cover files inside the package. Keep startup and JIT
         // matching separate so exclusions in one mode do not affect the other.
-        return (compiled.has_traversal_globs
-            && check_compiled_globs(
-                file_unix,
-                &compiled.inclusions,
-                &compiled.exclusions,
-                false,
-                false,
-            ))
-            || (compiled.jit_has_traversal_globs
-                && check_compiled_globs(
-                    file_unix,
-                    &compiled.jit_inclusions,
-                    &compiled.jit_exclusions,
-                    false,
-                    false,
-                ));
+        return (compiled.startup.has_traversal_globs
+            && compiled.startup.matches(file_unix, false, false))
+            || (compiled.jit.has_traversal_globs && compiled.jit.matches(file_unix, false, false));
     }
 
-    check_compiled_globs(
-        file_unix,
-        &compiled.inclusions,
-        &compiled.exclusions,
-        compiled.default,
-        compiled.eager,
-    ) || check_compiled_globs(
-        file_unix,
-        &compiled.jit_inclusions,
-        &compiled.jit_exclusions,
-        compiled.jit_default,
-        false,
-    )
+    compiled
+        .config_inputs
+        .iter()
+        .any(|glob| glob.is_match(file_unix))
+        || compiled.startup.matches(file_unix, true, compiled.eager)
+        || compiled.jit.matches(file_unix, true, false)
 }
 
-/// Checks whether a file path matches against compiled inclusion/exclusion
-/// globs.
-///
-/// **Precedence**: Exclusions are evaluated first. If any exclusion pattern
-/// matches, the file is rejected regardless of inclusion patterns. This means
-/// pattern ordering in the `inputs` array does not affect matching behavior —
-/// `["**/*.ts", "!generated.ts"]` and `["!generated.ts", "**/*.ts"]` are
-/// equivalent.
-fn check_compiled_globs(
-    file_path: &str,
-    inclusions: &[wax::Glob<'static>],
-    exclusions: &[wax::Glob<'static>],
-    default: bool,
-    fallback_to_all: bool,
-) -> bool {
-    for pattern in exclusions {
-        if pattern.is_match(file_path) {
-            return false;
+fn any_match(globs: &[wax::Glob<'static>], file_path: &str) -> bool {
+    globs.iter().any(|glob| glob.is_match(file_path))
+}
+
+impl ModeGlobs {
+    /// Checks whether the hasher includes a file in this mode's hash.
+    ///
+    /// **Precedence**: pattern ordering in the `inputs` array does not
+    /// affect matching — `["**/*.ts", "!generated.ts"]` and
+    /// `["!generated.ts", "**/*.ts"]` are equivalent. See the module docs for
+    /// how exclusions apply in each mode.
+    fn matches(&self, file_path: &str, in_package: bool, fallback_to_all: bool) -> bool {
+        if self.default {
+            // `$TURBO_DEFAULT$` hashes every package file plus the walked
+            // inclusions, then removes files matching an exclusion as written.
+            return !any_match(&self.exclusions, file_path)
+                && (in_package || self.walk_matches(file_path));
         }
-    }
 
-    if default {
-        return true;
-    }
-
-    // Both `inputs: []` (explicit empty) and a missing `inputs` key produce
-    // TaskInputs { globs: [], default: false }. We treat both as "all files
-    // are inputs" for affected detection, matching turbo's existing hashing
-    // behavior.
-    if fallback_to_all && inclusions.is_empty() && exclusions.is_empty() {
-        return true;
-    }
-
-    for pattern in inclusions {
-        if pattern.is_match(file_path) {
+        // Both `inputs: []` (explicit empty) and a missing `inputs` key
+        // produce TaskInputs { globs: [], default: false }. We treat both as
+        // "all files are inputs" for affected detection, matching turbo's
+        // existing hashing behavior.
+        if in_package
+            && fallback_to_all
+            && self.literals.is_empty()
+            && self.walked.is_empty()
+            && self.exclusions.is_empty()
+        {
             return true;
         }
+
+        self.walk_matches(file_path)
     }
 
-    false
+    /// Whether the file walker returns the file for this mode's inclusions.
+    fn walk_matches(&self, file_path: &str) -> bool {
+        any_match(&self.literals, file_path)
+            || (any_match(&self.walked, file_path) && !any_match(&self.walk_exclusions, file_path))
+    }
 }
 
 #[cfg(test)]
@@ -746,6 +809,314 @@ mod tests {
                 default: false,
                 ..Default::default()
             },
+            false,
+        );
+    }
+
+    fn explicit(globs: &[&str]) -> TaskInputs {
+        TaskInputs {
+            globs: globs.iter().map(|glob| glob.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    /// The hashers add `package.json`, `turbo.json` and `turbo.jsonc` to
+    /// explicit inputs, so changing them changes the task hash.
+    #[test]
+    fn explicit_inputs_match_package_config_files() {
+        let inputs = explicit(&["src/**"]);
+        for file in globwalk::PACKAGE_CONFIG_INPUTS {
+            assert_match(
+                &format!("packages/lib-a/{file}"),
+                "packages/lib-a",
+                &inputs,
+                true,
+            );
+            assert_match(
+                &format!("packages/lib-b/{file}"),
+                "packages/lib-a",
+                &inputs,
+                false,
+            );
+        }
+        assert_match(
+            "packages/lib-a/src/package.json",
+            "packages/lib-a",
+            &inputs,
+            true,
+        );
+        assert_match(
+            "packages/lib-a/tsconfig.json",
+            "packages/lib-a",
+            &inputs,
+            false,
+        );
+        assert_match("package.json", "", &explicit(&["scripts/**"]), true);
+    }
+
+    #[test]
+    fn exclusions_do_not_remove_config_files_from_explicit_inputs() {
+        let inputs = explicit(&["src/**", "!package.json", "!**/*.json"]);
+        assert_match(
+            "packages/lib-a/package.json",
+            "packages/lib-a",
+            &inputs,
+            true,
+        );
+        assert_match("packages/lib-a/turbo.json", "packages/lib-a", &inputs, true);
+        assert_match(
+            "packages/lib-a/src/data.json",
+            "packages/lib-a",
+            &inputs,
+            false,
+        );
+    }
+
+    /// With `$TURBO_DEFAULT$`, an exclusion removes `package.json` from the
+    /// hash, so it must not make the task affected either.
+    #[test]
+    fn default_inputs_respect_config_file_exclusions() {
+        let inputs = TaskInputs {
+            globs: vec!["!package.json".to_string()],
+            default: true,
+            ..Default::default()
+        };
+        assert_match(
+            "packages/lib-a/package.json",
+            "packages/lib-a",
+            &inputs,
+            false,
+        );
+        assert_match("packages/lib-a/turbo.json", "packages/lib-a", &inputs, true);
+    }
+
+    #[test]
+    fn jit_inputs_match_package_config_files() {
+        let inputs = TaskInputs {
+            jit_globs: vec!["src/**".to_string()],
+            eager: false,
+            ..Default::default()
+        };
+        assert_match(
+            "packages/lib-a/package.json",
+            "packages/lib-a",
+            &inputs,
+            true,
+        );
+        assert_match("packages/lib-a/README.md", "packages/lib-a", &inputs, false);
+    }
+
+    #[test]
+    fn literal_directory_inputs_match_files_inside() {
+        for raw in ["src", "src/", "./src"] {
+            let inputs = explicit(&[raw]);
+            assert_match(
+                "packages/lib-a/src/index.ts",
+                "packages/lib-a",
+                &inputs,
+                true,
+            );
+            assert_match("packages/lib-a/src/a/b.ts", "packages/lib-a", &inputs, true);
+            assert_match(
+                "packages/lib-a/srcx/index.ts",
+                "packages/lib-a",
+                &inputs,
+                false,
+            );
+        }
+        let inputs = explicit(&["../../config"]);
+        assert_match("config/app.json", "packages/lib-a", &inputs, true);
+        assert_match("configs/app.json", "packages/lib-a", &inputs, false);
+        assert_match("tools/x.ts", "", &explicit(&["tools"]), true);
+        let jit = TaskInputs {
+            jit_globs: vec!["generated".to_string()],
+            eager: false,
+            ..Default::default()
+        };
+        assert_match(
+            "packages/lib-a/generated/a.ts",
+            "packages/lib-a",
+            &jit,
+            true,
+        );
+    }
+
+    /// With `$TURBO_DEFAULT$`, the hasher removes package files that match an
+    /// exclusion as written, so excluding a directory keeps its contents.
+    #[test]
+    fn default_inputs_do_not_expand_exclusions() {
+        let inputs = TaskInputs {
+            globs: vec!["!src".to_string()],
+            default: true,
+            ..Default::default()
+        };
+        assert_match(
+            "packages/lib-a/src/index.ts",
+            "packages/lib-a",
+            &inputs,
+            true,
+        );
+    }
+
+    /// Without `$TURBO_DEFAULT$`, the walker excludes `X` and `X/**`.
+    #[test]
+    fn explicit_exclusions_cover_directory_contents() {
+        for globs in [
+            ["src", "!src/gen"],
+            ["src/**", "!src/gen"],
+            ["src/**", "!**/gen"],
+        ] {
+            let inputs = explicit(&globs);
+            assert_match(
+                "packages/lib-a/src/gen/a.ts",
+                "packages/lib-a",
+                &inputs,
+                false,
+            );
+            assert_match(
+                "packages/lib-a/src/index.ts",
+                "packages/lib-a",
+                &inputs,
+                true,
+            );
+        }
+        assert_match(
+            "packages/lib-a/src/index.ts",
+            "packages/lib-a",
+            &explicit(&["src", "!src"]),
+            false,
+        );
+        let jit = TaskInputs {
+            jit_globs: vec!["src".to_string(), "!src/gen".to_string()],
+            eager: false,
+            ..Default::default()
+        };
+        assert_match("packages/lib-a/src/gen/a.ts", "packages/lib-a", &jit, false);
+    }
+
+    /// The hashers walk inclusions outside the package with `X` and `X/**`
+    /// exclusions even under `$TURBO_DEFAULT$`.
+    #[test]
+    fn default_inputs_expand_exclusions_for_walked_files_outside_package() {
+        let inputs = TaskInputs {
+            globs: vec!["../../shared".to_string(), "!../../shared/skip".to_string()],
+            default: true,
+            ..Default::default()
+        };
+        assert_match("shared/skip/a.txt", "packages/lib-a", &inputs, false);
+        assert_match("shared/a.txt", "packages/lib-a", &inputs, true);
+    }
+
+    /// Literal file inclusions are resolved with a single `stat`, so walk
+    /// exclusions never remove them. With `$TURBO_DEFAULT$`, exclusions as
+    /// written still do.
+    #[test]
+    fn literal_file_inclusions_ignore_walk_exclusions() {
+        for exclusion in ["!src", "!src/**", "!src/index.ts"] {
+            assert_match(
+                "packages/lib-a/src/index.ts",
+                "packages/lib-a",
+                &explicit(&["src/index.ts", exclusion]),
+                true,
+            );
+        }
+        // `wax` reads `$` as a wildcard, so the walker walks this input and
+        // applies exclusions to it.
+        assert_match(
+            "packages/lib-a/src/$gen.ts",
+            "packages/lib-a",
+            &explicit(&["src/$gen.ts", "!src/$gen.ts"]),
+            false,
+        );
+        let default = |exclusion: &str| TaskInputs {
+            globs: vec!["../../shared/a.txt".to_string(), exclusion.to_string()],
+            default: true,
+            ..Default::default()
+        };
+        assert_match(
+            "shared/a.txt",
+            "packages/lib-a",
+            &default("!../../shared"),
+            true,
+        );
+        assert_match(
+            "shared/a.txt",
+            "packages/lib-a",
+            &default("!../../shared/a.txt"),
+            false,
+        );
+    }
+
+    /// The walker excludes `<root>/**` for exclusions that resolve to the
+    /// repository root or everything under it. Literal file inclusions and
+    /// package configuration files bypass walk exclusions.
+    #[test]
+    fn exclusions_of_the_whole_repository() {
+        for exclusion in ["!../../**", "!../..", "!../../"] {
+            assert_match(
+                "packages/lib-a/src/index.ts",
+                "packages/lib-a",
+                &explicit(&["src/index.ts", exclusion]),
+                true,
+            );
+            let walked = explicit(&["src/**", exclusion]);
+            assert_match("packages/lib-a/src/a.ts", "packages/lib-a", &walked, false);
+            assert_match(
+                "packages/lib-a/package.json",
+                "packages/lib-a",
+                &walked,
+                true,
+            );
+        }
+        for exclusion in ["!**", "!.", "!./", "!./**"] {
+            let inputs = explicit(&["scripts/**", exclusion]);
+            assert_match("scripts/a.sh", "", &inputs, false);
+            assert_match("package.json", "", &inputs, true);
+            assert_match("tools/a.sh", "", &explicit(&["tools", exclusion]), false);
+        }
+    }
+
+    /// With `$TURBO_DEFAULT$`, the hasher stats an inclusion without glob
+    /// metacharacters itself, even outside the package and when `wax` reads
+    /// a character in it (`$`) as a wildcard, so walk exclusions do not
+    /// remove it.
+    #[test]
+    fn default_inputs_stat_literal_inclusions_with_wax_syntax() {
+        let inputs = TaskInputs {
+            globs: vec![
+                "../../shared/$a.txt".to_string(),
+                "!../../shared".to_string(),
+            ],
+            default: true,
+            ..Default::default()
+        };
+        assert_match("shared/$a.txt", "packages/lib-a", &inputs, true);
+        assert_match("shared/b.txt", "packages/lib-a", &inputs, false);
+    }
+
+    /// The walker never expands an inclusion containing a character `wax`
+    /// may treat as syntax, even when it names a directory.
+    #[test]
+    fn inclusions_with_glob_syntax_are_not_expanded_as_directories() {
+        for raw in ["$gen", "gen:x"] {
+            let inputs = explicit(&[raw]);
+            assert_match(
+                &format!("packages/lib-a/{raw}/a.ts"),
+                "packages/lib-a",
+                &inputs,
+                false,
+            );
+            assert_match(
+                &format!("packages/lib-a/{raw}"),
+                "packages/lib-a",
+                &inputs,
+                true,
+            );
+        }
+        assert_match(
+            "packages/$lib/src/a.ts",
+            "packages/$lib",
+            &explicit(&["src"]),
             false,
         );
     }

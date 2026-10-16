@@ -12,6 +12,12 @@ use std::{borrow::Cow, str::FromStr};
 
 use crate::{GlobError, ValidatedGlob, is_glob_pattern};
 
+/// Package files that are always inputs of a task that declares `inputs`.
+/// `scripts` in `package.json` define the commands `turbo` runs, and a Package
+/// Configuration defines the tasks themselves. The file hashers and
+/// `--affected` task matching must both use this list.
+pub const PACKAGE_CONFIG_INPUTS: [&str; 3] = ["package.json", "turbo.json", "turbo.jsonc"];
+
 /// A task input glob resolved against its package directory.
 #[derive(Clone, Debug)]
 pub struct PackageInput {
