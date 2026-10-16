@@ -9,7 +9,10 @@ use std::{
 
 use notify::Event;
 use radix_trie::{Trie, TrieCommon};
-use tokio::sync::{Mutex, Notify, broadcast, oneshot, watch};
+use tokio::{
+    sync::{Mutex, Notify, broadcast, oneshot, watch},
+    time::Instant,
+};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_config::{CONFIG_FILE, CONFIG_FILE_JSONC, resolve_turbo_config_path};
 use turborepo_daemon::{
@@ -39,6 +42,7 @@ pub struct PackageChangesWatcher {
     _handle: tokio::task::JoinHandle<()>,
     package_change_events_rx: broadcast::Receiver<PackageChangeEvent>,
     repository_discovery_rx: watch::Receiver<Option<Arc<RepositoryDiscoverySnapshot>>>,
+    started_at: Instant,
 }
 
 /// The number of events that can be buffered in the channel.
@@ -52,9 +56,9 @@ const DEFAULT_STARTUP_TIMEOUT_SECS: u64 = 120;
 
 /// Resolve the startup readiness timeout, honoring
 /// `TURBO_WATCH_STARTUP_TIMEOUT` (seconds). Shared by the package-changes
-/// subscriber and the watch client so the inner wait can never be shorter than
-/// the outer one — otherwise the subscriber would give up before the client's
-/// retry loop could report why.
+/// subscriber and the watch client, which both measure it from
+/// [`PackageChangesWatcher::started_at`] so the client can report why the
+/// subscriber gave up.
 pub fn startup_timeout_secs() -> u64 {
     std::env::var("TURBO_WATCH_STARTUP_TIMEOUT")
         .ok()
@@ -91,13 +95,25 @@ impl PackageChangesWatcher {
             future_flags,
         );
 
+        let started_at = Instant::now();
         let _handle = tokio::spawn(subscriber.watch(exit_rx));
         Self {
             _exit_tx: exit_tx,
             _handle,
             package_change_events_rx,
             repository_discovery_rx,
+            started_at,
         }
+    }
+
+    /// The instant the subscriber's startup timeout is measured from.
+    ///
+    /// The subscriber drops its event sender once `startup_timeout_secs()`
+    /// elapse without the file watcher becoming ready, so callers waiting on
+    /// the initial event must measure the same budget from here to report that
+    /// timeout instead of a closed channel.
+    pub fn started_at(&self) -> Instant {
+        self.started_at
     }
 }
 

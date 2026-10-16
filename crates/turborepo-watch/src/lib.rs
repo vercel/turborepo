@@ -13,6 +13,7 @@ use tokio::{
     select,
     sync::{Notify, broadcast},
     task::JoinHandle,
+    time::Instant,
 };
 use tracing::{debug, instrument, trace};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
@@ -83,8 +84,9 @@ struct FileWatching {
     // Kept alive so its background tasks continue providing package
     // discovery data to the HashWatcher.
     _package_watcher: Arc<PackageWatcher>,
-    // Kept alive to maintain the watcher background task.
-    _package_changes_watcher: PackageChangesWatcher,
+    // Kept alive to maintain the watcher background task. Also supplies the
+    // origin of the startup timeout.
+    package_changes_watcher: PackageChangesWatcher,
     // Used by startup-timeout diagnostics to report the slowest-to-hash files.
     hash_watcher: Arc<HashWatcher>,
 }
@@ -328,6 +330,65 @@ fn slowest_files_hint(slowest: &[turborepo_scm::SlowestFile]) -> String {
     hint
 }
 
+/// Per-attempt wait while the file watcher starts up, so a slow initial hash
+/// produces a progress warning well before the overall startup cap.
+const STARTUP_ATTEMPT: Duration = Duration::from_secs(10);
+
+/// Waits for the first event from the package-changes subscriber.
+///
+/// The initial scan (recursive watch setup + package graph build + hashing)
+/// can be slow when a large file or tree lives in the repo, so this polls in
+/// short attempts up to `startup_cap`, measured from `started_at`. That must be
+/// the subscriber's own start so both sides share one deadline: when the
+/// subscriber gives up it drops the sender, and a close at or past the
+/// deadline is reported as a startup timeout rather than a bare channel error.
+#[expect(
+    clippy::result_large_err,
+    reason = "retain the structured watch-mode error type"
+)]
+async fn wait_for_initial_event(
+    events: &mut broadcast::Receiver<PackageChangeEvent>,
+    started_at: Instant,
+    startup_cap: Duration,
+    slowest_files: impl Fn() -> String,
+) -> Result<PackageChangeEvent, Error> {
+    let timed_out = || Error::FileWatchingTimeout(startup_cap.as_secs(), slowest_files());
+    let mut warned = false;
+    loop {
+        let remaining = startup_cap.saturating_sub(started_at.elapsed());
+        match tokio::time::timeout(STARTUP_ATTEMPT.min(remaining), events.recv()).await {
+            Ok(Ok(event)) => return Ok(event),
+            Ok(Err(broadcast::error::RecvError::Closed)) => {
+                if started_at.elapsed() >= startup_cap {
+                    return Err(timed_out());
+                }
+                return Err(Error::PackageChangeClosed);
+            }
+            Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
+                return Err(Error::PackageChangeLagged);
+            }
+            Err(_) => {
+                if started_at.elapsed() >= startup_cap {
+                    return Err(timed_out());
+                }
+                if !warned {
+                    warned = true;
+                    turborepo_log::warn(
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                        format!(
+                            "File watcher still initializing after {}s, likely a large file is \
+                             slowing the initial hash.{}\nRetrying...",
+                            started_at.elapsed().as_secs(),
+                            slowest_files()
+                        ),
+                    )
+                    .emit();
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("File watcher error: {0}")]
@@ -534,7 +595,7 @@ impl WatchClient {
             _watcher: watcher,
             _glob_watcher: glob_watcher.clone(),
             _package_watcher: package_watcher,
-            _package_changes_watcher: package_changes_watcher,
+            package_changes_watcher,
             hash_watcher,
         };
 
@@ -631,51 +692,17 @@ impl WatchClient {
 
         // Wait for the initial Rediscover event, which signals that the file
         // watcher is ready. The PackageChangesWatcher emits this on startup.
-        // The initial scan (recursive watch setup + package graph build +
-        // hashing) can be slow when a large file or tree lives in the repo, so
-        // poll with a short per-attempt timeout and keep retrying up to a
-        // generous cap rather than failing on the first stall. The channel
-        // stays alive between attempts, so no events are lost.
-        const STARTUP_ATTEMPT: Duration = Duration::from_secs(10);
-        // Shared with the package-changes subscriber's inner wait so the inner
-        // timeout is never shorter than this outer cap.
         let startup_cap = Duration::from_secs(
             turborepo_package_watcher::package_changes_watcher::startup_timeout_secs(),
         );
-        let started = std::time::Instant::now();
-        let mut warned = false;
-        let initial_event = loop {
-            match tokio::time::timeout(STARTUP_ATTEMPT, events.recv()).await {
-                Ok(Ok(event)) => break event,
-                Ok(Err(broadcast::error::RecvError::Closed)) => {
-                    return Err(Error::PackageChangeClosed);
-                }
-                Ok(Err(broadcast::error::RecvError::Lagged(_))) => {
-                    return Err(Error::PackageChangeLagged);
-                }
-                Err(_) => {
-                    if started.elapsed() >= startup_cap {
-                        return Err(Error::FileWatchingTimeout(
-                            startup_cap.as_secs(),
-                            slowest_files_hint(&self._watching.hash_watcher.slowest_files()),
-                        ));
-                    }
-                    if !warned {
-                        warned = true;
-                        turborepo_log::warn(
-                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                            format!(
-                                "File watcher still initializing after {}s, likely a large file \
-                                 is slowing the initial hash.{}\nRetrying...",
-                                STARTUP_ATTEMPT.as_secs(),
-                                slowest_files_hint(&self._watching.hash_watcher.slowest_files())
-                            ),
-                        )
-                        .emit();
-                    }
-                }
-            }
-        };
+        let hash_watcher = self._watching.hash_watcher.clone();
+        let initial_event = wait_for_initial_event(
+            &mut events,
+            self._watching.package_changes_watcher.started_at(),
+            startup_cap,
+            || slowest_files_hint(&hash_watcher.slowest_files()),
+        )
+        .await?;
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
@@ -1080,16 +1107,20 @@ mod test {
     use std::{
         collections::HashSet,
         sync::{Arc, Mutex},
+        time::Duration,
     };
 
-    use tokio::sync::{Notify, broadcast, oneshot};
+    use tokio::{
+        sync::{Notify, broadcast, oneshot},
+        time::Instant,
+    };
     use turbopath::AnchoredSystemPathBuf;
     use turborepo_daemon::PackageChangeEvent;
     use turborepo_repository::{package_graph::PackageName, toolchain::WatchSpec};
 
     use super::{
-        ChangedPackages, Error, RunHandle, WatchClient, WatchRunLifecycle,
-        package_graph_invalidated,
+        ChangedPackages, Error, RunHandle, STARTUP_ATTEMPT, WatchClient, WatchRunLifecycle,
+        package_graph_invalidated, wait_for_initial_event,
     };
 
     fn make_package_changed(name: &str) -> PackageChangeEvent {
@@ -1351,6 +1382,84 @@ mod test {
             collector.await.unwrap(),
             Err(Error::PackageChangeClosed)
         ));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn initial_event_is_returned_once_watcher_is_ready() {
+        let (tx, mut rx) = broadcast::channel(4);
+        let started_at = Instant::now();
+        tx.send(make_rediscover()).unwrap();
+
+        let event = wait_for_initial_event(&mut rx, started_at, Duration::from_secs(120), || {
+            String::new()
+        })
+        .await
+        .unwrap();
+        assert!(matches!(event, PackageChangeEvent::Rediscover));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn subscriber_giving_up_before_wait_reports_startup_timeout() {
+        let (tx, mut rx) = broadcast::channel::<PackageChangeEvent>(4);
+        let started_at = Instant::now();
+        let cap = Duration::from_secs(120);
+        // Building the run outlasts the cap, so the subscriber has already hit
+        // its own startup timeout and dropped its sender by the time the
+        // client starts waiting.
+        tokio::time::advance(cap + Duration::from_secs(5)).await;
+        drop(tx);
+
+        let err = wait_for_initial_event(&mut rx, started_at, cap, || " hint".to_string())
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(&err, Error::FileWatchingTimeout(120, hint) if hint == " hint"),
+            "expected startup timeout, got {err:?}"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn startup_budget_includes_time_before_waiting() {
+        let (_tx, mut rx) = broadcast::channel::<PackageChangeEvent>(4);
+        let started_at = Instant::now();
+        // Building the run happens between subscriber start and this wait.
+        tokio::time::advance(Duration::from_secs(115)).await;
+
+        let err = wait_for_initial_event(&mut rx, started_at, Duration::from_secs(120), || {
+            String::new()
+        })
+        .await
+        .unwrap_err();
+        assert!(matches!(err, Error::FileWatchingTimeout(120, _)));
+        assert_eq!(started_at.elapsed(), Duration::from_secs(120));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn short_startup_cap_is_not_rounded_up_to_attempt_interval() {
+        let (_tx, mut rx) = broadcast::channel::<PackageChangeEvent>(4);
+        let started_at = Instant::now();
+        let cap = Duration::from_secs(3);
+        assert!(cap < STARTUP_ATTEMPT);
+
+        let err = wait_for_initial_event(&mut rx, started_at, cap, String::new)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, Error::FileWatchingTimeout(3, _)));
+        assert_eq!(started_at.elapsed(), cap);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn channel_closed_before_deadline_is_not_a_timeout() {
+        let (tx, mut rx) = broadcast::channel::<PackageChangeEvent>(4);
+        let started_at = Instant::now();
+        drop(tx);
+
+        let err = wait_for_initial_event(&mut rx, started_at, Duration::from_secs(120), || {
+            String::new()
+        })
+        .await
+        .unwrap_err();
+        assert!(matches!(err, Error::PackageChangeClosed));
     }
 
     #[test]
