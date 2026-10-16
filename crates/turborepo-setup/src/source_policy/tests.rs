@@ -1,710 +1,374 @@
 use super::*;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-// Owned fixture inventory: never inspect the contributor's home/env/system.
+// Every filesystem input is owned; never inspect or mutate host
+// home/env/system.
 struct Fixture {
     directory: tempfile::TempDir,
+    boundary: PathBuf,
     root: PathBuf,
-    home: PathBuf,
-    system: PathBuf,
-    node: PathBuf,
 }
+
 impl Fixture {
-    fn new() -> Result<Self, io::Error> {
+    fn new() -> io::Result<Self> {
         let directory = tempfile::tempdir()?;
-        let root = directory.path().join("repo/nested");
-        let home = directory.path().join("home");
-        let system = directory.path().join("system/npmrc");
-        let node = directory.path().join("selected/bin/node");
-        for path in [
-            &root,
-            &home,
-            system.parent().ok_or_else(|| io::Error::other("fixture"))?,
-            node.parent().ok_or_else(|| io::Error::other("fixture"))?,
-        ] {
-            fs::create_dir_all(path)?;
-        }
-        fs::write(&node, b"never execute this")?;
+        let boundary = fs::canonicalize(directory.path())?;
+        let root = boundary.join("repo/nested");
+        fs::create_dir_all(&root)?;
         Ok(Self {
             directory,
+            boundary,
             root,
-            home,
-            system,
-            node,
         })
     }
-    fn check(&self, env: &[(OsString, OsString)]) -> Result<OfficialSourcePolicy, Error> {
-        inspect_inputs(
-            &self.root,
-            &self.home,
-            Some(&self.node),
-            env,
-            vec![self.system.clone()],
-            Some(self.directory.path()),
-        )
-    }
-}
 
-#[test]
-fn config_owner_and_metadata_table() -> TestResult {
-    for owner in [
-        ConfigOwner::Repository,
-        ConfigOwner::Ancestor,
-        ConfigOwner::User,
-        ConfigOwner::System,
-        ConfigOwner::Prefix,
-        ConfigOwner::RootPolicy,
-    ] {
-        assert_eq!(validate(owner, Observation::Missing), Ok(()));
-        assert_eq!(
-            validate(owner, Observation::Unsafe),
-            Err(Error::Inspection(owner))
-        );
-        assert_eq!(
-            validate(owner, Observation::Readable),
-            Err(Error::Configured(owner))
-        );
-        assert_eq!(validate(owner, Observation::NonFetching), Ok(()));
-        assert_eq!(
-            validate(owner, Observation::Setting(3)),
-            Err(Error::Setting(owner, 3))
-        );
+    fn check(&self) -> Result<ToolDownloadPolicy, Error> {
+        inspect_inputs(&self.root, Some(&self.boundary))
     }
-    for contents in [
-        "",
-        "registry=https://registry.npmjs.org",
-        "script-shell=private-secret",
-        "//private-registry/:_authToken=private-secret",
-    ] {
-        let project = if contents.is_empty() { None } else { Some(1) };
-        for owner in [
-            ConfigOwner::Repository,
-            ConfigOwner::Ancestor,
-            ConfigOwner::User,
-            ConfigOwner::System,
-            ConfigOwner::Prefix,
-        ] {
-            let fixture = Fixture::new()?;
-            let path = match owner {
-                ConfigOwner::Repository => fixture.root.join(".npmrc"),
-                ConfigOwner::Ancestor => fixture
-                    .root
-                    .parent()
-                    .ok_or("fixture parent")?
-                    .join(".npmrc"),
-                ConfigOwner::User => fixture.home.join(".npmrc"),
-                ConfigOwner::System => fixture.system.clone(),
-                _ => fixture.directory.path().join("selected/etc/npmrc"),
-            };
-            fs::create_dir_all(path.parent().ok_or("fixture parent")?)?;
-            fs::write(&path, contents)?;
-            let expected = match owner {
-                ConfigOwner::Repository | ConfigOwner::Ancestor => {
-                    project.map(|line| Error::Setting(owner, line))
-                }
-                _ => Some(Error::Configured(owner)),
-            };
-            let error = fixture.check(&[]).err();
-            assert_eq!(error, expected);
-            let text = format!(
-                "{error:?} {}",
-                error.as_ref().map(ToString::to_string).unwrap_or_default()
-            );
-            assert!(!text.contains("private-secret"));
-            assert!(!text.contains(&path.display().to_string()));
-        }
-    }
-    Ok(())
-}
 
-#[test]
-fn project_npmrc_passes_only_with_non_fetching_settings() -> TestResult {
-    let layout = "auto-install-peers = true\nhoist-pattern[]=react\n# \
-                  comment\nresolution-mode=highest\ndedupe-direct-deps=true\n";
-    for owner in [ConfigOwner::Repository, ConfigOwner::Ancestor] {
-        let fixture = Fixture::new()?;
-        let path = match owner {
-            ConfigOwner::Repository => fixture.root.join(".npmrc"),
-            _ => fixture
-                .root
-                .parent()
-                .ok_or("fixture parent")?
-                .join(".npmrc"),
-        };
-        fs::write(&path, layout)?;
-        assert_eq!(fixture.check(&[])?.registry(), PUBLIC_NPM_REGISTRY);
-        fs::write(
-            &path,
-            format!("{layout}@scope:registry=https://npm.example.test/\n"),
-        )?;
-        assert_eq!(fixture.check(&[]).err(), Some(Error::Setting(owner, 6)));
-        fs::write(&path, format!("{layout}save-exact=${{PRIVATE}}\n"))?;
-        assert_eq!(fixture.check(&[]).err(), Some(Error::Setting(owner, 6)));
-        fs::write(&path, vec![b'#'; usize::try_from(npmrc::LIMIT)? + 1])?;
-        assert_eq!(fixture.check(&[]).err(), Some(Error::Inspection(owner)));
-        // A non-fetching project file never relaxes the other layers.
-        fs::write(&path, layout)?;
-        fs::write(fixture.home.join(".npmrc"), layout)?;
-        assert_eq!(
-            fixture.check(&[]).err(),
-            Some(Error::Configured(ConfigOwner::User))
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn environment_prefix_and_known_system_locations() -> TestResult {
-    let fixture = Fixture::new()?;
-    assert_eq!(fixture.check(&[])?.registry(), PUBLIC_NPM_REGISTRY);
-    for key in [
-        "npm_config_registry",
-        "NpM_CoNfIg_PrEfIx",
-        "NPM_CONFIG_GLOBALCONFIG",
-        "npm_config_userconfig",
-        "NPM_CONFIG_HTTPS_PROXY",
-        "COREPACK_NPM_REGISTRY",
-        "NVM_NODEJS_ORG_MIRROR",
-        "DESTDIR",
-    ] {
-        for value in ["", "private-secret"] {
-            assert_eq!(
-                fixture.check(&[(key.into(), value.into())]).err(),
-                Some(Error::Environment)
-            );
-        }
-    }
-    let prefix = fixture.directory.path().join("custom-prefix");
-    fs::create_dir_all(prefix.join("etc"))?;
-    fs::write(prefix.join("etc/npmrc"), b"")?;
-    assert_eq!(
-        fixture
-            .check(&[("PREFIX".into(), prefix.into_os_string())])
-            .err(),
-        Some(Error::Configured(ConfigOwner::Prefix))
-    );
-    #[cfg(unix)]
-    assert_eq!(
-        system_configs(&[])?,
+    fn ambient_paths(&self) -> Vec<PathBuf> {
         [
-            "/etc/npmrc",
-            "/usr/etc/npmrc",
-            "/usr/local/etc/npmrc",
-            "/opt/homebrew/etc/npmrc"
-        ]
-        .map(PathBuf::from)
-    );
-    Ok(())
-}
-
-/// `npx`/`npm exec`/`npm run` (npm 11) and pnpm 11+ default wrapper keys.
-fn wrapper_env(fixture: &Fixture) -> Vec<(OsString, OsString)> {
-    let at = |path: &str| fixture.directory.path().join(path).into_os_string();
-    let mut env: Vec<(OsString, OsString)> = [
-        ("npm_config_cache", at("home/.npm")),
-        ("npm_config_call", "turbo setup".into()),
-        ("npm_config_global_prefix", at("selected")),
-        ("npm_config_globalconfig", at("selected/etc/npmrc")),
-        ("npm_config_init_module", at("home/.npm-init.js")),
-        (
-            "npm_config_local_prefix",
-            fixture.root.clone().into_os_string(),
-        ),
-        ("npm_config_loglevel", "silent".into()),
-        ("npm_config_node_gyp", at("node-gyp/bin/node-gyp.js")),
-        ("npm_config_noproxy", "".into()),
-        ("npm_config_npm_version", "11.13.0".into()),
-        ("npm_config_package", "turbo".into()),
-        ("npm_config_prefix", at("selected")),
-        (
-            "npm_config_user_agent",
-            "npm/11.13.0 node/v24.0.0 linux x64".into(),
-        ),
-        ("npm_config_userconfig", fixture.home.join(".npmrc").into()),
-        ("npm_config_yes", "true".into()),
-        ("NPM_CONFIG_SCRIPT_SHELL", "/bin/sh".into()),
-        (
-            "npm_config_user-agent",
-            "pnpm/11.0.0 node/v24.0.0 linux x64".into(),
-        ),
-    ]
-    .into_iter()
-    .map(|(key, value)| (key.into(), value))
-    .collect();
-    env.push(("npm_lifecycle_event".into(), "npx".into()));
-    env
-}
-
-/// `pnpm run` (pnpm 10.34) defaults; pnpm 8 to 10.0 export a subset.
-fn pnpm10_run_env(fixture: &Fixture) -> Vec<(OsString, OsString)> {
-    let at = |path: &str| fixture.directory.path().join(path).into_os_string();
-    [
-        ("npm_config__jsr_registry", "https://npm.jsr.io/".into()),
-        ("npm_config_frozen_lockfile", "".into()),
-        ("npm_config_globalconfig", at("home/.config/pnpm/rc")),
-        ("npm_config_node_gyp", at("pnpm/node-gyp/bin/node-gyp.js")),
-        ("npm_config_npm_globalconfig", at("system/npmrc")),
-        ("npm_config_registry", "https://registry.npmjs.org/".into()),
-        (
-            "npm_config_user_agent",
-            "pnpm/10.34.7 npm/? node/v24.17.0 linux x64".into(),
-        ),
-        ("npm_config_verify_deps_before_run", "false".into()),
-        ("pnpm_config_verify_deps_before_run", "false".into()),
-    ]
-    .into_iter()
-    .map(|(key, value)| (key.into(), value))
-    .collect()
-}
-
-#[test]
-fn wrapper_environments_pass_and_reported_locations_are_inspected() -> TestResult {
-    let fixture = Fixture::new()?;
-    let env = wrapper_env(&fixture);
-    assert_eq!(fixture.check(&env)?.registry(), PUBLIC_NPM_REGISTRY);
-    assert!(fixture.check(&pnpm10_run_env(&fixture)).is_ok());
-    for registry in ["https://registry.npmjs.org", "HTTPS://Registry.NPMJS.org/"] {
-        let env = [("NPM_CONFIG_REGISTRY".into(), registry.into())];
-        assert!(fixture.check(&env).is_ok(), "{registry}");
-    }
-    // Each reported location is followed to the file npm would read.
-    let custom = fixture.directory.path().join("custom");
-    for (key, value, config, owner) in [
-        ("npm_config_userconfig", "npmrc", "npmrc", ConfigOwner::User),
-        (
-            "npm_config_globalconfig",
-            "npmrc",
-            "npmrc",
-            ConfigOwner::System,
-        ),
-        (
-            "npm_config_npm_globalconfig",
-            "npmrc",
-            "npmrc",
-            ConfigOwner::System,
-        ),
-        ("npm_config_prefix", "", "etc/npmrc", ConfigOwner::Prefix),
-        (
-            "NPM_CONFIG_GLOBAL_PREFIX",
-            "",
-            "etc/npmrc",
-            ConfigOwner::Prefix,
-        ),
-        (
-            "npm_config_local_prefix",
-            "",
+            "repo/nested/.npmrc",
+            "repo/.npmrc",
             ".npmrc",
-            ConfigOwner::Repository,
-        ),
-    ] {
-        let mut env = env.clone();
-        env.push((key.into(), custom.join(value).into_os_string()));
-        assert!(fixture.check(&env).is_ok(), "{key}");
-        let config = custom.join(config);
-        fs::create_dir_all(config.parent().ok_or("parent")?)?;
-        fs::write(&config, "registry=https://private.invalid/")?;
-        let expected = if owner == ConfigOwner::Repository {
-            Error::Setting(owner, 1)
-        } else {
-            Error::Configured(owner)
-        };
-        assert_eq!(fixture.check(&env).err(), Some(expected));
-        fs::remove_dir_all(&custom)?;
+            "home/.npmrc",
+            "home/.config/pnpm/rc",
+            "system/etc/npmrc",
+            "selected/etc/npmrc",
+            "selected/lib/node_modules/npm/npmrc",
+            "selected/node_modules/npm/npmrc",
+            "selected/bin/node",
+        ]
+        .map(|path| self.boundary.join(path))
+        .to_vec()
     }
-    Ok(())
 }
 
 #[test]
-fn wrapper_environments_with_source_settings_fail_closed() -> TestResult {
+fn public_inspection_requires_only_an_invocation() {
+    // Check the public signature without scanning the contributor's ancestors.
+    let _: fn(&Path) -> Result<ToolDownloadPolicy, Error> = ToolDownloadPolicy::inspect;
+}
+
+#[test]
+fn root_policy_observations_fail_closed() {
+    let owner = ConfigOwner::RootPolicy;
+    assert_eq!(validate(Observation::Missing), Ok(()));
+    assert_eq!(validate(Observation::PolicyAbsent), Ok(()));
+    assert_eq!(
+        validate(Observation::Readable),
+        Err(Error::Configured(owner))
+    );
+    assert_eq!(validate(Observation::Unsafe), Err(Error::Inspection(owner)));
+}
+
+#[test]
+fn ambient_files_are_ignored_even_when_empty_invalid_or_nonfiles() -> TestResult {
     let fixture = Fixture::new()?;
-    for (key, value) in [
-        ("npm_config_registry", "https://private.invalid/"),
-        ("npm_config_registry", "http://registry.npmjs.org/"),
-        ("npm_config_registry", "https://registry.npmjs.org:443/"),
-        ("npm_config_registry", "https://private@registry.npmjs.org/"),
-        ("npm_config_registry", "https://registry.npmjs.org/private/"),
-        ("npm_config_registry", "https://registry.npmjs.org//"),
-        ("npm_config_registry", "https://registry.npmjs.org/?private"),
-        ("npm_config_registry", "https://registry.npmjs.org."),
-        ("npm_config_registry", " https://registry.npmjs.org/"),
-        ("npm_config_registry", "https://registry.yarnpkg.com/"),
-        ("npm_config__jsr_registry", "https://private.invalid/"),
-        ("npm_config__jsr_registry", "https://registry.npmjs.org/"),
-        ("npm_config_@jsr:registry", "https://npm.jsr.io/"),
-        ("npm_config_@scope:registry", "https://private.invalid/"),
-        ("npm_config_proxy", "http://proxy.invalid"),
-        ("npm_config_https-proxy", "http://proxy.invalid"),
-        ("npm_config_noproxy", "registry.npmjs.org"),
-        ("npm_config_cafile", "/private/ca.pem"),
-        ("npm_config_strict_ssl", "false"),
-        ("npm_config__auth", "private-secret"),
-        (
-            "npm_config_//registry.npmjs.org/:_authToken",
-            "private-secret",
-        ),
-        ("npm_config_store_dir", "/private/store"),
-        ("npm_config_userconfig", "relative/.npmrc"),
-        ("npm_config_prefix", ""),
-    ] {
-        let mut env = wrapper_env(&fixture);
-        env.extend(pnpm10_run_env(&fixture));
-        env.push((key.into(), value.into()));
-        let error = fixture.check(&env).err();
-        assert_eq!(error, Some(Error::Environment), "{key}");
-        assert!(!format!("{error:?}").contains("private"));
+    assert_eq!(fixture.check()?.registry(), PUBLIC_NPM_REGISTRY);
+    for path in fixture.ambient_paths() {
+        fs::create_dir_all(path.parent().ok_or("ambient parent")?)?;
+        for contents in [
+            b"".as_slice(),
+            b"registry=https://private-secret.invalid/\n//registry/:_authToken=private-secret",
+            b"\xff\0invalid private-secret",
+        ] {
+            fs::write(&path, contents)?;
+            assert!(fixture.check().is_ok(), "{}", path.display());
+        }
+        fs::remove_file(&path)?;
+        fs::create_dir(&path)?;
+        assert!(fixture.check().is_ok(), "{}", path.display());
+        fs::remove_dir(&path)?;
     }
+    // Ambient registry configuration cannot override or invalidate applied mirrors.
+    fs::write(
+        fixture.root.join("turbo.json"),
+        r#"{"setup":{"mirrors":{"npmRegistry":"https://mirror.invalid/npm"}}}"#,
+    )?;
+    fs::write(fixture.root.join(".npmrc"), "registry=private-secret")?;
+    assert!(fixture.check().is_ok());
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn ambient_symlinks_and_unreadable_files_are_ignored() -> TestResult {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    let fixture = Fixture::new()?;
+    let outside = tempfile::tempdir()?;
+    let target = outside.path().join("private-secret");
+    fs::write(&target, b"private-secret")?;
+    for path in fixture.ambient_paths() {
+        fs::create_dir_all(path.parent().ok_or("ambient parent")?)?;
+        for target in [&target, &outside.path().join("missing")] {
+            symlink(target, &path)?;
+            assert!(fixture.check().is_ok());
+            fs::remove_file(&path)?;
+        }
+        fs::write(&path, b"private-secret")?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o0))?;
+        let result = fixture.check();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+        assert!(result.is_ok());
+        fs::remove_file(path)?;
+    }
+    // Even intermediate ambient directory links must not trigger inspection.
+    fs::remove_dir_all(fixture.boundary.join("home"))?;
+    symlink(outside.path(), fixture.boundary.join("home"))?;
+    assert!(fixture.check().is_ok());
     Ok(())
 }
 
 #[test]
-fn root_json_and_jsonc_policy_is_not_silently_ignored() -> TestResult {
+fn root_json_and_jsonc_applied_policy_shapes_pass() -> TestResult {
     for name in CONFIG_FILES {
         let fixture = Fixture::new()?;
         let path = fixture.root.join(name);
-        fs::write(
-            &path,
-            "{ // safe normal configuration\n \"futureFlags\": {\"experimentalSetup\":true}, }",
-        )?;
-        assert!(fixture.check(&[]).is_ok());
         for contents in [
-            "{\"setup\":{}}",
-            "{\"setup\":null}",
-            "{\"setup\":{\"registry\":\"private-secret\"}}",
-            "{\"setup\":{\"tools\":\"skip\",\"mirror\":\"private-secret\"}}",
-            "{\"setup\":{\"javascript\":{\"registry\":\"private-secret\"}}}",
-            "{\"setup\":{\"tools\":{\"url\":\"private-secret\"}}}",
-            "{\"setup\":{\"javascript\":\"skip\"}}",
-            "{\"setup\":{\"mirrors\":\"private-secret\"}}",
-            "{\"setup\":{\"mirrors\":{\"deno\":\"private-secret\"}}}",
-            "{\"setup\":{\"mirrors\":{\"node\":{\"url\":\"private-secret\"}}}}",
+            "{}",
+            "{ // normal configuration\n \"futureFlags\": {\"experimentalSetup\":true}, }",
+            r#"{"setup":{"tools":"managed","dependencies":"skip","rust":{},"javascript":{"tools":"verify-system"}}}"#,
+            r#"{"setup":{"python":{"dependencies":"skip"},"go":{"tools":"managed"}}}"#,
+            r#"{"setup":{"additionalTools":{},"tools":"skip"}}"#,
+            r#"{"setup":{"additionalTools":{}}}"#,
+            // Preserve applied_policy's shape validation, not value validation.
+            r#"{"setup":{"tools":"future-value","additionalTools":null}}"#,
+            r#"{"setup":{"mirrors":{}}}"#,
+            r#"{"setup":{"tools":"managed","mirrors":{"node":"https://mirror.invalid/dist","npmRegistry":"https://mirror.invalid/npm","bun":"https://mirror.invalid/github","uv":"https://mirror.invalid/astral","python":"https://mirror.invalid/astral","go":"https://mirror.invalid/go","rust":"https://mirror.invalid/rust"}}}"#,
         ] {
             fs::write(&path, contents)?;
-            assert_eq!(
-                fixture.check(&[]).err(),
-                Some(Error::Configured(ConfigOwner::RootPolicy))
-            );
+            assert!(fixture.check().is_ok(), "{name}: {contents}");
         }
-        // Setup applies tool and dependency policy, neither of which
-        // configures download sources.
-        fs::write(
-            &path,
-            r#"{"setup":{"tools":"managed","dependencies":"skip","rust":{},"javascript":{"tools":"verify-system"}}}"#,
-        )?;
-        assert!(fixture.check(&[]).is_ok());
-        // Setup applies additional tools too, alone or with other policy.
-        fs::write(
-            &path,
-            "{\"setup\":{\"additionalTools\":{},\"tools\":\"skip\"}}",
-        )?;
-        assert!(fixture.check(&[]).is_ok());
-        fs::write(&path, "{\"setup\":{\"additionalTools\":{}}}")?;
-        assert!(fixture.check(&[]).is_ok());
-        // Setup applies mirrors through its own validated transports.
-        fs::write(
-            &path,
-            "{\"setup\":{\"tools\":\"managed\",\"mirrors\":{\"node\":\"https://mirror.invalid/\
-             dist\",\"npmRegistry\":\"https://mirror.invalid/npm\",\"bun\":\"https://mirror.\
-             invalid/github\",\"uv\":\"https://mirror.invalid/astral\",\"python\":\"https://\
-             mirror.invalid/astral\",\"go\":\"https://mirror.invalid/go\",\"rust\":\"https://\
-             mirror.invalid/rust\"}}}",
-        )?;
-        assert!(fixture.check(&[]).is_ok());
-        fs::write(path, "invalid private-secret")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn unsupported_root_policy_shapes_are_configured_without_echoing_secrets() -> TestResult {
+    for name in CONFIG_FILES {
+        let fixture = Fixture::new()?;
+        let path = fixture.root.join(name);
+        for contents in [
+            r#"{"setup":{}}"#,
+            r#"{"setup":null}"#,
+            r#"{"setup":[]}"#,
+            r#"{"setup":"private-secret"}"#,
+            r#"{"setup":{"registry":"private-secret"}}"#,
+            r#"{"setup":{"tools":"skip","mirror":"private-secret"}}"#,
+            r#"{"setup":{"javascript":{"registry":"private-secret"}}}"#,
+            r#"{"setup":{"tools":{"url":"private-secret"}}}"#,
+            r#"{"setup":{"dependencies":false}}"#,
+            r#"{"setup":{"lifecycleScripts":[]}}"#,
+            r#"{"setup":{"javascript":"skip"}}"#,
+            r#"{"setup":{"mirrors":"private-secret"}}"#,
+            r#"{"setup":{"mirrors":{"deno":"private-secret"}}}"#,
+            r#"{"setup":{"mirrors":{"node":{"url":"private-secret"}}}}"#,
+            // An applied duplicate does not hide an unapplied setup property.
+            r#"{"setup":{"tools":"skip"},"setup":{"registry":"private-secret"}}"#,
+        ] {
+            fs::write(&path, contents)?;
+            let error = fixture.check().err().ok_or("expected policy rejection")?;
+            assert_eq!(error, Error::Configured(ConfigOwner::RootPolicy));
+            assert_redacted(&error, &path);
+        }
+    }
+    Ok(())
+}
+
+fn assert_redacted(error: &Error, path: &Path) {
+    let text = format!("{error:?} {error}");
+    assert!(!text.contains("private-secret"));
+    assert!(!text.contains(&path.display().to_string()));
+}
+
+#[test]
+fn invalid_nonobject_oversized_and_nonfile_root_configs_fail_inspection() -> TestResult {
+    for name in CONFIG_FILES {
+        let fixture = Fixture::new()?;
+        let path = fixture.root.join(name);
+        for contents in [
+            b"".to_vec(),
+            b"invalid private-secret".to_vec(),
+            b"{\"private-secret\":".to_vec(),
+            b"[]".to_vec(),
+            b"null".to_vec(),
+            b"\"private-secret\"".to_vec(),
+            b"true".to_vec(),
+            b"42".to_vec(),
+            b"\xffprivate-secret".to_vec(),
+            // A valid object beyond the read limit must not pass.
+            format!("{{\"private-secret\":\"{}\"}}", "x".repeat(1_048_576)).into_bytes(),
+        ] {
+            fs::write(&path, contents)?;
+            let error = fixture.check().err().ok_or("expected inspection failure")?;
+            assert_eq!(error, Error::Inspection(ConfigOwner::RootPolicy));
+            assert_redacted(&error, &path);
+        }
+        fs::remove_file(&path)?;
+        fs::create_dir(&path)?;
         assert_eq!(
-            fixture.check(&[]).err(),
+            fixture.check().err(),
             Some(Error::Inspection(ConfigOwner::RootPolicy))
         );
+        fs::remove_dir(path)?;
     }
     Ok(())
 }
 
-/// A committed npmrc never stands in for, or agrees with, `setup.mirrors`:
-/// setup does not parse npm configuration, so even a matching registry stays
-/// rejected.
+#[cfg(unix)]
 #[test]
-fn npmrc_matching_the_policy_registry_mirror_is_still_rejected() -> TestResult {
+fn root_config_symlinks_and_unreadable_files_fail_inspection() -> TestResult {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    for name in CONFIG_FILES {
+        let fixture = Fixture::new()?;
+        let path = fixture.root.join(name);
+        let target = fixture.boundary.join("private-secret");
+        fs::write(&target, "{}")?;
+        for target in [&target, &fixture.boundary.join("missing")] {
+            symlink(target, &path)?;
+            assert_eq!(
+                fixture.check().err(),
+                Some(Error::Inspection(ConfigOwner::RootPolicy))
+            );
+            fs::remove_file(&path)?;
+        }
+        fs::write(&path, "{}")?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o0))?;
+        // Privileged test processes may still read mode-000 files.
+        let unreadable = fs::File::open(&path).is_err();
+        let result = fixture.check();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+        if unreadable {
+            assert_eq!(
+                result.err(),
+                Some(Error::Inspection(ConfigOwner::RootPolicy))
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn every_ancestor_and_both_root_config_names_are_checked() -> TestResult {
     let fixture = Fixture::new()?;
-    let mirror = "https://mirror.invalid/npm";
-    fs::write(
-        fixture.root.join("turbo.json"),
-        format!("{{\"setup\":{{\"mirrors\":{{\"npmRegistry\":\"{mirror}\"}}}}}}"),
-    )?;
-    assert!(fixture.check(&[]).is_ok());
-    fs::write(fixture.root.join(".npmrc"), format!("registry={mirror}/\n"))?;
-    // Still rejected; #14740 names the project npmrc's rejected line.
+    for ancestor in [
+        &fixture.root,
+        &fixture.boundary.join("repo"),
+        &fixture.boundary,
+    ] {
+        for name in CONFIG_FILES {
+            let path = ancestor.join(name);
+            fs::write(&path, r#"{"setup":{}}"#)?;
+            assert_eq!(
+                fixture.check().err(),
+                Some(Error::Configured(ConfigOwner::RootPolicy))
+            );
+            fs::remove_file(path)?;
+        }
+    }
+    fs::write(fixture.root.join("turbo.json"), "{}")?;
+    fs::write(fixture.root.join("turbo.jsonc"), r#"{"setup":{}}"#)?;
     assert_eq!(
-        fixture.check(&[]).err(),
-        Some(Error::Setting(ConfigOwner::Repository, 1))
+        fixture.check().err(),
+        Some(Error::Configured(ConfigOwner::RootPolicy))
+    );
+    // The boundary itself is a valid invocation and terminates the scan.
+    assert!(inspect_inputs(&fixture.boundary, Some(&fixture.boundary)).is_ok());
+    assert!(fixture.directory.path().exists());
+    Ok(())
+}
+
+#[test]
+fn owned_boundary_stops_before_configs_in_its_parent() -> TestResult {
+    let fixture = Fixture::new()?;
+    let boundary = fixture.boundary.join("repo");
+    for name in CONFIG_FILES {
+        fs::write(fixture.boundary.join(name), r#"{"setup":{}}"#)?;
+    }
+    assert!(inspect_inputs(&fixture.root, Some(&boundary)).is_ok());
+    // Moving the boundary outward includes those same files.
+    assert_eq!(
+        fixture.check().err(),
+        Some(Error::Configured(ConfigOwner::RootPolicy))
     );
     Ok(())
 }
 
 #[cfg(unix)]
 #[test]
-fn symlink_invocation_and_actual_node_prefix_are_inspected() -> TestResult {
+fn lexical_and_canonical_invocation_ancestors_are_both_checked() -> TestResult {
     use std::os::unix::fs::symlink;
+
     let fixture = Fixture::new()?;
-    let shortcut = fixture.directory.path().join("shortcut");
+    let lexical = fixture.boundary.join("shortcut-parent");
+    fs::create_dir(&lexical)?;
+    let shortcut = lexical.join("shortcut");
     symlink(&fixture.root, &shortcut)?;
-    let ancestor_config = fixture.root.parent().ok_or("fixture")?.join(".npmrc");
-    fs::write(&ancestor_config, b"registry=https://npm.example.test/")?;
-    assert_eq!(
-        inspect_inputs(
-            &shortcut,
-            &fixture.home,
-            Some(&fixture.node),
-            &[],
-            vec![],
-            Some(fixture.directory.path())
-        )
-        .err(),
-        Some(Error::Setting(ConfigOwner::Ancestor, 1))
-    );
-    fs::remove_file(ancestor_config)?;
-    let bundled = fixture
-        .directory
-        .path()
-        .join("selected/lib/node_modules/npm/npmrc");
-    fs::create_dir_all(bundled.parent().ok_or("fixture")?)?;
-    fs::write(&bundled, b"prefix=/unreported/private-prefix")?;
-    assert_eq!(
-        fixture.check(&[]).err(),
-        Some(Error::Configured(ConfigOwner::Prefix))
-    );
-    fs::remove_file(bundled)?;
-    let selected = fixture.directory.path().join("wrapper/bin/node");
-    fs::create_dir_all(selected.parent().ok_or("fixture")?)?;
-    symlink(&fixture.node, &selected)?;
-    fs::create_dir_all(fixture.directory.path().join("selected/etc"))?;
-    fs::write(fixture.directory.path().join("selected/etc/npmrc"), b"")?;
-    assert_eq!(
-        inspect_inputs(
-            &fixture.root,
-            &fixture.home,
-            Some(&selected),
-            &[],
-            vec![],
-            Some(fixture.directory.path())
-        )
-        .err(),
-        Some(Error::Configured(ConfigOwner::Prefix))
-    );
+    assert!(inspect_inputs(&shortcut, Some(&fixture.boundary)).is_ok());
+    for ancestor in [&lexical, &fixture.boundary.join("repo")] {
+        for name in CONFIG_FILES {
+            let path = ancestor.join(name);
+            fs::write(&path, r#"{"setup":{}}"#)?;
+            assert_eq!(
+                inspect_inputs(&shortcut, Some(&fixture.boundary)).err(),
+                Some(Error::Configured(ConfigOwner::RootPolicy))
+            );
+            fs::remove_file(path)?;
+        }
+    }
     Ok(())
 }
 
 #[test]
-fn nonfile_unreadable_and_unknown_node_layout_fail_closed() -> TestResult {
+fn invalid_locations_and_owned_boundary_escapes_are_rejected() -> TestResult {
     let fixture = Fixture::new()?;
-    fs::create_dir(fixture.home.join(".npmrc"))?;
-    assert_eq!(
-        fixture.check(&[]).err(),
-        Some(Error::Inspection(ConfigOwner::User))
-    );
-    fs::remove_dir(fixture.home.join(".npmrc"))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{PermissionsExt, symlink};
-        let path = fixture.home.join(".npmrc");
-        symlink(fixture.home.join("missing"), &path)?;
+    let outside = tempfile::tempdir()?;
+    // PathBuf::join normalizes `..` on Windows verbatim paths; keep the traversal
+    // literal.
+    let parent_traversal = |base: &Path| {
+        let mut path = base.as_os_str().to_os_string();
+        path.push(std::path::MAIN_SEPARATOR_STR);
+        path.push("..");
+        PathBuf::from(path)
+    };
+    for invocation in [
+        PathBuf::from("relative"),
+        fixture.root.join("missing"),
+        outside.path().to_path_buf(),
+        parent_traversal(&fixture.boundary),
+        parent_traversal(&fixture.root),
+    ] {
         assert_eq!(
-            fixture.check(&[]).err(),
-            Some(Error::Inspection(ConfigOwner::User))
+            inspect_inputs(&invocation, Some(&fixture.boundary)).err(),
+            Some(Error::Locations),
+            "invocation: {invocation:?}"
         );
-        fs::remove_file(&path)?;
-        fs::write(&path, b"private-secret")?;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o0))?;
-        assert_eq!(
-            fixture.check(&[]).err(),
-            Some(Error::Inspection(ConfigOwner::User))
-        );
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
-        fs::remove_file(path)?;
     }
-    let unknown = fixture.directory.path().join("task-executable");
-    fs::write(&unknown, b"not current Node")?;
+    for boundary in [PathBuf::from("relative"), fixture.boundary.join("missing")] {
+        assert_eq!(
+            inspect_inputs(&fixture.root, Some(&boundary)).err(),
+            Some(Error::Locations)
+        );
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn canonical_invocation_escape_is_rejected_before_policy_inspection() -> TestResult {
+    use std::os::unix::fs::symlink;
+
+    let fixture = Fixture::new()?;
+    let outside = tempfile::tempdir()?;
+    fs::write(outside.path().join("turbo.json"), "private-secret")?;
+    let shortcut = fixture.root.join("escape");
+    symlink(outside.path(), &shortcut)?;
     assert_eq!(
-        inspect_inputs(
-            &fixture.root,
-            &fixture.home,
-            Some(&unknown),
-            &[],
-            vec![],
-            Some(fixture.directory.path())
-        )
-        .err(),
+        inspect_inputs(&shortcut, Some(&fixture.boundary)).err(),
         Some(Error::Locations)
     );
-    Ok(())
-}
-
-#[cfg(unix)]
-#[test]
-fn homebrew_bundled_prefix_is_allowed_only_while_its_global_config_is_inspected() -> TestResult {
-    use std::os::unix::fs::symlink;
-    let fixture = Fixture::new()?;
-    // GitHub's macOS images: `brew install node@22 && brew link --force`.
-    // Linking makes real `lib/node_modules/**` directories and links each file.
-    let brew = fixture.directory.path().join("homebrew");
-    let keg = brew.join("Cellar/node@22/22.0.0");
-    for dir in [
-        brew.join("bin"),
-        keg.join("bin"),
-        brew.join("lib/node_modules/npm"),
-        keg.join("lib/node_modules/npm"),
-    ] {
-        fs::create_dir_all(dir)?;
-    }
-    fs::write(keg.join("bin/node"), b"never execute this")?;
-    symlink(keg.join("bin/node"), brew.join("bin/node"))?;
-    symlink(
-        "../../../Cellar/node@22/22.0.0/lib/node_modules/npm/npmrc",
-        brew.join(BUNDLED_NPMRC),
-    )?;
-    let check = |node: Option<&Path>| {
-        inspect_inputs(
-            &fixture.root,
-            &fixture.home,
-            node,
-            &[],
-            vec![brew.join("etc/npmrc")],
-            Some(fixture.directory.path()),
-        )
-    };
-    let homebrew = format!("prefix = {}\n", brew.display());
-    for contents in [
-        homebrew.clone(),
-        format!("; comment\r\n\n\tprefix={}/\r\n", brew.display()),
-    ] {
-        fs::write(keg.join(BUNDLED_NPMRC), contents)?;
-        // Native standalone sees the linked bundled file as System config; the
-        // wrapper also reaches the keg's copy through the canonical Node path.
-        assert!(check(None).is_ok());
-        assert!(check(Some(&brew.join("bin/node"))).is_ok());
-    }
-    // The global config that prefix selects is still inspected and fails closed.
-    fs::create_dir_all(brew.join("etc"))?;
-    fs::write(brew.join("etc/npmrc"), b"")?;
-    assert_eq!(
-        check(None).err(),
-        Some(Error::Configured(ConfigOwner::System))
-    );
-    fs::remove_file(brew.join("etc/npmrc"))?;
-    let other = fixture.directory.path().join("other");
-    for contents in [
-        String::new(),
-        format!("{homebrew}registry=https://registry.npmjs.org\n"),
-        format!("{homebrew}{homebrew}"),
-        format!("prefix = {}\n", other.display()),
-        format!("prefix = {}/../homebrew\n", brew.display()),
-        format!("prefix = \"{}\"\n", brew.display()),
-        format!("prefix = {} ; comment\n", brew.display()),
-        format!("prefix[] = {}\n", brew.display()),
-        format!("PREFIX = {}\n", brew.display()),
-        format!("[section]\n{homebrew}"),
-        format!("\u{feff}{homebrew}"),
-        format!("prefix = {}\u{85}\n", brew.display()),
-        format!("{homebrew}{}", " ".repeat(4096)),
-        "prefix = ${HOME}\n".into(),
-        "prefix = ~/homebrew\n".into(),
-        "prefix = homebrew\n".into(),
-        "prefix\n".into(),
-        "globalconfig = /etc/npmrc\n".into(),
-    ] {
-        fs::write(keg.join(BUNDLED_NPMRC), &contents)?;
-        assert_eq!(
-            check(None).err(),
-            Some(Error::Configured(ConfigOwner::System)),
-            "{contents:?}"
-        );
-    }
-    // Other layers never get this allowance.
-    fs::write(keg.join(BUNDLED_NPMRC), &homebrew)?;
-    fs::write(fixture.home.join(".npmrc"), &homebrew)?;
-    assert_eq!(
-        check(None).err(),
-        Some(Error::Configured(ConfigOwner::User))
-    );
-    Ok(())
-}
-
-#[cfg(unix)]
-#[test]
-fn only_a_linked_keg_npmrc_in_its_own_cellar_is_followed() -> TestResult {
-    use std::os::unix::fs::symlink;
-    let fixture = Fixture::new()?;
-    let brew = fixture.directory.path().join("homebrew");
-    let link = brew.join(BUNDLED_NPMRC);
-    let homebrew = format!("prefix = {}\n", brew.display());
-    let check = || {
-        inspect_inputs(
-            &fixture.root,
-            &fixture.home,
-            None,
-            &[],
-            vec![brew.join("etc/npmrc")],
-            Some(fixture.directory.path()),
-        )
-        .err()
-    };
-    let other = fixture.directory.path().join("other");
-    fs::create_dir_all(link.parent().ok_or("fixture")?)?;
-    for target in [
-        other.join(BUNDLED_NPMRC),
-        other.join("Cellar/node@22/22.0.0").join(BUNDLED_NPMRC),
-        brew.join("Cellar/node@22").join(BUNDLED_NPMRC),
-        brew.join("Cellar/node@22/22.0.0/libexec")
-            .join(BUNDLED_NPMRC),
-        brew.join("Cellar/node@22/22.0.0/npmrc"),
-    ] {
-        fs::create_dir_all(target.parent().ok_or("fixture")?)?;
-        fs::write(&target, &homebrew)?;
-        symlink(&target, &link)?;
-        let blocked = Some(Error::Inspection(ConfigOwner::System));
-        assert_eq!(check(), blocked, "{target:?}");
-        fs::remove_file(&link)?;
-    }
-    // A keg-shaped link must still resolve to a regular file.
-    let keg = brew.join("Cellar/node@22/22.0.0").join(BUNDLED_NPMRC);
-    symlink(&keg, &link)?;
-    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::System)));
-    fs::create_dir_all(&keg)?;
-    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::System)));
-    fs::remove_dir(&keg)?;
-    fs::write(&keg, &homebrew)?;
-    assert_eq!(check(), None);
-    // No other layer follows a link, even into a keg.
-    symlink(&keg, fixture.home.join(".npmrc"))?;
-    assert_eq!(check(), Some(Error::Inspection(ConfigOwner::User)));
-    Ok(())
-}
-
-#[cfg(windows)]
-#[test]
-fn windows_global_npm_prefix_is_inspected_and_required() -> TestResult {
-    let fixture = Fixture::new()?;
-    let app_data = fixture.directory.path().join("AppData/Roaming");
-    let env = [(OsString::from("AppData"), app_data.clone().into_os_string())];
-    let system = system_configs(&env)?;
-    assert_eq!(system, [app_data.join("npm").join("etc").join("npmrc")]);
-    assert_eq!(system_configs(&[]).err(), Some(Error::Locations));
-    let relative = [(OsString::from("APPDATA"), OsString::from("Roaming"))];
-    assert_eq!(system_configs(&relative).err(), Some(Error::Locations));
-    for path in [
-        system[0].clone(),
-        app_data.join("npm/node_modules/npm/npmrc"),
-    ] {
-        fs::create_dir_all(path.parent().ok_or("parent")?)?;
-        fs::write(&path, "registry=https://mirror.invalid")?;
-        let result = inspect_inputs(
-            &fixture.root,
-            &fixture.home,
-            None,
-            &[],
-            system.clone(),
-            Some(fixture.directory.path()),
-        );
-        assert_eq!(result.err(), Some(Error::Configured(ConfigOwner::System)));
-        fs::remove_file(path)?;
-    }
     Ok(())
 }

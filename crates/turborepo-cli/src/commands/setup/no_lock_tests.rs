@@ -296,7 +296,7 @@ fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_downloa
         for name in [
             "turbo.lock",
             ".nvmrc",
-            "apps/web/.npmrc",
+            "turbo.json",
             "pnpm-workspace.yaml",
             ".gitignore",
         ] {
@@ -319,6 +319,8 @@ fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_downloa
                         root.join(name),
                         if name == "turbo.lock" {
                             "{}"
+                        } else if name == "turbo.json" {
+                            UNSUPPORTED_SETUP
                         } else {
                             "changed"
                         },
@@ -371,11 +373,7 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
                 0 => fs::write(staged.join("record.json"), "corrupt").unwrap(),
                 1 => fs::write(staged.join("tools/pnpm/dist/resource"), "corrupt").unwrap(),
                 2 => fs::write(f.owned.root().join("turbo.lock"), "{}").unwrap(),
-                3 => fs::write(
-                    f.owned.root().join("apps/web/.npmrc"),
-                    "registry=https://private.invalid",
-                )
-                .unwrap(),
+                3 => fs::write(f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                 _ => fs::write(f.owned.root().join("pnpm-workspace.yaml"), "packages: []").unwrap(),
             }
         });
@@ -412,11 +410,7 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
                 })
             });
             rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            fs::write(
-                root.join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap();
+            fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap();
             drop(guard);
             drop(store);
             assert!(pending.join().unwrap().is_err());

@@ -138,7 +138,7 @@ pub struct BunTransport {
     origin: String,
 }
 impl BunTransport {
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         let assets = ASSETS
             .into_iter()
             .map(ApprovedOrigin::https)
@@ -153,7 +153,7 @@ impl BunTransport {
     /// Send the official release paths to a validated mirror base. The mirror
     /// must serve the bytes itself: no redirect leaves its origin.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &crate::mirror::Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {

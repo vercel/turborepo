@@ -144,8 +144,8 @@ fn state(root: &Path) -> (BTreeMap<String, Vec<u8>>, Vec<String>) {
     (files, setup)
 }
 
-/// The official source policy rejects npm configuration in the environment,
-/// so start from a minimal Windows environment with owned profile folders.
+/// Start from a minimal Windows environment with owned profile folders so
+/// cancellation tests do not inherit contributor-specific configuration.
 fn command(launcher: &ProcessLauncher, launch: Launch, root: &Path, proxy: &str) -> Command {
     let entry = match launch {
         Launch::Standalone => Entrypoint::Standalone,
@@ -187,8 +187,8 @@ fn command(launcher: &ProcessLauncher, launch: Launch, root: &Path, proxy: &str)
         .env("ALL_PROXY", proxy)
         .env("NO_PROXY", "");
     if launch == Launch::WrapperUnderNpm {
-        // A script marker that selects the wrapper's pipe. npm_config_* would
-        // also select it, but official-only setup rejects npm configuration.
+        // A script marker that selects the wrapper's pipe, as npm_config_*
+        // settings would when launched by a package manager.
         command.env("npm_lifecycle_event", "setup");
     }
     command
@@ -492,10 +492,10 @@ fn interrupted_download_releases_locks_and_leaves_resumable_state() {
     }
 }
 
-/// Package managers also export npm_config_* settings, which official-only
-/// setup rejects before any transaction, so the wrapper exits promptly.
+/// Ambient npm registry settings do not prevent the wrapper from checking
+/// managed tool readiness without starting a transaction or making requests.
 #[test]
-fn npm_configuration_fails_closed_before_any_transaction() {
+fn npm_configuration_does_not_affect_read_only_tool_check() {
     if common::windows_arm64_host() {
         eprintln!("Skipped: managed setup refuses Windows arm64 hosts, even for x64 turbo.");
         return;
@@ -507,14 +507,15 @@ fn npm_configuration_fails_closed_before_any_transaction() {
     let before = state(&root);
     let (proxy, requests) = stalled_proxy();
     let mut command = command(&launcher, Launch::Wrapper, &root, &proxy);
-    // Wrapper variables such as npm_config_user_agent are allowed; a custom
-    // registry is still rejected before any transaction.
-    command.env("npm_config_registry", "https://registry.example.invalid/");
+    command
+        .args(["--check", "--offline"])
+        .env("npm_config_registry", "https://registry.example.invalid/");
     let output = CapturedProcess::spawn(&mut command).finish(TIMEOUT);
     let text = common::combined_output(&output);
     assert_eq!(output.status.code(), Some(1), "{text}");
     assert!(
-        text.contains("rejects npm configuration environment overrides"),
+        text.replace([' ', '\n', '\r', '|'], "")
+            .contains("managedinstallationismissing;runturbosetup"),
         "{text}"
     );
     assert!(requests.try_recv().is_err(), "{text}");

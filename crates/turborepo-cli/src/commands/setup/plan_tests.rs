@@ -250,7 +250,7 @@ fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
 
 #[test]
 fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
-    for case in 0..13 {
+    for case in 0..11 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         let mut flags = PLAN.to_vec();
@@ -265,29 +265,23 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 flags.push("--frozen");
             }
             2 => fs::write(f.owned.root().join("turbo.lock"), "invalid").unwrap(),
-            3 => fs::write(
-                f.owned.root().join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap(),
-            4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
-            5 => {
+            3 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");
                 f.save();
             }
-            6 => {
+            4 => {
                 f.lock["tools"]["pnpm"]["version"] = json!("11.0.0");
                 f.save();
             }
-            7 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            8 => fs::write(
+            5 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+            6 => fs::write(
                 f.owned.root().join("turbo.json"),
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            9 => flags.push("--no-lock"),
-            10 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
-            11 => {
+            7 => flags.push("--no-lock"),
+            8 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
+            9 => {
                 let artifacts = f.lock["tools"]["node"]["installation"]["artifacts"]
                     .as_object_mut()
                     .unwrap();
@@ -310,7 +304,7 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                     .contains("frozen setup requires turbo.lock")
             );
         }
-        if matches!(case, 9 | 10) {
+        if matches!(case, 7 | 8) {
             assert!(matches!(error, Error::NotImplemented));
         }
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
@@ -586,7 +580,7 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
                         f.owned.root().join("apps/web/.git"),
                         "gitdir: /not-probed".into(),
                     ),
-                    _ => (f.owned.home().join(".npmrc"), "".into()),
+                    _ => (f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into()),
                 };
                 fs::write(path, contents).unwrap();
                 *edited.borrow_mut() = Some(snapshot(f.owned.root().parent().unwrap()));

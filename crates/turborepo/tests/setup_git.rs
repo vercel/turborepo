@@ -82,17 +82,6 @@ fn failed_setup(root: &Path, path: &Path) -> String {
     text
 }
 
-/// Strict source policy may stop on host System npm configuration (as on
-/// macOS runners) before Git is consulted. That is reported, never bypassed.
-fn system_policy_blocked(text: &str) -> bool {
-    let blocked = text.contains("official-onlysetuprejectsSystemconfiguration")
-        || text.contains("cannotsafelyinspectSystemconfiguration");
-    if blocked {
-        eprintln!("Git diagnostics not reached: blocked by host System npm configuration.");
-    }
-    blocked
-}
-
 /// A directory containing only the real Git executable.
 fn git_only_path() -> tempfile::TempDir {
     let bin = tempfile::tempdir().unwrap();
@@ -114,9 +103,6 @@ fn missing_git_and_unusable_repositories_get_actionable_errors() {
     fs::create_dir(root.join(".git")).unwrap();
 
     let text = failed_setup(root, Path::new(""));
-    if system_policy_blocked(&text) {
-        return;
-    }
     assert!(
         text.contains("couldnotrun`git`:itwasnotfoundonPATH"),
         "{text}"
@@ -259,9 +245,6 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     // Docker images often lack Git too; neither run needs it here.
     let frozen = ["setup", "--frozen", "--tools-only"];
     let (code, text) = turbo_with_home(&root, &frozen, Path::new(""), home.path());
-    if system_policy_blocked(&text) {
-        return;
-    }
     assert_eq!(code, 0, "{text}");
     assert!(
         text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
