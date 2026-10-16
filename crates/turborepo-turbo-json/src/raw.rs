@@ -17,7 +17,11 @@ use turborepo_task_id::TaskName;
 use turborepo_types::{EnvMode, ExperimentalCIConfig, OutputLogsMode, UIMode};
 use turborepo_unescape::UnescapedString;
 
-use crate::{error::Error, future_flags::FutureFlags};
+use crate::{
+    error::Error,
+    future_flags::FutureFlags,
+    setup::{RawSetupPolicy, SetupPolicy},
+};
 
 /// An object representing the task dependency graph of your project.
 ///
@@ -414,6 +418,7 @@ pub struct RawRootTurboJson {
     pub experimental_observability: Option<RawExperimentalObservability>,
 
     pub global: Option<Spanned<RawGlobalConfig>>,
+    pub setup: Option<Spanned<RawSetupPolicy>>,
 
     #[deserializable(rename = "//")]
     pub _comment: Option<String>,
@@ -430,6 +435,8 @@ pub struct RawPackageTurboJson {
     pub pipeline: Option<Spanned<Pipeline>>,
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
     pub boundaries: Option<Spanned<BoundariesConfig>>,
+    // Parsed only to reject it with a root-only diagnostic.
+    pub setup: Option<Spanned<RawSetupPolicy>>,
     #[deserializable(rename = "//")]
     pub _comment: Option<String>,
 }
@@ -459,7 +466,7 @@ pub struct RawTurboJson {
 
     /// Controls whether turbo maintains a root `AGENTS.md` block for AI agents.
     ///
-    /// Defaults to `true`. Set to `false` to opt out of future automatic
+    /// Defaults to `false`. Set to `true` to opt in to future automatic
     /// updates.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -646,6 +653,12 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub global: Option<Spanned<RawGlobalConfig>>,
+
+    /// Repository policy for `turbo setup`. Only allowed in the root
+    /// turbo.json and requires `futureFlags.experimentalSetup`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "SetupPolicy")]
+    pub setup: Option<Spanned<RawSetupPolicy>>,
 
     // Internal field - excluded from schema
     #[deserializable(rename = "//")]
@@ -925,11 +938,13 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
     type Error = Error;
 
     fn try_from(root: RawRootTurboJson) -> Result<Self, Error> {
-        let global_config_enabled = root
+        let future_flags = root
             .future_flags
             .as_ref()
-            .map(|ff| ff.value.global_configuration)
-            .unwrap_or(false);
+            .map(|ff| *ff.as_inner())
+            .unwrap_or_default();
+        SetupPolicy::from_raw(root.setup.as_ref(), &future_flags)?;
+        let global_config_enabled = future_flags.global_configuration;
 
         if global_config_enabled {
             validate_no_top_level_global_keys(&root)?;
@@ -944,6 +959,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 boundaries: root.boundaries,
                 future_flags: root.future_flags,
                 global: root.global,
+                setup: root.setup,
                 _comment: root._comment,
                 extends: None,
                 // All global fields are None — they live in `global`
@@ -991,6 +1007,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 concurrency: root.concurrency,
                 future_flags: root.future_flags,
                 experimental_observability: root.experimental_observability,
+                setup: root.setup,
                 _comment: root._comment,
                 extends: None,
                 global: None,
@@ -1076,6 +1093,7 @@ impl From<RawPackageTurboJson> for RawTurboJson {
             pipeline: pkg.pipeline,
             boundaries: pkg.boundaries,
             tags: pkg.tags,
+            setup: pkg.setup,
             _comment: pkg._comment,
             ..Default::default()
         }

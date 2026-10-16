@@ -64,6 +64,7 @@ pub struct Visitor<'a, R: TaskGraphRunOpts> {
     ui_sender: Option<UISender>,
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
+    managed_environment: Option<Arc<dyn turborepo_task_executor::ManagedEnvironment>>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -131,6 +132,8 @@ enum PrecomputedTask {
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
+    #[error("managed setup validation failed: {0}")]
+    ManagedTools(String),
     #[error("Cannot find package {package_name} for task {task_id}.")]
     MissingPackage {
         package_name: PackageName,
@@ -224,6 +227,14 @@ fn write_join_error(f: &mut fmt::Formatter<'_>, context: &str, err: &JoinError) 
 }
 
 impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
+    pub fn with_managed_environment(
+        mut self,
+        tools: Arc<dyn turborepo_task_executor::ManagedEnvironment>,
+    ) -> Self {
+        self.managed_environment = Some(tools);
+        self
+    }
+
     // Disabling this lint until we stop adding state to the visitor.
     // Once we have the full picture we will go about grouping these pieces of data
     // together
@@ -307,6 +318,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
             ui_sender,
             is_watch,
             warnings: Default::default(),
+            managed_environment: None,
             micro_frontends_configs,
         })
     }

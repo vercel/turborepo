@@ -138,7 +138,10 @@ fn frozen_guard_rejects_a_replaced_directory_at_the_same_canonical_path() {
             write_file(repo.path(), name, bytes);
         }
     }
-    assert_eq!(inputs(repo.path()).unwrap(), snapshot.inputs);
+    assert_eq!(
+        inputs(repo.path(), snapshot.ecosystems).unwrap(),
+        snapshot.inputs
+    );
     assert!(guard.read_lock().unwrap().is_none());
     assert!(matches!(
         snapshot.check_guard(&guard),
@@ -201,6 +204,27 @@ fn missing_to_present_and_unchanged_keep_exact_expectations() {
     fs::remove_file(root.path().join(LOCK_NAME)).unwrap();
     assert_conflict(present.commit(&candidate(&present, "25.0.0")));
     assert!(!root.path().join(LOCK_NAME).exists());
+    no_stage(root.path());
+}
+
+#[test]
+fn equivalent_compact_lock_stays_untouched_through_publication() {
+    let root = root();
+    let absent = Snapshot::capture(root.path()).unwrap();
+    let compact = serde_json::to_vec(candidate(&absent, "24.0.0").document()).unwrap();
+    write_file(root.path(), LOCK_NAME, &compact);
+    let present = Snapshot::capture(root.path()).unwrap();
+    let same = candidate(&present, "24.0.0");
+    assert_eq!(present.commit(&same).unwrap(), WriteOutcome::Unchanged);
+    let published = present.after_publication(&same).unwrap();
+    published.ensure_current().unwrap();
+    assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), compact);
+    let next = candidate(&published, "25.0.0");
+    assert_eq!(published.commit(&next).unwrap(), WriteOutcome::Written);
+    assert_eq!(
+        fs::read(root.path().join(LOCK_NAME)).unwrap(),
+        next.canonical_bytes().unwrap()
+    );
     no_stage(root.path());
 }
 

@@ -11,7 +11,7 @@ use turborepo_tracing::TurboSubscriber;
 use turborepo_types::DryRunMode;
 use turborepo_ui::{LogSinks, sender::UISender};
 
-use crate::commands::CommandBase;
+use crate::commands::{CommandBase, managed};
 
 #[derive(Debug, PartialEq, Eq)]
 enum RunOutcome<T> {
@@ -56,6 +56,10 @@ pub async fn run(
     subscriber: &TurboSubscriber,
     verbosity: u8,
 ) -> Result<i32, run::Error> {
+    let managed = managed::select(&base)?;
+    if let Some(tools) = &managed {
+        managed::activate_probes(tools)?;
+    }
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
@@ -101,7 +105,9 @@ pub async fn run(
 
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
-        RunBuilder::new(base.run_builder_input()?, Some(http_client))?
+        let mut input = base.run_builder_input()?;
+        input.managed_environment = managed;
+        RunBuilder::new(input, Some(http_client))?
     };
     if let Some(qs) = query_server {
         run_builder = run_builder.with_query_server(qs);
@@ -218,6 +224,15 @@ async fn run_with_ui(
         subscriber.restore_stderr();
         println!("Verbose logs written to {path}");
     }
+
+    // `turbo run` ends the process right after this returns (see
+    // `process_exit::exit`, which already skips stack-local destructors).
+    // Dropping the run here would walk the package graph, lockfile, engine,
+    // and repo index only to free memory the OS reclaims at exit. Nothing in
+    // `Run` relies on `Drop` for cleanup: child processes, the cache,
+    // analytics, and the UI are shut down explicitly above or by the signal
+    // handler.
+    std::mem::forget(run);
 
     result
 }

@@ -7,12 +7,14 @@ use std::{
 
 use super::*;
 
+mod cleanup;
 mod force;
 mod inherited_child;
 mod inherited_lock;
 mod paths_permissions;
 mod record;
 mod recovery;
+mod stamps;
 
 fn tool(id: &str) -> Tool {
     Tool {
@@ -84,6 +86,22 @@ fn inspect_does_not_initialize_or_lock_storage() {
     fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
     assert!(Store::inspect(repo.path()).unwrap().is_some());
     assert!(!repo.path().join(".turbo/tools/transaction.lock").exists());
+    fs::write(current.bin.join("../tools/node/resource"), "damage").unwrap();
+    assert!(matches!(
+        Store::inspect(repo.path()),
+        Err(Error::DamagedContents)
+    ));
+    assert_eq!(
+        fs::read(repo.path().join(".turbo/tools/manifest.json")).unwrap(),
+        before
+    );
+    // Content damage must not hide structural corruption elsewhere.
+    fs::remove_file(current.bin.join("node")).unwrap();
+    symlink(repo.path(), current.bin.join("node")).unwrap();
+    assert!(matches!(
+        Store::inspect(repo.path()),
+        Err(Error::UnsafePath)
+    ));
 }
 
 #[test]

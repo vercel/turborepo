@@ -80,3 +80,33 @@ fn forced_staging_and_late_precondition_failure_preserve_prior_inventory() {
     assert!(store.can_reuse(&desired[0]).unwrap());
     assert!(store.can_reuse(&desired[1]).unwrap());
 }
+
+#[test]
+fn forced_replacement_copies_only_tools_without_fresh_bytes() {
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    let desired = [tool("node"), tool("pnpm")];
+    store.reconcile(&desired, populate).unwrap();
+    let old = store.current().unwrap().unwrap().bin;
+    let mut staged = Vec::new();
+    let stage = |tool: &Tool, root: &Path| {
+        staged.push(tool.id.clone());
+        populate(tool, root)
+    };
+    let reused = [tool("node")];
+    let outcome = store.force_reconcile_reusing_checked(&desired, &reused, stage, || Ok(()));
+    assert_eq!(outcome.unwrap(), Outcome::Replaced);
+    assert_eq!(staged, ["pnpm"]);
+    let current = store.current().unwrap().unwrap();
+    assert!(current.bin != old && current.tools == desired);
+    // Reuse needs a healthy selection; otherwise the caller must stage.
+    fs::write(current.bin.join("../tools/pnpm/resource"), b"damaged").unwrap();
+    let before = manifest(&store);
+    let fail = |_: &Tool, _: &Path| Err(Error::InvalidInventory);
+    assert!(
+        store
+            .force_reconcile_reusing_checked(&desired, &desired, fail, || Ok(()))
+            .is_err()
+    );
+    assert_eq!(manifest(&store), before);
+}

@@ -51,7 +51,7 @@ turborepo-api-client = { workspace = true }
 turborepo-auth = { workspace = true }
 turborepo-log = { path = "../turborepo-log" }
 turborepo-types = { workspace = true }
-zstd = { version = "0.13.3", default-features = false }
+zstd = { version = "0.13.3", default-features = false, features = ["zstdmt"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.59", features = [

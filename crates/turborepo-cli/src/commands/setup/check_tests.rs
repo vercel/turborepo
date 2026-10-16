@@ -3,11 +3,11 @@ use std::{os::unix::fs::MetadataExt, path::Path, time::SystemTime};
 use super::*;
 
 #[derive(Debug, PartialEq, Eq)]
-struct Entry(PathBuf, u32, SystemTime, Vec<u8>, Option<PathBuf>);
+pub(super) struct Entry(PathBuf, u32, SystemTime, Vec<u8>, Option<PathBuf>);
 
 // All owned files, including the Git index, ignored generations, links,
 // directories and synthetic user/system state. No host inputs or exclusions.
-fn snapshot(root: &Path) -> Vec<Entry> {
+pub(super) fn snapshot(root: &Path) -> Vec<Entry> {
     fn visit(path: &Path, entries: &mut Vec<Entry>) {
         let metadata = fs::symlink_metadata(path).unwrap();
         let link = metadata.file_type().is_symlink();
@@ -38,9 +38,9 @@ fn snapshot(root: &Path) -> Vec<Entry> {
     entries
 }
 
-const CHECK: &[&str] = &["--check", "--tools-only"];
+pub(super) const CHECK: &[&str] = &["--check", "--tools-only"];
 impl Fixture {
-    fn check(&self, flags: &[&str]) -> Result<i32, Error> {
+    pub(super) fn check(&self, flags: &[&str]) -> Result<i32, Error> {
         let before = snapshot(self.owned.root().parent().unwrap());
         let args = self.args(flags);
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
@@ -55,7 +55,7 @@ impl Fixture {
         self.no_execution();
         result
     }
-    fn install(&self, upstream: &Upstream) {
+    pub(super) fn install(&self, upstream: &Upstream) {
         assert!(
             std::process::Command::new("git")
                 .current_dir(self.owned.root())
@@ -65,6 +65,45 @@ impl Fixture {
                 .success()
         );
         assert_eq!(self.run(upstream, FROZEN).unwrap(), 0);
+    }
+}
+
+/// Any installed manager shares Node/pnpm's read-only check failures: a
+/// damaged tree, a switched manager, an edited lock, and missing inventory.
+pub(super) fn assert_manager_check_failures(
+    installed: impl Fn() -> (Fixture, LoopbackServer),
+    id: &str,
+    switched: &str,
+) {
+    for case in 0..4 {
+        let (f, u) = installed();
+        assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+        let hits = u.hits();
+        let root = f.owned.root();
+        let current = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        match case {
+            0 => fs::write(current.bin.join(format!("../tools/{id}/extra")), "x").unwrap(),
+            1 => fs::write(
+                root.join("package.json"),
+                json!({ "packageManager": switched }).to_string(),
+            )
+            .unwrap(),
+            2 => {
+                let mut lock: Value =
+                    serde_json::from_slice(&fs::read(root.join("turbo.lock")).unwrap()).unwrap();
+                lock["tools"][id]["version"] = json!("9.9.9");
+                fs::write(root.join("turbo.lock"), lock.to_string()).unwrap();
+            }
+            _ => fs::remove_file(root.join(".turbo/tools/manifest.json")).unwrap(),
+        }
+        let error = f.check(CHECK).unwrap_err().to_string();
+        assert!(
+            error.contains("turbo setup") || error.contains("lock"),
+            "{id} case {case}: {error}"
+        );
+        assert_eq!(u.hits(), hits);
     }
 }
 
@@ -169,7 +208,11 @@ fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            2 => fs::write(f.owned.root().join("apps/web/.npmrc"), "").unwrap(),
+            2 => fs::write(
+                f.owned.root().join("apps/web/.npmrc"),
+                "registry=https://private.invalid",
+            )
+            .unwrap(),
             3 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
             4 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");

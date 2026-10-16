@@ -5,10 +5,20 @@ usage() {
   cat <<'EOF'
 Install the standalone Turborepo CLI without Node.js or a JavaScript package manager.
 
-Usage: install [--version VERSION] [--install-dir DIRECTORY]
+Usage: install [--version VERSION] [--install-dir DIRECTORY] [--no-modify-path]
+               [--no-shell-hook]
+       install --uninstall [--install-dir DIRECTORY]
 
 By default, the installer uses the latest stable release and installs to
 ~/.local/bin. Set TURBO_VERSION or TURBO_INSTALL_DIR to configure this in CI.
+
+The installer adds the install directory to PATH and, when the installed turbo
+supports it, adds the turbo shell hook to the same shell profiles.
+  --no-modify-path  Do not edit shell profiles (TURBO_NO_MODIFY_PATH=1).
+  --no-shell-hook   Do not add the shell hook (TURBO_NO_SHELL_HOOK=1).
+  --uninstall       Remove the turbo binary, PATH entry, and shell hook that the
+                    installer added for the install directory, and nothing else
+                    (TURBO_UNINSTALL=1).
 EOF
 }
 
@@ -19,8 +29,23 @@ fail() {
 
 version=${TURBO_VERSION:-}
 install_dir=${TURBO_INSTALL_DIR:-}
+no_modify_path=${TURBO_NO_MODIFY_PATH:-0}
+no_shell_hook=${TURBO_NO_SHELL_HOOK:-0}
+uninstall=${TURBO_UNINSTALL:-0}
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --uninstall)
+      uninstall=1
+      shift
+      ;;
+    --no-modify-path)
+      no_modify_path=1
+      shift
+      ;;
+    --no-shell-hook)
+      no_shell_hook=1
+      shift
+      ;;
     --version)
       [ "$#" -ge 2 ] || fail "--version requires a value"
       version=$2
@@ -73,7 +98,7 @@ esac
 
 binary_name=turbo
 destination="$install_dir/$binary_name"
-if existing_turbo=$(command -v turbo 2>/dev/null); then
+if [ "$uninstall" != 1 ] && existing_turbo=$(command -v turbo 2>/dev/null); then
   if [ "$existing_turbo" != "$destination" ]; then
     fail "Found an existing turbo on PATH at $existing_turbo.
 Uninstall it using the tool that installed it, then rerun:
@@ -86,7 +111,7 @@ check_destination() {
     fail "$destination is not a regular file; it was left untouched. Remove it yourself or choose another --install-dir."
   fi
 }
-check_destination
+[ "$uninstall" = 1 ] || check_destination
 
 for utility in curl tar awk grep sed head mktemp mkdir cp chmod mv ln rm tr; do
   command -v "$utility" >/dev/null 2>&1 || fail "required command not found: $utility"
@@ -109,24 +134,175 @@ shell_quote() {
   printf "'%s'" "$quoted"
 }
 
+path_marker="# Turborepo standalone installer PATH: $install_dir"
+
+path_block() {
+  quoted_install_dir=$(shell_quote "$install_dir")
+  printf '%s\n' "$path_marker"
+  printf 'case ":$PATH:" in\n'
+  printf '  *:%s:*) ;;\n' "$quoted_install_dir"
+  printf '  *) PATH=%s:"$PATH" ;;\n' "$quoted_install_dir"
+  printf 'esac\nexport PATH\n'
+}
+
 append_path_profile() {
   profile=$1
-  marker="# Turborepo standalone installer PATH: $install_dir"
-  if [ -f "$profile" ] && grep -Fqx "$marker" "$profile"; then
+  if [ -f "$profile" ] && grep -Fqx "$path_marker" "$profile"; then
     return 0
   fi
+  { printf '\n'; path_block; } >> "$profile"
+}
 
-  quoted_install_dir=$(shell_quote "$install_dir")
-  if ! {
-    printf '\n%s\n' "$marker"
-    printf 'case ":$PATH:" in\n'
-    printf '  *:%s:*) ;;\n' "$quoted_install_dir"
-    printf '  *) PATH=%s:"$PATH" ;;\n' "$quoted_install_dir"
-    printf 'esac\nexport PATH\n'
-  } >> "$profile"; then
-    return 1
+hook_marker='# Turborepo standalone installer shell hook'
+
+hook_line_for() {
+  printf 'eval "$(%s hook %s)" %s' "$(shell_quote "$destination")" "$1" "$hook_marker"
+}
+
+# Owns one marked line per profile: replace it in place, writing through
+# symlinked dotfiles and dropping duplicates, or append it.
+write_hook_profile() {
+  profile=$1
+  if [ -f "$profile" ] && grep -Fq "$hook_marker" "$profile"; then
+    if grep -Fqx "$hook_line" "$profile" && [ "$(grep -Fc "$hook_marker" "$profile")" = 1 ]; then
+      return 0
+    fi
+    HOOK_LINE=$hook_line HOOK_MARKER=$hook_marker awk '
+      index($0, ENVIRON["HOOK_MARKER"]) { if (!done) print ENVIRON["HOOK_LINE"]; done = 1; next }
+      { print }
+    ' "$profile" > "$work_dir/profile" || return 1
+    cat "$work_dir/profile" > "$profile" || return 1
+  else
+    printf '\n%s\n' "$hook_line" >> "$profile" || return 1
   fi
 }
+
+configure_shell_hook() {
+  [ -z "${GITHUB_PATH:-}" ] && [ "$no_modify_path" != 1 ] && [ "$no_shell_hook" != 1 ] || return 0
+  shell_name=${SHELL:-}
+  shell_name=${shell_name##*/}
+  case "$shell_name" in
+    zsh|bash|fish) ;;
+    *) return 0 ;;
+  esac
+  # Older releases have no hook command.
+  "$destination" hook "$shell_name" >/dev/null 2>&1 || return 0
+  quoted_destination=$(shell_quote "$destination")
+  hook_line=$(hook_line_for "$shell_name")
+  case "$shell_name" in
+    zsh)
+      write_hook_profile "$HOME/.zshrc" || return 1
+      ;;
+    bash)
+      # Never ~/.profile: sh and dash read it too.
+      for profile in "$HOME/.bash_profile" "$HOME/.bash_login"; do
+        if [ -f "$profile" ]; then
+          write_hook_profile "$profile" || return 1
+          break
+        fi
+      done
+      write_hook_profile "$HOME/.bashrc" || return 1
+      ;;
+    fish)
+      printf 'To activate managed tools in fish, add this line to ~/.config/fish/config.fish:\n  %s hook fish | source\n' "$quoted_destination"
+      return 0
+      ;;
+  esac
+  printf 'Added the turbo shell hook to your %s profile; open a new shell to use it.\n' "$shell_name"
+}
+
+# Removes this installation's PATH block and hook lines, with the blank line
+# the installer wrote before each, so the profile returns to its prior bytes.
+# Exits 3 when nothing matches.
+remove_profile_lines() {
+  PATH_BLOCK=$(path_block) HOOK_ZSH=$(hook_line_for zsh) HOOK_BASH=$(hook_line_for bash) awk '
+    function drop(first, count) {
+      for (j = first; j < first + count; j++) dropped[j] = 1
+      removed = 1
+      if (first > 1 && !dropped[first - 1]) {
+        if (line[first - 1] == "") dropped[first - 1] = 1
+        else unterminated[first - 1] = 1
+      }
+    }
+    { line[NR] = $0 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        block = line[i]
+        for (k = 1; k <= 5 && i + k <= NR; k++) block = block "\n" line[i + k]
+        if (line[i] == ENVIRON["HOOK_ZSH"] || line[i] == ENVIRON["HOOK_BASH"]) drop(i, 1)
+        else if (block == ENVIRON["PATH_BLOCK"]) { drop(i, 6); i += 5 }
+      }
+      if (!removed) exit 3
+      last = 0
+      for (i = 1; i <= NR; i++) if (!dropped[i]) last = i
+      for (i = 1; i <= last; i++) {
+        if (dropped[i]) continue
+        # The installer ended this line when the profile had no final newline.
+        if (i == last && unterminated[i]) printf "%s", line[i]
+        else print line[i]
+      }
+    }
+  ' "$1"
+}
+
+uninstall_profile() {
+  profile=$1
+  [ -f "$profile" ] || return 0
+  had_path=0
+  had_hook=0
+  if grep -Fqx "$path_marker" "$profile"; then had_path=1; fi
+  if grep -Fqx -e "$(hook_line_for zsh)" -e "$(hook_line_for bash)" "$profile"; then had_hook=1; fi
+  removal_status=0
+  remove_profile_lines "$profile" > "$work_dir/profile" || removal_status=$?
+  case "$removal_status" in
+    0)
+      if [ -s "$work_dir/profile" ] || [ -L "$profile" ]; then
+        cat "$work_dir/profile" > "$profile" || return 1
+      else
+        rm -f "$profile" || return 1
+      fi
+      ;;
+    3) ;;
+    *) return 1 ;;
+  esac
+  if [ "$had_path" = 1 ] && ! grep -Fqx "$path_marker" "$profile" 2>/dev/null; then
+    printf 'Removed the turbo PATH entry from %s\n' "$profile"
+  fi
+  if [ "$had_hook" = 1 ]; then
+    printf 'Removed the turbo shell hook from %s\n' "$profile"
+  fi
+  if grep -Fq '# Turborepo standalone installer ' "$profile" 2>/dev/null; then
+    printf 'Left lines in %s that are marked by the installer but do not match this installation.\n' "$profile"
+  fi
+}
+
+# Removes only what this installer owns: a regular file at the destination
+# (the same rule upgrades use) and its own marked profile lines.
+uninstall_turbo() {
+  if [ -L "$destination" ] || { [ -e "$destination" ] && [ ! -f "$destination" ]; }; then
+    printf 'Left %s because it is not a regular file.\n' "$destination"
+  elif [ -f "$destination" ]; then
+    rm -f "$destination" || fail "could not remove $destination"
+    printf 'Removed %s\n' "$destination"
+  else
+    printf 'No turbo found at %s\n' "$destination"
+  fi
+  for profile in "$HOME/.profile" "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.bashrc" "$HOME/.zprofile" "$HOME/.zshrc"; do
+    uninstall_profile "$profile" || fail "could not update $profile"
+  done
+  fish_config="$HOME/.config/fish/config.fish"
+  if [ -f "$fish_config" ] && grep -Fq "$(shell_quote "$destination") hook fish" "$fish_config"; then
+    printf 'Left the turbo hook line in %s because the installer did not add it; remove it yourself.\n' "$fish_config"
+  fi
+  if other_turbo=$(command -v turbo 2>/dev/null) && [ "$other_turbo" != "$destination" ]; then
+    printf 'Left %s because the installer did not install it.\n' "$other_turbo"
+  fi
+}
+
+if [ "$uninstall" = 1 ]; then
+  uninstall_turbo
+  exit 0
+fi
 
 download() {
   curl --fail --show-error --silent --location \
@@ -224,7 +400,7 @@ configure_path() {
     fi
     return 0
   fi
-  [ "${TURBO_NO_MODIFY_PATH:-0}" != 1 ] || return 1
+  [ "$no_modify_path" != 1 ] || return 1
 
   shell_name=${SHELL:-}
   shell_name=${shell_name##*/}
@@ -261,4 +437,7 @@ if configure_path; then
   esac
 else
   printf 'Add %s to PATH to run `turbo` by name.\n' "$install_dir"
+fi
+if ! configure_shell_hook; then
+  printf 'Could not add the turbo shell hook to your shell profile.\n'
 fi

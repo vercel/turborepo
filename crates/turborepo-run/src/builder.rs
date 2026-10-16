@@ -28,7 +28,7 @@ use turborepo_repository::{
 };
 use turborepo_run_context::RepoContext;
 use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
-use turborepo_run_summary::observability;
+use turborepo_run_summary::{ScmStatePrefetch, observability};
 use turborepo_scm::SCM;
 use turborepo_scope::{
     ChangedFilesDetector, GitChangeDetector, TargetSelector, filter::ResolutionError,
@@ -71,6 +71,7 @@ struct RepoDiscovery {
     pkg_dep_graph: Arc<PackageGraph>,
     lazy_plan: Option<LazyPlan<CachingPackageDiscovery<LocalPackageDiscovery>>>,
     scm: SCM,
+    scm_state_prefetch: Option<ScmStatePrefetch>,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: PendingRepoIndex,
     untracked_scan_scope_tx: Option<tokio::sync::oneshot::Sender<Option<Vec<RelativeUnixPathBuf>>>>,
@@ -412,6 +413,7 @@ pub struct RunBuilder {
     // workspace configuration) changed since the graph was built; the watch
     // client checks the changed-file set before sharing it.
     shared_pkg_graph: Option<Arc<PackageGraph>>,
+    managed_environment: Option<Arc<crate::ManagedRun>>,
 }
 
 impl RunBuilder {
@@ -435,6 +437,7 @@ impl RunBuilder {
             opts,
             version,
             api_auth,
+            managed_environment,
         } = input;
 
         Ok(Self {
@@ -455,6 +458,7 @@ impl RunBuilder {
             skip_repo_index_and_scm_state: false,
             skip_external_dependencies: false,
             shared_pkg_graph: None,
+            managed_environment,
         })
     }
 
@@ -942,6 +946,7 @@ impl RunBuilder {
                 .future_flags
                 .github_actions_remote_base_ref_fallback;
             let skip_repo_index = self.skip_repo_index_and_scm_state;
+            let prefetch_summary_scm_state = self.opts.run_opts.dry_run.is_some();
             tokio::task::spawn_blocking(move || {
                 let scm = match git_root {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
@@ -950,8 +955,15 @@ impl RunBuilder {
                 .with_github_actions_remote_base_ref_fallback(
                     github_actions_remote_base_ref_fallback,
                 );
+                // A dry run executes no tasks, so nothing can move `HEAD`
+                // before its summary is built. Resolve the summary's SCM state
+                // (a git subprocess outside CI) now, overlapping graph
+                // construction, instead of after the visitor finishes.
+                let scm_state_prefetch = prefetch_summary_scm_state.then(|| {
+                    ScmStatePrefetch::spawn(&EnvironmentVariableMap::infer(), &scm, &repo_root)
+                });
                 if skip_repo_index {
-                    let _ = scm_tx.send(scm);
+                    let _ = scm_tx.send((scm, scm_state_prefetch));
                     return None;
                 }
                 // The tracked half of the repo index only needs `.git/index`.
@@ -959,7 +971,7 @@ impl RunBuilder {
                     let _span = tracing::info_span!("build_tracked_repo_index_gix").entered();
                     scm.build_tracked_repo_index_eager()
                 };
-                let _ = scm_tx.send(scm.clone());
+                let _ = scm_tx.send((scm.clone(), scm_state_prefetch));
                 let mut index = tracked_index?;
                 // Candidate runs wait here for the scope decision:
                 // `Some(prefixes)` walks only those subtrees (relative to
@@ -1073,6 +1085,15 @@ impl RunBuilder {
                     builder
                 };
                 let builder = graph_features.configure_with_plan(builder, &contributor_plan);
+                // A task run at the repository root with no package selection
+                // selects every package, so its first settlement pass loads
+                // every native owner: start their toolchain subprocesses now
+                // so they overlap inventory construction.
+                let loads_every_owner = !self.opts.run_opts.tasks.is_empty()
+                    && self.opts.scope_opts.filter_patterns.is_empty()
+                    && self.opts.scope_opts.affected_range.is_none()
+                    && self.opts.scope_opts.pkg_inference_root.is_none();
+                let builder = builder.with_contributor_prefetch(loads_every_owner);
 
                 let graph = builder
                     .build_lazy()
@@ -1121,7 +1142,7 @@ impl RunBuilder {
         // The SCM handle arrives as soon as detection and the tracked index
         // build finish; the untracked scan continues in the background and
         // is joined just before the first repo-index consumer.
-        let scm = {
+        let (scm, scm_state_prefetch) = {
             let _span = tracing::info_span!("scm_task_await").entered();
             match scm_rx.await {
                 Ok(scm) => scm,
@@ -1130,7 +1151,7 @@ impl RunBuilder {
                     // panicked; that panic surfaces when the repo-index task
                     // is joined below. Detect inline so the run reaches that
                     // point.
-                    SCM::new(&self.repo_root)
+                    (SCM::new(&self.repo_root), None)
                 }
             }
         };
@@ -1153,6 +1174,7 @@ impl RunBuilder {
             pkg_dep_graph,
             lazy_plan,
             scm,
+            scm_state_prefetch,
             micro_frontend_configs,
             repo_index,
             untracked_scan_scope_tx,
@@ -2158,6 +2180,10 @@ impl RunBuilder {
             TurboState::platform_name(),
         );
         let start_at = Local::now();
+        // Reject stale managed state before graph/probe work or HTTP activation.
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(Error::ManagedTools)?;
+        }
 
         let RepoDiscovery {
             run_telemetry,
@@ -2166,6 +2192,7 @@ impl RunBuilder {
             pkg_dep_graph,
             lazy_plan,
             scm,
+            scm_state_prefetch,
             micro_frontend_configs,
             repo_index,
             untracked_scan_scope_tx,
@@ -2218,7 +2245,10 @@ impl RunBuilder {
             .unzip();
 
         let scm_state = LazyScmState::new();
-        let scm_state_task = (!self.skip_repo_index_and_scm_state).then(|| {
+        // The SCM state is provenance for cache writes. Runs that execute no
+        // tasks (dry and graph runs) never write, so skip the git subprocesses.
+        let capture_scm_state = !self.skip_repo_index_and_scm_state && self.will_execute_tasks();
+        let scm_state_task = capture_scm_state.then(|| {
             let scm = scm.clone();
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || {
@@ -2295,6 +2325,7 @@ impl RunBuilder {
                     start_at,
                     opts: Arc::new(self.opts),
                     env_at_execution_start,
+                    managed_environment: self.managed_environment,
                     filtered_pkgs,
                     remote_cache_status,
                     engine,
@@ -2308,6 +2339,7 @@ impl RunBuilder {
                     run_cache,
                     signal_handler: signal_handler.clone(),
                     repo_index,
+                    scm_state_prefetch: Arc::new(std::sync::Mutex::new(scm_state_prefetch)),
                     observability_handle,
                     query_server: self.query_server,
                     shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -3283,6 +3315,7 @@ mod origins_match_tests {
                 opts: affected_opts(repo_root, filters),
                 version: "test",
                 api_auth: None,
+                managed_environment: None,
             },
             None,
         )
@@ -3545,6 +3578,7 @@ mod origins_match_tests {
                 opts,
                 version: "test",
                 api_auth: None,
+                managed_environment: None,
             },
             None,
         )

@@ -186,7 +186,7 @@ fn baseline_monorepo_hashes() {
 }
 
 #[test]
-fn turbo_lock_does_not_enable_setup_or_change_run_hashes() {
+fn turbo_lock_without_setup_flag_keeps_hashes_and_flagged_runs_require_setup() {
     let tempdir = tempfile::tempdir().unwrap();
     let dir = tempdir.path();
     setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
@@ -208,6 +208,30 @@ fn turbo_lock_does_not_enable_setup_or_change_run_hashes() {
         fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
         let without_lock = dry_json(dir, &["run", "build", "--dry=json"]);
         fs::write(&lock_path, lock_contents).unwrap();
+        if enabled == Some(true) {
+            // A flagged root lock makes runs managed: without valid setup they
+            // fail instead of hashing or executing with host tools.
+            for args in [
+                &["run", "build", "--dry=json"][..],
+                &["run", "build", "--force"],
+            ] {
+                let output = common::run_turbo(dir, args);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert!(!output.status.success(), "{args:?}: {stderr}");
+                assert!(
+                    stderr.contains("managed setup validation failed"),
+                    "{stderr}"
+                );
+            }
+            assert_eq!(baseline_task_hashes, task_hash_contract(&without_lock));
+            assert_eq!(
+                baseline_global_inputs,
+                global_cache_inputs_contract(&without_lock)
+            );
+            assert_eq!(fs::read_to_string(&lock_path).unwrap(), lock_contents);
+            fs::remove_file(&lock_path).unwrap();
+            continue;
+        }
         let with_lock = dry_json(dir, &["run", "build", "--dry=json"]);
         for (state, actual) in [
             ("without lock", &without_lock),

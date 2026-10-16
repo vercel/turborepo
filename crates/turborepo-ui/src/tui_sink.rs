@@ -115,13 +115,14 @@ impl LogSink for TuiSink {
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let normalized = normalize_newlines(bytes);
+        // Normalize only when the bytes are kept: in stream mode the sink
+        // is disabled and every chunk would be copied and dropped.
         match &mut *state {
             SinkState::Buffering { task_output, .. } => {
-                task_output.push((task.to_string(), normalized));
+                task_output.push((task.to_string(), normalize_newlines(bytes)));
             }
             SinkState::Connected(sender) => {
-                let _ = sender.output(task.to_string(), normalized);
+                let _ = sender.output(task.to_string(), normalize_newlines(bytes));
             }
             SinkState::Disabled => {}
         }

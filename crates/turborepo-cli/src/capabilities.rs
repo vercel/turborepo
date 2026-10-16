@@ -44,7 +44,7 @@ pub(crate) fn run_query<T: AsRef<OsStr>>(args: impl IntoIterator<Item = T>) -> O
             Some(1)
         }
         Request::Query => {
-            let bytes = match Capabilities::unsupported(crate::get_version()).encode() {
+            let bytes = match Capabilities::current(crate::get_version()).encode() {
                 Ok(bytes) => bytes,
                 Err(err) => {
                     let _ = writeln!(std::io::stderr().lock(), "error: {err}");

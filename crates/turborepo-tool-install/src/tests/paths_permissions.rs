@@ -305,6 +305,79 @@ fn direct_and_symlink_exports_require_owner_execute_before_publication() {
     }
 }
 
+/// Ubuntu's default user umask is 0002. The umask is process-wide, so the
+/// body runs in a re-executed copy of this test binary, not beside siblings.
+#[test]
+fn umask_0002_clone_gets_a_private_store_and_unsafe_directories_fail_closed() {
+    const CHILD: &str = "TURBO_TOOL_INSTALL_UMASK_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        use std::os::unix::process::CommandExt;
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "tests::paths_permissions::umask_0002_clone_gets_a_private_store_and_unsafe_directories_fail_closed",
+                "--test-threads=1",
+            ])
+            .env(CHILD, "1");
+        // SAFETY: umask is async-signal-safe and touches no heap or locks.
+        unsafe {
+            command.pre_exec(|| {
+                libc::umask(0o002);
+                Ok(())
+            });
+        }
+        let output = command.output().unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
+    let mode = |path: &Path| fs::symlink_metadata(path).unwrap().permissions().mode() & 0o7777;
+    // A fresh clone, plus a `.turbo` that another turbo command created first.
+    let repo = tempfile::tempdir().unwrap();
+    fs::set_permissions(repo.path(), fs::Permissions::from_mode(0o775)).unwrap();
+    let turbo = repo.path().join(".turbo");
+    fs::create_dir(&turbo).unwrap();
+    assert_eq!(mode(&turbo), 0o775);
+    let mut store = Store::open(repo.path()).unwrap();
+    store.reconcile(&[tool("node")], populate).unwrap();
+    let generation = store.current().unwrap().unwrap().bin.join("..");
+    drop(store);
+    for (path, expected) in [
+        (turbo.join("tools"), 0o700),
+        (generation.clone(), 0o700),
+        (generation.join("bin"), 0o700),
+        (generation.join("tools/node"), 0o700),
+        (turbo.join("tools/transaction.lock"), 0o600),
+        (turbo.join("tools/manifest.json"), 0o600),
+    ] {
+        assert_eq!(mode(&path), expected, "{}", path.display());
+    }
+    assert!(Store::inspect(repo.path()).unwrap().is_some());
+    for (path, unsafe_mode, restore) in [
+        (repo.path().to_path_buf(), 0o777, 0o775),
+        (turbo.clone(), 0o777, 0o775),
+        (turbo.join("tools"), 0o770, 0o700),
+        (generation.clone(), 0o770, 0o700),
+    ] {
+        fs::set_permissions(&path, fs::Permissions::from_mode(unsafe_mode)).unwrap();
+        assert!(
+            matches!(Store::inspect(repo.path()), Err(Error::UnsafePath)),
+            "{}",
+            path.display()
+        );
+        fs::set_permissions(&path, fs::Permissions::from_mode(restore)).unwrap();
+    }
+    assert!(Store::inspect(repo.path()).unwrap().is_some());
+    // Unprivileged tests cannot chown; another user's private store is unsafe.
+    let other = rustix::process::geteuid().as_raw().wrapping_add(1);
+    assert!(!private_to_user(0o700, other));
+}
+
 #[test]
 fn legacy_non_owner_executable_inventory_is_not_current_or_a_no_op() {
     let repo = tempfile::tempdir().unwrap();

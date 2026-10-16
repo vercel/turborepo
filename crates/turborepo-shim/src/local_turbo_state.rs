@@ -257,6 +257,55 @@ impl LocalTurboState {
         None
     }
 
+    /// Managed dispatch may not turn an installed but broken pin into absence.
+    /// Initial Node/pnpm repositories use the node_modules strategies, not PnP.
+    pub fn infer_managed(root: &AbsoluteSystemPath) -> Result<Option<Self>, std::io::Error> {
+        let paths: &[&[&str]] = &[
+            &[
+                TurboState::scoped_platform_package_scope(),
+                TurboState::scoped_platform_package_dir(),
+            ],
+            &[TurboState::platform_package_name()],
+        ];
+        for base in [
+            Self::generate_hoisted_path,
+            Self::generate_nested_path,
+            Self::generate_linked_path,
+        ]
+        .into_iter()
+        .filter_map(|strategy| strategy(root))
+        {
+            for path in paths {
+                let package = base.join_components(path);
+                match fs::symlink_metadata(package.as_std_path()) {
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(e) => return Err(e),
+                    Ok(_) => {
+                        return Self::try_probe_binary(&base, path, TurboState::binary_name())
+                            .map(Some)
+                            .ok_or_else(|| {
+                                std::io::Error::other(
+                                    "installed native CLI is damaged; repair or upgrade the pin",
+                                )
+                            });
+                    }
+                }
+            }
+        }
+        for path in ["node_modules/turbo", "node_modules/.bin/turbo"] {
+            match fs::symlink_metadata(root.as_std_path().join(path)) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+                Ok(_) => {
+                    return Err(std::io::Error::other(
+                        "installed repository CLI cannot be resolved; repair or upgrade the pin",
+                    ));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     /// Check to see if the detected local executable is the one currently
     /// running.
     pub fn local_is_self(&self) -> bool {

@@ -43,10 +43,24 @@ fn missing_or_overridden_ignore_reports_before_creating_state() {
     .unwrap();
     assert!(WriterStorage::acquire(root.path()).is_err());
     assert!(!root.path().join(".turbo").exists());
-    let non_git = tempfile::tempdir().unwrap();
-    fs::write(non_git.path().join(".gitignore"), "/.turbo/\n").unwrap();
-    assert!(WriterStorage::acquire(non_git.path()).is_err());
-    assert!(!non_git.path().join(".turbo").exists());
+    // Any `.git`, even a broken one, keeps the strict Git check.
+    let broken = tempfile::tempdir().unwrap();
+    fs::write(broken.path().join(".gitignore"), "/.turbo/\n").unwrap();
+    fs::write(broken.path().join(".git"), "").unwrap();
+    assert!(WriterStorage::acquire(broken.path()).is_err());
+    assert!(!broken.path().join(".turbo").exists());
+}
+
+#[test]
+fn roots_outside_any_repository_need_no_git() {
+    let root = tempfile::tempdir().unwrap();
+    assert!(outside_git_repository(root.path()).unwrap());
+    let nested = root.path().join("out/full");
+    fs::create_dir_all(&nested).unwrap();
+    drop(WriterStorage::acquire(&nested).unwrap());
+    assert!(state(&nested, WRITER).exists());
+    fs::create_dir(root.path().join(".git")).unwrap();
+    assert!(!outside_git_repository(&nested).unwrap());
 }
 
 #[test]

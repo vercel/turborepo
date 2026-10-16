@@ -203,6 +203,12 @@ impl AsyncCache {
     /// Only dry runs use the query endpoint; ordinary cache reads retain their
     /// existing HEAD/GET behavior.
     pub async fn dry_run_exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
+        // Batching only helps share a remote query. Without a remote cache the
+        // batch is a sequence of local lookups, and joining it would only add
+        // the batch collection window to every dry run.
+        if !self.real_cache.may_read_remote() {
+            return Ok(self.real_cache.local_exists(key));
+        }
         let (sender, receiver) = oneshot::channel();
         self.dry_run_sender
             .send((key.to_owned(), sender))
