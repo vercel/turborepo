@@ -68,10 +68,50 @@ pub enum TraceError {
 impl TraceResult {
     #[allow(dead_code)]
     pub fn emit_errors(&self) {
-        for error in &self.errors {
-            eprintln!("{:?}", Report::new(error.clone()));
+        // Stderr is unbuffered and miette renders a report as many small
+        // fragments (often single characters), so formatting directly into
+        // stderr costs one write syscall per fragment. Render reports first
+        // and write each rendered chunk with a single call instead.
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+        for chunk in render_errors(&self.errors, threads) {
+            eprint!("{chunk}");
         }
     }
+}
+
+/// Small error lists are rendered on the calling thread; spawning render
+/// threads isn't worth it for them.
+const PARALLEL_RENDER_THRESHOLD: usize = 256;
+
+/// Renders `errors` as miette reports, in order.
+///
+/// Rendering is independent per report, so large error lists (a reverse trace
+/// can report tens of thousands) are split into contiguous chunks rendered on
+/// up to `threads` threads. Concatenating the returned chunks gives the same
+/// output as rendering the reports one by one.
+fn render_errors(errors: &[TraceError], threads: usize) -> Vec<String> {
+    if threads <= 1 || errors.len() < PARALLEL_RENDER_THRESHOLD {
+        return errors.iter().map(render_error).collect();
+    }
+
+    let chunk_size = errors.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = errors
+            .chunks(chunk_size)
+            .map(|chunk| scope.spawn(move || chunk.iter().map(render_error).collect::<String>()))
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| match handle.join() {
+                Ok(rendered) => rendered,
+                Err(panic) => std::panic::resume_unwind(panic),
+            })
+            .collect()
+    })
+}
+
+fn render_error(error: &TraceError) -> String {
+    format!("{:?}\n", Report::new(error.clone()))
 }
 
 pub struct TraceResult {
@@ -111,7 +151,11 @@ pub fn parse_file(
     import_type: ImportTraceType,
     include_ast: bool,
 ) -> Result<(Vec<ImportResult>, Option<serde_json::Value>), String> {
-    let source_type = SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    let mut source_type = SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    // JSX is also valid in JavaScript files without a .jsx extension.
+    if source_type.is_javascript() {
+        source_type = source_type.with_jsx(true);
+    }
 
     let allocator = Allocator::default();
     let ret = Parser::new(&allocator, file_content, source_type).parse();
@@ -618,6 +662,63 @@ mod test {
     use test_case::test_case;
 
     use super::*;
+
+    #[test_case("js" ; "javascript")]
+    #[test_case("jsx" ; "jsx")]
+    #[test_case("mjs" ; "javascript module")]
+    #[test_case("cjs" ; "commonjs")]
+    #[test_case("tsx" ; "typescript jsx")]
+    #[tokio::test]
+    async fn trace_jsx_imports(extension: &str) {
+        let (_tmp, root) = canonical_tempdir();
+        let source = if extension == "cjs" {
+            "const { helper } = require('./helper.js');\nexports.Greeting = () => \
+             <div>{helper()}</div>;"
+        } else {
+            "import { helper } from './helper.js';\nexport const Greeting = () => \
+             <div>{helper()}</div>;"
+        };
+        let entry = write_source(&root, &format!("greeting.{extension}"), source);
+        let helper = write_source(&root, "helper.js", "export const helper = () => 'hi';");
+
+        let result = trace_root(&root, vec![entry]).trace(None).await;
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(result.files.len(), 2);
+        assert!(result.files.contains_key(absolute_path(&helper)));
+    }
+
+    #[test_case("ts" ; "typescript")]
+    #[test_case("mts" ; "typescript module")]
+    #[test_case("cts" ; "typescript commonjs")]
+    fn parse_typescript_angle_bracket_assertion(extension: &str) {
+        let (_tmp, root) = canonical_tempdir();
+        let file = root.join(format!("index.{extension}"));
+        let source = "import { value } from './helper.js'; export const result = <number>value;";
+        let (imports, ast) = parse_file(absolute_path(&file), source, ImportTraceType::All, true)
+            .unwrap_or_else(|error| panic!("failed to parse TypeScript: {error}"));
+
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].specifier, "./helper.js");
+        assert_eq!(
+            ast.unwrap()["body"][1]["declaration"]["declarations"][0]["init"]["type"],
+            "TSTypeAssertion"
+        );
+    }
+
+    #[test]
+    fn parallel_error_rendering_matches_serial_rendering() {
+        let errors: Vec<TraceError> = (0..PARALLEL_RENDER_THRESHOLD * 2 + 3)
+            .map(|i| TraceError::InvalidTraceGlob(format!("pattern {i}")))
+            .collect();
+
+        let serial = render_errors(&errors, 1);
+        let parallel = render_errors(&errors, 8);
+
+        assert_eq!(serial.len(), errors.len());
+        assert_eq!(parallel.len(), 8);
+        assert_eq!(parallel.concat(), serial.concat());
+    }
 
     fn canonical_tempdir() -> (tempfile::TempDir, PathBuf) {
         let tmp = tempfile::tempdir().expect("create temp project");

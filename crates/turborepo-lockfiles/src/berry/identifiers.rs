@@ -225,6 +225,7 @@ impl fmt::Display for Locator<'_> {
 }
 
 const WORKSPACE_PROTOCOL: &str = "workspace:";
+const PATCH_PROTOCOL: &str = "patch:";
 
 impl<'a> Locator<'a> {
     pub fn new(ident: &'a str, reference: &'a str) -> Result<Self, Error> {
@@ -236,6 +237,10 @@ impl<'a> Locator<'a> {
     }
 
     pub fn from_patch_reference(patch_reference: &'a str) -> Option<Self> {
+        // The pattern requires a literal `patch:`; skip the regex otherwise.
+        if !patch_reference.contains(PATCH_PROTOCOL) {
+            return None;
+        }
         let caps = regex!(r"patch:(.+)#(?:\./)?([^:]+)(?:::)?.*$").captures(patch_reference)?;
         let capture_group = caps.get(1)?;
         let Locator { ident, reference } = Locator::try_from(capture_group.as_str()).ok()?;
@@ -270,6 +275,11 @@ impl<'a> Locator<'a> {
     }
 
     pub fn patch_file(&self) -> Option<&str> {
+        // The pattern requires a literal `patch:`; skip the regex otherwise.
+        // Called for every locator while loading a lockfile.
+        if !self.reference.contains(PATCH_PROTOCOL) {
+            return None;
+        }
         regex!(r"patch:(.+)#(?:\./)?([^:]+)(?:::)?.*$")
             .captures(&self.reference)
             .and_then(|caps| caps.get(2))

@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    io::{Seek, SeekFrom, Write},
+    io::{BufWriter, Seek, SeekFrom, Write},
 };
 
 use turborepo_ghostty as ghostty;
@@ -17,10 +17,21 @@ use crate::terminal_sink::has_bare_lf;
 /// task cannot grow memory without limit.
 const OUTPUT_SPOOL_THRESHOLD: usize = 1024 * 1024;
 
+/// Spool writes are coalesced up to this size. Once the spool has rolled over
+/// to its temp file, every unbuffered chunk would otherwise be one `write(2)`.
+const OUTPUT_SPOOL_WRITE_BUFFER: usize = 32 * 1024;
+
+fn new_spool() -> BufWriter<tempfile::SpooledTempFile> {
+    BufWriter::with_capacity(
+        OUTPUT_SPOOL_WRITE_BUFFER,
+        tempfile::spooled_tempfile(OUTPUT_SPOOL_THRESHOLD),
+    )
+}
+
 pub struct TerminalOutput<W> {
     /// The complete raw (newline-normalized) byte stream, spooled through a
     /// bounded in-memory buffer that rolls over to disk.
-    output: tempfile::SpooledTempFile,
+    output: BufWriter<tempfile::SpooledTempFile>,
     /// Total bytes written to `output` (its write position is disturbed by
     /// replay reads, so length is tracked explicitly).
     output_len: usize,
@@ -46,7 +57,7 @@ enum LogBehavior {
 impl<W> TerminalOutput<W> {
     pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Result<Self, Error> {
         Ok(Self {
-            output: tempfile::spooled_tempfile(OUTPUT_SPOOL_THRESHOLD),
+            output: new_spool(),
             output_len: 0,
             parser: ghostty::Parser::try_new(rows, cols, scrollback_len as usize)?,
             stdin,
@@ -71,15 +82,16 @@ impl<W> TerminalOutput<W> {
     /// stream in memory.
     pub fn read_output_from(&mut self, offset: usize) -> Vec<u8> {
         let mut buf = Vec::with_capacity(self.output_len.saturating_sub(offset));
-        let result = self
-            .output
-            .seek(SeekFrom::Start(offset as u64))
-            .and_then(|_| {
+        // Push buffered writes into the spool before reading it back.
+        let result = self.output.flush().and_then(|_| {
+            let spool = self.output.get_mut();
+            spool.seek(SeekFrom::Start(offset as u64)).and_then(|_| {
                 // Restore the write position so later writes keep appending.
-                let result = std::io::Read::read_to_end(&mut self.output, &mut buf);
-                let _ = self.output.seek(SeekFrom::Start(self.output_len as u64));
+                let result = std::io::Read::read_to_end(spool, &mut buf);
+                let _ = spool.seek(SeekFrom::Start(self.output_len as u64));
                 result
-            });
+            })
+        });
         if let Err(err) = result {
             // Replay is best-effort; a failed spool read must not break the
             // TUI.
@@ -288,7 +300,7 @@ impl<W> TerminalOutput<W> {
 
     pub fn clear_logs(&mut self) {
         // A fresh spool releases any rolled-over temp file.
-        self.output = tempfile::spooled_tempfile(OUTPUT_SPOOL_THRESHOLD);
+        self.output = new_spool();
         self.output_len = 0;
         self.parser.reset();
     }
@@ -336,7 +348,7 @@ mod spool_tests {
         output.process(&expected);
 
         assert!(
-            output.output.is_rolled(),
+            output.output.get_ref().is_rolled(),
             "output beyond the threshold must be spooled to disk"
         );
         assert_eq!(output.output_len(), expected.len());
@@ -353,7 +365,7 @@ mod spool_tests {
     fn small_output_stays_in_memory() -> Result<(), Error> {
         let mut output = TerminalOutput::<std::io::Empty>::new(24, 80, None, 1000)?;
         output.process(b"hello\r\n");
-        assert!(!output.output.is_rolled());
+        assert!(!output.output.get_ref().is_rolled());
         assert_eq!(output.read_output_from(0), b"hello\r\n");
         Ok(())
     }

@@ -143,16 +143,37 @@ impl<'a> PackageExternalDeclarations<'a> {
 /// Equality, ordering, and hashing are defined by `(key, version)` only.
 /// `human_name` is display metadata captured at observation time so query
 /// consumers do not re-read native lockfiles.
-#[derive(Debug, Clone)]
+///
+/// The fields live behind one shared allocation: resolution assembly clones
+/// an identity into every closure that contains it (workspaces x closure
+/// size on large monorepos), so a clone or drop is one reference-count
+/// update instead of one per string.
+#[derive(Clone)]
 pub struct ExternalPackageIdentity {
+    inner: Arc<IdentityFields>,
+}
+
+#[derive(Clone)]
+struct IdentityFields {
     key: Arc<str>,
     version: Arc<str>,
     human_name: Option<Arc<str>>,
 }
 
+impl fmt::Debug for ExternalPackageIdentity {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ExternalPackageIdentity")
+            .field("key", &self.inner.key)
+            .field("version", &self.inner.version)
+            .field("human_name", &self.inner.human_name)
+            .finish()
+    }
+}
+
 impl PartialEq for ExternalPackageIdentity {
     fn eq(&self, other: &Self) -> bool {
-        self.key == other.key && self.version == other.version
+        Arc::ptr_eq(&self.inner, &other.inner)
+            || (self.inner.key == other.inner.key && self.inner.version == other.inner.version)
     }
 }
 
@@ -166,42 +187,47 @@ impl PartialOrd for ExternalPackageIdentity {
 
 impl Ord for ExternalPackageIdentity {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (&self.key, &self.version).cmp(&(&other.key, &other.version))
+        if Arc::ptr_eq(&self.inner, &other.inner) {
+            return std::cmp::Ordering::Equal;
+        }
+        (&self.inner.key, &self.inner.version).cmp(&(&other.inner.key, &other.inner.version))
     }
 }
 
 impl std::hash::Hash for ExternalPackageIdentity {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.key.hash(state);
-        self.version.hash(state);
+        self.inner.key.hash(state);
+        self.inner.version.hash(state);
     }
 }
 
 impl ExternalPackageIdentity {
     pub fn new(key: impl Into<Arc<str>>, version: impl Into<Arc<str>>) -> Self {
         Self {
-            key: key.into(),
-            version: version.into(),
-            human_name: None,
+            inner: Arc::new(IdentityFields {
+                key: key.into(),
+                version: version.into(),
+                human_name: None,
+            }),
         }
     }
 
     pub fn with_human_name(mut self, human_name: impl Into<Arc<str>>) -> Self {
-        self.human_name = Some(human_name.into());
+        Arc::make_mut(&mut self.inner).human_name = Some(human_name.into());
         self
     }
 
     pub fn key(&self) -> &str {
-        &self.key
+        &self.inner.key
     }
 
     pub fn version(&self) -> &str {
-        &self.version
+        &self.inner.version
     }
 
     /// Prefer the producer-supplied display name; otherwise the opaque key.
     pub fn display_name(&self) -> &str {
-        self.human_name.as_deref().unwrap_or(&self.key)
+        self.inner.human_name.as_deref().unwrap_or(&self.inner.key)
     }
 }
 
@@ -865,21 +891,78 @@ pub(crate) fn compare_resolution_data(
             return Ok(ExternalResolutionChanges::All);
         }
 
-        let previous: BTreeSet<_> = previous.identities().iter().collect();
-        let current: BTreeSet<_> = package.identities().iter().collect();
+        let (added, removed) =
+            sorted_identity_difference(package.identities(), previous.identities()).unwrap_or_else(
+                || set_identity_difference(package.identities(), previous.identities()),
+            );
         changes.push(PackageResolutionChange {
             package: package.package().to_string(),
-            added: current
-                .difference(&previous)
-                .map(|identity| (*identity).clone())
-                .collect(),
-            removed: previous
-                .difference(&current)
-                .map(|identity| (*identity).clone())
-                .collect(),
+            added,
+            removed,
         });
     }
     Ok(ExternalResolutionChanges::Packages(changes))
+}
+
+/// Returns `(current \ previous, previous \ current)` in ascending order.
+fn set_identity_difference(
+    current: &[ExternalPackageIdentity],
+    previous: &[ExternalPackageIdentity],
+) -> (Vec<ExternalPackageIdentity>, Vec<ExternalPackageIdentity>) {
+    let previous: BTreeSet<_> = previous.iter().collect();
+    let current: BTreeSet<_> = current.iter().collect();
+    (
+        current
+            .difference(&previous)
+            .map(|identity| (*identity).clone())
+            .collect(),
+        previous
+            .difference(&current)
+            .map(|identity| (*identity).clone())
+            .collect(),
+    )
+}
+
+/// Same result as [`set_identity_difference`] with one merge pass, or `None`
+/// if either list is not strictly increasing.
+///
+/// Identity lists are sorted and deduplicated when they are built
+/// ([`PackageResolution::shared_identity_list`]), so the merge gives the same
+/// result as set difference without building two ordered sets per package.
+fn sorted_identity_difference(
+    current: &[ExternalPackageIdentity],
+    previous: &[ExternalPackageIdentity],
+) -> Option<(Vec<ExternalPackageIdentity>, Vec<ExternalPackageIdentity>)> {
+    let strictly_increasing =
+        |identities: &[ExternalPackageIdentity]| identities.windows(2).all(|w| w[0] < w[1]);
+    if !strictly_increasing(current) || !strictly_increasing(previous) {
+        return None;
+    }
+
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let (mut current_index, mut previous_index) = (0, 0);
+    while let (Some(current_identity), Some(previous_identity)) =
+        (current.get(current_index), previous.get(previous_index))
+    {
+        match current_identity.cmp(previous_identity) {
+            std::cmp::Ordering::Less => {
+                added.push(current_identity.clone());
+                current_index += 1;
+            }
+            std::cmp::Ordering::Greater => {
+                removed.push(previous_identity.clone());
+                previous_index += 1;
+            }
+            std::cmp::Ordering::Equal => {
+                current_index += 1;
+                previous_index += 1;
+            }
+        }
+    }
+    added.extend_from_slice(&current[current_index..]);
+    removed.extend_from_slice(&previous[previous_index..]);
+    Some((added, removed))
 }
 
 #[cfg(test)]
@@ -1280,5 +1363,53 @@ mod tests {
             Err(ExternalResolutionError::UnknownPackage { identity, .. })
                 if identity == "missing"
         ));
+    }
+
+    #[test]
+    fn sorted_identity_difference_matches_set_difference() {
+        fn ids(entries: &[(&str, &str, &str)]) -> Vec<ExternalPackageIdentity> {
+            entries
+                .iter()
+                .map(|(key, version, name)| {
+                    ExternalPackageIdentity::new(*key, *version).with_human_name(*name)
+                })
+                .collect()
+        }
+        fn display(list: &[ExternalPackageIdentity]) -> Vec<String> {
+            list.iter()
+                .map(|i| format!("{}@{} ({})", i.key(), i.version(), i.display_name()))
+                .collect()
+        }
+
+        let a = ids(&[
+            ("a", "1.0.0", "a"),
+            ("b", "1.0.0", "b"),
+            ("c", "2.0.0", "c"),
+        ]);
+        let b = ids(&[
+            ("a", "1.0.0", "a-previous"),
+            ("b", "1.0.1", "b"),
+            ("d", "1.0.0", "d"),
+        ]);
+        let empty = ids(&[]);
+        for (current, previous) in [
+            (&a, &b),
+            (&b, &a),
+            (&a, &a),
+            (&a, &empty),
+            (&empty, &b),
+            (&empty, &empty),
+        ] {
+            let (added, removed) =
+                sorted_identity_difference(current, previous).expect("sorted inputs");
+            let (expected_added, expected_removed) = set_identity_difference(current, previous);
+            assert_eq!(display(&added), display(&expected_added));
+            assert_eq!(display(&removed), display(&expected_removed));
+        }
+
+        let unsorted = ids(&[("b", "1.0.0", "b"), ("a", "1.0.0", "a")]);
+        let duplicated = ids(&[("a", "1.0.0", "a"), ("a", "1.0.0", "a")]);
+        assert!(sorted_identity_difference(&unsorted, &a).is_none());
+        assert!(sorted_identity_difference(&a, &duplicated).is_none());
     }
 }

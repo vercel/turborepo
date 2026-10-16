@@ -182,6 +182,83 @@ test("rejects a dispatch whose workflow SHA differs from the PR head", async () 
   );
 });
 
+const nativeStack = () => ({
+  base: { ref: "main", sha: "stack-base-sha" },
+  id: 2087113,
+  number: 14792,
+  position: 3,
+  size: 3,
+});
+
+for (const baseRef of ["main", "stack-parent"]) {
+  test(`accepts a native stack rooted on main with immediate base ${baseRef}`, async () => {
+    await withGitHub(
+      { files: [{ filename: "crates/turborepo-cli/src/lib.rs" }] },
+      async (pull) => {
+        pull.base.ref = baseRef;
+        pull.stack = nativeStack();
+        await assert.doesNotReject(run());
+      },
+    );
+  });
+}
+
+const invalidStacks = [
+  ["nondefault root", { ...nativeStack(), base: { ref: "release", sha: "sha" } }],
+  ["missing root", { ...nativeStack(), base: undefined }],
+  ["missing root ref", { ...nativeStack(), base: { sha: "sha" } }],
+  ["missing root SHA", { ...nativeStack(), base: { ref: "main" } }],
+  ["empty root SHA", { ...nativeStack(), base: { ref: "main", sha: "" } }],
+  ["non-string root SHA", { ...nativeStack(), base: { ref: "main", sha: 1 } }],
+  ["boolean metadata", true],
+  ["array metadata", []],
+  ["empty metadata", {}],
+];
+for (const field of ["id", "number", "position", "size"]) {
+  for (const value of [undefined, 0, -1, 1.5, "3", Number.MAX_SAFE_INTEGER + 1]) {
+    invalidStacks.push([`${field}=${String(value)}`, { ...nativeStack(), [field]: value }]);
+  }
+}
+invalidStacks.push(["position exceeds size", { ...nativeStack(), position: 4 }]);
+
+for (const [name, stack] of invalidStacks) {
+  for (const baseRef of ["main", "stack-parent"]) {
+    test(`rejects ${name} stack metadata with immediate base ${baseRef}`, async () => {
+      await withGitHub(
+        { files: [{ filename: "crates/turborepo-cli/src/lib.rs" }] },
+        async (pull) => {
+          pull.base.ref = baseRef;
+          pull.stack = stack;
+          await assert.rejects(run(), /metadata is not eligible/);
+        },
+      );
+    });
+  }
+}
+
+for (const stack of [undefined, null]) {
+  test(`rejects nondefault unstacked base with stack ${String(stack)}`, async () => {
+    await withGitHub(
+      { files: [{ filename: "version.txt" }] },
+      async (pull) => {
+        pull.base.ref = "arbitrary-branch";
+        pull.stack = stack;
+        await assert.rejects(run(), /metadata is not eligible/);
+      },
+    );
+  });
+}
+
+test("native stack eligibility does not waive approvals or dispatched head validation", async () => {
+  await withGitHub({ files: [{ filename: "version.txt" }] }, async (pull) => {
+    pull.base.ref = "stack-parent";
+    pull.stack = nativeStack();
+    await assert.rejects(run(), /write-authorized human must approve/);
+    pull.head.sha = "changed-head";
+    await assert.rejects(run(), /head does not match the dispatched SHA/);
+  });
+});
+
 function response(data) {
   return {
     ok: true,

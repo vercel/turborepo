@@ -8,7 +8,7 @@ use std::{
     fs::{DirBuilder, FileType, Permissions},
     io,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex, PoisonError},
 };
 
 // `fs_err` preserves paths in the error messages unlike `std::fs`
@@ -42,6 +42,7 @@ struct PlannedEntry {
     kind: PlannedEntryKind,
 }
 
+#[derive(Clone)]
 enum PlannedEntryKind {
     /// Permissions are captured during the walk so the copy can recreate the
     /// directory without a second `stat`.
@@ -101,7 +102,7 @@ impl CopyPlan {
             .collect();
 
         if !shared.is_empty() {
-            collect_entries(root, &shared, use_gitignore, &mut plan.planned)?;
+            collect_entries(root, &shared, use_gitignore, true, &mut plan.planned)?;
         }
 
         Ok(plan)
@@ -127,7 +128,7 @@ impl CopyPlan {
 
         let walk_root = walk_root_for(src, self.use_gitignore, self.gitignore_root.as_deref());
         let mut entries = HashMap::new();
-        collect_entries(walk_root, &[src], self.use_gitignore, &mut entries)?;
+        collect_entries(walk_root, &[src], self.use_gitignore, false, &mut entries)?;
         match entries.get(src) {
             Some(entries) => copy_entries(src, dst, entries),
             None => Ok(()),
@@ -157,10 +158,16 @@ fn walk_root_for<'a>(
 
 /// Walk `walk_root` once and record the entries belonging to each source in
 /// `srcs`. Every source must be `walk_root` or live beneath it.
+///
+/// Each source's entries are recorded so that a directory comes before
+/// anything inside it. A `parallel` walk reads directories and records entries
+/// on several threads, then orders each source's entries by depth, which keeps
+/// that guarantee.
 fn collect_entries(
     walk_root: &AbsoluteSystemPath,
     srcs: &[&AbsoluteSystemPath],
     use_gitignore: bool,
+    parallel: bool,
     out: &mut HashMap<AbsoluteSystemPathBuf, Vec<PlannedEntry>>,
 ) -> Result<(), Error> {
     let walk_from_root = !(srcs.len() == 1 && srcs[0] == walk_root);
@@ -205,62 +212,196 @@ fn collect_entries(
         });
     }
 
-    for entry in builder.build() {
-        let entry = match entry {
-            Err(e) => {
-                if e.io_error().is_some() {
-                    // Matches go behavior where we translate path errors
-                    // into skipping the path we're currently walking
-                    continue;
-                } else {
-                    return Err(e.into());
-                }
+    if !parallel {
+        for entry in builder.build() {
+            if let Some((path, kind)) = classify_entry(&sources, entry)? {
+                record_entry(&sources, &path, kind, out)?;
             }
-            Ok(entry) => entry,
-        };
-
-        let path = AbsoluteSystemPath::from_std_path(entry.path())?;
-        let mut owners = owning_sources(&sources, entry.path()).peekable();
-        if owners.peek().is_none() {
-            continue;
         }
+        return Ok(());
+    }
 
-        let file_type = match entry.file_type() {
-            Some(file_type) => file_type,
-            None => entry.metadata()?.file_type(),
-        };
+    let found = Mutex::new(HashMap::new());
+    let first_error = Mutex::new(None);
+    builder.build_parallel().visit(&mut CollectVisitorBuilder {
+        sources: &sources,
+        found: &found,
+        first_error: &first_error,
+    });
+    if let Some(error) = first_error
+        .into_inner()
+        .unwrap_or_else(PoisonError::into_inner)
+    {
+        return Err(error);
+    }
 
-        // Note that we also don't currently copy broken symlinks
-        if file_type.is_symlink() && path.stat().is_err() {
-            // If we have a broken link, skip this entry
-            continue;
-        }
-
-        let kind = if file_type.is_dir() {
-            PlannedEntryKind::Directory(entry.metadata()?.permissions())
-        } else if file_type.is_file() || file_type.is_symlink() {
-            PlannedEntryKind::File(file_type)
+    for (owner, mut entries) in found.into_inner().unwrap_or_else(PoisonError::into_inner) {
+        // A directory is shallower than everything beneath it, so ordering by
+        // depth creates each directory before anything is copied into it.
+        entries.sort_unstable_by_key(|(depth, _)| *depth);
+        let recorded = out
+            .entry(AbsoluteSystemPath::from_std_path(&owner)?.to_owned())
+            .or_default();
+        if recorded.is_empty() {
+            *recorded = entries.into_iter().map(|(_, entry)| entry).collect();
         } else {
-            // Skip special files (sockets, FIFOs, device nodes)
-            continue;
-        };
-
-        for owner in owners {
-            let owner = AbsoluteSystemPath::from_std_path(owner)?;
-            let suffix = AnchoredSystemPathBuf::new(owner, path)?;
-            let kind = match &kind {
-                PlannedEntryKind::Directory(permissions) => {
-                    PlannedEntryKind::Directory(permissions.clone())
-                }
-                PlannedEntryKind::File(file_type) => PlannedEntryKind::File(*file_type),
-            };
-            out.entry(owner.to_owned())
-                .or_default()
-                .push(PlannedEntry { suffix, kind });
+            recorded.extend(entries.into_iter().map(|(_, entry)| entry));
+            recorded.sort_by_cached_key(|entry| entry.suffix.as_path().components().count());
         }
     }
 
     Ok(())
+}
+
+/// Decide whether a walked entry is copied, and how.
+///
+/// Returns `None` for entries that belong to no source, broken symlinks,
+/// special files, and I/O errors, which skip the path being walked.
+fn classify_entry(
+    sources: &HashSet<PathBuf>,
+    entry: Result<ignore::DirEntry, ignore::Error>,
+) -> Result<Option<(PathBuf, PlannedEntryKind)>, Error> {
+    let entry = match entry {
+        Err(e) => {
+            if e.io_error().is_some() {
+                // Matches go behavior where we translate path errors
+                // into skipping the path we're currently walking
+                return Ok(None);
+            } else {
+                return Err(e.into());
+            }
+        }
+        Ok(entry) => entry,
+    };
+
+    if owning_sources(sources, entry.path()).next().is_none() {
+        return Ok(None);
+    }
+
+    let file_type = match entry.file_type() {
+        Some(file_type) => file_type,
+        None => entry.metadata()?.file_type(),
+    };
+
+    // Note that we also don't currently copy broken symlinks
+    if file_type.is_symlink()
+        && AbsoluteSystemPath::from_std_path(entry.path())?
+            .stat()
+            .is_err()
+    {
+        // If we have a broken link, skip this entry
+        return Ok(None);
+    }
+
+    let kind = if file_type.is_dir() {
+        PlannedEntryKind::Directory(entry.metadata()?.permissions())
+    } else if file_type.is_file() || file_type.is_symlink() {
+        PlannedEntryKind::File(file_type)
+    } else {
+        // Skip special files (sockets, FIFOs, device nodes)
+        return Ok(None);
+    };
+
+    Ok(Some((entry.into_path(), kind)))
+}
+
+/// Record `path` for every source that contains it.
+fn record_entry(
+    sources: &HashSet<PathBuf>,
+    path: &Path,
+    kind: PlannedEntryKind,
+    out: &mut HashMap<AbsoluteSystemPathBuf, Vec<PlannedEntry>>,
+) -> Result<(), Error> {
+    let path = AbsoluteSystemPath::from_std_path(path)?;
+    for owner in owning_sources(sources, path.as_std_path()) {
+        let owner = AbsoluteSystemPath::from_std_path(owner)?;
+        let suffix = AnchoredSystemPathBuf::new(owner, path)?;
+        out.entry(owner.to_owned()).or_default().push(PlannedEntry {
+            suffix,
+            kind: kind.clone(),
+        });
+    }
+    Ok(())
+}
+
+/// Planned entries of one source, each with its depth below the source.
+type DepthEntries = Vec<(usize, PlannedEntry)>;
+
+struct CollectVisitorBuilder<'s> {
+    sources: &'s HashSet<PathBuf>,
+    found: &'s Mutex<HashMap<PathBuf, DepthEntries>>,
+    first_error: &'s Mutex<Option<Error>>,
+}
+
+impl<'s> ignore::ParallelVisitorBuilder<'s> for CollectVisitorBuilder<'s> {
+    fn build(&mut self) -> Box<dyn ignore::ParallelVisitor + 's> {
+        Box::new(CollectVisitor {
+            sources: self.sources,
+            local: HashMap::new(),
+            found: self.found,
+            first_error: self.first_error,
+        })
+    }
+}
+
+/// Records one walker thread's entries per source and hands them over when the
+/// thread finishes, so threads do not contend on every entry.
+struct CollectVisitor<'s> {
+    sources: &'s HashSet<PathBuf>,
+    local: HashMap<PathBuf, DepthEntries>,
+    found: &'s Mutex<HashMap<PathBuf, DepthEntries>>,
+    first_error: &'s Mutex<Option<Error>>,
+}
+
+impl CollectVisitor<'_> {
+    fn record(&mut self, path: &Path, kind: PlannedEntryKind) -> Result<(), Error> {
+        let absolute = AbsoluteSystemPath::from_std_path(path)?;
+        for owner in owning_sources(self.sources, path) {
+            let suffix =
+                AnchoredSystemPathBuf::new(AbsoluteSystemPath::from_std_path(owner)?, absolute)?;
+            let depth = suffix.as_path().components().count();
+            let entry = (
+                depth,
+                PlannedEntry {
+                    suffix,
+                    kind: kind.clone(),
+                },
+            );
+            match self.local.get_mut(owner) {
+                Some(entries) => entries.push(entry),
+                None => {
+                    self.local.insert(owner.to_path_buf(), vec![entry]);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl ignore::ParallelVisitor for CollectVisitor<'_> {
+    fn visit(&mut self, entry: Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
+        let recorded = match classify_entry(self.sources, entry) {
+            Ok(Some((path, kind))) => self.record(&path, kind),
+            Ok(None) => Ok(()),
+            Err(error) => Err(error),
+        };
+        match recorded {
+            Ok(()) => ignore::WalkState::Continue,
+            Err(error) => {
+                record_first_error(self.first_error, error);
+                ignore::WalkState::Quit
+            }
+        }
+    }
+}
+
+impl Drop for CollectVisitor<'_> {
+    fn drop(&mut self) {
+        let mut found = self.found.lock().unwrap_or_else(PoisonError::into_inner);
+        for (owner, entries) in self.local.drain() {
+            found.entry(owner).or_default().extend(entries);
+        }
+    }
 }
 
 /// The sources that contain `path`, nearest first. A source contains itself.
@@ -272,22 +413,97 @@ fn owning_sources<'a>(
         .filter(move |ancestor| sources.contains(*ancestor))
 }
 
+/// Below this many files a source is copied on the calling thread; handing a
+/// handful of copies to the thread pool costs more than it saves.
+const PARALLEL_COPY_MIN_FILES: usize = 16;
+
 fn copy_entries(
     src: &AbsoluteSystemPath,
     dst: &AbsoluteSystemPath,
     entries: &[PlannedEntry],
 ) -> Result<(), Error> {
-    for entry in entries {
-        let target = dst.resolve(&entry.suffix);
-        match &entry.kind {
-            PlannedEntryKind::Directory(permissions) => make_dir_copy(&target, permissions)?,
-            PlannedEntryKind::File(file_type) => {
-                copy_file_with_type(src.resolve(&entry.suffix), *file_type, &target)?
+    let file_count = entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, PlannedEntryKind::File(_)))
+        .count();
+    if file_count < PARALLEL_COPY_MIN_FILES {
+        for entry in entries {
+            let target = dst.resolve(&entry.suffix);
+            match &entry.kind {
+                PlannedEntryKind::Directory(permissions) => make_dir_copy(&target, permissions)?,
+                PlannedEntryKind::File(file_type) => {
+                    copy_planned_file(&src.resolve(&entry.suffix), *file_type, &target)?
+                }
             }
         }
+        return Ok(());
     }
 
-    Ok(())
+    // Copying a file is dominated by per-file system calls rather than by
+    // bytes moved, and every copy is independent of the others. Directories
+    // are created in walk order, which visits a directory before anything
+    // inside it, so each file's parent exists by the time its copy is spawned.
+    let first_error: Mutex<Option<Error>> = Mutex::new(None);
+    rayon::scope(|scope| {
+        for entry in entries {
+            let target = dst.resolve(&entry.suffix);
+            match &entry.kind {
+                PlannedEntryKind::Directory(permissions) => {
+                    if let Err(error) = make_dir_copy(&target, permissions) {
+                        record_first_error(&first_error, error);
+                        return;
+                    }
+                }
+                PlannedEntryKind::File(file_type) => {
+                    let file_type = *file_type;
+                    let first_error = &first_error;
+                    scope.spawn(move |_| {
+                        if let Err(error) =
+                            copy_planned_file(&src.resolve(&entry.suffix), file_type, &target)
+                        {
+                            record_first_error(first_error, error);
+                        }
+                    });
+                }
+            }
+        }
+    });
+
+    match first_error
+        .into_inner()
+        .unwrap_or_else(PoisonError::into_inner)
+    {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+fn record_first_error(slot: &Mutex<Option<Error>>, error: Error) {
+    let mut slot = slot.lock().unwrap_or_else(PoisonError::into_inner);
+    if slot.is_none() {
+        *slot = Some(error);
+    }
+}
+
+/// Copy a file whose parent directory was already created from the plan.
+///
+/// The parent is only created here if the copy reports it missing, which
+/// saves the two `ensure_dir` system calls per file on the common path.
+fn copy_planned_file(
+    from: &AbsoluteSystemPath,
+    from_type: FileType,
+    to: &AbsoluteSystemPath,
+) -> Result<(), Error> {
+    if from_type.is_symlink() {
+        return copy_file_with_type(from, from_type, to);
+    }
+    match fs::copy(from.as_path(), to.as_path()) {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            copy_file_with_type(from, from_type, to)
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn make_dir_copy(
