@@ -470,9 +470,12 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         inputs: Vec<String>,
         include_default: bool,
     ) -> Result<HashMap<String, String>, RpcError> {
-        let inputs = InputGlobs::from_raw(inputs, include_default)?;
         let package_path = AnchoredSystemPathBuf::try_from(package_path.as_str())
             .map_err(|e| RpcError::InvalidAnchoredPath(package_path, e))?;
+        let package_root = self.file_watching.repo_root.resolve(&package_path);
+        let inputs =
+            globwalk::escape_existing_literal_components(package_root.as_std_path(), &inputs);
+        let inputs = InputGlobs::from_raw(inputs, include_default)?;
         let hash_spec = HashSpec {
             package_path,
             inputs,

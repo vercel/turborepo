@@ -32,6 +32,13 @@ impl SCM {
         telemetry: Option<PackageTaskEventBuilder>,
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
+        let package_root = turbo_root.resolve(package_path);
+        let raw_inputs: Vec<String> = inputs
+            .iter()
+            .map(|input| input.as_ref().to_owned())
+            .collect();
+        let inputs =
+            globwalk::escape_existing_literal_components(package_root.as_std_path(), &raw_inputs);
         match self {
             SCM::Manual => {
                 if let Some(telemetry) = telemetry {
@@ -40,7 +47,7 @@ impl SCM {
                 crate::manual::get_package_file_hashes_without_git(
                     turbo_root,
                     package_path,
-                    inputs,
+                    &inputs,
                     include_default_files,
                     None,
                     None,
@@ -50,7 +57,7 @@ impl SCM {
                 let result = git.get_package_file_hashes(
                     turbo_root,
                     package_path,
-                    inputs,
+                    &inputs,
                     include_default_files,
                     repo_index,
                 );
@@ -87,7 +94,7 @@ impl SCM {
                         crate::manual::get_package_file_hashes_without_git(
                             turbo_root,
                             package_path,
-                            inputs,
+                            &inputs,
                             include_default_files,
                             Some(&git.root),
                             git.git_attrs(),

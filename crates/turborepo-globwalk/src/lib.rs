@@ -478,6 +478,51 @@ pub fn is_glob_pattern(pattern: &str) -> bool {
     false
 }
 
+/// Escapes glob syntax in path components that already exist literally under
+/// `base`. This lets inputs such as `src/[id]/**` refer to an existing
+/// bracketed directory while leaving glob syntax in the remaining components
+/// intact.
+pub fn escape_existing_literal_components(base: &Path, inputs: &[String]) -> Vec<String> {
+    inputs
+        .iter()
+        .map(|input| {
+            let (prefix, pattern) = input
+                .strip_prefix('!')
+                .map_or(("", input.as_str()), |pattern| ("!", pattern));
+            let mut path = base.to_path_buf();
+            let mut result = String::new();
+            let mut can_resolve = true;
+
+            for (index, component) in pattern.split('/').enumerate() {
+                if index > 0 {
+                    result.push('/');
+                }
+                let has_glob = is_glob_pattern(component);
+                if can_resolve && has_glob {
+                    path.push(component);
+                    if path.exists() {
+                        result.push_str(&wax::escape(component));
+                    } else {
+                        result.push_str(component);
+                        can_resolve = false;
+                    }
+                } else {
+                    result.push_str(component);
+                    if can_resolve {
+                        let component = unescape_glob_component(component);
+                        path.push(component.as_ref());
+                    }
+                    if has_glob {
+                        can_resolve = false;
+                    }
+                }
+            }
+
+            format!("{prefix}{result}")
+        })
+        .collect()
+}
+
 /// Returns the literal prefix of a relative glob of the shape
 /// `<plain-segment>/.../<plain-segment>/**`, e.g. `crates/foo/.turbo` for
 /// `crates/foo/.turbo/**`. Such a glob matches exactly the paths accepted by
@@ -559,6 +604,25 @@ impl LiteralSegmentGlob<'_> {
             segment_exclusion_matches(rest.as_bytes(), self.segment.as_bytes(), self.tree)
         })
     }
+}
+
+fn unescape_glob_component(component: &str) -> Cow<'_, str> {
+    if !component.contains('\\') {
+        return Cow::Borrowed(component);
+    }
+
+    let mut unescaped = String::with_capacity(component.len());
+    let mut chars = component.chars();
+    while let Some(character) = chars.next() {
+        if character == '\\'
+            && let Some(escaped) = chars.next()
+        {
+            unescaped.push(escaped);
+        } else {
+            unescaped.push(character);
+        }
+    }
+    Cow::Owned(unescaped)
 }
 
 pub fn globwalk_with_settings(
