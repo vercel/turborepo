@@ -27,7 +27,7 @@ use turborepo_config::{CONFIG_FILE, CONFIG_FILE_JSONC};
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageTaskContext, PackageTaskContextKind},
     package_json::PackageJson,
-    package_manager::{PackageManager, npmrc::NpmRc},
+    package_manager::{PackageManager, pnpm},
     prune_knowledge::{PruneDomainId, PrunePlan},
     task_contracts::PrunePackageMode,
 };
@@ -703,11 +703,10 @@ impl<'a> Prune<'a> {
 
         let uses_per_workspace_lockfiles = package_graph
             .package_manager()
-            .is_some_and(|pm| pm.is_pnpm_family())
-            && NpmRc::from_file(&input.repo_root)
-                .unwrap_or_default()
-                .shared_workspace_lockfile
-                == Some(false);
+            .and_then(|pm| pnpm::PnpmVersion::try_from(pm.lockfile_manager()).ok())
+            .is_some_and(|pnpm_version| {
+                !pnpm::shared_workspace_lockfile(pnpm_version, &input.repo_root)
+            });
 
         full_directory.create_dir_all()?;
         if input.docker {

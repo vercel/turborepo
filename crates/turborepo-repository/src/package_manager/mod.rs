@@ -1232,12 +1232,10 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         _root_package_json: &PackageJson,
     ) -> Result<Option<Box<dyn Lockfile>>, Error> {
-        let npmrc = npmrc::NpmRc::from_file(root_path)
-            .inspect_err(|e| tracing::debug!("unable to read npmrc: {e}"))
-            .unwrap_or_default();
-
-        // shared-workspace-lockfile defaults to true
-        if npmrc.shared_workspace_lockfile != Some(false) {
+        let Ok(pnpm_version) = pnpm::PnpmVersion::try_from(self) else {
+            return Ok(None);
+        };
+        if pnpm::shared_workspace_lockfile(pnpm_version, root_path) {
             return Ok(None);
         }
 

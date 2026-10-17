@@ -214,6 +214,33 @@ pub fn link_workspace_packages_from_path(
         })
 }
 
+/// Whether every workspace shares the root lockfile (pnpm's
+/// `sharedWorkspaceLockfile`, true unless set). Since pnpm 10.8 the setting in
+/// `pnpm-workspace.yaml` takes precedence over `.npmrc`, and pnpm 11 reads it
+/// only from `pnpm-workspace.yaml`. `PnpmVersion::Pnpm9` also covers pnpm 9 and
+/// 10.0–10.7, which ignore the `pnpm-workspace.yaml` key.
+pub fn shared_workspace_lockfile(
+    pnpm_version: PnpmVersion,
+    repo_root: &AbsoluteSystemPath,
+) -> bool {
+    let workspace_config = matches!(pnpm_version, PnpmVersion::Pnpm9)
+        .then(|| {
+            PnpmWorkspace::from_file(repo_root, WORKSPACE_CONFIGURATION_PATH)
+                .inspect_err(|e| debug!("unable to read {WORKSPACE_CONFIGURATION_PATH}: {e}"))
+                .ok()
+        })
+        .flatten()
+        .and_then(|config| config.shared_workspace_lockfile.as_ref()?.as_bool());
+    workspace_config
+        .or_else(|| {
+            npmrc::NpmRc::from_file(repo_root)
+                .inspect_err(|e| debug!("unable to read npmrc: {e}"))
+                .unwrap_or_default()
+                .shared_workspace_lockfile
+        })
+        .unwrap_or(true)
+}
+
 pub fn get_configured_workspace_globs(repo_root: &AbsoluteSystemPath) -> Option<Vec<String>> {
     get_configured_workspace_globs_from_path(repo_root, WORKSPACE_CONFIGURATION_PATH)
 }
@@ -239,6 +266,8 @@ pub fn get_default_exclusions() -> &'static [&'static str] {
 struct PnpmWorkspace {
     pub packages: Vec<String>,
     link_workspace_packages: Option<LinkWorkspacePackages>,
+    // Kept untyped so an unexpected value can't fail the whole file.
+    shared_workspace_lockfile: Option<serde_yaml_ng::Value>,
     #[serde(rename = "patchedDependencies")]
     patched_dependencies:
         Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
@@ -579,6 +608,112 @@ mod test {
             .unwrap();
         let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
         assert!(actual, "deep should be treated as true");
+    }
+
+    // Matches real installs: pnpm 10.8+ prefers `pnpm-workspace.yaml` over
+    // `.npmrc`, while pnpm 7 and 8 read only `.npmrc`. `PnpmVersion::Pnpm9`
+    // also covers pnpm 9 and 10.0–10.7, which read only `.npmrc`.
+    #[test_case(PnpmVersion::Pnpm9, None, None, true ; "pnpm9 default")]
+    #[test_case(PnpmVersion::Pnpm9, Some(false), None, false ; "pnpm9 workspace yaml")]
+    #[test_case(PnpmVersion::Pnpm9, None, Some(false), false ; "pnpm9 npmrc")]
+    #[test_case(PnpmVersion::Pnpm9, Some(true), Some(false), true ; "pnpm9 workspace yaml wins")]
+    #[test_case(PnpmVersion::Pnpm7And8, Some(false), None, true ; "pnpm8 ignores workspace yaml")]
+    #[test_case(PnpmVersion::Pnpm7And8, None, Some(false), false ; "pnpm8 npmrc")]
+    fn test_shared_workspace_lockfile(
+        version: PnpmVersion,
+        workspace_yaml: Option<bool>,
+        npmrc: Option<bool>,
+        expected: bool,
+    ) {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let mut workspace = "packages:\n  - \"packages/*\"\n".to_string();
+        if let Some(shared) = workspace_yaml {
+            workspace.push_str(&format!("sharedWorkspaceLockfile: {shared}\n"));
+        }
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents(workspace)
+            .unwrap();
+        if let Some(shared) = npmrc {
+            repo_root
+                .join_component(npmrc::NPMRC_FILENAME)
+                .create_with_contents(format!("shared-workspace-lockfile={shared}\n"))
+                .unwrap();
+        }
+        assert_eq!(shared_workspace_lockfile(version, repo_root), expected);
+    }
+
+    #[test]
+    fn test_non_bool_shared_workspace_lockfile_keeps_workspace_config() {
+        // pnpm 10 and 11 install a shared lockfile for a quoted "false".
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\nsharedWorkspaceLockfile: \"false\"\n",
+            )
+            .unwrap();
+        assert!(shared_workspace_lockfile(PnpmVersion::Pnpm9, repo_root));
+        assert_eq!(
+            get_configured_workspace_globs(repo_root),
+            Some(vec!["packages/*".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_read_per_workspace_lockfiles_from_workspace_yaml_setting() -> Result<(), Error> {
+        // Written by pnpm 10.34.7 with `sharedWorkspaceLockfile: false` in
+        // pnpm-workspace.yaml and no `.npmrc`.
+        let repo_root = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\nsharedWorkspaceLockfile: false\n",
+            )?;
+        repo_root.join_component(LOCKFILE).create_with_contents(
+            "lockfileVersion: '9.0'\n\nsettings:\n  autoInstallPeers: true\n  \
+             excludeLinksFromLockfile: false\n\nimporters:\n\n  .: {}\n",
+        )?;
+        let ui = repo_root.join_components(&["packages", "ui"]);
+        ui.create_dir_all()?;
+        ui.join_component("package.json")
+            .create_with_contents(r#"{"name":"ui","dependencies":{"ms":"^2.1.2"}}"#)?;
+        ui.join_component(LOCKFILE).create_with_contents(
+            r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      ms:
+        specifier: ^2.1.2
+        version: 2.1.2
+
+packages:
+
+  ms@2.1.2:
+    resolution: {integrity: sha512-sGkPx+VjMtmA6MX27oA4FBFELFCZZ4S4XqeGOXCv68tT+jb3vk/RyaKWP0PTKyWtmLSM0b+adUTEvbs1PEaH2w==}
+
+snapshots:
+
+  ms@2.1.2: {}
+"#,
+        )?;
+
+        let root_package_json = PackageJson::from_value(json!({"name": "root"}))?;
+        let lockfile = PackageManager::Pnpm9.read_lockfile(&repo_root, &root_package_json)?;
+        let ms = lockfile
+            .resolve_package("packages/ui", "ms", "^2.1.2")?
+            .expect("ms resolves from ui's own lockfile");
+        assert_eq!(ms.version, "2.1.2");
+        Ok(())
     }
 
     #[test]

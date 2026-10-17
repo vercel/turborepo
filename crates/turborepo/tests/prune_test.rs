@@ -1759,6 +1759,45 @@ fn test_prune_pnpm_per_workspace_lockfile() {
 }
 
 #[test]
+fn test_prune_pnpm_per_workspace_lockfile_from_workspace_yaml_docker() {
+    // pnpm 10.8+ reads the setting from pnpm-workspace.yaml, and pnpm 11 reads
+    // it only from there.
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("pnpm_per_workspace_lockfile", tempdir.path()).unwrap();
+    fs::remove_file(tempdir.path().join(".npmrc")).unwrap();
+    let package_json = fs::read_to_string(tempdir.path().join("package.json")).unwrap();
+    fs::write(
+        tempdir.path().join("package.json"),
+        package_json.replace("pnpm@9.15.0", "pnpm@10.34.7"),
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("pnpm-workspace.yaml"),
+        "packages:\n  - \"apps/*\"\n  - \"packages/*\"\nsharedWorkspaceLockfile: false\n",
+    )
+    .unwrap();
+    setup::setup_git(tempdir.path()).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for lockfile in ["apps/web/pnpm-lock.yaml", "packages/ui/pnpm-lock.yaml"] {
+        assert!(
+            tempdir.path().join("out/json").join(lockfile).exists(),
+            "{lockfile} should be in out/json/"
+        );
+    }
+    let json_lockfile = fs::read_to_string(tempdir.path().join("out/json/pnpm-lock.yaml")).unwrap();
+    assert!(
+        json_lockfile.contains(".: {}"),
+        "json root lockfile should be the original"
+    );
+}
+
+#[test]
 fn test_prune_pnpm_per_workspace_lockfile_docker() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::copy_fixture("pnpm_per_workspace_lockfile", tempdir.path()).unwrap();
