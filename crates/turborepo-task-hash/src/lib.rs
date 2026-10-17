@@ -34,7 +34,7 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::task::PackageTaskEventBuilder;
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
-    TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
+    TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs, TaskOutputs,
 };
 
 fn env_var_names_for_debug_log(env_vars: &EnvironmentVariableMap) -> Vec<String> {
@@ -160,13 +160,14 @@ impl PackageInputsHashes {
             }
         };
 
-        // Phase 1: Collect task metadata and group by (package_path, inputs) for dedup.
-        // Multiple tasks in the same package with identical inputs produce the same
-        // file hashes — no need to globwalk and hash the same files repeatedly.
+        // Phase 1: Group by package, inputs, and outputs: tracked outputs are
+        // implicit inputs, so different output selections can produce different
+        // file hashes even when the configured inputs are identical.
         struct TaskInfo<'b> {
             task_id: TaskId<'static>,
             package_path: &'b AnchoredSystemPath,
             inputs: &'b TaskInputs,
+            outputs: &'b TaskOutputs,
         }
 
         let collect_span = tracing::info_span!("collect_task_hash_keys").entered();
@@ -188,11 +189,19 @@ impl PackageInputsHashes {
                 task_id: task_id.clone(),
                 package_path,
                 inputs,
+                outputs: task_definition.outputs(),
             });
         }
 
-        // Build dedup key: (package_path_str, globs, default, eager)
-        type HashKey = (AnchoredSystemPathBuf, Vec<String>, bool, bool);
+        // Include both output inclusions and exclusions in the dedup key.
+        type HashKey = (
+            AnchoredSystemPathBuf,
+            Vec<String>,
+            bool,
+            bool,
+            Vec<String>,
+            Vec<String>,
+        );
         let mut unique_keys: Vec<HashKey> = Vec::new();
         let mut key_indices: HashMap<HashKey, usize> = HashMap::new();
         let mut task_key_map: Vec<usize> = Vec::with_capacity(task_infos.len());
@@ -203,6 +212,8 @@ impl PackageInputsHashes {
                 info.inputs.globs.clone(),
                 info.inputs.default,
                 info.inputs.eager,
+                info.outputs.inclusions.clone(),
+                info.outputs.exclusions.clone(),
             );
             let idx = match key_indices.entry(key) {
                 std::collections::hash_map::Entry::Occupied(e) => *e.get(),
@@ -233,22 +244,39 @@ impl PackageInputsHashes {
         let hash_span = tracing::info_span!("hash_unique_inputs").entered();
         let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
-            .map(|(package_path, globs, default, eager)| {
-                let file_hashes = if !eager {
-                    Arc::new(FileHashes(Vec::new()))
-                } else {
-                    file_hashes_for_inputs(
-                        scm,
+            .map(
+                |(package_path, globs, default, eager, inclusions, exclusions)| {
+                    let mut file_hashes = if !eager {
+                        Arc::new(FileHashes(Vec::new()))
+                    } else {
+                        file_hashes_for_inputs(
+                            scm,
+                            repo_root,
+                            &package_path,
+                            &globs,
+                            default,
+                            repo_index,
+                        )?
+                    };
+                    // Tracked outputs are startup inputs even for JIT-only tasks.
+                    // Deferred hashing carries these forward through expanded_hashes.
+                    let tracked_outputs = scm.get_tracked_output_hashes(
                         repo_root,
                         &package_path,
-                        &globs,
-                        default,
+                        &inclusions,
+                        &exclusions,
                         repo_index,
-                    )?
-                };
-                let hash = file_hashes.as_ref().hash();
-                Ok((file_hashes, hash))
-            })
+                    )?;
+                    if !tracked_outputs.is_empty() {
+                        file_hashes = combine_file_hashes(
+                            &file_hashes,
+                            &FileHashes(tracked_outputs.into_iter().collect()),
+                        );
+                    }
+                    let hash = file_hashes.as_ref().hash();
+                    Ok((file_hashes, hash))
+                },
+            )
             .collect();
 
         let file_hash_results: Vec<(Arc<FileHashes>, String)> = file_hash_results
@@ -1147,6 +1175,8 @@ mod test {
     mod jit_inputs;
     #[path = "structured_inputs_test.rs"]
     mod structured_inputs;
+    #[path = "tracked_outputs_test.rs"]
+    mod tracked_outputs;
 
     struct TestRunOpts {
         single_package: bool,
