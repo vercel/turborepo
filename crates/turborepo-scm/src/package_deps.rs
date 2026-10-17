@@ -8,6 +8,24 @@ use crate::{
     hash_object::{hash_discovered_objects, hash_objects},
 };
 
+fn excluded_link(
+    root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+    excludes: &[PackageInput],
+) -> bool {
+    if excludes.is_empty() || !crate::hash_object::has_symlink(root, path) {
+        return false;
+    }
+    let Ok(relative) = root.anchor(path) else {
+        return false;
+    };
+    let relative = relative.to_unix();
+    excludes.iter().any(|input| {
+        wax::Glob::new(input.as_str())
+            .is_ok_and(|glob| wax::Program::is_match(&glob, relative.as_str()))
+    })
+}
+
 impl SCM {
     pub fn get_hashes_for_files(
         &self,
@@ -32,7 +50,7 @@ impl SCM {
         telemetry: Option<PackageTaskEventBuilder>,
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        match self {
+        let mut hashes = match self {
             SCM::Manual => {
                 if let Some(telemetry) = telemetry {
                     telemetry.track_file_hash_method(FileHashMethod::Manual);
@@ -95,7 +113,43 @@ impl SCM {
                     }
                 }
             }
+        }?;
+        if let SCM::Git(git) = self {
+            let package_dir = turbo_root.resolve(package_path);
+            let defaults = inputs.is_empty() || include_default_files;
+            let mut link_inputs: Vec<String> = inputs
+                .iter()
+                .map(|input| input.as_ref().to_owned())
+                .collect();
+            // Explicitly retain tracked links even when an ignore rule hides them.
+            if defaults {
+                link_inputs.extend(
+                    hashes
+                        .keys()
+                        .filter(|path| {
+                            crate::hash_object::has_symlink(
+                                turbo_root,
+                                &package_dir.join_unix_path(path),
+                            )
+                        })
+                        .map(ToString::to_string),
+                );
+            }
+            let linked = crate::manual::get_package_file_hashes(
+                turbo_root,
+                package_path,
+                &link_inputs,
+                defaults,
+                Some(&git.root),
+                git.git_attrs(),
+                true,
+            )?;
+            hashes.retain(|path, _| {
+                !crate::hash_object::has_symlink(turbo_root, &package_dir.join_unix_path(path))
+            });
+            hashes.extend(linked);
         }
+        Ok(hashes)
     }
 
     pub fn hash_files(
@@ -142,7 +196,12 @@ impl GitRepo {
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
         if inputs.is_empty() {
-            return self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index);
+            return self.get_package_file_hashes_from_index(
+                turbo_root,
+                package_path,
+                repo_index,
+                &[],
+            );
         }
 
         if !include_default_files {
@@ -169,6 +228,7 @@ impl GitRepo {
         turbo_root: &AbsoluteSystemPath,
         package_path: &AnchoredSystemPath,
         repo_index: Option<&RepoGitIndex>,
+        excludes: &[PackageInput],
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
         let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
@@ -181,6 +241,9 @@ impl GitRepo {
             let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
             (hashes, to_hash)
         };
+
+        to_hash
+            .retain(|path| !excluded_link(turbo_root, &self.root.join_unix_path(path), excludes));
 
         // Git blob IDs cannot represent the cache-only OIDC normalization.
         // Re-read matching tracked files, even when Git considers them clean.
@@ -202,6 +265,7 @@ impl GitRepo {
 
         // Note: to_hash is *git repo relative*
         hash_discovered_objects(
+            turbo_root,
             &self.root,
             &full_pkg_path,
             to_hash,
@@ -239,6 +303,7 @@ impl GitRepo {
         let mut hashes = GitHashes::new();
         let to_hash = self.repo_relative_paths(process_relative_to, files)?;
         hash_discovered_objects(
+            process_relative_to,
             &self.root,
             process_relative_to,
             to_hash,
@@ -282,6 +347,7 @@ impl GitRepo {
 
     fn extend_hashes_from_candidates(
         &self,
+        turbo_root: &AbsoluteSystemPath,
         full_pkg_path: &AbsoluteSystemPath,
         pkg_prefix: &turbopath::RelativeUnixPathBuf,
         repo_index: Option<&RepoGitIndex>,
@@ -312,6 +378,7 @@ impl GitRepo {
         if !to_hash.is_empty() {
             let mut new_hashes = GitHashes::with_capacity(to_hash.len());
             hash_discovered_objects(
+                turbo_root,
                 &self.root,
                 full_pkg_path,
                 to_hash,
@@ -370,6 +437,7 @@ impl GitRepo {
         }
         let mut hashes = GitHashes::with_capacity(files.len());
         self.extend_hashes_from_candidates(
+            turbo_root,
             &full_pkg_path,
             &pkg_prefix,
             repo_index,
@@ -387,10 +455,6 @@ impl GitRepo {
         inputs: &[S],
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        // Start with ALL files from the git index (committed + dirty).
-        let mut hashes =
-            self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index)?;
-
         let pkg_prefix = package_path.to_unix();
         let package_unix_path = pkg_prefix.as_str();
 
@@ -404,6 +468,13 @@ impl GitRepo {
                 includes.push(input_str);
             }
         }
+
+        let mut hashes = self.get_package_file_hashes_from_index(
+            turbo_root,
+            package_path,
+            repo_index,
+            &excludes,
+        )?;
 
         // Include globs can find files not in the git index (e.g. gitignored files
         // that a user explicitly wants to track). Walk the filesystem for these
@@ -454,7 +525,7 @@ impl GitRepo {
                             let already_known = pkg_relative
                                 .as_ref()
                                 .is_some_and(|rel| hashes.contains_key(rel));
-                            if !already_known {
+                            if !already_known && !excluded_link(turbo_root, &resolved, &excludes) {
                                 literal_to_hash.push(git_relative);
                             }
                         }
@@ -469,6 +540,7 @@ impl GitRepo {
             // Hash any literal files discovered via direct stat.
             if !literal_to_hash.is_empty() {
                 self.extend_hashes_from_candidates(
+                    turbo_root,
                     &full_pkg_path,
                     &pkg_prefix,
                     repo_index,
@@ -503,6 +575,7 @@ impl GitRepo {
 
                 if !to_hash.is_empty() {
                     self.extend_hashes_from_candidates(
+                        turbo_root,
                         &full_pkg_path,
                         &pkg_prefix,
                         repo_index,
@@ -608,18 +681,21 @@ mod tests {
         git_root.join_component("inside").create_dir_all().unwrap();
         let link = git_root.join_component("link");
         link.symlink_to_dir("inside").unwrap();
-        // FIXME: This test verifies a bug: we don't hash symlinks.
+        git_root
+            .join_components(&["inside", "input.txt"])
+            .create_with_contents("input")
+            .unwrap();
         let pkg_path = git_root.anchor(&git_root).unwrap();
         let scm = SCM::new(&git_root);
         let hashes = scm
             .get_package_file_hashes(&git_root, &pkg_path, &["link"], false, None, None)
             .unwrap();
-        assert!(hashes.is_empty());
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("link/input.txt").unwrap()));
 
         let manual_hashes =
-            get_package_file_hashes_without_git(&git_root, &pkg_path, &["l*"], false, None, None)
+            get_package_file_hashes_without_git(&git_root, &pkg_path, &["link"], false, None, None)
                 .unwrap();
-        assert!(manual_hashes.is_empty());
+        assert_eq!(hashes, manual_hashes);
     }
 
     #[test]

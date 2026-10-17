@@ -35,30 +35,10 @@ use crate::CacheError;
 /// Cache artifacts must never modify Git metadata, including nested
 /// repositories and case variants on case-insensitive filesystems.
 pub(super) fn validate_restore_path(path: &AnchoredSystemPath) -> Result<(), CacheError> {
-    if path.components().any(|component| {
-        let name = component.as_str();
-        // Windows also accepts trailing dots/spaces, alternate data streams,
-        // and the short name of the .git directory.
-        #[cfg(windows)]
-        let name = name
-            .split(':')
-            .next()
-            .unwrap_or(name)
-            .trim_end_matches(['.', ' ']);
-        // HFS+ ignores these formatting characters when comparing names.
-        // Match conservatively on every platform so artifacts cannot disguise
-        // a .git component on the filesystem where they are restored.
-        let is_git = name
-            .chars()
-            .filter(|c| !matches!(c, '\u{200c}'..='\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{206a}'..='\u{206f}' | '\u{feff}'))
-            .map(|c| c.to_ascii_lowercase())
-            .eq(".git".chars());
-        let is_short_name = cfg!(windows)
-            && name.get(..4).is_some_and(|prefix| prefix.eq_ignore_ascii_case("git~"))
-            && name.len() > 4
-            && name[4..].bytes().all(|b| b.is_ascii_digit());
-        is_git || is_short_name
-    }) {
+    if path
+        .components()
+        .any(|component| turbopath::is_git_metadata_component(component.as_str()))
+    {
         return Err(CacheError::GitMetadataWrite(
             path.to_string(),
             Backtrace::capture(),
