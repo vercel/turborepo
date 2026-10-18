@@ -25,6 +25,7 @@ use turborepo_repository::{
     change_mapper::{
         ChangeMapper, GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges,
     },
+    discovery::DiscoveryResponse,
     package_graph::{PackageGraph, PackageName, RepositoryDiscoverySnapshot, WorkspacePackage},
     toolchain::WatchSpec,
 };
@@ -67,6 +68,7 @@ impl PackageChangesWatcher {
     pub fn new(
         repo_root: AbsoluteSystemPathBuf,
         file_events: WatchSource,
+        package_discovery: watch::Receiver<Option<Result<DiscoveryResponse, String>>>,
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
@@ -83,6 +85,7 @@ impl PackageChangesWatcher {
             file_events,
             package_change_events_tx,
             repository_discovery_tx,
+            package_discovery,
             hash_watcher,
             custom_turbo_json_path,
             single_package,
@@ -178,6 +181,7 @@ fn accumulate_changed_files(changed_files: &mut ChangedFiles, paths: Vec<std::pa
 
 struct Subscriber {
     file_events: WatchSource,
+    package_discovery: watch::Receiver<Option<Result<DiscoveryResponse, String>>>,
     changed_files: Mutex<RefCell<ChangedFiles>>,
     repo_root: AbsoluteSystemPathBuf,
     repository_ignore: RepositoryIgnore,
@@ -210,6 +214,33 @@ fn ancestors_is_ignored(
 struct RepoState {
     root_turbo_json: Option<TurboJson>,
     pkg_dep_graph: PackageGraph,
+}
+
+fn workspace_membership_changed(
+    repo_root: &AbsoluteSystemPathBuf,
+    discovery: &DiscoveryResponse,
+    graph: &PackageGraph,
+) -> bool {
+    let directories = discovery
+        .workspaces
+        .iter()
+        .filter(|workspace| workspace.workspace_root().as_str() != repo_root.as_str())
+        .map(|workspace| {
+            repo_root
+                .anchor(workspace.workspace_root())
+                .map(|path| path.to_unix().to_string())
+        })
+        .collect::<Result<HashSet<_>, _>>();
+    let Ok(directories) = directories else {
+        return false;
+    };
+    let installed = graph
+        .change_knowledge()
+        .package_directories()
+        .values()
+        .cloned()
+        .collect::<HashSet<_>>();
+    directories != installed
 }
 
 /// Build repository scopes independently of file-watcher startup and hashing.
@@ -457,6 +488,7 @@ impl Subscriber {
         file_events: WatchSource,
         package_change_events_tx: broadcast::Sender<PackageChangeEvent>,
         repository_discovery_tx: watch::Sender<Option<Arc<RepositoryDiscoverySnapshot>>>,
+        package_discovery: watch::Receiver<Option<Result<DiscoveryResponse, String>>>,
         hash_watcher: Arc<HashWatcher>,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
         single_package: bool,
@@ -511,6 +543,7 @@ impl Subscriber {
             watch_spec_ready: Arc::new(AtomicBool::new(false)),
             package_change_events_tx,
             repository_discovery_tx,
+            package_discovery,
             hash_watcher,
             custom_turbo_json_path: normalized_custom_path,
             single_package,
@@ -871,12 +904,49 @@ impl Subscriber {
                 .send(PackageChangeEvent::Rediscover)
                 .ok();
             let mut last_batch_at: Option<tokio::time::Instant> = None;
+            let mut package_discovery = self.package_discovery.clone();
+            let mut pending_discovery = package_discovery
+                .borrow_and_update()
+                .clone()
+                .and_then(Result::ok);
+            let mut discovery_open = true;
 
             loop {
-                // Wait for a change, then let the batch settle: keep collecting
-                // while changes arrive within CHANGE_SETTLE of each other, for at
-                // most CHANGE_BATCH_WINDOW.
-                changes_pending.notified().await;
+                if let Some(discovery) = pending_discovery.take() {
+                    if !repo_state
+                        .pkg_dep_graph
+                        .resolved_single_package(self.single_package)
+                        && workspace_membership_changed(
+                            &self.repo_root,
+                            &discovery,
+                            &repo_state.pkg_dep_graph,
+                        )
+                    {
+                        if let Some(new_state) = self.initialize_repo_state().await {
+                            repo_state = new_state;
+                            change_mapper = match repo_state.get_change_mapper() {
+                                Some(mapper) => mapper,
+                                None => break,
+                            };
+                            self.package_change_events_tx
+                                .send(PackageChangeEvent::Rediscover)
+                                .ok();
+                        } else {
+                            pending_discovery = Some(discovery);
+                        }
+                    }
+                }
+
+                tokio::select! {
+                    result = package_discovery.changed(), if discovery_open => {
+                        discovery_open = result.is_ok();
+                        if discovery_open {
+                            pending_discovery = package_discovery.borrow_and_update().clone().and_then(Result::ok);
+                        }
+                        continue;
+                    }
+                    _ = changes_pending.notified() => {}
+                }
                 let close_by = tokio::time::Instant::now() + CHANGE_BATCH_WINDOW;
                 loop {
                     let quiet_until = (tokio::time::Instant::now() + CHANGE_SETTLE).min(close_by);
@@ -1128,6 +1198,7 @@ mod test {
             file_events,
             broadcast::channel(8).0,
             watch::channel(None).0,
+            discovery_rx.clone(),
             Arc::new(HashWatcher::new(
                 repo_root.clone(),
                 discovery_rx,
@@ -1228,6 +1299,17 @@ mod test {
             );
         }
         assert!(state.pkg_dep_graph.has_root_javascript_scope());
+        assert!(!state.pkg_dep_graph.resolved_single_package(true));
+        assert!(!super::workspace_membership_changed(
+            &repo_root,
+            &discovery_for(&repo_root, &["web"]),
+            &state.pkg_dep_graph,
+        ));
+        assert!(super::workspace_membership_changed(
+            &repo_root,
+            &discovery_for(&repo_root, &["web", "added"]),
+            &state.pkg_dep_graph,
+        ));
     }
 
     #[tokio::test]
@@ -2094,9 +2176,8 @@ mod test {
     struct TestWatcherHandle {
         watcher: PackageChangesWatcher,
         file_events_tx: WatchEventSender,
-        // These must be kept alive to prevent the HashWatcher from busy-looping
-        // on closed channels.
-        _pkg_discovery_tx: watch::Sender<Option<Result<DiscoveryResponse, String>>>,
+        pkg_discovery_tx: watch::Sender<Option<Result<DiscoveryResponse, String>>>,
+        _hash_discovery_tx: watch::Sender<Option<Result<DiscoveryResponse, String>>>,
         hash_events_tx: WatchEventSender,
     }
 
@@ -2124,12 +2205,25 @@ mod test {
         allow_no_package_manager: bool,
         graph_features: RepositoryGraphFeatures,
     ) -> TestWatcherHandle {
-        let (file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
+        create_test_watcher_with_discovery(
+            repo_root,
+            single_package,
+            allow_no_package_manager,
+            graph_features,
+            None,
+        )
+    }
 
-        // Keep the discovery sender alive so the HashWatcher doesn't busy-loop
-        // on a closed watch channel. Repository graph paths are registered by
-        // PackageChangesWatcher after graph construction.
-        let (pkg_discovery_tx, pkg_discovery_rx) = watch::channel(None);
+    fn create_test_watcher_with_discovery(
+        repo_root: &AbsoluteSystemPathBuf,
+        single_package: bool,
+        allow_no_package_manager: bool,
+        graph_features: RepositoryGraphFeatures,
+        discovery: Option<Result<DiscoveryResponse, String>>,
+    ) -> TestWatcherHandle {
+        let (file_events_tx, file_events) = WatchSource::channel_for_root(repo_root.as_std_path());
+        let (pkg_discovery_tx, pkg_discovery_rx) = watch::channel(discovery);
+        let (hash_discovery_tx, hash_discovery_rx) = watch::channel(None);
 
         let scm = SCM::new(repo_root);
 
@@ -2138,7 +2232,7 @@ mod test {
 
         let hash_watcher = Arc::new(HashWatcher::new(
             repo_root.clone(),
-            pkg_discovery_rx,
+            hash_discovery_rx,
             hash_events,
             scm,
         ));
@@ -2152,6 +2246,7 @@ mod test {
         let watcher = PackageChangesWatcher::new(
             repo_root.clone(),
             file_events,
+            pkg_discovery_rx,
             hash_watcher,
             None,
             single_package,
@@ -2163,7 +2258,8 @@ mod test {
         TestWatcherHandle {
             watcher,
             file_events_tx,
-            _pkg_discovery_tx: pkg_discovery_tx,
+            pkg_discovery_tx,
+            _hash_discovery_tx: hash_discovery_tx,
             hash_events_tx,
         }
     }
@@ -2191,6 +2287,303 @@ mod test {
             "expected Rediscover, got {:?}",
             event
         );
+    }
+
+    fn discovery_for(repo_root: &AbsoluteSystemPathBuf, packages: &[&str]) -> DiscoveryResponse {
+        use turborepo_repository::{discovery::WorkspaceData, package_manager::PackageManager};
+
+        DiscoveryResponse {
+            workspaces: packages
+                .iter()
+                .map(|name| {
+                    let manifest = if *name == "//" {
+                        repo_root.join_component("package.json")
+                    } else {
+                        repo_root.join_components(&["packages", name, "package.json"])
+                    };
+                    WorkspaceData::new(manifest, None).unwrap()
+                })
+                .collect(),
+            package_manager: PackageManager::Npm,
+        }
+    }
+
+    #[tokio::test]
+    async fn workspace_discovery_adds_packages_and_tracks_later_manifest_edits() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        let manifest = repo_root.join_components(&["packages", "c", "package.json"]);
+        manifest.ensure_dir().unwrap();
+        manifest
+            .create_with_contents(br#"{"name":"c","scripts":{"build":"echo built"}}"#)
+            .unwrap();
+        handle
+            .pkg_discovery_tx
+            .send(Some(Ok(discovery_for(&repo_root, &["a", "b", "c"]))))
+            .unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        let source = repo_root.join_components(&["packages", "c", "index.ts"]);
+        source.create_with_contents(b"export const c = 1;").unwrap();
+        let event = make_notify_event_from(&[&source]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Package { name, .. }) if name.to_string() == "c"
+        ));
+
+        manifest
+            .create_with_contents(
+                br#"{"name":"c","dependencies":{"a":"*"},"scripts":{"build":"echo built"}}"#,
+            )
+            .unwrap();
+        let event = make_notify_event_from(&[&manifest]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        handle
+            .pkg_discovery_tx
+            .send(Some(Ok(discovery_for(&repo_root, &["a", "b", "c"]))))
+            .unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Package { name, .. }) if name.to_string() == "c"
+        ));
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_discovery_removes_packages_without_file_events() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+        std::fs::remove_dir_all(repo_root.join_components(&["packages", "b"]).as_std_path())
+            .unwrap();
+        handle
+            .pkg_discovery_tx
+            .send(Some(Ok(discovery_for(&repo_root, &["a"]))))
+            .unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+        let mut discovery = handle.watcher.repository_discovery_rx.clone();
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            discovery.wait_for(|snapshot| {
+                snapshot.as_ref().is_some_and(|snapshot| {
+                    !snapshot
+                        .scopes
+                        .iter()
+                        .any(|scope| scope.name.to_string() == "b")
+                })
+            }),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        handle
+            .pkg_discovery_tx
+            .send(Some(Ok(discovery_for(&repo_root, &["a"]))))
+            .unwrap();
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_discovery_unchanged_and_unavailable_preserve_source_events() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+        for value in [
+            Some(Ok(discovery_for(&repo_root, &["b", "a", "//"]))),
+            None,
+            Some(Err("temporary discovery error".to_string())),
+        ] {
+            handle.pkg_discovery_tx.send(value).unwrap();
+            assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+        }
+        drop(handle.pkg_discovery_tx);
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+
+        let source = repo_root.join_components(&["packages", "a", "index.ts"]);
+        source.create_with_contents(b"export const a = 2;").unwrap();
+        let event = make_notify_event_from(&[&source]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Package { name, .. }) if name.to_string() == "a"
+        ));
+    }
+
+    #[tokio::test]
+    async fn workspace_discovery_processes_initial_value() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher_with_discovery(
+            &repo_root,
+            false,
+            false,
+            RepositoryGraphFeatures::default(),
+            Some(Ok(discovery_for(&repo_root, &["a"]))),
+        );
+        let rx = &mut handle.watcher.package_change_events_rx;
+        for _ in 0..2 {
+            assert!(matches!(
+                recv_event(rx, Duration::from_secs(5)).await,
+                Some(PackageChangeEvent::Rediscover)
+            ));
+        }
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+
+        let source = repo_root.join_components(&["packages", "a", "index.ts"]);
+        source.create_with_contents(b"export const a = 2;").unwrap();
+        let event = make_notify_event_from(&[&source]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Package { name, .. }) if name.to_string() == "a"
+        ));
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_discovery_closed_stale_snapshot_is_not_reprocessed() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher_with_discovery(
+            &repo_root,
+            false,
+            false,
+            RepositoryGraphFeatures::default(),
+            Some(Ok(discovery_for(&repo_root, &["a"]))),
+        );
+        let rx = &mut handle.watcher.package_change_events_rx;
+        for _ in 0..2 {
+            assert!(matches!(
+                recv_event(rx, Duration::from_secs(5)).await,
+                Some(PackageChangeEvent::Rediscover)
+            ));
+        }
+        drop(handle.pkg_discovery_tx);
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+
+        let source = repo_root.join_components(&["packages", "a", "index.ts"]);
+        source.create_with_contents(b"export const a = 2;").unwrap();
+        let event = make_notify_event_from(&[&source]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Package { name, .. }) if name.to_string() == "a"
+        ));
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_discovery_retries_incomplete_manifest_on_file_event() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        let manifest = repo_root.join_components(&["packages", "c", "package.json"]);
+        manifest.ensure_dir().unwrap();
+        manifest.create_with_contents(br#"{"name":"c","#).unwrap();
+        handle
+            .pkg_discovery_tx
+            .send(Some(Ok(discovery_for(&repo_root, &["a", "b", "c"]))))
+            .unwrap();
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+
+        let source = repo_root.join_components(&["packages", "a", "index.ts"]);
+        source.create_with_contents(b"export const a = 2;").unwrap();
+        let event = make_notify_event_from(&[&source]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Package { name, .. }) if name.to_string() == "a"
+        ));
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+
+        manifest
+            .create_with_contents(br#"{"name":"c","scripts":{"build":"echo built"}}"#)
+            .unwrap();
+        let event = make_notify_event_from(&[&manifest]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+        assert!(
+            handle
+                .watcher
+                .repository_discovery_rx
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .scopes
+                .iter()
+                .any(|scope| scope.name.to_string() == "c")
+        );
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+
+        manifest
+            .create_with_contents(
+                br#"{"name":"c","dependencies":{"a":"*"},"scripts":{"build":"echo built"}}"#,
+            )
+            .unwrap();
+        let event = make_notify_event_from(&[&manifest]);
+        handle.hash_events_tx.send(Ok(event.clone())).unwrap();
+        handle.file_events_tx.send(Ok(event)).unwrap();
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Package { name, .. }) if name.to_string() == "c"
+        ));
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn workspace_discovery_skips_explicit_single_package_mode() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher_with_discovery(
+            &repo_root,
+            true,
+            false,
+            RepositoryGraphFeatures::default(),
+            Some(Ok(discovery_for(&repo_root, &["a", "b"]))),
+        );
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+        handle
+            .pkg_discovery_tx
+            .send(Some(Ok(discovery_for(&repo_root, &["a"]))))
+            .unwrap();
+        assert!(recv_event(rx, Duration::from_millis(250)).await.is_none());
     }
 
     #[tokio::test]
