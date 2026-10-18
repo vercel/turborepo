@@ -322,7 +322,7 @@ where
         match self {
             Separation::Filtrate(filtrate) => {
                 cancellation.cancel_walk_tree();
-                Separation::from_inner_residue(TreeResidue::Node(f(filtrate.into_inner())))
+                Separation::from_inner_residue(TreeResidue::Tree(f(filtrate.into_inner())))
             }
             Separation::Residue(residue) => match residue.into_inner() {
                 TreeResidue::Node(residue) => {
@@ -671,5 +671,27 @@ where
             };
         }
         return None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tree_filter_preserves_tree_residue() {
+        struct Walk(bool);
+        impl CancelWalk for Walk {
+            fn cancel_walk_tree(&mut self) {
+                self.0 = true;
+            }
+        }
+        let mut walk = Walk(false);
+        let entry = Separation::<(&str, TreeResidue<&str>)>::from_inner_filtrate("entry");
+        let filtered = entry.filter_map_tree(WalkCancellation::unchecked(&mut walk), |entry| entry);
+        assert!(walk.0);
+        assert!(
+            matches!(filtered, Separation::Residue(residue) if matches!(residue.into_inner(), TreeResidue::Tree("entry")))
+        );
     }
 }

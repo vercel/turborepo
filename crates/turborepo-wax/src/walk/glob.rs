@@ -15,7 +15,7 @@ use crate::{
     walk::{
         Entry, EntryResidue, FileIterator, JoinAndGetDepth, TreeEntry, WalkBehavior, WalkError,
         WalkTree,
-        filter::{HierarchicalIterator, Separation},
+        filter::{HierarchicalIterator, SeparatingFilter, Separation, TreeResidue},
     },
 };
 
@@ -329,7 +329,143 @@ pub struct GlobWalker {
     program: WalkProgram,
 }
 
+/// Enumerate every entry, without applying glob matching, while deferring
+/// directory links until tree filters accept them. Explicit glob semantics are
+/// unchanged; defaults use this to include all supported filenames.
+pub fn walk_tree_with_filtered_links(
+    root: impl Into<PathBuf>,
+    prune: impl FnMut(&dyn Entry) -> Option<EntryResidue>,
+) -> Vec<Result<TreeEntry, WalkError>> {
+    walk_filtered_links(
+        Anchor {
+            root: root.into(),
+            prefix: 0,
+        },
+        |anchor| anchor.clone().walk_with_behavior(WalkBehavior::default()),
+        prune,
+    )
+}
+
+fn walk_filtered_links<E, I>(
+    anchor: Anchor,
+    mut walk: impl FnMut(&Anchor) -> I,
+    mut prune: impl FnMut(&dyn Entry) -> Option<EntryResidue>,
+) -> Vec<Result<E, WalkError>>
+where
+    E: 'static + Entry,
+    TreeEntry: From<E>,
+    I: FileIterator<Entry = E, Residue = TreeEntry>,
+{
+    let mut found = Vec::new();
+    let mut pending = vec![(anchor, Vec::<PathBuf>::new())];
+    while let Some((anchor, ancestors)) = pending.pop() {
+        let mut iter = walk(&anchor).filter_entry(&mut prune);
+        while let Some(separation) = iter.feed() {
+            let separation = match separation.transpose_filtrate() {
+                Ok(separation) => separation,
+                Err(error) => {
+                    found.push(Err(error.into_inner()));
+                    continue;
+                }
+            };
+            let entry: &dyn Entry = match &separation {
+                Separation::Filtrate(entry) => entry.as_ref(),
+                Separation::Residue(entry) => match entry.get() {
+                    TreeResidue::Node(entry) => entry,
+                    TreeResidue::Tree(_) => continue,
+                },
+            };
+            // WalkDir already follows a link used as the walk root.
+            if entry.depth() != 0 && entry.file_type().is_symlink() {
+                let path = entry.path();
+                let io_error = |error| WalkError {
+                    depth: entry.depth(),
+                    kind: super::WalkErrorKind::Io {
+                        path: Some(path.to_path_buf()),
+                        error,
+                    },
+                };
+                let next = (|| {
+                    match std::fs::metadata(path) {
+                        Ok(metadata) if metadata.is_dir() => {
+                            let target = same_file::Handle::from_path(path).map_err(io_error)?;
+                            let mut ancestors = ancestors.clone();
+                            // Match walkdir: only directories on the actual
+                            // traversal branch are cycle candidates. A link
+                            // above the walk root can be a valid parent link.
+                            ancestors.extend(
+                                path.ancestors()
+                                    .skip(1)
+                                    .take_while(|parent| parent.starts_with(&anchor.root))
+                                    .map(Path::to_path_buf),
+                            );
+                            for ancestor in &ancestors {
+                                if target
+                                    == same_file::Handle::from_path(ancestor).map_err(io_error)?
+                                {
+                                    return Err(WalkError {
+                                        depth: entry.depth(),
+                                        kind: super::WalkErrorKind::LinkCycle {
+                                            root: ancestor.clone(),
+                                            leaf: path.to_path_buf(),
+                                        },
+                                    });
+                                }
+                            }
+                            return Ok(Some((
+                                Anchor {
+                                    root: path.to_path_buf(),
+                                    prefix: anchor.prefix + path.components().count()
+                                        - anchor.root.components().count(),
+                                },
+                                ancestors,
+                            )));
+                        }
+                        Ok(_) => {}
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                        Err(error) => return Err(io_error(error)),
+                    }
+                    Ok(None)
+                })();
+                match next {
+                    Ok(Some(next)) => pending.push(next),
+                    Ok(None) => {}
+                    Err(error) => {
+                        found.push(Err(error));
+                        continue;
+                    }
+                }
+            }
+            if let Separation::Filtrate(entry) = separation {
+                found.push(Ok(entry.into_inner()));
+            }
+        }
+    }
+    found
+}
+
 impl GlobWalker {
+    /// Apply tree filters before following links. A node-only residue can
+    /// still have matching descendants; a tree residue must never be followed.
+    pub fn walk_with_filtered_links(
+        self,
+        exclude: FilterAny,
+        prune: impl FnMut(&dyn Entry) -> Option<EntryResidue>,
+    ) -> Vec<Result<GlobEntry, WalkError>> {
+        walk_filtered_links(
+            self.anchor,
+            |anchor| {
+                GlobWalker {
+                    anchor: anchor.clone(),
+                    program: self.program.clone(),
+                }
+                .walk_with_behavior(WalkBehavior::default())
+                .not_any(exclude.clone())
+            },
+            prune,
+        )
+    }
+
     /// Gets the root and prefix paths.
     ///
     /// The root path is the path to the walked directory tree. **This path may

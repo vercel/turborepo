@@ -314,11 +314,18 @@ pub struct Settings {
     /// directories are traversed into (their targets are read). Cycles are
     /// detected and handled gracefully by the underlying walkdir layer.
     follow_links: bool,
+    filter_links: bool,
 }
 
 impl Settings {
     pub fn ignore_nested_packages(mut self) -> Self {
         self.ignore_nested_packages = true;
+        self
+    }
+
+    pub fn follow_links_after_filtering(mut self) -> Self {
+        self.follow_links = true;
+        self.filter_links = true;
         self
     }
 
@@ -574,9 +581,44 @@ pub fn globwalk_with_settings(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+    globwalk_with_literal_inputs(base_path, include, exclude, &[], walk_type, settings)
+}
+
+/// Include concrete inventory paths without interpreting their names as globs.
+/// Directory inputs retain the usual recursive selection behavior.
+pub fn globwalk_with_literal_inputs(
+    base_path: &AbsoluteSystemPath,
+    include: &[ValidatedGlob],
+    exclude: &[ValidatedGlob],
+    literals: &[AbsoluteSystemPathBuf],
+    walk_type: WalkType,
+    settings: Settings,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
     let compiled = {
         let _span = tracing::info_span!("globwalk_compile").entered();
-        compile_globs(base_path, include, exclude, settings)?
+        let mut compiled = compile_globs(base_path, include, exclude, settings)?;
+        for path in literals {
+            if path.as_std_path().is_dir() {
+                // Inventory directories select every valid filename, rather
+                // than applying authored-glob wildcard semantics to children.
+                compiled
+                    .recursive_all
+                    .push(path.as_std_path().to_path_buf());
+                continue;
+            }
+            // Escape after platform path normalization: backslash escapes must
+            // not be converted to Windows path separators by preprocessing.
+            let slash = path
+                .as_std_path()
+                .to_slash()
+                .ok_or(WalkError::InvalidPath)?;
+            let pattern = wax::escape(&slash).into_owned();
+            compiled
+                .include_patterns
+                .push(glob_with_contextual_error(pattern)?);
+            compiled.include_tree_prefixes.push(None);
+        }
+        compiled
     };
     let _span = tracing::info_span!("globwalk_walk").entered();
     retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, settings))
@@ -1430,8 +1472,9 @@ fn walk_compiled_globs(
 /// - the prefix itself matches (a tree wildcard matches zero components);
 /// - symlinks are yielded as files and never followed (wax's default
 ///   `LinkBehavior::ReadFile`), except at the walk root, which walkdir follows
-///   by default — patterns compiled with [`Settings::follow_links`] never reach
-///   this function, `compile_globs` routes them through wax instead;
+///   by default. Authored patterns with [`Settings::follow_links`] go through
+///   wax instead; literal inventory directories use the filtered raw walk
+///   below;
 /// - exclusions are matched per entry against the absolute slash path;
 /// - with `ignore_nested_packages`, any non-base directory containing a
 ///   `package.json` is discarded along with its subtree;
@@ -1465,6 +1508,42 @@ fn walk_recursive_all(
     let prune_nested_package = |dir: &Path| {
         settings.ignore_nested_packages && dir != walk_base && dir.join("package.json").exists()
     };
+
+    if settings.follow_links {
+        use wax::walk::{PathExt as _, walk_tree_with_filtered_links};
+
+        let prune = |entry: &dyn Entry| {
+            (excluded(entry.path())
+                || (settings.ignore_nested_packages
+                    && entry.path().is_dir()
+                    && prune_nested_package(entry.path())))
+            .then_some(EntryResidue::Tree)
+        };
+        let entries = if settings.filter_links {
+            walk_tree_with_filtered_links(prefix, prune)
+        } else {
+            prefix
+                .walk_with_behavior(WalkBehavior {
+                    link: LinkBehavior::ReadTarget,
+                    ..Default::default()
+                })
+                .filter_entry(prune)
+                .collect()
+        };
+        for entry in entries {
+            if walk_type == WalkType::Files
+                && entry
+                    .as_ref()
+                    .is_ok_and(|entry| entry.file_type().is_symlink() && entry.path().is_dir())
+            {
+                continue;
+            }
+            if let Some(path) = visit_file(walk_type, entry) {
+                results.push(path?);
+            }
+        }
+        return Ok(());
+    }
 
     // The walk root follows symlinks (walkdir's `follow_root_links` default).
     let root_meta = match std::fs::metadata(prefix) {
@@ -1700,6 +1779,39 @@ fn walk_glob(
     glob: &Glob<'static>,
     settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
+    if settings.filter_links {
+        return glob
+            .walker(base_path_new)
+            .walk_with_filtered_links(ex_filter, |entry| {
+                let path = entry.path();
+                if excluded_by_plain(plain_exclusions, path)
+                    || (settings.ignore_nested_packages
+                        && path != base_path_new
+                        && path.is_dir()
+                        && path.join("package.json").exists())
+                {
+                    Some(EntryResidue::Tree)
+                } else {
+                    None
+                }
+            })
+            .into_iter()
+            .filter_map(|entry| {
+                // Deferred traversal keeps the link entry until its tree has
+                // been filtered. File-only results still use the target type.
+                if walk_type == WalkType::Files
+                    && entry.as_ref().is_ok_and(|entry| {
+                        entry.file_type().is_symlink()
+                            && std::fs::metadata(entry.path())
+                                .is_ok_and(|metadata| metadata.is_dir())
+                    })
+                {
+                    return None;
+                }
+                visit_file(walk_type, entry)
+            })
+            .collect();
+    }
     let behavior = if settings.follow_links {
         WalkBehavior {
             link: LinkBehavior::ReadTarget,
@@ -1741,9 +1853,9 @@ fn walk_glob(
     }
 }
 
-fn visit_file(
+fn visit_file<E: Entry>(
     walk_type: WalkType,
-    entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
+    entry: Result<E, wax::walk::WalkError>,
 ) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
     match entry {
         Ok(entry)
@@ -1878,6 +1990,89 @@ mod test {
     const GLOB_ROOT: &str = "/";
     #[cfg(windows)]
     const GLOB_ROOT: &str = "C\\:/"; // in globs, expect an escaped ':' token
+
+    #[cfg(unix)]
+    #[test]
+    fn literal_directory_inputs_preserve_filenames_and_settings() {
+        for nested_packages in [false, true] {
+            let temp = TempDir::new().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+            let directory = root.join_component("literal[1]");
+            directory.join_component("nested").create_dir_all().unwrap();
+            for name in [
+                "plain.txt",
+                "line\nname.txt",
+                "excluded.txt",
+                "nested/child.txt",
+            ] {
+                std::fs::write(directory.as_std_path().join(name), "contents").unwrap();
+            }
+            if nested_packages {
+                std::fs::write(directory.as_std_path().join("nested/package.json"), "{}").unwrap();
+            }
+            std::os::unix::fs::symlink("plain.txt", directory.as_std_path().join("file-link"))
+                .unwrap();
+            std::os::unix::fs::symlink("nested", directory.as_std_path().join("directory-link"))
+                .unwrap();
+            root.join_component("literal1").create_dir_all().unwrap();
+            let excluded = [ValidatedGlob::from_str("literal*/excluded.txt").unwrap()];
+            for (settings, follows) in [
+                (Settings::default(), false),
+                (Settings::default().follow_links(), true),
+                (Settings::default().follow_links_after_filtering(), true),
+            ] {
+                let settings = if nested_packages {
+                    settings.ignore_nested_packages()
+                } else {
+                    settings
+                };
+                for walk_type in [WalkType::Files, WalkType::Folders, WalkType::All] {
+                    let selected = super::globwalk_with_literal_inputs(
+                        &root,
+                        &[],
+                        &excluded,
+                        std::slice::from_ref(&directory),
+                        walk_type,
+                        settings,
+                    )
+                    .unwrap();
+                    assert!(
+                        selected
+                            .iter()
+                            .all(|path| path.as_std_path().starts_with(directory.as_std_path()))
+                    );
+                    for name in ["plain.txt", "line\nname.txt", "file-link"] {
+                        assert!(
+                            selected.contains(
+                                &AbsoluteSystemPathBuf::try_from(
+                                    directory.as_std_path().join(name)
+                                )
+                                .unwrap()
+                            )
+                        );
+                    }
+                    assert!(!selected.contains(&directory.join_component("excluded.txt")));
+                    for (name, expected) in [
+                        ("nested/child.txt", !nested_packages),
+                        ("directory-link/child.txt", follows && !nested_packages),
+                    ] {
+                        assert_eq!(
+                            selected.contains(
+                                &AbsoluteSystemPathBuf::try_from(
+                                    directory.as_std_path().join(name)
+                                )
+                                .unwrap()
+                            ),
+                            expected
+                        );
+                    }
+                    if walk_type == WalkType::Files {
+                        assert!(!selected.contains(&directory));
+                    }
+                }
+            }
+        }
+    }
 
     #[test_case("a", "a" ; "no change")]
     #[test_case("**/**", "**")]
@@ -3299,6 +3494,110 @@ mod test {
             std::os::unix::fs::symlink("../external/nested", root.join("packages/nested")).unwrap();
 
             tmp
+        }
+
+        #[test]
+        fn followed_directory_links_are_not_returned_as_files() {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            std::fs::create_dir(tmp.path().join("src")).unwrap();
+            std::fs::create_dir(tmp.path().join("shared")).unwrap();
+            std::fs::write(tmp.path().join("shared/file.txt"), "content").unwrap();
+            std::os::unix::fs::symlink("../shared", tmp.path().join("src/folder.txt")).unwrap();
+            std::os::unix::fs::symlink("../shared/file.txt", tmp.path().join("src/link.txt"))
+                .unwrap();
+            for (pattern, expected) in [
+                ("src/**", vec!["src/folder.txt/file.txt", "src/link.txt"]),
+                ("src/*.txt", vec!["src/link.txt"]),
+                ("src/*/file.txt", vec!["src/folder.txt/file.txt"]),
+                (
+                    "src/{folder.txt,other}/file.txt",
+                    vec!["src/folder.txt/file.txt"],
+                ),
+            ] {
+                let files = globwalk_with_settings(
+                    &root,
+                    &[pattern.parse().unwrap()],
+                    &[],
+                    WalkType::Files,
+                    Settings::default().follow_links_after_filtering(),
+                )
+                .unwrap();
+                let expected: HashSet<_> = expected
+                    .into_iter()
+                    .map(|path| {
+                        root.join_unix_path(turbopath::RelativeUnixPath::new(path).unwrap())
+                    })
+                    .collect();
+                assert_eq!(files, expected, "pattern {pattern}");
+            }
+        }
+
+        #[test]
+        fn filtered_links_agree_with_target_walk_on_acyclic_trees() {
+            use wax::{
+                Glob,
+                walk::{Entry, FileIterator, FilterAny, LinkBehavior},
+            };
+
+            let tmp = setup_symlinked_workspace();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            std::os::unix::fs::symlink(
+                "../external/widget-a",
+                tmp.path().join("widgets/space widget"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink("missing", tmp.path().join("widgets/broken")).unwrap();
+            for pattern in [
+                "**/*",
+                "widgets/**",
+                "widgets/*/package.json",
+                "packages/**/package.json",
+                "widgets/{widget-a,space widget}/**",
+                "widgets/space widget/**",
+            ] {
+                for exclusion in [None, Some("**/nested/**"), Some("widgets/*/**")] {
+                    let include = [pattern.parse::<ValidatedGlob>().unwrap()];
+                    let exclude: Vec<ValidatedGlob> = exclusion
+                        .into_iter()
+                        .map(|pattern| pattern.parse().unwrap())
+                        .collect();
+                    let (base, patterns, exclusions) =
+                        crate::preprocess_paths_and_globs(&root, &include, &exclude, true).unwrap();
+                    let filter = FilterAny::any(
+                        exclusions
+                            .iter()
+                            .map(|pattern| Glob::new(pattern).unwrap().into_owned()),
+                    )
+                    .unwrap();
+                    let glob = Glob::new(&patterns[0]).unwrap();
+                    for walk_type in [WalkType::Files, WalkType::All] {
+                        let expected: HashSet<_> = glob
+                            .walk_with_behavior(&base, LinkBehavior::ReadTarget)
+                            .not_any(filter.clone())
+                            .map(|entry| entry.unwrap())
+                            .filter(|entry| {
+                                walk_type != WalkType::Files
+                                    || entry.file_type().is_file()
+                                    || entry.file_type().is_symlink()
+                            })
+                            .map(|entry| AbsoluteSystemPathBuf::try_from(entry.path()).unwrap())
+                            .collect();
+                        let actual = globwalk_with_settings(
+                            &root,
+                            &include,
+                            &exclude,
+                            walk_type,
+                            Settings::default().follow_links_after_filtering(),
+                        )
+                        .unwrap();
+                        assert_eq!(
+                            actual, expected,
+                            "pattern {pattern}, exclusion {exclusion:?}, type {walk_type:?}"
+                        );
+                    }
+                }
+            }
         }
 
         #[test]

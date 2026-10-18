@@ -1,3 +1,8 @@
+#[cfg(test)]
+thread_local! {
+    pub(crate) static LINK_SUPPLEMENTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 use globwalk::{PackageInput, ValidatedGlob};
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError};
@@ -102,40 +107,54 @@ impl SCM {
                         if let Some(telemetry) = telemetry {
                             telemetry.track_file_hash_method(FileHashMethod::Manual);
                         }
-                        crate::manual::get_package_file_hashes_without_git(
+                        // Manual hashing already selects and hashes links. Its
+                        // result is not a tracked-file inventory for the Git
+                        // supplement below.
+                        return crate::manual::get_package_file_hashes_without_git(
                             turbo_root,
                             package_path,
                             inputs,
                             include_default_files,
                             Some(&git.root),
                             git.git_attrs(),
-                        )
+                        );
                     }
                 }
             }
         }?;
         if let SCM::Git(git) = self {
             let package_dir = turbo_root.resolve(package_path);
+            if inputs.is_empty()
+                && !hashes.is_empty()
+                && repo_index
+                    .is_some_and(|index| index.has_link_free_defaults(package_dir.as_std_path()))
+            {
+                crate::manual::validate_default_ignore_parents(&package_dir)?;
+                return Ok(hashes);
+            }
+            #[cfg(test)]
+            LINK_SUPPLEMENTS.with(|count| count.set(count.get() + 1));
             let defaults = inputs.is_empty() || include_default_files;
-            let mut link_inputs: Vec<String> = inputs
+            let link_inputs: Vec<String> = inputs
                 .iter()
                 .map(|input| input.as_ref().to_owned())
                 .collect();
             // Explicitly retain tracked links even when an ignore rule hides them.
-            if defaults {
-                link_inputs.extend(
-                    hashes
-                        .keys()
-                        .filter(|path| {
-                            crate::hash_object::has_symlink(
-                                turbo_root,
-                                &package_dir.join_unix_path(path),
-                            )
-                        })
-                        .map(ToString::to_string),
-                );
-            }
-            let linked = crate::manual::get_package_file_hashes(
+            let literal_inputs: Vec<_> = if defaults {
+                hashes
+                    .keys()
+                    .filter(|path| {
+                        crate::hash_object::has_symlink(
+                            turbo_root,
+                            &package_dir.join_unix_path(path),
+                        )
+                    })
+                    .map(|path| package_dir.join_unix_path(path))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            let linked = crate::manual::get_package_file_hashes_with_literals(
                 turbo_root,
                 package_path,
                 &link_inputs,
@@ -143,6 +162,7 @@ impl SCM {
                 Some(&git.root),
                 git.git_attrs(),
                 true,
+                &literal_inputs,
             )?;
             hashes.retain(|path, _| {
                 !crate::hash_object::has_symlink(turbo_root, &package_dir.join_unix_path(path))

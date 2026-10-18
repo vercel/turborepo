@@ -19,7 +19,7 @@ default = ["walk"]
 # Integrates with `miette` and provides `Diagnostic` error types and reporting.
 miette = ["dep:miette", "dep:tardar"]
 # Provides APIs for matching globs against directory trees.
-walk = ["dep:walkdir"]
+walk = ["dep:same-file", "dep:walkdir"]
 
 [lints]
 workspace = true
@@ -29,6 +29,7 @@ const_format = "^0.2.0"
 itertools = { workspace = true }
 nom = "^7.0.0"
 pori = "=0.0.0"
+same-file = { version = "1.0.6", optional = true }
 thiserror = { workspace = true }
 
   [dependencies.miette]

@@ -82,7 +82,7 @@ use std::{
 use thiserror::Error;
 use walkdir::{DirEntry, Error, WalkDir};
 
-pub use crate::walk::glob::{FilterAny, GlobEntry, GlobWalker};
+pub use crate::walk::glob::{FilterAny, GlobEntry, GlobWalker, walk_tree_with_filtered_links};
 use crate::{
     BuildError, Pattern,
     walk::filter::{

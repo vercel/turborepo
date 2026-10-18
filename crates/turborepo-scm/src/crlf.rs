@@ -489,6 +489,37 @@ pub(crate) fn hash_file_as_git_blob(
         return Ok(None);
     }
 
+    let (target, real_root, has_link) = input_target(root, path)?;
+    let mut file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+    if turbopath::file_realpath(&file)? != target.as_std_path() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "input changed while opening",
+        ));
+    }
+    let hash = hash_file_for_cache(path, &mut file, metadata.len(), attr)?;
+    Ok(Some(if has_link {
+        hash_link_identity(root, &real_root, path, hash, 0)?
+    } else {
+        hash
+    }))
+}
+
+fn input_target(
+    root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+) -> Result<
+    (
+        turbopath::AbsoluteSystemPathBuf,
+        turbopath::AbsoluteSystemPathBuf,
+        bool,
+    ),
+    std::io::Error,
+> {
     let target = path.to_realpath().map_err(|error| match error {
         turbopath::PathError::IO(error) => error,
         error => std::io::Error::other(error),
@@ -517,23 +548,114 @@ pub(crate) fn hash_file_as_git_blob(
             ));
         }
     }
-    let mut file = std::fs::File::open(path)?;
-    let metadata = file.metadata()?;
-    if !metadata.is_file() {
+    let has_link = target != authored;
+    Ok((target, real_root, has_link))
+}
+
+/// Bind contents to every link traversed during resolution, including links
+/// inside other links' targets. Authored targets and their positions in the
+/// resolution sequence enter the hash, without computed absolute paths or
+/// checkout-location aliases.
+fn hash_link_identity(
+    root: &AbsoluteSystemPath,
+    real_root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+    contents: OidHash,
+    kind: u8,
+) -> Result<OidHash, std::io::Error> {
+    use std::{collections::VecDeque, path::Component};
+
+    let relative = turbopath::AnchoredSystemPathBuf::relative_path_between(root, path);
+    let mut pending: VecDeque<_> = relative
+        .as_path()
+        .components()
+        .map(|part| part.as_os_str().to_owned())
+        .collect();
+    let mut resolved = real_root.as_std_path().to_path_buf();
+    let mut bytes = Vec::new();
+    let mut expansions = 0;
+    let mut component_position = 0_u64;
+    while let Some(part) = pending.pop_front() {
+        component_position += 1;
+        match std::path::Path::new(&part).components().next() {
+            Some(Component::ParentDir) => {
+                resolved.pop();
+                continue;
+            }
+            Some(Component::CurDir) | None => continue,
+            Some(Component::RootDir | Component::Prefix(_)) => {
+                resolved.push(part);
+                continue;
+            }
+            Some(Component::Normal(_)) => resolved.push(part),
+        }
+        let metadata = match std::fs::symlink_metadata(&resolved) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+            Err(error) => return Err(error),
+        };
+        if !metadata.is_symlink() {
+            continue;
+        }
+        expansions += 1;
+        // Canonicalization rejects stable cycles before this function runs.
+        // Bound identity collection too if links are concurrently retargeted.
+        if expansions > 1024 {
+            return Err(std::io::Error::other("too many input symlink resolutions"));
+        }
+        let target = std::fs::read_link(&resolved)?;
+        if bytes.is_empty() {
+            bytes.extend_from_slice(b"turbo-input-links\0");
+            bytes.push(kind);
+            bytes.extend_from_slice(contents.as_bytes());
+        }
+        // Position counts every resolved component, not just links. The same
+        // target text at different components must produce different identities.
+        bytes.extend_from_slice(&component_position.to_le_bytes());
+        // Fixed-width positions and blob IDs frame each ordered link identity.
+        bytes.extend_from_slice(
+            hash_bytes_as_blob(target.as_os_str().as_encoded_bytes())?.as_bytes(),
+        );
+        resolved.pop();
+        // Resolve target components before the remaining suffix. In particular,
+        // do not lexically clean `..` before expanding a preceding link.
+        for part in target.components().rev() {
+            pending.push_front(part.as_os_str().to_owned());
+        }
+    }
+    if bytes.is_empty() {
+        Ok(contents)
+    } else {
+        hash_bytes_as_blob(&bytes)
+    }
+}
+
+/// A selected directory or dangling link has no file contents, but its own
+/// identity is still an input. Never open a special-file referent here.
+pub(crate) fn hash_non_file_link(
+    root: &AbsoluteSystemPath,
+    path: &AbsoluteSystemPath,
+) -> Result<Option<OidHash>, std::io::Error> {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    if !metadata.is_symlink() {
         return Ok(None);
     }
-    if turbopath::file_realpath(&file)? != target.as_std_path() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "input changed while opening",
-        ));
-    }
-    Ok(Some(hash_file_for_cache(
-        path,
-        &mut file,
-        metadata.len(),
-        attr,
-    )?))
+    let (kind, real_root) = match std::fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => return Ok(None),
+        Ok(metadata) => {
+            let (_, real_root, _) = input_target(root, path)?;
+            (if metadata.is_dir() { 1 } else { 3 }, real_root)
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            (2, root.to_realpath().map_err(std::io::Error::other)?)
+        }
+        Err(error) => return Err(error),
+    };
+    hash_link_identity(root, &real_root, path, hash_bytes_as_blob(&[])?, kind).map(Some)
 }
 
 /// Hash a working-tree file and report how the hash was produced. Used by the

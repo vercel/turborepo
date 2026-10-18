@@ -122,7 +122,20 @@ fn hash_objects_inner(
 
                 let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
-                    crate::crlf::hash_file_as_git_blob(root, &full_file_path, text_attr)
+                    match crate::crlf::hash_file_as_git_blob(root, &full_file_path, text_attr) {
+                        Ok(None) if matches!(missing_files, MissingFiles::Ignore) => {
+                            crate::crlf::hash_non_file_link(root, &full_file_path)
+                        }
+                        Err(error)
+                            if matches!(missing_files, MissingFiles::Ignore)
+                                && error.kind() == std::io::ErrorKind::NotFound =>
+                        {
+                            // A missing referent can leave a tracked link whose
+                            // identity must survive unstaged retargets.
+                            crate::crlf::hash_non_file_link(root, &full_file_path)
+                        }
+                        result => result,
+                    }
                 });
                 drop(_guard);
 

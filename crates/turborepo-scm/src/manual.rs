@@ -89,12 +89,14 @@ fn hash_discovered_file(
     match crate::crlf::hash_file_as_git_blob(root, path, text_attr) {
         Ok(Some(hash)) => Ok(Some(hash)),
         Ok(None) => {
-            info!(%path, "skipping non-regular hash candidate");
-            Ok(None)
+            info!(%path, "checking non-regular input link");
+            crate::crlf::hash_non_file_link(root, path)
+                .map_err(|error| Error::hash_file(path.to_owned(), error))
         }
         Err(error) if error.kind() == ErrorKind::NotFound => {
             info!(%path, "discovered hash candidate disappeared");
-            Ok(None)
+            crate::crlf::hash_non_file_link(root, path)
+                .map_err(|error| Error::hash_file(path.to_owned(), error))
         }
         Err(error) => Err(Error::hash_file(path.to_owned(), error)),
     }
@@ -149,6 +151,30 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
     cached_attrs: Option<&crate::crlf::GitAttrs>,
     symlinks_only: bool,
 ) -> Result<GitHashes, Error> {
+    get_package_file_hashes_with_literals(
+        turbo_root,
+        package_path,
+        inputs,
+        include_default_files,
+        git_root,
+        cached_attrs,
+        symlinks_only,
+        &[],
+    )
+}
+
+// Preserve the existing hashing options while keeping inventory paths separate.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn get_package_file_hashes_with_literals<S: AsRef<str>>(
+    turbo_root: &AbsoluteSystemPath,
+    package_path: &AnchoredSystemPath,
+    inputs: &[S],
+    include_default_files: bool,
+    git_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+    symlinks_only: bool,
+    literal_inputs: &[turbopath::AbsoluteSystemPathBuf],
+) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);
     let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
@@ -179,7 +205,6 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
         }
     }
     let has_local_inputs = !local_inclusions.is_empty() || !local_exclusions.is_empty();
-    let has_local_inclusions = !local_inclusions.is_empty();
 
     for inclusion in &local_inclusions {
         external_inclusions
@@ -191,18 +216,19 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
                 .into_glob(),
         );
     }
-    let has_inclusions = !external_inclusions.is_empty();
+    let has_inclusions = !external_inclusions.is_empty() || !literal_inputs.is_empty();
     if has_inclusions {
         for name in ["package.json", "turbo.json", "turbo.jsonc"] {
             external_inclusions
                 .push(PackageInput::resolve(package_unix_path.as_str(), name)?.into_glob());
         }
-        let files = globwalk::globwalk_with_settings(
+        let files = globwalk::globwalk_with_literal_inputs(
             turbo_root,
             &external_inclusions,
             &external_exclusions,
-            globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links(),
+            literal_inputs,
+            globwalk::WalkType::All,
+            globwalk::Settings::default().follow_links_after_filtering(),
         )?;
         for file_path in &files {
             if symlinks_only && !crate::hash_object::has_symlink(turbo_root, file_path) {
@@ -223,61 +249,42 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
         }
     }
 
-    let mut walker_builder = WalkBuilder::new(&full_package_path);
-    let mut excludes = Vec::new();
-    for exclusion in &local_exclusions {
-        excludes.push(to_glob(exclusion)?);
-    }
-    let exclude_pattern = if excludes.is_empty() {
+    let exclude_pattern = if external_exclusions.is_empty() {
         None
     } else {
-        Some(any(excludes)?)
+        let mut patterns = Vec::new();
+        for glob in &external_exclusions {
+            let pattern = glob.as_ref().trim_end_matches('/');
+            patterns.push(to_glob(pattern)?);
+            // A directory-tree exclusion also excludes the directory node.
+            if let Some(prefix) = pattern.strip_suffix("/**") {
+                patterns.push(to_glob(prefix)?);
+            }
+        }
+        Some(any(patterns)?)
     };
 
-    if !has_local_inclusions {
-        let git_metadata_path = git_metadata_path.clone();
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
-    }
+    let walker = (!has_inclusions && !include_default_files)
+        .then(|| {
+            walk_defaults(
+                turbo_root,
+                &full_package_path,
+                &git_metadata_path,
+                exclude_pattern.clone(),
+                !has_local_inputs && external_inclusions.is_empty(),
+            )
+        })
+        .transpose()?;
 
-    let walker = (!has_inclusions).then(|| {
-        walker_builder
-            .follow_links(true)
-            // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
-            // regular behavior
-            .git_ignore(!has_local_inputs && external_inclusions.is_empty())
-            .require_git(false)
-            .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
-            .build()
-    });
-
-    for dirent in walker.into_iter().flatten() {
-        let dirent = dirent?;
-        let metadata = match dirent.metadata() {
-            Ok(metadata) => metadata,
-            Err(error)
-                if error
-                    .io_error()
-                    .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
-            {
-                info!(path = %dirent.path().display(), "discovered hash candidate disappeared");
-                continue;
-            }
-            Err(error) => return Err(error.into()),
-        };
-        // Skip anything that isn't a regular file (directories, symlinks,
-        // sockets, FIFOs, device nodes). This must be here rather than as a
-        // walker filter because the root directory is always yielded.
-        if !metadata.is_file() {
-            continue;
-        }
-
-        let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
+    for path in walker.into_iter().flatten() {
+        let path = path?;
+        let path: &AbsoluteSystemPath = &path;
         let relative_path = full_package_path.anchor(path)?;
         let relative_path = relative_path.to_unix();
 
         // if we have excludes, and this path matches one of them, skip it
         if let Some(exclude_pattern) = exclude_pattern.as_ref()
-            && exclude_pattern.is_match(relative_path.as_str())
+            && exclude_pattern.is_match(turbo_root.anchor(path)?.to_unix().as_str())
         {
             continue;
         }
@@ -291,44 +298,25 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
         }
     }
 
-    // If we're including default files, we need to walk again, but this time with
-    // git_ignore enabled
+    // Supplement explicit inputs with defaults. With only exclusions this is
+    // the sole walk, so ignored files cannot leak in through an unfiltered pass.
     if include_default_files {
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
-        let walker = walker_builder
-            .follow_links(true)
-            .git_ignore(true)
-            .require_git(false)
-            .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
-            .build();
+        let walker = walk_defaults(
+            turbo_root,
+            &full_package_path,
+            &git_metadata_path,
+            exclude_pattern.clone(),
+            true,
+        )?;
 
-        for dirent in walker {
-            let dirent = dirent?;
-            let metadata = match dirent.metadata() {
-                Ok(metadata) => metadata,
-                Err(error)
-                    if error
-                        .io_error()
-                        .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
-                {
-                    info!(path = %dirent.path().display(), "discovered hash candidate disappeared");
-                    continue;
-                }
-                Err(error) => return Err(error.into()),
-            };
-            // Skip anything that isn't a regular file. Must be here rather
-            // than as a walker filter because the root directory is always
-            // yielded.
-            if !metadata.is_file() {
-                continue;
-            }
-
-            let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
+        for path in walker {
+            let path = path?;
+            let path: &AbsoluteSystemPath = &path;
             let relative_path = full_package_path.anchor(path)?;
             let relative_path = relative_path.to_unix();
 
             if let Some(exclude_pattern) = exclude_pattern.as_ref()
-                && exclude_pattern.is_match(relative_path.as_str())
+                && exclude_pattern.is_match(turbo_root.anchor(path)?.to_unix().as_str())
             {
                 // Track excluded paths — no need to hash since we only use the
                 // path for filtering.
@@ -361,6 +349,118 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
     Ok(hashes)
 }
 
+/// Apply authored exclusions and ignore rules before following directory links.
+/// The incremental matcher keeps ignore's context at the original package root,
+/// including ignore files reached through links, without a second tree walk.
+fn walk_defaults(
+    turbo_root: &AbsoluteSystemPath,
+    package: &AbsoluteSystemPath,
+    git_metadata: &AbsoluteSystemPath,
+    excludes: Option<wax::Any<'static>>,
+    git_ignore: bool,
+) -> Result<impl Iterator<Item = Result<turbopath::AbsoluteSystemPathBuf, Error>>, Error> {
+    use wax::walk::{Entry, EntryResidue, walk_tree_with_filtered_links};
+
+    let mut ignores = WalkBuilder::new(package)
+        .follow_links(true)
+        .git_ignore(git_ignore)
+        .require_git(false)
+        .hidden(false)
+        .build_matchers()
+        .pop()
+        .ok_or_else(|| std::io::Error::other("missing default-input ignore matcher"))?;
+    let mut errors = Vec::<Error>::new();
+    let entries = walk_tree_with_filtered_links(package.as_std_path(), |entry| {
+        let path = entry.path();
+        if path == git_metadata.as_std_path()
+            || excludes
+                .as_ref()
+                .is_some_and(|exclude| path_is_excluded(turbo_root, path, exclude))
+        {
+            return Some(EntryResidue::Tree);
+        }
+        let Ok(relative) = path.strip_prefix(package.as_std_path()) else {
+            errors.push(std::io::Error::other("default input outside package walk root").into());
+            return Some(EntryResidue::Tree);
+        };
+        let is_dir =
+            entry.file_type().is_dir() || (entry.file_type().is_symlink() && path.is_dir());
+        let (matched, error) = ignores.matched_with_errors(relative, is_dir);
+        if let Some(error) = error.and_then(|error| parent_ignore_error(error, package)) {
+            errors.push(error.into());
+        }
+        matched.is_ignore().then_some(EntryResidue::Tree)
+    });
+    Ok(errors
+        .into_iter()
+        .map(Err)
+        .chain(entries.into_iter().filter_map(|entry| match entry {
+            Ok(entry) if entry.file_type().is_file() || entry.file_type().is_symlink() => Some(
+                turbopath::AbsoluteSystemPathBuf::try_from(entry.into_path()).map_err(Error::from),
+            ),
+            Ok(_) => None,
+            Err(error) => Some(Err(globwalk::WalkError::IO(error.into()).into())),
+        })))
+}
+
+// The link-free Git fast path still reports parent ignore-loading errors,
+// without enumerating the package a second time.
+pub(crate) fn validate_default_ignore_parents(package: &AbsoluteSystemPath) -> Result<(), Error> {
+    let mut ignores = WalkBuilder::new(package)
+        .follow_links(true)
+        .require_git(false)
+        .hidden(false)
+        .build_matchers()
+        .pop()
+        .ok_or_else(|| std::io::Error::other("missing default-input ignore matcher"))?;
+    let (_, error) =
+        ignores.matched_with_errors(std::path::Path::new(".turbo-ignore-validation"), false);
+    if let Some(error) = error.and_then(|error| parent_ignore_error(error, package)) {
+        return Err(error.into());
+    }
+    Ok(())
+}
+
+// Walk reports parent rule-loading errors, but puts errors from in-tree ignore
+// files on DirEntry::error(), which this caller does not treat as fatal. Keep
+// that policy when using the incremental matcher. Traversal errors never pass
+// through this function.
+fn parent_ignore_error(
+    error: ignore::Error,
+    package: &AbsoluteSystemPath,
+) -> Option<ignore::Error> {
+    match error {
+        ignore::Error::WithPath { ref path, .. } if path.starts_with(package.as_std_path()) => None,
+        ignore::Error::Partial(errors) => {
+            let errors: Vec<_> = errors
+                .into_iter()
+                .filter_map(|error| parent_ignore_error(error, package))
+                .collect();
+            (!errors.is_empty()).then_some(ignore::Error::Partial(errors))
+        }
+        error => Some(error),
+    }
+}
+
+fn path_is_excluded(
+    root: &AbsoluteSystemPath,
+    path: &std::path::Path,
+    excludes: &wax::Any<'_>,
+) -> bool {
+    for ancestor in path.ancestors() {
+        let Ok(path) = AbsoluteSystemPath::from_std_path(ancestor) else {
+            return false;
+        };
+        let Ok(relative) = root.anchor(path) else {
+            break;
+        };
+        if excludes.is_match(relative.to_unix().as_str()) {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use std::assert_matches;
@@ -371,6 +471,88 @@ mod tests {
     };
 
     use super::*;
+
+    #[test]
+    fn default_walk_preserves_ignore_error_policy() {
+        let (_tmp, root) = tmp_dir();
+        root.join_component(".ignore")
+            .create_with_contents("[z-a]\n")
+            .unwrap();
+        let package = root.join_component("package");
+        package.create_dir_all().unwrap();
+        package
+            .join_component("file.txt")
+            .create_with_contents("data")
+            .unwrap();
+        assert!(
+            WalkBuilder::new(&package)
+                .require_git(false)
+                .build()
+                .any(|entry| entry.is_err())
+        );
+        assert!(
+            walk_defaults(&root, &package, &root.join_component(".git"), None, true)
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .is_err()
+        );
+        std::fs::remove_file(root.join_component(".ignore")).unwrap();
+        package
+            .join_component(".ignore")
+            .create_with_contents("[z-a]\n")
+            .unwrap();
+        assert!(
+            WalkBuilder::new(&package)
+                .require_git(false)
+                .build()
+                .all(|entry| entry.is_ok())
+        );
+        assert!(
+            walk_defaults(&root, &package, &root.join_component(".git"), None, true)
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .is_ok()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn default_exclusions_are_applied_before_following_links() {
+        let (_tmp, root) = tmp_dir();
+        let src = root.join_component("src");
+        src.create_dir_all().unwrap();
+        src.join_component("a.txt")
+            .create_with_contents("safe")
+            .unwrap();
+        let cycle = src.join_component("ignored-cycle");
+        std::os::unix::fs::symlink(".", &cycle).unwrap();
+        assert!(std::fs::symlink_metadata(&cycle).unwrap().is_symlink());
+        // The previous traversal checks for loops before invoking its predicate.
+        assert!(
+            WalkBuilder::new(&root)
+                .follow_links(true)
+                .filter_entry(move |entry| entry.path() != cycle.as_std_path())
+                .build()
+                .any(|entry| entry.is_err())
+        );
+        let excludes = any([to_glob("src/ignored-cycle").unwrap()]).unwrap();
+        let files = walk_defaults(
+            &root,
+            &root,
+            &root.join_component(".git"),
+            Some(excludes),
+            true,
+        )
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+        assert_eq!(files, [src.join_component("a.txt")]);
+        assert!(
+            walk_defaults(&root, &root, &root.join_component(".git"), None, true)
+                .unwrap()
+                .any(|entry| entry.is_err())
+        );
+    }
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -548,7 +730,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn test_external_recursive_input_skips_directory_symlink() {
+    fn test_external_recursive_input_tracks_directory_symlink() {
         let (_tmp, turbo_root) = tmp_dir();
         let pkg_path = AnchoredSystemPathBuf::from_raw("packages/app").unwrap();
         let pkg_dir = turbo_root.resolve(&pkg_path);
@@ -581,7 +763,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!hashes.contains_key(&RelativeUnixPathBuf::new("../../node_modules/dep").unwrap()));
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("../../node_modules/dep").unwrap()));
         assert!(hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()));
     }
 

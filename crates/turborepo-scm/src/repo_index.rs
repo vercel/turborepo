@@ -43,6 +43,7 @@ pub struct RepoGitIndex {
     /// `git write-tree` would produce. `None` after `git add` or when the
     /// extension is missing.
     cache_tree_root: Option<String>,
+    link_scan: Option<LinkScan>,
 }
 
 impl RepoGitIndex {
@@ -60,6 +61,7 @@ impl RepoGitIndex {
             diff_skip_blocked: true,
             eol_sensitive: false,
             cache_tree_root: None,
+            link_scan: None,
         }
     }
 
@@ -315,6 +317,7 @@ impl RepoGitIndex {
             diff_skip_blocked,
             eol_sensitive: eol_sensitive_count > 0,
             cache_tree_root,
+            link_scan: None,
         })
     }
 
@@ -448,6 +451,7 @@ impl RepoGitIndex {
             diff_skip_blocked: true,
             eol_sensitive: false,
             cache_tree_root: None,
+            link_scan: None,
         })
     }
 
@@ -517,6 +521,7 @@ impl RepoGitIndex {
         let before_status_count = self.status_entries.len();
         let untracked =
             find_untracked_files(git, &self.ls_tree_hashes, &self.status_entries, prefixes)?;
+        self.link_scan = untracked.link_scan;
         self.unsupported_paths.extend(untracked.unsupported_paths);
         self.unsupported_paths.sort();
         self.unsupported_paths.dedup();
@@ -544,6 +549,24 @@ impl RepoGitIndex {
         );
 
         Ok(())
+    }
+
+    /// The existing no-follow untracked walk can prove ordinary defaults need
+    /// no link supplement. Paths-only candidate scans cannot provide this
+    /// proof.
+    pub(crate) fn has_link_free_defaults(&self, package: &std::path::Path) -> bool {
+        self.link_scan.as_ref().is_some_and(|scan| {
+            package.strip_prefix(&scan.root).is_ok_and(|relative| {
+                scan.scope
+                    .is_within_selected_prefix_bytes(path_to_git_path_bytes(relative).as_ref())
+                    && scan.directories.contains(package)
+                    && !scan
+                        .links
+                        .iter()
+                        .chain(&scan.unvisited_tracked_parents)
+                        .any(|path| path.starts_with(package) || package.starts_with(path))
+            })
+        })
     }
 
     /// Append untracked file names from the repo index to the dirty-hash
@@ -746,7 +769,24 @@ impl RepoGitIndex {
     }
 }
 
+/// Coverage retained from the existing no-follow walk, never a second scan.
+struct LinkScan {
+    root: std::path::PathBuf,
+    scope: UntrackedScope,
+    directories: std::collections::HashSet<std::path::PathBuf>,
+    links: Vec<std::path::PathBuf>,
+    unvisited_tracked_parents: Vec<std::path::PathBuf>,
+}
+
+#[derive(Default)]
+struct LinkScanState {
+    incomplete: std::sync::atomic::AtomicBool,
+    directories: std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>,
+    links: std::sync::Mutex<Vec<std::path::PathBuf>>,
+}
+
 struct WalkedPaths {
+    link_scan: Option<LinkScan>,
     paths: Vec<RelativeUnixPathBuf>,
     /// Untracked symlinks. Kept separate from `paths` because per-package
     /// hashing intentionally ignores symlinks, while dirty-hash provenance
@@ -758,6 +798,7 @@ struct WalkedPaths {
 impl WalkedPaths {
     fn new() -> Self {
         Self {
+            link_scan: None,
             paths: Vec::new(),
             symlink_paths: Vec::new(),
             unsupported_paths: Vec::new(),
@@ -852,6 +893,7 @@ fn walk_candidate_files_with_unsupported(
         fn drop(&mut self) {
             if !self.batch.is_empty() {
                 let batch = WalkedPaths {
+                    link_scan: None,
                     paths: std::mem::take(&mut self.batch.paths),
                     symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
                     unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
@@ -956,6 +998,18 @@ fn find_untracked_files(
 
     let root = std::sync::Arc::new(git.root.as_std_path().to_path_buf());
     let scope = std::sync::Arc::new(UntrackedScope::new(prefixes));
+    let link_scan = std::sync::Arc::new(LinkScanState::default());
+    // The Git-only scan does not interpret .ignore overrides. Ancestors above
+    // the walk root are not visited; check them once per repository, not once
+    // per file. Unknown/unreadable rules also decline the optimization.
+    if root.ancestors().skip(1).any(|parent| {
+        !matches!(std::fs::symlink_metadata(parent.join(".ignore")),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+    }) {
+        link_scan
+            .incomplete
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
 
     // Pre-build gitignore matchers from all tracked .gitignore files.
     // Each .gitignore is built with a builder rooted at its containing
@@ -1063,6 +1117,7 @@ fn find_untracked_files(
         .follow_links(false)
         .git_ignore(false)
         .git_exclude(false)
+        .git_global(false)
         .require_git(false)
         .ignore(false)
         .parents(false)
@@ -1071,8 +1126,21 @@ fn find_untracked_files(
             let matchers = gitignore_matchers.clone();
             let root = root.clone();
             let scope = scope.clone();
+            let link_scan = link_scan.clone();
             move |entry| {
+                if entry.file_name() == ".ignore" {
+                    link_scan
+                        .incomplete
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 if entry.file_name() == ".git" {
+                    // Nested Git metadata is pruned by this walk. It cannot
+                    // prove coverage for the separate default-input selector.
+                    if entry.path().parent() != Some(root.as_path()) {
+                        link_scan
+                            .incomplete
+                            .store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
                     return false;
                 }
                 let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
@@ -1094,6 +1162,21 @@ fn find_untracked_files(
                 };
                 if !in_scope {
                     return false;
+                }
+
+                // Observe links before ignore filtering: tracked inputs can be
+                // ignored, including a directory replaced with a link.
+                match entry.file_type() {
+                    Some(kind) if kind.is_symlink() => match link_scan.links.lock() {
+                        Ok(mut links) => links.push(path.to_path_buf()),
+                        Err(_) => link_scan
+                            .incomplete
+                            .store(true, std::sync::atomic::Ordering::Relaxed),
+                    },
+                    None => link_scan
+                        .incomplete
+                        .store(true, std::sync::atomic::Ordering::Relaxed),
+                    _ => {}
                 }
 
                 // Only ancestor .gitignore files can affect this entry. Git
@@ -1147,6 +1230,7 @@ fn find_untracked_files(
         fn drop(&mut self) {
             if !self.batch.is_empty() {
                 let batch = WalkedPaths {
+                    link_scan: None,
                     paths: std::mem::take(&mut self.batch.paths),
                     symlink_paths: std::mem::take(&mut self.batch.symlink_paths),
                     unsupported_paths: std::mem::take(&mut self.batch.unsupported_paths),
@@ -1158,6 +1242,7 @@ fn find_untracked_files(
 
     walker.run(|| {
         let root = root.clone();
+        let link_scan = link_scan.clone();
         let mut guard = FlushOnDrop {
             batch: WalkedPaths::new(),
             tx: tx.clone(),
@@ -1166,7 +1251,12 @@ fn find_untracked_files(
         Box::new(move |entry| {
             let entry = match entry {
                 Ok(e) => e,
-                Err(_) => return ignore::WalkState::Continue,
+                Err(_) => {
+                    link_scan
+                        .incomplete
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
+                    return ignore::WalkState::Continue;
+                }
             };
 
             // Regular files feed per-package hashing. Symlinks are trackable
@@ -1174,6 +1264,21 @@ fn find_untracked_files(
             // collected separately so hashing never sees them. Everything
             // else (directories, sockets, FIFOs, device nodes) is skipped.
             let file_type = entry.file_type();
+            if file_type.is_some_and(|kind| kind.is_dir()) {
+                match link_scan.directories.lock() {
+                    Ok(mut directories) => {
+                        directories.insert(entry.path().to_path_buf());
+                    }
+                    Err(_) => link_scan
+                        .incomplete
+                        .store(true, std::sync::atomic::Ordering::Relaxed),
+                }
+            }
+            if file_type.is_none() {
+                link_scan
+                    .incomplete
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             let is_file = file_type.as_ref().is_some_and(|ft| ft.is_file());
             let is_symlink = file_type.is_some_and(|ft| ft.is_symlink());
             if !is_file && !is_symlink {
@@ -1189,6 +1294,9 @@ fn find_untracked_files(
             let path = match parse_path(rel_path, "working tree path") {
                 Ok(Ok(path)) => path,
                 Ok(Err(path)) => {
+                    link_scan
+                        .incomplete
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     guard.batch.unsupported_paths.push(path);
                     return ignore::WalkState::Continue;
                 }
@@ -1264,6 +1372,42 @@ fn find_untracked_files(
         }
     }
 
+    if !link_scan
+        .incomplete
+        .load(std::sync::atomic::Ordering::Relaxed)
+    {
+        let (Ok(mut directories), Ok(mut links)) =
+            (link_scan.directories.lock(), link_scan.links.lock())
+        else {
+            return Ok(untracked);
+        };
+        let directories = std::mem::take(&mut *directories);
+        // A tracked file may be hidden by an ignore rule or reached through a
+        // replaced parent directory. Unvisited tracked parents prevent a proof;
+        // no additional filesystem probing is needed.
+        let tracked_parents: std::collections::HashSet<_> = ls_tree_hashes
+            .iter()
+            .map(|(path, _)| path.as_str())
+            .chain(
+                status_entries
+                    .iter()
+                    .filter(|entry| !entry.is_untracked && !entry.is_delete)
+                    .map(|entry| entry.path.as_str()),
+            )
+            .filter_map(|path| root.join(path).parent().map(std::path::Path::to_path_buf))
+            .collect();
+        let unvisited_tracked_parents = tracked_parents
+            .into_iter()
+            .filter(|parent| !directories.contains(parent))
+            .collect();
+        untracked.link_scan = Some(LinkScan {
+            root: root.as_ref().clone(),
+            scope: scope.as_ref().clone(),
+            directories,
+            links: std::mem::take(&mut *links),
+            unvisited_tracked_parents,
+        });
+    }
     Ok(untracked)
 }
 
@@ -1795,6 +1939,7 @@ mod tests {
             diff_skip_blocked: true,
             eol_sensitive: false,
             cache_tree_root: None,
+            link_scan: None,
         }
     }
 
