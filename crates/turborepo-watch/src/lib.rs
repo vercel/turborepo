@@ -345,6 +345,11 @@ pub enum Error {
     Run(#[from] run::Error),
     #[error("`--since` is not supported in Watch Mode.")]
     SinceNotSupported,
+    #[error(
+        "experimentalFiles is not supported in watch mode; use turbo run to rediscover and hash \
+         file tasks"
+    )]
+    FileTasksNotSupported,
     #[error(transparent)]
     Opts(#[from] OptsError),
     #[error("Invalid filter pattern")]
@@ -566,6 +571,16 @@ impl WatchClient {
         }
 
         let (run, _analytics) = run_builder.build(&handler, telemetry.clone()).await?;
+        for task in run.engine().task_ids() {
+            let root_file_task = run.root_turbo_json().file_task_template(task).is_some();
+            let package_file_task = run
+                .turbo_json_loader()
+                .load(&PackageName::from(task.package()))
+                .is_ok_and(|config| config.file_task_template(task).is_some());
+            if root_file_task || package_file_task {
+                return Err(Error::FileTasksNotSupported);
+            }
+        }
         let shared_pkg_graph = Some(run.pkg_dep_graph_handle());
         let run = Arc::new(run);
 

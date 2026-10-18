@@ -26,6 +26,7 @@ use turborepo_unescape::UnescapedString;
 
 pub mod error;
 mod extend;
+mod file_tasks;
 pub mod future_flags;
 pub mod loader;
 pub mod parser;
@@ -83,6 +84,7 @@ pub struct TurboJson {
     pub global_pass_through_env: Option<Vec<String>>,
     pub tasks: Pipeline,
     pub future_flags: FutureFlags,
+    file_tasks: file_tasks::FileTasks,
 }
 
 impl TryFrom<RawTurboJson> for TurboJson {
@@ -136,6 +138,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
         let tasks = raw_turbo.tasks.clone().unwrap_or_default();
 
         Ok(TurboJson {
+            file_tasks: Default::default(),
             text: raw_turbo.span.text,
             path: raw_turbo.span.path,
             tags: raw_turbo.tags,
@@ -178,6 +181,15 @@ impl TryFrom<RawTurboJson> for TurboJson {
 }
 
 impl TurboJson {
+    /// Includes shared input nodes materialized by a selected file task.
+    pub fn contains_task(&self, name: &TaskName) -> bool {
+        self.tasks.contains_key(name) || self.is_file_source_task(name)
+    }
+
+    /// Source nodes are registered only by successfully traced file tasks.
+    pub fn is_file_source_task(&self, name: &TaskName) -> bool {
+        self.file_tasks.contains_source(name)
+    }
     /// Returns the global deps that should contribute to the global hash and
     /// scope/filter/affected resolution. When `globalConfiguration` is
     /// enabled, this returns an empty slice because global deps are embedded
@@ -223,6 +235,31 @@ impl TurboJson {
         self.path.as_ref()
     }
 
+    /// Return the template owning a generated file task or input node.
+    pub fn file_task_template(&self, task_id: &TaskId) -> Option<&TaskName<'static>> {
+        // Prefer the most specific template when task names themselves contain
+        // '@'. Looking up successive prefixes also avoids scanning every source
+        // node for each task in a large expanded graph.
+        std::iter::successors(Some(task_id.task()), |name| {
+            name.rsplit_once('@').map(|(prefix, _)| prefix)
+        })
+        .find_map(|candidate| {
+            let candidate = TaskId::new(task_id.package(), candidate);
+            [
+                candidate.as_task_name().into_owned(),
+                candidate.as_non_workspace_task_name().into_owned(),
+            ]
+            .into_iter()
+            .find_map(|key| {
+                self.tasks
+                    .get_key_value(&key)
+                    .and_then(|(name, definition)| {
+                        definition.experimental_files.as_ref().map(|_| name)
+                    })
+            })
+        })
+    }
+
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
     ///
@@ -251,6 +288,7 @@ impl TurboJson {
         let mut turbo_json = TurboJson::try_from(raw_turbo_json)?;
         // Override with root's future flags (only root turbo.json can define them)
         turbo_json.future_flags = future_flags;
+        file_tasks::expand(&mut turbo_json, repo_root, path)?;
         Ok(Some(turbo_json))
     }
 
@@ -260,16 +298,12 @@ impl TurboJson {
         task_id: &TaskId,
         task_name: &TaskName,
     ) -> Result<Option<ProcessedTaskDefinition>, Error> {
-        match self.tasks.get(&task_id.as_task_name()) {
-            Some(entry) => {
-                ProcessedTaskDefinition::from_raw(entry.value.clone(), &self.future_flags).map(Some)
-            }
+        match self.file_tasks.task(&task_id.as_task_name(), &self.tasks)? {
+            Some(entry) => ProcessedTaskDefinition::from_raw(entry, &self.future_flags).map(Some),
             None => self
-                .tasks
-                .get(task_name)
-                .map(|entry| {
-                    ProcessedTaskDefinition::from_raw(entry.value.clone(), &self.future_flags)
-                })
+                .file_tasks
+                .task(task_name, &self.tasks)?
+                .map(|entry| ProcessedTaskDefinition::from_raw(entry, &self.future_flags))
                 .transpose(),
         }
     }

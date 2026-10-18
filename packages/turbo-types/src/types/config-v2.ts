@@ -663,7 +663,23 @@ export interface DependencyOutputsInput {
   globs?: Array<string>;
 }
 
+export interface FileTasks {
+  /** Positive discovery globs relative to the configuration directory. */
+  include: Array<string>;
+  exclude?: Array<string>;
+  /** Trace module imports in addition to the explicitly declared inputs. */
+  trace?: boolean;
+  /** Module resolution contract: explicit ESM (default) or Bun. */
+  resolution?: "explicit" | "bun";
+  /** Additional module entrypoints, such as preloads. */
+  traceRoots?: Array<string>;
+  /** Complete conservative inputs used when tracing cannot resolve a graph. */
+  fallbackInputs?: Array<string>;
+}
+
 export interface Pipeline {
+  /** Expand an independent, logs-only command into separately cached file tasks. */
+  experimentalFiles?: FileTasks;
   /**
    * A human-readable description of what this task does.
    *

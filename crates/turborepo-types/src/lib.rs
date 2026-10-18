@@ -1169,7 +1169,20 @@ pub fn sharable_workspace_relative_log_file(
         Err(_) => unreachable!("LOG_DIR is a valid relative unix path"),
     };
     match namespace {
-        None => log_dir.join_component(&task_log_filename(task_name)),
+        None => {
+            let filename = task_log_filename(task_name);
+            if filename.len() > 255 {
+                // File-task identities can contain deeply nested source paths.
+                // Keep the identity intact while bounding each filesystem
+                // component. A separate directory avoids ordinary log names.
+                let digest = Sha256::digest(task_name.as_bytes());
+                log_dir
+                    .join_component("long-task-logs")
+                    .join_component(&format!("{digest:x}.log"))
+            } else {
+                log_dir.join_component(&filename)
+            }
+        }
         Some(namespace) => {
             // Length framing makes the original identity tuple unambiguous.
             // Readable labels are sanitized and bounded; the short digest

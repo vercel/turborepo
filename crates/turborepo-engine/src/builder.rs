@@ -519,7 +519,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             {
                 // In add_all_tasks mode (devtools), allow root tasks that have a definition
                 // in turbo.json even if not explicitly in root_enabled_tasks
-                let should_allow = if self.add_all_tasks {
+                let file_source = turbo_json_loader
+                    .load(&PackageName::Root)?
+                    .is_file_source_task(&task_id.as_task_name());
+                let should_allow = if file_source {
+                    true
+                } else if self.add_all_tasks {
                     let task_name: TaskName<'static> =
                         TaskName::from(task_id.task().to_string()).into_owned();
                     let task_id_owned = task_id.as_inner().clone().into_owned();

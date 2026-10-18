@@ -251,6 +251,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             return Ok(check_task_def(task_def));
         }
 
+        if turbo_json.is_file_source_task(&task_id_as_name)
+            || turbo_json.is_file_source_task(task_name)
+            || (check_base_task && turbo_json.is_file_source_task(&base_task_name))
+        {
+            return Ok(TaskDefinitionResult::found());
+        }
+
         // Check the extends chain for the task definition
         // Track if any package in the chain excluded this task
         for extend in turbo_json.extends.as_inner().iter() {
@@ -337,6 +344,54 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             .as_ref()
             .is_some_and(|context| context.native_tasks().authors(task_id.task()));
 
+        for (index, config) in turbo_json_chain.iter().enumerate() {
+            let Some(template_name) = config.file_task_template(task_id) else {
+                continue;
+            };
+            if turbo_json_chain[..index].iter().any(|parent| {
+                parent.tasks.iter().any(|(name, definition)| {
+                    name.task() == template_name.task()
+                        && name
+                            .package()
+                            .is_none_or(|package| package == task_id.package())
+                        && definition.has_config_beyond_extends()
+                })
+            }) {
+                return Err(BuilderError::TurboJson(
+                    turborepo_turbo_json::Error::FileTask(
+                        "file task templates require a distinct task name without inherited task \
+                         defaults"
+                            .into(),
+                    ),
+                ));
+            }
+            if self.global_deps.iter().any(|input| input.starts_with('!')) {
+                return Err(BuilderError::TurboJson(
+                    turborepo_turbo_json::Error::FileTask(
+                        "global input exclusions could hide mandatory file dependencies".into(),
+                    ),
+                ));
+            }
+            if self.tasks_only {
+                return Err(BuilderError::TurboJson(
+                    turborepo_turbo_json::Error::FileTask(
+                        "--only cannot skip the generated execution and input dependencies of \
+                         file tasks"
+                            .into(),
+                    ),
+                ));
+            }
+            if index > 0 && index + 1 < turbo_json_chain.len() {
+                return Err(BuilderError::TurboJson(
+                    turborepo_turbo_json::Error::FileTask(
+                        "file task templates must be defined in the executing package, not \
+                         inherited from another package"
+                            .into(),
+                    ),
+                ));
+            }
+        }
+
         // Most tasks resolve to an identical definition: the same turbo.json
         // chain and task name, differing only by the package's depth (for
         // `$TURBO_ROOT$`/global-input anchoring) and whether the package's
@@ -347,12 +402,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // consults first, and packages whose toolchain derives per-package
         // hash wiring (e.g. Cargo crate closures differ per crate).
         let memo_key = {
-            let package_scoped = turbo_json_chain.iter().any(|turbo_json| {
-                turbo_json
-                    .tasks
-                    .get(&task_id.as_inner().as_task_name())
-                    .is_some()
-            });
+            let package_scoped = turbo_json_chain
+                .iter()
+                .any(|turbo_json| turbo_json.contains_task(&task_id.as_inner().as_task_name()));
             let memoizable_contract = package_context.as_ref().is_none_or(|context| {
                 !native_contract.as_ref().map_or_else(
                     || {
@@ -380,6 +432,26 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             && let Some(cached) = def_memo.get(key)
         {
             return Ok(cached.clone());
+        }
+
+        if TaskArgs::new(&self.pass_through_args, &self.requested_tasks)
+            .args_for_task(task_id.as_inner())
+            .is_some()
+        {
+            for config in &turbo_json_chain {
+                if let Some(key) = configured_task_key(config, task_id, task_name)
+                    && let Some(definition) = config.tasks.get(&key)
+                    && definition.experimental_files.is_some()
+                {
+                    return Err(BuilderError::AggregatePassThrough {
+                        task_id: task_id.to_string(),
+                        alternatives: format!(
+                            "select an individual {}@<encoded-file> task",
+                            task_id.as_inner()
+                        ),
+                    });
+                }
+            }
         }
 
         let chain_definitions = Self::resolve_task_definitions_from_chain(
@@ -874,7 +946,7 @@ fn configured_task_key(
     let base = TaskName::from(task_name.task());
     [&scoped, task_name, &base]
         .into_iter()
-        .find(|key| turbo_json.tasks.contains_key(*key))
+        .find(|key| turbo_json.contains_task(key))
         .map(|key| key.clone().into_owned())
 }
 

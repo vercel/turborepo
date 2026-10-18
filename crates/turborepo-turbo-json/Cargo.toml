@@ -14,6 +14,7 @@ biome_diagnostics = { workspace = true }
 biome_json_parser = { workspace = true }
 biome_json_syntax = { workspace = true }
 camino = { workspace = true }
+globwalk = { path = "../turborepo-globwalk" }
 miette = { workspace = true, features = ["fancy"] }
 rayon = "1"
 schemars = { workspace = true }
@@ -22,6 +23,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 ts-rs = { workspace = true }
+turbo-trace = { workspace = true }
 turbopath = { workspace = true }
 turborepo-boundaries = { workspace = true }
 turborepo-errors = { workspace = true }
@@ -30,6 +32,7 @@ turborepo-repository = { path = "../turborepo-repository" }
 turborepo-task-id = { workspace = true }
 turborepo-types = { workspace = true }
 turborepo-unescape = { workspace = true }
+unrs_resolver = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]

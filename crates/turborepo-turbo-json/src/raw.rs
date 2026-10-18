@@ -753,6 +753,11 @@ impl Serialize for RawCommand {
 #[ts(export, rename = "Pipeline")]
 #[deserializable(unknown_fields = "deny")]
 pub struct RawTaskDefinition {
+    /// Expand an independent, logs-only command into separately cached file
+    /// tasks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub experimental_files: Option<RawFileTasks>,
     // Internal field - excluded from schema
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
@@ -931,6 +936,54 @@ impl HasConfigBeyondExtends for RawTaskDefinition {
             || self.with.is_some()
             || self.experimental_ci.is_some()
             || self.command.is_some()
+            || self.experimental_files.is_some()
+    }
+}
+
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Deserializable, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[schemars(rename = "FileTasks", rename_all = "camelCase")]
+#[ts(export, rename = "FileTasks")]
+#[deserializable(unknown_fields = "deny")]
+pub struct RawFileTasks {
+    /// Positive globs relative to this configuration's directory.
+    pub include: Vec<Spanned<UnescapedString>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub exclude: Option<Vec<Spanned<UnescapedString>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub trace: Option<bool>,
+    /// Module resolution contract: explicit ESM (default) or Bun.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional, as = "Option<FileTaskResolution>")]
+    pub resolution: Option<Spanned<FileTaskResolution>>,
+    /// Additional module entrypoints, such as preloads, relative to this
+    /// package.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub trace_roots: Option<Vec<Spanned<UnescapedString>>>,
+    /// Complete conservative inputs used when a module graph cannot be traced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub fallback_inputs: Option<Vec<Spanned<UnescapedString>>>,
+}
+
+#[derive(Serialize, Debug, PartialEq, Clone, Copy, Deserializable, JsonSchema, TS)]
+#[ts(export)]
+pub enum FileTaskResolution {
+    #[serde(rename = "explicit")]
+    Explicit,
+    #[serde(rename = "bun")]
+    Bun,
+}
+
+impl FileTaskResolution {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Explicit => "explicit",
+            Self::Bun => "bun",
+        }
     }
 }
 

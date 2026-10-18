@@ -75,6 +75,8 @@ pub struct UnnecessaryPackageTaskSyntaxError {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    #[error("Invalid experimental file task: {0}")]
+    FileTask(String),
     // ============================================================
     // File existence and location errors
     // ============================================================

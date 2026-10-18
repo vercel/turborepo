@@ -6,7 +6,9 @@
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
 mod import_finder;
+mod runtime_imports;
 mod tracer;
 
 pub use import_finder::{ImportResult, ImportType, find_imports};
+pub use runtime_imports::{RuntimeImports, parse_explicit_imports, parse_runtime_imports};
 pub use tracer::{ImportTraceType, TraceError, TraceResult, Tracer, parse_file};

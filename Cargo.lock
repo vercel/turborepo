@@ -4146,6 +4146,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxc_ast_visit"
+version = "0.115.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e33ffb874949ea07fce9b686c2dba7e221c849e047232c04a84b13bae4496ef"
+dependencies = [
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_span",
+ "oxc_syntax",
+]
+
+[[package]]
 name = "oxc_data_structures"
 version = "0.115.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7153,6 +7165,7 @@ dependencies = [
  "miette",
  "oxc_allocator",
  "oxc_ast",
+ "oxc_ast_visit",
  "oxc_estree",
  "oxc_parser",
  "oxc_span",
@@ -8645,6 +8658,7 @@ dependencies = [
  "biome_json_parser",
  "biome_json_syntax",
  "camino",
+ "globwalk",
  "insta",
  "miette",
  "pretty_assertions",
@@ -8657,6 +8671,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "ts-rs",
+ "turbo-trace",
  "turbopath",
  "turborepo-boundaries",
  "turborepo-errors",
@@ -8665,6 +8680,7 @@ dependencies = [
  "turborepo-task-id",
  "turborepo-types",
  "turborepo-unescape",
+ "unrs_resolver",
  "url",
 ]
 

@@ -1,0 +1,15 @@
+{
+	"agentGuidance": false,
+	"futureFlags": { "experimentalTaskCommand": true },
+	"tasks": {
+		"//#test": {
+			"experimentalFiles": {
+				"include": ["packages/*/src/*.test.ts"],
+				"trace": true
+			},
+			"command": ["bun", "test", "$TURBO_FILE$"],
+			"inputs": [],
+			"outputs": []
+		}
+	}
+}
