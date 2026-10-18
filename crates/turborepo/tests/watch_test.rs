@@ -941,24 +941,18 @@ fn watch_edit_during_build_triggers_rebuild() {
     );
 }
 
-/// Rapid successive edits to the same file should be coalesced by the
-/// debouncer, producing fewer rebuilds than edits.
 #[test]
 fn watch_rapid_edits_produce_single_rebuild() {
-    let (_tempdir, test_dir) = setup_watch_test();
+    let (_tempdir, test_dir) = setup_slow_build_test();
     let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
 
-    // Wait for initial build and settle
     wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
     wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
-    std::thread::sleep(Duration::from_secs(3));
+    std::thread::sleep(Duration::from_secs(4));
 
     let a_before = marker_count(&test_dir, "a");
 
-    // Fire 10 rapid edits without staging or committing each one. The watcher
-    // only needs file-system events here, and per-edit git commits can take
-    // longer than the debounce window under parallel CI load.
-    let num_edits = 10;
+    let num_edits = 5;
     let src_file = test_dir.join("packages/a/src.js");
     for i in 0..num_edits {
         fs::write(
@@ -966,9 +960,9 @@ fn watch_rapid_edits_produce_single_rebuild() {
             format!("module.exports = {{ a: 'rapid-{i}' }};\n"),
         )
         .unwrap();
+        std::thread::sleep(Duration::from_millis(100));
     }
 
-    // Wait for at least one rebuild, then let the system fully settle.
     wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30));
     std::thread::sleep(Duration::from_secs(5));
 
@@ -977,9 +971,9 @@ fn watch_rapid_edits_produce_single_rebuild() {
     drop(guard);
 
     let rebuilds = a_after - a_before;
-    assert!(
-        rebuilds < num_edits,
-        "debouncer should coalesce {num_edits} rapid edits into fewer rebuilds, but got {rebuilds}"
+    assert_eq!(
+        rebuilds, 1,
+        "{num_edits} rapid edits should produce exactly one rebuild, but got {rebuilds}"
     );
 }
 
