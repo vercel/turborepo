@@ -8,6 +8,36 @@ use crate::{
     hash_object::{hash_discovered_objects, hash_objects},
 };
 
+#[derive(Clone, Copy)]
+pub(crate) enum InputSelection {
+    Package { include_default_files: bool },
+    Exact,
+}
+
+pub(crate) fn exact_input_exclusions<S: AsRef<str>>(
+    package_path: &str,
+    inputs: &[S],
+) -> Result<Vec<wax::Glob<'static>>, Error> {
+    let mut exclusions = Vec::new();
+    for input in inputs
+        .iter()
+        .filter(|input| input.as_ref().starts_with('!'))
+    {
+        let input = PackageInput::resolve(package_path, input.as_ref())?;
+        exclusions.push(wax::Glob::new(input.as_str())?.into_owned());
+        let path = input.as_str().trim_end_matches('/');
+        if path != "**" && !path.ends_with("/**") {
+            let descendants = if path.is_empty() {
+                "**".to_owned()
+            } else {
+                format!("{path}/**")
+            };
+            exclusions.push(wax::Glob::new(&descendants)?.into_owned());
+        }
+    }
+    Ok(exclusions)
+}
+
 impl SCM {
     pub fn get_hashes_for_files(
         &self,
@@ -32,28 +62,79 @@ impl SCM {
         telemetry: Option<PackageTaskEventBuilder>,
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
+        self.get_input_file_hashes(
+            turbo_root,
+            package_path,
+            inputs,
+            InputSelection::Package {
+                include_default_files,
+            },
+            telemetry,
+            repo_index,
+        )
+    }
+
+    /// Hash only the selected inputs, without package defaults or mandatory
+    /// config files.
+    pub fn get_explicit_input_file_hashes<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        repo_index: Option<&RepoGitIndex>,
+    ) -> Result<GitHashes, Error> {
+        self.get_input_file_hashes(
+            turbo_root,
+            package_path,
+            inputs,
+            InputSelection::Exact,
+            None,
+            repo_index,
+        )
+    }
+
+    fn get_input_file_hashes<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        selection: InputSelection,
+        telemetry: Option<PackageTaskEventBuilder>,
+        repo_index: Option<&RepoGitIndex>,
+    ) -> Result<GitHashes, Error> {
         match self {
             SCM::Manual => {
                 if let Some(telemetry) = telemetry {
                     telemetry.track_file_hash_method(FileHashMethod::Manual);
                 }
-                crate::manual::get_package_file_hashes_without_git(
+                crate::manual::get_input_file_hashes_without_git(
                     turbo_root,
                     package_path,
                     inputs,
-                    include_default_files,
+                    selection,
                     None,
                     None,
                 )
             }
             SCM::Git(git) => {
-                let result = git.get_package_file_hashes(
-                    turbo_root,
-                    package_path,
-                    inputs,
-                    include_default_files,
-                    repo_index,
-                );
+                let result = match selection {
+                    InputSelection::Package {
+                        include_default_files,
+                    } => git.get_package_file_hashes(
+                        turbo_root,
+                        package_path,
+                        inputs,
+                        include_default_files,
+                        repo_index,
+                    ),
+                    InputSelection::Exact => git.get_package_file_hashes_from_inputs(
+                        turbo_root,
+                        package_path,
+                        inputs,
+                        false,
+                        repo_index,
+                    ),
+                };
                 match result {
                     Ok(hashes) => {
                         if let Some(telemetry) = telemetry {
@@ -84,11 +165,11 @@ impl SCM {
                         if let Some(telemetry) = telemetry {
                             telemetry.track_file_hash_method(FileHashMethod::Manual);
                         }
-                        crate::manual::get_package_file_hashes_without_git(
+                        crate::manual::get_input_file_hashes_without_git(
                             turbo_root,
                             package_path,
                             inputs,
-                            include_default_files,
+                            selection,
                             Some(&git.root),
                             git.git_attrs(),
                         )
@@ -364,8 +445,23 @@ impl GitRepo {
             &exclusions,
             globwalk::WalkType::Files,
         )?;
+        let exact_exclusions = if include_configs {
+            Vec::new()
+        } else {
+            exact_input_exclusions(package_unix_path, inputs)?
+        };
         let mut candidate_paths = Vec::with_capacity(files.len());
         for entry in &files {
+            if !exact_exclusions.is_empty() {
+                let repo_relative =
+                    AnchoredSystemPathBuf::relative_path_between(turbo_root, entry).to_unix();
+                if exact_exclusions
+                    .iter()
+                    .any(|glob| wax::Program::is_match(glob, repo_relative.as_str()))
+                {
+                    continue;
+                }
+            }
             candidate_paths.push(self.root.anchor(entry)?.to_unix());
         }
         let mut hashes = GitHashes::with_capacity(files.len());
@@ -583,6 +679,73 @@ mod tests {
         let cmds: &[&[&str]] = &[&["add", "."], &["commit", "-m", "foo"]];
         for cmd in cmds {
             require_git_cmd(repo_root, cmd);
+        }
+    }
+
+    #[test]
+    fn exact_inputs_do_not_inject_configs_or_defaults() {
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        for path in [
+            "pkg/package.json",
+            "pkg/turbo.json",
+            "pkg/turbo.jsonc",
+            "pkg/source.rs",
+            "pkg/node_modules/data/schema.json",
+            "pkg/node_modules/data/nested/other.json",
+            "pkg/node_modules/data/skip.json",
+            "pkg/node_modules/database/junk.json",
+            "shared/schema.json",
+        ] {
+            let file = root.join_unix_path(turbopath::RelativeUnixPath::new(path).unwrap());
+            file.ensure_dir().unwrap();
+            file.create_with_contents("{}\n").unwrap();
+        }
+        root.join_component(".gitignore")
+            .create_with_contents("node_modules/\n")
+            .unwrap();
+        commit_all(&root);
+        let package = AnchoredSystemPathBuf::from_raw("pkg").unwrap();
+        let git = SCM::new(&root);
+        assert!(!git.is_manual());
+        for scm in [git, SCM::Manual] {
+            for (patterns, expected) in [
+                (vec![], vec![]),
+                (vec!["!source.rs"], vec![]),
+                (
+                    vec!["node_modules/data/schema.json"],
+                    vec!["node_modules/data/schema.json"],
+                ),
+                (
+                    vec!["node_modules/data", "!**/skip.json"],
+                    vec![
+                        "node_modules/data/schema.json",
+                        "node_modules/data/nested/other.json",
+                    ],
+                ),
+                (
+                    vec![
+                        "node_modules/**/*.json",
+                        "!node_modules/database/**",
+                        "!**/skip.json",
+                        "!**/nested",
+                    ],
+                    vec!["node_modules/data/schema.json"],
+                ),
+                (vec!["../shared"], vec!["../shared/schema.json"]),
+                (vec!["../shared/*.json", "!../shared/schema.json"], vec![]),
+                (vec!["package.json", "!package.json"], vec![]),
+                (vec!["turbo.jsonc"], vec!["turbo.jsonc"]),
+            ] {
+                let hashes = scm
+                    .get_explicit_input_file_hashes(&root, &package, &patterns, None)
+                    .unwrap();
+                let mut actual: Vec<_> = hashes.keys().map(|path| path.as_str()).collect();
+                let mut expected = expected;
+                actual.sort();
+                expected.sort();
+                assert_eq!(actual, expected, "scm={scm:?}, inputs={patterns:?}");
+            }
         }
     }
 

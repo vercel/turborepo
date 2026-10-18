@@ -36,6 +36,7 @@ pub enum AffectednessError {
 /// inputs, matching turbo's default hashing behavior.
 static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
     globs: Vec::new(),
+    derived_globs: Vec::new(),
     default: true,
     jit_globs: Vec::new(),
     jit_default: false,

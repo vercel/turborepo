@@ -2709,9 +2709,8 @@ fn selectors_require_complete_graph(selectors: &[TargetSelector]) -> bool {
 /// the same rule as eager globs.
 fn task_inputs_are_package_local(inputs: &TaskInputs) -> bool {
     inputs
-        .globs
-        .iter()
-        .chain(inputs.jit_globs.iter())
+        .all_globs()
+        .chain(inputs.jit_globs.iter().map(String::as_str))
         .filter(|glob| !glob.starts_with('!'))
         .all(|glob| !glob_escapes_package(glob))
 }
@@ -2959,6 +2958,15 @@ mod untracked_scoping_tests {
             "src/../../shared/**"
         ])));
         assert!(!task_inputs_are_package_local(&inputs(&["src/.."])));
+    }
+
+    #[test]
+    fn derived_globs_obey_the_same_locality_rule() {
+        let mut task = inputs(&["src/**"]);
+        task.derived_globs = vec!["../lib/**".into(), "!../lib/node_modules/**".into()];
+        assert!(!task_inputs_are_package_local(&task));
+        task.derived_globs = vec!["src/**".into(), "!../lib/node_modules/**".into()];
+        assert!(task_inputs_are_package_local(&task));
     }
 
     #[test]
