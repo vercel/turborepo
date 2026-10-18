@@ -1186,6 +1186,85 @@ fn test_dependency_crate_node_modules_does_not_change_entrypoint_hash() {
     );
 }
 
+#[test]
+fn test_cargo_explicit_node_modules_inputs_respect_exclusions_and_defaults() {
+    for input in [
+        "node_modules/pkg/index.js",
+        "node_modules/pkg/*.js",
+        "node_modules/pkg",
+    ] {
+        for excluded in [false, true] {
+            let tempdir = cargo_tempdir();
+            setup_cargo_monorepo(tempdir.path());
+            let turbo_json = tempdir.path().join("turbo.json");
+            let mut config: serde_json::Value =
+                serde_json::from_slice(&fs::read(&turbo_json).unwrap()).unwrap();
+            let mut inputs = vec![
+                "$TURBO_DEFAULT$".to_string(),
+                format!("$TURBO_ROOT$/crates/lib-a/{input}"),
+            ];
+            if excluded {
+                inputs.push("!$TURBO_ROOT$/crates/lib-a/node_modules/pkg/index.js".to_string());
+            }
+            config["tasks"]["app#build"] = serde_json::json!({
+                "dependsOn": [],
+                "inputs": inputs
+            });
+            fs::write(turbo_json, serde_json::to_vec_pretty(&config).unwrap()).unwrap();
+
+            let app = tempdir.path().join("crates/app");
+            let dependency = tempdir.path().join("crates/lib-a");
+            let named = dependency.join("node_modules/pkg/index.js");
+            let sibling = dependency.join("node_modules/other/index.js");
+            for file in [&named, &sibling] {
+                fs::create_dir_all(file.parent().unwrap()).unwrap();
+                fs::write(file, "module.exports = 1;\n").unwrap();
+            }
+            let app_build_hash = || {
+                let output =
+                    run_turbo(tempdir.path(), &["build", "--filter=app", "--dry-run=json"]);
+                assert_command_success(&output, "app build dry run");
+                let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+                let task = json["tasks"]
+                    .as_array()
+                    .and_then(|tasks| tasks.iter().find(|task| task["taskId"] == "app#build"))
+                    .expect("app#build task");
+                assert_eq!(task["dependencies"], serde_json::json!([]));
+                task["hash"].as_str().unwrap().to_string()
+            };
+            let baseline = app_build_hash();
+
+            fs::write(&named, "module.exports = 2;\n").unwrap();
+            let after_named = app_build_hash();
+            if excluded {
+                assert_eq!(
+                    after_named, baseline,
+                    "an explicit exclusion must override {input} and default inputs"
+                );
+            } else {
+                assert_ne!(
+                    after_named, baseline,
+                    "explicit input {input} must hash the named node_modules file"
+                );
+            }
+
+            fs::write(&sibling, "module.exports = 2;\n").unwrap();
+            let after_sibling = app_build_hash();
+            assert_eq!(
+                after_sibling, after_named,
+                "an ignored sibling must not affect {input}, excluded={excluded}"
+            );
+
+            fs::write(app.join("src/main.rs"), "fn main() {}\n").unwrap();
+            assert_ne!(
+                app_build_hash(),
+                after_sibling,
+                "default source inputs must still be hashed for {input}, excluded={excluded}"
+            );
+        }
+    }
+}
+
 /// Prune produces a self-contained Cargo workspace: kept crate dirs, a
 /// lockfile subset, and a rewritten root manifest — proven by building the
 /// pruned output with `cargo build --locked`.
