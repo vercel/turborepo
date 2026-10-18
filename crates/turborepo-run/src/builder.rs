@@ -994,6 +994,11 @@ impl RunBuilder {
                 .opts
                 .future_flags
                 .github_actions_remote_base_ref_fallback;
+            let file_hash_mode = if self.opts.future_flags.hash_file_permissions {
+                turborepo_scm::FileHashMode::ExecutableBit
+            } else {
+                turborepo_scm::FileHashMode::ContentOnly
+            };
             let skip_repo_index = self.skip_repo_index_and_scm_state;
             let prefetch_summary_scm_state = self.opts.run_opts.dry_run.is_some();
             tokio::task::spawn_blocking(move || {
@@ -1001,6 +1006,7 @@ impl RunBuilder {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
                     None => SCM::new(&repo_root),
                 }
+                .with_file_hash_mode(file_hash_mode)
                 .with_github_actions_remote_base_ref_fallback(
                     github_actions_remote_base_ref_fallback,
                 );
@@ -1210,7 +1216,16 @@ impl RunBuilder {
                     // panicked; that panic surfaces when the repo-index task
                     // is joined below. Detect inline so the run reaches that
                     // point.
-                    (SCM::new(&self.repo_root), None)
+                    (
+                        SCM::new(&self.repo_root).with_file_hash_mode(
+                            if self.opts.future_flags.hash_file_permissions {
+                                turborepo_scm::FileHashMode::ExecutableBit
+                            } else {
+                                turborepo_scm::FileHashMode::ContentOnly
+                            },
+                        ),
+                        None,
+                    )
                 }
             }
         };
@@ -3207,7 +3222,7 @@ mod origins_match_tests {
             repo_root: repo_root.to_owned(),
             color_config: ColorConfig::new(true),
             version: "test",
-            scm: SCM::Manual,
+            scm: SCM::Manual(turborepo_scm::FileHashMode::ContentOnly),
             pkg_dep_graph,
             turbo_json_loader: UnifiedTurboJsonLoader::noop(HashMap::from([(
                 PackageName::Root,

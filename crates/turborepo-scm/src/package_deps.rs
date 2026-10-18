@@ -32,8 +32,8 @@ impl SCM {
         telemetry: Option<PackageTaskEventBuilder>,
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        match self {
-            SCM::Manual => {
+        let hashes = match self {
+            SCM::Manual(_) => {
                 if let Some(telemetry) = telemetry {
                     telemetry.track_file_hash_method(FileHashMethod::Manual);
                 }
@@ -95,7 +95,9 @@ impl SCM {
                     }
                 }
             }
-        }
+        }?;
+        self.file_hash_mode()
+            .apply(&turbo_root.resolve(package_path), hashes, true)
     }
 
     pub fn hash_files(
@@ -103,10 +105,11 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
-        match self {
-            SCM::Manual => crate::manual::hash_files(turbo_root, files, false, None, None),
+        let hashes = match self {
+            SCM::Manual(_) => crate::manual::hash_files(turbo_root, files, false, None, None),
             SCM::Git(git) => git.hash_files(turbo_root, files),
-        }
+        }?;
+        self.file_hash_mode().apply(turbo_root, hashes, false)
     }
 
     // hash_existing_of takes a list of files to hash and returns the hashes for the
@@ -125,10 +128,11 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
-        match self {
-            SCM::Manual => crate::manual::hash_discovered_files(turbo_root, files, None, None),
+        let hashes = match self {
+            SCM::Manual(_) => crate::manual::hash_discovered_files(turbo_root, files, None, None),
             SCM::Git(git) => git.hash_discovered_files(turbo_root, files),
-        }
+        }?;
+        self.file_hash_mode().apply(turbo_root, hashes, true)
     }
 }
 
@@ -645,7 +649,7 @@ mod tests {
 
         let directory = AnchoredSystemPathBuf::from_raw("directory").unwrap();
         repo_root.resolve(&directory).create_dir_all().unwrap();
-        let hashes = SCM::Manual
+        let hashes = SCM::Manual(crate::FileHashMode::ContentOnly)
             .hash_discovered_files(&repo_root, [missing, directory].iter())
             .unwrap();
         assert!(hashes.is_empty());

@@ -444,6 +444,11 @@
           "default": false,
           "type": "boolean"
         },
+        "hashFilePermissions": {
+          "description": "Include file executable permissions in task hashes. Disabled by default. Enabling this flag changes all task hashes. On Unix, any executable bit marks a regular file as executable. On Windows, files are non-executable. Symlink permissions and other permission bits do not affect hashes.",
+          "default": false,
+          "type": "boolean"
+        },
         "longerSignatureKey": {
           "description": "Enforce a minimum length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force tag collision feasible.",
           "default": false,

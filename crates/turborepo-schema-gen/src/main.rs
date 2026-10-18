@@ -790,6 +790,15 @@ fn generate_root_schema_interface() -> String {
 
 export interface FutureFlags {
   /**
+   * Include file executable permissions in task hashes. Disabled by default.
+   * Enabling this flag changes all task hashes. On Unix, any executable bit
+   * marks a regular file as executable. On Windows, files are non-executable.
+   * Symlink permissions and other permission bits do not affect hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashFilePermissions?: boolean;
+  /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
    * running without showing full output logs.
@@ -1303,6 +1312,21 @@ mod cli_tests {
         );
         assert!(super::generate_root_schema_interface().contains("experimentalSetup?: boolean;"));
         assert!(!super::generate_workspace_schema_interface().contains("futureFlags"));
+    }
+
+    #[test]
+    fn hash_file_permissions_is_an_optional_boolean_future_flag() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let flags = &schema["definitions"]["FutureFlags"];
+        let permissions = &flags["properties"]["hashFilePermissions"];
+        assert_eq!(permissions["type"], "boolean");
+        assert_eq!(permissions["default"], false);
+        assert!(
+            flags["required"]
+                .as_array()
+                .is_none_or(|fields| !fields.contains(&serde_json::json!("hashFilePermissions")))
+        );
+        assert!(super::generate_typescript().contains("hashFilePermissions?: boolean;"));
     }
 
     #[test]
