@@ -35,6 +35,7 @@ pub struct CompiledGlobs {
     exclusions: Vec<wax::Glob<'static>>,
     jit_inclusions: Vec<wax::Glob<'static>>,
     jit_exclusions: Vec<wax::Glob<'static>>,
+    authored_overrides: Option<(Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool)>,
     /// True when `$TURBO_DEFAULT$` was present in the task's inputs,
     /// meaning all files within the package directory match by default.
     default: bool,
@@ -81,15 +82,23 @@ pub fn compile_globs(
     package_unix_path: &str,
 ) -> Result<CompiledGlobs, InvalidTaskInputGlob> {
     let (inclusions, exclusions, has_traversal_globs) =
-        compile_patterns(&inputs.globs, package_unix_path)?;
-    let (jit_inclusions, jit_exclusions, jit_has_traversal_globs) =
-        compile_patterns(&inputs.jit_globs, package_unix_path)?;
+        compile_patterns(inputs.all_globs(), package_unix_path, false)?;
+    let authored_overrides = inputs
+        .explicit_override_globs()
+        .map(|globs| compile_patterns(globs.iter().map(String::as_str), package_unix_path, true))
+        .transpose()?;
+    let (jit_inclusions, jit_exclusions, jit_has_traversal_globs) = compile_patterns(
+        inputs.jit_globs.iter().map(String::as_str),
+        package_unix_path,
+        false,
+    )?;
 
     Ok(CompiledGlobs {
         inclusions,
         exclusions,
         jit_inclusions,
         jit_exclusions,
+        authored_overrides,
         default: inputs.default,
         jit_default: inputs.jit_default,
         eager: inputs.eager,
@@ -98,9 +107,10 @@ pub fn compile_globs(
     })
 }
 
-fn compile_patterns(
-    globs: &[String],
+fn compile_patterns<'a>(
+    globs: impl Iterator<Item = &'a str>,
     package_unix_path: &str,
+    expand_descendants: bool,
 ) -> Result<(Vec<wax::Glob<'static>>, Vec<wax::Glob<'static>>, bool), InvalidTaskInputGlob> {
     let mut inclusions = Vec::new();
     let mut exclusions = Vec::new();
@@ -108,7 +118,7 @@ fn compile_patterns(
 
     for glob_str in globs {
         let invalid = |error: Box<dyn std::error::Error + Send + Sync>| InvalidTaskInputGlob {
-            glob: glob_str.clone(),
+            glob: glob_str.to_owned(),
             error,
         };
         let input = PackageInput::resolve(package_unix_path, glob_str)
@@ -123,11 +133,32 @@ fn compile_patterns(
             continue;
         }
 
+        let descendants = if expand_descendants
+            && (input.is_exclusion() || input.is_literal())
+            && input.as_str() != "**"
+            && !input.as_str().ends_with("/**")
+        {
+            let path = input.as_str().trim_end_matches('/');
+            let descendants = if path.is_empty() {
+                "**".to_owned()
+            } else {
+                format!("{path}/**")
+            };
+            Some(
+                wax::Glob::new(&descendants)
+                    .map_err(|error| invalid(Box::new(error)))?
+                    .into_owned(),
+            )
+        } else {
+            None
+        };
         if input.is_exclusion() {
             exclusions.push(glob);
+            exclusions.extend(descendants);
         } else {
             has_traversal_globs |= input.reaches_outside_package();
             inclusions.push(glob);
+            inclusions.extend(descendants);
         }
     }
 
@@ -172,6 +203,13 @@ pub fn file_matches_compiled_inputs(
     compiled: &CompiledGlobs,
 ) -> bool {
     let in_package = pkg_str.is_empty() || file_unix.starts_with(pkg_prefix_slash);
+
+    if let Some((inclusions, exclusions, has_traversal)) = &compiled.authored_overrides
+        && (in_package || *has_traversal)
+        && check_compiled_globs(file_unix, inclusions, exclusions, false, false)
+    {
+        return true;
+    }
 
     if !in_package {
         // Defaults only cover files inside the package. Keep startup and JIT
@@ -265,8 +303,77 @@ mod tests {
         assert_eq!(
             file_matches_compiled_inputs_path(&f, &p, &compiled),
             expected,
-            "file={file}, pkg={pkg}, expected={expected}"
+            "file={file}, pkg={pkg}, expected={expected}, inputs={inputs:?}"
         );
+    }
+
+    #[test]
+    fn authored_overrides_derived_exclusions_without_admitting_siblings() {
+        for (pattern, matching_file) in [
+            (
+                "../lib/node_modules/data/schema.json",
+                "packages/lib/node_modules/data/schema.json",
+            ),
+            (
+                "../../packages/lib/node_modules/data/*.json",
+                "packages/lib/node_modules/data/schema.json",
+            ),
+            (
+                "../lib/node_modules/data",
+                "packages/lib/node_modules/data/nested/schema.json",
+            ),
+            (
+                "./node_modules/data",
+                "packages/app/node_modules/data/nested/schema.json",
+            ),
+        ] {
+            let mut inputs = TaskInputs {
+                globs: vec![pattern.to_owned()],
+                derived_globs: vec![
+                    "../lib/**".into(),
+                    "!../lib/**/node_modules/**".into(),
+                    "!**/node_modules/**".into(),
+                ],
+                default: true,
+                ..TaskInputs::default()
+            };
+            assert_match(matching_file, "packages/app", &inputs, true);
+            assert_match(
+                "packages/lib/node_modules/database/junk.json",
+                "packages/app",
+                &inputs,
+                false,
+            );
+            assert_match(
+                "packages/app/node_modules/database/junk.json",
+                "packages/app",
+                &inputs,
+                false,
+            );
+            assert_match("packages/lib/src/lib.rs", "packages/app", &inputs, true);
+            assert_match("packages/app/src/main.rs", "packages/app", &inputs, true);
+            for exclusion in [format!("!{pattern}"), "!../../**/schema.json".into()] {
+                inputs.globs.insert(0, exclusion);
+                assert_match(matching_file, "packages/app", &inputs, false);
+                inputs.globs.remove(0);
+            }
+        }
+    }
+
+    #[test]
+    fn derived_inclusions_do_not_override_authored_exclusions() {
+        let inputs = TaskInputs {
+            globs: vec!["!../lib/private/**".into()],
+            derived_globs: vec!["../lib/**".into(), "!../lib/node_modules/**".into()],
+            ..TaskInputs::default()
+        };
+        assert_match(
+            "packages/lib/private/data.json",
+            "packages/app",
+            &inputs,
+            false,
+        );
+        assert_match("packages/lib/src/lib.rs", "packages/app", &inputs, true);
     }
 
     #[test]
