@@ -275,6 +275,19 @@ impl Lockfile for BunLockfile {
         Ok(patches)
     }
 
+    fn external_file_inputs(
+        &self,
+        package: &crate::Package,
+    ) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
+        self.data
+            .patched_dependencies
+            .get(&package.key)
+            .map(|path| RelativeUnixPathBuf::new(path.clone()))
+            .transpose()
+            .map(|path| path.into_iter().collect())
+            .map_err(Into::into)
+    }
+
     fn global_change(&self, other: &dyn Lockfile) -> bool {
         let any_other = other as &dyn Any;
         let Some(other_bun) = any_other.downcast_ref::<Self>() else {
@@ -321,6 +334,56 @@ impl Lockfile for BunLockfile {
             workspace_path,
             sensitive_names: self.index.names_scoped_under(&workspace_names),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_file_inputs_follow_resolved_keys_without_changing_identities() {
+        let lockfile: BunLockfile = serde_json::json!({
+            "lockfileVersion": 1,
+            "workspaces": { "": { "name": "root" } },
+            "packages": {
+                "foo": ["foo@1.0.0", "", {}, "sha512-one"],
+                "other/foo": ["foo@2.0.0", "", {}, "sha512-two"],
+                "renamed": ["foo@2.0.0", "", {}, "sha512-two"]
+            },
+            "overrides": { "foo": "2.0.0" },
+            "patchedDependencies": {
+                "foo@1.0.0": "patches/one.patch",
+                "foo@2.0.0": "patches/two.patch"
+            }
+        })
+        .to_string()
+        .parse()
+        .unwrap();
+        for (name, specifier) in [("foo", "^1.0.0"), ("renamed", "npm:foo@2.0.0")] {
+            let package = lockfile
+                .resolve_package("", name, specifier)
+                .unwrap()
+                .unwrap();
+            assert_eq!(package.key, "foo@2.0.0");
+            assert_eq!(package.version, "2.0.0+patches/two.patch");
+            assert_eq!(
+                lockfile.external_file_inputs(&package).unwrap(),
+                vec![RelativeUnixPathBuf::new("patches/two.patch").unwrap()]
+            );
+        }
+        assert_eq!(
+            lockfile
+                .external_file_inputs(&crate::Package::new("foo@1.0.0", "opaque+version"))
+                .unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/one.patch").unwrap()]
+        );
+        assert!(
+            lockfile
+                .external_file_inputs(&crate::Package::new("foo@3.0.0", "3.0.0"))
+                .unwrap()
+                .is_empty()
+        );
     }
 }
 
