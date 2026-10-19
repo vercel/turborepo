@@ -1785,11 +1785,8 @@ impl GoTaskContract {
                 match dependency.task_contract().dependency_source_inputs() {
                     DependencySourceInputs::Include => {
                         let directory = root_input(dependency.directory().to_unix().as_str());
-                        io.input_globs.extend([
-                            format!("{directory}/**"),
-                            format!("!{directory}/.git/**"),
-                            format!("!{directory}/.turbo/**"),
-                        ]);
+                        io.input_globs
+                            .extend(toolchain::directory_source_globs(&directory));
                         io.input_globs.extend(
                             dependency
                                 .task_contract()
@@ -3574,6 +3571,10 @@ mod tests {
                 }
                 assert!(io.input_globs.contains(&"../bridge/**".to_string()));
                 assert!(io.input_globs.contains(&"../worker/**".to_string()));
+                assert!(
+                    io.input_globs
+                        .contains(&"!../bridge/**/node_modules/**".to_string())
+                );
                 assert!(!io.input_globs.iter().any(|glob| glob.contains("dist")));
                 let mut includes = vec!["**".parse::<globwalk::ValidatedGlob>().unwrap()];
                 let mut excludes = Vec::new();

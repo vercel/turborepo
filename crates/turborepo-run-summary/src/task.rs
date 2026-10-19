@@ -362,7 +362,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
             pass_through_env,
             topological_dependencies,
             task_dependencies,
-            mut inputs,
+            inputs,
             output_logs,
             persistent,
             interruptible,
@@ -396,13 +396,14 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
         depends_on.sort();
         outputs.sort();
         env.sort();
-        inputs.globs.sort();
+        let mut input_globs: Vec<_> = inputs.all_globs().map(str::to_owned).collect();
+        input_globs.sort();
 
         Self {
             outputs,
             cache,
             depends_on,
-            inputs: inputs.globs,
+            inputs: input_globs,
             output_logs,
             persistent,
             interruptible,
@@ -426,6 +427,23 @@ mod test {
     use turborepo_types::{EnvMode, HashTrackerDetailedMap, OutputLogsMode};
 
     use super::*;
+
+    #[test]
+    fn task_summary_flattens_authored_and_derived_inputs() {
+        let definition = TaskDefinition {
+            inputs: turborepo_types::TaskInputs {
+                globs: vec!["src/**".into()],
+                derived_globs: vec!["../lib/**".into(), "!../lib/node_modules/**".into()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let summary = TaskSummaryTaskDefinition::from(definition);
+        assert_eq!(
+            summary.inputs,
+            ["!../lib/node_modules/**", "../lib/**", "src/**"]
+        );
+    }
 
     #[test_case(CacheStatus::Hit, json!("HIT") ; "hit")]
     #[test_case(CacheStatus::Miss, json!("MISS") ; "miss")]

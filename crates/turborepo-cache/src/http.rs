@@ -1,7 +1,7 @@
 use std::{
     backtrace::Backtrace,
     collections::HashMap,
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Seek, SeekFrom, Write},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -19,8 +19,7 @@ use turborepo_types::SecretString;
 
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
-    artifact_body::{ARTIFACT_MEMORY_THRESHOLD, ArtifactBody},
-    cache_archive::CacheReader,
+    artifact_body::{ARTIFACT_MEMORY_THRESHOLD, Artifact, ArtifactBody},
     signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
     upload_progress::{UploadProgress, UploadProgressQuery},
 };
@@ -318,9 +317,9 @@ impl HTTPCache {
         // rather than occupying a Tokio runtime worker.
         let anchor = anchor.to_owned();
         let files = files.to_vec();
-        let body = tokio::task::spawn_blocking(move || ArtifactBody::from_files(&anchor, &files))
-            .await??;
-        self.put_body(hash, Arc::new(body), duration).await
+        let artifact =
+            tokio::task::spawn_blocking(move || Artifact::from_files(&anchor, &files)).await??;
+        self.put_body(hash, artifact.body().clone(), duration).await
     }
 
     /// Uploads an already-built archive. Shared with the local cache so a
@@ -510,7 +509,7 @@ impl HTTPCache {
         Ok(self
             .fetch_with_archive(hash)
             .await?
-            .map(|(metadata, files, _body)| (metadata, files)))
+            .map(|(metadata, files, _artifact)| (metadata, files)))
     }
 
     /// Fetches and restores the artifact, also returning the verified archive
@@ -522,8 +521,7 @@ impl HTTPCache {
     pub(crate) async fn fetch_with_archive(
         &self,
         hash: &str,
-    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>, ArtifactBody)>, CacheError>
-    {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>, Artifact)>, CacheError> {
         let Some(DownloadedArtifact {
             duration,
             sha,
@@ -538,10 +536,10 @@ impl HTTPCache {
         // Decompression and extraction are synchronous CPU and filesystem
         // work; run them on the blocking pool so a large restore does not
         // occupy a runtime worker.
+        let body = Arc::new(body);
         let repo_root = self.repo_root.clone();
-        let reader = body.reader()?;
-        let files =
-            tokio::task::spawn_blocking(move || Self::restore_tar(&repo_root, reader)).await??;
+        let (files, artifact) =
+            tokio::task::spawn_blocking(move || body.restore(&repo_root)).await??;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
         Ok(Some((
@@ -552,7 +550,7 @@ impl HTTPCache {
                 dirty_hash,
             },
             files,
-            body,
+            artifact,
         )))
     }
 
@@ -758,16 +756,6 @@ impl HTTPCache {
         self.uploads.clone()
     }
 
-    #[tracing::instrument(skip_all)]
-    pub(crate) fn restore_tar(
-        root: &AbsoluteSystemPath,
-        body: impl Read,
-    ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
-        let mut cache_reader = CacheReader::from_reader(body, true)?;
-        let (files, _manifest) = cache_reader.restore(root, None)?;
-        Ok(files)
-    }
-
     fn convert_api_error(hash: &str, err: turborepo_api_client::Error) -> CacheError {
         match err {
             turborepo_api_client::Error::ReqwestError(e) if e.is_timeout() => {
@@ -849,7 +837,7 @@ mod test {
         let mut bytes = Vec::new();
         {
             let mut writer = crate::cache_archive::CacheWriter::from_writer(&mut bytes, true)?;
-            writer.add_file(&source_path, &file)?;
+            writer.add_files(&source_path, &[file])?;
             writer.finish()?;
         }
         Ok(bytes)
