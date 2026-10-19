@@ -1281,6 +1281,64 @@ mod test {
         assert!(tar.exists());
     }
 
+    #[test]
+    fn put_archive_restores_files_changed_before_install() -> Result<()> {
+        for change in ["modify", "delete"] {
+            let repo_root = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+            let output = anchor.join_component("output.txt");
+            output.create_with_contents("archived")?;
+            let files = vec![AnchoredSystemPathBuf::from_raw("output.txt")?];
+            let body = crate::artifact_body::ArtifactBody::from_files(anchor, &files)?;
+            match change {
+                "modify" => output.create_with_contents("changed after archiving")?,
+                _ => output.remove_file()?,
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive(anchor, "before-install", &files, &body, 50)?;
+
+            cache
+                .fetch(anchor, "before-install")?
+                .expect("cache should hit");
+            assert_eq!(output.read_to_string()?, "archived", "{change}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn put_archive_restores_symlinks_changed_before_install() -> Result<()> {
+        for change in ["retarget", "delete"] {
+            let repo_root = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+            let files = symlinked_outputs(anchor)?;
+            let body = crate::artifact_body::ArtifactBody::from_files(anchor, &files)?;
+            let link = anchor.join_components(&["dist", "link"]);
+            link.remove_file()?;
+            if change == "retarget" {
+                link.symlink_to_file("b.txt")?;
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive(anchor, "before-install", &files, &body, 50)?;
+
+            cache
+                .fetch(anchor, "before-install")?
+                .expect("cache should hit");
+            assert_eq!(link.read_link()?.as_str(), "a.txt", "{change}");
+        }
+        Ok(())
+    }
+
     /// Lays out `dist/` with files, an empty directory, and symlinks, and
     /// returns the paths a task caching `dist/**` would save. Restoring them
     /// into an empty `dist/` writes `link` as soon as it is read, and defers
