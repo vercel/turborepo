@@ -75,7 +75,9 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         // Prove repeat doesn't recreate even an absent producer lock file.
         fs::remove_file(f.owned.root().join(".turbo/tools/transaction.lock")).unwrap();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
-        // Plain --offline cannot install locked dependencies (TURBO-6229).
+        // Plain --offline also installs locked dependencies, which this
+        // fixture's pnpm cannot run; dependency offline installs have their
+        // own tests.
         for flags in [
             OFFLINE,
             &["--tools-only", "--offline", "--frozen"],
@@ -120,8 +122,8 @@ fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_a
         let declaration = fs::read(f.owned.root().join("package.json")).unwrap();
         let environment: std::collections::BTreeMap<_, _> = std::env::vars_os().collect();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
-        // Repeated forced reinstalls; plain --offline --force cannot install
-        // locked dependencies (TURBO-6229).
+        // Repeated forced reinstalls; plain --offline --force would also
+        // install locked dependencies, which this fixture's pnpm cannot run.
         for _ in 0..2 {
             let before = f.manifest().unwrap();
             assert_eq!(f.run(&empty, OFFLINE_FORCE).unwrap(), 0);
@@ -274,19 +276,14 @@ fn coherent_repository_only_forgery_is_healthy_but_never_authorized_offline() {
 #[test]
 fn declaration_drift_missing_lock_and_unsupported_offline_controls_never_resolve() {
     let empty = LoopbackServer::new([], |_| {}).unwrap();
-    for case in 0..4 {
+    for case in 0..3 {
         let f = installed();
         match case {
             0 => fs::remove_file(f.owned.root().join("turbo.lock")).unwrap(),
             1 => fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap(),
-            2 => fs::write(
+            _ => fs::write(
                 f.owned.root().join("package.json"),
                 r#"{"packageManager":"pnpm@11.0.0"}"#,
-            )
-            .unwrap(),
-            _ => fs::write(
-                f.owned.root().join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
             )
             .unwrap(),
         }
@@ -340,7 +337,7 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
                 rustup: turborepo_setup::rustup_provision::RustupTransport::official(&policy).unwrap(),
                 python: turborepo_setup::python_resolution::PythonTransport::official(&policy).unwrap(),
                 go: turborepo_setup::go_resolution::GoTransport::official(&policy).unwrap(),
-            }), || {
+            }), f.git.clone(), || {
                 called.set(called.get() + 1);
                 if called.get() == 2 {
                     match case {
@@ -368,7 +365,7 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
 fn offline_repeat_does_not_wait_for_writer_or_store_guards() {
     let f = installed();
     let empty = LoopbackServer::new([], |_| {}).unwrap();
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = Store::open(f.owned.root()).unwrap();
     std::thread::scope(|scope| {

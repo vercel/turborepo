@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import {
@@ -201,10 +200,13 @@ export default async function HomePage() {
               in minutes.
             </p>
           </div>
-          <Button asChild className="rounded-full" size="lg" variant="outline">
-            <Link href={getLocalizedPath(lang, "/repo/docs")} prefetch>
-              Read the docs
-            </Link>
+          <Button
+            className="rounded-full"
+            href={getLocalizedPath(lang, "/repo/docs")}
+            size="large"
+            variant="secondary"
+          >
+            Read the docs
           </Button>
         </div>
         <div className="mt-6 grid w-full auto-rows-fr grid-cols-1 items-stretch gap-x-6 gap-y-6 md:grid-cols-3 md:gap-y-10 lg:gap-y-12">
@@ -237,10 +239,12 @@ export default async function HomePage() {
             Deploy your Turborepo today
           </h2>
           <div className="flex flex-col w-full items-start gap-3 sm:flex-row sm:items-center md:justify-end">
-            <Button asChild className="w-full sm:w-fit rounded-full" size="lg">
-              <Link href={getLocalizedPath(lang, "/docs")} prefetch>
-                Get started
-              </Link>
+            <Button
+              className="w-full sm:w-fit rounded-full"
+              href={getLocalizedPath(lang, "/docs")}
+              size="large"
+            >
+              Get started
             </Button>
             <CommandPromptRoot
               className="w-full sm:w-auto items-start"

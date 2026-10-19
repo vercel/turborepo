@@ -9,7 +9,8 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    fs, io,
+    fs,
+    io::{self, Read},
     path::Path,
     process::{Command, ExitStatus, Stdio},
 };
@@ -42,6 +43,21 @@ pub enum Error {
     Io(#[from] io::Error),
 }
 
+/// How a frozen install refuses every registry and network request, using
+/// only the manager's own cache.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Offline {
+    /// Native arguments after the frozen ones.
+    Args(&'static [&'static str]),
+    /// Native settings read from the environment.
+    Env(&'static [(&'static str, &'static str)]),
+    /// Why this manager version cannot be kept off the network.
+    Unsupported(String),
+}
+
+/// The first Bun release with `bun install --offline`.
+const BUN_OFFLINE: Version = Version::new(1, 4, 1);
+
 /// A package manager with a frozen install adapter.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Frozen {
@@ -58,6 +74,10 @@ impl Frozen {
     pub fn new(manager: Manager) -> Option<Self> {
         let (lockfiles, regenerate): (&'static [_], _) = match manager {
             Manager::Npm => (&["npm-shrinkwrap.json", "package-lock.json"], "npm install"),
+            Manager::Pnpm => (&["pnpm-lock.yaml"], "pnpm install"),
+            Manager::Yarn => (&["yarn.lock"], "yarn install"),
+            // Bun reads its text lock first and can migrate the binary one.
+            Manager::Bun => (&["bun.lock", "bun.lockb"], "bun install"),
             _ => return None,
         };
         Some(Self {
@@ -67,20 +87,51 @@ impl Frozen {
         })
     }
 
-    pub fn manager(self) -> Manager {
-        self.manager
-    }
-
     /// The managed executable's name, which is also its turbo.lock tool ID.
     pub fn program(self) -> &'static str {
         self.manager.name()
     }
 
     /// The native frozen command's arguments for the locked version.
-    pub fn args(self, _version: &Version) -> &'static [&'static str] {
+    pub fn args(self, version: &Version) -> &'static [&'static str] {
         match self.manager {
             // Installs exactly the lockfile and fails if package.json disagrees.
             Manager::Npm => &["ci"],
+            // Installs the whole workspace and fails instead of updating the lock.
+            Manager::Pnpm => &["install", "--frozen-lockfile"],
+            // Yarn classic and modern Yarn spell the same refusal differently.
+            Manager::Yarn if version.major < 2 => &["install", "--frozen-lockfile"],
+            Manager::Yarn => &["install", "--immutable"],
+            Manager::Bun => &["install", "--frozen-lockfile"],
+            _ => unreachable!("Frozen::new admits only adapted managers"),
+        }
+    }
+
+    /// The locked version's native offline mode. Each one fails on anything
+    /// missing from the manager's cache instead of downloading it.
+    pub fn offline(self, version: &Version, root: &Path) -> Offline {
+        match self.manager {
+            // npm's update check bypasses its cache even with --offline.
+            Manager::Npm => Offline::Args(&["--offline", "--no-update-notifier"]),
+            Manager::Pnpm => Offline::Args(&["--offline"]),
+            Manager::Yarn if version.major < 2 => Offline::Args(&["--offline"]),
+            // Modern Yarn has no flag, but `enableNetwork: false` blocks every
+            // request, with its global or project cache alike. A per-host
+            // `networkSettings` entry takes precedence over it.
+            Manager::Yarn => match yarn_host_network(root) {
+                Ok(false) => Offline::Env(&[("YARN_ENABLE_NETWORK", "0")]),
+                Ok(true) => Offline::Unsupported(
+                    ".yarnrc.yml enables the network for a host in networkSettings, which Yarn \
+                     prefers over the enableNetwork setting that offline setup disables"
+                        .into(),
+                ),
+                Err(error) => Offline::Unsupported(error.to_string()),
+            },
+            Manager::Bun if *version >= BUN_OFFLINE => Offline::Args(&["--offline"]),
+            Manager::Bun => Offline::Unsupported(format!(
+                "Bun {version} has no offline install mode (`bun install --offline` needs Bun \
+                 {BUN_OFFLINE} or newer)"
+            )),
             _ => unreachable!("Frozen::new admits only adapted managers"),
         }
     }
@@ -101,7 +152,9 @@ impl Frozen {
 
     /// Runs `program` (the managed executable) in `root` with `env` over the
     /// inherited environment, so native registry credentials and settings
-    /// still apply. stdin is closed and output goes to the terminal. Returns
+    /// still apply. stdin is closed and output goes to the terminal. `wait`
+    /// starts the command and waits for it, so the caller owns process and
+    /// console policy (`Command::status` keeps the plain behavior). Returns
     /// the manager's exit status after checking every protected lockfile.
     pub fn run(
         self,
@@ -109,6 +162,7 @@ impl Frozen {
         args: &[&str],
         root: &Path,
         env: &BTreeMap<String, OsString>,
+        wait: impl FnOnce(&mut Command) -> io::Result<ExitStatus>,
     ) -> Result<ExitStatus, Error> {
         let mut protected = Vec::new();
         for name in self.lockfiles {
@@ -116,12 +170,13 @@ impl Frozen {
             let before = read(&path)?;
             protected.push((*name, path, before));
         }
-        let status = Command::new(program)
-            .current_dir(root)
-            .args(args)
-            .envs(env)
-            .stdin(Stdio::null())
-            .status();
+        let status = wait(
+            Command::new(program)
+                .current_dir(root)
+                .args(args)
+                .envs(env)
+                .stdin(Stdio::null()),
+        );
         let mut changed = Vec::new();
         for (name, path, before) in &protected {
             if read(path)? != *before {
@@ -143,6 +198,41 @@ impl Frozen {
         }
         Ok(status)
     }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("cannot read offline network settings from .yarnrc.yml; fix or remove it and retry")]
+struct YarnSettingsError;
+
+fn yarn_host_network(root: &Path) -> Result<bool, YarnSettingsError> {
+    const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
+    let path = root.join(".yarnrc.yml");
+    let mut text = String::new();
+    match fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.is_file() && metadata.len() <= MAX_SETTINGS_BYTES => {
+            fs::File::open(&path)
+                .and_then(|file| file.take(MAX_SETTINGS_BYTES + 1).read_to_string(&mut text))
+                .map_err(|_| YarnSettingsError)?;
+            if text.len() as u64 > MAX_SETTINGS_BYTES {
+                return Err(YarnSettingsError);
+            }
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        _ => return Err(YarnSettingsError),
+    }
+    let value: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(&text).map_err(|_| YarnSettingsError)?;
+    if !(value.is_mapping() || value.is_null()) {
+        return Err(YarnSettingsError);
+    }
+    Ok(value.get("networkSettings").is_some_and(|hosts| {
+        hosts.as_mapping().is_some_and(|hosts| {
+            hosts.values().any(|host| {
+                host.get("enableNetwork")
+                    .is_some_and(|enabled| !enabled.is_null() && enabled.as_bool() != Some(false))
+            })
+        })
+    }))
 }
 
 fn read(path: &Path) -> io::Result<Option<Vec<u8>>> {

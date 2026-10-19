@@ -133,7 +133,7 @@ fn authorization_success_is_readonly_and_rechecks_at_every_use_without_locks() {
     f.no_execution();
 
     // Neither inspection nor use may acquire producer locks.
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = Store::open(f.owned.root()).unwrap();
     std::thread::scope(|scope| {

@@ -5,11 +5,13 @@ use std::{cell::Cell, io};
 use turborepo_setup::{
     activation::{ActivationPlan, Error as ReadinessError},
     lock::{Installation, Platform, Snapshot, Tool, reconcile},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 use turborepo_tool_install::Store;
 
-use super::{Error, LockMode, SetupRequest, check, provision, root::Discovery};
+use super::{
+    Error, LockMode, SetupRequest, check, dependencies::Dependencies, provision, root::Discovery,
+};
 
 /// A missing lock, local declaration drift or `--update-lock` proposes the
 /// candidate setup would publish. `--force` only reinstalls locked selections.
@@ -17,8 +19,9 @@ pub(super) fn report(
     discovery: &Discovery,
     sources: Snapshot,
     request: &SetupRequest,
+    dependencies: &Dependencies,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let proposed = request.update_lock
         || match sources.previous_lock() {
@@ -28,16 +31,45 @@ pub(super) fn report(
             }
         };
     if request.force || !proposed {
-        return inspect(discovery, sources, request.force, preflight);
+        return inspect_with(discovery, sources, request.force, dependencies, preflight);
     }
-    propose(discovery, sources, request, transports, preflight)
+    propose(
+        discovery,
+        sources,
+        request,
+        dependencies,
+        transports,
+        preflight,
+    )
 }
 
+/// The plan's heading names a tools-only plan only when it is one.
+fn kind(dependencies: &Dependencies) -> &'static str {
+    if dependencies.skipped() {
+        "tools-only plan"
+    } else {
+        "plan"
+    }
+}
+
+/// A tools-only locked plan, for direct tests.
+#[cfg(test)]
 pub(super) fn inspect(
     discovery: &Discovery,
     sources: Snapshot,
     force: bool,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
+) -> Result<String, Error> {
+    let dependencies = Dependencies::tools_only();
+    inspect_with(discovery, sources, force, &dependencies, preflight)
+}
+
+fn inspect_with(
+    discovery: &Discovery,
+    sources: Snapshot,
+    force: bool,
+    dependencies: &Dependencies,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let context = check::context()?;
     let platform = context.artifact_platform();
@@ -47,7 +79,7 @@ pub(super) fn inspect(
     ))?;
     // Share frozen provisioning's native request, artifact and integrity gates.
     provision::plans(&sources, lock)?;
-    provision::storage(discovery.snapshot_root()?.as_std_path())?;
+    provision::storage(discovery.snapshot_root()?.as_std_path(), discovery.git())?;
     let action = match ActivationPlan::inspect_captured(&sources, context) {
         Ok(_) => "reuse (healthy installation)",
         Err(ReadinessError::MissingInventory) => "install (missing installation)",
@@ -58,12 +90,16 @@ pub(super) fn inspect(
         Err(error) => return Err(error.into()),
     };
     let action = if force { "reinstall (--force)" } else { action };
-    let mut lines = vec!["Locked tools-only plan (turbo.lock unchanged):".to_owned()];
+    let root = discovery.snapshot_root()?.as_std_path();
+    let mut lines = vec![format!(
+        "Locked {} (turbo.lock unchanged):",
+        kind(dependencies)
+    )];
     for (id, tool) in lock.tools() {
         describe(&mut lines, id, tool, &platform, action);
     }
+    lines.extend(dependencies.plan(root, lock)?);
     recheck(discovery, &sources, &preflight)?;
-    lines.push("Dependencies skipped (--tools-only); dependency readiness was not checked.".into());
     lines.push("Tracked changes: none. No downloads, probes, or tasks run.".into());
     Ok(lines.join("\n"))
 }
@@ -72,8 +108,9 @@ fn propose(
     discovery: &Discovery,
     sources: Snapshot,
     request: &SetupRequest,
+    dependencies: &Dependencies,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let platform = provision::platform()?;
     let root = discovery.snapshot_root()?.as_std_path();
@@ -82,7 +119,7 @@ fn propose(
     let check = || {
         preflight()?;
         revalidate(discovery)?;
-        provision::storage(root)
+        provision::storage(root, discovery.git())
     };
     check()?;
     let policy = preflight()?;
@@ -154,9 +191,10 @@ fn propose(
         Some(previous) if previous != &outcome.lock => Some("updated"),
         Some(_) => None,
     };
+    let kind = kind(dependencies);
     let mut lines = vec![match change {
-        Some(change) => format!("Proposed tools-only plan (turbo.lock would be {change}):"),
-        None => "Proposed tools-only plan (turbo.lock unchanged):".into(),
+        Some(change) => format!("Proposed {kind} (turbo.lock would be {change}):"),
+        None => format!("Proposed {kind} (turbo.lock unchanged):"),
     }];
     for (id, tool) in outcome.lock.tools() {
         let inventory_id = match &tool.installation {
@@ -184,8 +222,8 @@ fn propose(
         let diff = provision::lock_report(previous, &outcome.lock);
         lines.extend(diff.lines().skip(1).map(|line| format!("  {line}")));
     }
+    lines.extend(dependencies.plan(root, &outcome.lock)?);
     recheck(discovery, &sources, &preflight)?;
-    lines.push("Dependencies skipped (--tools-only); dependency readiness was not checked.".into());
     lines.push(format!(
         "Tracked changes: {}. {}",
         match change {
@@ -244,10 +282,10 @@ fn revalidate(discovery: &Discovery) -> Result<(), Error> {
 fn recheck(
     discovery: &Discovery,
     sources: &Snapshot,
-    preflight: &impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    preflight: &impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<(), Error> {
     preflight()?;
     revalidate(discovery)?;
     sources.ensure_current()?;
-    provision::storage(discovery.snapshot_root()?.as_std_path())
+    provision::storage(discovery.snapshot_root()?.as_std_path(), discovery.git())
 }

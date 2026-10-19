@@ -256,6 +256,10 @@ pub struct GitRepo {
     /// Optional recorder for the slowest-to-hash files. Set by long-running
     /// consumers (the file watcher) so they can diagnose a stalled startup.
     slowest_files: Option<std::sync::Arc<SlowestFiles>>,
+    /// Change-detection results started early by [`SCM::prefetch_changes`].
+    /// Shared by clones so the handle that consumes a result need not be the
+    /// one that started it.
+    change_prefetch: std::sync::Arc<git::ChangePrefetch>,
 }
 
 impl GitRepo {
@@ -274,6 +278,7 @@ impl Clone for GitRepo {
             attrs: OnceLock::new(),
             github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
             slowest_files: self.slowest_files.clone(),
+            change_prefetch: self.change_prefetch.clone(),
         }
     }
 }
@@ -313,6 +318,7 @@ impl GitRepo {
             attrs: OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
             slowest_files: None,
+            change_prefetch: Default::default(),
         })
     }
 
@@ -385,6 +391,7 @@ impl SCM {
                 attrs: OnceLock::new(),
                 github_actions_remote_base_ref_fallback: false,
                 slowest_files: None,
+                change_prefetch: Default::default(),
             }),
             Err(e) => {
                 debug!(

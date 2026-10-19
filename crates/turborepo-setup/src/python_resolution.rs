@@ -53,6 +53,13 @@ fn key(version: &Version, platform: Platform) -> Option<String> {
     Some(format!("cpython-{version}-{os}-{arch}-{libc}"))
 }
 
+/// [`key`] for an installed tool's exact version and lock platform spelling.
+/// Every locked build's destination is this key (see [`is_official`]).
+pub(crate) fn installed_key(version: &str, platform: &str) -> Option<String> {
+    let platform = serde_json::from_value(Value::String(platform.to_owned())).ok()?;
+    key(&exact_release(version)?, platform)
+}
+
 /// The only artifact shape setup records or installs for a CPython build.
 pub(crate) fn official_artifact(
     version: &Version,
@@ -334,7 +341,7 @@ pub struct PythonTransport {
 }
 
 impl PythonTransport {
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(ORIGIN)?])?,
             origin: ORIGIN.into(),
@@ -343,7 +350,7 @@ impl PythonTransport {
 
     /// Send the official build paths to a validated mirror base.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &crate::mirror::Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {

@@ -912,50 +912,61 @@ fn typecheck_affected(dir: &Path) -> (bool, bool) {
     (run, query)
 }
 
-/// A task is affected exactly when a change to its inputs changes its hash.
-/// The hashers always include a package's configuration files in explicit
-/// inputs, expand directory inputs to the files inside them, and walk explicit
-/// inputs excluding everything under an excluded directory.
 #[test]
 fn test_task_level_affected_iff_task_hash_changes() {
-    let cases: &[(&str, &str, bool)] = &[
-        (r#"["src/**"]"#, "packages/lib-a/package.json", true),
+    enum Inputs {
+        Eager(&'static str),
+        Jit(&'static str),
+    }
+    use Inputs::{Eager, Jit};
+
+    let cases = [
+        (Eager(r#"["src/**"]"#), "packages/lib-a/package.json", true),
         (
-            r#"["src/**", "!package.json"]"#,
+            Eager(r#"["src/**", "!package.json"]"#),
             "packages/lib-a/package.json",
             true,
         ),
-        (r#"["src/**"]"#, "packages/lib-a/turbo.json", true),
-        (r#"["src"]"#, "packages/lib-a/src/index.ts", true),
+        (Eager(r#"["src/**"]"#), "packages/lib-a/turbo.json", true),
+        (Eager(r#"["src/**"]"#), "packages/lib-a/turbo.jsonc", true),
+        (Eager(r#"["src"]"#), "packages/lib-a/src/index.ts", true),
         (
-            r#"["src", "!src/gen"]"#,
+            Eager(r#"["src", "!src/gen"]"#),
             "packages/lib-a/src/gen/a.ts",
             false,
         ),
         (
-            r#"["src", "!src/gen"]"#,
+            Eager(r#"["src", "!src/gen"]"#),
             "packages/lib-a/src/index.ts",
             true,
         ),
         (
-            r#"["src/index.ts", "!src"]"#,
+            Eager(r#"["src/index.ts", "!src"]"#),
             "packages/lib-a/src/index.ts",
             true,
         ),
         (
-            r#"[{"mode": "jit", "globs": ["src/**"]}]"#,
+            Eager(r#"["src/index.ts", "!src/**"]"#),
+            "packages/lib-a/src/index.ts",
+            true,
+        ),
+        (
+            Jit(r#"[{"mode": "jit", "globs": ["src/**"]}]"#),
             "packages/lib-a/package.json",
             true,
         ),
-        (r#"["src/**"]"#, "packages/lib-a/README.md", false),
+        (Eager(r#"["src/**"]"#), "packages/lib-a/README.md", false),
         (
-            r#"["$TURBO_DEFAULT$", "!package.json"]"#,
+            Eager(r#"["$TURBO_DEFAULT$", "!package.json"]"#),
             "packages/lib-a/package.json",
             false,
         ),
     ];
 
-    for (inputs, changed_file, expected) in cases {
+    for (mode, changed_file, expected) in cases {
+        let inputs = match mode {
+            Eager(inputs) | Jit(inputs) => inputs,
+        };
         let tempdir = tempfile::tempdir().unwrap();
         let dir = tempdir.path();
         setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
@@ -977,7 +988,7 @@ fn test_task_level_affected_iff_task_hash_changes() {
         let before = typecheck_hash(dir);
         let path = dir.join(changed_file);
         let mut contents = fs::read_to_string(&path).unwrap_or_default();
-        if changed_file.ends_with("turbo.json") {
+        if changed_file.ends_with("turbo.json") || changed_file.ends_with("turbo.jsonc") {
             contents = r#"{"extends": ["//"], "tasks": {}}"#.to_string();
         } else if changed_file.ends_with(".json") {
             let mut json: serde_json::Value =
@@ -988,18 +999,21 @@ fn test_task_level_affected_iff_task_hash_changes() {
             contents.push_str("\n// changed\n");
         }
         fs::write(&path, contents).unwrap();
-        // A JIT hash is computed during execution, so a dry run cannot
-        // observe it.
-        if let Some(before) = before {
-            assert_eq!(
-                typecheck_hash(dir).expect("hash") != before,
-                *expected,
+        let after = typecheck_hash(dir);
+        match mode {
+            Eager(_) => assert_eq!(
+                after.expect("eager hash after edit") != before.expect("eager hash before edit"),
+                expected,
                 "hash change for inputs {inputs} and {changed_file}"
-            );
+            ),
+            Jit(_) => {
+                assert_eq!(before, None, "JIT hashes are deferred during dry runs");
+                assert_eq!(after, None, "JIT hashes are deferred during dry runs");
+            }
         }
         assert_eq!(
             typecheck_affected(dir),
-            (*expected, *expected),
+            (expected, expected),
             "(run, query) affectedness for inputs {inputs} and {changed_file}"
         );
     }

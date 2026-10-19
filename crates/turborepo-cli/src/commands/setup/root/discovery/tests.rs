@@ -1,6 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
-use std::{ffi::OsString, fs};
+use std::{ffi::OsString, fs, sync::Arc};
+
+use turborepo_setup::git::FakeGit;
 
 use super::*;
 use crate::{cli::Command, commands::setup};
@@ -15,6 +17,7 @@ struct Fixture {
     _temp: tempfile::TempDir,
     root: AbsoluteSystemPathBuf,
     nested: AbsoluteSystemPathBuf,
+    git: Arc<FakeGit>,
 }
 
 impl Fixture {
@@ -36,6 +39,7 @@ impl Fixture {
             _temp: temp,
             root,
             nested,
+            git: FakeGit::shared(),
         }
     }
 
@@ -48,7 +52,7 @@ impl Fixture {
     }
 
     fn capture(&self, cwd: &str, config: Option<&str>) -> Discovery {
-        Discovery::capture_at(&self.args(cwd, config), &self.root).unwrap()
+        Discovery::capture_at(&self.args(cwd, config), &self.root, self.git.clone()).unwrap()
     }
 
     fn discovery(&self) -> Discovery {
@@ -73,7 +77,7 @@ fn real_parser_captures_relative_and_absolute_invocation_once() {
         assert!(d.revalidate().unwrap());
     }
     let args = Args::parse_args(vec!["turbo".into(), "setup".into()]).unwrap();
-    let d = Discovery::capture_at(&args, &f.nested).unwrap();
+    let d = Discovery::capture_at(&args, &f.nested, f.git.clone()).unwrap();
     assert!(!d.explicit_cwd);
     assert_eq!(d.root_path(), &*f.root);
     assert!(d.revalidate().unwrap());
@@ -88,7 +92,7 @@ fn explicit_config_is_invocation_relative_not_cwd_relative() {
         .unwrap();
     // Without an explicit choice, two config files conflict as before.
     assert!(matches!(
-        Discovery::capture_at(&f.args("apps/web", None), &f.root),
+        Discovery::capture_at(&f.args("apps/web", None), &f.root, f.git.clone()),
         Err(Error::Config(_))
     ));
     for config in ["turbo.jsonc", f.root.join_component("turbo.jsonc").as_str()] {
@@ -308,7 +312,7 @@ fn explicit_exact_root_does_not_begin_searching_ancestors_on_recheck() {
     assert!(exact.revalidate().unwrap());
     let args = Args::parse_args(vec!["turbo".into(), "setup".into()]).unwrap();
     assert!(matches!(
-        Discovery::capture_at(&args, &f.nested),
+        Discovery::capture_at(&args, &f.nested, f.git.clone()),
         Err(Error::Ambiguous { .. })
     ));
 }
@@ -373,7 +377,7 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
         let Some(Command::Setup { setup_args }) = &args.command else {
             panic!("not setup")
         };
-        setup::run(&args, setup_args)
+        setup::run(&args, setup_args, f.git.clone())
     };
     assert!(matches!(
         dispatch(&["--frozen", "--tools-only"]),
@@ -381,11 +385,14 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
             setup::lock_diagnostics::Error::Missing
         )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.
     ));
-    for flags in [&["--plan"][..], &["--__test-run"]] {
-        assert!(matches!(dispatch(flags), Err(setup::Error::NotImplemented)));
+    assert!(matches!(
+        dispatch(&["--__test-run"]),
+        Err(setup::Error::NotImplemented)
+    ));
+    // Plain plans and checks are read-only; this fixture has no lock.
+    for flags in [&["--plan"][..], &["--check"]] {
+        assert!(matches!(dispatch(flags), Err(e) if !matches!(e, setup::Error::NotImplemented)));
     }
-    // Plain --check is a read-only tools check; nothing is installed here.
-    assert!(matches!(dispatch(&["--check"]), Err(e) if !matches!(e, setup::Error::NotImplemented)));
     assert!(
         Args::parse_args(
             ["turbo", "setup", "--frozen", "--update-lock"]
@@ -398,7 +405,7 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
     let custom = f.root.join_component("custom.json");
     custom.create_with_contents(ENABLED).unwrap();
     assert!(matches!(
-        dispatch(&["--plan", "--root-turbo-json", custom.as_str()]),
+        dispatch(&["--__test-run", "--root-turbo-json", custom.as_str()]),
         Err(setup::Error::NotImplemented)
     ));
     f.root
@@ -425,15 +432,7 @@ fn production_run_preserves_disabled_parse_normalization_and_not_implemented() {
 fn git_init_and_worktree_file_boundaries_change_nested_discovery() {
     let f = Fixture::new();
     let d = f.discovery();
-    let status = std::process::Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(&f.nested)
-        .env_remove("GIT_DIR")
-        .env_remove("GIT_WORK_TREE")
-        .env_remove("GIT_INDEX_FILE")
-        .status()
-        .unwrap();
-    assert!(status.success());
+    turborepo_setup::git::fake_repository(f.nested.as_std_path()).unwrap();
     assert!(!d.revalidate().unwrap());
     // Root inference is deliberately file-presence-based, not a Git probe. A
     // worktree's .git file is as authoritative as a clone's .git directory.
@@ -447,7 +446,11 @@ fn git_init_and_worktree_file_boundaries_change_nested_discovery() {
     let explicit = f.capture(".", Some("turbo.json"));
     assert!(explicit.revalidate().unwrap());
     assert!(matches!(
-        Discovery::capture_at(&f.args("apps/web", Some("turbo.json")), &f.root),
+        Discovery::capture_at(
+            &f.args("apps/web", Some("turbo.json")),
+            &f.root,
+            f.git.clone(),
+        ),
         Err(Error::Nested { .. })
     ));
 }
@@ -481,4 +484,34 @@ fn cwd_and_config_symlink_retargeting_cannot_redirect_captured_context() {
     fs::remove_file(&config_link).unwrap();
     std::os::unix::fs::symlink(second.join_component("turbo.json"), &config_link).unwrap();
     assert!(matches!(custom.revalidate(), Err(Error::Outside { .. })));
+}
+
+#[test]
+fn effective_worktree_comes_from_the_injected_git() {
+    use turborepo_setup::git::Failure;
+    let f = Fixture::new();
+    fs::remove_dir(f.root.join_component(".git")).unwrap();
+    turborepo_setup::git::fake_repository(f.root.as_std_path()).unwrap();
+    let d = f.discovery();
+    let asked = f.git.queries();
+    assert!(asked > 0);
+    assert!(d.revalidate().unwrap());
+    assert!(f.git.queries() > asked);
+    // A different effective worktree is drift, not a new expectation.
+    f.git
+        .set_toplevel(f.root.as_std_path(), f.nested.as_std_path());
+    assert!(!d.revalidate().unwrap());
+    f.git
+        .set_toplevel(f.root.as_std_path(), f.root.as_std_path());
+    assert!(d.revalidate().unwrap());
+    f.git
+        .fail(Some(Failure::Fatal("fatal: not a git repository".into())));
+    let error = d.revalidate().err().unwrap().to_string();
+    assert!(
+        error.contains("cannot guard effective Git worktree"),
+        "{error}"
+    );
+    f.git.fail(Some(Failure::Spawn));
+    let error = d.revalidate().err().unwrap().to_string();
+    assert!(error.contains("not found on PATH"), "{error}");
 }

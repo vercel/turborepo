@@ -9,6 +9,7 @@
 use std::{
     borrow::Cow,
     collections::HashSet,
+    ffi::OsString,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -233,7 +234,7 @@ fn collapse_path(path: &str) -> Option<(Cow<'_, str>, usize)> {
 /// Adds the patterns the walker matches for the exclusion `glob`. Unless it
 /// already ends in `/**`, an exclusion also excludes everything under the
 /// paths it matches (`X` becomes `X` and `X/**`).
-pub fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
+fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
     if let Some(stripped) = glob.strip_suffix('/') {
         if stripped.ends_with("**") {
             exclude_paths.push(stripped.to_string());
@@ -250,17 +251,54 @@ pub fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
     }
 }
 
-/// Whether the walker expands the inclusion `glob` to `glob/**` when it names
-/// a directory. Inclusions containing any character that `wax` may treat as
-/// syntax are never read as a file path, so they are not expanded.
-pub fn expands_directory_inclusion(glob: &str) -> bool {
-    !regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(glob)
+/// The repo-relative patterns the walker excludes for the resolved exclusion
+/// `glob`: the paths it matches and everything under them. The walker applies
+/// exclusions to absolute paths, so the repository root (`""` or `"."`) and
+/// `**` both exclude `**`. Expanding a relative `**` would produce `**/**`,
+/// which `wax` rejects.
+pub fn walk_exclusion_patterns(glob: &str) -> Vec<String> {
+    let mut patterns = Vec::with_capacity(2);
+    match glob {
+        "" | "." | "**" => patterns.push("**".to_owned()),
+        _ => add_trailing_double_star(&mut patterns, glob),
+    }
+    patterns
+}
+
+/// The pattern the walker uses in place of the inclusion `glob` when `glob`
+/// names a directory. `None` when `glob` contains a character `wax` may treat
+/// as syntax, since the walker never reads those as a file path. The
+/// repository root (`""` or `"."`) becomes `**`.
+pub fn directory_inclusion_tree(glob: &str) -> Option<String> {
+    if regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(glob) {
+        return None;
+    }
+    Some(match glob.strip_suffix('/').unwrap_or(glob) {
+        "" | "." => "**".to_owned(),
+        directory => format!("{directory}/**"),
+    })
+}
+
+/// The subtree that an exact input selection also removes for the resolved
+/// exclusion `glob`, or covers for a literal inclusion: `X/**` for `X`.
+/// `None` when `glob` already ends in `**`. Unlike the walker, the repository
+/// root `"."` keeps its dot, which matches nothing in `wax`.
+pub fn exact_input_tree(glob: &str) -> Option<String> {
+    let path = glob.trim_end_matches('/');
+    if path == "**" || path.ends_with("/**") {
+        return None;
+    }
+    Some(if path.is_empty() {
+        "**".to_owned()
+    } else {
+        format!("{path}/**")
+    })
 }
 
 fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
-    if !expands_directory_inclusion(glob) {
+    let Some(tree) = directory_inclusion_tree(glob) else {
         return;
-    }
+    };
 
     // Globs are given in unix style
     let Ok(glob_path) = RelativeUnixPath::new(&*glob) else {
@@ -283,10 +321,7 @@ fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
     debug!("'{path}' is a directory");
 
     // Glob points to a dir, must add **
-    if !glob.ends_with('/') {
-        glob.push('/');
-    }
-    glob.push_str("**");
+    *glob = tree;
 }
 
 fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, WalkError> {
@@ -512,6 +547,62 @@ pub fn matches_literal_tree(path: &str, prefix: &str) -> bool {
         .is_some_and(|rest| rest.is_empty() || (rest.starts_with('/') && !rest.contains('\n')))
 }
 
+/// A relative glob of the shape `[<prefix>/]**/<segment>` or
+/// `[<prefix>/]**/<segment>/**` made only of plain segments, such as
+/// `**/node_modules/**` or `packages/a/**/dist`.
+/// [`LiteralSegmentGlob::is_match`] matches exactly the paths wax would,
+/// without compiling a regex.
+#[derive(Clone, Copy, Debug)]
+pub struct LiteralSegmentGlob<'a> {
+    prefix: Option<&'a str>,
+    segment: &'a str,
+    tree: bool,
+}
+
+/// Classifies a relative glob as a [`LiteralSegmentGlob`]. Deliberately
+/// conservative, like [`literal_tree_prefix`]. Always `None` on Windows.
+pub fn literal_segment_glob(pattern: &str) -> Option<LiteralSegmentGlob<'_>> {
+    if !PLAIN_EXCLUSIONS_SUPPORTED {
+        return None;
+    }
+    let (body, tree) = match pattern.strip_suffix("/**") {
+        Some(body) => (body, true),
+        None => (pattern, false),
+    };
+    let (prefix, segment) = match body.strip_prefix("**/") {
+        Some(segment) => (None, segment),
+        None => {
+            let (prefix, segment) = body.rsplit_once("/**/")?;
+            (Some(prefix), segment)
+        }
+    };
+    let plain = |segment: &str| plain_segment(segment) && segment != "." && segment != "..";
+    if !plain(segment) || !prefix.is_none_or(|prefix| prefix.split('/').all(plain)) {
+        return None;
+    }
+    Some(LiteralSegmentGlob {
+        prefix,
+        segment,
+        tree,
+    })
+}
+
+impl LiteralSegmentGlob<'_> {
+    /// Mirrors wax's encoding: a leading tree wildcard is `(?:/?|(.*/))`, an
+    /// inner one `(?:/|/(.*/))`, and a trailing one `(?:/?|/(.*))`.
+    pub fn is_match(&self, path: &str) -> bool {
+        let rest = match self.prefix {
+            None => Some(path.strip_prefix('/').unwrap_or(path)),
+            Some(prefix) => path
+                .strip_prefix(prefix)
+                .and_then(|rest| rest.strip_prefix('/')),
+        };
+        rest.is_some_and(|rest| {
+            segment_exclusion_matches(rest.as_bytes(), self.segment.as_bytes(), self.tree)
+        })
+    }
+}
+
 pub fn globwalk_with_settings(
     base_path: &AbsoluteSystemPath,
     include: &[ValidatedGlob],
@@ -629,6 +720,11 @@ struct PlainExclusion {
     /// `<path>/**`: matches `path` itself and everything beneath it.
     /// Otherwise the pattern matches exactly `path`.
     tree: bool,
+    /// `<path>/**/<segment>` (with `tree`: `<path>/**/<segment>/**`), the
+    /// shape of package managers' default `**/node_modules/**` workspace
+    /// exclusions once joined onto the walk root. See
+    /// [`segment_exclusion_matches`].
+    segment: Option<OsString>,
 }
 
 impl PlainExclusion {
@@ -636,6 +732,15 @@ impl PlainExclusion {
     /// trailing tree wildcard as `(?:/?|/.*)$` without the `s` flag, so a
     /// remainder containing a newline does not match.
     fn matches(&self, candidate: &Path) -> bool {
+        if let Some(segment) = &self.segment {
+            return candidate.strip_prefix(&self.path).is_ok_and(|rest| {
+                segment_exclusion_matches(
+                    rest.as_os_str().as_encoded_bytes(),
+                    segment.as_encoded_bytes(),
+                    self.tree,
+                )
+            });
+        }
         if self.tree {
             candidate
                 .strip_prefix(&self.path)
@@ -647,8 +752,57 @@ impl PlainExclusion {
 
     /// Whether this exclusion can match `root` or any path beneath it.
     fn may_match_under(&self, root: &Path) -> bool {
-        self.path.starts_with(root) || (self.tree && root.starts_with(&self.path))
+        self.path.starts_with(root)
+            || ((self.tree || self.segment.is_some()) && root.starts_with(&self.path))
     }
+}
+
+/// Whether the remainder `rest` of a path below an exclusion's literal prefix
+/// (separators normalized to `/`, no leading separator) is matched by
+/// `<prefix>/**/<segment>`, or by `<prefix>/**/<segment>/**` when `tree`.
+///
+/// Wax encodes the inner tree wildcard as `(?:/|/(.*/))` and a trailing one as
+/// `(?:/?|/(.*))`, both without the `s` flag. So `segment` must be a whole
+/// component of `rest` (the last one unless `tree`), and because `.*` covers
+/// every other byte of `rest`, `rest` must not contain a newline.
+fn segment_exclusion_matches(rest: &[u8], segment: &[u8], tree: bool) -> bool {
+    if rest.is_empty() || rest.contains(&b'\n') {
+        return false;
+    }
+    let mut components = rest.split(|byte| *byte == b'/');
+    if tree {
+        components.any(|component| component == segment)
+    } else {
+        components.next_back() == Some(segment)
+    }
+}
+
+/// Classifies a preprocessed (absolute) exclusion of the shape
+/// `<plain-prefix>/**/<plain-segment>` or
+/// `<plain-prefix>/**/<plain-segment>/**` (e.g. `/repo/**/node_modules/**`).
+/// Like [`classify_simple_pattern`], it is deliberately conservative: the
+/// prefix must be non-empty and every segment must consist of bytes wax treats
+/// literally.
+fn classify_segment_exclusion(pattern: &str) -> Option<PlainExclusion> {
+    let (body, tree) = match pattern.strip_suffix("/**") {
+        Some(body) => (body, true),
+        None => (pattern, false),
+    };
+    let (prefix, segment) = body.rsplit_once("/**/")?;
+    if !plain_segment(segment) || segment == "." || segment == ".." {
+        return None;
+    }
+    let prefix_segments: Vec<&str> = prefix.split('/').skip_while(|s| s.is_empty()).collect();
+    let plain_prefix = !prefix_segments.is_empty()
+        && prefix_segments.iter().enumerate().all(|(index, segment)| {
+            (index == 0 && is_plain_windows_drive(segment))
+                || (plain_segment(segment) && *segment != "." && *segment != "..")
+        });
+    plain_prefix.then(|| PlainExclusion {
+        path: simple_path(prefix),
+        tree,
+        segment: Some(OsString::from(segment)),
+    })
 }
 
 /// Wax matches literals case-insensitively by default on Windows, which the
@@ -949,14 +1103,22 @@ fn compile_globs<S: AsRef<str>>(
                 .push(PlainExclusion {
                     path: prefix,
                     tree: true,
+                    segment: None,
                 }),
             SimplePattern::Literal(literal) if PLAIN_EXCLUSIONS_SUPPORTED => {
                 plain_exclusions.push(PlainExclusion {
                     path: literal,
                     tree: false,
+                    segment: None,
                 })
             }
-            _ => complex_exclusions.push(path),
+            // `**/node_modules/**` and friends. Pruning on a bare
+            // `<prefix>/**/<segment>` match is exact for the same reason as for
+            // literals: `add_trailing_double_star` always emits its `/**` twin.
+            _ => match classify_segment_exclusion(&path) {
+                Some(exclusion) if PLAIN_EXCLUSIONS_SUPPORTED => plain_exclusions.push(exclusion),
+                _ => complex_exclusions.push(path),
+            },
         }
     }
 
@@ -1088,6 +1250,10 @@ fn try_decompose_shallow_wildcard(
     Some((prefix, suffix))
 }
 
+/// Below this many shallow-wildcard candidates, they are checked on the calling
+/// thread instead of the rayon pool.
+const PARALLEL_STAT_MIN_CANDIDATES: usize = 32;
+
 fn walk_compiled_globs(
     compiled: &CompiledGlobs,
     walk_type: WalkType,
@@ -1178,37 +1344,48 @@ fn walk_compiled_globs(
 
     let ex_patterns = &compiled.ex_patterns;
     let plain_exclusions = &compiled.plain_exclusions;
-    let shallow_results: Vec<AbsoluteSystemPathBuf> = shallow_candidates
-        .par_iter()
-        .filter_map(|candidate| {
-            let meta = candidate.symlink_metadata().ok()?;
-            let dominated = match walk_type {
-                WalkType::Files => meta.is_file() || meta.is_symlink(),
-                WalkType::Folders => meta.is_dir(),
-                WalkType::All => true,
-            };
-            if !dominated {
+    let shallow_match = |candidate: &PathBuf| -> Option<AbsoluteSystemPathBuf> {
+        let meta = candidate.symlink_metadata().ok()?;
+        let dominated = match walk_type {
+            WalkType::Files => meta.is_file() || meta.is_symlink(),
+            WalkType::Folders => meta.is_dir(),
+            WalkType::All => true,
+        };
+        if !dominated {
+            return None;
+        }
+        if excluded_by_plain(plain_exclusions, candidate) {
+            return None;
+        }
+        // Check exclusion patterns. Exclusion globs are compiled from
+        // absolute paths (e.g. `/repo/**/node_modules/**`), so match
+        // against the full candidate path using slash-normalized form for
+        // cross-platform correctness.
+        if !ex_patterns.is_empty() {
+            let candidate_str = candidate.to_slash_lossy();
+            if ex_patterns
+                .iter()
+                .any(|ex| ex.is_match(candidate_str.as_ref()))
+            {
                 return None;
             }
-            if excluded_by_plain(plain_exclusions, candidate) {
-                return None;
-            }
-            // Check exclusion patterns. Exclusion globs are compiled from
-            // absolute paths (e.g. `/repo/**/node_modules/**`), so match
-            // against the full candidate path using slash-normalized form for
-            // cross-platform correctness.
-            if !ex_patterns.is_empty() {
-                let candidate_str = candidate.to_slash_lossy();
-                if ex_patterns
-                    .iter()
-                    .any(|ex| ex.is_match(candidate_str.as_ref()))
-                {
-                    return None;
-                }
-            }
-            AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
-        })
-        .collect();
+        }
+        AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
+    };
+    // A handful of stats is faster on the calling thread than fanned out
+    // across the rayon pool, which wakes every worker.
+    let shallow_results: Vec<AbsoluteSystemPathBuf> =
+        if shallow_candidates.len() < PARALLEL_STAT_MIN_CANDIDATES {
+            shallow_candidates
+                .iter()
+                .filter_map(shallow_match)
+                .collect()
+        } else {
+            shallow_candidates
+                .par_iter()
+                .filter_map(shallow_match)
+                .collect()
+        };
 
     let mut results: HashSet<AbsoluteSystemPathBuf> = variant_globs
         .par_iter()
@@ -1725,8 +1902,8 @@ mod test {
 
     use crate::{
         Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
-        deduplicate_recursive_all_prefixes, escape_glob_literals, fix_glob_pattern, globwalk,
-        needs_path_cleaning,
+        deduplicate_recursive_all_prefixes, directory_inclusion_tree, escape_glob_literals,
+        exact_input_tree, fix_glob_pattern, globwalk, needs_path_cleaning, walk_exclusion_patterns,
     };
 
     #[cfg(unix)]
@@ -3124,6 +3301,65 @@ mod test {
         assert_eq!(glob, expected);
     }
 
+    #[test_case("pkg/dir", Some("pkg/dir/**") ; "directory")]
+    #[test_case("pkg/dir/", Some("pkg/dir/**") ; "trailing slash")]
+    #[test_case("", Some("**") ; "root")]
+    #[test_case(".", Some("**") ; "dot root")]
+    #[test_case("./", Some("**") ; "dot root slash")]
+    #[test_case("pkg/*.ts", None ; "wildcard")]
+    #[test_case("pkg/[ab]", None ; "class")]
+    #[test_case("pkg/{a,b}", None ; "alternative")]
+    #[test_case("pkg/$x", None ; "dollar")]
+    #[test_case(r"pkg/a\:b", None ; "escaped colon")]
+    fn test_directory_inclusion_tree(glob: &str, expected: Option<&str>) {
+        assert_eq!(directory_inclusion_tree(glob).as_deref(), expected);
+    }
+
+    #[test_case("", "." ; "empty and dot")]
+    #[test_case("", "./" ; "empty and dot slash")]
+    fn test_root_directory_inclusions_walk_the_whole_base(a: &str, b: &str) {
+        let tmpdir = TempDir::with_prefix("root-inclusion").unwrap();
+        let base = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
+        base.join_component("top.txt")
+            .create_with_contents(b"top")
+            .unwrap();
+        let nested = base.join_components(&["dir", "nested.txt"]);
+        nested.ensure_dir().unwrap();
+        nested.create_with_contents(b"nested").unwrap();
+
+        let walk = |include: &str| {
+            let include = ValidatedGlob::from_str(include).unwrap();
+            globwalk(base, &[include], &[], WalkType::Files).unwrap()
+        };
+        let expected = HashSet::from([base.join_component("top.txt"), nested]);
+        assert_eq!(walk(a), expected);
+        assert_eq!(walk(b), expected);
+    }
+
+    #[test_case("pkg/dist", &["pkg/dist/**", "pkg/dist"] ; "path")]
+    #[test_case("pkg/dist/", &["pkg/dist/**"] ; "trailing slash")]
+    #[test_case("pkg/**", &["pkg/**"] ; "already a tree")]
+    #[test_case("pkg/**/", &["pkg/**"] ; "tree with trailing slash")]
+    #[test_case("**/*.log", &["**/*.log/**", "**/*.log"] ; "glob")]
+    #[test_case("", &["**"] ; "root")]
+    #[test_case(".", &["**"] ; "dot root")]
+    #[test_case("**", &["**"] ; "everything")]
+    fn test_walk_exclusion_patterns(glob: &str, expected: &[&str]) {
+        assert_eq!(walk_exclusion_patterns(glob), expected);
+    }
+
+    #[test_case("pkg/x", Some("pkg/x/**") ; "path")]
+    #[test_case("pkg/x/", Some("pkg/x/**") ; "trailing slash")]
+    #[test_case("**/nested", Some("**/nested/**") ; "glob")]
+    #[test_case("", Some("**") ; "root")]
+    #[test_case(".", Some("./**") ; "dot root keeps its dot")]
+    #[test_case("**", None ; "everything")]
+    #[test_case("**/", None ; "everything with trailing slash")]
+    #[test_case("pkg/**", None ; "already a tree")]
+    fn test_exact_input_tree(glob: &str, expected: Option<&str>) {
+        assert_eq!(exact_input_tree(glob).as_deref(), expected);
+    }
+
     // Regression tests for https://github.com/vercel/turborepo/issues/2517
     // Workspace packages behind symlinked directories must be discoverable.
     #[cfg(unix)]
@@ -3676,8 +3912,16 @@ mod plain_exclusion_test {
         ];
         for pattern in patterns {
             let exclusion = match classify_simple_pattern(pattern) {
-                SimplePattern::RecursiveAll(path) => PlainExclusion { path, tree: true },
-                SimplePattern::Literal(path) => PlainExclusion { path, tree: false },
+                SimplePattern::RecursiveAll(path) => PlainExclusion {
+                    path,
+                    tree: true,
+                    segment: None,
+                },
+                SimplePattern::Literal(path) => PlainExclusion {
+                    path,
+                    tree: false,
+                    segment: None,
+                },
                 _ => panic!("{pattern} should classify as a plain exclusion"),
             };
             let glob = Glob::new(pattern).unwrap();
@@ -3728,6 +3972,40 @@ mod plain_exclusion_test {
             "crates/[a]/**",
         ] {
             assert_eq!(literal_tree_prefix(pattern), None, "{pattern}");
+        }
+    }
+
+    #[test]
+    fn shallow_exclusions_apply_on_both_sides_of_parallel_threshold() {
+        for count in [
+            PARALLEL_STAT_MIN_CANDIDATES - 1,
+            PARALLEL_STAT_MIN_CANDIDATES,
+        ] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            let mut expected = HashSet::new();
+            for index in 0..count {
+                let path = tmp
+                    .path()
+                    .join(format!("packages/pkg-{index}/package.json"));
+                std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                std::fs::write(&path, "{}").unwrap();
+                if index > 1 {
+                    expected.insert(AbsoluteSystemPathBuf::try_from(path).unwrap());
+                }
+            }
+            let include = [ValidatedGlob::from_str("packages/*/package.json").unwrap()];
+            let exclude = [
+                ValidatedGlob::from_str("packages/pkg-0/package.json").unwrap(),
+                ValidatedGlob::from_str("packages/pkg-1/**").unwrap(),
+            ];
+            for walk_type in [WalkType::Files, WalkType::All] {
+                assert_eq!(
+                    globwalk(&root, &include, &exclude, walk_type).unwrap(),
+                    expected,
+                    "{count} candidates, {walk_type:?}"
+                );
+            }
         }
     }
 
@@ -3786,6 +4064,241 @@ mod plain_exclusion_test {
                 let wax_only =
                     walk_compiled_globs(&compiled, walk_type, Settings::default()).unwrap();
                 assert_eq!(plain, wax_only, "{include:?} {walk_type:?}");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(windows))]
+mod segment_exclusion_test {
+    use std::path::Path;
+
+    use wax::{Glob, Program};
+
+    use super::*;
+
+    const SEGMENTS: &[&str] = &["node_modules", "bower_components", ".git", "a b+c@d"];
+
+    /// Paths below `/repo` built around each segment: whole components,
+    /// substrings, case variants, nesting, newlines before, inside, and after.
+    fn candidates(segment: &str) -> Vec<String> {
+        let upper = segment.to_uppercase();
+        let rels = [
+            segment.to_string(),
+            format!("{segment}/x"),
+            format!("{segment}/x/y.js"),
+            format!("a/{segment}"),
+            format!("a/{segment}/b"),
+            format!("a/b/{segment}/{segment}/c"),
+            format!("my_{segment}"),
+            format!("a/my_{segment}/b"),
+            format!("{segment}_x/b"),
+            format!("a/{segment}x"),
+            format!("a/x{segment}"),
+            format!("{upper}/b"),
+            format!("a\n/{segment}"),
+            format!("a/{segment}/b\nc"),
+            format!("a/{segment}\n"),
+            format!("a\nb/{segment}"),
+            format!("{segment}/\n"),
+            "a/b".to_string(),
+            "".to_string(),
+        ];
+        let mut out: Vec<String> = rels.iter().map(|rel| format!("/repo/{rel}")).collect();
+        out.extend([
+            "/repo".to_string(),
+            format!("/repo2/{segment}"),
+            format!("/{segment}/repo"),
+            format!("/other/{segment}"),
+        ]);
+        out
+    }
+
+    #[test]
+    fn segment_exclusions_match_like_wax() {
+        for segment in SEGMENTS {
+            for pattern in [
+                format!("/repo/**/{segment}/**"),
+                format!("/repo/**/{segment}"),
+                format!("/repo/sub dir/**/{segment}/**"),
+                format!("/repo/sub dir/**/{segment}"),
+            ] {
+                let exclusion = classify_segment_exclusion(&pattern)
+                    .unwrap_or_else(|| panic!("{pattern} should be a segment exclusion"));
+                let glob = Glob::new(&pattern).unwrap();
+                for candidate in candidates(segment).iter().chain(
+                    candidates(segment)
+                        .iter()
+                        .map(|c| c.replacen("/repo", "/repo/sub dir", 1))
+                        .collect::<Vec<_>>()
+                        .iter(),
+                ) {
+                    if candidate.ends_with('/') || candidate.contains("//") {
+                        continue;
+                    }
+                    assert_eq!(
+                        exclusion.matches(Path::new(candidate)),
+                        glob.is_match(candidate.as_str()),
+                        "{pattern} vs {candidate:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn literal_segment_globs_match_like_wax() {
+        for segment in SEGMENTS {
+            for pattern in [
+                format!("**/{segment}/**"),
+                format!("**/{segment}"),
+                format!("packages/a/**/{segment}/**"),
+                format!("packages/a/**/{segment}"),
+            ] {
+                let matcher = literal_segment_glob(&pattern)
+                    .unwrap_or_else(|| panic!("{pattern} should be a segment glob"));
+                let glob = Glob::new(&pattern).unwrap();
+                for candidate in candidates(segment) {
+                    for path in [
+                        candidate.trim_start_matches("/repo/").to_string(),
+                        candidate.replacen("/repo", "packages/a", 1),
+                        candidate.replacen("/repo", "", 1),
+                        candidate.replacen("/repo", "/", 1),
+                    ] {
+                        assert_eq!(
+                            matcher.is_match(&path),
+                            glob.is_match(path.as_str()),
+                            "{pattern} vs {path:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn non_plain_segment_patterns_keep_wax() {
+        for pattern in [
+            "/repo/**/node_*/**",
+            "/repo/**/a/b/**",
+            "/repo/**/a/**/b/**",
+            "/repo/**/{a,b}/**",
+            "/repo/**/./**",
+            "/repo/**/../**",
+            "/**/node_modules/**",
+            "/repo/*/node_modules/**",
+            "/repo/a\\:b/**/node_modules/**",
+            "/repo/**/node_modules/*",
+            "/repo/**/[n]ode_modules/**",
+        ] {
+            assert!(classify_segment_exclusion(pattern).is_none(), "{pattern}");
+        }
+        for pattern in [
+            "**/node_*/**",
+            "**/a/b/**",
+            "a/**/b/**/c",
+            "**/{a,b}/**",
+            "**/./**",
+            "../**/a/**",
+            "a/*/**/b",
+            "**/**/a",
+            "a//**/b",
+        ] {
+            assert!(literal_segment_glob(pattern).is_none(), "{pattern}");
+        }
+    }
+
+    /// Walks with segment exclusions must equal walks with every exclusion
+    /// compiled by wax, for each walker and the settings package discovery
+    /// and hashing use.
+    #[test]
+    fn segment_exclusions_walk_like_wax_exclusions() {
+        let tmp = tempfile::tempdir().unwrap();
+        for file in [
+            "package.json",
+            "node_modules/dep/package.json",
+            "packages/a/package.json",
+            "packages/a/node_modules/dep/package.json",
+            "packages/a/node_modules/.bin/tool",
+            "packages/a/my_node_modules/package.json",
+            "packages/a/node_modules_extra/package.json",
+            "packages/a/src/node_modules/deep/package.json",
+            "packages/a/bower_components/x/package.json",
+            "packages/node_modules/package.json",
+            "packages/b/package.json",
+            "packages/b/src/index.ts",
+            "packages/b/Node_Modules/package.json",
+            "packages/b/new\nline/node_modules/package.json",
+            "packages/b/node_modules/new\nline/package.json",
+            "packages/c/package.json",
+        ] {
+            let path = tmp.path().join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "{}").unwrap();
+        }
+        // A symlinked package directory and a symlink named node_modules.
+        std::os::unix::fs::symlink("a", tmp.path().join("packages/linked")).unwrap();
+        std::os::unix::fs::symlink(
+            "../a/node_modules",
+            tmp.path().join("packages/c/node_modules"),
+        )
+        .unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let includes = [
+            "packages/*/package.json",
+            "packages/**/package.json",
+            "**/package.json",
+            "packages/**",
+            "packages/a/**/*.json",
+        ];
+        let exclusion_sets: &[&[&str]] = &[
+            &["**/node_modules/**", "**/bower_components/**"],
+            &["**/node_modules", "packages/a/**/src"],
+            &["**/node_modules/**", "**/test/**", "**/tests/**"],
+        ];
+        let settings_list = [
+            Settings::default(),
+            Settings::default().follow_links(),
+            Settings::default().ignore_nested_packages(),
+        ];
+        for settings in settings_list {
+            for walk_type in [WalkType::Files, WalkType::All] {
+                for include in includes {
+                    for exclusions in exclusion_sets {
+                        let include = [ValidatedGlob::from_str(include).unwrap()];
+                        let exclude: Vec<ValidatedGlob> = exclusions
+                            .iter()
+                            .map(|ex| ValidatedGlob::from_str(ex).unwrap())
+                            .collect();
+                        let plain =
+                            globwalk_with_settings(&root, &include, &exclude, walk_type, settings)
+                                .unwrap();
+                        let mut compiled =
+                            compile_globs(&root, &include, &exclude, settings).unwrap();
+                        assert!(
+                            compiled
+                                .plain_exclusions
+                                .iter()
+                                .any(|ex| ex.segment.is_some()),
+                            "{exclusions:?} should produce segment exclusions"
+                        );
+                        let (_, _, exclude_paths) =
+                            preprocess_paths_and_globs(&root, &include, &exclude).unwrap();
+                        compiled.plain_exclusions.clear();
+                        compiled.ex_patterns = exclude_paths
+                            .into_iter()
+                            .map(glob_with_contextual_error)
+                            .collect::<Result<_, _>>()
+                            .unwrap();
+                        compiled.ex_filter = FilterAny::any(compiled.ex_patterns.clone()).unwrap();
+                        let wax_only = walk_compiled_globs(&compiled, walk_type, settings).unwrap();
+                        assert_eq!(
+                            plain, wax_only,
+                            "{include:?} !{exclusions:?} {walk_type:?} {settings:?}"
+                        );
+                    }
+                }
             }
         }
     }

@@ -260,7 +260,7 @@ fn refresh_late_guards_keep_original_discovery_and_snapshot_across_publication()
                             .unwrap();
                         }
                     }
-                    4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
+                    4 => fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                     5 => {
                         let mut foreign: Value =
                             serde_json::from_slice(&fs::read(root.join("turbo.lock")).unwrap())

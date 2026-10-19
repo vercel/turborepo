@@ -117,9 +117,7 @@ impl Plan {
         let eligible: Vec<_> = eligible.into_iter().collect();
         let configured = eligible.iter().any(|id| {
             let configured = policy.toolchain(id);
-            configured.tools.is_some()
-                || configured.dependencies.is_some()
-                || configured.lifecycle_scripts.is_some()
+            configured.tools.is_some() || configured.dependencies.is_some()
         });
         Self(
             eligible

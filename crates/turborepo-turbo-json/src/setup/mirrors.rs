@@ -2,7 +2,10 @@
 //! `turbo setup` downloads from: `turbo.lock` keeps the official URLs, and
 //! every download is verified against its locked digest. The matching
 //! `TURBO_SETUP_*` environment variables override these values for one
-//! invocation.
+//! invocation. These settings apply only to tool provisioning, not dependency
+//! installation. Native ecosystem configuration may coexist but cannot select
+//! setup's tool sources. A selected mirror never falls back to the official
+//! source on failure.
 
 use std::sync::Arc;
 

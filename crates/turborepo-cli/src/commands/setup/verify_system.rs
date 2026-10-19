@@ -31,7 +31,7 @@ pub(super) fn provision(
     let snapshot = if lock_mode == LockMode::Write && !force {
         let check = || {
             provision::revalidate(discovery)?;
-            provision::storage(root)
+            provision::storage(root, discovery.git())
         };
         check()?;
         let outcome = reconcile::reconcile_checked(
