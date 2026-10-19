@@ -129,6 +129,22 @@ impl HTTPCache {
         })
     }
 
+    pub(crate) async fn test_results(
+        &self,
+        write: bool,
+        payload: &serde_json::Value,
+    ) -> Result<Option<serde_json::Value>, CacheError> {
+        if self.signer_verifier.is_some() || self.is_disabled() {
+            return Ok(None);
+        }
+        self.execute_with_token_refresh("experimental-test-results", |auth| async move {
+            self.client
+                .experimental_test_results(&auth, write, payload)
+                .await
+        })
+        .await
+    }
+
     #[cfg(test)]
     pub(crate) fn trip_outage_for_test(&self) {
         for _ in 0..3 {
@@ -838,6 +854,18 @@ mod test {
             LazyScmState::resolved(None),
         )
         .unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_results_respect_the_outage_breaker() {
+        let cache = cache_with_token("token");
+        cache.trip_outage_for_test();
+        assert!(matches!(
+            cache
+                .test_results(false, &serde_json::json!({"keys": []}))
+                .await,
+            Err(crate::CacheError::RemoteCacheUnavailable)
+        ));
     }
 
     /// A compressed archive containing one file, `name`, with `contents`.

@@ -30,6 +30,10 @@ use ts_rs::TS;
 #[schemars(rename_all = "camelCase")]
 #[deserializable()]
 pub struct FutureFlags {
+    /// Cache supported JavaScript Jest test files independently. Unsupported
+    /// commands and configurations retain ordinary task caching.
+    #[serde(default)]
+    pub experimental_test_caching: bool,
     /// When using `outputLogs: "errors-only"`, show task hashes when tasks
     /// complete successfully. This provides visibility into which tasks are
     /// running without showing full output logs.
@@ -168,8 +172,9 @@ impl TS for FutureFlags {
     }
 
     fn inline() -> String {
-        "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+        "{ experimentalTestCaching?: boolean, errorsOnlyShowHash?: boolean, \
+         experimentalObservability?: boolean, longerSignatureKey?: boolean, \
+         affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
@@ -179,8 +184,9 @@ impl TS for FutureFlags {
     }
 
     fn inline_flattened() -> String {
-        "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+        "{ experimentalTestCaching?: boolean, errorsOnlyShowHash?: boolean, \
+         experimentalObservability?: boolean, longerSignatureKey?: boolean, \
+         affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
          watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
@@ -190,10 +196,11 @@ impl TS for FutureFlags {
     }
 
     fn decl() -> String {
-        "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
-         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+        "type FutureFlags = { experimentalTestCaching?: boolean, errorsOnlyShowHash?: boolean, \
+         experimentalObservability?: boolean, longerSignatureKey?: boolean, \
+         affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
+         githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: boolean, \
+         filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
          experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
@@ -201,10 +208,11 @@ impl TS for FutureFlags {
     }
 
     fn decl_concrete() -> String {
-        "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
-         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+        "type FutureFlags = { experimentalTestCaching?: boolean, errorsOnlyShowHash?: boolean, \
+         experimentalObservability?: boolean, longerSignatureKey?: boolean, \
+         affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
+         githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: boolean, \
+         filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
          experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"

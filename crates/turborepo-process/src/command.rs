@@ -18,6 +18,7 @@ pub struct Command {
     open_stdin: bool,
     env_clear: bool,
     serial_group: Option<String>,
+    pub javascript_test_command: Option<Vec<String>>,
 }
 
 impl Command {
@@ -31,6 +32,7 @@ impl Command {
             open_stdin: false,
             env_clear: false,
             serial_group: None,
+            javascript_test_command: None,
         }
     }
 
@@ -104,6 +106,14 @@ impl Command {
         self.open_stdin
     }
 
+    pub fn working_directory(&self) -> Option<&AbsoluteSystemPathBuf> {
+        self.cwd.as_ref()
+    }
+
+    pub fn replace_program(&mut self, program: impl AsRef<OsStr>) {
+        self.program = program.as_ref().to_owned();
+    }
+
     /// Program for the command
     pub fn program(&self) -> &OsStr {
         &self.program
@@ -135,6 +145,7 @@ impl From<Command> for std::process::Command {
             open_stdin,
             env_clear,
             serial_group: _,
+            javascript_test_command: _,
         } = value;
 
         let mut cmd = std::process::Command::new(program);

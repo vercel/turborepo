@@ -308,6 +308,31 @@ Enable experimental features that will become the default behavior in future ver
   cache](/docs/crafting-your-repository/caching).
 </Callout>
 
+#### `experimentalTestCaching`
+
+Default: `false`
+
+Cache successful JavaScript test-file results independently for supported Jest 30 commands. Each run discovers test files, traces their static dependencies, restores matching results, and executes the remaining files together.
+
+```json title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalTestCaching": true
+  },
+  "tasks": {
+    "test": {}
+  }
+}
+```
+
+The initial implementation accepts plain `jest` commands, optionally with `--runInBand`, and a `jest` object in the package's `package.json`. Tests must use the Node environment, disable transforms with `"transform": {}`, and use static relative JavaScript or JSON imports. Tests with coverage, snapshots, custom environments, setup hooks, executable Jest configuration, or unsupported loading behavior use ordinary task caching instead. Explicit task input globs, deferred inputs, and declared output files also retain ordinary task caching.
+
+Supported tasks report `test cache: N hit, M miss`. A fully cached task does not execute its tests. A failed or incomplete execution batch publishes no new results. Cached results store pass counts, not replayable test logs.
+
+Local results use the configured cache directory. Remote results require an experimental bulk-payload capability; existing remote servers without that capability retain ordinary task caching. This feature never falls back to a remote request per test file. Signature-enabled remote caching and configured cache eviction limits also retain ordinary task caching.
+
+Prerequisite task hashes remain part of every test-file key. Changes to a prerequisite can therefore invalidate all consuming test files. The flag does not enable `$TURBO_COMMAND$` expansion.
+
 #### `errorsOnlyShowHash`
 
 Default: `false`

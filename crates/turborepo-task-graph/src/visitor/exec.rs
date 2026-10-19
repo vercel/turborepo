@@ -67,7 +67,8 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
             visitor.run_opts.task_args(),
             visitor.micro_frontends_configs,
             command_overrides,
-        );
+        )
+        .with_test_caching(visitor.run_opts.experimental_test_caching());
         let pkg_graph_provider = if visitor.managed_environment.is_some() {
             pkg_graph_provider.with_managed_path()
         } else {
@@ -132,7 +133,13 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
 
         let pretty_prefix = self.prefix_with_color(&task_id);
 
+        let test_context_hash = self
+            .visitor
+            .task_hasher
+            .task_hash_tracker()
+            .test_context_hash(&task_id);
         Ok(Some(TaskExecutor {
+            test_context_hash,
             task_id,
             task_id_for_display,
             task_hash,

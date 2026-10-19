@@ -30,6 +30,7 @@ pub struct CacheMultiplexer {
     // being read-only
     should_print_skipping_remote_put: AtomicBool,
     cache_config: CacheConfig,
+    test_results_allowed: bool,
     fs: Option<Arc<FSCache>>,
     http: Option<Arc<HTTPCache>>,
     scm_state: LazyScmState,
@@ -111,10 +112,88 @@ impl CacheMultiplexer {
             should_print_skipping_remote_put: AtomicBool::new(true),
             should_use_http_cache: AtomicBool::new(http_cache.is_some()),
             cache_config: opts.cache,
+            test_results_allowed: opts.cache_max_age.is_none() && opts.cache_max_size.is_none(),
             fs: fs_cache,
             http: http_cache,
             scm_state,
         })
+    }
+
+    pub(crate) async fn fetch_test_results(
+        &self,
+        keys: &[String],
+        read: bool,
+    ) -> Result<Option<crate::test_results::TestResults>, CacheError> {
+        use crate::test_results::{MAX_TEST_RESULTS, TestResults, read_local, validate_results};
+        if !self.test_results_allowed || keys.len() > MAX_TEST_RESULTS {
+            return Ok(None);
+        }
+        let mut results = std::collections::BTreeMap::new();
+        let mut source = crate::CacheSource::Local;
+        if read
+            && self.cache_config.local.read
+            && let Some(fs) = &self.fs
+        {
+            let directory = fs.cache_directory().as_std_path().to_owned();
+            let keys = keys.to_vec();
+            results = tokio::task::spawn_blocking(move || read_local(&directory, &keys)).await?;
+        }
+        let missing: Vec<_> = keys
+            .iter()
+            .filter(|key| !results.contains_key(*key))
+            .cloned()
+            .collect();
+        if (self.cache_config.remote.read || self.cache_config.remote.write) && self.http.is_some()
+        {
+            let Some(http) = self.get_http_cache() else {
+                return Ok(None);
+            };
+            let query = if read && self.cache_config.remote.read {
+                missing.as_slice()
+            } else {
+                &[]
+            };
+            let Some(payload) = http
+                .test_results(false, &serde_json::json!({"keys": query}))
+                .await?
+            else {
+                return Ok(None);
+            };
+            let Some(remote) = validate_results(payload, query) else {
+                return Ok(None);
+            };
+            if !remote.is_empty() {
+                source = crate::CacheSource::Remote;
+            }
+            results.extend(remote);
+        }
+        Ok(Some(TestResults {
+            hits: results,
+            source,
+        }))
+    }
+
+    pub(crate) async fn save_test_results(
+        &self,
+        results: std::collections::BTreeMap<String, crate::test_results::TestResult>,
+    ) -> Result<(), CacheError> {
+        if self.cache_config.local.write
+            && let Some(fs) = &self.fs
+        {
+            let directory = fs.cache_directory().as_std_path().to_owned();
+            let local = results.clone();
+            tokio::task::spawn_blocking(move || {
+                crate::test_results::write_local(&directory, &local)
+            })
+            .await??;
+        }
+        if self.cache_config.remote.write
+            && let Some(http) = self.get_http_cache()
+        {
+            http.test_results(true, &serde_json::json!({"results": results}))
+                .await?;
+        }
+        Ok(())
     }
 
     // This is technically a TOCTOU bug, but at worst it'll cause

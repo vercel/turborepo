@@ -52,7 +52,7 @@ pub type EnvVarPairs = Vec<String>;
 /// This matches the type from turborepo-env::EnvironmentVariablePairs.
 pub type EnvironmentVariablePairs = Vec<String>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TaskHashable<'a> {
     // hashes
     pub global_hash: &'a str,

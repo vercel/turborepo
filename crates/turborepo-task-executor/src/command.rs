@@ -168,6 +168,7 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// Lazily resolved package-manager binary path for JS framing.
     package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     managed_path: bool,
+    experimental_test_caching: bool,
     /// Lazily resolved cargo binary path for Cargo framing.
     cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     /// Lazily resolved uv binary path for Python framing.
@@ -190,6 +191,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             command_overrides,
             package_manager_binary: std::sync::OnceLock::new(),
             managed_path: false,
+            experimental_test_caching: false,
             cargo_binary: std::sync::OnceLock::new(),
             uv_binary: std::sync::OnceLock::new(),
             go_binary: std::sync::OnceLock::new(),
@@ -200,6 +202,11 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     /// Ordinary repositories retain their original process-PATH lookup.
     pub fn with_managed_path(mut self) -> Self {
         self.managed_path = true;
+        self
+    }
+
+    pub fn with_test_caching(mut self, enabled: bool) -> Self {
+        self.experimental_test_caching = enabled;
         self
     }
 
@@ -338,7 +345,38 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             return Ok(None);
         };
 
+        let test_command =
+            if self.experimental_test_caching && package_context.is_package_json_scope() {
+                override_command
+                    .map(|argv| argv.to_vec())
+                    .or_else(|| {
+                        let script = package_context
+                            .native_tasks()
+                            .get(task_id.task())?
+                            .script()?;
+                        // Do not interpret shell syntax as argv. Only a plain Jest invocation
+                        // can be replaced without bypassing package-manager behavior.
+                        let script = script.as_inner();
+                        if script.chars().any(|c| ";&|$`<>\\\n".contains(c)) {
+                            return None;
+                        }
+                        shell_words::split(script).ok()
+                    })
+                    .map(|mut argv| {
+                        argv.extend(
+                            self.task_args
+                                .args_for_task(task_id)
+                                .unwrap_or_default()
+                                .iter()
+                                .cloned(),
+                        );
+                        argv
+                    })
+            } else {
+                None
+            };
         let mut cmd = Command::new(spec.program);
+        cmd.javascript_test_command = test_command;
         cmd.args(spec.args);
         cmd.current_dir(spec.cwd);
         if let Some(group) = spec.serial_group {

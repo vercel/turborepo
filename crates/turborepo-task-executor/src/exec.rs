@@ -159,6 +159,8 @@ pub enum SuccessOutcome {
     Run,
     /// Task was executed but log flush failed, so outputs should not be cached
     RunOutputError,
+    /// Per-file results were handled separately; never save a parent artifact.
+    TestRun,
 }
 
 /// Internal errors that can occur during task execution.
@@ -228,6 +230,7 @@ pub struct TaskExecutor<H, E, W, A> {
     pub task_id: TaskId<'static>,
     pub task_id_for_display: String,
     pub task_hash: String,
+    pub test_context_hash: Option<String>,
 
     // Execution
     pub cmd: Command,
@@ -347,9 +350,9 @@ where
             Ok(ExecOutcome::Success(outcome)) => {
                 match outcome {
                     SuccessOutcome::CacheHit => tracker.cached().await,
-                    SuccessOutcome::Run | SuccessOutcome::RunOutputError => {
-                        tracker.build_succeeded(0).await
-                    }
+                    SuccessOutcome::Run
+                    | SuccessOutcome::RunOutputError
+                    | SuccessOutcome::TestRun => tracker.build_succeeded(0).await,
                 };
             }
             Ok(ExecOutcome::Task { exit_code, message }) => {
@@ -394,31 +397,80 @@ where
         }
 
         let tui_sender = task_output.sender();
-        let cache_result = validated_restore(
-            self.task_cache
-                .restore_outputs(task_handle, tui_sender, telemetry)
-                .instrument(tracing::info_span!("cache_restore", task = %self.task_id)),
-            self.managed_environment.as_deref(),
-        )
-        .await?;
-        match cache_result {
-            Ok(Some(status)) => {
-                self.hash_tracker.insert_expanded_outputs(
-                    self.task_id.clone(),
-                    self.task_cache.expanded_outputs().to_vec(),
-                );
-                self.hash_tracker
-                    .insert_cache_status(self.task_id.clone(), status);
-                return Ok(ExecOutcome::Success(SuccessOutcome::CacheHit));
+        let mut test_plan = if self.task_cache.test_caching_enabled()
+            && !self.task_access.is_enabled()
+            && !self.takes_input
+            && let Some(context) = &self.test_context_hash
+        {
+            crate::test_cache::TestPlan::discover(
+                &self.cmd,
+                self.task_cache.repository_root(),
+                self.task_id.task(),
+                context,
+                &self.manager,
+                &self.task_id,
+            )
+            .await
+        } else {
+            None
+        };
+        if let Some(plan) = &mut test_plan {
+            match self.task_cache.fetch_test_results(&plan.keys()).await {
+                Ok(Some(hits)) if plan.inputs_unchanged() => {
+                    let source = hits.source;
+                    let hits = plan.retain_misses(&hits.hits);
+                    self.task_cache.report_test_counts(
+                        task_handle,
+                        tui_sender,
+                        hits,
+                        plan.misses(),
+                    );
+                    if plan.misses() == 0 {
+                        if let Some(tools) = &self.managed_environment {
+                            tools.revalidate().map_err(InternalError::ManagedTools)?;
+                        }
+                        self.hash_tracker.insert_cache_status(
+                            self.task_id.clone(),
+                            turborepo_cache::CacheHitMetadata {
+                                source,
+                                time_saved: 0,
+                                sha: None,
+                                dirty_hash: None,
+                            },
+                        );
+                        return Ok(ExecOutcome::Success(SuccessOutcome::CacheHit));
+                    }
+                }
+                _ => test_plan = None,
             }
-            Ok(None) => (),
-            Err(e) => {
-                telemetry.track_error(TrackedErrors::ErrorFetchingFromCache);
-                task_handle.emit(turborepo_log::LogEvent::new(
-                    turborepo_log::Level::Error,
-                    turborepo_log::Source::task(&self.task_id_for_display),
-                    format!("error fetching from cache: {e}"),
-                ));
+        }
+        if test_plan.is_none() {
+            let cache_result = validated_restore(
+                self.task_cache
+                    .restore_outputs(task_handle, tui_sender, telemetry)
+                    .instrument(tracing::info_span!("cache_restore", task = %self.task_id)),
+                self.managed_environment.as_deref(),
+            )
+            .await?;
+            match cache_result {
+                Ok(Some(status)) => {
+                    self.hash_tracker.insert_expanded_outputs(
+                        self.task_id.clone(),
+                        self.task_cache.expanded_outputs().to_vec(),
+                    );
+                    self.hash_tracker
+                        .insert_cache_status(self.task_id.clone(), status);
+                    return Ok(ExecOutcome::Success(SuccessOutcome::CacheHit));
+                }
+                Ok(None) => (),
+                Err(e) => {
+                    telemetry.track_error(TrackedErrors::ErrorFetchingFromCache);
+                    task_handle.emit(turborepo_log::LogEvent::new(
+                        turborepo_log::Level::Error,
+                        turborepo_log::Source::task(&self.task_id_for_display),
+                        format!("error fetching from cache: {e}"),
+                    ));
+                }
             }
         }
 
@@ -443,7 +495,9 @@ where
             tools.revalidate().map_err(InternalError::ManagedTools)?;
         }
         // Spawn the process
-        let cmd = self.cmd.clone();
+        let cmd = test_plan
+            .as_ref()
+            .map_or_else(|| self.cmd.clone(), |plan| plan.command());
         let mut process =
             match self
                 .manager
@@ -549,7 +603,18 @@ where
             status
         };
         match exit_status {
-            ChildExit::Finished(Some(0)) => Ok(ExecOutcome::Success(SuccessOutcome::Run)),
+            ChildExit::Finished(Some(0)) => {
+                if let Some(plan) = test_plan {
+                    if let Some(results) = plan.successful_results()
+                        && let Err(error) = self.task_cache.save_test_results(results).await
+                    {
+                        error!("error caching test results: {error}");
+                    }
+                    Ok(ExecOutcome::Success(SuccessOutcome::TestRun))
+                } else {
+                    Ok(ExecOutcome::Success(SuccessOutcome::Run))
+                }
+            }
             ChildExit::Finished(Some(code)) => {
                 if let Err(e) = self.task_cache.on_error(task_handle, tui_sender) {
                     error!("error reading logs: {e}");
@@ -871,6 +936,7 @@ mod tests {
         for result in [
             Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)),
             Ok(ExecOutcome::Success(SuccessOutcome::RunOutputError)),
+            Ok(ExecOutcome::Success(SuccessOutcome::TestRun)),
             Ok(ExecOutcome::Task {
                 exit_code: Some(1),
                 message: "failed".to_string(),

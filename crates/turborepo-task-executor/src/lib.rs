@@ -23,6 +23,7 @@ mod command;
 mod exec;
 mod managed;
 mod output;
+mod test_cache;
 
 pub use managed::ManagedEnvironment;
 mod visitor;

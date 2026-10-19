@@ -323,6 +323,8 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalSetup?: boolean;
+  /** Cache supported JavaScript Jest test files independently. */
+  experimentalTestCaching?: boolean;
 }
 
 export interface GlobalConfig {

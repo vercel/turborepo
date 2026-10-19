@@ -424,6 +424,11 @@
           "default": false,
           "type": "boolean"
         },
+        "experimentalTestCaching": {
+          "description": "Cache supported JavaScript Jest test files independently. Unsupported commands and configurations retain ordinary task caching.",
+          "default": false,
+          "type": "boolean"
+        },
         "experimentalSetup": {
           "description": "Opt into experimental setup features that are still in progress.\n\nSetup invocation requires this flag; help is available without it. The `turbo.lock` format is unstable. Only parsing and help are implemented; provisioning, planning, and checking return a diagnostic. Setup does not interpret `turbo.lock` or change run or hash behavior.",
           "default": false,

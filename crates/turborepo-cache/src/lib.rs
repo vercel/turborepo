@@ -35,6 +35,7 @@ pub mod signature_authentication;
 pub mod size;
 #[cfg(test)]
 mod test_cases;
+pub mod test_results;
 mod upload_progress;
 
 use std::{

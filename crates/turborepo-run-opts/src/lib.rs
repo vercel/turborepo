@@ -384,6 +384,7 @@ impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
         RunCacheOpts {
             task_output_logs_override: inputs.execution_selector.output_logs,
             errors_only_show_hash: inputs.config.future_flags().errors_only_show_hash,
+            experimental_test_caching: inputs.config.future_flags().experimental_test_caching,
         }
     }
 }
@@ -399,6 +400,7 @@ pub struct RunOpts {
     pub is_shared_worktree_cache: bool,
     // Whether or not to infer the framework for each workspace.
     pub framework_inference: bool,
+    pub experimental_test_caching: bool,
     pub profile: Option<String>,
     pub continue_on_error: ContinueMode,
     pub pass_through_args: Vec<String>,
@@ -529,6 +531,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             log_prefix,
             log_order,
             summarize: inputs.config.run_summary(),
+            experimental_test_caching: inputs.config.future_flags().experimental_test_caching,
             framework_inference: inputs
                 .execution_selector
                 .framework_inference
@@ -739,6 +742,10 @@ impl RunOpts {
 
 // Implement RunOptsInfo for RunOpts to allow use with turborepo-run-summary
 impl turborepo_types::RunOptsHashInfo for RunOpts {
+    fn experimental_test_caching(&self) -> bool {
+        self.experimental_test_caching
+    }
+
     fn framework_inference(&self) -> bool {
         self.framework_inference
     }
@@ -949,6 +956,7 @@ mod test {
             cache_dir: camino::Utf8PathBuf::new(),
             is_shared_worktree_cache: false,
             framework_inference: true,
+            experimental_test_caching: false,
             profile: None,
             continue_on_error: opts_input.continue_on_error,
             pass_through_args: opts_input.pass_through_args,

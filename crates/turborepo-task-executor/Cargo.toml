@@ -46,6 +46,10 @@ tokio = { workspace = true }
 
 # Serialization (for config)
 serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tempfile = { workspace = true }
+turbo-trace = { path = "../turbo-trace" }
 
 # Console styling
 console = { workspace = true }

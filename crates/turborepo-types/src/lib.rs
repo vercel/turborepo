@@ -407,6 +407,7 @@ pub struct TuiOpts {
 /// Options for configuring the run cache behavior.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct RunCacheOpts {
+    pub experimental_test_caching: bool,
     /// Override for task output logs mode
     pub task_output_logs_override: Option<OutputLogsMode>,
     /// When using `outputLogs: "errors-only"`, show task hashes when tasks
@@ -1531,6 +1532,9 @@ impl TaskDefinitionHashInfo for TaskDefinition {
 /// # Implementors
 /// - `RunOpts` from `turborepo-run-opts`
 pub trait RunOptsHashInfo {
+    fn experimental_test_caching(&self) -> bool {
+        false
+    }
     /// Whether to infer the framework for each workspace
     fn framework_inference(&self) -> bool;
     /// Whether this is a single-package repo (not a monorepo)

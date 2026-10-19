@@ -28,6 +28,7 @@ enum WorkerRequest {
         duration: u64,
         files: Vec<AnchoredSystemPathBuf>,
     },
+    TestResults(std::collections::BTreeMap<String, crate::test_results::TestResult>),
     Flush(oneshot::Sender<()>),
     /// Shutdown the cache. The first oneshot notifies when shutdown starts and
     /// allows the user to inspect the status of the uploads. The second
@@ -69,12 +70,8 @@ impl AsyncCache {
             let mut shutdown_callback = None;
             while let Some(request) = write_consumer.recv().await {
                 match request {
-                    WorkerRequest::WriteRequest {
-                        anchor,
-                        key,
-                        duration,
-                        files,
-                    } => {
+                    request @ (WorkerRequest::WriteRequest { .. }
+                    | WorkerRequest::TestResults(_)) => {
                         let Ok(permit) = semaphore.clone().acquire_owned().await else {
                             break;
                         };
@@ -83,9 +80,19 @@ impl AsyncCache {
                         let worker_span = tracing::span!(Level::TRACE, "cache worker: cache PUT");
                         workers.push(tokio::spawn(
                             async move {
-                                if let Err(err) =
-                                    real_cache.put(&anchor, &key, &files, duration).await
-                                {
+                                let result = match request {
+                                    WorkerRequest::WriteRequest {
+                                        anchor,
+                                        key,
+                                        duration,
+                                        files,
+                                    } => real_cache.put(&anchor, &key, &files, duration).await,
+                                    WorkerRequest::TestResults(results) => {
+                                        real_cache.save_test_results(results).await
+                                    }
+                                    _ => unreachable!(),
+                                };
+                                if let Err(err) = result {
                                     let num_warnings =
                                         warnings.load(std::sync::atomic::Ordering::Acquire);
                                     if num_warnings <= WARNING_CUTOFF {
@@ -223,6 +230,24 @@ impl AsyncCache {
         key: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         self.real_cache.fetch(anchor, key).await
+    }
+
+    pub async fn fetch_test_results(
+        &self,
+        keys: &[String],
+        read: bool,
+    ) -> Result<Option<crate::test_results::TestResults>, CacheError> {
+        self.real_cache.fetch_test_results(keys, read).await
+    }
+
+    pub async fn save_test_results(
+        &self,
+        results: std::collections::BTreeMap<String, crate::test_results::TestResult>,
+    ) -> Result<(), CacheError> {
+        self.writer_sender
+            .send(WorkerRequest::TestResults(results))
+            .await
+            .map_err(|_| CacheError::CacheShuttingDown)
     }
 
     /// See [`CacheMultiplexer::prefetch_remote`].

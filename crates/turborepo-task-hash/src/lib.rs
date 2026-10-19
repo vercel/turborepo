@@ -310,6 +310,8 @@ pub struct TaskHashTrackerState {
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
     package_task_hashes: HashMap<TaskId<'static>, Arc<str>>,
     #[serde(skip)]
+    test_context_hashes: HashMap<TaskId<'static>, String>,
+    #[serde(skip)]
     package_task_framework: HashMap<TaskId<'static>, FrameworkSlug>,
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
@@ -684,6 +686,18 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             experimental_ci: task_definition.experimental_ci(),
         };
 
+        if self.run_opts.experimental_test_caching() {
+            let mut test_context = task_hashable.clone();
+            test_context.hash_of_files = "experimental-test-context-v1";
+            test_context.task_dependency_hashes =
+                self.calculate_dependency_hashes(dependency_set, None)?;
+            let test_context = test_context.calculate_task_hash()?;
+            self.task_hash_tracker.with_state_mut(|state| {
+                state
+                    .test_context_hashes
+                    .insert(task_id.clone(), test_context);
+            });
+        }
         let task_hash = task_hashable.calculate_task_hash()?;
 
         let task_hash_arc: Arc<str> = Arc::from(task_hash.as_str());
@@ -974,6 +988,10 @@ impl TaskHashTracker {
                 std::mem::take(&mut *state)
             }
         }
+    }
+
+    pub fn test_context_hash(&self, task_id: &TaskId) -> Option<String> {
+        self.with_state(|state| state.test_context_hashes.get(task_id).cloned())
     }
 
     pub fn hash(&self, task_id: &TaskId) -> Option<Arc<str>> {

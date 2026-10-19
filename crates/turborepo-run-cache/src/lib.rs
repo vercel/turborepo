@@ -126,6 +126,7 @@ pub struct RunCache {
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
     /// flag.
     errors_only_show_hash: bool,
+    experimental_test_caching: bool,
 }
 
 /// Task-specific context used to create cache operations.
@@ -167,6 +168,7 @@ impl RunCache {
             output_watcher,
             ui,
             errors_only_show_hash: run_cache_opts.errors_only_show_hash,
+            experimental_test_caching: run_cache_opts.experimental_test_caching,
         }
     }
 
@@ -220,6 +222,10 @@ impl RunCache {
             task_id,
             task_output_logs,
             caching_disabled,
+            test_caching_allowed: task_definition.outputs.inclusions.is_empty()
+                && task_definition.inputs.globs.is_empty()
+                && task_definition.inputs.eager
+                && !task_definition.inputs.has_deferred_inputs(),
             log_file_path,
             scoped_log: package_context.log_namespace().is_some(),
             shared_physical_directories: package_context.shared_physical_directories(),
@@ -238,7 +244,11 @@ impl RunCache {
         // Never fetch where `restore_outputs` wouldn't: with reads disabled,
         // in dry runs, or with an output watcher, which can skip the fetch
         // when outputs are unchanged.
-        if self.reads_disabled || self.is_dry_run || self.output_watcher.is_some() {
+        if self.reads_disabled
+            || self.is_dry_run
+            || self.output_watcher.is_some()
+            || self.experimental_test_caching
+        {
             return;
         }
         self.cache.prefetch_remote(hashes, concurrency);
@@ -400,6 +410,7 @@ pub struct TaskCache {
     hash: String,
     task_output_logs: OutputLogsMode,
     caching_disabled: bool,
+    test_caching_allowed: bool,
     log_file_path: AbsoluteSystemPathBuf,
     /// Use authoritative scope metadata: a legacy task name can resemble a
     /// scoped filename without opting into scoped-log behavior.
@@ -416,6 +427,58 @@ pub struct TaskCache {
 }
 
 impl TaskCache {
+    pub fn test_caching_enabled(&self) -> bool {
+        self.run_cache.experimental_test_caching
+            && self.test_caching_allowed
+            && !self.caching_disabled
+            && !self.run_cache.is_dry_run
+            && self.output_watcher.is_none()
+    }
+
+    pub fn repository_root(&self) -> &AbsoluteSystemPath {
+        &self.run_cache.repo_root
+    }
+
+    pub async fn fetch_test_results(
+        &self,
+        keys: &[String],
+    ) -> Result<Option<turborepo_cache::test_results::TestResults>, Error> {
+        Ok(self
+            .run_cache
+            .cache
+            .fetch_test_results(keys, !self.run_cache.reads_disabled)
+            .await?)
+    }
+
+    pub async fn save_test_results(
+        &self,
+        results: std::collections::BTreeMap<String, turborepo_cache::test_results::TestResult>,
+    ) -> Result<(), Error> {
+        if !self.run_cache.writes_disabled {
+            self.run_cache.cache.save_test_results(results).await?;
+        }
+        Ok(())
+    }
+
+    pub fn report_test_counts(
+        &self,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+        tui_sender: Option<&turborepo_ui::sender::TaskSender>,
+        hits: usize,
+        misses: usize,
+    ) {
+        self.write_status(
+            task_handle,
+            tui_sender,
+            &format!("test cache: {hits} hit, {misses} miss"),
+            if misses == 0 {
+                CacheResult::Hit
+            } else {
+                CacheResult::Miss
+            },
+        );
+    }
+
     pub fn output_logs(&self) -> OutputLogsMode {
         self.task_output_logs
     }
@@ -1413,6 +1476,7 @@ mod test {
             output_watcher: None,
             ui,
             errors_only_show_hash,
+            experimental_test_caching: false,
         });
 
         TaskCache {
@@ -1426,6 +1490,7 @@ mod test {
             task_id: TaskId::new("pkg", "build"),
             task_output_logs,
             caching_disabled: false,
+            test_caching_allowed: false,
             log_file_path: repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]),
             scoped_log: false,
             shared_physical_directories: Arc::default(),

@@ -313,6 +313,76 @@ impl Client for APIClient {
 }
 
 impl APIClient {
+    /// Experimental payload protocol. A server must explicitly acknowledge v1;
+    /// this endpoint is not part of the hosted Remote Cache contract.
+    pub async fn experimental_test_results(
+        &self,
+        auth: &APIAuth,
+        write: bool,
+        payload: &serde_json::Value,
+    ) -> Result<Option<serde_json::Value>> {
+        if self.use_preflight {
+            return Ok(None);
+        }
+        const MAX_BYTES: usize = 1024 * 1024;
+        if payload.to_string().len() > MAX_BYTES {
+            return Ok(None);
+        }
+        let url = self.make_url("/v8/artifacts/experimental-test-results")?;
+        let request = if write {
+            self.upload_request(Method::PUT, url)
+        } else {
+            self.api_request(Method::POST, url)
+        }
+        .header("User-Agent", &self.user_agent)
+        .header("x-turbo-test-cache", "1")
+        .bearer_auth(auth.token.expose())
+        .json(payload);
+        let request =
+            Self::add_team_params(request, auth.team_id.as_deref(), auth.team_slug.as_deref());
+        let response = retry::make_rate_limited_request(
+            request,
+            retry::RetryStrategy::Timeout,
+            self.artifact_rate_limit(
+                &auth.token,
+                auth.team_id.as_deref(),
+                auth.team_slug.as_deref(),
+            ),
+        )
+        .await?
+        .into_response();
+        match response.status() {
+            StatusCode::NOT_FOUND
+            | StatusCode::METHOD_NOT_ALLOWED
+            | StatusCode::NOT_IMPLEMENTED => return Ok(None),
+            StatusCode::FORBIDDEN => return Err(Self::handle_403(response).await),
+            _ => {}
+        }
+        let mut response = response.error_for_status()?;
+        if response
+            .headers()
+            .get("x-turbo-test-cache")
+            .and_then(|v| v.to_str().ok())
+            != Some("1")
+        {
+            return Ok(None);
+        }
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_BYTES as u64)
+        {
+            return Ok(None);
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await? {
+            if bytes.len() + chunk.len() > MAX_BYTES {
+                return Ok(None);
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        Ok(serde_json::from_slice(&bytes).ok())
+    }
+
     /// Query multiple artifacts without downloading their bodies. An invalid or
     /// unsupported response is an error so callers can fall back to HEAD.
     pub async fn query_artifacts(
