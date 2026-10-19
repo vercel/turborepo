@@ -322,26 +322,7 @@ impl FSCache {
             .join_component(&format!("{hash}.tar.zst"));
 
         let mut cache_item = CacheWriter::create(&cache_path)?;
-        let mut manifest = crate::cache_archive::RestoreManifest::new();
-
-        for file in files {
-            // Record the manifest from what was archived instead of statting
-            // each output again.
-            let entry = cache_item.add_file(anchor, file)?;
-            let unix_path = file.to_unix();
-            match entry {
-                crate::cache_archive::ArchivedEntry::File(m) => {
-                    let _ = manifest.record_file_metadata(unix_path.as_str().to_owned(), &m);
-                }
-                crate::cache_archive::ArchivedEntry::Directory => {
-                    manifest.record_dir(unix_path.as_str().to_owned());
-                }
-                crate::cache_archive::ArchivedEntry::Symlink(target) => {
-                    manifest.record_symlink(unix_path.as_str().to_owned(), target.as_str());
-                }
-                crate::cache_archive::ArchivedEntry::Other => {}
-            }
-        }
+        let manifest = cache_item.add_files(anchor, files)?;
 
         // Finish the archive (performs atomic rename from temp to final path)
         cache_item.finish()?;
@@ -354,16 +335,11 @@ impl FSCache {
     /// Atomically installs an already-built compressed archive, avoiding a
     /// second read/compress pass when the same artifact has another
     /// destination (a remote write or a verified remote download).
-    ///
-    /// `files` must already exist under `anchor` so the restore manifest can
-    /// be recorded from their current metadata.
     #[tracing::instrument(skip_all)]
     pub(crate) fn put_archive(
         &self,
-        anchor: &AbsoluteSystemPath,
         hash: &str,
-        files: &[AnchoredSystemPathBuf],
-        archive: &crate::artifact_body::ArtifactBody,
+        artifact: &crate::artifact_body::Artifact,
         duration: u64,
     ) -> Result<(), CacheError> {
         let cache_path = self
@@ -382,14 +358,13 @@ impl FSCache {
             // Match the 1 MiB flush granularity of CacheWriter::create so the
             // copy does not turn into per-8-KiB write syscalls.
             let mut buffered = std::io::BufWriter::with_capacity(2usize.pow(20), file);
-            archive.copy_to(&mut buffered)?;
+            artifact.body().copy_to(&mut buffered)?;
             // Flush explicitly; BufWriter's Drop would ignore the error.
             std::io::Write::flush(&mut buffered)?;
         }
         temp_path.rename(&cache_path)?;
 
-        let manifest = crate::cache_archive::RestoreManifest::from_disk(anchor, files);
-        self.write_sidecars(hash, &manifest, duration)?;
+        self.write_sidecars(hash, artifact.manifest(), duration)?;
 
         Ok(())
     }
@@ -1289,7 +1264,7 @@ mod test {
             let output = anchor.join_component("output.txt");
             output.create_with_contents("archived")?;
             let files = vec![AnchoredSystemPathBuf::from_raw("output.txt")?];
-            let body = crate::artifact_body::ArtifactBody::from_files(anchor, &files)?;
+            let artifact = crate::artifact_body::Artifact::from_files(anchor, &files)?;
             match change {
                 "modify" => output.create_with_contents("changed after archiving")?,
                 _ => output.remove_file()?,
@@ -1300,7 +1275,7 @@ mod test {
                 None,
                 LazyScmState::resolved(None),
             )?;
-            cache.put_archive(anchor, "before-install", &files, &body, 50)?;
+            cache.put_archive("before-install", &artifact, 50)?;
 
             cache
                 .fetch(anchor, "before-install")?
@@ -1317,7 +1292,7 @@ mod test {
             let repo_root = tempdir()?;
             let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
             let files = symlinked_outputs(anchor)?;
-            let body = crate::artifact_body::ArtifactBody::from_files(anchor, &files)?;
+            let artifact = crate::artifact_body::Artifact::from_files(anchor, &files)?;
             let link = anchor.join_components(&["dist", "link"]);
             link.remove_file()?;
             if change == "retarget" {
@@ -1329,10 +1304,78 @@ mod test {
                 None,
                 LazyScmState::resolved(None),
             )?;
-            cache.put_archive(anchor, "before-install", &files, &body, 50)?;
+            cache.put_archive("before-install", &artifact, 50)?;
 
             cache
                 .fetch(anchor, "before-install")?
+                .expect("cache should hit");
+            assert_eq!(link.read_link()?.as_str(), "a.txt", "{change}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn put_archive_after_restore_restores_changed_files() -> Result<()> {
+        for change in ["modify", "delete"] {
+            let source = tempdir()?;
+            let source_anchor = AbsoluteSystemPath::from_std_path(source.path())?;
+            source_anchor
+                .join_component("output.txt")
+                .create_with_contents("archived")?;
+            let files = vec![AnchoredSystemPathBuf::from_raw("output.txt")?];
+            let built = crate::artifact_body::Artifact::from_files(source_anchor, &files)?;
+
+            let workspace = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(workspace.path())?;
+            let (_restored, artifact) = built.body().restore(anchor)?;
+            let output = anchor.join_component("output.txt");
+            match change {
+                "modify" => output.create_with_contents("changed after restore")?,
+                _ => output.remove_file()?,
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive("after-restore", &artifact, 50)?;
+
+            cache
+                .fetch(anchor, "after-restore")?
+                .expect("cache should hit");
+            assert_eq!(output.read_to_string()?, "archived", "{change}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn put_archive_after_restore_restores_changed_symlinks() -> Result<()> {
+        for change in ["retarget", "delete"] {
+            let source = tempdir()?;
+            let source_anchor = AbsoluteSystemPath::from_std_path(source.path())?;
+            let files = symlinked_outputs(source_anchor)?;
+            let built = crate::artifact_body::Artifact::from_files(source_anchor, &files)?;
+
+            let workspace = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(workspace.path())?;
+            let (_restored, artifact) = built.body().restore(anchor)?;
+            let link = anchor.join_components(&["dist", "link"]);
+            link.remove_file()?;
+            if change == "retarget" {
+                link.symlink_to_file("b.txt")?;
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive("after-restore", &artifact, 50)?;
+
+            cache
+                .fetch(anchor, "after-restore")?
                 .expect("cache should hit");
             assert_eq!(link.read_link()?.as_str(), "a.txt", "{change}");
         }
@@ -1392,8 +1435,8 @@ mod test {
             if installer == "put" {
                 cache.put(repo_root_path, "symlinks", &files, 50)?;
             } else {
-                let body = crate::artifact_body::ArtifactBody::from_files(repo_root_path, &files)?;
-                cache.put_archive(repo_root_path, "symlinks", &files, &body, 50)?;
+                let artifact = crate::artifact_body::Artifact::from_files(repo_root_path, &files)?;
+                cache.put_archive("symlinks", &artifact, 50)?;
             }
 
             let dist = repo_root_path.join_component("dist");

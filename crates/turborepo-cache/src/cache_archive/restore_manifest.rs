@@ -70,9 +70,7 @@ impl RestoreManifest {
     }
 
     /// Records every entry in `paths` (relative to `anchor`) as it currently
-    /// is on disk: regular files, directories, and symlinks. Used when an
-    /// already-built archive is installed for outputs on disk; saving outputs
-    /// records each entry as it archives it, and a restore as it writes it.
+    /// is on disk: regular files, directories, and symlinks.
     pub fn from_disk(anchor: &AbsoluteSystemPath, paths: &[AnchoredSystemPathBuf]) -> Self {
         let mut manifest = Self::new();
         for path in paths {

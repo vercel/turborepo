@@ -1,15 +1,55 @@
 use std::{
     io::{Read, Seek, SeekFrom, Write},
     pin::Pin,
+    sync::Arc,
 };
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
     CacheError,
-    cache_archive::CacheWriter,
+    cache_archive::{CacheReader, CacheWriter, RestoreManifest},
     signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
 };
+
+pub(crate) struct Artifact {
+    body: Arc<ArtifactBody>,
+    manifest: RestoreManifest,
+}
+
+impl Artifact {
+    pub(crate) fn from_files(
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> Result<Self, CacheError> {
+        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
+        let manifest = {
+            let mut buffered = std::io::BufWriter::new(&mut spool);
+            let mut cache_archive = CacheWriter::from_writer(&mut buffered, true)?;
+            let manifest = cache_archive.add_files(anchor, files)?;
+            // finish() writes the tar footer; dropping then auto-finishes the
+            // zstd stream into the buffer.
+            cache_archive.finish()?;
+            // BufWriter's Drop ignores flush errors; flush explicitly so a
+            // failed final write cannot be reused as a truncated artifact.
+            buffered.flush()?;
+            manifest
+        };
+        spool.seek(SeekFrom::Start(0))?;
+        Ok(Self {
+            body: Arc::new(ArtifactBody::from_spool(spool)?),
+            manifest,
+        })
+    }
+
+    pub(crate) fn body(&self) -> &Arc<ArtifactBody> {
+        &self.body
+    }
+
+    pub(crate) fn manifest(&self) -> &RestoreManifest {
+        &self.manifest
+    }
+}
 
 /// Artifacts smaller than this are kept in memory during transfers. Larger
 /// ones roll over to an anonymous temporary file (unlinked on creation where
@@ -43,28 +83,19 @@ pub(crate) type UploadStream = Pin<
 >;
 
 impl ArtifactBody {
-    /// Builds the canonical compressed archive for `files` exactly once,
-    /// spooling to disk when it grows past the in-memory threshold.
-    pub(crate) fn from_files(
+    pub(crate) fn restore(
+        self: &Arc<Self>,
         anchor: &AbsoluteSystemPath,
-        files: &[AnchoredSystemPathBuf],
-    ) -> Result<Self, CacheError> {
-        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
-        {
-            let mut buffered = std::io::BufWriter::new(&mut spool);
-            let mut cache_archive = CacheWriter::from_writer(&mut buffered, true)?;
-            for file in files {
-                cache_archive.add_file(anchor, file)?;
-            }
-            // finish() writes the tar footer; dropping then auto-finishes the
-            // zstd stream into the buffer.
-            cache_archive.finish()?;
-            // BufWriter's Drop ignores flush errors; flush explicitly so a
-            // failed final write cannot be reused as a truncated artifact.
-            buffered.flush()?;
-        }
-        spool.seek(SeekFrom::Start(0))?;
-        Self::from_spool(spool)
+    ) -> Result<(Vec<AnchoredSystemPathBuf>, Artifact), CacheError> {
+        let mut cache_reader = CacheReader::from_reader(self.reader()?, true)?;
+        let (files, manifest) = cache_reader.restore(anchor, None)?;
+        Ok((
+            files,
+            Artifact {
+                body: Arc::clone(self),
+                manifest,
+            },
+        ))
     }
 
     /// Converts a spooled artifact into its shared representation, keeping

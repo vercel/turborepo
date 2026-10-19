@@ -8,8 +8,11 @@ use std::{
 };
 
 use tar::{EntryType, Header};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, IntoUnix};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix,
+};
 
+use super::RestoreManifest;
 use crate::CacheError;
 
 /// Most worker threads zstd uses to compress one cache archive.
@@ -88,9 +91,7 @@ struct OpenDir {
     path: AbsoluteSystemPathBuf,
 }
 
-/// What [`CacheWriter::add_file`] archived, so callers recording a restore
-/// manifest don't need to stat the output again.
-pub(crate) enum ArchivedEntry {
+enum ArchivedEntry {
     /// A regular file, with the metadata of the opened file that was archived.
     File(fs::Metadata),
     Directory,
@@ -330,8 +331,33 @@ impl<'a> CacheWriter<'a> {
         }
     }
 
+    pub(crate) fn add_files(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> Result<RestoreManifest, CacheError> {
+        let mut manifest = RestoreManifest::new();
+        for file in files {
+            let entry = self.add_file(anchor, file)?;
+            let unix_path = file.to_unix();
+            match entry {
+                ArchivedEntry::File(metadata) => {
+                    let _ = manifest.record_file_metadata(unix_path.as_str().to_owned(), &metadata);
+                }
+                ArchivedEntry::Directory => {
+                    manifest.record_dir(unix_path.as_str().to_owned());
+                }
+                ArchivedEntry::Symlink(target) => {
+                    manifest.record_symlink(unix_path.as_str().to_owned(), target.as_str());
+                }
+                ArchivedEntry::Other => {}
+            }
+        }
+        Ok(manifest)
+    }
+
     // Adds a user-cached item to the tar
-    pub(crate) fn add_file(
+    fn add_file(
         &mut self,
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
