@@ -95,24 +95,61 @@ pub fn cargo_external_closures(
     contents: &str,
     members: &[String],
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
+    let CargoExternalClosures { packages, closures } =
+        cargo_external_closure_indices(contents, members)?;
+    Ok(closures
+        .into_iter()
+        .map(|(member, closure)| {
+            let closure = closure.into_iter().map(|idx| packages[idx].clone());
+            (member, closure.collect())
+        })
+        .collect())
+}
+
+/// [`cargo_external_closures`] in indexed form, for consumers that convert
+/// every identity: each external identity is materialized once in
+/// `packages`, and each member's closure lists distinct indices into it.
+#[derive(Debug, Default)]
+pub struct CargoExternalClosures {
+    pub packages: Vec<Package>,
+    pub closures: HashMap<String, Vec<usize>>,
+}
+
+/// See [`cargo_external_closures`]; same errors, same closure contents.
+pub fn cargo_external_closure_indices(
+    contents: &str,
+    members: &[String],
+) -> Result<CargoExternalClosures, Error> {
     let lock: CargoLock = toml::from_str(contents).map_err(Box::new)?;
     let index = LockIndex::new(&lock);
 
-    let mut closures = HashMap::new();
+    // Members' closures overlap heavily, so each entry's dependency strings
+    // are resolved and its identity built at most once across all members.
+    let mut edges: Vec<Option<Vec<usize>>> = vec![None; lock.package.len()];
+    let mut slots: Vec<Option<usize>> = vec![None; lock.package.len()];
+    let mut visited = vec![false; lock.package.len()];
+    let mut packages = Vec::new();
+    let mut closures = HashMap::with_capacity(members.len());
     for member in members {
         let start = index
             .member(member)
             .ok_or_else(|| Error::MissingMember(member.clone()))?;
-        let mut externals = HashSet::new();
-        for idx in index.reachable(start)? {
+        let reached = index.reachable_memoized(start, &mut edges, &mut visited)?;
+        let mut externals = Vec::with_capacity(reached.len());
+        for idx in reached {
+            visited[idx] = false;
             let package = &lock.package[idx];
             if package.source.is_some() {
-                externals.insert(package.hash_identity());
+                let slot = *slots[idx].get_or_insert_with(|| {
+                    packages.push(package.hash_identity());
+                    packages.len() - 1
+                });
+                externals.push(slot);
             }
         }
         closures.insert(member.clone(), externals);
     }
-    Ok(closures)
+    Ok(CargoExternalClosures { packages, closures })
 }
 
 /// The result of pruning a Cargo.lock to a set of root members.
@@ -325,6 +362,38 @@ impl<'a> LockIndex<'a> {
         }
         Ok(visited)
     }
+
+    /// [`LockIndex::reachable`] with dependency resolution memoized in
+    /// `edges` across calls. Visits in the same order and fails on the same
+    /// dependency. `visited` must be all `false` on entry; the caller resets
+    /// the returned indices.
+    fn reachable_memoized(
+        &self,
+        start: usize,
+        edges: &mut [Option<Vec<usize>>],
+        visited: &mut [bool],
+    ) -> Result<Vec<usize>, Error> {
+        let mut reached = Vec::new();
+        let mut stack = vec![start];
+        while let Some(idx) = stack.pop() {
+            if std::mem::replace(&mut visited[idx], true) {
+                continue;
+            }
+            reached.push(idx);
+            let targets = match &mut edges[idx] {
+                Some(targets) => targets,
+                slot @ None => slot.insert(
+                    self.lock.package[idx]
+                        .dependencies
+                        .iter()
+                        .map(|dep| self.resolve(dep))
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
+            };
+            stack.extend_from_slice(targets);
+        }
+        Ok(reached)
+    }
 }
 
 #[cfg(test)]
@@ -381,6 +450,29 @@ source = "git+https://example.com/dep#deadbeef"
             .collect();
         names.sort();
         names
+    }
+
+    #[test]
+    fn test_memoized_closures_match_independent_traversals() {
+        let members = vec![
+            "lib-a".to_string(),
+            "app".to_string(),
+            "other".to_string(),
+            "app".to_string(),
+        ];
+        let closures = cargo_external_closures(LOCK, &members).unwrap();
+        let lock: CargoLock = toml::from_str(LOCK).unwrap();
+        let index = LockIndex::new(&lock);
+        for member in &members {
+            let expected: HashSet<Package> = index
+                .reachable(index.member(member).unwrap())
+                .unwrap()
+                .into_iter()
+                .filter(|&idx| lock.package[idx].source.is_some())
+                .map(|idx| lock.package[idx].hash_identity())
+                .collect();
+            assert_eq!(closures[member], expected, "{member}");
+        }
     }
 
     #[test]

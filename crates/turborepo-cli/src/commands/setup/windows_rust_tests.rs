@@ -48,7 +48,7 @@ impl Repo {
     fn new() -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
-        owned.init_git().unwrap();
+        owned.fake_git().unwrap();
         fs::write(root.join("turbo.json"), RUST).unwrap();
         fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
         fs::write(root.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
@@ -161,6 +161,7 @@ impl Repo {
                     artifact: None,
                     trust_base: Some(self.owned.home().to_owned()),
                 }),
+                turborepo_setup::git::FakeGit::shared(),
                 || Ok(self.owned.policy_at(self.owned.root())?),
             )
         })
@@ -323,6 +324,43 @@ fn local_rust_setup_locks_windows_artifacts_then_reuses_them_offline() {
     }
     assert_eq!(offline.hits(), 0);
     assert_eq!((repo.calls().len(), repo.manifest()), (1, manifest));
+}
+
+#[test]
+fn locked_cargo_dependencies_prefetch_through_the_managed_proxy_and_home() {
+    if unqualified_host() {
+        return;
+    }
+    let repo = Repo::new();
+    repo.lock();
+    let root = repo.owned.root();
+    fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+    let upstream = repo.upstream();
+    assert_eq!(repo.ok(&upstream, FROZEN), 0);
+    // Run the managed `cargo.exe` proxy (a cmd.exe image here) the way the
+    // prefetch does: `fetch --locked` from the root with stdin closed.
+    let (_, bin) = repo.overrides();
+    let proxy = std::process::Command::new(bin.join("cargo.exe"))
+        .args(["fetch", "--locked"])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap()
+        .code();
+    // Setup prefetches with that proxy and passes its status through.
+    for flags in [&["--frozen"][..], &["--frozen"]] {
+        assert_eq!(repo.run(&upstream, flags).ok(), proxy, "{flags:?}");
+    }
+    assert!(root.join(".turbo").join("cargo-home").is_dir());
+    assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), b"version = 4\n");
+    assert_eq!(repo.calls(), [INSTALL]);
+
+    fs::remove_file(root.join("Cargo.lock")).unwrap();
+    let error = repo.run(&upstream, &["--frozen"]).unwrap_err().to_string();
+    assert!(error.contains("requires a committed Cargo.lock"), "{error}");
+    assert!(!root.join("Cargo.lock").exists());
 }
 
 #[test]

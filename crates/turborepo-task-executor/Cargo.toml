@@ -25,6 +25,7 @@ turborepo-run-cache = { path = "../turborepo-run-cache" }
 turborepo-ui = { path = "../turborepo-ui", features = ["tui"] }
 
 # Command execution
+shell-words = { workspace = true }
 turborepo-env = { workspace = true }
 turborepo-process = { workspace = true }
 
@@ -66,6 +67,7 @@ which = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 turborepo-repository = { path = "../turborepo-repository", features = [
   "test-util",
 ] }

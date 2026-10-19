@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use futures::{StreamExt, stream};
 use tracing::{debug, info, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
@@ -161,7 +162,10 @@ impl CacheMultiplexer {
                 .await??
             });
 
-            {
+            // Install the archive locally and upload it at the same time.
+            // Both read the body independently, and neither depends on the
+            // other.
+            let install = {
                 let fs = fs.clone();
                 let anchor = anchor.to_owned();
                 let key = key.to_owned();
@@ -170,9 +174,10 @@ impl CacheMultiplexer {
                 tokio::task::spawn_blocking(move || {
                     fs.put_archive(&anchor, &key, &files, &body, duration)
                 })
-                .await??;
-            }
-            let http_result = http.put_body(key, body, duration).await;
+            };
+            let (install_result, http_result) =
+                tokio::join!(install, http.put_body(key, body, duration));
+            install_result??;
 
             return match http_result {
                 Err(CacheError::ApiClientError(
@@ -332,6 +337,25 @@ impl CacheMultiplexer {
         Ok(None)
     }
 
+    /// Starts downloading the remote artifacts for `keys` (in order) ahead of
+    /// the tasks that will fetch them, so remote round trips overlap instead
+    /// of waiting for each task's dependencies. `keys` is only called when the
+    /// remote cache is readable. Keys with a local cache entry are skipped,
+    /// since `fetch` restores those locally.
+    pub fn prefetch_remote(&self, keys: impl FnOnce() -> Vec<String>, concurrency: usize) {
+        if !self.cache_config.remote.read {
+            return;
+        }
+        let Some(http) = self.get_http_cache() else {
+            return;
+        };
+        let fs = self.fs.clone().filter(|_| self.cache_config.local.read);
+        http.prefetch(keys(), concurrency, move |key| {
+            fs.as_ref()
+                .is_some_and(|fs| matches!(fs.exists(key), Ok(Some(_))))
+        });
+    }
+
     /// Whether [`Self::batch_exists`] could ever consult the remote cache.
     /// When this is false a batch reduces to independent local lookups, so
     /// there is nothing to gain from waiting for other keys.
@@ -374,14 +398,25 @@ impl CacheMultiplexer {
         };
         let hashes: Vec<_> = remote_keys.iter().map(|(_, key)| key.clone()).collect();
         let batch = http.batch_exists(&hashes).await;
-        for (index, key) in remote_keys {
-            hits[index] = match &batch {
+        // Older self-hosted caches do not implement the batch endpoint. Resolve
+        // their HEAD fallbacks concurrently so network latency does not add up
+        // once per task, while limiting the number of in-flight requests.
+        let batch = &batch;
+        let resolved = stream::iter(remote_keys.into_iter().map(|(index, key)| async move {
+            let hit = match batch {
                 Ok(entries) => match entries.get(&key) {
                     Some(hit) => hit.clone(),
                     None => http.exists(&key).await.ok().flatten(),
                 },
                 Err(_) => http.exists(&key).await.ok().flatten(),
             };
+            (index, hit)
+        }))
+        .buffer_unordered(16)
+        .collect::<Vec<_>>()
+        .await;
+        for (index, hit) in resolved {
+            hits[index] = hit;
         }
         hits
     }

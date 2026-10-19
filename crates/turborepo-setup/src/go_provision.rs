@@ -161,6 +161,7 @@ impl GoPlan {
             EXCLUDED,
         )?;
         Ok(PreparedGo {
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             tree,
             tool: self.tool.clone(),
         })
@@ -170,9 +171,15 @@ impl GoPlan {
 pub struct PreparedGo {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
 }
 
 impl PreparedGo {
+    /// Verified archive bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Callback for Store reconciliation: copy the verified tree, preserving
     /// executable modes; never run hooks.
     pub fn stage(

@@ -52,14 +52,7 @@ fn actual_local_workspace_and_git_indirection_repros_cannot_publish() {
             fs::rename(root.join(".git"), root.join("gitdir")).unwrap();
             fs::write(root.join(".git"), "gitdir: gitdir\n").unwrap();
             fs::create_dir(root.join("second")).unwrap();
-            assert!(
-                std::process::Command::new("git")
-                    .current_dir(root.join("second"))
-                    .args(["init", "-q"])
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            turborepo_setup::git::fake_repository(&root.join("second")).unwrap();
             fs::rename(root.join("second/.git"), root.join("replacement-gitdir")).unwrap();
         } else {
             fs::write(root.join("workspace.yaml"), "packages: ['apps/*']\n").unwrap();
@@ -287,7 +280,7 @@ fn dispatch(
         artifact: None,
         go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
         bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin()).unwrap(),
-    }), || {
+    }), f.git.clone(), || {
         hook();
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     })).unwrap()
@@ -353,6 +346,8 @@ fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
     for flags in [LOCAL, &["--no-frozen"]] {
         let f = fresh();
         fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+        // Plain setup would also run pnpm, which this fixture's Node cannot.
+        fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
         assert_eq!(f.run(&u, flags).unwrap(), 0);
         assert_eq!(u.hits(), 7);
@@ -372,21 +367,60 @@ fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
     assert_eq!(outcomes[0], outcomes[1]);
 }
 #[test]
+fn local_and_no_lock_setup_ignore_ambient_npmrc_drift_during_resolution() {
+    for flags in [LOCAL, &["--tools-only", "--no-lock"][..]] {
+        let f = fresh();
+        let paths = [
+            f.owned.root().join(".npmrc"),
+            f.owned.root().join("apps/web/.npmrc"),
+            f.owned.home().join(".npmrc"),
+        ];
+        for path in &paths {
+            fs::write(path, "registry=https://before.invalid\n").unwrap();
+        }
+        let changed = paths.clone();
+        let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), move |p| {
+            if p == "/pnpm/-/pnpm-10.0.0.tgz" {
+                for path in &changed {
+                    fs::write(path, "registry=https://after.invalid\n").unwrap();
+                }
+            }
+        })
+        .unwrap();
+        assert_eq!(f.run(&u, flags).unwrap(), 0, "{flags:?}");
+        assert_eq!(u.hits(), 7); // Resolution followed by exact provisioning in both modes.
+        assert!(f.manifest().is_some());
+        assert_eq!(f.owned.root().join("turbo.lock").exists(), flags == LOCAL);
+        for path in &paths {
+            assert_eq!(
+                fs::read_to_string(path).unwrap(),
+                "registry=https://after.invalid\n"
+            );
+        }
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        let manifest = f.manifest().unwrap();
+        assert_eq!(f.run(&empty, flags).unwrap(), 0);
+        assert_eq!(empty.hits(), 0);
+        assert_eq!(f.manifest().unwrap(), manifest);
+        untouched(&f);
+    }
+}
+
+#[test]
 fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
-    for case in 0..7 {
+    for case in 0..6 {
         let f = fresh();
         let u = LoopbackServer::new([], |_| {}).unwrap();
         match case {
             0 => fs::remove_file(f.owned.root().join(".nvmrc")).unwrap(),
             1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.x"}"#).unwrap(),
             2 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.x"}"#).unwrap(),
-            3 => fs::write(f.owned.root().join(".npmrc"), "registry=https://private.invalid").unwrap(),
-            4 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
-            5 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
+            3 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
+            4 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
             _ => {},
         }
         assert!(
-            f.run(&u, if case == 6 { FROZEN } else { LOCAL }).is_err(),
+            f.run(&u, if case == 5 { FROZEN } else { LOCAL }).is_err(),
             "case {case}"
         );
         assert_eq!(u.hits(), 0);
@@ -411,7 +445,7 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
                 1 => fs::write(root.join("apps/web/turbo.json"), ENABLED).unwrap(),
                 2 => fs::write(root.join("apps/web/pnpm-workspace.yaml"), "packages: []").unwrap(),
                 3 => fs::write(root.join("apps/web/.git"), "gitdir: /not-probed").unwrap(),
-                4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
+                4 => fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                 5 => fs::write(root.join(".gitignore"), "").unwrap(),
                 6 => fs::write(root.join("turbo.json"), "{}").unwrap(),
                 7 => {
@@ -429,14 +463,7 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
                 }
                 _ => {
                     fs::write(root.join(".turbo/sentinel"), "untracked must stay ignored").unwrap();
-                    assert!(
-                        std::process::Command::new("git")
-                            .current_dir(root)
-                            .args(["add", "-f", ".turbo/sentinel"])
-                            .status()
-                            .unwrap()
-                            .success()
-                    );
+                    f.git.track(".turbo/sentinel");
                 }
             }
         });
@@ -456,7 +483,7 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
 }
 #[test]
 fn local_writer_wait_rechecks_policy_git_and_workspace() {
-    for name in ["apps/web/.npmrc", ".gitignore", "pnpm-workspace.yaml"] {
+    for name in ["turbo.json", ".gitignore", "pnpm-workspace.yaml"] {
         let f = fresh();
         let (tx, rx) = std::sync::mpsc::channel();
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), move |p| {
@@ -465,13 +492,13 @@ fn local_writer_wait_rechecks_policy_git_and_workspace() {
             }
         })
         .unwrap();
-        let snapshot = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let snapshot = f.sources().unwrap();
         let guard = snapshot.guard().unwrap();
         std::thread::scope(|scope| {
             let pending = scope.spawn(|| f.run(&u, LOCAL));
             rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            let rejected = if name.ends_with(".npmrc") {
-                "registry=https://private.invalid"
+            let rejected = if name == "turbo.json" {
+                UNSUPPORTED_SETUP
             } else {
                 ""
             };
@@ -566,11 +593,7 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
                         foreign["tools"]["node"]["version"] = json!("24.9.0");
                         fs::write(root.join("turbo.lock"), foreign.to_string()).unwrap();
                     }
-                    _ => fs::write(
-                        root.join("apps/web/.npmrc"),
-                        "registry=https://private.invalid",
-                    )
-                    .unwrap(),
+                    _ => fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                 }
             }
         })

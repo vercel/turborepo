@@ -150,13 +150,21 @@ fn rust_setup_then_plain_run_uses_the_locked_toolchain_without_host_rust() {
     for probe in ["cargo metadata --format-version 1", "rustc -vV"] {
         assert!(calls.contains(probe), "{probe}: {calls}");
     }
+    // Commands that discover the repository without tasks activate them too.
+    journey.discovers_managed("cargo metadata");
+    journey.pinned_cli_needs_upgrade();
 
     fs::remove_file(bin.join("cargo")).unwrap();
-    journey.fails("build", "run turbo setup to repair the installation");
+    let repair = "run turbo setup to repair the installation";
+    journey.fails("build", repair);
+    journey.discovery_fails(repair, &[]);
     journey.setup("", &["--frozen", "--tools-only"]);
     let file = journey.root().join("rust-toolchain.toml");
     fs::write(&file, TOOLCHAIN.replace("stable", "1.98")).unwrap();
     journey.fails("build", "run turbo setup to update turbo.lock");
+    journey.discovery_fails("run turbo setup to update turbo.lock", &[]);
+    let ci = "run turbo setup locally and commit the updated turbo.lock";
+    journey.discovery_fails(ci, &[("CI", "1")]);
     fs::write(&file, TOOLCHAIN).unwrap();
     let (code, text) = journey.turbo("", &["run", "build", "--ui=stream"]);
     assert_eq!(code, 0, "{text}");

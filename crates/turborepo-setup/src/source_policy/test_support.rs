@@ -80,6 +80,18 @@ pub fn wait_for_writer(root: &Path) -> io::Result<()> {
     }
 }
 
+/// Whether a setup writer holds `root`'s lock right now. Like
+/// `wait_for_writer`, but never waits, so a Git hook on the writer's own
+/// thread can ask.
+pub fn writer_held(root: &Path) -> io::Result<bool> {
+    let file = fs::File::open(root)?;
+    match file.try_lock() {
+        Err(fs::TryLockError::WouldBlock) => Ok(true),
+        Err(fs::TryLockError::Error(error)) => Err(error),
+        Ok(()) => file.unlock().map(|()| false),
+    }
+}
+
 use super::*;
 
 /// Keeps every preflight input alive inside one ephemeral, canonical directory.
@@ -133,6 +145,13 @@ impl OwnedSetupFixture {
         fs::write(self.root.join(".gitignore"), "/.turbo/\n")
     }
 
+    /// `init_git` without running Git: the `.git` entries setup's filesystem
+    /// checks read, for a [`crate::git::FakeGit`] to answer about.
+    pub fn fake_git(&self) -> io::Result<()> {
+        crate::git::fake_repository(&self.root)?;
+        fs::write(self.root.join(".gitignore"), "/.turbo/\n")
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -146,14 +165,15 @@ impl OwnedSetupFixture {
         &self.node
     }
 
-    pub fn policy(&self) -> Result<OfficialSourcePolicy, Error> {
+    pub fn policy(&self) -> Result<ToolDownloadPolicy, Error> {
         self.policy_at(self.root())
     }
 
-    /// Re-runs the production fail-closed npmrc/root-policy checks at an owned
-    /// invocation. Neither lexical traversal nor symlink escape can extend the
-    /// ancestor scan outside this fixture. Other hosts stay unqualified.
-    pub fn policy_at(&self, invocation: &Path) -> Result<OfficialSourcePolicy, Error> {
+    /// Re-runs production root-policy validation at an owned invocation.
+    /// Neither lexical traversal nor symlink escape can extend the ancestor
+    /// scan outside this fixture. Other hosts stay unqualified. Ambient fixture
+    /// paths stay confined for CLI tests, but are not policy inputs.
+    pub fn policy_at(&self, invocation: &Path) -> Result<ToolDownloadPolicy, Error> {
         if !cfg!(any(unix, windows)) {
             return Err(Error::UnsupportedHost);
         }
@@ -182,14 +202,7 @@ impl OwnedSetupFixture {
         {
             return Err(Error::Locations);
         }
-        inspect_inputs(
-            invocation,
-            &self.home,
-            Some(&self.node),
-            &[],
-            vec![self.system.clone()],
-            Some(&boundary),
-        )
+        inspect_inputs(invocation, Some(&boundary))
     }
 }
 
@@ -200,47 +213,44 @@ mod tests {
 
     #[cfg(any(unix, windows))]
     #[test]
-    fn owned_inventory_uses_the_same_fail_closed_policy_and_is_ephemeral() -> TestResult {
+    fn owned_inventory_ignores_ambient_files_validates_root_policy_and_is_ephemeral() -> TestResult
+    {
         let fixture = OwnedSetupFixture::new()?;
         let root = fixture.root().to_owned();
         let nested = root.join("apps/web");
         fs::create_dir_all(&nested)?;
         assert_eq!(fixture.policy_at(&nested)?.registry(), PUBLIC_NPM_REGISTRY);
-        for (path, owner) in [
-            (nested.join(".npmrc"), ConfigOwner::Repository),
-            (root.join(".npmrc"), ConfigOwner::Ancestor),
-            (fixture.home().join(".npmrc"), ConfigOwner::User),
-            (fixture.system_config().to_owned(), ConfigOwner::System),
-            (
-                fixture
-                    .current_node()
-                    .parent()
-                    .ok_or("bin")?
-                    .parent()
-                    .ok_or("prefix")?
-                    .join("etc/npmrc"),
-                ConfigOwner::Prefix,
-            ),
-            (root.join("turbo.json"), ConfigOwner::RootPolicy),
+        for path in [
+            nested.join(".npmrc"),
+            root.join(".npmrc"),
+            fixture.home().join(".npmrc"),
+            fixture.system_config().to_owned(),
+            fixture
+                .current_node()
+                .parent()
+                .ok_or("bin")?
+                .parent()
+                .ok_or("prefix")?
+                .join("etc/npmrc"),
         ] {
             fs::create_dir_all(path.parent().ok_or("parent")?)?;
-            let project = matches!(owner, ConfigOwner::Repository | ConfigOwner::Ancestor);
-            fs::write(
-                &path,
-                match owner {
-                    ConfigOwner::RootPolicy => "{\"setup\":{}}",
-                    _ if project => "registry=https://npm.example.test/",
-                    _ => "",
-                },
-            )?;
+            fs::write(&path, b"\xffregistry=private-secret")?;
+            assert!(fixture.policy_at(&nested).is_ok());
+        }
+        for name in CONFIG_FILES {
+            let path = root.join(name);
+            fs::write(&path, r#"{"setup":{}}"#)?;
             assert_eq!(
                 fixture.policy_at(&nested).err(),
-                Some(if project {
-                    Error::Setting(owner, 1)
-                } else {
-                    Error::Configured(owner)
-                })
+                Some(Error::Configured(ConfigOwner::RootPolicy))
             );
+            fs::write(&path, "private-secret")?;
+            assert_eq!(
+                fixture.policy_at(&nested).err(),
+                Some(Error::Inspection(ConfigOwner::RootPolicy))
+            );
+            fs::write(&path, r#"{"setup":{"tools":"managed"}}"#)?;
+            assert!(fixture.policy_at(&nested).is_ok());
             fs::remove_file(path)?;
         }
         assert!(fixture.policy().is_ok());
@@ -257,6 +267,10 @@ mod tests {
         let fixture = OwnedSetupFixture::new()?;
         assert_eq!(
             fixture.policy_at(outside.path()).err(),
+            Some(Error::Locations)
+        );
+        assert_eq!(
+            fixture.policy_at(fixture.home()).err(),
             Some(Error::Locations)
         );
         assert_eq!(
@@ -288,7 +302,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn intermediate_prefix_configuration_symlink_cannot_inspect_host_files() -> TestResult {
+    fn intermediate_ambient_prefix_symlink_is_not_a_policy_input() -> TestResult {
         use std::os::unix::fs::symlink;
         let fixture = OwnedSetupFixture::new()?;
         let outside = tempfile::tempdir()?;
@@ -300,10 +314,7 @@ mod tests {
             .parent()
             .ok_or("prefix")?;
         symlink(outside.path(), prefix.join("etc"))?;
-        assert_eq!(
-            fixture.policy().err(),
-            Some(Error::Inspection(ConfigOwner::Prefix))
-        );
+        assert!(fixture.policy().is_ok());
         Ok(())
     }
 

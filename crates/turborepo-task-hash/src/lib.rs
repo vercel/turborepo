@@ -191,8 +191,7 @@ impl PackageInputsHashes {
             });
         }
 
-        // Build dedup key: (package_path_str, globs, default, eager)
-        type HashKey = (AnchoredSystemPathBuf, Vec<String>, bool, bool);
+        type HashKey = (AnchoredSystemPathBuf, Vec<String>, Vec<String>, bool, bool);
         let mut unique_keys: Vec<HashKey> = Vec::new();
         let mut key_indices: HashMap<HashKey, usize> = HashMap::new();
         let mut task_key_map: Vec<usize> = Vec::with_capacity(task_infos.len());
@@ -201,6 +200,7 @@ impl PackageInputsHashes {
             let key: HashKey = (
                 info.package_path.to_owned(),
                 info.inputs.globs.clone(),
+                info.inputs.derived_globs.clone(),
                 info.inputs.default,
                 info.inputs.eager,
             );
@@ -233,18 +233,36 @@ impl PackageInputsHashes {
         let hash_span = tracing::info_span!("hash_unique_inputs").entered();
         let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
-            .map(|(package_path, globs, default, eager)| {
+            .map(|(package_path, globs, derived_globs, default, eager)| {
                 let file_hashes = if !eager {
                     Arc::new(FileHashes(Vec::new()))
                 } else {
-                    file_hashes_for_inputs(
-                        scm,
+                    let inputs = TaskInputs {
+                        globs,
+                        derived_globs,
+                        default,
+                        ..TaskInputs::default()
+                    };
+                    let all_globs: Vec<_> = inputs.all_globs().collect();
+                    let mut hashes = scm.get_package_file_hashes(
                         repo_root,
                         &package_path,
-                        &globs,
+                        &all_globs,
                         default,
+                        None,
                         repo_index,
-                    )?
+                    )?;
+                    if let Some(authored) = inputs.explicit_override_globs() {
+                        hashes.extend(scm.get_explicit_input_file_hashes(
+                            repo_root,
+                            &package_path,
+                            authored,
+                            repo_index,
+                        )?);
+                    }
+                    let mut hashes: Vec<_> = hashes.into_iter().collect();
+                    hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+                    Arc::new(FileHashes(hashes))
                 };
                 let hash = file_hashes.as_ref().hash();
                 Ok((file_hashes, hash))

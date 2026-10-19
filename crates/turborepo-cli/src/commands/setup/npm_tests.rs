@@ -8,6 +8,58 @@ const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 const FORCE: &[&str] = &["--tools-only", "--no-frozen", "--force"];
 const CHECK: &[&str] = &["--tools-only", "--check", "--offline"];
 
+#[test]
+fn npm_telemetry_counts_managed_owners_and_artifact_bytes() {
+    use turborepo_telemetry::events::setup::{SetupDependencies, SetupLock, SetupMode};
+
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        let f = &n.f;
+        let u = n.upstream();
+        let artifacts = (f.node.len() + if bundled { 0 } else { n.npm.len() }) as u64;
+        let owners = if bundled { 1 } else { 2 };
+        for (flags, downloaded_bytes, tools_installed, tools_reused) in [
+            (FROZEN, artifacts, owners, 0),
+            (FROZEN, 0, 0, owners),
+            (FORCE, artifacts, owners, 0),
+        ] {
+            let mut report = telemetry::Report::default();
+            let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
+                let transports = f.transports(u.origin(), None);
+                run_reporting(
+                    args,
+                    setup_args,
+                    Some(transports),
+                    f.git.clone(),
+                    &mut report,
+                    || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
+                )
+            })
+            .unwrap();
+            assert_eq!(result.unwrap(), 0);
+            assert_eq!(
+                report,
+                telemetry::Report {
+                    gated: true,
+                    request: Some((
+                        SetupMode::Provision,
+                        if flags == FORCE {
+                            SetupLock::Write
+                        } else {
+                            SetupLock::Frozen
+                        },
+                        SetupDependencies::Skip
+                    )),
+                    downloaded_bytes,
+                    tools_installed,
+                    tools_reused,
+                }
+            );
+            n.untouched();
+        }
+    }
+}
+
 struct NpmFixture {
     f: Fixture,
     npm: Vec<u8>,
@@ -127,8 +179,8 @@ impl NpmFixture {
         crate::cli::dispatch_setup(&self.f.args(flags), |args, setup_args| {
             let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
             validate_request(&request)?;
-            let discovery = root::Discovery::capture(args)?;
-            let sources = turborepo_setup::lock::Snapshot::capture(self.f.owned.root())?;
+            let discovery = root::Discovery::capture(args, self.f.git.clone())?;
+            let sources = self.f.sources()?;
             let transports = provision::Transports {
                 trust_base: Some(self.f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
@@ -160,6 +212,7 @@ impl NpmFixture {
                 &discovery,
                 sources,
                 &request,
+                &dependencies::Dependencies::tools_only(),
                 Some(transports),
                 || {
                     Ok(self
@@ -568,11 +621,7 @@ fn npm_failed_integrity_or_late_drift_never_publishes_a_partial_generation() {
             if p.ends_with(".tgz") {
                 match case {
                     2 => fs::write(root.join("package.json"), "{}").unwrap(),
-                    3 => fs::write(
-                        root.join("apps/web/.npmrc"),
-                        "registry=https://private.invalid",
-                    )
-                    .unwrap(),
+                    3 => fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                     _ => {}
                 }
             }
@@ -680,7 +729,7 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
     for bundled in [false, true] {
         let n = NpmFixture::new(bundled);
         n.f.run(&n.upstream(), FROZEN).unwrap();
-        let sources = turborepo_setup::lock::Snapshot::capture(n.f.owned.root()).unwrap();
+        let sources = n.f.sources().unwrap();
         let writer = sources.guard().unwrap();
         let store = turborepo_tool_install::Store::open(n.f.owned.root()).unwrap();
         std::thread::scope(|scope| {
@@ -792,21 +841,74 @@ fn locked_npm_dependencies_install_with_managed_npm_and_repeat_safely() {
 }
 
 #[test]
-fn npm_lifecycle_skip_controls_pass_ignore_scripts_and_tools_only_skips_npm() {
+fn offline_npm_dependencies_install_from_the_npm_cache_without_traffic() {
+    // npm fails offline while `cold` exists, like a cache miss.
+    let n = installing("[ -f cold ] && exit 4\nmkdir -p node_modules");
+    let (root, lock) = (n.f.owned.root(), n.lock());
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    let hits = u.hits();
+    // An offline repeat reuses the trusted tools and runs npm offline.
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen", "--offline"]).unwrap(), 0);
+    assert!(root.join("node_modules").exists());
+    // A cache miss passes npm's status through; nothing is reported ready.
+    fs::write(root.join("cold"), "").unwrap();
+    assert_eq!(n.f.run(&u, &["--offline"]).unwrap(), 4);
+    assert_eq!(n.f.run(&u, &["--force", "--offline"]).unwrap(), 4);
+    assert_eq!(u.hits(), hits);
+    let offline = "ci --offline --no-update-notifier";
+    assert_eq!(n.args(), ["ci", offline, offline, offline]);
+    let plan = n.f.dependencies(&["--plan", "--offline"]).plan(root, &lock);
+    assert_eq!(
+        plan.unwrap()[0],
+        "javascript dependencies: npm ci --offline --no-update-notifier from package-lock.json \
+         with managed tools (package-lock.json stays unchanged)"
+    );
+    n.no_tasks();
+}
+
+#[test]
+fn npm_plans_and_checks_report_the_install_without_running_it() {
+    let n = installing("touch hook-ran");
+    let (root, lock) = (n.f.owned.root(), n.lock());
+    assert_eq!(
+        n.f.dependencies(&["--plan"]).plan(root, &lock).unwrap(),
+        [
+            "javascript dependencies: npm ci from package-lock.json with managed tools \
+             (package-lock.json stays unchanged)",
+        ]
+    );
+    let check = n.f.dependencies(&["--check"]).check(root, &lock).unwrap();
+    assert_eq!(
+        check[0],
+        "javascript dependencies: not checked; turbo setup reruns npm ci from package-lock.json, \
+         because dependency readiness is not tracked"
+    );
+    assert_eq!(check.last().unwrap(), "No tasks run.");
+    assert_eq!(
+        n.f.dependencies(&["--plan", "--tools-only"])
+            .plan(root, &lock)
+            .unwrap(),
+        ["Dependencies skipped (--tools-only); dependency readiness was not checked."]
+    );
+    // Plans and checks run end to end without running npm.
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--plan"]).unwrap(), 0);
+    assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(n.f.run(&u, &["--check"]).unwrap(), 0);
+    assert!(n.args().is_empty());
+    n.no_tasks();
+}
+
+#[test]
+fn npm_tools_only_skips_the_native_install() {
     let n = installing("");
     let u = n.upstream();
     assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
     assert!(n.args().is_empty());
-    assert_eq!(n.f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
-    let skip = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"lifecycleScripts":"skip"}}"#;
-    fs::write(n.f.owned.root().join("turbo.json"), skip).unwrap();
     assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
-    fs::write(n.f.owned.root().join("turbo.json"), ENABLED).unwrap();
-    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
-    assert_eq!(
-        n.args(),
-        ["ci --ignore-scripts", "ci --ignore-scripts", "ci"]
-    );
+    assert_eq!(n.args(), ["ci"]);
     n.no_tasks();
 }
 

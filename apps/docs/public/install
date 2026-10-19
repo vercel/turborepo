@@ -6,19 +6,17 @@ usage() {
 Install the standalone Turborepo CLI without Node.js or a JavaScript package manager.
 
 Usage: install [--version VERSION] [--install-dir DIRECTORY] [--no-modify-path]
-               [--no-shell-hook]
        install --uninstall [--install-dir DIRECTORY]
 
 By default, the installer uses the latest stable release and installs to
 ~/.local/bin. Set TURBO_VERSION or TURBO_INSTALL_DIR to configure this in CI.
 
-The installer adds the install directory to PATH and, when the installed turbo
-supports it, adds the turbo shell hook to the same shell profiles.
+The installer adds the install directory to PATH. It does not activate managed
+tools in your shell.
   --no-modify-path  Do not edit shell profiles (TURBO_NO_MODIFY_PATH=1).
-  --no-shell-hook   Do not add the shell hook (TURBO_NO_SHELL_HOOK=1).
-  --uninstall       Remove the turbo binary, PATH entry, and shell hook that the
-                    installer added for the install directory, and nothing else
-                    (TURBO_UNINSTALL=1).
+  --uninstall       Remove the turbo binary, PATH entry, and any shell hook added
+                    by an older installer for the install directory, and nothing
+                    else (TURBO_UNINSTALL=1).
 EOF
 }
 
@@ -30,7 +28,6 @@ fail() {
 version=${TURBO_VERSION:-}
 install_dir=${TURBO_INSTALL_DIR:-}
 no_modify_path=${TURBO_NO_MODIFY_PATH:-0}
-no_shell_hook=${TURBO_NO_SHELL_HOOK:-0}
 uninstall=${TURBO_UNINSTALL:-0}
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -40,10 +37,6 @@ while [ "$#" -gt 0 ]; do
       ;;
     --no-modify-path)
       no_modify_path=1
-      shift
-      ;;
-    --no-shell-hook)
-      no_shell_hook=1
       shift
       ;;
     --version)
@@ -153,62 +146,11 @@ append_path_profile() {
   { printf '\n'; path_block; } >> "$profile"
 }
 
+# Retained only so uninstall can remove hooks written by older installers.
 hook_marker='# Turborepo standalone installer shell hook'
 
 hook_line_for() {
   printf 'eval "$(%s hook %s)" %s' "$(shell_quote "$destination")" "$1" "$hook_marker"
-}
-
-# Owns one marked line per profile: replace it in place, writing through
-# symlinked dotfiles and dropping duplicates, or append it.
-write_hook_profile() {
-  profile=$1
-  if [ -f "$profile" ] && grep -Fq "$hook_marker" "$profile"; then
-    if grep -Fqx "$hook_line" "$profile" && [ "$(grep -Fc "$hook_marker" "$profile")" = 1 ]; then
-      return 0
-    fi
-    HOOK_LINE=$hook_line HOOK_MARKER=$hook_marker awk '
-      index($0, ENVIRON["HOOK_MARKER"]) { if (!done) print ENVIRON["HOOK_LINE"]; done = 1; next }
-      { print }
-    ' "$profile" > "$work_dir/profile" || return 1
-    cat "$work_dir/profile" > "$profile" || return 1
-  else
-    printf '\n%s\n' "$hook_line" >> "$profile" || return 1
-  fi
-}
-
-configure_shell_hook() {
-  [ -z "${GITHUB_PATH:-}" ] && [ "$no_modify_path" != 1 ] && [ "$no_shell_hook" != 1 ] || return 0
-  shell_name=${SHELL:-}
-  shell_name=${shell_name##*/}
-  case "$shell_name" in
-    zsh|bash|fish) ;;
-    *) return 0 ;;
-  esac
-  # Older releases have no hook command.
-  "$destination" hook "$shell_name" >/dev/null 2>&1 || return 0
-  quoted_destination=$(shell_quote "$destination")
-  hook_line=$(hook_line_for "$shell_name")
-  case "$shell_name" in
-    zsh)
-      write_hook_profile "$HOME/.zshrc" || return 1
-      ;;
-    bash)
-      # Never ~/.profile: sh and dash read it too.
-      for profile in "$HOME/.bash_profile" "$HOME/.bash_login"; do
-        if [ -f "$profile" ]; then
-          write_hook_profile "$profile" || return 1
-          break
-        fi
-      done
-      write_hook_profile "$HOME/.bashrc" || return 1
-      ;;
-    fish)
-      printf 'To activate managed tools in fish, add this line to ~/.config/fish/config.fish:\n  %s hook fish | source\n' "$quoted_destination"
-      return 0
-      ;;
-  esac
-  printf 'Added the turbo shell hook to your %s profile; open a new shell to use it.\n' "$shell_name"
 }
 
 # Removes this installation's PATH block and hook lines, with the blank line
@@ -437,7 +379,4 @@ if configure_path; then
   esac
 else
   printf 'Add %s to PATH to run `turbo` by name.\n' "$install_dir"
-fi
-if ! configure_shell_hook; then
-  printf 'Could not add the turbo shell hook to your shell profile.\n'
 fi

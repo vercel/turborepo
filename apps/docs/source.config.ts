@@ -39,28 +39,35 @@ export const docs = defineDocs({
   }
 });
 
+// Extended schemas are declared outside `defineDocs`. Inlined, TypeScript
+// fails with "Type instantiation is excessively deep" (TS2589) against the
+// larger Geistdocs 2 frontmatter schema.
+const blogSchema = geistdocsFrontmatterSchema
+  .extend({
+    description: z.string(),
+    date: z.string(),
+    tag: z.string()
+  })
+  .strict();
+
 export const { docs: blogDocs, meta: blogMeta } = defineDocs({
   dir: "content/blog",
   docs: {
-    schema: geistdocsFrontmatterSchema
-      .extend({
-        description: z.string(),
-        date: z.string(),
-        tag: z.string()
-      })
-      .strict()
+    schema: blogSchema
   }
+});
+
+const externalBlogSchema = geistdocsFrontmatterSchema.extend({
+  description: z.string(),
+  date: z.string(),
+  isExternal: z.literal(true),
+  href: z.string()
 });
 
 export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
   dir: "content/external-blog",
   docs: {
-    schema: geistdocsFrontmatterSchema.extend({
-      description: z.string(),
-      date: z.string(),
-      isExternal: z.literal(true),
-      href: z.string()
-    })
+    schema: externalBlogSchema
   }
 });
 
@@ -76,12 +83,14 @@ export const openapi = defineDocs({
 
 export const { docs: openapiDocs, meta: openapiMeta } = openapi;
 
+const extraSchema = geistdocsFrontmatterSchema.extend({
+  description: z.string()
+});
+
 export const { docs: extraDocs, meta: extraMeta } = defineDocs({
   dir: "content/extra",
   docs: {
-    schema: geistdocsFrontmatterSchema.extend({
-      description: z.string()
-    })
+    schema: extraSchema
   }
 });
 

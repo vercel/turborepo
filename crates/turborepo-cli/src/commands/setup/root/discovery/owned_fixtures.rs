@@ -6,6 +6,7 @@ use std::{fs, time::Duration};
 
 use turborepo_download::{DownloadClient, ExpectedSha256, Limits};
 use turborepo_setup::{
+    git::FakeGit,
     lock::{Lock, Platform},
     node_provision::{NodePlan, NodeTransport},
     npm_provision::NpmTransport,
@@ -48,7 +49,7 @@ fn owned_policy_reaches_actual_parser_root_and_executor_without_success_or_write
     let Some(Command::Setup { setup_args }) = &args.command else {
         return Err("not setup".into());
     };
-    let discovery = Discovery::capture(&args)?;
+    let discovery = Discovery::capture(&args, FakeGit::shared())?;
     assert_eq!(discovery.snapshot_root()?.as_std_path(), f.root());
     assert!(discovery.revalidate()?);
     assert_eq!(
@@ -60,16 +61,13 @@ fn owned_policy_reaches_actual_parser_root_and_executor_without_success_or_write
     assert!(request.tools_only);
     setup::validate_request(&request)?;
     assert!(matches!(
-        setup::run(&args, setup_args),
+        setup::run(&args, setup_args, FakeGit::shared()),
         Err(setup::Error::LockDiagnostics(
             setup::lock_diagnostics::Error::Missing
         )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.
     ));
     fs::write(f.home().join(".npmrc"), "")?;
-    assert_eq!(
-        f.policy().err(),
-        Some(PolicyError::Configured(ConfigOwner::User))
-    );
+    assert!(f.policy().is_ok());
     assert!(!f.root().join(".turbo").exists());
     assert!(!f.root().join("turbo.lock").exists());
     Ok(())
@@ -87,7 +85,7 @@ fn owned_nested_config_workspace_and_git_drift_preserve_discovery_guard() -> Tes
     ] {
         let f = fixture()?;
         let args = args(&f)?;
-        let d = Discovery::capture(&args)?;
+        let d = Discovery::capture(&args, FakeGit::shared())?;
         let nested = f.root().join("apps/web");
         assert!(f.policy_at(&nested)?.registry().starts_with("https://"));
         fs::write(nested.join(marker), body)?;
@@ -104,7 +102,7 @@ fn owned_nested_config_workspace_and_git_drift_preserve_discovery_guard() -> Tes
     }
     let f = fixture()?;
     let args = args(&f)?;
-    let d = Discovery::capture(&args)?;
+    let d = Discovery::capture(&args, FakeGit::shared())?;
     fs::write(f.root().join("turbo.json"), r#"{"setup":{}}"#)?;
     assert_eq!(
         f.policy().err(),
@@ -247,7 +245,7 @@ async fn unsupported_unix_artifact_targets_fail_before_loopback_traffic_or_stora
         return Err("not setup".into());
     };
     assert!(matches!(
-        setup::run(&args, setup_args),
+        setup::run(&args, setup_args, FakeGit::shared()),
         Err(setup::Error::LockDiagnostics(
             setup::lock_diagnostics::Error::Missing
         )) | Err(setup::Error::Unsupported(_)) // Unqualified hosts.

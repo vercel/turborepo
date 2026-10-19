@@ -136,8 +136,20 @@ impl OutputWatcher for InProcessOutputWatcher {
     }
 }
 
+/// Selects managed tools for one run exactly like a new `turbo run` does:
+/// `None` for an unmanaged repository, an error with `turbo setup` guidance
+/// for missing, stale or drifted managed state.
+pub type ManagedSelector =
+    Box<dyn Fn() -> Result<Option<Arc<run::ManagedRun>>, run::Error> + Send + Sync>;
+
+/// The selection's portable identity, `None` when unmanaged.
+fn managed_identity(selection: Option<&Arc<run::ManagedRun>>) -> Option<&str> {
+    selection.map(|tools| tools.snapshot().fingerprint())
+}
+
 pub struct WatchClient {
     run: Arc<Run>,
+    select_managed: ManagedSelector,
     /// The package graph from the most recent full run, reused by partial
     /// (`ChangedPackages::Some`) reruns whose changed files provably cannot
     /// alter it. See `package_graph_invalidated`.
@@ -216,9 +228,15 @@ impl<S: Clone> WatchRunLifecycle<S> {
         self.active_runs.push(handle);
     }
 
-    async fn settle_completed(&mut self) {
+    /// Returns the errors of runs that failed before or around their tasks,
+    /// such as a missing package manager or stale managed tools. Watch keeps
+    /// going, but must report them instead of idling silently.
+    async fn settle_completed(&mut self) -> Vec<run::Error> {
+        let mut failures = Vec::new();
         for handle in &mut self.active_runs {
-            let _ = (&mut handle.run_task).await;
+            if let Ok(Err(error)) = (&mut handle.run_task).await {
+                failures.push(error);
+            }
         }
         for handle in &self.active_runs {
             if handle.run_task.is_finished() {
@@ -227,6 +245,7 @@ impl<S: Clone> WatchRunLifecycle<S> {
         }
         self.active_runs
             .retain(|handle| !handle.run_task.is_finished());
+        failures
     }
 
     async fn stop_tasks<F, Fut>(&self, mut stop: F)
@@ -351,6 +370,10 @@ pub enum Error {
     PackageChangeClosed,
     #[error("Package change channel lagged.")]
     PackageChangeLagged,
+    #[error(
+        "Managed tools changed after `turbo watch` started. Restart `turbo watch` to use them."
+    )]
+    ManagedToolsChanged,
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
     #[error("Invalid config: {0}")]
@@ -423,12 +446,15 @@ impl WatchTaskSelection<'_> {
 }
 
 impl WatchClient {
+    /// `base.managed_environment` is the startup selection, already activated
+    /// for turbo's own probes; `select_managed` reselects for each rerun.
     #[expect(
         clippy::result_large_err,
         reason = "retain the structured watch-mode error type"
     )]
     pub async fn new(
         base: RunBuilderInput,
+        select_managed: ManagedSelector,
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
         query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
@@ -575,6 +601,7 @@ impl WatchClient {
         Ok(Self {
             base,
             run,
+            select_managed,
             shared_pkg_graph,
             watched_packages,
             _watching: watching,
@@ -702,7 +729,13 @@ impl WatchClient {
                         active_runs = self.lifecycle.active_runs.len(),
                         "waiting for runs to complete"
                     );
-                    self.lifecycle.settle_completed().await;
+                    for error in self.lifecycle.settle_completed().await {
+                        turborepo_log::error(
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                            error.to_string(),
+                        )
+                        .emit();
+                    }
                     debug!("all runs completed, ready for next event");
                 }
             }
@@ -865,6 +898,24 @@ impl WatchClient {
         selection.packages
     }
 
+    /// Reselects managed tools for a rerun like a new `turbo run`, so drift
+    /// fails with `turbo setup` guidance instead of running system tools.
+    /// turbo's own probes were activated once at startup, so a selection that
+    /// differs from the startup one needs a restart, not a silent switch.
+    #[expect(
+        clippy::result_large_err,
+        reason = "retain the structured watch-mode error type"
+    )]
+    fn reselect_managed(&self) -> Result<Option<Arc<run::ManagedRun>>, Error> {
+        let current = (self.select_managed)()?;
+        if managed_identity(current.as_ref())
+            != managed_identity(self.base.managed_environment.as_ref())
+        {
+            return Err(Error::ManagedToolsChanged);
+        }
+        Ok(current)
+    }
+
     /// Start executing tasks.
     ///
     /// If `changed_packages` is `Some(set)`, only tasks in those packages run.
@@ -899,7 +950,7 @@ impl WatchClient {
                     version: self.base.version,
                     color_config: self.base.color_config,
                     api_auth: self.base.api_auth.clone(),
-                    managed_environment: None,
+                    managed_environment: self.reselect_managed()?,
                 };
 
                 let signal_handler = self.handler.clone();
@@ -984,7 +1035,7 @@ impl WatchClient {
                     version: self.base.version,
                     color_config: self.base.color_config,
                     api_auth: self.base.api_auth.clone(),
-                    managed_environment: None,
+                    managed_environment: self.reselect_managed()?,
                 };
 
                 let mut run_builder = RunBuilder::new(base.clone(), None)?
@@ -1169,6 +1220,39 @@ mod test {
         lifecycle.settle_completed().await;
         assert_eq!(lifecycle.background_stoppers.len(), 1);
         assert_eq!(events.lock().unwrap().last().unwrap(), "restart:joined");
+    }
+
+    #[tokio::test]
+    async fn lifecycle_returns_failed_runs_for_reporting() {
+        // A run that fails outside its tasks, such as on stale managed tools,
+        // must surface instead of leaving watch silently idle.
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let mut lifecycle = WatchRunLifecycle::new();
+        let (succeeded, done) = recording_run("succeeded", &events);
+        lifecycle.push(succeeded);
+        done.complete();
+        lifecycle.push(RunHandle {
+            stopper: RecordingStopper {
+                name: "failed",
+                events: events.clone(),
+                completion: Arc::new(Mutex::new(None)),
+            },
+            run_task: tokio::spawn(async {
+                Err(turborepo_run::Error::ManagedTools("run turbo setup".into()))
+            }),
+        });
+        let failures: Vec<_> = lifecycle
+            .settle_completed()
+            .await
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            failures,
+            ["managed setup validation failed: run turbo setup"]
+        );
+        assert!(lifecycle.active_runs.is_empty());
+        assert_eq!(lifecycle.background_stoppers.len(), 2);
     }
 
     #[tokio::test]

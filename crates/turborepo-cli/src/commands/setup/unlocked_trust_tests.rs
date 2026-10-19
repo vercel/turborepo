@@ -17,7 +17,7 @@ fn missing_lock_publication_succeeds_and_revokes_previous_locked_authority() {
         .path();
     let manifest = f.manifest().unwrap();
     fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
     sources.check_guard(&writer).unwrap();

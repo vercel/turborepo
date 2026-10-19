@@ -531,8 +531,10 @@ pub struct TaskOutputs {
 /// where an omitted `inputs` key means "hash everything."
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 pub struct TaskInputs {
-    /// Glob patterns for input files
+    /// Configured and global eager input patterns.
     pub globs: Vec<String>,
+    /// Automatic toolchain eager input patterns.
+    pub derived_globs: Vec<String>,
     /// Set when $TURBO_DEFAULT$ is in inputs
     pub default: bool,
     /// Glob patterns for files that should be hashed after task dependencies
@@ -556,6 +558,7 @@ impl Default for TaskInputs {
     fn default() -> Self {
         Self {
             globs: Vec::new(),
+            derived_globs: Vec::new(),
             default: false,
             jit_globs: Vec::new(),
             jit_default: false,
@@ -566,10 +569,26 @@ impl Default for TaskInputs {
 }
 
 impl TaskInputs {
+    pub fn all_globs(&self) -> impl Iterator<Item = &str> {
+        self.globs
+            .iter()
+            .chain(&self.derived_globs)
+            .map(String::as_str)
+    }
+
+    /// Authored inputs can override automatic exclusions, but never authored
+    /// exclusions.
+    pub fn explicit_override_globs(&self) -> Option<&[String]> {
+        (self.derived_globs.iter().any(|glob| glob.starts_with('!'))
+            && self.globs.iter().any(|glob| !glob.starts_with('!')))
+        .then_some(self.globs.as_slice())
+    }
+
     /// Creates a new TaskInputs with the given globs and default set to false
     pub fn new(globs: Vec<String>) -> Self {
         Self {
             globs,
+            derived_globs: Vec::new(),
             default: false,
             jit_globs: Vec::new(),
             jit_default: false,
@@ -631,6 +650,23 @@ mod tests {
         let outputs = TaskOutputs::default();
         assert!(outputs.inclusions.is_empty());
         assert!(outputs.exclusions.is_empty());
+    }
+
+    #[test]
+    fn explicit_override_requires_authored_inclusions_and_derived_exclusions() {
+        let mut inputs = TaskInputs::default();
+        assert!(inputs.explicit_override_globs().is_none());
+        inputs.derived_globs = vec!["../lib/**".into(), "!../lib/node_modules/**".into()];
+        assert!(inputs.explicit_override_globs().is_none());
+        inputs.globs.push("!excluded/**".into());
+        assert!(inputs.explicit_override_globs().is_none());
+        inputs.globs.push("../lib/node_modules/data.json".into());
+        assert_eq!(
+            inputs.explicit_override_globs(),
+            Some(inputs.globs.as_slice())
+        );
+        inputs.derived_globs.pop();
+        assert!(inputs.explicit_override_globs().is_none());
     }
 
     #[test]

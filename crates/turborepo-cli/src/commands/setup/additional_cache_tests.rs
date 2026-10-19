@@ -120,13 +120,13 @@ fn the_artifact_mirror_serves_host_prefixed_paths_with_canonical_provenance() {
         artifact: mirror("/mirror/artifacts/"),
         ..Mirrors::default()
     };
-    let policy = || -> Result<OfficialSourcePolicy, Error> {
+    let policy = || -> Result<ToolDownloadPolicy, Error> {
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     };
     let run = |flags: &[&str]| {
         crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
             let transports = provision::Transports::configured(&policy()?, &mirrors, None)?;
-            run_with_policy(args, setup_args, Some(transports), policy)
+            run_with_policy(args, setup_args, Some(transports), f.git.clone(), policy)
         })
         .unwrap()
     };
