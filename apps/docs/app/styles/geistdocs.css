@@ -6,7 +6,7 @@
  */
 @import "fumadocs-openapi/css/preset.css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:where(.dark, .dark *, .dark-theme, .dark-theme *));
 
 /*
  * shadcn tokens for the site-owned UI (homepage, blog, devtools, showcase,
@@ -63,7 +63,8 @@
   --sidebar-foreground: oklch(0.145 0 0);
 }
 
-.dark {
+.dark,
+.dark-theme {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

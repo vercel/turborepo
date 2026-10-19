@@ -25,6 +25,10 @@ pub(crate) fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
 /// Append `bytes` to `out`, converting lone `\n` to `\r\n`. Same output as
 /// [`normalize_newlines`] for a single call.
 fn normalize_newlines_into(out: &mut Vec<u8>, bytes: &[u8]) {
+    if !has_bare_lf(bytes) {
+        out.extend_from_slice(bytes);
+        return;
+    }
     let mut prev_cr = false;
     for &b in bytes {
         if b == b'\n' && !prev_cr {
@@ -32,6 +36,27 @@ fn normalize_newlines_into(out: &mut Vec<u8>, bytes: &[u8]) {
         }
         out.push(b);
         prev_cr = b == b'\r';
+    }
+}
+
+/// Whether `bytes` contains a `\n` that isn't preceded by `\r` (a `\n` at the
+/// very start counts), i.e. whether newline normalization would change it.
+///
+/// Output read from a PTY normally has none, because the kernel already
+/// turns `\n` into `\r\n`. The scan is branch-free so it vectorizes.
+pub(crate) fn has_bare_lf(bytes: &[u8]) -> bool {
+    match bytes.first() {
+        None => false,
+        Some(b'\n') => true,
+        Some(_) => {
+            bytes[1..]
+                .iter()
+                .zip(bytes)
+                .fold(0u8, |found, (&b, &prev)| {
+                    found | u8::from((b == b'\n') & (prev != b'\r'))
+                })
+                != 0
+        }
     }
 }
 
@@ -209,7 +234,7 @@ impl TerminalSink {
         let mut rendered = Vec::with_capacity(bytes.len() + bytes.len() / 2);
 
         // Split on newlines. For each complete line, render prefix + line.
-        for line in bytes.split_inclusive(|c| *c == b'\n') {
+        for line in split_inclusive_byte(bytes, b'\n') {
             if line.ends_with(b"\n") {
                 if state.line_buffer.is_empty() {
                     render_prefixed_line(&mut rendered, &state.prefix, line, raw);
@@ -231,13 +256,48 @@ impl TerminalSink {
     }
 }
 
+/// Size of the blocks [`find_byte`] skips at a time.
+const SCAN_BLOCK: usize = 32;
+
+/// Index of the first `needle` in `bytes`.
+///
+/// Whole blocks without `needle` are skipped with a branch-free test that
+/// vectorizes, so long lines cost far less than a byte-at-a-time search.
+fn find_byte(bytes: &[u8], needle: u8) -> Option<usize> {
+    let (blocks, _) = bytes.as_chunks::<SCAN_BLOCK>();
+    let skipped = blocks
+        .iter()
+        .take_while(|block| !block.iter().fold(false, |found, &b| found | (b == needle)))
+        .count();
+    let start = skipped * SCAN_BLOCK;
+    bytes[start..]
+        .iter()
+        .position(|&b| b == needle)
+        .map(|index| start + index)
+}
+
+/// Same pieces as `bytes.split_inclusive(|b| *b == needle)`, found with
+/// [`find_byte`].
+fn split_inclusive_byte(bytes: &[u8], needle: u8) -> impl Iterator<Item = &[u8]> {
+    let mut rest = bytes;
+    std::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let end = find_byte(rest, needle).map_or(rest.len(), |index| index + 1);
+        let (piece, tail) = rest.split_at(end);
+        rest = tail;
+        Some(piece)
+    })
+}
+
 /// Render a complete line with per-chunk prefix handling for `\r`.
 ///
 /// Under raw mode each `\r`-delimited chunk is newline-normalized on its
 /// own, exactly as if it had been written separately.
 fn render_prefixed_line(out: &mut Vec<u8>, prefix: &str, line: &[u8], raw: bool) {
     let mut is_first = true;
-    for chunk in line.split_inclusive(|c| *c == b'\r') {
+    for chunk in split_inclusive_byte(line, b'\r') {
         if is_first || chunk != b"\n" {
             out.extend_from_slice(prefix.as_bytes());
         }
@@ -525,6 +585,54 @@ mod tests {
             buf, b"a\r\nb\r\n",
             "lone \\n becomes \\r\\n, existing \\r\\n untouched"
         );
+    }
+
+    #[test]
+    fn has_bare_lf_matches_normalization() {
+        for (bytes, bare) in [
+            (&b""[..], false),
+            (b"\n", true),
+            (b"\r\n", false),
+            (b"\r", false),
+            (b"a\r\nb\r\n", false),
+            (b"a\r\nb\n", true),
+            (b"\nb\r\n", true),
+            (b"\r\r\n\n", true),
+            (b"no newline", false),
+        ] {
+            assert_eq!(has_bare_lf(bytes), bare, "{bytes:?}");
+            assert_eq!(normalize_newlines(bytes) != bytes, bare, "{bytes:?}");
+        }
+        // Long input exercises the vectorized scan, with the only bare LF last.
+        let mut long = b"line\r\n".repeat(10_000);
+        assert!(!has_bare_lf(&long));
+        long.push(b'\n');
+        assert!(has_bare_lf(&long));
+    }
+
+    #[test]
+    fn split_inclusive_byte_matches_std() {
+        let long = "x".repeat(100);
+        let inputs = [
+            String::new(),
+            "\n".to_string(),
+            "a\nb".to_string(),
+            "a\n\n".to_string(),
+            "no break".to_string(),
+            format!("{long}\n{long}"),
+            format!("{}\n", "y".repeat(31)),
+            format!("{}\n", "y".repeat(32)),
+            format!("{}\n{}\n", "y".repeat(63), "z".repeat(64)),
+            format!("\r{long}\r\n{long}\r"),
+        ];
+        for input in &inputs {
+            for needle in *b"\n\r" {
+                let bytes = input.as_bytes();
+                let ours: Vec<&[u8]> = split_inclusive_byte(bytes, needle).collect();
+                let std: Vec<&[u8]> = bytes.split_inclusive(|b| *b == needle).collect();
+                assert_eq!(ours, std, "{input:?} split on {needle}");
+            }
+        }
     }
 
     #[test]

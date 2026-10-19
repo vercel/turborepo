@@ -138,7 +138,7 @@ pub struct BunTransport {
     origin: String,
 }
 impl BunTransport {
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         let assets = ASSETS
             .into_iter()
             .map(ApprovedOrigin::https)
@@ -153,7 +153,7 @@ impl BunTransport {
     /// Send the official release paths to a validated mirror base. The mirror
     /// must serve the bytes itself: no redirect leaves its origin.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &crate::mirror::Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {
@@ -326,6 +326,7 @@ impl BunPlan {
             },
         )?;
         Ok(Some(PreparedBun {
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             tree,
             tool: self.tool.clone(),
         }))
@@ -335,8 +336,14 @@ impl BunPlan {
 pub struct PreparedBun {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
 }
 impl PreparedBun {
+    /// Verified archive bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Callback for Store::reconcile: copy the verified release tree as-is.
     pub fn stage(
         &self,

@@ -10,6 +10,7 @@ use std::{
 };
 
 use turbopath::AbsoluteSystemPath;
+use turborepo_setup::git::Git;
 use turborepo_turbo_json::FutureFlags;
 
 use super::Error;
@@ -112,7 +113,7 @@ impl Inputs {
         }
         Ok(())
     }
-    fn git(&mut self, marker: &Path) -> io::Result<()> {
+    fn git(&mut self, marker: &Path, git: &dyn Git) -> io::Result<()> {
         if [
             "GIT_COMMON_DIR",
             "GIT_CONFIG_COUNT",
@@ -139,19 +140,12 @@ impl Inputs {
         // Git resolves core.worktree, includes and worktree config; do not parse
         // its grammar here. Empty read-only fixture boundaries have no HEAD.
         if self.record(&dir.join("HEAD"), false, true)?.is_some() {
-            let output = std::process::Command::new("git")
-                .current_dir(
-                    marker
-                        .parent()
-                        .ok_or_else(|| io::Error::other("invalid Git boundary"))?,
-                )
-                .env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE")
-                .args(["rev-parse", "--show-toplevel"])
-                .output()
-                .map_err(turborepo_setup::writer_storage::git_spawn_error)?;
-            if !output.status.success() {
+            let output = git.toplevel(
+                marker
+                    .parent()
+                    .ok_or_else(|| io::Error::other("invalid Git boundary"))?,
+            )?;
+            if !output.success() {
                 return Err(io::Error::other("cannot guard effective Git worktree"));
             }
             let worktree = pointer(marker, &output.stdout, "")?.canonicalize()?;
@@ -190,7 +184,11 @@ fn pointer(file: &Path, bytes: &[u8], prefix: &str) -> io::Result<PathBuf> {
         .ok_or_else(|| io::Error::other("invalid Git marker"))?
         .join(value))
 }
-pub(super) fn capture(cwd: &AbsoluteSystemPath, flags: FutureFlags) -> Result<Inputs, Error> {
+pub(super) fn capture(
+    cwd: &AbsoluteSystemPath,
+    flags: FutureFlags,
+    git: &dyn Git,
+) -> Result<Inputs, Error> {
     let cwd = cwd.to_realpath()?;
     let mut inputs = Inputs::default();
     for dir in cwd.ancestors() {
@@ -215,7 +213,7 @@ pub(super) fn capture(cwd: &AbsoluteSystemPath, flags: FutureFlags) -> Result<In
         for name in names {
             let path = dir.join_component(name);
             let result = if name == ".git" && path.exists() {
-                inputs.git(path.as_std_path())
+                inputs.git(path.as_std_path(), git)
             } else {
                 inputs
                     .record(path.as_std_path(), false, name.starts_with("turbo.json"))

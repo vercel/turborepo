@@ -309,11 +309,11 @@ where
     S: ChildSpawner,
     V: VersionProvider,
 {
-    let schema = match runtime.runner.managed_run_schema(&repo_state.root, ui) {
-        Ok(schema) => schema,
+    let requirement = match runtime.runner.managed_run_requirement(&repo_state.root, ui) {
+        Ok(requirement) => requirement,
         Err(error) => return ShimResult::CliError(error),
     };
-    if let Some(schema) = schema {
+    if let Some(requirement) = requirement {
         // Managed mode never enters update checks or implicit CLI downloads.
         let local = match LocalTurboState::infer_managed(&repo_state.root) {
             Ok(local) => local,
@@ -323,13 +323,13 @@ where
             let capabilities =
                 crate::capabilities::Capabilities::current(runtime.version_provider.get_version());
             if let Err(error) =
-                crate::managed_run::select(schema, &capabilities, Some(local.binary()))
+                crate::managed_run::select(&requirement, &capabilities, Some(local.binary()))
             {
-                return ShimResult::ShimError(error.into());
+                return ShimResult::ShimError(error.declared(local.version()).into());
             }
             // Revalidate after the peer query, immediately before dispatch.
-            match runtime.runner.managed_run_schema(&repo_state.root, ui) {
-                Ok(Some(current)) if current == schema => {}
+            match runtime.runner.managed_run_requirement(&repo_state.root, ui) {
+                Ok(Some(current)) if current == requirement => {}
                 Err(error) => return ShimResult::CliError(error),
                 _ => {
                     return ShimResult::ShimError(Error::LocalTurboPath(
@@ -345,9 +345,8 @@ where
             }
             return spawn_local_turbo(runtime, &repo_state, local, shim_args);
         }
-        // No installed pin: execute this CLI's native, guarded Node/pnpm path.
-        // Its public complete-schema handshake stays unadvertised pending the
-        // complete platform/peer qualification; never substitute an installed pin.
+        // No installed pin: this CLI validated the selection and runs it.
+        // An installed pin is never substituted.
         unsafe {
             env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
         }
@@ -742,12 +741,12 @@ mod tests {
         struct ManagedRunner;
         impl TurboRunner for ManagedRunner {
             type Error = std::io::Error;
-            fn managed_run_schema(
+            fn managed_run_requirement(
                 &self,
                 _: &turbopath::AbsoluteSystemPath,
                 _: ColorConfig,
-            ) -> Result<Option<u32>, Self::Error> {
-                Ok(Some(0))
+            ) -> Result<Option<crate::capabilities::Requirement>, Self::Error> {
+                Ok(Some(crate::capabilities::Requirement::new(0, ["node"])))
             }
             fn run(&self, state: Option<RepoState>, _: ColorConfig) -> Result<i32, Self::Error> {
                 assert!(state.is_some());

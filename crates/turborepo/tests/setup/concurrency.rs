@@ -99,7 +99,7 @@ fn assert_ready(repo: &Repo) {
 
 #[test]
 fn concurrent_writers_in_one_repository_publish_one_generation_or_nothing() {
-    let Some(repo) = Repo::new() else { return };
+    let repo = Repo::new();
     let monitor = monitor();
     // A torn entry fails every racer the same way and publishes nothing.
     let [node, _] = repo.seed();
@@ -118,9 +118,7 @@ fn concurrent_writers_in_one_repository_publish_one_generation_or_nothing() {
 
 #[test]
 fn cancelled_writer_releases_waiters_while_another_repository_shares_the_cache() {
-    let (Some(first), Some(mut second)) = (Repo::new(), Repo::new()) else {
-        return;
-    };
+    let (first, mut second) = (Repo::new(), Repo::new());
     second.share_cache(&first);
     // Holds the first repository's writer lock until it is killed.
     let (mut writer, held) = first.stalled_writer();

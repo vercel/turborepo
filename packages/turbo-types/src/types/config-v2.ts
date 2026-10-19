@@ -8,7 +8,6 @@ export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
 export type ToolPolicy = "managed" | "verify-system" | "skip";
 export type DependencyPolicy = "locked" | "skip";
-export type LifecycleScripts = "native" | "skip";
 export type ArtifactPlatform =
   | "macos-x64"
   | "macos-arm64"
@@ -568,15 +567,6 @@ export interface SetupPolicy {
    */
   dependencies?: DependencyPolicy;
 
-  /**
-   * Whether dependency setup runs package-manager lifecycle scripts for every
-   * toolchain.
-   *
-   * - `"native"`: Keep each package manager's defaults and committed allowlists or trust settings.
-   * - `"skip"`: Skip them with the package manager's own flag, or fail where it has none.
-   */
-  lifecycleScripts?: LifecycleScripts;
-
   /** Setup policy for the JavaScript toolchain. */
   javascript?: ToolchainSetupPolicy;
 
@@ -653,9 +643,6 @@ export interface ToolchainSetupPolicy {
 
   /** How `turbo setup` prepares this toolchain's dependencies. */
   dependencies?: DependencyPolicy;
-
-  /** Whether this toolchain's dependency setup runs lifecycle scripts. */
-  lifecycleScripts?: LifecycleScripts;
 }
 
 export interface StartupInput {

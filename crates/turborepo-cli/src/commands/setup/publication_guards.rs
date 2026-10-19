@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use turborepo_setup::lock::{
-    Lock, Snapshot,
+    Lock,
     reconcile::{self, Mode},
 };
 
@@ -35,7 +35,7 @@ fn check(f: &Fixture, d: &root::Discovery) -> std::io::Result<()> {
     f.owned
         .policy_at(&f.owned.root().join("apps/web/src"))
         .map_err(std::io::Error::other)?;
-    provision::storage(f.owned.root()).map_err(std::io::Error::other)?;
+    provision::storage(f.owned.root(), &*f.git).map_err(std::io::Error::other)?;
     if !d.revalidate().map_err(std::io::Error::other)? {
         return Err(std::io::Error::other("original discovery drift"));
     }
@@ -46,8 +46,8 @@ fn publish(
     desired: &Lock,
     hook: impl Fn(),
 ) -> Result<reconcile::Outcome, reconcile::Error> {
-    let d = root::Discovery::capture(&f.args(FROZEN)).unwrap();
-    let snapshot = Snapshot::capture(f.owned.root()).unwrap();
+    let d = root::Discovery::capture(&f.args(FROZEN), f.git.clone()).unwrap();
+    let snapshot = f.sources().unwrap();
     reconcile::reconcile_checked(
         &snapshot,
         Mode::Local,
@@ -142,8 +142,8 @@ fn resolved_candidate_missing_current_host_is_rejected_before_publication_or_sto
         ),
     ];
     let u = LoopbackServer::new(routes, |_| {}).unwrap();
-    let d = root::Discovery::capture(&f.args(FROZEN)).unwrap();
-    let snapshot = Snapshot::capture(f.owned.root()).unwrap();
+    let d = root::Discovery::capture(&f.args(FROZEN), f.git.clone()).unwrap();
+    let snapshot = f.sources().unwrap();
     let node = turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin())
         .unwrap();
     let registry =
@@ -252,14 +252,7 @@ fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging(
         .unwrap();
         let other = root.join("replacement");
         fs::create_dir(&other).unwrap();
-        assert!(
-            std::process::Command::new("git")
-                .current_dir(&other)
-                .args(["init", "-q"])
-                .status()
-                .unwrap()
-                .success()
-        );
+        turborepo_setup::git::fake_repository(&other).unwrap();
         fs::rename(other.join(".git"), root.join("other-common")).unwrap();
         let worktree = root.parent().unwrap().join("worktree-link");
         if case == 5 {
@@ -271,6 +264,8 @@ fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging(
                 format!("{config}\n[core]\nworktree = {}\n", worktree.display()),
             )
             .unwrap();
+            // Git reports the configured worktree, through the link.
+            f.git.set_toplevel(root, &worktree);
         }
         let config_before = fs::read(root.join("common/config")).unwrap();
         let desired = Lock::parse(f.lock.to_string().as_bytes()).unwrap();
@@ -307,7 +302,7 @@ fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging(
                     fs::remove_file(&worktree).unwrap();
                     std::os::unix::fs::symlink(root.parent().unwrap(), &worktree).unwrap();
                     assert_eq!(fs::read(root.join("common/config")).unwrap(), config_before);
-                    assert!(provision::storage(root).is_ok());
+                    assert!(provision::storage(root, &*f.git).is_ok());
                 }
                 _ => {
                     fs::rename(root.join("common/config"), root.join("common/old-config")).unwrap();

@@ -10,6 +10,7 @@ use std::{
 use tar::{EntryType, Header};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, IntoUnix};
 
+use super::zstd_sink::ZstdSink;
 use crate::CacheError;
 
 /// Most worker threads zstd uses to compress one cache archive.
@@ -137,7 +138,7 @@ fn generate_temp_path(final_path: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf 
 /// Implements [`Drop`] to clean up temporary files if `finish()` is not called.
 /// This ensures no orphaned temp files remain on disk after errors or panics.
 pub struct CacheWriter<'a> {
-    builder: tar::Builder<Box<dyn Write + 'a>>,
+    builder: tar::Builder<ArchiveSink<'a>>,
     /// The temporary path where the archive is being written.
     /// On `finish()`, this will be atomically renamed to `final_path`.
     temp_path: Option<AbsoluteSystemPathBuf>,
@@ -155,6 +156,35 @@ pub struct CacheWriter<'a> {
     dir_stack: Vec<OpenDir>,
     #[cfg(windows)]
     windows_anchor: Option<WindowsArchiveAnchor>,
+}
+
+/// Where the tar stream goes.
+enum ArchiveSink<'a> {
+    Writer(Box<dyn Write + 'a>),
+    /// Compressed archives written to the local cache. Must be finished
+    /// explicitly; see [`CacheWriter::finish`].
+    ZstdFile(ZstdSink<BufWriter<fs::File>>),
+    /// Compressed archives built in a spool for upload; see
+    /// [`CacheWriter::spooled`].
+    ZstdSpool(ZstdSink<BufWriter<tempfile::SpooledTempFile>>),
+}
+
+impl Write for ArchiveSink<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            ArchiveSink::Writer(writer) => writer.write(buf),
+            ArchiveSink::ZstdFile(sink) => sink.write(buf),
+            ArchiveSink::ZstdSpool(sink) => sink.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            ArchiveSink::Writer(writer) => writer.flush(),
+            ArchiveSink::ZstdFile(sink) => sink.flush(),
+            ArchiveSink::ZstdSpool(sink) => sink.flush(),
+        }
+    }
 }
 
 impl Drop for CacheWriter<'_> {
@@ -199,10 +229,17 @@ impl<'a> CacheWriter<'a> {
     /// After calling this method, the `Drop` implementation will not attempt
     /// to clean up the temp file since it has been successfully renamed.
     pub fn finish(mut self) -> Result<(), CacheError> {
-        // Finish the tar archive - this writes the tar footer and flushes data.
-        // The underlying zstd encoder (if used) has `auto_finish()` which ensures
-        // compression is finalized when the encoder is dropped.
+        // Finish the tar archive - this writes the tar footer.
         self.builder.finish()?;
+        // Compressed local archives are completed and flushed before the
+        // rename, so the final path never names a partially written file.
+        // Other writers' zstd encoders (if used) have `auto_finish()`, which
+        // finalizes compression when the encoder is dropped.
+        match self.builder.get_mut() {
+            ArchiveSink::ZstdFile(sink) => drop(sink.finish()?),
+            ArchiveSink::ZstdSpool(sink) => drop(sink.finish()?),
+            ArchiveSink::Writer(_) => {}
+        }
 
         // Take the paths before the rename. If rename succeeds, Drop won't try
         // to clean up. If rename fails, we return the error and Drop will clean up.
@@ -218,11 +255,48 @@ impl<'a> CacheWriter<'a> {
         Ok(())
     }
 
+    /// Makes a compressed archive in memory that moves to an anonymous
+    /// temporary file once it exceeds `memory_threshold` bytes. Large archives
+    /// are compressed on a dedicated thread like [`CacheWriter::create`]'s.
+    /// Get the archive with [`CacheWriter::finish_spooled`].
+    pub(crate) fn spooled(memory_threshold: usize) -> Result<CacheWriter<'static>, CacheError> {
+        let spool = BufWriter::new(tempfile::spooled_tempfile(memory_threshold));
+        let zw = archive_encoder(spool)?;
+        Ok(CacheWriter {
+            builder: tar::Builder::new(ArchiveSink::ZstdSpool(ZstdSink::new(zw))),
+            temp_path: None,
+            final_path: None,
+            #[cfg(unix)]
+            anchor: None,
+            #[cfg(unix)]
+            dir_stack: Vec::new(),
+            #[cfg(windows)]
+            windows_anchor: None,
+        })
+    }
+
+    /// Finishes an archive made by [`CacheWriter::spooled`] and returns the
+    /// complete compressed archive, positioned at its end.
+    pub(crate) fn finish_spooled(mut self) -> Result<tempfile::SpooledTempFile, CacheError> {
+        self.builder.finish()?;
+        let ArchiveSink::ZstdSpool(sink) = self.builder.get_mut() else {
+            return Err(std::io::Error::other(
+                "finish_spooled called on an archive not made by CacheWriter::spooled",
+            )
+            .into());
+        };
+        let spool = sink
+            .finish()?
+            .into_inner()
+            .map_err(|err| err.into_error())?;
+        Ok(spool)
+    }
+
     pub fn from_writer(writer: impl Write + 'a, use_compression: bool) -> Result<Self, CacheError> {
         if use_compression {
             let zw = archive_encoder(writer)?.auto_finish();
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(zw)),
+                builder: tar::Builder::new(ArchiveSink::Writer(Box::new(zw))),
                 temp_path: None,
                 final_path: None,
                 #[cfg(unix)]
@@ -234,7 +308,7 @@ impl<'a> CacheWriter<'a> {
             })
         } else {
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(writer)),
+                builder: tar::Builder::new(ArchiveSink::Writer(Box::new(writer))),
                 temp_path: None,
                 final_path: None,
                 #[cfg(unix)]
@@ -249,7 +323,7 @@ impl<'a> CacheWriter<'a> {
 
     // Makes a new CacheArchive at the specified path
     // Wires up the chain of writers:
-    // tar::Builder -> zstd::Encoder (optional) -> BufWriter -> File
+    // tar::Builder -> ZstdFileSink (optional) -> BufWriter -> File
     //
     // Uses atomic write pattern: writes to a temporary file, then renames
     // to the final path on `finish()`. This ensures concurrent safety when
@@ -268,10 +342,10 @@ impl<'a> CacheWriter<'a> {
         let is_compressed = path.extension() == Some("zst");
 
         if is_compressed {
-            let zw = archive_encoder(file_buffer)?.auto_finish();
+            let zw = archive_encoder(file_buffer)?;
 
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(zw)),
+                builder: tar::Builder::new(ArchiveSink::ZstdFile(ZstdSink::new(zw))),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
                 #[cfg(unix)]
@@ -283,7 +357,7 @@ impl<'a> CacheWriter<'a> {
             })
         } else {
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(file_buffer)),
+                builder: tar::Builder::new(ArchiveSink::Writer(Box::new(file_buffer))),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
                 #[cfg(unix)]
@@ -1352,6 +1426,63 @@ mod tests {
         assert_eq!(files[1].as_str(), really_long_dir.as_str());
         assert_eq!(files[2].as_str(), really_long_symlink.as_str());
         assert_eq!(files[3].as_str(), really_long_dir_symlink.as_str());
+        Ok(())
+    }
+
+    #[test]
+    fn large_compressed_archive_matches_single_pass_encoding() -> Result<()> {
+        // Larger than the zstd sink's pipeline threshold, so `create` moves
+        // compression to a worker thread partway through the archive.
+        let input_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(input_dir.path())?;
+        let dist = anchor.join_component("dist");
+        dist.create_dir_all()?;
+        let mut files = vec![AnchoredSystemPathBuf::from_raw("dist")?];
+        for i in 0..6 {
+            let contents: String = (0..60_000)
+                .map(|line| format!("export const value_{i}_{line} = {};\n", line * 31 % 977))
+                .collect();
+            dist.join_component(&format!("chunk-{i}.js"))
+                .create_with_contents(contents)?;
+            files.push(AnchoredSystemPathBuf::from_raw(format!(
+                "dist/chunk-{i}.js"
+            ))?);
+        }
+
+        let archive_dir = tempdir()?;
+        let archive_path = AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar.zst"))?;
+        let mut cache_archive = CacheWriter::create(&archive_path)?;
+        for file in &files {
+            cache_archive.add_file(&anchor, file)?;
+        }
+        cache_archive.finish()?;
+
+        let mut single_pass = Vec::new();
+        {
+            let mut cache_archive = CacheWriter::from_writer(&mut single_pass, true)?;
+            for file in &files {
+                cache_archive.add_file(&anchor, file)?;
+            }
+            cache_archive.finish()?;
+        }
+        let written = std::fs::read(archive_path.as_std_path())?;
+        assert!(!written.is_empty());
+        assert!(written == single_pass, "pipelined archive differs");
+
+        let restore_dir = tempdir()?;
+        let restore_path = AbsoluteSystemPathBuf::try_from(restore_dir.path())?;
+        let (restored, _) = CacheReader::open(&archive_path)?.restore(&restore_path, None)?;
+        assert_eq!(restored, files);
+        for i in 0..6 {
+            let name = format!("chunk-{i}.js");
+            assert_eq!(
+                restore_path
+                    .join_component("dist")
+                    .join_component(&name)
+                    .read()?,
+                dist.join_component(&name).read()?
+            );
+        }
         Ok(())
     }
 

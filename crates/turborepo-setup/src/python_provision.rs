@@ -208,6 +208,7 @@ impl PythonPlan {
             OFFICIAL_ARCHIVE,
         )?;
         Ok(Some(PreparedPython {
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             tree,
             tool: self.tool.clone(),
             key: self.key.clone(),
@@ -222,6 +223,7 @@ impl PythonPlan {
 pub struct PreparedPython {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
     key: String,
     interpreter: String,
     stdlib: String,
@@ -230,6 +232,11 @@ pub struct PreparedPython {
 }
 
 impl PreparedPython {
+    /// Verified archive bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Callback for Store::reconcile: copy the FULL verified interpreter tree
     /// into uv's key directory, preserving relative links and modes. Windows
     /// adds the batch launchers that the Store's forwarders run.

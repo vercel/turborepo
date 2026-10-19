@@ -37,30 +37,17 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
         ] {
             fs::write(f.owned.root().join(name), format!("{name} sentinel\n")).unwrap();
         }
-        let git = |args: &[&str]| {
-            let output = std::process::Command::new("git")
-                .current_dir(f.owned.root())
-                .env_remove("GIT_DIR")
-                .env_remove("GIT_WORK_TREE")
-                .env_remove("GIT_INDEX_FILE")
-                .args(args)
-                .output()
-                .unwrap();
-            assert!(output.status.success(), "{output:?}");
-            output.stdout
+        if !flags.contains(&"--tools-only") {
+            fs::write(f.owned.root().join("turbo.json"), SKIP_DEPENDENCIES).unwrap();
+        }
+        // Everything outside the ignored storage: what `git status` would see.
+        let worktree = || {
+            let storage = f.owned.root().join(".turbo");
+            let mut state = super::publication_guards::state(f.owned.root());
+            state.retain(|(path, _)| !path.starts_with(&storage));
+            state
         };
-        git(&["add", "."]);
-        git(&[
-            "-c",
-            "user.name=Fixture",
-            "-c",
-            "user.email=fixture@example.invalid",
-            "commit",
-            "-qm",
-            "Fixture",
-        ]);
-        let tracked = git(&["status", "--porcelain"]);
-        assert!(tracked.is_empty());
+        let tracked = worktree();
         let u = Upstream::new(&f, false, None);
         f.run(&u, FROZEN).unwrap();
         let before = f.manifest().unwrap();
@@ -102,14 +89,14 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
         f.run(&u, FROZEN).unwrap();
         assert_locked_traffic(&f, &u, 2);
         assert_eq!(f.manifest().unwrap(), after);
-        assert_eq!(git(&["status", "--porcelain"]), tracked);
+        assert_eq!(worktree(), tracked);
         f.no_execution();
     }
 }
 
 #[test]
 fn force_missing_stale_no_host_and_unsupported_locks_fail_before_mutation() {
-    for case in 0..9 {
+    for case in 0..8 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         match case {
@@ -135,11 +122,6 @@ fn force_missing_stale_no_host_and_unsupported_locks_fail_before_mutation() {
             .unwrap(),
             5 => fs::write(f.owned.root().join(".node-version"), "26.0.0").unwrap(),
             6 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            7 => fs::write(
-                f.owned.root().join(".npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap(),
             _ => {
                 let pin = format!("pnpm@10.0.0+sha256.{}", "0".repeat(64));
                 f.declare(json!({"packageManager":pin}));
@@ -169,7 +151,7 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
             2 => Some((f.owned.root().join(".nvmrc"), "26.0.0".into())),
             3 => Some((f.owned.root().join("turbo.lock"), format!("{} ", f.lock))),
             4 => Some((f.owned.root().join("apps/web/turbo.json"), ENABLED.into())),
-            5 => Some((f.owned.home().join(".npmrc"), "".into())),
+            5 => Some((f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into())),
             6 => Some((f.owned.root().join(".gitignore"), "".into())),
             7 => Some((f.owned.root().to_owned(), "track".into())),
             _ => None,
@@ -210,8 +192,9 @@ fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
         let u = Upstream::new(&f, false, None);
         let result = f.run(&u, &flags);
         if flags.contains(&"--offline") && !flags.contains(&"--tools-only") {
-            // Offline setup cannot install locked dependencies yet.
-            assert!(matches!(result, Err(Error::Unsupported(_))));
+            // Offline dependency setup needs the fixture's missing
+            // pnpm-lock.yaml before anything else.
+            assert!(matches!(result, Err(Error::Dependencies(_))));
         } else if flags.contains(&"--offline") {
             // Nothing is installed, so offline force has no verified bytes.
             assert!(matches!(result, Err(Error::Offline(_))));

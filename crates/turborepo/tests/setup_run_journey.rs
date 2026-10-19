@@ -20,9 +20,10 @@ use std::{
     net::{TcpListener, TcpStream},
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Child, Command},
     sync::{Arc, Mutex},
     thread,
+    time::{Duration, Instant},
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD};
@@ -293,21 +294,6 @@ impl Outcome {
         self
     }
 
-    /// Host npm configuration outside the fixture (for example Homebrew's
-    /// bundled npmrc) is rejected by setup's official-source preflight. Like
-    /// the other binary setup tests, report it rather than weaken the policy.
-    fn host_policy_blocked(&self) -> bool {
-        let blocked = contains(
-            &self.text,
-            "official-only setup rejects System configuration",
-        ) || contains(&self.text, "cannot safely inspect System configuration");
-        if blocked {
-            assert_ne!(self.code, 0, "{}", self.text);
-            eprintln!("Journey blocked by host System npm configuration; policy was not bypassed.");
-        }
-        blocked
-    }
-
     /// Fails before any task runs, with the expected guidance.
     fn fails(&self, expected: &str) -> &Self {
         assert_ne!(self.code, 0, "{}", self.text);
@@ -328,6 +314,54 @@ impl Outcome {
             self.text
         );
         self
+    }
+}
+
+/// Bounds every `turbo watch` observation: a regression fails, never hangs.
+const WATCH_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// A running `turbo watch`, killed on drop.
+struct Watch {
+    child: Child,
+    log: PathBuf,
+}
+
+impl Watch {
+    fn output(&self) -> String {
+        fs::read_to_string(&self.log).unwrap()
+    }
+
+    /// Waits until the output has every expected line while watch runs on.
+    fn running_until(&mut self, expected: &[&str]) {
+        let deadline = Instant::now() + WATCH_TIMEOUT;
+        while !expected.iter().all(|line| self.output().contains(line)) {
+            assert!(
+                self.child.try_wait().unwrap().is_none(),
+                "{}",
+                self.output()
+            );
+            assert!(Instant::now() < deadline, "no task ran: {}", self.output());
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
+
+    /// The exit code, if watch stops on its own within `timeout`.
+    fn exits_within(&mut self, timeout: Duration) -> Option<i32> {
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            if let Some(status) = self.child.try_wait().unwrap() {
+                return Some(status.code().unwrap_or(-1));
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        None
+    }
+}
+
+impl Drop for Watch {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 }
 
@@ -402,7 +436,37 @@ impl Journey {
 
     fn turbo(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Outcome {
         let seen = self.upstream.connects().len();
-        let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
+        let output = self.command(cwd, args, env).output().unwrap();
+        assert!(
+            !self.sentinel.exists(),
+            "host tool ran: {}",
+            fs::read_to_string(&self.sentinel).unwrap_or_default()
+        );
+        Outcome {
+            code: output.status.code().unwrap(),
+            text: common::combined_output(&output),
+            connects: self.upstream.connects()[seen..].to_vec(),
+        }
+    }
+
+    /// `turbo watch` from the root, its combined output in a file.
+    fn watch(&self, args: &[&str]) -> Watch {
+        let (file, log) = tempfile::NamedTempFile::new_in(self.temp.path())
+            .unwrap()
+            .keep()
+            .unwrap();
+        let child = self
+            .command(&self.root, args, &[])
+            .stdout(file.try_clone().unwrap())
+            .stderr(file)
+            .spawn()
+            .unwrap();
+        Watch { child, log }
+    }
+
+    fn command(&self, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
+        command
             .env_clear()
             .current_dir(cwd)
             .args(args)
@@ -418,19 +482,8 @@ impl Journey {
             .env("NO_PROXY", "")
             .env("SSL_CERT_FILE", &self.ca)
             .env("JOURNEY_SECRET", "present")
-            .envs(env.iter().copied())
-            .output()
-            .unwrap();
-        assert!(
-            !self.sentinel.exists(),
-            "host tool ran: {}",
-            fs::read_to_string(&self.sentinel).unwrap_or_default()
-        );
-        Outcome {
-            code: output.status.code().unwrap(),
-            text: common::combined_output(&output),
-            connects: self.upstream.connects()[seen..].to_vec(),
-        }
+            .envs(env.iter().copied());
+        command
     }
 
     /// The same repository with a root `setup.mirrors` policy.
@@ -485,9 +538,6 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
 
     // First setup from a subdirectory creates the lock and asks for a commit.
     let first = j.turbo(&j.web, TOOLS_ONLY, &[]);
-    if first.host_policy_blocked() {
-        return;
-    }
     first.succeeds();
     assert!(contains(&first.text, "Commit turbo.lock"), "{}", first.text);
     assert!(!first.connects.is_empty() && !first.text.contains("fixture-"));
@@ -511,6 +561,8 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
             .fails("run turbo setup")
             .offline();
     }
+    // JavaScript discovery runs no tool, so it needs no managed selection.
+    j.turbo(&j.web, &["ls"], &[]).succeeds().offline();
     j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
     assert_eq!(j.read("turbo.lock"), lock);
     j.build(&j.web, "strict", "24.0.0", &[]);
@@ -540,13 +592,113 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
     j.build(&j.web, "loose", "24.1.0", &[]);
 }
 
+/// Tool acquisition ignores npm's ambient configuration: first setup still
+/// uses verified official fixture downloads, and installed repeats stay
+/// offline. All environment overrides belong to child commands, never the test
+/// process.
+#[test]
+fn ambient_npm_configuration_does_not_affect_tool_downloads_or_installed_repeats() {
+    let clean = Journey::new();
+    clean.turbo(&clean.root, TOOLS_ONLY, &[]).succeeds();
+    let expected_lock = clean.read("turbo.lock");
+    let mut expected_requests = clean.upstream.origin.requests();
+    expected_requests.sort();
+    assert!(!expected_requests.is_empty());
+
+    let j = Journey::new();
+    let npmrc = "registry=https://registry.example.invalid/\n\
+                 proxy=http://127.0.0.1:1\nhttps-proxy=http://127.0.0.1:1\n\
+                 cafile=/nonexistent/npm-ca.pem\nstrict-ssl=false\noffline=true\n";
+    let global = j.temp.path().join("global.npmrc");
+    let user = j.home.join(".npmrc");
+    let prefix = j.temp.path().join("npm-prefix");
+    fs::create_dir_all(prefix.join("etc")).unwrap();
+    fs::create_dir_all(prefix.join("lib/node_modules/npm")).unwrap();
+    for path in [
+        j.temp.path().join(".npmrc"),
+        j.root.join(".npmrc"),
+        j.web.join(".npmrc"),
+        user.clone(),
+        global.clone(),
+        prefix.join("etc/npmrc"),
+        prefix.join("lib/node_modules/npm/npmrc"),
+    ] {
+        fs::write(path, npmrc).unwrap();
+    }
+    let ambient = [
+        ("npm_config_registry", "https://lowercase.example.invalid/"),
+        ("NPM_CONFIG_REGISTRY", "https://uppercase.example.invalid/"),
+        ("npm_config_userconfig", user.to_str().unwrap()),
+        ("NPM_CONFIG_GLOBALCONFIG", global.to_str().unwrap()),
+        ("npm_config_prefix", prefix.to_str().unwrap()),
+        ("npm_config_global_prefix", prefix.to_str().unwrap()),
+        ("npm_config_proxy", "http://127.0.0.1:1"),
+        ("npm_config_https_proxy", "http://127.0.0.1:1"),
+        ("npm_config_cafile", "/nonexistent/npm-ca.pem"),
+        ("npm_config_strict_ssl", "false"),
+        ("npm_config_offline", "true"),
+        ("npm_config_unrecognized_setting", "ignored"),
+        ("COREPACK_NPM_REGISTRY", "https://corepack.example.invalid/"),
+        ("DESTDIR", "/nonexistent/ambient-prefix"),
+        ("UV_INDEX_URL", "https://python.example.invalid/simple"),
+        ("PIP_INDEX_URL", "https://pip.example.invalid/simple"),
+        ("GOPROXY", "https://go.example.invalid"),
+        ("RUSTUP_DIST_SERVER", "https://rust.example.invalid"),
+        ("NODE_MIRROR", "https://node-mirror.example.invalid/"),
+        (
+            "NODEJS_ORG_MIRROR",
+            "https://nodejs-mirror.example.invalid/",
+        ),
+        (
+            "NVM_NODEJS_ORG_MIRROR",
+            "https://nvm-mirror.example.invalid/",
+        ),
+    ];
+    let first = j.turbo(&j.web, TOOLS_ONLY, &ambient);
+    first.succeeds();
+    assert!(!first.connects.is_empty(), "{}", first.text);
+    assert!(!first.text.contains("fixture-"), "{}", first.text);
+    assert_eq!(j.read("turbo.lock"), expected_lock);
+    let mut requests = j.upstream.origin.requests();
+    requests.sort();
+    assert_eq!(requests, expected_requests);
+    // Store inspection verifies the published installation, not just exit status.
+    let installed = turborepo_tool_install::Store::inspect(&j.root)
+        .unwrap()
+        .expect("verified managed installation");
+    assert!(installed.bin.join("node").exists());
+    assert!(installed.bin.join("pnpm").exists());
+    let manifest = j.read(".turbo/tools/manifest.json");
+
+    // Unresolved npm interpolation is also irrelevant to tools-only reuse.
+    fs::write(
+        j.root.join(".npmrc"),
+        "not an npm setting = ${UNSET_NPM_VALUE}\n",
+    )
+    .unwrap();
+    let mut ci = ambient.to_vec();
+    ci.push(("CI", "1"));
+    for args in [
+        TOOLS_ONLY,
+        &["setup", "--tools-only", "--offline"][..],
+        &["setup", "--tools-only", "--check", "--offline"][..],
+    ] {
+        j.turbo(&j.root, args, &ci).succeeds().offline();
+        assert_eq!(j.read("turbo.lock"), expected_lock);
+        assert_eq!(j.read(".turbo/tools/manifest.json"), manifest);
+        assert!(
+            turborepo_tool_install::Store::inspect(&j.root)
+                .unwrap()
+                .is_some()
+        );
+    }
+    assert_eq!(j.upstream.origin.requests().len(), requests.len());
+}
+
 #[test]
 fn repository_local_cli_pins_after_global_setup() {
     let j = Journey::new();
     let first = j.turbo(&j.root, TOOLS_ONLY, &[]);
-    if first.host_policy_blocked() {
-        return;
-    }
     first.succeeds();
     // No pin: the global CLI runs the guarded managed pipeline itself.
     j.build(&j.web, "strict", "24.0.0", &[]);
@@ -571,7 +723,8 @@ fn repository_local_cli_pins_after_global_setup() {
     for cwd in [&j.root, &j.web] {
         let outcome = j.turbo(cwd, &["run", "build"], &[]);
         outcome
-            .fails("repository-local CLI")
+            .fails("repository-local turbo 2.5.0")
+            .fails("does not report managed-run support")
             .fails("upgrade")
             .offline();
     }
@@ -612,6 +765,51 @@ fn repository_local_cli_pins_after_global_setup() {
         .offline();
 }
 
+/// `turbo watch` activates managed tools exactly like `turbo run`: the initial
+/// run dispatches managed pnpm and Node, and declaration drift stops a rerun
+/// or startup with `turbo setup` guidance instead of idling silently.
+#[test]
+fn watch_uses_managed_tools_and_fails_on_drift() {
+    let j = Journey::new();
+    let first = j.turbo(&j.root, TOOLS_ONLY, &[]);
+    first.succeeds();
+    let commit = |message: &str| {
+        common::git(&j.root, &["add", "."]);
+        common::git(&j.root, &["commit", "--quiet", "-m", message]);
+    };
+    common::git(&j.root, &["config", "user.email", "journey@example.com"]);
+    common::git(&j.root, &["config", "user.name", "journey"]);
+    commit("setup");
+    let seen = j.upstream.connects().len();
+    let args = ["watch", "build", "--ui=stream"];
+
+    let mut watch = j.watch(&args);
+    watch.running_until(&["fixture-pnpm 10.0.0 secret=filtered", "fixture-node 24.0.0"]);
+    fs::write(j.root.join(".nvmrc"), "24.1.0\n").unwrap();
+    // Any package change reruns; retry in case the watcher coalesces events.
+    let code = (0..3).find_map(|attempt| {
+        fs::write(j.web.join("index.js"), format!("{attempt}\n")).unwrap();
+        commit("change");
+        watch.exits_within(Duration::from_secs(20))
+    });
+    let text = watch.output();
+    assert!(code.is_some_and(|code| code != 0), "{text}");
+    assert!(contains(&text, "run turbo setup"), "{text}");
+    assert_eq!(text.matches("fixture-node").count(), 1, "{text}");
+
+    // With the drift in place, watch fails at startup before any task.
+    let mut watch = j.watch(&args);
+    let code = watch.exits_within(WATCH_TIMEOUT);
+    Outcome {
+        code: code.unwrap_or_else(|| panic!("watch idled: {}", watch.output())),
+        text: watch.output(),
+        connects: j.upstream.connects()[seen..].to_vec(),
+    }
+    .fails("run turbo setup")
+    .offline();
+    assert!(!j.sentinel.exists(), "a host tool ran");
+}
+
 /// TURBO-6404: root `setup.mirrors` routes downloads, an environment variable
 /// overrides one mirror, and `turbo.lock` keeps the official URLs either way.
 /// Each policy mirror sits on the other official host, so the CONNECT log
@@ -620,9 +818,6 @@ fn repository_local_cli_pins_after_global_setup() {
 fn policy_mirrors_route_downloads_and_environment_overrides_them() {
     let official = Journey::new();
     let first = official.turbo(&official.root, TOOLS_ONLY, &[]);
-    if first.host_policy_blocked() {
-        return;
-    }
     first.succeeds();
     let lock = official.read("turbo.lock");
     let policy = r#"{"node":"https://registry.npmjs.org/policy/node/","npmRegistry":"https://nodejs.org/policy/npm"}"#;

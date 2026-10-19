@@ -3,7 +3,7 @@ use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::{ExecutionContext, Libc},
     lock::{Platform, Snapshot},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 
 use super::{Error, root::Discovery};
@@ -29,8 +29,8 @@ pub(super) fn context() -> Result<ExecutionContext, Error> {
 pub(super) fn run(
     discovery: &Discovery,
     sources: Snapshot,
-    tools_only: bool,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    dependencies: &super::dependencies::Dependencies,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
     let context = context()?;
     preflight()?;
@@ -59,18 +59,17 @@ pub(super) fn run(
         println!("npm {}: ready (bundled with managed Node)", npm.version);
     }
     // Reports what setup would clean up; checks never remove anything.
-    for line in super::cleanup::inspect(discovery.snapshot_root()?.as_std_path()) {
+    let root = discovery.snapshot_root()?.as_std_path();
+    for line in super::cleanup::inspect(root) {
         println!("{line}");
     }
-    // Plain checks cover the same tools; dependency readiness is never claimed.
-    println!(
-        "Dependencies skipped ({}); dependency readiness was not checked. No tasks run.",
-        if tools_only {
-            "--tools-only"
-        } else {
-            "dependency checks are not supported yet"
+    // The activation plan above already required turbo.lock. Dependency
+    // readiness is never claimed.
+    if let Some(lock) = sources.previous_lock() {
+        for line in dependencies.check(root, lock)? {
+            println!("{line}");
         }
-    );
+    }
     Ok(0)
 }
 
