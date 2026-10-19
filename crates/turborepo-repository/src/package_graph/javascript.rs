@@ -129,7 +129,7 @@ pub(super) fn resolve_dependencies(
     ignore_missing_packages: bool,
     definition_source: AnchoredSystemPathBuf,
 ) -> Result<ResolutionSnapshot, String> {
-    let closures = match turborepo_lockfiles::all_transitive_closures_sorted(
+    let closures = match turborepo_lockfiles::all_transitive_closures_indexed(
         lockfile,
         external_dependencies,
         ignore_missing_packages,
@@ -150,35 +150,29 @@ pub(super) fn resolve_dependencies(
     // Workspaces sharing an identical external closure (common when a
     // monorepo has many packages with the same dependencies) share one
     // materialized identity list instead of each cloning every member's
-    // strings and re-reading its lockfile display name. Closure members
-    // are interned `Arc`s when the shared closure DP produced them, so an
-    // identical pointer sequence means an identical closure; formats that
-    // fall back to the legacy per-workspace walk produce distinct pointers
-    // and simply build their lists independently.
+    // strings and re-reading its lockfile display name. Closures arrive as
+    // ascending indices into one sorted, duplicate-free package table, so an
+    // identical index sequence means an identical closure.
     //
     // The identity lists for the *distinct* closures are built in parallel:
-    // this is the bulk of resolution assembly on large monorepos (a string
-    // clone plus a lockfile `human_name` lookup per closure member). Raw
-    // pointers stay on the sequential bucketing side; only the borrowed
-    // closure slices cross into the parallel build.
+    // this is the bulk of resolution assembly on large monorepos (an
+    // identity clone per closure member).
     use rayon::prelude::*;
 
-    // Bucketing and interning hash every closure member's pointer, which is
-    // workspaces x closure size: by far the largest key volume in resolution
-    // assembly on large monorepos. Keys are addresses, so a multiplicative
-    // hash is sufficient (SipHash's DoS resistance buys nothing here), and
-    // closures are keyed by their borrowed slices instead of a freshly
-    // collected pointer vector per workspace.
+    let turborepo_lockfiles::IndexedClosures {
+        packages: table,
+        closures,
+    } = closures;
     let resolution_members = resolution_packages(knowledge);
-    let mut index_of: HashMap<ClosureKey<'_>, usize, PointerHashBuilder> = HashMap::default();
-    let mut distinct_closures: Vec<&[Arc<turborepo_lockfiles::Package>]> = Vec::new();
+    let mut index_of: HashMap<&[u32], usize, IndexHashBuilder> = HashMap::default();
+    let mut distinct_closures: Vec<&[u32]> = Vec::new();
     let mut plan: Vec<(&str, usize)> = Vec::with_capacity(resolution_members.len());
     for &(identity, directory) in &resolution_members {
-        let members: &[Arc<turborepo_lockfiles::Package>] = closures
+        let members: &[u32] = closures
             .get(directory.to_unix().as_str())
             .map(Vec::as_slice)
             .unwrap_or(&[]);
-        let idx = *index_of.entry(ClosureKey(members)).or_insert_with(|| {
+        let idx = *index_of.entry(members).or_insert_with(|| {
             distinct_closures.push(members);
             distinct_closures.len() - 1
         });
@@ -186,32 +180,11 @@ pub(super) fn resolve_dependencies(
     }
     drop(index_of);
 
-    // A shared dependency appears in many distinct closures. Intern one
-    // `ExternalPackageIdentity` per distinct package (the DP hands us the
-    // same `Arc<Package>` everywhere it occurs) so its key/version/human_name
-    // strings are allocated once and every closure that contains it clones a
-    // cheap `Arc<str>`-backed identity instead of re-cloning the strings.
-    // Each closure's members are resolved to interned indices in the same
-    // pass (the raw pointers never leave this sequential side).
-    let mut identity_of: HashMap<*const turborepo_lockfiles::Package, u32, PointerHashBuilder> =
-        HashMap::default();
-    let mut distinct_packages: Vec<&Arc<turborepo_lockfiles::Package>> = Vec::new();
-    let mut closure_indices: Vec<Vec<u32>> = Vec::with_capacity(distinct_closures.len());
-    for members in &distinct_closures {
-        let mut indices = Vec::with_capacity(members.len());
-        for package in *members {
-            let index = *identity_of.entry(Arc::as_ptr(package)).or_insert_with(|| {
-                distinct_packages.push(package);
-                (distinct_packages.len() - 1) as u32
-            });
-            indices.push(index);
-        }
-        closure_indices.push(indices);
-    }
-    drop(identity_of);
-    // Build each distinct identity once, in parallel (the key/version clones
-    // and lockfile `human_name` lookup).
-    let interned: Vec<ExternalPackageIdentity> = distinct_packages
+    // Intern one `ExternalPackageIdentity` per package in the table, in
+    // parallel (the key/version clones and lockfile `human_name` lookup), so
+    // its strings are allocated once and every closure that contains it
+    // clones one shared identity.
+    let interned: Vec<ExternalPackageIdentity> = table
         .par_iter()
         .map(|package| {
             let mut identity =
@@ -222,10 +195,9 @@ pub(super) fn resolve_dependencies(
             identity
         })
         .collect();
-    drop(distinct_closures);
 
     // Assemble the lists in parallel by cloning interned identities.
-    let built: Vec<Arc<[ExternalPackageIdentity]>> = closure_indices
+    let built: Vec<Arc<[ExternalPackageIdentity]>> = distinct_closures
         .par_iter()
         .map(|indices| {
             PackageResolution::shared_identity_list(
@@ -233,6 +205,7 @@ pub(super) fn resolve_dependencies(
             )
         })
         .collect();
+    drop(distinct_closures);
 
     let packages: Vec<PackageResolution> = plan
         .into_iter()
@@ -262,46 +235,24 @@ pub(super) fn resolve_dependencies(
     })
 }
 
-/// A workspace closure keyed by the identity (address) of its interned
-/// members, matching the DP's guarantee that an identical pointer sequence
-/// is an identical closure.
-struct ClosureKey<'a>(&'a [Arc<turborepo_lockfiles::Package>]);
-
-impl std::hash::Hash for ClosureKey<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_usize(self.0.len());
-        for package in self.0 {
-            state.write_usize(Arc::as_ptr(package) as usize);
-        }
-    }
-}
-
-impl PartialEq for ClosureKey<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.len() == other.0.len()
-            && self
-                .0
-                .iter()
-                .zip(other.0)
-                .all(|(left, right)| Arc::ptr_eq(left, right))
-    }
-}
-
-impl Eq for ClosureKey<'_> {}
-
-/// Multiplicative (Fx-style) hasher for address keys. The final rotation
-/// moves the well-mixed high bits into the low bits hashbrown indexes by,
-/// since aligned addresses have zero low bits.
+/// Multiplicative (Fx-style) hasher for closure index slices. Grouping
+/// hashes every closure member (workspaces x closure size on large
+/// monorepos), and the keys are internal, so SipHash's DoS resistance buys
+/// nothing; slices are consumed eight bytes at a time.
 #[derive(Default)]
-struct PointerHasher(u64);
+struct IndexHasher(u64);
 
-impl std::hash::Hasher for PointerHasher {
+impl std::hash::Hasher for IndexHasher {
     fn finish(&self) -> u64 {
         self.0.rotate_left(26)
     }
 
     fn write(&mut self, bytes: &[u8]) {
-        for &byte in bytes {
+        let (chunks, remainder) = bytes.as_chunks::<8>();
+        for &chunk in chunks {
+            self.write_u64(u64::from_le_bytes(chunk));
+        }
+        for &byte in remainder {
             self.write_u64(u64::from(byte));
         }
     }
@@ -316,7 +267,36 @@ impl std::hash::Hasher for PointerHasher {
     }
 }
 
-type PointerHashBuilder = std::hash::BuildHasherDefault<PointerHasher>;
+type IndexHashBuilder = std::hash::BuildHasherDefault<IndexHasher>;
+
+#[cfg(test)]
+mod tests {
+    use std::hash::Hasher;
+
+    use super::IndexHasher;
+
+    #[test]
+    fn index_hasher_preserves_byte_hashes_for_all_remainders_and_alignments() {
+        let bytes: Vec<u8> = (0..136).map(|i| (i * 73) as u8).collect();
+        for start in 0..8 {
+            for len in 0..=128 {
+                let bytes = &bytes[start..start + len];
+                let mut hasher = IndexHasher::default();
+                hasher.write(bytes);
+
+                let whole_bytes = bytes.len() / 8 * 8;
+                let words = bytes[..whole_bytes]
+                    .chunks(8)
+                    .map(|chunk| u64::from_le_bytes(chunk.try_into().unwrap()));
+                let tail = bytes[whole_bytes..].iter().copied().map(u64::from);
+                let expected = words.chain(tail).fold(0u64, |hash, value| {
+                    hash.wrapping_add(value).wrapping_mul(0xf135_7aea_2e62_a9c5)
+                });
+                assert_eq!(hasher.finish(), expected.rotate_left(26));
+            }
+        }
+    }
+}
 
 fn resolution_data(
     generation: &ExternalResolutionGeneration,
@@ -448,6 +428,8 @@ pub enum ChangedPackagesError {
     Yarnrc(#[from] crate::package_manager::yarnrc::Error),
     #[error("uv lockfile error: {0}")]
     Uv(#[from] turborepo_lockfiles::UvLockError),
+    #[error("Cargo lockfile error: {0}")]
+    Cargo(#[from] turborepo_lockfiles::CargoLockError),
     #[error("Lockfile content is not UTF-8")]
     NonUtf8Lockfile,
 }

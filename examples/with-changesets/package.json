@@ -4,6 +4,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "changeset": "changeset",
@@ -11,14 +12,14 @@
     "release": "turbo run build --filter=@acme/docs^... && changeset publish"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.1",
-    "eslint": "^8.57.0",
-    "prettier": "^3.2.5",
-    "turbo": "^2.9.6"
+    "@changesets/cli": "3.0.3",
+    "eslint": "10.12.0",
+    "prettier": "3.9.10",
+    "turbo": "2.11.7"
   },
-  "packageManager": "pnpm@8.15.6",
+  "packageManager": "pnpm@12.11.2",
   "engines": {
-    "node": ">=18"
+    "node": ">=26.11.1"
   },
   "name": "with-changesets"
 }

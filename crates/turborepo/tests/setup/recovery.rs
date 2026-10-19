@@ -17,7 +17,7 @@ use std::{
 use nix::sys::signal::Signal;
 use sha2::{Digest, Sha256};
 
-use super::{ENABLED, diagnostic_contains, external_system_policy_blocked};
+use super::{ENABLED, diagnostic_contains};
 
 /// Uncompressed size of each Node fixture's filler file. It compresses to a
 /// few KiB but crosses `UNPACK_LIMIT` while being extracted.
@@ -67,8 +67,7 @@ pub(super) struct Repo {
 }
 
 impl Repo {
-    /// None when the host's npm configuration blocks setup before any write.
-    pub(super) fn new() -> Option<Self> {
+    pub(super) fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
         let base = fs::canonicalize(temp.path()).unwrap();
         let [root, home, tmp] = ["repo", "home", "tmp"].map(|name| base.join(name));
@@ -119,9 +118,6 @@ impl Repo {
         repo.set_node("first");
         let check = repo.run(None, CHECK);
         let code = check.status.code().unwrap();
-        if external_system_policy_blocked(code, &check.text) {
-            return None;
-        }
         assert_eq!(code, 1, "{}", check.text);
         assert!(
             diagnostic_contains(
@@ -131,7 +127,7 @@ impl Repo {
             "{}",
             check.text
         );
-        Some(repo)
+        repo
     }
 
     fn git(&self, words: &[&str]) -> String {
@@ -379,7 +375,7 @@ fn partial_scratch(tmp: &Path) -> bool {
 
 #[test]
 fn killed_download_releases_locks_and_offline_lists_every_missing_artifact() {
-    let Some(repo) = Repo::new() else { return };
+    let repo = Repo::new();
     let (mut child, held) = repo.stalled_writer();
     child.kill().unwrap();
     assert_eq!(child.wait().unwrap().signal(), Some(Signal::SIGKILL as i32));
@@ -412,7 +408,7 @@ fn killed_download_releases_locks_and_offline_lists_every_missing_artifact() {
 
 #[test]
 fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
-    let Some(mut repo) = Repo::new() else { return };
+    let mut repo = Repo::new();
     let [node, _] = repo.seed();
     repo.killed_unpack();
     assert_eq!(repo.inventory(), None);
@@ -467,7 +463,7 @@ fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
 #[test]
 fn killed_additional_tool_download_publishes_nothing_and_recovers_from_the_cache() {
     const OFFLINE_FORCE: &[&str] = &["setup", "--tools-only", "--offline", "--force"];
-    let Some(repo) = Repo::new() else { return };
+    let repo = Repo::new();
     // Node and pnpm come from the cache, so the tool is the first download.
     repo.seed();
     let tool = archive(

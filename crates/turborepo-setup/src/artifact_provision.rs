@@ -89,7 +89,7 @@ impl ArtifactTransport {
     /// lock still records only the declared URL. Construct only after the
     /// setup source preflight passes.
     pub fn new(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         plans: &[ArtifactPlan],
     ) -> Result<Self, Error> {
         let origins: BTreeSet<_> = plans.iter().map(|plan| plan.origin.as_str()).collect();
@@ -108,7 +108,7 @@ impl ArtifactTransport {
     /// keeps the declared URLs and every download is still verified against
     /// its locked digest.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &Mirror,
     ) -> Result<Self, Error> {
         let client = mirror.client().map_err(Error::Transport)?;

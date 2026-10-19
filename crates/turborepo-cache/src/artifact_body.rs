@@ -22,19 +22,9 @@ impl Artifact {
         anchor: &AbsoluteSystemPath,
         files: &[AnchoredSystemPathBuf],
     ) -> Result<Self, CacheError> {
-        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
-        let manifest = {
-            let mut buffered = std::io::BufWriter::new(&mut spool);
-            let mut cache_archive = CacheWriter::from_writer(&mut buffered, true)?;
-            let manifest = cache_archive.add_files(anchor, files)?;
-            // finish() writes the tar footer; dropping then auto-finishes the
-            // zstd stream into the buffer.
-            cache_archive.finish()?;
-            // BufWriter's Drop ignores flush errors; flush explicitly so a
-            // failed final write cannot be reused as a truncated artifact.
-            buffered.flush()?;
-            manifest
-        };
+        let mut cache_archive = CacheWriter::spooled(ARTIFACT_MEMORY_THRESHOLD)?;
+        let manifest = cache_archive.add_files(anchor, files)?;
+        let mut spool = cache_archive.finish_spooled()?;
         spool.seek(SeekFrom::Start(0))?;
         Ok(Self {
             body: Arc::new(ArtifactBody::from_spool(spool)?),
@@ -136,21 +126,18 @@ impl ArtifactBody {
     }
 
     /// A fresh reader positioned at the start of the archive, independent of
-    /// where previous consumers stopped. Readers are cheap: a `Bytes`
-    /// refcount bump in memory or a `dup` of the spool file on disk. The
+    /// every other reader, so several consumers can read at once. Readers are
+    /// cheap: a `Bytes` refcount bump in memory or a `dup` of the spool file
+    /// on disk, read with positional reads at the reader's own offset. The
     /// on-disk variant is buffered so consumers issuing small reads (like
     /// tar header parsing) do not turn into per-block syscalls.
     pub(crate) fn reader(&self) -> std::io::Result<Box<dyn Read + Send>> {
         match self {
             ArtifactBody::InMemory(bytes) => Ok(Box::new(std::io::Cursor::new(bytes.clone()))),
-            ArtifactBody::OnDisk(file) => {
-                let mut handle = file.try_clone()?;
-                handle.seek(SeekFrom::Start(0))?;
-                Ok(Box::new(std::io::BufReader::with_capacity(
-                    ARTIFACT_CHUNK_BYTES,
-                    handle,
-                )))
-            }
+            ArtifactBody::OnDisk(file) => Ok(Box::new(std::io::BufReader::with_capacity(
+                ARTIFACT_CHUNK_BYTES,
+                PositionalReader::new(file)?,
+            ))),
         }
     }
 
@@ -170,20 +157,74 @@ impl ArtifactBody {
                 ARTIFACT_CHUNK_BYTES,
             ))),
             ArtifactBody::OnDisk(file) => {
-                // Clones share the file offset, so seek to the start before
-                // each upload attempt (signing and local writes also read it).
-                let mut handle = file.try_clone()?;
-                handle.seek(SeekFrom::Start(0))?;
-                let reader = tokio_util::io::ReaderStream::with_capacity(
-                    tokio::fs::File::from_std(handle),
-                    ARTIFACT_CHUNK_BYTES,
-                );
-                Ok(Box::pin(futures::StreamExt::map(reader, |chunk| {
+                // Positional reads keep every upload attempt independent of
+                // other readers, like the local cache install that runs at
+                // the same time.
+                let reader = PositionalReader::new(file)?;
+                let chunks = futures::stream::try_unfold(reader, |mut reader| async move {
+                    let (reader, chunk) = tokio::task::spawn_blocking(move || {
+                        let mut chunk = vec![0; ARTIFACT_CHUNK_BYTES];
+                        let len = reader.read(&mut chunk)?;
+                        chunk.truncate(len);
+                        Ok::<_, std::io::Error>((reader, chunk))
+                    })
+                    .await
+                    .map_err(std::io::Error::other)??;
+                    Ok::<_, std::io::Error>(
+                        (!chunk.is_empty()).then(|| (bytes::Bytes::from(chunk), reader)),
+                    )
+                });
+                Ok(Box::pin(futures::StreamExt::map(chunks, |chunk| {
                     chunk.map_err(turborepo_api_client::Error::from)
                 })))
             }
         }
     }
+}
+
+/// Reads a file from its own offset with positional reads. Duplicated file
+/// handles share one OS file position, so readers that seek and read would
+/// interfere when they run at the same time; these don't.
+struct PositionalReader {
+    file: std::fs::File,
+    offset: u64,
+}
+
+impl PositionalReader {
+    fn new(file: &std::fs::File) -> std::io::Result<Self> {
+        Ok(Self {
+            file: file.try_clone()?,
+            offset: 0,
+        })
+    }
+}
+
+impl Read for PositionalReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let len = read_at(&self.file, buf, self.offset)?;
+        self.offset += len as u64;
+        Ok(len)
+    }
+}
+
+#[cfg(unix)]
+fn read_at(file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    std::os::unix::fs::FileExt::read_at(file, buf, offset)
+}
+
+#[cfg(windows)]
+fn read_at(file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    // Moves the shared file position, which no reader relies on.
+    std::os::windows::fs::FileExt::seek_read(file, buf, offset)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn read_at(mut file: &std::fs::File, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+    // Without a positional read, make seek + read atomic across readers.
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    file.seek(SeekFrom::Start(offset))?;
+    file.read(buf)
 }
 
 /// Yields zero-copy `Bytes` slices of `chunk_size` from an already-in-memory
@@ -209,8 +250,108 @@ mod tests {
     use std::io::Write;
 
     use anyhow::Result;
+    use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+
+    /// Archives `files` with the single-pass writer, for comparison.
+    fn single_pass_archive(
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> Result<Vec<u8>> {
+        let mut archive = Vec::new();
+        {
+            let mut cache_archive = CacheWriter::from_writer(&mut archive, true)?;
+            cache_archive.add_files(anchor, files)?;
+            cache_archive.finish()?;
+        }
+        Ok(archive)
+    }
+
+    #[test]
+    fn from_files_matches_single_pass_archive() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(dir.path())?;
+        let dist = anchor.join_component("dist");
+        dist.create_dir_all()?;
+
+        // Compressible output: compressed on a worker thread, small enough
+        // compressed to stay in memory.
+        let text: String = (0..300_000)
+            .map(|line| format!("export const value_{line} = {};\n", line * 31 % 977))
+            .collect();
+        dist.join_component("bundle.js")
+            .create_with_contents(&text)?;
+        let files = vec![
+            AnchoredSystemPathBuf::from_raw("dist")?,
+            AnchoredSystemPathBuf::from_raw("dist/bundle.js")?,
+        ];
+        let artifact = Artifact::from_files(&anchor, &files)?;
+        let body = artifact.body().as_ref();
+        assert!(matches!(body, ArtifactBody::InMemory(_)));
+        let mut built = Vec::new();
+        body.reader()?.read_to_end(&mut built)?;
+        assert!(built == single_pass_archive(&anchor, &files)?);
+
+        // Incompressible output: large enough compressed to spill to disk.
+        let mut state: u64 = 0x9e37_79b9_7f4a_7c15;
+        let noise: Vec<u8> = (0..ARTIFACT_MEMORY_THRESHOLD + (2 << 20))
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
+                state as u8
+            })
+            .collect();
+        dist.join_component("blob.bin")
+            .create_with_contents(&noise)?;
+        let files = vec![
+            AnchoredSystemPathBuf::from_raw("dist")?,
+            AnchoredSystemPathBuf::from_raw("dist/blob.bin")?,
+            AnchoredSystemPathBuf::from_raw("dist/bundle.js")?,
+        ];
+        let artifact = Artifact::from_files(&anchor, &files)?;
+        let body = artifact.body().as_ref();
+        assert!(matches!(body, ArtifactBody::OnDisk(_)));
+        let mut built = Vec::new();
+        body.reader()?.read_to_end(&mut built)?;
+        assert!(built == single_pass_archive(&anchor, &files)?);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn concurrent_readers_of_disk_artifact_see_whole_body() -> Result<()> {
+        let mut spool = tempfile::spooled_tempfile(ARTIFACT_MEMORY_THRESHOLD);
+        let bytes: Vec<u8> = (0..ARTIFACT_MEMORY_THRESHOLD + 3 * ARTIFACT_CHUNK_BYTES + 17)
+            .map(|i| (i % 251) as u8)
+            .collect();
+        spool.write_all(&bytes)?;
+        spool.rewind()?;
+        let body = std::sync::Arc::new(ArtifactBody::from_spool(spool)?);
+        assert!(matches!(*body, ArtifactBody::OnDisk(_)));
+
+        // Local installs copy the body on blocking threads while the upload
+        // streams it.
+        let copies: Vec<_> = (0..3)
+            .map(|_| {
+                let body = body.clone();
+                tokio::task::spawn_blocking(move || {
+                    let mut copy = Vec::new();
+                    body.copy_to(&mut copy).map(|()| copy)
+                })
+            })
+            .collect();
+        let mut streamed = Vec::new();
+        let mut stream = body.stream()?;
+        while let Some(chunk) = futures::StreamExt::next(&mut stream).await {
+            streamed.extend_from_slice(&chunk?);
+        }
+        assert!(streamed == bytes);
+        for copy in copies {
+            assert!(copy.await?? == bytes);
+        }
+        Ok(())
+    }
 
     #[test]
     fn signing_disk_artifact_after_local_copy_includes_body() -> Result<()> {

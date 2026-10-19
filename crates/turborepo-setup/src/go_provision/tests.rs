@@ -86,6 +86,7 @@ fn plan(document: Document, platform: Platform) -> Result<GoPlan, Error> {
 #[tokio::test]
 async fn verified_archive_installs_go_and_gofmt_then_reuses_healthy_trees() {
     let bytes = archive(true);
+    let size = bytes.len() as u64;
     let platform = Platform::LinuxX64Gnu;
     let plan = plan(document(platform, &bytes), platform).unwrap();
     let server = LoopbackServer::new([(ROUTE.to_owned(), bytes)], |_| {}).unwrap();
@@ -98,6 +99,7 @@ async fn verified_archive_installs_go_and_gofmt_then_reuses_healthy_trees() {
         .await
         .unwrap()
         .unwrap();
+    assert_eq!(prepared.downloaded_bytes(), size);
     store
         .reconcile(&desired, |tool, path| prepared.stage(tool, path))
         .unwrap();

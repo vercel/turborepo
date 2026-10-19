@@ -18,6 +18,10 @@ thiserror = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 same-file = "1.0.6"
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1", features = ["process"] }

@@ -1,34 +1,12 @@
-const { resolve } = require("node:path");
+const { defineConfig } = require("eslint/config");
+const next = require("@next/eslint-plugin-next");
+const base = require("./library.js");
 
-const project = resolve(process.cwd(), "tsconfig.json");
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: [
-    "eslint:recommended",
-    "prettier",
-    require.resolve("@vercel/style-guide/eslint/next"),
-    "turbo",
-  ],
-  globals: {
-    React: true,
-    JSX: true,
+module.exports = defineConfig(base, {
+  files: ["**/*.{ts,tsx}"],
+  plugins: { "@next/next": next },
+  rules: {
+    ...next.configs.recommended.rules,
+    ...next.configs["core-web-vitals"].rules,
   },
-  env: {
-    node: true,
-  },
-  plugins: ["only-warn"],
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
-      },
-    },
-  },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-  ],
-  overrides: [{ files: ["*.js?(x)", "*.ts?(x)"] }],
-};
+});

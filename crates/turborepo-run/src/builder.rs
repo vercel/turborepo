@@ -50,6 +50,20 @@ use turborepo_vercel_api::CachingStatusResponse;
 use url::Url;
 
 type RunEngine = Engine<Built, TaskDefinition>;
+
+/// Root lockfiles whose base-revision content change detection may read.
+/// Prefetching one that the package manager does not use only costs an
+/// unused `git show` when that file changed; a lockfile missing from this
+/// list is still read on demand, just not ahead of time.
+const CHANGE_PREFETCH_LOCKFILES: &[&str] = &[
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "uv.lock",
+];
+
 type FilteredPackages = (
     HashMap<PackageName, PackageInclusionReason>,
     FilterMode,
@@ -906,6 +920,40 @@ impl RunBuilder {
         seen.into_iter().collect()
     }
 
+    /// The change-detection queries scope resolution will make for
+    /// `--affected` and git-range `--filter`s, with the same arguments, so
+    /// they can start before the package graph exists.
+    fn change_prefetch_requests(&self) -> Vec<turborepo_scm::git::ChangedFilesRequest> {
+        let scope_opts = &self.opts.scope_opts;
+        let affected = scope_opts
+            .affected_range
+            .iter()
+            .map(|(from_ref, to_ref)| (from_ref.clone(), to_ref.clone(), true, true));
+        let filters = scope_opts.get_filters().iter().filter_map(|pattern| {
+            let range = pattern.parse::<TargetSelector>().ok()?.git_range?;
+            Some((
+                range.from_ref,
+                range.to_ref,
+                range.include_uncommitted,
+                range.merge_base,
+            ))
+        });
+        affected
+            .chain(filters)
+            .map(
+                |(from_commit, to_commit, include_uncommitted, merge_base)| {
+                    turborepo_scm::git::ChangedFilesRequest {
+                        turbo_root: self.repo_root.clone(),
+                        from_commit,
+                        to_commit,
+                        include_uncommitted,
+                        merge_base,
+                    }
+                },
+            )
+            .collect()
+    }
+
     async fn discover_repo(&self, telemetry: &CommandEventBuilder) -> Result<RepoDiscovery, Error> {
         // SCM detection, the tracked repo index, and untracked-file discovery
         // all run on one background task, overlapping package graph and
@@ -938,6 +986,7 @@ impl RunBuilder {
             (None, None)
         };
         let (scm_tx, scm_rx) = tokio::sync::oneshot::channel();
+        let change_prefetch_requests = self.change_prefetch_requests();
         let repo_index_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
@@ -955,6 +1004,16 @@ impl RunBuilder {
                 .with_github_actions_remote_base_ref_fallback(
                     github_actions_remote_base_ref_fallback,
                 );
+                // Change detection needs nothing from the package graph, so
+                // its git subprocesses overlap graph construction. Scope
+                // resolution consumes the results through this SCM handle.
+                if !change_prefetch_requests.is_empty() {
+                    let lockfile_candidates = CHANGE_PREFETCH_LOCKFILES
+                        .iter()
+                        .map(|name| repo_root.join_component(name))
+                        .collect();
+                    scm.prefetch_changes(change_prefetch_requests, lockfile_candidates);
+                }
                 // A dry run executes no tasks, so nothing can move `HEAD`
                 // before its summary is built. Resolve the summary's SCM state
                 // (a git subprocess outside CI) now, overlapping graph
@@ -2741,9 +2800,8 @@ fn selectors_require_complete_graph(selectors: &[TargetSelector]) -> bool {
 /// the same rule as eager globs.
 fn task_inputs_are_package_local(inputs: &TaskInputs) -> bool {
     inputs
-        .globs
-        .iter()
-        .chain(inputs.jit_globs.iter())
+        .all_globs()
+        .chain(inputs.jit_globs.iter().map(String::as_str))
         .filter(|glob| !glob.starts_with('!'))
         .all(|glob| !glob_escapes_package(glob))
 }
@@ -2991,6 +3049,15 @@ mod untracked_scoping_tests {
             "src/../../shared/**"
         ])));
         assert!(!task_inputs_are_package_local(&inputs(&["src/.."])));
+    }
+
+    #[test]
+    fn derived_globs_obey_the_same_locality_rule() {
+        let mut task = inputs(&["src/**"]);
+        task.derived_globs = vec!["../lib/**".into(), "!../lib/node_modules/**".into()];
+        assert!(!task_inputs_are_package_local(&task));
+        task.derived_globs = vec!["src/**".into(), "!../lib/node_modules/**".into()];
+        assert!(task_inputs_are_package_local(&task));
     }
 
     #[test]

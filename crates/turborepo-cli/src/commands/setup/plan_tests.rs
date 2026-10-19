@@ -4,8 +4,8 @@ const PLAN: &[&str] = &["--plan", "--tools-only"];
 
 impl Fixture {
     fn plan_report(&self, force: bool) -> Result<String, Error> {
-        let discovery = root::Discovery::capture(&self.args(PLAN))?;
-        let sources = turborepo_setup::lock::Snapshot::capture(self.owned.root())?;
+        let discovery = root::Discovery::capture(&self.args(PLAN), self.git.clone())?;
+        let sources = self.sources()?;
         plan::inspect(&discovery, sources, force, || {
             Ok(self
                 .owned
@@ -71,7 +71,7 @@ fn locked_plans_report_missing_reuse_and_force_in_every_readonly_mode() {
         assert_eq!(f.owned.root().join(".turbo").exists(), installed);
     }
     assert_eq!(u.hits(), 3);
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
     std::thread::scope(|scope| {
@@ -205,7 +205,7 @@ fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
             }
             let edit = || {
                 if installed {
-                    track(f.owned.root());
+                    track(&f.git);
                 } else {
                     fs::write(f.owned.root().join(".gitignore"), "").unwrap();
                 }
@@ -214,8 +214,8 @@ fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
                 edit();
             }
             let expected = std::cell::RefCell::new(snapshot(f.owned.root().parent().unwrap()));
-            let discovery = root::Discovery::capture(&f.args(PLAN)).unwrap();
-            let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+            let discovery = root::Discovery::capture(&f.args(PLAN), f.git.clone()).unwrap();
+            let sources = f.sources().unwrap();
             let calls = std::cell::Cell::new(0);
             let result = plan::inspect(&discovery, sources, installed, || {
                 calls.set(calls.get() + 1);
@@ -250,7 +250,7 @@ fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
 
 #[test]
 fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
-    for case in 0..13 {
+    for case in 0..11 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         let mut flags = PLAN.to_vec();
@@ -265,29 +265,23 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 flags.push("--frozen");
             }
             2 => fs::write(f.owned.root().join("turbo.lock"), "invalid").unwrap(),
-            3 => fs::write(
-                f.owned.root().join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap(),
-            4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
-            5 => {
+            3 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");
                 f.save();
             }
-            6 => {
+            4 => {
                 f.lock["tools"]["pnpm"]["version"] = json!("11.0.0");
                 f.save();
             }
-            7 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            8 => fs::write(
+            5 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+            6 => fs::write(
                 f.owned.root().join("turbo.json"),
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            9 => flags.push("--no-lock"),
-            10 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
-            11 => {
+            7 => flags.push("--no-lock"),
+            8 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
+            9 => {
                 let artifacts = f.lock["tools"]["node"]["installation"]["artifacts"]
                     .as_object_mut()
                     .unwrap();
@@ -310,7 +304,7 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                     .contains("frozen setup requires turbo.lock")
             );
         }
-        if matches!(case, 9 | 10) {
+        if matches!(case, 7 | 8) {
             assert!(matches!(error, Error::NotImplemented));
         }
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
@@ -379,14 +373,18 @@ impl Fixture {
         crate::cli::dispatch_setup(&self.args(flags), |args, setup_args| {
             let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
             validate_request(&request)?;
-            let discovery = root::Discovery::capture(args)?;
-            let sources =
-                turborepo_setup::lock::Snapshot::capture_with(self.owned.root(), ecosystems)?;
+            let discovery = root::Discovery::capture(args, self.git.clone())?;
+            let sources = turborepo_setup::lock::Snapshot::capture_with_git(
+                self.owned.root(),
+                ecosystems,
+                self.git.clone(),
+            )?;
             let transports = Some(loopback(self, upstream));
             report = Some(plan::report(
                 &discovery,
                 sources,
                 &request,
+                &dependencies::Dependencies::tools_only(),
                 transports,
                 || {
                     Ok(self
@@ -562,8 +560,8 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
     for case in 0..7 {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        let discovery = root::Discovery::capture(&f.args(PLAN)).unwrap();
-        let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let discovery = root::Discovery::capture(&f.args(PLAN), f.git.clone()).unwrap();
+        let sources = f.sources().unwrap();
         let calls = std::cell::Cell::new(0);
         let edited = std::cell::RefCell::new(None);
         let result = plan::inspect(&discovery, sources, false, || {
@@ -582,7 +580,7 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
                         f.owned.root().join("apps/web/.git"),
                         "gitdir: /not-probed".into(),
                     ),
-                    _ => (f.owned.home().join(".npmrc"), "".into()),
+                    _ => (f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into()),
                 };
                 fs::write(path, contents).unwrap();
                 *edited.borrow_mut() = Some(snapshot(f.owned.root().parent().unwrap()));

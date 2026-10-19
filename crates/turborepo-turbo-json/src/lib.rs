@@ -52,7 +52,7 @@ pub use raw::{
     RawTaskDefinition, RawTurboJson,
 };
 pub use setup::{
-    ArtifactFormat, ArtifactPlatform, DependencyPolicy, LifecycleScripts, RawAdditionalTool,
+    ArtifactFormat, ArtifactPlatform, DependencyPolicy, RawAdditionalTool,
     RawAdditionalToolArtifact, RawSetupMirrors, RawSetupPolicy, RawToolchainSetupPolicy,
     SetupMirrors, SetupPolicy, ToolPolicy, ToolchainSetupPolicy,
 };
@@ -406,6 +406,7 @@ impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
 
         Ok(turborepo_types::TaskInputs {
             globs,
+            derived_globs: Vec::new(),
             default,
             jit_globs,
             jit_default,

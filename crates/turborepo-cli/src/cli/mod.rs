@@ -112,7 +112,7 @@ fn init_rayon_pool() {
     }
 }
 
-fn initialize_deferred_telemetry_client(
+pub(crate) fn initialize_deferred_telemetry_client(
     http_client: SharedHttpClient,
     color_config: ColorConfig,
     version: &str,
@@ -401,9 +401,12 @@ pub fn run(
         Args::new(env::args_os().collect())
     };
 
-    // Setup must not bootstrap task configuration, telemetry, agent guidance,
-    // HTTP clients, or worker runtimes. Help already exited during parsing.
-    if let Some(result) = dispatch_setup(&cli_args, setup::run) {
+    // Setup must not bootstrap task configuration, agent guidance, HTTP
+    // clients, or worker runtimes. Help already exited during parsing. Its
+    // standard telemetry starts only after the outcome is final.
+    if let Some(result) = dispatch_setup(&cli_args, |args, setup_args| {
+        setup::run_with_telemetry(args, setup_args, color_config)
+    }) {
         return result.map_err(Into::into);
     }
     // Runs at every prompt: no telemetry, update checks, agent guidance,
@@ -497,7 +500,10 @@ async fn run_main(
     cli_args.command = Some(command);
     // Also guard direct/wrapper --skip-infer paths before telemetry activation
     // or agent-file maintenance; shim handoff validation is not sufficient.
-    if matches!(cli_args.command, Some(Command::Run { .. })) {
+    if matches!(
+        cli_args.command,
+        Some(Command::Run { .. } | Command::Watch { .. })
+    ) {
         let base = CommandBase::new(cli_args.clone(), repo_root.clone(), version, color_config)?;
         managed::validate(&base)?;
     }
@@ -836,9 +842,22 @@ async fn run_main(
                 return Ok(1);
             }
 
+            // Like `turbo run`: activate managed tools before any discovery,
+            // and reselect them for every rerun so drift fails with guidance.
+            let managed = managed::select(&base)?;
+            if let Some(tools) = &managed {
+                managed::activate_probes(tools)?;
+            }
+            let mut input = base.run_builder_input()?;
+            input.managed_environment = managed;
+            let select_managed: turborepo_watch::ManagedSelector = {
+                let base = base.clone();
+                Box::new(move || managed::select(&base))
+            };
             let verbosity: u8 = cli_args.verbosity.into();
             let mut client = WatchClient::new(
-                base.run_builder_input()?,
+                input,
+                select_managed,
                 *experimental_write_cache,
                 event,
                 query_server.clone(),

@@ -62,9 +62,9 @@ pub(crate) struct TrustStore {
 /// Setup-recorded tools for the interactive shell hook only.
 pub(crate) struct Recorded {
     pub(crate) bin: PathBuf,
-    /// The installation includes managed Go, whose Windows export needs
-    /// GOROOT.
-    pub(crate) go: bool,
+    /// The runtime variables managed run sets for the recorded tools (Rust,
+    /// Go and uv/Python).
+    pub(crate) env: std::collections::BTreeMap<String, std::ffi::OsString>,
     /// turbo.lock changed since setup recorded this installation, including a
     /// lock added after `turbo setup --no-lock`.
     pub(crate) stale: bool,
@@ -392,9 +392,16 @@ impl TrustStore {
         let targets = (record.installation.tools.iter())
             .flat_map(|tool| tool.executables.values().cloned())
             .collect();
+        let installation = &record.installation;
+        let env = turborepo_setup::activation::runtime_env(
+            &self.root,
+            &installation.bin,
+            &installation.tools,
+        )
+        .map_err(io::Error::other)?;
         Ok(Some(Recorded {
             stale: !record.resolves(lock.as_deref()),
-            go: record.installation.tools.iter().any(|tool| tool.id == "go"),
+            env,
             bin: record.installation.bin,
             targets,
         }))
