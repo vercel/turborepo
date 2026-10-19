@@ -25,14 +25,8 @@ pub(crate) fn exact_input_exclusions<S: AsRef<str>>(
     {
         let input = PackageInput::resolve(package_path, input.as_ref())?;
         exclusions.push(wax::Glob::new(input.as_str())?.into_owned());
-        let path = input.as_str().trim_end_matches('/');
-        if path != "**" && !path.ends_with("/**") {
-            let descendants = if path.is_empty() {
-                "**".to_owned()
-            } else {
-                format!("{path}/**")
-            };
-            exclusions.push(wax::Glob::new(&descendants)?.into_owned());
+        if let Some(tree) = globwalk::exact_input_tree(input.as_str()) {
+            exclusions.push(wax::Glob::new(&tree)?.into_owned());
         }
     }
     Ok(exclusions)
@@ -420,8 +414,11 @@ impl GitRepo {
         let pkg_prefix = self.root.anchor(&full_pkg_path)?.to_unix();
         let package_unix_path = package_unix_path_buf.as_str();
 
-        static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
-        let extra_inputs = if include_configs { CONFIG_FILES } else { &[] };
+        let extra_inputs: &[&str] = if include_configs {
+            &globwalk::PACKAGE_CONFIG_INPUTS
+        } else {
+            &[]
+        };
         let total_inputs = inputs.len() + extra_inputs.len();
 
         let mut inclusions = Vec::with_capacity(total_inputs);
@@ -512,8 +509,6 @@ impl GitRepo {
         if !includes.is_empty() {
             let full_pkg_path = turbo_root.resolve(package_path);
 
-            static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
-
             let mut glob_inclusions = Vec::new();
             let mut literal_to_hash = Vec::new();
 
@@ -523,7 +518,10 @@ impl GitRepo {
             let glob_exclusions: Vec<ValidatedGlob> =
                 excludes.iter().map(|input| input.glob().clone()).collect();
 
-            let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
+            let all = includes
+                .iter()
+                .copied()
+                .chain(globwalk::PACKAGE_CONFIG_INPUTS);
             for raw_glob in all {
                 if !globwalk::is_glob_pattern(raw_glob) {
                     // Literal file path — resolve directly via stat instead of

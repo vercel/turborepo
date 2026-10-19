@@ -12,6 +12,9 @@ use std::{borrow::Cow, str::FromStr};
 
 use crate::{GlobError, ValidatedGlob, is_glob_pattern};
 
+/// Package configuration files added to explicit inputs without default files.
+pub const PACKAGE_CONFIG_INPUTS: [&str; 3] = ["package.json", "turbo.json", "turbo.jsonc"];
+
 /// A task input glob resolved against its package directory.
 #[derive(Clone, Debug)]
 pub struct PackageInput {
