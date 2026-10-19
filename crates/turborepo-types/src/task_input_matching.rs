@@ -1203,7 +1203,12 @@ mod tests {
     /// may treat as syntax, even when it names a directory.
     #[test]
     fn inclusions_with_glob_syntax_are_not_expanded_as_directories() {
-        for raw in ["$gen", "gen:x"] {
+        for raw in [
+            "$gen",
+            // Colons are invalid in Windows filenames.
+            #[cfg(not(windows))]
+            "gen:x",
+        ] {
             let inputs = explicit(&[raw]);
             assert_match(
                 &format!("packages/lib-a/{raw}/a.ts"),
