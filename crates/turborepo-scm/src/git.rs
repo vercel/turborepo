@@ -1338,11 +1338,13 @@ mod tests {
         assert_eq!(
             files,
             HashSet::from([
-                Path::new("packages/util")
+                Path::new("packages")
+                    .join("util")
                     .join(source_name)
                     .to_string_lossy()
                     .into_owned(),
-                Path::new("packages/another")
+                Path::new("packages")
+                    .join("another")
                     .join(destination_name)
                     .to_string_lossy()
                     .into_owned(),
