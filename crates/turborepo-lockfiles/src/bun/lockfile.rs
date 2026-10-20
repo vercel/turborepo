@@ -337,6 +337,38 @@ impl Lockfile for BunLockfile {
     }
 }
 
+/// Resolves transitive dependency edges for the shared closure DP.
+///
+/// [`Lockfile::resolve_package`] consults the workspace only through the
+/// workspace-scoped index (`<workspace name>/<dependency>` entries, checked by
+/// `find_matching_version` and `find_package`); catalog, override, workspace
+/// protocol, hoisted, and nested lookups ignore it. A dependency name with no
+/// entry nested under any workspace name therefore resolves identically for
+/// every workspace. Names that do have one are reported as sensitive so the
+/// DP falls back to the per-workspace walk.
+struct BunEdgeResolver<'a> {
+    lockfile: &'a BunLockfile,
+    // Any workspace: non-sensitive edges resolve identically for all of them.
+    workspace_path: &'a str,
+    sensitive_names: HashSet<&'a str>,
+}
+
+impl crate::TransitiveEdgeResolver for BunEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        if self.sensitive_names.contains(name) {
+            return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
+        }
+        Ok(crate::TransitiveEdgeResolution::Global(
+            self.lockfile
+                .resolve_package(self.workspace_path, name, version)?,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -384,37 +416,5 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-    }
-}
-
-/// Resolves transitive dependency edges for the shared closure DP.
-///
-/// [`Lockfile::resolve_package`] consults the workspace only through the
-/// workspace-scoped index (`<workspace name>/<dependency>` entries, checked by
-/// `find_matching_version` and `find_package`); catalog, override, workspace
-/// protocol, hoisted, and nested lookups ignore it. A dependency name with no
-/// entry nested under any workspace name therefore resolves identically for
-/// every workspace. Names that do have one are reported as sensitive so the
-/// DP falls back to the per-workspace walk.
-struct BunEdgeResolver<'a> {
-    lockfile: &'a BunLockfile,
-    // Any workspace: non-sensitive edges resolve identically for all of them.
-    workspace_path: &'a str,
-    sensitive_names: HashSet<&'a str>,
-}
-
-impl crate::TransitiveEdgeResolver for BunEdgeResolver<'_> {
-    fn resolve_edge(
-        &self,
-        name: &str,
-        version: &str,
-    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
-        if self.sensitive_names.contains(name) {
-            return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
-        }
-        Ok(crate::TransitiveEdgeResolution::Global(
-            self.lockfile
-                .resolve_package(self.workspace_path, name, version)?,
-        ))
     }
 }
