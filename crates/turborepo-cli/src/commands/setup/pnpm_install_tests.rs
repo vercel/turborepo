@@ -36,51 +36,39 @@ fn locked_pnpm_workspaces_install_frozen_and_repeat_safely() {
     let u = Upstream::new(&f, false, None);
     assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
     assert!(root.join("node_modules/.installed").exists());
-    // Every run reinstalls, so removed dependencies are repaired; skipped
-    // scripts use pnpm's own flag, and tools-only setup never runs pnpm.
     fs::remove_dir_all(root.join("node_modules")).unwrap();
-    assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
     assert!(root.join("node_modules/.installed").exists());
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(
         args(&f),
-        [
-            "install --frozen-lockfile",
-            "install --frozen-lockfile --ignore-scripts"
-        ]
+        ["install --frozen-lockfile", "install --frozen-lockfile"]
     );
     no_tasks(&f);
 }
 
 #[test]
-fn pnpm_native_build_policy_is_reported_and_never_broadened() {
-    let f = installing("");
-    let lock = turborepo_setup::lock::Lock::parse(&f.lock.to_string().into_bytes()).unwrap();
-    let plan = |f: &Fixture| {
-        f.dependencies(&["--plan"])
-            .plan(f.owned.root(), &lock)
-            .unwrap()
-    };
-    assert_eq!(
-        plan(&f)[..2],
-        [
-            "javascript dependencies: pnpm install --frozen-lockfile from pnpm-lock.yaml with \
-             managed pnpm 10.0.0 (pnpm-lock.yaml stays unchanged)",
-            "  pnpm 10.0.0: native pnpm policy; project scripts run; dependency scripts run only \
-             for allowed packages",
-        ]
-    );
-    // Committed allowlists and blocks stay pnpm's to enforce: setup reports
-    // them and passes no flag of its own.
-    let workspace = "packages:\n  - apps/*\nonlyBuiltDependencies:\n  - esbuild\n";
-    fs::write(f.owned.root().join("pnpm-workspace.yaml"), workspace).unwrap();
-    assert!(plan(&f)[1].ends_with("(committed: onlyBuiltDependencies in pnpm-workspace.yaml)"));
-    let blocked = "packages:\n  - apps/*\nignoreScripts: true\n";
-    fs::write(f.owned.root().join("pnpm-workspace.yaml"), blocked).unwrap();
-    assert!(plan(&f)[1].contains("project scripts do not run; dependency scripts do not run"));
+fn pnpm_native_settings_reach_the_installer_unchanged() {
+    let f = installing("cp pnpm-workspace.yaml observed-settings");
+    let root = f.owned.root();
     let u = Upstream::new(&f, false, None);
-    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
-    assert_eq!(args(&f), ["install --frozen-lockfile"]);
+    for settings in [
+        "packages:\n  - apps/*\nonlyBuiltDependencies:\n  - esbuild\n",
+        "packages:\n  - apps/*\nignoreScripts: true\n",
+        "packages: [malformed native settings",
+    ] {
+        fs::write(root.join("pnpm-workspace.yaml"), settings).unwrap();
+        assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+        assert_eq!(
+            fs::read_to_string(root.join("observed-settings")).unwrap(),
+            settings
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("pnpm-workspace.yaml")).unwrap(),
+            settings
+        );
+    }
+    assert_eq!(args(&f), ["install --frozen-lockfile"; 3]);
     no_tasks(&f);
 }
 

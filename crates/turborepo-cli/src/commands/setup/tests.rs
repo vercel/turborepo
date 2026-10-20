@@ -236,7 +236,7 @@ impl Fixture {
     }
     /// The fixture root's Snapshot, guarded through this fixture's Git.
     fn sources(&self) -> Result<Snapshot, StorageError> {
-        Snapshot::capture_with_git(self.owned.root(), Ecosystems::default(), self.git.clone())
+        Snapshot::capture_with(self.owned.root(), Ecosystems::default())
     }
     fn manifest(&self) -> Option<Vec<u8>> {
         fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
@@ -256,7 +256,6 @@ impl std::ops::Deref for Upstream {
 }
 impl Upstream {
     fn new(f: &Fixture, corrupt: bool, drift: Option<(PathBuf, String)>) -> Self {
-        let git = f.git.clone();
         Self(
             LoopbackServer::node_pnpm(
                 f.node_path.clone(),
@@ -267,21 +266,13 @@ impl Upstream {
                     if request == "/pnpm/-/pnpm-10.0.0.tgz"
                         && let Some((path, body)) = &drift
                     {
-                        if body == "track" {
-                            track(&git);
-                        } else {
-                            fs::write(path, body).unwrap();
-                        }
+                        fs::write(path, body).unwrap();
                     }
                 },
             )
             .unwrap(),
         )
     }
-}
-/// `git add -f` of the installed manifest, as the fixture's Git sees it.
-fn track(git: &FakeGit) {
-    git.track(".turbo/tools/manifest.json");
 }
 #[path = "cache_tests.rs"]
 mod cache;
@@ -639,7 +630,7 @@ fn readonly_modes_accept_late_ambient_npmrc_drift_without_traffic_or_mutation() 
 
 #[test]
 fn missing_stale_non_native_or_wrong_exact_lock_never_mutates() {
-    for case in 0..7 {
+    for case in 0..6 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         match case {
@@ -658,8 +649,7 @@ fn missing_stale_non_native_or_wrong_exact_lock_never_mutates() {
                 f.lock["tools"]["node"]["declarations"][0]["request"] = json!("26.0.0");
                 f.save();
             }
-            5 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            _ => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
+            _ => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
         }
         assert!(f.run(&u, FROZEN).is_err(), "case {case}");
         assert_eq!(u.hits(), 0);
@@ -668,44 +658,8 @@ fn missing_stale_non_native_or_wrong_exact_lock_never_mutates() {
     }
 }
 #[test]
-fn git_storage_drift_while_waiting_for_store_lock_never_reuses_or_downloads() {
-    for indexed in [false, true] {
-        let f = Fixture::new();
-        let u = Upstream::new(&f, false, None);
-        f.run(&u, FROZEN).unwrap();
-        let before = f.manifest().unwrap();
-        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
-        // Drift exactly when the run asks Git again under its writer lock.
-        let fired = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let (git, root, drifted) = (
-            Arc::downgrade(&f.git),
-            f.owned.root().to_owned(),
-            fired.clone(),
-        );
-        f.git.on_query(move || {
-            if drifted.load(std::sync::atomic::Ordering::SeqCst)
-                || !turborepo_setup::test_support::writer_held(&root).unwrap()
-            {
-                return;
-            }
-            drifted.store(true, std::sync::atomic::Ordering::SeqCst);
-            match git.upgrade() {
-                Some(git) if indexed => track(&git),
-                _ => fs::write(root.join(".gitignore"), "").unwrap(),
-            }
-        });
-        // The ignore recheck under the writer fails before Store is tried.
-        let error = f.run(&u, FROZEN).unwrap_err();
-        assert!(fired.load(std::sync::atomic::Ordering::SeqCst));
-        assert!(format!("{error:?}").contains("to .gitignore"), "{error:?}");
-        drop(store);
-        assert_eq!(u.hits(), 3);
-        assert_eq!(f.manifest().unwrap(), before);
-    }
-}
-#[test]
 fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
-    for case in 0..11 {
+    for case in 0..9 {
         let mut f = Fixture::new();
         let first = Upstream::new(&f, false, None);
         assert_eq!(f.run(&first, FROZEN).unwrap(), 0);
@@ -748,8 +702,6 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
                 f.owned.root().join("apps/web/package.json"),
                 r#"{"workspaces":[]}"#.into(),
             )),
-            9 => Some((f.owned.root().join(".gitignore"), "".into())),
-            10 => Some((f.owned.root().to_owned(), "track".into())),
             _ => None,
         };
         let u = Upstream::new(&f, case == 0, drift);

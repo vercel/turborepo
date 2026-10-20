@@ -6,8 +6,7 @@ fn resolution_wait_preserves_actual_absent_lock_and_source_expectations() {
         let (repo, store, lock) = installed("24.x", json!({}));
         let p = repo.path();
         fs::write(p.join(".nvmrc"), "^24.0.0").unwrap();
-        let snapshot =
-            Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared()).unwrap();
+        let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
         let before = manifest(p);
         let path = p.to_owned();
         let world = World::new(node_routes(&["24.1.0"]), move |request| {

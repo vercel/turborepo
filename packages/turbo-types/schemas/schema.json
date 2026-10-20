@@ -603,11 +603,6 @@
         }
       }
     },
-    "LifecycleScripts": {
-      "description": "Whether dependency setup lets package managers run lifecycle scripts. `native` keeps each package manager's defaults and committed allowlists or trust settings. `skip` passes the package manager's own flag for skipping them, and fails where the package manager has none.",
-      "type": "string",
-      "enum": ["native", "skip"]
-    },
     "Map_of_AdditionalToolArtifact": {
       "type": "object",
       "additionalProperties": {
@@ -1035,17 +1030,6 @@
             }
           ]
         },
-        "lifecycleScripts": {
-          "description": "Whether dependency setup runs lifecycle scripts for every toolchain.",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/LifecycleScripts"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "mirrors": {
           "description": "Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the official URLs, and environment variables override these values.",
           "anyOf": [
@@ -1184,17 +1168,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/DependencyPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "lifecycleScripts": {
-          "description": "Whether this toolchain's dependency setup runs lifecycle scripts.",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/LifecycleScripts"
             },
             {
               "type": "null"

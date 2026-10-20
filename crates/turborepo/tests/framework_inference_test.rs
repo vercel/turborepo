@@ -123,3 +123,56 @@ fn test_global_env_exclusion_overrides_inference() {
     let inferred = &result["tasks"][0]["environmentVariables"]["inferred"];
     assert_eq!(inferred, &serde_json::json!([]));
 }
+
+#[test]
+fn test_global_env_exclusion_keeps_task_env_in_hash() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_framework(tempdir.path());
+
+    // Opt out of inferred NEXT_PUBLIC_* globally, but declare one of them on
+    // the task. The task can read it through the builtin NEXT_* pass-through,
+    // so it has to stay in the hash.
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "globalEnv": ["!NEXT_PUBLIC_*"],
+  "tasks": {
+    "build": { "env": ["NEXT_PUBLIC_API_URL"] }
+  }
+}"#,
+    )
+    .unwrap();
+
+    let dry_run = |api_url: &str| -> serde_json::Value {
+        let output = run_turbo_with_env(
+            tempdir.path(),
+            &["run", "build", "--dry=json"],
+            &[
+                ("NEXT_PUBLIC_API_URL", api_url),
+                ("NEXT_PUBLIC_CHANGED", "true"),
+            ],
+        );
+        serde_json::from_slice(&output.stdout).unwrap()
+    };
+    let preview = dry_run("https://preview.example.com");
+    let production = dry_run("https://example.com");
+
+    let task = &preview["tasks"][0];
+    assert_eq!(task["framework"], "nextjs");
+    assert_eq!(
+        task["environmentVariables"]["inferred"],
+        serde_json::json!([])
+    );
+    let configured = task["environmentVariables"]["configured"]
+        .as_array()
+        .unwrap();
+    assert_eq!(configured.len(), 1);
+    assert!(
+        configured[0]
+            .as_str()
+            .unwrap()
+            .starts_with("NEXT_PUBLIC_API_URL=")
+    );
+    assert_ne!(task["hash"], production["tasks"][0]["hash"]);
+}

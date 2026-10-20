@@ -42,7 +42,7 @@ fn canonical(lock: &Lock, root: &Path) {
     assert_eq!(Lock::parse(&bytes).unwrap(), *lock);
     assert!(
         lock.matches_native(
-            Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared())
+            Snapshot::capture_with(root, Ecosystems::default())
                 .unwrap()
                 .declarations()
         )
@@ -254,11 +254,10 @@ fn node_drift_preserves_independent_npm_all_variants_and_authoritative_floating_
             .unwrap()
             .lock;
         write_manifest(repo.path(), json!({"packageManager":request}));
-        let declarations =
-            Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared())
-                .unwrap()
-                .declarations()["npm"]
-                .clone();
+        let declarations = Snapshot::capture_with(repo.path(), Ecosystems::default())
+            .unwrap()
+            .declarations()["npm"]
+            .clone();
         let mut old = old.document().clone();
         let npm = old.tools.get_mut("npm").unwrap();
         npm.declarations = declarations;
@@ -349,9 +348,7 @@ fn unsupported_native_choices_fail_before_traffic_and_preserved_npm_preflights_e
         serde_json::to_vec(&document).unwrap(),
     )
     .unwrap();
-    assert!(
-        Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared()).is_err()
-    );
+    assert!(Snapshot::capture_with(repo.path(), Ecosystems::default()).is_err());
 }
 
 #[test]
@@ -455,7 +452,7 @@ fn registry_mismatch_integrity_and_drift_never_publish_partial_cohorts() {
         // No authored pin would use bundled npm, so force the independent path
         // while retaining the same authoritative Node release/artifact bytes.
         if pin.is_empty() {
-            let mut old = Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared())
+            let mut old = Snapshot::capture_with(p, Ecosystems::default())
                 .unwrap()
                 .previous_lock()
                 .unwrap()

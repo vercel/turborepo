@@ -3,6 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+use futures::{StreamExt, stream};
 use tracing::{debug, info, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
@@ -152,30 +153,26 @@ impl CacheMultiplexer {
         {
             // Archive construction reads and compresses every output file;
             // keep that synchronous work off the Tokio runtime workers.
-            let body = Arc::new({
+            let artifact = {
                 let anchor = anchor.to_owned();
                 let files = files.to_vec();
                 tokio::task::spawn_blocking(move || {
-                    crate::artifact_body::ArtifactBody::from_files(&anchor, &files)
+                    crate::artifact_body::Artifact::from_files(&anchor, &files)
                 })
                 .await??
-            });
+            };
+            let upload = artifact.body().clone();
 
             // Install the archive locally and upload it at the same time.
             // Both read the body independently, and neither depends on the
             // other.
             let install = {
                 let fs = fs.clone();
-                let anchor = anchor.to_owned();
                 let key = key.to_owned();
-                let files = files.to_vec();
-                let body = body.clone();
-                tokio::task::spawn_blocking(move || {
-                    fs.put_archive(&anchor, &key, &files, &body, duration)
-                })
+                tokio::task::spawn_blocking(move || fs.put_archive(&key, &artifact, duration))
             };
             let (install_result, http_result) =
-                tokio::join!(install, http.put_body(key, body, duration));
+                tokio::join!(install, http.put_body(key, upload, duration));
             install_result??;
 
             return match http_result {
@@ -309,20 +306,21 @@ impl CacheMultiplexer {
             if self.cache_config.local.write
                 && let Some(fs) = &self.fs
             {
-                if let Ok(Some((hit_metadata, files, body))) = http.fetch_with_archive(key).await {
+                if let Ok(Some((hit_metadata, files, artifact))) =
+                    http.fetch_with_archive(key).await
+                {
                     // We can ignore errors here because we know we have
                     // previously successfully fetched from the HTTP cache, and
                     // so the overall result is a success. Storing in
                     // lower-priority caches is an optimization. The archive
                     // passed signature verification before any restore ran, so
                     // a rejected download never becomes a local hit.
+                    let time_saved = hit_metadata.time_saved;
                     let _ = {
                         let fs = fs.clone();
-                        let anchor = anchor.to_owned();
                         let key = key.to_owned();
-                        let files = files.clone();
                         tokio::task::spawn_blocking(move || {
-                            fs.put_archive(&anchor, &key, &files, &body, hit_metadata.time_saved)
+                            fs.put_archive(&key, &artifact, time_saved)
                         })
                         .await
                     };
@@ -397,14 +395,25 @@ impl CacheMultiplexer {
         };
         let hashes: Vec<_> = remote_keys.iter().map(|(_, key)| key.clone()).collect();
         let batch = http.batch_exists(&hashes).await;
-        for (index, key) in remote_keys {
-            hits[index] = match &batch {
+        // Older self-hosted caches do not implement the batch endpoint. Resolve
+        // their HEAD fallbacks concurrently so network latency does not add up
+        // once per task, while limiting the number of in-flight requests.
+        let batch = &batch;
+        let resolved = stream::iter(remote_keys.into_iter().map(|(index, key)| async move {
+            let hit = match batch {
                 Ok(entries) => match entries.get(&key) {
                     Some(hit) => hit.clone(),
                     None => http.exists(&key).await.ok().flatten(),
                 },
                 Err(_) => http.exists(&key).await.ok().flatten(),
             };
+            (index, hit)
+        }))
+        .buffer_unordered(16)
+        .collect::<Vec<_>>()
+        .await;
+        for (index, hit) in resolved {
+            hits[index] = hit;
         }
         hits
     }

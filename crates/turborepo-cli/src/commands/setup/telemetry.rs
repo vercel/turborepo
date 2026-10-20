@@ -75,8 +75,7 @@ fn activation_failure(error: &turborepo_setup::activation::Error) -> SetupFailur
 }
 
 // Failures before the installer runs keep their tool-side categories; the
-// native install itself, its lifecycle policy, and its host are
-// `Dependencies`.
+// native install itself and its host are `Dependencies`.
 fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
     use super::dependencies::Error as Dependencies;
     match error {
@@ -89,7 +88,6 @@ fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
         Dependencies::Activation(error) => activation_failure(error),
         Dependencies::Host(_)
         | Dependencies::Install(_)
-        | Dependencies::Lifecycle(_)
         | Dependencies::Uv(_)
         | Dependencies::Cargo(_)
         | Dependencies::Go(_)
@@ -129,10 +127,7 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
             "a native Node declaration is required"
             | "setup discovery changed during check; retry turbo setup"
             | "setup discovery changed during provisioning" => SetupFailure::Discovery,
-            "unsafe .turbo storage path"
-            | "storage must be untracked and Git-ignored; add /.turbo/ to .gitignore" => {
-                SetupFailure::Install
-            }
+            "unsafe .turbo storage path" => SetupFailure::Install,
             _ => SetupFailure::Unsupported,
         },
         Error::SourcePolicy(_) => SetupFailure::SourcePolicy,

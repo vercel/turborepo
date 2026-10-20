@@ -91,6 +91,45 @@ fn runs_the_frozen_command_with_the_given_environment_and_returns_its_status() {
 }
 
 #[test]
+fn native_script_settings_reach_npm_without_setup_flags() {
+    let f = Fixture::new();
+    let root = f.root();
+    fs::write(root.join("package-lock.json"), "lock").unwrap();
+    let npm = f.npm(
+        "cp .npmrc observed-settings\nprintf '%s' \"$npm_config_ignore_scripts\" > \
+         observed-env\nprintf '%s' \"$*\" > args",
+    );
+    for value in ["true", "false"] {
+        let settings = format!("ignore-scripts={value}\n");
+        fs::write(root.join(".npmrc"), &settings).unwrap();
+        let env = BTreeMap::from([("npm_config_ignore_scripts".into(), OsString::from(value))]);
+        assert!(
+            f.frozen
+                .run(
+                    &npm,
+                    f.frozen.args(&Version::new(11, 0, 0)),
+                    &root,
+                    &env,
+                    Command::status
+                )
+                .unwrap()
+                .success()
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("observed-settings")).unwrap(),
+            settings
+        );
+        assert_eq!(fs::read_to_string(root.join(".npmrc")).unwrap(), settings);
+        assert_eq!(
+            fs::read_to_string(root.join("observed-env")).unwrap(),
+            value
+        );
+        assert_eq!(fs::read_to_string(root.join("args")).unwrap(), "ci");
+    }
+    assert_eq!(fs::read(root.join("package-lock.json")).unwrap(), b"lock");
+}
+
+#[test]
 fn rewritten_or_created_lockfiles_are_restored_and_fail() {
     for body in [
         "echo rewritten > package-lock.json",
@@ -174,7 +213,17 @@ fn offline_modes_follow_each_manager_and_locked_version() {
     assert_eq!(offline(Manager::Yarn, "4.9.2"), network);
     let rc = f.root().join(".yarnrc.yml");
     let host = "networkSettings:\n  \"*.example\":\n    enableNetwork:";
-    for (value, kept_offline) in [(" false", true), (" true", false), (" \"true\"", false)] {
+    for (value, kept_offline) in [
+        (" false", true),
+        (" null", true),
+        ("", true),
+        (" true", false),
+        (" \"true\"", false),
+        (" \"false\"", false),
+        (" 0", false),
+        (" []", false),
+        (" {}", false),
+    ] {
         fs::write(&rc, format!("{host}{value}\n")).unwrap();
         let mode = offline(Manager::Yarn, "4.9.2");
         assert_eq!(mode == network, kept_offline, "{value}: {mode:?}");
@@ -184,4 +233,65 @@ fn offline_modes_follow_each_manager_and_locked_version() {
         offline(Manager::Yarn, "3.8.7"),
         Offline::Unsupported(reason) if reason.contains(".yarnrc.yml")
     ));
+}
+
+#[test]
+fn modern_yarn_offline_settings_preserve_yaml_shape_and_read_boundaries() {
+    let f = Fixture::new();
+    let rc = f.root().join(".yarnrc.yml");
+    let yarn = Frozen::new(Manager::Yarn).unwrap();
+    let version = Version::new(4, 9, 2);
+    let network = Offline::Env(&[("YARN_ENABLE_NETWORK", "0")]);
+    for text in [
+        "",
+        "null",
+        "{}",
+        "networkSettings: null",
+        "networkSettings: []",
+        "networkSettings:\n  host: {}",
+    ] {
+        fs::write(&rc, text).unwrap();
+        assert_eq!(yarn.offline(&version, &f.root()), network, "{text}");
+    }
+    for text in ["[", "[]", "true", "settings", "42"] {
+        fs::write(&rc, text).unwrap();
+        assert!(
+            matches!(yarn.offline(&version, &f.root()), Offline::Unsupported(_)),
+            "{text}"
+        );
+    }
+    fs::write(&rc, b"\xff").unwrap();
+    assert!(matches!(
+        yarn.offline(&version, &f.root()),
+        Offline::Unsupported(_)
+    ));
+    let at_limit = format!("#{}", " ".repeat(1024 * 1024 - 1));
+    fs::write(&rc, &at_limit).unwrap();
+    assert_eq!(yarn.offline(&version, &f.root()), network);
+    fs::write(&rc, format!("{at_limit} ")).unwrap();
+    assert!(matches!(
+        yarn.offline(&version, &f.root()),
+        Offline::Unsupported(_)
+    ));
+    fs::remove_file(&rc).unwrap();
+    fs::create_dir(&rc).unwrap();
+    assert!(matches!(
+        yarn.offline(&version, &f.root()),
+        Offline::Unsupported(_)
+    ));
+    fs::remove_dir(&rc).unwrap();
+    let target = f.root().join("settings.yml");
+    fs::write(&target, "enableNetwork: false").unwrap();
+    std::os::unix::fs::symlink(&target, &rc).unwrap();
+    assert!(matches!(
+        yarn.offline(&version, &f.root()),
+        Offline::Unsupported(_)
+    ));
+    fs::remove_file(&target).unwrap();
+    assert!(matches!(
+        yarn.offline(&version, &f.root()),
+        Offline::Unsupported(_)
+    ));
+    fs::remove_file(&rc).unwrap();
+    assert_eq!(yarn.offline(&version, &f.root()), network);
 }

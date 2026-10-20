@@ -430,12 +430,8 @@ fn locked_uv_workspaces_sync_with_the_managed_uv_and_its_environment() {
     let u = upstream_with(&["0.12.24"], uv, Vec::new());
     assert_eq!(run(&owned, &u, &["--no-frozen"]).unwrap(), 0);
     assert!(root.join(".venv").exists());
-    // A repeat resyncs a removed environment; skipping scripts refuses builds.
     fs::remove_dir_all(root.join(".venv")).unwrap();
-    assert_eq!(
-        run(&owned, &u, &["--frozen", "--ignore-scripts"]).unwrap(),
-        0
-    );
+    assert_eq!(run(&owned, &u, &["--frozen"]).unwrap(), 0);
     assert!(root.join(".venv").exists());
     // uv's refusal of a stale lock passes its exit status through, and
     // tools-only setup never syncs.
@@ -447,7 +443,7 @@ fn locked_uv_workspaces_sync_with_the_managed_uv_and_its_environment() {
         args.lines().collect::<Vec<_>>(),
         [
             "sync --locked --all-packages never",
-            "sync --locked --all-packages --no-build never",
+            "sync --locked --all-packages never",
             "sync --locked --all-packages never",
         ]
     );

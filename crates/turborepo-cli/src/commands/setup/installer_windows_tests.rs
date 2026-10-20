@@ -81,8 +81,8 @@ fn batch_installers_get_exact_arguments_and_exit_codes_from_metacharacter_paths(
     let args = [
         "install",
         "--frozen-lockfile",
-        "--mode=skip-build",
-        "--ignore-scripts",
+        "--reporter=append-only",
+        "--offline",
     ];
     let mut command = Command::new(&pnpm);
     command.args(args).current_dir(&work).stdin(Stdio::null());

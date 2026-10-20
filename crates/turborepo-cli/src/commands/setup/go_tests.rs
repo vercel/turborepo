@@ -143,14 +143,13 @@ fn proposed(f: &Fixture, upstream: &LoopbackServer, flags: &[&str]) -> Result<St
         validate_request(&request)?;
         let discovery = root::Discovery::capture(args, f.git.clone())?;
         let eligible = discovery.source_eligibility();
-        let snapshot = turborepo_setup::lock::Snapshot::capture_with_git(
+        let snapshot = turborepo_setup::lock::Snapshot::capture_with(
             discovery.snapshot_root()?.as_std_path(),
             turborepo_setup::lock::Ecosystems {
                 go: eligible.go(),
                 python: eligible.python(),
                 rust: eligible.cargo(),
             },
-            discovery.shared_git(),
         )?;
         report = Some(plan::report(
             &discovery,
@@ -359,7 +358,7 @@ fn locked_go_modules_prefetch_with_the_managed_goroot_and_read_only_sums() {
     let u = LoopbackServer::new(go_routes_with(&["1.22.12"], go), |_| {}).unwrap();
     assert_eq!(f.run(&u, &["--no-frozen"]).unwrap(), 0);
     // Go module setup runs no package code; tools-only setup never prefetches.
-    assert_eq!(f.run(&u, &["--frozen", "--ignore-scripts"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     // A failed download passes go's exit status through.
     fs::write(root.join("stale"), "").unwrap();

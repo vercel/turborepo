@@ -59,7 +59,7 @@ pub enum Error {
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run."
+             No tools, dependencies, or locks were changed."
         )
     )]
     NotImplemented,
@@ -193,28 +193,10 @@ struct SetupRequest {
     force: bool,
     offline: bool,
     tools_only: bool,
-    ignore_scripts: bool,
     update_lock: bool,
 }
 
 impl SetupRequest {
-    /// Lifecycle intent for a toolchain's dependency installer: CLI >
-    /// repository policy > native default.
-    fn lifecycle(
-        &self,
-        repository: Option<turborepo_turbo_json::LifecycleScripts>,
-    ) -> turborepo_setup::lifecycle::Request {
-        use turborepo_setup::lifecycle::{Intent, Request};
-        use turborepo_turbo_json::LifecycleScripts;
-        Request::new(
-            self.ignore_scripts,
-            repository.map(|scripts| match scripts {
-                LifecycleScripts::Native => Intent::Native,
-                LifecycleScripts::Skip => Intent::Skip,
-            }),
-        )
-    }
-
     fn new(args: &SetupArgs, is_ci: bool) -> Result<Self, Error> {
         // Explicit conflicts are enforced by the argument parser. --no-lock
         // overrides only the inferred CI default, not explicit --frozen.
@@ -240,7 +222,6 @@ impl SetupRequest {
             force: args.force,
             offline: args.offline,
             tools_only: args.tools_only,
-            ignore_scripts: args.ignore_scripts,
             update_lock: args.update_lock,
         })
     }
@@ -377,12 +358,11 @@ fn run_reporting(
         .map_or(ToolPolicy::Skip, |t| t.tools.0);
     // Preserve current workspace gating, with explicit policy skips disabling
     // interpretation of that ecosystem's declarations.
-    let snapshot = turborepo_setup::lock::Snapshot::capture_with_git(
+    let snapshot = turborepo_setup::lock::Snapshot::capture_with(
         discovery.snapshot_root()?.as_std_path(),
         // Python declarations are captured only when experimentalPythonWorkspaces
         // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
         ecosystems,
-        discovery.shared_git(),
     )?;
     if snapshot.previous_lock().is_some_and(|lock| {
         lock.tools().values().any(|tool| {
@@ -427,7 +407,7 @@ fn run_reporting(
                      locked tools",
                 ));
             }
-            println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
+            println!("Nothing to prepare: every toolchain is skipped.");
             return Ok(0);
         }
         if snapshot
@@ -651,38 +631,6 @@ mod tests {
     use super::*;
     use crate::cli::Command;
 
-    #[test]
-    fn storage_distinguishes_git_failures_from_missing_ignore_rules() {
-        use turborepo_setup::git::{Failure, FakeGit, fake_repository};
-        let root = tempfile::tempdir().unwrap();
-        fake_repository(root.path()).unwrap();
-        let git = FakeGit::new();
-        let message = |git: &FakeGit| {
-            provision::storage(root.path(), git)
-                .unwrap_err()
-                .to_string()
-        };
-        assert!(message(&git).contains("add /.turbo/ to .gitignore"));
-        std::fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
-        provision::storage(root.path(), &git).unwrap();
-        git.track(".turbo/tools/manifest.json");
-        assert!(message(&git).contains("add /.turbo/ to .gitignore"));
-        git.fail(Some(Failure::Fatal("fatal: not a git repository\n".into())));
-        assert_eq!(
-            message(&git),
-            "Git could not check whether .turbo/ is ignored (fatal: not a git repository); run \
-             turbo setup inside the repository's Git checkout"
-        );
-        git.fail(Some(Failure::Spawn));
-        assert!(message(&git).contains("`git`: it was not found on PATH"));
-        // Outside any repository nothing can be committed, so Git is not asked.
-        let outside = tempfile::tempdir().unwrap();
-        provision::storage(outside.path(), &git).unwrap();
-        let queries = git.queries();
-        provision::storage(outside.path(), &git).unwrap();
-        assert_eq!(git.queries(), queries);
-    }
-
     fn request(flags: &[&str], ci: bool) -> Result<SetupRequest, Error> {
         let words = ["turbo", "setup"].into_iter().chain(flags.iter().copied());
         let args = Args::parse_args(words.map(OsString::from).collect()).unwrap();
@@ -853,24 +801,15 @@ mod tests {
     }
 
     #[test]
-    fn ignore_scripts_overrides_repository_lifecycle_policy() {
-        use turborepo_setup::lifecycle::{Intent, Origin};
-        use turborepo_turbo_json::LifecycleScripts;
-        let native = Some(LifecycleScripts::Native);
-        let cli = request(&["--tools-only", "--ignore-scripts"], false).unwrap();
-        assert!(validate_request(&cli).is_ok());
-        let resolved = cli.lifecycle(native);
-        assert_eq!(
-            (resolved.intent, resolved.origin),
-            (Intent::Skip, Origin::Cli)
-        );
-        let plain = request(&[], false).unwrap();
-        let resolved = plain.lifecycle(Some(LifecycleScripts::Skip));
-        assert_eq!(
-            (resolved.intent, resolved.origin),
-            (Intent::Skip, Origin::Repository)
-        );
-        assert_eq!(plain.lifecycle(None).origin, Origin::Default);
+    fn removed_ignore_scripts_is_rejected() {
+        for flags in [
+            vec!["--ignore-scripts"],
+            vec!["--tools-only", "--ignore-scripts"],
+            vec!["--plan", "--ignore-scripts"],
+        ] {
+            let words = ["turbo", "setup"].into_iter().chain(flags);
+            assert!(Args::parse_args(words.map(OsString::from).collect()).is_err());
+        }
     }
 
     #[test]
