@@ -1,5 +1,4 @@
 use super::*;
-use crate::git::FakeGit;
 
 #[test]
 fn mismatched_native_adapter_and_presence_are_not_false_absence() {
@@ -37,9 +36,7 @@ fn canonical_output_byte_limit_fails_before_any_write() {
     for index in 0..4 {
         let mut tool = template.clone();
         tool.adapter = "generic-download".into();
-        tool.installation = Installation::VerifySystem {
-            executables: vec![format!("tool-{index}")],
-        };
+        tool.installation = serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{format!("tool-{index}"):"bin/tool"}}}}})).unwrap();
         tool.declarations = (0..64)
             .map(|source| Declaration {
                 file: format!("source-{source}"),
@@ -62,7 +59,7 @@ fn canonical_output_byte_limit_fails_before_any_write() {
     let lock = Lock::new(document).unwrap();
     assert_eq!(lock.canonical_bytes(), Err(Error::TooLarge));
     let root = tempfile::tempdir().unwrap();
-    assert!(write(root.path(), &lock, &FakeGit::new()).is_err());
+    assert!(write(root.path(), &lock).is_err());
     assert!(files(root.path()).is_empty());
     fs::write(
         root.path().join(LOCK_NAME),
@@ -70,7 +67,7 @@ fn canonical_output_byte_limit_fails_before_any_write() {
     )
     .unwrap();
     let before = fs::read(root.path().join(LOCK_NAME)).unwrap();
-    assert!(write(root.path(), &lock, &FakeGit::new()).is_err());
+    assert!(write(root.path(), &lock).is_err());
     assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), before);
     assert_eq!(files(root.path()), vec![LOCK_NAME]);
 }

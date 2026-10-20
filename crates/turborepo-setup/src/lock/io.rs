@@ -5,9 +5,9 @@ use std::{
     path::Path,
 };
 
-use super::{Declaration, Error, Installation, Lock, MAX_LOCK_BYTES, declarations};
+use super::{Declaration, Error, Lock, MAX_LOCK_BYTES, declarations};
 use crate::{
-    NodeDiscoveryError, NodeRequirements, git::Git, node_discovery::UniqueJson, package_manager,
+    NodeDiscoveryError, NodeRequirements, node_discovery::UniqueJson, package_manager,
     writer_storage::WriterStorage,
 };
 
@@ -80,9 +80,6 @@ impl Lock {
         let mut document = self.document().clone();
         for tool in document.tools.values_mut() {
             sort_declarations(&mut tool.declarations);
-            if let Installation::VerifySystem { executables } = &mut tool.installation {
-                executables.sort();
-            }
         }
         let mut bytes = serde_json::to_vec_pretty(&document).map_err(|_| Error::Json)?;
         bytes.push(b'\n');
@@ -325,20 +322,19 @@ pub(super) fn rust_toolchain(
 }
 
 /// Explicit unconditional publication of a complete validated selection.
-/// Bookkeeping and recovery belong to ignored WriterStorage; readers never
+/// Bookkeeping and recovery belong to WriterStorage; readers never
 /// acquire it. Resolver callers must use lock/source snapshot CAS instead.
-pub fn write(root: &Path, lock: &Lock, git: &dyn Git) -> Result<WriteOutcome, StorageError> {
-    write_with(root, lock, git, || Ok(()))
+pub fn write(root: &Path, lock: &Lock) -> Result<WriteOutcome, StorageError> {
+    write_with(root, lock, || Ok(()))
 }
 
 fn write_with(
     root: &Path,
     lock: &Lock,
-    git: &dyn Git,
     before_replace: impl FnOnce() -> io::Result<()>,
 ) -> Result<WriteOutcome, StorageError> {
     let bytes = lock.canonical_bytes()?;
-    let mut guard = WriterStorage::acquire(root, git)?;
+    let mut guard = WriterStorage::acquire(root)?;
     if records(guard.read_lock()?.as_deref(), &bytes) {
         return Ok(WriteOutcome::Unchanged);
     }

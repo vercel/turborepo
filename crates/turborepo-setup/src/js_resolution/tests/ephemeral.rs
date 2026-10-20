@@ -85,8 +85,7 @@ fn publish(next: Staged, snapshot: &Snapshot, store: &mut Store) -> Outcome {
         .unwrap()
 }
 fn seed_ephemeral(root: &Path, store: &mut Store) -> Lock {
-    let snapshot =
-        Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(root, Ecosystems::default()).unwrap();
     let selection = staged(&snapshot, store, &fixture(&["24.0.0"])).unwrap();
     let lock = selection.selection().clone();
     assert_eq!(publish(selection, &snapshot, store), Outcome::Replaced);
@@ -116,8 +115,7 @@ fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_aft
             (false, Outcome::Unchanged, vec![]),
             (true, Outcome::Replaced, vec!["node", "pnpm"]),
         ] {
-            let snapshot =
-                Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared()).unwrap();
+            let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
             let world = fixture(&["24.1.0", "24.0.0"]);
             let selection = staged(&snapshot, &store, &world).unwrap();
             assert_eq!(selection.selection(), &lock);
@@ -150,7 +148,7 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
         p,
         json!({"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"pnpm","version":"10.0.0"}}}),
     );
-    let snapshot = Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
     let world = World::new(registry_routes(&pnpm_bytes()), |_| {});
     let next = staged(&snapshot, &store, &world).unwrap();
     assert_eq!(next.selection().tools()["node"], old.tools()["node"]);
@@ -158,7 +156,7 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
     let manager = next.selection().tools()["pnpm"].clone();
     assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
     fs::write(p.join(".nvmrc"), "^24.0.0").unwrap();
-    let snapshot = Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
     let world = World::new(node_routes(&["24.1.0", "24.0.0"]), |_| {});
     let next = staged(&snapshot, &store, &world).unwrap();
     assert_eq!(next.selection().tools()["pnpm"], manager);
@@ -170,7 +168,7 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
     let node = next.selection().tools()["node"].clone();
     assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
     write_manifest(p, json!({}));
-    let snapshot = Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
     let world = World::new(vec![], |_| {});
     let next = staged(&snapshot, &store, &world).unwrap();
     assert_eq!(
@@ -211,8 +209,7 @@ fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requ
         }
         assert!(store.generation().is_err());
         assert!(!store.is_current(&current.tools).unwrap());
-        let snapshot =
-            Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared()).unwrap();
+        let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
         let world = fixture(&["24.1.0", "24.0.0"]);
         let next = staged(&snapshot, &store, &world).unwrap();
         assert_eq!(next.selection(), &lock);
@@ -245,8 +242,7 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
             if changed {
                 write_manifest(p, json!({}));
             }
-            let snapshot =
-                Snapshot::capture_with_git(p, Ecosystems::default(), FakeGit::shared()).unwrap();
+            let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
             let selection = staged(&snapshot, &store, &World::new(vec![], |_| {})).unwrap();
             let before = manifest(p);
             let current = store.current().unwrap().unwrap();
@@ -295,8 +291,7 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
 fn foreign_live_store_and_real_lock_and_unsupported_integrity_fail_closed() {
     let (repo, store, lock) = installed("24.x", json!({}));
     let other = root(Some("24.x"), json!({}));
-    let snapshot =
-        Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
     let selection = staged(&snapshot, &store, &World::new(vec![], |_| {})).unwrap();
     let foreign = Store::open(other.path()).unwrap();
     assert!(selection.check(&snapshot, &foreign).is_err());
@@ -305,16 +300,14 @@ fn foreign_live_store_and_real_lock_and_unsupported_integrity_fail_closed() {
     let result = selection.publish(&snapshot, &mut reopened, false, |_, _| panic!(), || Ok(()));
     assert!(result.is_err());
     save(repo.path(), &lock);
-    let actual =
-        Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let actual = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
     assert!(staged(&actual, &reopened, &World::new(vec![], |_| {})).is_err());
     fs::remove_file(repo.path().join("turbo.lock")).unwrap();
     write_manifest(
         repo.path(),
         json!({"packageManager":format!("pnpm@10.0.0+sha512.{:x}", Sha512::digest(pnpm_bytes()))}),
     );
-    let snapshot =
-        Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
     let before = manifest(repo.path());
     let world = fixture(&["24.0.0"]);
     assert!(staged(&snapshot, &reopened, &world).is_err());

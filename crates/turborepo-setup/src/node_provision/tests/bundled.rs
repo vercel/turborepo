@@ -4,7 +4,6 @@ use super::*;
 use crate::{
     bundled_npm,
     execution_identity::{ExecutionContext, ExecutionSnapshot, Libc, SelectedInstallation},
-    git::FakeGit,
     lock::{Document, Ecosystems, Snapshot, WriteOutcome, reconcile},
     node_resolution::{ChecksumManifest, resolve},
 };
@@ -20,7 +19,7 @@ fn capture(root: &Path, manifest: Value) -> Snapshot {
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
-    Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared()).unwrap()
+    Snapshot::capture_with(root, Ecosystems::default()).unwrap()
 }
 fn node(snapshot: &Snapshot, bytes: &[u8]) -> lock::Tool {
     let index = serde_json::to_vec(
@@ -101,9 +100,7 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
             matches!(&committed.tools()["npm"].installation, Installation::Bundled { owner } if owner == "node")
         );
         let before = fs::read(repo.path().join("turbo.lock")).unwrap();
-        let frozen =
-            Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared())
-                .unwrap();
+        let frozen = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
         reconcile::reconcile(&frozen, reconcile::Mode::Frozen, true, |_| {
             panic!("no resolution")
         })
@@ -262,7 +259,7 @@ fn inconsistent_owners_identity_platforms_and_collisions_are_rejected() {
         ("/tools/node/options", json!({"bundled-npm":["11.x"]})),
         (
             "/tools/node/installation",
-            json!({"kind":"verify-system","executables":["node","npm","npx"]}),
+            json!({"kind":"bundled","owner":"npm"}),
         ),
         (
             "/tools/node/installation/artifacts/linux-x64-gnu/distribution/executables",
@@ -283,9 +280,7 @@ fn inconsistent_owners_identity_platforms_and_collisions_are_rejected() {
     assert!(Lock::new(bad).is_err());
     let mut bad = good.document().clone();
     let mut sibling = bad.tools["npm"].clone();
-    sibling.installation = Installation::VerifySystem {
-        executables: vec!["NPM".into()],
-    };
+    sibling.installation = serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{"NPM":"bin/tool"}}}}})).unwrap();
     bad.tools.insert("fixture".into(), sibling);
     assert!(Lock::new(bad).is_err());
     let mut bad = good.document().clone();

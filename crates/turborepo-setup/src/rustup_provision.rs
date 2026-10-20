@@ -26,14 +26,11 @@ const MAX_INSTALLER_BYTES: usize = 64 * 1024 * 1024;
 pub enum Error {
     #[error("invalid locked rustup artifact or mappings; regenerate turbo.lock")]
     InvalidLock,
-    #[error(
-        "no locked rustup artifact for this target; update turbo.lock on a supported target or \
-         configure verify-system"
-    )]
+    #[error("no locked rustup artifact for this target; update turbo.lock on a supported target")]
     MissingTarget,
     #[error(
         "managed rustup promotion is not qualified for this host, Windows arm64 or musl; use a \
-         supported macOS, GNU Linux or Windows x64 target or configure verify-system"
+         supported macOS, GNU Linux or Windows x64 target"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this rustup plan unchanged")]

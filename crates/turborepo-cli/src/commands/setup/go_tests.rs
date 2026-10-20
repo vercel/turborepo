@@ -143,14 +143,13 @@ fn proposed(f: &Fixture, upstream: &LoopbackServer, flags: &[&str]) -> Result<St
         validate_request(&request)?;
         let discovery = root::Discovery::capture(args, f.git.clone())?;
         let eligible = discovery.source_eligibility();
-        let snapshot = turborepo_setup::lock::Snapshot::capture_with_git(
+        let snapshot = turborepo_setup::lock::Snapshot::capture_with(
             discovery.snapshot_root()?.as_std_path(),
             turborepo_setup::lock::Ecosystems {
                 go: eligible.go(),
                 python: eligible.python(),
                 rust: eligible.cargo(),
             },
-            discovery.shared_git(),
         )?;
         report = Some(plan::report(
             &discovery,

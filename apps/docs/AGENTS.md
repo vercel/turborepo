@@ -15,7 +15,7 @@ The root `AGENTS.md` also applies to this app. Geistdocs owns shared runtime beh
 ## Public contracts
 
 - `/llms.txt` is the page index. `/llms-full.txt` is the complete docs corpus.
-- Preserve page Markdown, content negotiation, `/agents.md`, `/sitemap.md`, both RSS feeds, XML sitemap state, robots rules, search, Ask AI, signed OG routes, schemas, and proxy exclusions.
+- Preserve page Markdown, content negotiation, `/agents.md`, `/sitemap.md`, both RSS feeds, the XML sitemap, robots rules, search, Ask AI, signed OG routes, schemas, and proxy exclusions.
 - Static app-owned routes serve `/terms` and `/governance`. The localized not-found page owns browser 404s, while Geistdocs owns automatic agent-readable 404 recovery.
 - Keep blog, OpenAPI, showcase, Devtools, redirects, version-host behavior, analytics, and the Remote Cache page action app-owned.
 - Do not advertise an MCP server unless Turborepo provides one.
