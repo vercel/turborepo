@@ -1089,7 +1089,6 @@ fn generate_setup_policy_interfaces() -> String {
    * How `turbo setup` prepares tools for every toolchain.
    *
    * - `"managed"`: Provision the locked version for this repository.
-   * - `"verify-system"`: Use an installed tool after verifying that it matches the locked version.
    * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
    *
    * Without `setup`, `turbo setup` infers what to prepare from native
@@ -1311,10 +1310,7 @@ mod cli_tests {
         let setup = &schema["properties"]["setup"]["anyOf"][0]["$ref"];
         assert_eq!(setup, "#/definitions/SetupPolicy");
         let tools = &schema["definitions"]["ToolPolicy"]["enum"];
-        assert_eq!(
-            tools,
-            &serde_json::json!(["managed", "verify-system", "skip"])
-        );
+        assert_eq!(tools, &serde_json::json!(["managed", "skip"]));
         assert!(super::generate_typescript().contains("export interface ToolchainSetupPolicy {"));
         let tool = &schema["definitions"]["AdditionalTool"];
         assert_eq!(

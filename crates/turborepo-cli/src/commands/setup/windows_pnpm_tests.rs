@@ -47,7 +47,7 @@ fn provision(f: &Fixture, routes: Vec<(String, Vec<u8>)>) -> (ActivationPlan, Ve
     assert_eq!(u.hits(), hits);
     assert_eq!(f.manifest(), manifest);
     let plan = f.plan();
-    let mut names: Vec<_> = fs::read_dir(plan.path_prepend().unwrap())
+    let mut names: Vec<_> = fs::read_dir(plan.path_prepend())
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
         .collect();
@@ -60,7 +60,7 @@ fn launcher(plan: &ActivationPlan, name: &str) -> String {
     let path = &pnpm.executables[name];
     assert!(path.starts_with("managed-node-"), "{path}");
     assert!(path.ends_with(&format!("/{name}.cmd")), "{path}");
-    let tools = plan.path_prepend().unwrap().join("../tools/pnpm");
+    let tools = plan.path_prepend().join("../tools/pnpm");
     fs::read_to_string(tools.join(path)).unwrap()
 }
 
@@ -174,7 +174,7 @@ fn pnpm_12_locks_every_platform_and_runs_the_windows_binary_beside_its_wrapper()
 
     // The binary sits at the wrapper's own Windows Corepack location, beside
     // `dist/`, and launchers run it by that path, never a bin hard link.
-    let tools = plan.path_prepend().unwrap().join("../tools/pnpm");
+    let tools = plan.path_prepend().join("../tools/pnpm");
     assert_eq!(fs::read(tools.join("pnpm-native.exe")).unwrap(), windows);
     assert!(tools.join("dist/node-gyp-bin/node-gyp.cmd").is_file());
     assert!(!tools.join("pnpm-native").exists());

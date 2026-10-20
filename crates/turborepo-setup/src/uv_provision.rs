@@ -46,14 +46,11 @@ exec \"$tools/uv/@ENTRYPOINT@\" \"$@\"
 pub enum Error {
     #[error("invalid locked uv artifact or mappings; regenerate turbo.lock")]
     InvalidLock,
-    #[error(
-        "no locked uv artifact for this target; update turbo.lock on a supported target or \
-         configure verify-system"
-    )]
+    #[error("no locked uv artifact for this target; update turbo.lock on a supported target")]
     MissingTarget,
     #[error(
         "managed uv promotion is not qualified for Windows arm64 or musl; use macOS, GNU Linux or \
-         Windows x64, or configure verify-system"
+         Windows x64"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this uv plan unchanged")]

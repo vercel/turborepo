@@ -472,7 +472,7 @@ async fn selected_node_only_mapping_composes_with_separate_npm_inventory() {
     let mut value = fixture(platform, &bytes);
     value["tools"]["node"]["installation"]["artifacts"]["macos-arm64"]["distribution"]
         ["executables"] = json!({"node":"bin/node"});
-    value["tools"]["npm"] = json!({"adapter":"npm","version":"11.0.0","declarations":[{"file":"package.json","field":"packageManager","request":"npm@11.0.0"}],"installation":{"kind":"verify-system","executables":["npm","npx"]}});
+    value["tools"]["npm"] = json!({"adapter":"npm","version":"11.0.0","declarations":[{"file":"package.json","field":"packageManager","request":"npm@11.0.0"}],"installation":{"kind":"managed","artifacts":{"any":{"package":{"url":"https://registry.npmjs.org/npm/-/npm-11.0.0.tgz","sha256":"a".repeat(64),"format":"tar-gz","rootPrefix":"package","executables":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}}}}});
     let plan = plan(&value, platform).unwrap();
     assert_eq!(plan.inventory_tool().executables.len(), 1);
     let npm = Tool {

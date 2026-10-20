@@ -1,5 +1,5 @@
-use DependencyPolicy::{Locked, Skip as SkipDependencies};
-use ToolPolicy::{Managed, Skip, VerifySystem};
+use DependencyPolicy::Skip as SkipDependencies;
+use ToolPolicy::{Managed, Skip};
 use miette::Diagnostic;
 use test_case::test_case;
 
@@ -51,7 +51,7 @@ fn absent_or_empty_policy_leaves_every_value_inferred() {
 fn toolchain_values_override_root_values() {
     let policy = parse(
         r#"{"tools":"managed","dependencies":"locked",
-            "javascript":{"tools":"verify-system"},
+            "javascript":{"tools":"skip"},
             "rust":{"tools":"skip"},
             "python":{"dependencies":"skip"},
             "go":{"tools":"skip","dependencies":"skip"}}"#,
@@ -68,7 +68,7 @@ fn toolchain_values_override_root_values() {
     assert_eq!(
         effective(&policy, ids),
         [
-            (Some(VerifySystem), Some(Locked)),
+            (Some(Skip), Some(SkipDependencies)),
             (Some(Skip), Some(SkipDependencies)),
             (Some(Managed), Some(SkipDependencies)),
             (Some(Skip), Some(SkipDependencies)),
@@ -107,7 +107,7 @@ fn removed_lifecycle_controls_are_rejected() {
 
 #[test]
 fn policy_loads_deterministically_and_round_trips() {
-    let setup = r#"{"go":{"tools":"skip"},"dependencies":"skip","javascript":{"tools":"verify-system"},
+    let setup = r#"{"go":{"tools":"skip"},"dependencies":"skip","javascript":{"tools":"skip"},
         "mirrors":{"npmRegistry":"https://npm.example/registry"}}"#;
     assert_eq!(parse(setup).unwrap(), parse(setup).unwrap());
     let raw = root(ALL_FLAGS, setup).unwrap();
@@ -115,7 +115,7 @@ fn policy_loads_deterministically_and_round_trips() {
         serde_json::to_value(&raw).unwrap()["setup"],
         serde_json::json!({
             "dependencies": "skip",
-            "javascript": {"tools": "verify-system"},
+            "javascript": {"tools": "skip"},
             "go": {"tools": "skip"},
             "mirrors": {"npmRegistry": "https://npm.example/registry"}
         })
@@ -200,6 +200,11 @@ fn locked_dependencies_require_tools(setup: &str) {
     );
 }
 
+#[test_case(r#"{"tools":"verify-system"}"#; "removed root policy")]
+#[test_case(r#"{"javascript":{"tools":"verify-system"}}"#; "removed javascript policy")]
+#[test_case(r#"{"rust":{"tools":"verify-system"}}"#; "removed rust policy")]
+#[test_case(r#"{"python":{"tools":"verify-system"}}"#; "removed python policy")]
+#[test_case(r#"{"go":{"tools":"verify-system"}}"#; "removed go policy")]
 #[test_case(r#"{"tools":"system"}"#; "unknown tool policy")]
 #[test_case(r#"{"dependencies":"frozen"}"#; "unknown dependency policy")]
 #[test_case(r#"{"lifecycleScripts":"allow"}"#; "unknown lifecycle policy")]
