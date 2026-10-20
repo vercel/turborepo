@@ -18,7 +18,7 @@ fn git(root: &AbsoluteSystemPath, args: &[&str]) {
 }
 
 fn write(root: &AbsoluteSystemPath, path: &str, contents: &str) {
-    let path = root.join_unix_path(&RelativeUnixPathBuf::new(path).unwrap());
+    let path = root.join_unix_path(RelativeUnixPathBuf::new(path).unwrap());
     path.ensure_dir().unwrap();
     path.create_with_contents(contents).unwrap();
 }
@@ -120,6 +120,82 @@ async fn tracked_outputs_do_not_share_hashes_between_different_output_selections
     assert_ne!(before.hashes[&build], after.hashes[&build]);
     assert_eq!(before.hashes[&check], after.hashes[&check]);
     assert_eq!(before.hashes[&excluded], after.hashes[&excluded]);
+}
+
+#[tokio::test]
+async fn tracked_outputs_preserve_authored_input_provenance() {
+    for indexed in [false, true] {
+        let (_tmp, root, graph) = repository().await;
+        write(&root, ".gitignore", "node_modules/\n");
+        write(
+            &root,
+            "packages/app/node_modules/data/schema.json",
+            "schema v1\n",
+        );
+        write(
+            &root,
+            "packages/app/node_modules/data/junk.json",
+            "junk v1\n",
+        );
+        let rescued = TaskId::new("app", "rescued").into_owned();
+        let flattened = TaskId::new("app", "flattened").into_owned();
+        let excluded = TaskId::new("app", "excluded").into_owned();
+        let mut rescued_definition = definition(&["dist/**"]);
+        rescued_definition.inputs = TaskInputs {
+            globs: vec!["node_modules/data/schema.json".to_owned()],
+            derived_globs: vec![
+                "!node_modules/**".to_owned(),
+                "!package.json".to_owned(),
+                "!dist/**".to_owned(),
+            ],
+            default: true,
+            ..TaskInputs::default()
+        };
+        let mut flattened_definition = rescued_definition.clone();
+        flattened_definition.inputs = TaskInputs {
+            globs: rescued_definition
+                .inputs
+                .all_globs()
+                .map(str::to_owned)
+                .collect(),
+            default: true,
+            ..TaskInputs::default()
+        };
+        let mut excluded_definition = rescued_definition.clone();
+        excluded_definition
+            .outputs
+            .exclusions
+            .push("dist/LICENSE".to_owned());
+        let definitions = HashMap::from([
+            (rescued.clone(), rescued_definition),
+            (flattened.clone(), flattened_definition),
+            (excluded.clone(), excluded_definition),
+        ]);
+        let before = inputs(&root, &graph, &definitions, indexed, false);
+        assert_ne!(before.hashes[&rescued], before.hashes[&flattened]);
+        write(
+            &root,
+            "packages/app/node_modules/data/junk.json",
+            "junk v2\n",
+        );
+        write(&root, "packages/app/dist/generated.txt", "generated\n");
+        let unrelated = inputs(&root, &graph, &definitions, indexed, false);
+        assert_eq!(before.hashes, unrelated.hashes);
+        write(
+            &root,
+            "packages/app/node_modules/data/schema.json",
+            "schema v2\n",
+        );
+        let authored = inputs(&root, &graph, &definitions, indexed, false);
+        assert_ne!(before.hashes[&rescued], authored.hashes[&rescued]);
+        assert_ne!(before.hashes[&excluded], authored.hashes[&excluded]);
+        assert_eq!(before.hashes[&flattened], authored.hashes[&flattened]);
+        write(&root, "packages/app/dist/LICENSE", "license v2\n");
+        let output = inputs(&root, &graph, &definitions, indexed, false);
+        assert_ne!(authored.hashes[&rescued], output.hashes[&rescued]);
+        assert_ne!(authored.hashes[&flattened], output.hashes[&flattened]);
+        assert_eq!(authored.hashes[&excluded], output.hashes[&excluded]);
+    }
 }
 
 #[tokio::test]

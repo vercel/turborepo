@@ -11,8 +11,8 @@ use turborepo_setup::{
 
 use super::{Error, LockMode, provision, root::Discovery};
 
-const DEPENDENCIES: &str = "Dependencies skipped. No tasks run; verify-system tools are not \
-                            managed by turbo setup, so tasks use the verified tools on PATH.";
+const DEPENDENCIES: &str = "Dependencies skipped; verify-system tools are not managed by turbo \
+                            setup, so tasks use the verified tools on PATH.";
 
 pub(super) fn provision(
     discovery: &Discovery,
@@ -31,7 +31,7 @@ pub(super) fn provision(
     let snapshot = if lock_mode == LockMode::Write && !force {
         let check = || {
             provision::revalidate(discovery)?;
-            provision::storage(root, discovery.git())
+            provision::storage(root)
         };
         check()?;
         let outcome = reconcile::reconcile_checked(
@@ -90,6 +90,6 @@ pub(super) fn check(discovery: &Discovery, snapshot: Snapshot) -> Result<i32, Er
             tool.path.display()
         );
     }
-    println!("Dependencies skipped; dependency readiness was not checked. No tasks run.");
+    println!("Dependencies skipped; dependency readiness was not checked.");
     Ok(0)
 }

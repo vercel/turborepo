@@ -93,39 +93,27 @@ fn fresh_setup_records_exact_private_external_evidence_and_repeat_is_noop() {
 
 #[test]
 fn repository_inventory_is_never_promoted_to_trust_or_executed() {
-    for tracked in [false, true] {
-        let f = Fixture::new();
-        seed(&f, true);
-        assert!(
-            Store::inspect(f.owned.root())
-                .unwrap()
-                .unwrap()
-                .bin
-                .join("git")
-                .exists()
-        );
-        if tracked {
-            track(&f.git);
-        }
-        let u = Upstream::new(&f, false, None);
-        let result = f.run(&u, FROZEN);
-        if tracked {
-            assert!(result.is_err());
-            assert_eq!(u.hits(), 0);
-            assert!(!f.owned.home().join("turborepo").exists());
-        } else {
-            assert_eq!(result.unwrap(), 0);
-            assert_eq!(u.hits(), 3);
-            let current = Store::inspect(f.owned.root()).unwrap().unwrap();
-            assert!(!current.bin.join("git").exists());
-            assert!(
-                trust(&f)
-                    .allows_reuse(&Store::open(f.owned.root()).unwrap())
-                    .unwrap()
-            );
-        }
-        f.no_execution();
-    }
+    let f = Fixture::new();
+    seed(&f, true);
+    assert!(
+        Store::inspect(f.owned.root())
+            .unwrap()
+            .unwrap()
+            .bin
+            .join("git")
+            .exists()
+    );
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+    assert!(!current.bin.join("git").exists());
+    assert!(
+        trust(&f)
+            .allows_reuse(&Store::open(f.owned.root()).unwrap())
+            .unwrap()
+    );
+    f.no_execution();
 }
 
 #[test]

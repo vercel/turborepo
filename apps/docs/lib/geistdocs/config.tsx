@@ -38,5 +38,8 @@ export const config = defineConfig({
   ai: {
     prompt,
     suggestions
+  },
+  webmcp: {
+    enabled: true
   }
 });

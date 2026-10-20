@@ -274,7 +274,6 @@ fn test_tracked_outputs_invalidate_cache_and_preserve_committed_edits() {
         "license v2\n"
     );
 
-    // Generated, untracked outputs must not feed back into the input hash.
     fs::remove_file(app.join("dist/out.txt")).unwrap();
     let third = run_turbo(tempdir.path(), &args);
     assert!(
