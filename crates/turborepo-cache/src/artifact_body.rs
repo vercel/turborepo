@@ -1,15 +1,45 @@
 use std::{
     io::{Read, Seek, SeekFrom, Write},
     pin::Pin,
+    sync::Arc,
 };
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 
 use crate::{
     CacheError,
-    cache_archive::CacheWriter,
+    cache_archive::{CacheReader, CacheWriter, RestoreManifest},
     signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
 };
+
+pub(crate) struct Artifact {
+    body: Arc<ArtifactBody>,
+    manifest: RestoreManifest,
+}
+
+impl Artifact {
+    pub(crate) fn from_files(
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> Result<Self, CacheError> {
+        let mut cache_archive = CacheWriter::spooled(ARTIFACT_MEMORY_THRESHOLD)?;
+        let manifest = cache_archive.add_files(anchor, files)?;
+        let mut spool = cache_archive.finish_spooled()?;
+        spool.seek(SeekFrom::Start(0))?;
+        Ok(Self {
+            body: Arc::new(ArtifactBody::from_spool(spool)?),
+            manifest,
+        })
+    }
+
+    pub(crate) fn body(&self) -> &Arc<ArtifactBody> {
+        &self.body
+    }
+
+    pub(crate) fn manifest(&self) -> &RestoreManifest {
+        &self.manifest
+    }
+}
 
 /// Artifacts smaller than this are kept in memory during transfers. Larger
 /// ones roll over to an anonymous temporary file (unlinked on creation where
@@ -43,21 +73,19 @@ pub(crate) type UploadStream = Pin<
 >;
 
 impl ArtifactBody {
-    /// Builds the canonical compressed archive for `files` exactly once,
-    /// spooling to disk when it grows past the in-memory threshold.
-    pub(crate) fn from_files(
+    pub(crate) fn restore(
+        self: &Arc<Self>,
         anchor: &AbsoluteSystemPath,
-        files: &[AnchoredSystemPathBuf],
-    ) -> Result<Self, CacheError> {
-        let mut cache_archive = CacheWriter::spooled(ARTIFACT_MEMORY_THRESHOLD)?;
-        for file in files {
-            cache_archive.add_file(anchor, file)?;
-        }
-        // Finishing completes the zstd frame and flushes it into the spool,
-        // so a failed final write cannot be reused as a truncated artifact.
-        let mut spool = cache_archive.finish_spooled()?;
-        spool.seek(SeekFrom::Start(0))?;
-        Self::from_spool(spool)
+    ) -> Result<(Vec<AnchoredSystemPathBuf>, Artifact), CacheError> {
+        let mut cache_reader = CacheReader::from_reader(self.reader()?, true)?;
+        let (files, manifest) = cache_reader.restore(anchor, None)?;
+        Ok((
+            files,
+            Artifact {
+                body: Arc::clone(self),
+                manifest,
+            },
+        ))
     }
 
     /// Converts a spooled artifact into its shared representation, keeping
@@ -234,9 +262,7 @@ mod tests {
         let mut archive = Vec::new();
         {
             let mut cache_archive = CacheWriter::from_writer(&mut archive, true)?;
-            for file in files {
-                cache_archive.add_file(anchor, file)?;
-            }
+            cache_archive.add_files(anchor, files)?;
             cache_archive.finish()?;
         }
         Ok(archive)
@@ -260,7 +286,8 @@ mod tests {
             AnchoredSystemPathBuf::from_raw("dist")?,
             AnchoredSystemPathBuf::from_raw("dist/bundle.js")?,
         ];
-        let body = ArtifactBody::from_files(&anchor, &files)?;
+        let artifact = Artifact::from_files(&anchor, &files)?;
+        let body = artifact.body().as_ref();
         assert!(matches!(body, ArtifactBody::InMemory(_)));
         let mut built = Vec::new();
         body.reader()?.read_to_end(&mut built)?;
@@ -283,7 +310,8 @@ mod tests {
             AnchoredSystemPathBuf::from_raw("dist/blob.bin")?,
             AnchoredSystemPathBuf::from_raw("dist/bundle.js")?,
         ];
-        let body = ArtifactBody::from_files(&anchor, &files)?;
+        let artifact = Artifact::from_files(&anchor, &files)?;
+        let body = artifact.body().as_ref();
         assert!(matches!(body, ArtifactBody::OnDisk(_)));
         let mut built = Vec::new();
         body.reader()?.read_to_end(&mut built)?;

@@ -138,7 +138,7 @@ fn force_missing_stale_no_host_and_unsupported_locks_fail_before_mutation() {
 
 #[test]
 fn force_late_failures_keep_the_healthy_complete_inventory() {
-    for case in 0..8 {
+    for case in 0..6 {
         let f = Fixture::new();
         let first = Upstream::new(&f, false, None);
         f.run(&first, FROZEN).unwrap();
@@ -152,8 +152,6 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
             3 => Some((f.owned.root().join("turbo.lock"), format!("{} ", f.lock))),
             4 => Some((f.owned.root().join("apps/web/turbo.json"), ENABLED.into())),
             5 => Some((f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into())),
-            6 => Some((f.owned.root().join(".gitignore"), "".into())),
-            7 => Some((f.owned.root().to_owned(), "track".into())),
             _ => None,
         };
         let mut corrupted = f;

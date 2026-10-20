@@ -26,7 +26,7 @@ export function setupTestFixtures({
   options = {}
 }: SetupTextFixtures) {
   const fixtures: Array<string> = [];
-  const parentDirectory = path.join(directory, test ? test : randomUUID());
+  const parentDirectory = path.join(directory, test, randomUUID());
 
   afterEach(async () => {
     return Promise.all(
