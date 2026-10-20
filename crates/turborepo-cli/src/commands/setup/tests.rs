@@ -451,13 +451,11 @@ fn root_policy_and_cli_overrides_select_the_effective_setup() {
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 3);
 
-    // Preserve the native managed adapters added after the original policy
-    // stack. System Rust remains unsupported and must fail before traffic.
     let cargo = r#","experimentalCargoWorkspaces":true"#;
     let f = Fixture::new();
     configure(&f, cargo, r#"{"rust":{"tools":"verify-system"}}"#);
     let u = Upstream::new(&f, false, None);
-    assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
+    assert!(f.run(&u, FROZEN).is_err());
     assert_eq!(u.hits(), 0);
     configure(&f, cargo, r#"{"tools":"managed"}"#);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
