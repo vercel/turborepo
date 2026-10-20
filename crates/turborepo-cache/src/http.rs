@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     io::{Seek, SeekFrom, Write},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -25,6 +25,37 @@ use crate::{
 };
 
 pub type UploadMap = HashMap<String, UploadProgressQuery<10, 100>>;
+
+const WRITE_FORBIDDEN_MESSAGE: &str = "Remote cache rejected an upload with 403 and write access \
+                                       could not be restored; skipping uploads for this run \
+                                       (remote cache reads remain enabled)";
+
+/// Why uploads were disabled for the rest of the run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WritesDisabledReason {
+    /// The status endpoint reported a read-only token. This is the intended
+    /// experience for such tokens, so it is not a warning.
+    ReadOnly,
+    /// An upload was still forbidden after token recovery.
+    Forbidden,
+}
+
+impl WritesDisabledReason {
+    fn warning(self) -> Option<&'static str> {
+        match self {
+            WritesDisabledReason::ReadOnly => None,
+            WritesDisabledReason::Forbidden => Some(WRITE_FORBIDDEN_MESSAGE),
+        }
+    }
+}
+
+/// Whether a remote cache operation reads or writes artifacts. A 403 that
+/// survives token recovery disables only the matching access for the run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RemoteAccess {
+    Read,
+    Write,
+}
 
 /// A downloaded artifact whose signature (if any) has been verified but which
 /// has not been restored yet.
@@ -63,6 +94,7 @@ pub struct HTTPCache {
     api_auth: Arc<Mutex<APIAuth>>,
     recovery_lock: tokio::sync::Mutex<()>,
     disabled: AtomicBool,
+    writes_disabled: OnceLock<WritesDisabledReason>,
     outage_breaker: crate::outage_breaker::OutageBreaker,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
@@ -121,6 +153,7 @@ impl HTTPCache {
             api_auth: Arc::new(Mutex::new(api_auth)),
             recovery_lock: tokio::sync::Mutex::new(()),
             disabled: AtomicBool::new(false),
+            writes_disabled: OnceLock::new(),
             outage_breaker: Default::default(),
             analytics_recorder,
             scm_state,
@@ -147,24 +180,76 @@ impl HTTPCache {
         if first {
             turborepo_log::warn(
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
-                "Remote cache returned 403 and access could not be restored; disabling remote \
-                 caching for this run",
+                "Remote cache returned 403 for a read and access could not be restored; disabling \
+                 remote cache reads and uploads for this run",
             )
             .emit();
         }
         first
     }
 
+    /// Whether uploads are skipped, either because the whole remote cache is
+    /// disabled or because only writes are.
+    pub(crate) fn uploads_disabled(&self) -> bool {
+        self.is_disabled() || self.writes_disabled.get().is_some()
+    }
+
+    /// Silently skips uploads for the rest of the run while keeping remote
+    /// reads, because the token is read-only.
+    pub(crate) fn disable_writes_read_only(&self) -> bool {
+        self.disable_writes(WritesDisabledReason::ReadOnly)
+    }
+
+    fn disable_writes(&self, reason: WritesDisabledReason) -> bool {
+        let first = self.writes_disabled.set(reason).is_ok();
+        if first {
+            debug!("skipping remote cache uploads for this run: {reason:?}");
+            if let Some(warning) = reason.warning()
+                && !self.is_disabled()
+            {
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                    warning,
+                )
+                .emit();
+            }
+        }
+        first
+    }
+
+    fn disable_after_forbidden_for(&self, access: RemoteAccess) {
+        match access {
+            RemoteAccess::Read => {
+                self.disable_after_forbidden();
+            }
+            RemoteAccess::Write => {
+                self.disable_writes(WritesDisabledReason::Forbidden);
+            }
+        }
+    }
+
+    fn is_disabled_for(&self, access: RemoteAccess) -> bool {
+        match access {
+            RemoteAccess::Read => self.is_disabled(),
+            RemoteAccess::Write => self.uploads_disabled(),
+        }
+    }
+
     /// Only one operation may recover a rejected token. Waiters whose request
     /// used that token retry with the replacement instead of recovering again.
-    async fn try_refresh_token<F, Fut, E>(&self, rejected_token: &SecretString, recover: F) -> bool
+    async fn try_refresh_token<F, Fut, E>(
+        &self,
+        access: RemoteAccess,
+        rejected_token: &SecretString,
+        recover: F,
+    ) -> bool
     where
         F: FnOnce(SecretString) -> Fut,
         Fut: std::future::Future<Output = Result<Option<SecretString>, E>>,
         E: std::fmt::Debug,
     {
         let _recovery_guard = self.recovery_lock.lock().await;
-        if self.is_disabled() {
+        if self.is_disabled_for(access) {
             return false;
         }
 
@@ -204,7 +289,7 @@ impl HTTPCache {
             }
         };
         if !recovered {
-            self.disable_after_forbidden();
+            self.disable_after_forbidden_for(access);
         }
         recovered
     }
@@ -213,6 +298,7 @@ impl HTTPCache {
     /// on 403 errors.
     async fn execute_with_token_refresh<T, F, Fut>(
         &self,
+        access: RemoteAccess,
         hash: &str,
         operation: F,
     ) -> Result<T, CacheError>
@@ -220,12 +306,13 @@ impl HTTPCache {
         F: Fn(APIAuth) -> Fut,
         Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
     {
-        self.execute_with_token_refresh_and_recovery(hash, operation, |current_token| async move {
+        self.execute_with_access_and_recovery(access, hash, operation, |current_token| async move {
             turborepo_auth::recover_token_after_forbidden(&current_token).await
         })
         .await
     }
 
+    #[cfg(test)]
     async fn execute_with_token_refresh_and_recovery<T, F, Fut, R, RecoveryFut, E>(
         &self,
         hash: &str,
@@ -239,22 +326,13 @@ impl HTTPCache {
         RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
         E: std::fmt::Debug,
     {
-        if self.is_disabled() {
-            return Err(CacheError::ForbiddenRemoteCacheWrite);
-        }
-        let permit = self
-            .outage_breaker
-            .enter()
-            .ok_or(CacheError::RemoteCacheUnavailable)?;
-        let result = self
-            .execute_with_token_refresh_inner(hash, operation, recover)
-            .await;
-        permit.finish(&result.as_ref().map(|_| ()));
-        result
+        self.execute_with_access_and_recovery(RemoteAccess::Read, hash, operation, recover)
+            .await
     }
 
-    async fn execute_with_token_refresh_inner<T, F, Fut, R, RecoveryFut, E>(
+    async fn execute_with_access_and_recovery<T, F, Fut, R, RecoveryFut, E>(
         &self,
+        access: RemoteAccess,
         hash: &str,
         operation: F,
         recover: R,
@@ -266,7 +344,35 @@ impl HTTPCache {
         RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
         E: std::fmt::Debug,
     {
-        if self.is_disabled() {
+        if self.is_disabled_for(access) {
+            return Err(CacheError::ForbiddenRemoteCacheWrite);
+        }
+        let permit = self
+            .outage_breaker
+            .enter()
+            .ok_or(CacheError::RemoteCacheUnavailable)?;
+        let result = self
+            .execute_with_token_refresh_inner(access, hash, operation, recover)
+            .await;
+        permit.finish(&result.as_ref().map(|_| ()));
+        result
+    }
+
+    async fn execute_with_token_refresh_inner<T, F, Fut, R, RecoveryFut, E>(
+        &self,
+        access: RemoteAccess,
+        hash: &str,
+        operation: F,
+        recover: R,
+    ) -> Result<T, CacheError>
+    where
+        F: Fn(APIAuth) -> Fut,
+        Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
+        R: FnOnce(SecretString) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        E: std::fmt::Debug,
+    {
+        if self.is_disabled_for(access) {
             return Err(CacheError::ForbiddenRemoteCacheWrite);
         }
         let api_auth = self
@@ -278,7 +384,10 @@ impl HTTPCache {
         match operation(api_auth).await {
             Ok(result) => Ok(result),
             Err(turborepo_api_client::Error::UnknownStatus { code, .. }) if code == "forbidden" => {
-                if self.try_refresh_token(&rejected_token, recover).await {
+                if self
+                    .try_refresh_token(access, &rejected_token, recover)
+                    .await
+                {
                     let refreshed_auth = self
                         .api_auth
                         .lock()
@@ -288,13 +397,13 @@ impl HTTPCache {
                         Err(turborepo_api_client::Error::UnknownStatus { code, .. })
                             if code == "forbidden" =>
                         {
-                            self.disable_after_forbidden();
+                            self.disable_after_forbidden_for(access);
                             Err(CacheError::ForbiddenRemoteCacheWrite)
                         }
                         result => result.map_err(|err| Self::convert_api_error(hash, err)),
                     }
                 } else {
-                    self.disable_after_forbidden();
+                    self.disable_after_forbidden_for(access);
                     Err(CacheError::ForbiddenRemoteCacheWrite)
                 }
             }
@@ -351,7 +460,7 @@ impl HTTPCache {
         let sha_clone = sha.clone();
         let dirty_hash_clone = dirty_hash.clone();
 
-        self.execute_with_token_refresh(hash, |api_auth| {
+        self.execute_with_token_refresh(RemoteAccess::Write, hash, |api_auth| {
             let client = &self.client;
             let tag_ref = tag_clone.as_deref();
             let body_ref = body.clone();
@@ -402,7 +511,7 @@ impl HTTPCache {
         hashes: &[String],
     ) -> Result<HashMap<String, Option<CacheHitMetadata>>, CacheError> {
         let response = self
-            .execute_with_token_refresh("batch", |api_auth| {
+            .execute_with_token_refresh(RemoteAccess::Read, "batch", |api_auth| {
                 let client = &self.client;
                 async move {
                     client
@@ -433,7 +542,7 @@ impl HTTPCache {
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         let response = self
-            .execute_with_token_refresh(hash, |api_auth| {
+            .execute_with_token_refresh(RemoteAccess::Read, hash, |api_auth| {
                 let client = &self.client;
                 async move {
                     client
@@ -651,7 +760,7 @@ impl HTTPCache {
     #[tracing::instrument(skip_all)]
     async fn download(&self, hash: &str) -> DownloadResult {
         let response = self
-            .execute_with_token_refresh(hash, |api_auth| {
+            .execute_with_token_refresh(RemoteAccess::Read, hash, |api_auth| {
                 let client = &self.client;
                 async move {
                     client
@@ -782,7 +891,7 @@ mod test {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIClient, analytics};
+    use turborepo_api_client::{APIClient, CacheClient, analytics};
     use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -843,8 +952,20 @@ mod test {
         Ok(bytes)
     }
 
+    enum PrefetchAccess {
+        Writable,
+        ReadOnly,
+        ForbiddenUpload { replace_token: bool },
+    }
+
+    #[test_case::test_case(PrefetchAccess::Writable ; "writable")]
+    #[test_case::test_case(PrefetchAccess::ReadOnly ; "status read only")]
+    #[test_case::test_case(PrefetchAccess::ForbiddenUpload { replace_token: false } ; "upload forbidden without replacement")]
+    #[test_case::test_case(PrefetchAccess::ForbiddenUpload { replace_token: true } ; "upload forbidden after replacement")]
     #[tokio::test]
-    async fn prefetched_artifacts_are_requested_once_and_restored_on_fetch() -> Result<()> {
+    async fn prefetched_artifacts_are_requested_once_and_restored_on_fetch(
+        access: PrefetchAccess,
+    ) -> Result<()> {
         let server = httpmock::MockServer::start_async().await;
         let artifact = archive_bytes("out.txt", "prefetched")?;
         let hit = server
@@ -894,6 +1015,70 @@ mod test {
             LazyScmState::resolved(None),
         )?);
 
+        let put = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::PUT);
+                then.status(403).json_body(
+                    serde_json::json!({"error": {"code": "forbidden", "message": "read only"}}),
+                );
+            })
+            .await;
+        match access {
+            PrefetchAccess::Writable => {}
+            PrefetchAccess::ReadOnly => {
+                cache.disable_writes_read_only();
+            }
+            PrefetchAccess::ForbiddenUpload { replace_token } => {
+                let result = cache
+                    .execute_with_access_and_recovery(
+                        super::RemoteAccess::Write,
+                        "upload",
+                        |auth| {
+                            let client = &cache.client;
+                            async move {
+                                client
+                                    .put_artifact(
+                                        "upload",
+                                        tokio_stream::iter([Ok(bytes::Bytes::from_static(
+                                            b"body",
+                                        ))]),
+                                        4,
+                                        1,
+                                        None,
+                                        &auth.token,
+                                        auth.team_id.as_deref(),
+                                        None,
+                                        None,
+                                        None,
+                                    )
+                                    .await
+                            }
+                        },
+                        |_| async move {
+                            Ok::<_, ()>(
+                                replace_token.then(|| SecretString::new("replacement".into())),
+                            )
+                        },
+                    )
+                    .await;
+                assert!(matches!(
+                    result,
+                    Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+                ));
+                put.assert_calls_async(if replace_token { 2 } else { 1 })
+                    .await;
+            }
+        }
+        if !matches!(access, PrefetchAccess::Writable) {
+            assert!(cache.uploads_disabled());
+            assert!(!cache.is_disabled());
+            assert!(!cache.disable_writes_read_only());
+            assert!(matches!(
+                cache.put(&repo_root_path, "later-upload", &[], 1).await,
+                Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+            ));
+        }
+
         cache.prefetch(
             vec!["hit".into(), "miss".into(), "skipped".into()],
             2,
@@ -927,6 +1112,52 @@ mod test {
         // The prefetcher skipped this one, so the fetch downloads it itself.
         assert!(cache.fetch("skipped").await?.is_some());
 
+        let denied = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::GET).path("/v8/artifacts/denied");
+                then.status(403)
+                    .json_body(serde_json::json!({"error": {"code": "forbidden", "message": "no read access"}}));
+            })
+            .await;
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "denied",
+                |auth| {
+                    let client = &cache.client;
+                    async move {
+                        client
+                            .fetch_artifact("denied", &auth.token, None, None)
+                            .await
+                    }
+                },
+                |_| async { Ok::<Option<SecretString>, ()>(None) },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(matches!(
+            cache.fetch("hit").await,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(matches!(
+            cache
+                .put(&repo_root_path, "after-read-denied", &[], 1)
+                .await,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        denied.assert_calls_async(1).await;
+        put.assert_calls_async(match access {
+            PrefetchAccess::ForbiddenUpload {
+                replace_token: true,
+            } => 2,
+            PrefetchAccess::ForbiddenUpload {
+                replace_token: false,
+            } => 1,
+            PrefetchAccess::Writable | PrefetchAccess::ReadOnly => 0,
+        })
+        .await;
         hit.assert_calls_async(1).await;
         miss.assert_calls_async(1).await;
         skipped.assert_calls_async(1).await;
@@ -1684,6 +1915,121 @@ mod test {
         assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
         assert!(cache.is_disabled());
         assert_eq!(cache.api_auth.lock().unwrap().token.expose(), "new-token");
+    }
+
+    async fn successful_read(cache: &HTTPCache) -> Result<&'static str, crate::CacheError> {
+        cache
+            .execute_with_token_refresh_and_recovery(
+                "read-hash",
+                |_| async { Ok::<_, turborepo_api_client::Error>("read") },
+                |_| async {
+                    panic!("successful reads must not recover");
+                    #[allow(unreachable_code)]
+                    Ok::<Option<SecretString>, ()>(None)
+                },
+            )
+            .await
+    }
+
+    #[tokio::test]
+    async fn test_read_only_status_skips_uploads_and_keeps_reads() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache = cache_with_token("read-only-token");
+        assert!(cache.disable_writes_read_only());
+        let attempts = AtomicUsize::new(0);
+        let result = cache
+            .execute_with_access_and_recovery(
+                super::RemoteAccess::Write,
+                "hash",
+                |_| {
+                    attempts.fetch_add(1, Ordering::SeqCst);
+                    async { Ok::<_, turborepo_api_client::Error>(()) }
+                },
+                |_| async {
+                    panic!("skipped uploads must not recover");
+                    #[allow(unreachable_code)]
+                    Ok::<Option<SecretString>, ()>(None)
+                },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        // The upload is skipped without contacting the server.
+        assert_eq!(attempts.load(Ordering::SeqCst), 0);
+        assert!(!cache.is_disabled());
+        assert_eq!(successful_read(&cache).await.unwrap(), "read");
+    }
+
+    #[tokio::test]
+    async fn test_forbidden_upload_after_failed_recovery_disables_only_writes() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let cache = cache_with_token("expired-token");
+        let recoveries = AtomicUsize::new(0);
+        let result = cache
+            .execute_with_access_and_recovery(
+                super::RemoteAccess::Write,
+                "hash",
+                |_| async { Err::<(), _>(forbidden()) },
+                |_| {
+                    recoveries.fetch_add(1, Ordering::SeqCst);
+                    async { Ok::<Option<SecretString>, ()>(None) }
+                },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert_eq!(recoveries.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            cache.writes_disabled.get(),
+            Some(&super::WritesDisabledReason::Forbidden)
+        );
+        assert!(!cache.is_disabled());
+        assert_eq!(successful_read(&cache).await.unwrap(), "read");
+    }
+
+    #[tokio::test]
+    async fn test_forbidden_upload_after_refresh_disables_only_writes() {
+        let cache = cache_with_token("expired-token");
+        let result = cache
+            .execute_with_access_and_recovery(
+                super::RemoteAccess::Write,
+                "hash",
+                |_| async { Err::<(), _>(forbidden()) },
+                |_| async { Ok::<_, ()>(Some(SecretString::new("refreshed-token".into()))) },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(cache.uploads_disabled());
+        assert!(!cache.is_disabled());
+        assert_eq!(successful_read(&cache).await.unwrap(), "read");
+    }
+
+    #[test]
+    fn test_only_unexpected_write_disables_warn() {
+        // A read-only token is the intended experience, not a failure.
+        assert_eq!(super::WritesDisabledReason::ReadOnly.warning(), None);
+        assert_snapshot!(
+            super::WritesDisabledReason::Forbidden.warning().unwrap(),
+            @"Remote cache rejected an upload with 403 and write access could not be restored; skipping uploads for this run (remote cache reads remain enabled)"
+        );
+
+        // Whichever reason disables writes first is the one reported.
+        let cache = cache_with_token("token");
+        assert!(cache.disable_writes_read_only());
+        assert!(!cache.disable_writes(super::WritesDisabledReason::Forbidden));
+        assert_eq!(
+            cache.writes_disabled.get(),
+            Some(&super::WritesDisabledReason::ReadOnly)
+        );
     }
 
     #[test]
