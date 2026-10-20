@@ -60,7 +60,7 @@ pub enum Error {
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run."
+             No tools, dependencies, or locks were changed."
         )
     )]
     NotImplemented,
@@ -418,7 +418,7 @@ fn run_reporting(
                      locked tools",
                 ));
             }
-            println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
+            println!("Nothing to prepare: every toolchain is skipped.");
             return Ok(0);
         }
         if snapshot

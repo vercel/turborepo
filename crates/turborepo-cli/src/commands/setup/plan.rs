@@ -100,7 +100,7 @@ fn inspect_with(
     }
     lines.extend(dependencies.plan(root, lock)?);
     recheck(discovery, &sources, &preflight)?;
-    lines.push("Tracked changes: none. No downloads, probes, or tasks run.".into());
+    lines.push("Tracked changes: none. No downloads or probes run.".into());
     Ok(lines.join("\n"))
 }
 
@@ -233,9 +233,9 @@ fn propose(
         if resolved.get() {
             // Package-manager resolution verifies archive bytes to lock them.
             "Resolution read upstream metadata and verified archives; nothing was installed, and \
-             no probes or tasks run."
+             no probes run."
         } else {
-            "No downloads, probes, or tasks run."
+            "No downloads or probes run."
         }
     ));
     Ok(lines.join("\n"))
