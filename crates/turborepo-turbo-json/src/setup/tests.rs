@@ -1,4 +1,4 @@
-use DependencyPolicy::{Locked, Skip as SkipDependencies};
+use DependencyPolicy::Skip as SkipDependencies;
 use ToolPolicy::{Managed, Skip};
 use miette::Diagnostic;
 use test_case::test_case;
