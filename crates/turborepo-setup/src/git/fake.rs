@@ -1,10 +1,8 @@
 //! In-memory [`Git`] for unit tests. Answers are configured per test; nothing
-//! is spawned. Unless an ignored set is configured, `check_ignore` models only
-//! a root `.gitignore` line that ignores `/.turbo/`, so fixtures can still
-//! remove that rule to exercise setup's ignore guards.
+//! is spawned.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -24,8 +22,6 @@ pub enum Failure {
 
 struct State {
     toplevels: BTreeMap<PathBuf, PathBuf>,
-    ignored: Option<BTreeSet<String>>,
-    tracked: BTreeSet<String>,
     failure: Option<Failure>,
     queries: usize,
 }
@@ -48,24 +44,11 @@ fn key(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_owned())
 }
 
-fn covers(entry: &str, path: &str) -> bool {
-    entry == path || (entry.ends_with('/') && path.starts_with(entry))
-}
-
-fn lines<'a>(paths: impl IntoIterator<Item = &'a str>) -> Vec<u8> {
-    paths
-        .into_iter()
-        .flat_map(|path| [path.as_bytes(), b"\n"].concat())
-        .collect()
-}
-
 impl FakeGit {
     pub const fn new() -> Self {
         Self {
             state: Mutex::new(State {
                 toplevels: BTreeMap::new(),
-                ignored: None,
-                tracked: BTreeSet::new(),
                 failure: None,
                 queries: 0,
             }),
@@ -88,17 +71,6 @@ impl FakeGit {
     /// path is reported as given, so a symlink keeps its spelling.
     pub fn set_toplevel(&self, dir: &Path, toplevel: &Path) {
         self.state().toplevels.insert(key(dir), toplevel.to_owned());
-    }
-
-    /// Report exactly these root-relative paths (or `dir/` prefixes) as
-    /// ignored, replacing the `.gitignore` model.
-    pub fn set_ignored<'a>(&self, paths: impl IntoIterator<Item = &'a str>) {
-        self.state().ignored = Some(paths.into_iter().map(str::to_owned).collect());
-    }
-
-    /// Record a root-relative path as tracked, like `git add --force`.
-    pub fn track(&self, path: &str) {
-        self.state().tracked.insert(path.to_owned());
     }
 
     /// Fail every later query, or stop failing with `None`.
@@ -143,16 +115,6 @@ impl FakeGit {
     }
 }
 
-fn ignore_rule(root: &Path) -> io::Result<bool> {
-    match fs::read_to_string(root.join(".gitignore")) {
-        Ok(text) => Ok(text
-            .lines()
-            .any(|line| matches!(line.trim(), "/.turbo/" | ".turbo/" | "/.turbo" | ".turbo"))),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error),
-    }
-}
-
 impl Git for FakeGit {
     fn toplevel(&self, dir: &Path) -> io::Result<Reply> {
         if let Some(reply) = self.begin()? {
@@ -167,48 +129,6 @@ impl Git for FakeGit {
         Ok(Reply {
             code: Some(0),
             stdout: format!("{}\n", toplevel.display()).into_bytes(),
-            stderr: Vec::new(),
-        })
-    }
-
-    fn check_ignore(&self, root: &Path, paths: &[&str]) -> io::Result<Reply> {
-        if let Some(reply) = self.begin()? {
-            return Ok(reply);
-        }
-        let configured = self.state().ignored.clone();
-        let rule = configured.is_none() && ignore_rule(root)?;
-        let state = self.state();
-        // Like Git, tracked paths, and directories holding them, are never
-        // reported as ignored.
-        let ignored: Vec<&str> = paths
-            .iter()
-            .copied()
-            .filter(|path| !state.tracked.iter().any(|file| covers(path, file)))
-            .filter(|path| match &configured {
-                Some(set) => set.iter().any(|entry| covers(entry, path)),
-                None => rule && path.starts_with(".turbo/"),
-            })
-            .collect();
-        Ok(Reply {
-            code: Some(if ignored.is_empty() { 1 } else { 0 }),
-            stdout: lines(ignored),
-            stderr: Vec::new(),
-        })
-    }
-
-    fn ls_files(&self, _root: &Path, paths: &[&str]) -> io::Result<Reply> {
-        if let Some(reply) = self.begin()? {
-            return Ok(reply);
-        }
-        let state = self.state();
-        let tracked = state
-            .tracked
-            .iter()
-            .filter(|file| paths.iter().any(|path| covers(path, file)))
-            .map(String::as_str);
-        Ok(Reply {
-            code: Some(0),
-            stdout: lines(tracked),
             stderr: Vec::new(),
         })
     }

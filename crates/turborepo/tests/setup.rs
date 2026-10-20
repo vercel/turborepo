@@ -433,9 +433,7 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
                 _ => UNQUALIFIED,
             },
         );
-        if pending {
-            assert!(text.contains("no tasks were run"), "{text}");
-        }
+        assert!(!text.contains("no tasks were run"), "{text}");
         assert!(!text.contains("test run successful"), "{text}");
     }
     check_failure(
@@ -1431,7 +1429,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                          node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org/dist/v24.0.0/{prefix}.{extension}\n  SHA-256: {}\n\
                          pnpm 10.0.0: {action}\n  Declaration: package.json#/packageManager (pnpm@10.0.0)\n  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n  SHA-256: {}\n\
                          Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-                         Tracked changes: none. No downloads, probes, or tasks run.\n",
+                         Tracked changes: none. No downloads or probes run.\n",
                         "0".repeat(64), "1".repeat(64),
                     ));
                     assert_eq!(root.join(".turbo").exists(), installed);

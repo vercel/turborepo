@@ -226,6 +226,67 @@ fn executable_permissions_across_backends_and_inputs() {
 
 #[cfg(unix)]
 #[test]
+fn exact_inputs_hash_executable_permissions_without_package_defaults() {
+    let (_tmp, root) = test_utils::tmp_dir();
+    test_utils::init_repo(&root);
+    let package = AnchoredSystemPathBuf::from_raw("packages/pkg").unwrap();
+    let script = root.resolve(&package).join_component("script.sh");
+    script.ensure_dir().unwrap();
+    script.create_with_contents("echo hello\n").unwrap();
+    root.resolve(&package)
+        .join_component("package.json")
+        .create_with_contents("{}")
+        .unwrap();
+    test_utils::commit_all(&root);
+
+    for backend in [
+        Backend::Git,
+        Backend::Index,
+        Backend::SubprocessIndex,
+        Backend::Manual,
+        Backend::Fallback,
+    ] {
+        for mode in [FileHashMode::ContentOnly, FileHashMode::ExecutableBit] {
+            let mut scm = match backend {
+                Backend::Manual => SCM::Manual(mode),
+                _ => SCM::new(&root).with_file_hash_mode(mode),
+            };
+            let index = match backend {
+                Backend::Index => Some(scm.build_repo_index_eager().unwrap()),
+                Backend::SubprocessIndex => Some(
+                    scm.build_repo_index_from_subprocesses(&[path("packages/pkg")])
+                        .unwrap(),
+                ),
+                Backend::Fallback => {
+                    let SCM::Git(git) = &mut scm else {
+                        panic!("expected Git")
+                    };
+                    git.bin = root.join_component("missing-git");
+                    None
+                }
+                _ => None,
+            };
+            let mut hashes = Vec::new();
+            for permissions in [0o644, 0o755, 0o644] {
+                chmod(&root, "packages/pkg/script.sh", permissions);
+                let selected = scm
+                    .get_explicit_input_file_hashes(&root, &package, &["script.sh"], index.as_ref())
+                    .unwrap();
+                assert_eq!(selected.len(), 1, "{backend:?}, {mode:?}");
+                hashes.push(selected[&path("script.sh")]);
+            }
+            assert_eq!(hashes[0], hashes[2], "{backend:?}, {mode:?}");
+            assert_eq!(
+                hashes[0] == hashes[1],
+                mode == FileHashMode::ContentOnly,
+                "{backend:?}, {mode:?}"
+            );
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn symlink_hashes_ignore_target_permissions() {
     let (_tmp, root) = test_utils::tmp_dir();
     test_utils::init_repo(&root);

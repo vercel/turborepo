@@ -99,8 +99,9 @@ fn missing_git_and_unusable_repositories_get_actionable_errors() {
     )
     .unwrap();
     fs::write(root.join(".nvmrc"), "24.x").unwrap();
-    // A `.git` Git cannot use still marks a repository: the checks stay strict.
+    // A `.git` with a HEAD makes discovery ask Git for the effective worktree.
     fs::create_dir(root.join(".git")).unwrap();
+    fs::write(root.join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
 
     let text = failed_setup(root, Path::new(""));
     assert!(
@@ -109,14 +110,9 @@ fn missing_git_and_unusable_repositories_get_actionable_errors() {
     );
     assert!(!text.contains("(oserror2)"), "{text}");
 
-    // With Git available, an unusable repository is a Git failure, not a
-    // missing ignore rule that editing .gitignore could fix.
     let bin = git_only_path();
     let text = failed_setup(root, bin.path());
-    assert!(
-        text.contains("Gitcouldnotcheckwhether.turbo/isignored"),
-        "{text}"
-    );
+    assert!(text.contains("cannotguardeffectiveGitworktree"), "{text}");
     assert!(!text.contains(".gitignore"), "{text}");
 }
 
@@ -180,7 +176,6 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     );
     assert_eq!(code, 0, "{text}");
     let root = out.join("full");
-    assert!(turborepo_setup::writer_storage::outside_git_repository(&root).unwrap());
 
     // Seed the locked generation through the real Store so frozen setup reuses
     // it without downloads; the CLI library fixtures cover actual downloads.
@@ -250,7 +245,6 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
         text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
         "{text}"
     );
-    assert!(text.contains("NoGitrepositoryfound"), "{text}");
     let (code, text) = turbo_with_home(
         &root,
         &["setup", "--check", "--tools-only"],
@@ -260,7 +254,8 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     assert_eq!(code, 0, "{text}");
     assert!(text.contains("node24.0.0:ready"), "{text}");
 
-    // Once the output is a repository, the strict checks apply again.
+    // Once the output is a repository, setup needs Git to find the worktree
+    // but no ignore rule for .turbo/.
     let bin = git_only_path();
     assert!(
         Command::new("git")
@@ -279,7 +274,11 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
         text.contains("couldnotrun`git`:itwasnotfoundonPATH"),
         "{text}"
     );
+    assert!(!root.join(".gitignore").exists());
     let (code, text) = turbo_with_home(&root, &frozen, bin.path(), home.path());
-    assert_eq!(code, 1, "{text}");
-    assert!(text.contains("add/.turbo/to.gitignore"), "{text}");
+    assert_eq!(code, 0, "{text}");
+    assert!(
+        text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
+        "{text}"
+    );
 }

@@ -20,7 +20,7 @@ rustls = { version = "0.23.36", default-features = false, features = [
   "std",
 ] }
 # Only borrow P-521 signature verification; keep ring cipher suites/key exchange.
-rustls-webpki = { version = "0.103.10", default-features = false, features = [
+rustls-webpki = { version = "0.103.16", default-features = false, features = [
   "aws-lc-rs",
   "std",
 ] }
