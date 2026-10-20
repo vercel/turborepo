@@ -3,12 +3,9 @@ use std::{collections::BTreeSet, fs, path::Path};
 use serde_json::{Value, json};
 
 use super::*;
-use crate::{
-    git::FakeGit,
-    lock::{
-        Document, Ecosystems, Lock, SCHEMA_VERSION, Snapshot, StorageError, WriteOutcome,
-        reconcile::{Error, Mode, Resolution, reconcile},
-    },
+use crate::lock::{
+    Document, Ecosystems, Lock, SCHEMA_VERSION, Snapshot, StorageError, WriteOutcome,
+    reconcile::{Error, Mode, Resolution, reconcile},
 };
 
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
@@ -45,8 +42,7 @@ fn lock_bytes(root: &Path) -> Vec<u8> {
 }
 
 fn local(root: &Path) -> Option<WriteOutcome> {
-    let snapshot =
-        Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(root, Ecosystems::default()).unwrap();
     reconcile(&snapshot, Mode::Local, false, never)
         .unwrap()
         .publication
@@ -106,9 +102,7 @@ fn frozen_and_no_lock_report_drift_without_writing() {
     // The version text is unchanged in every case.
     for changed in [digest, platform, layout, json!({})] {
         config(root.path(), "turbo.json", &changed);
-        let snapshot =
-            Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared())
-                .unwrap();
+        let snapshot = Snapshot::capture_with(root.path(), Ecosystems::default()).unwrap();
         for mode in [Mode::Frozen, Mode::NoLock] {
             let error = reconcile(&snapshot, mode, false, never).unwrap_err();
             assert!(
@@ -121,8 +115,7 @@ fn frozen_and_no_lock_report_drift_without_writing() {
     }
     // Unchanged declarations freeze without touching the lock.
     config(root.path(), "turbo.json", &json!({"fixture": tool()}));
-    let snapshot =
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(root.path(), Ecosystems::default()).unwrap();
     for mode in [Mode::Frozen, Mode::NoLock] {
         let outcome = reconcile(&snapshot, mode, false, never).unwrap();
         assert_eq!(outcome.publication, None);
@@ -151,8 +144,7 @@ fn local_and_refresh_rewrite_only_changed_declarations() {
     assert_ne!(after.tools()["fixture"], before.tools()["fixture"]);
 
     // An explicit refresh has nothing to resolve for exact declarations.
-    let snapshot =
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(root.path(), Ecosystems::default()).unwrap();
     let refreshed = reconcile(&snapshot, Mode::Refresh, false, never).unwrap();
     assert_eq!(refreshed.publication, Some(WriteOutcome::Unchanged));
 
@@ -168,8 +160,7 @@ fn local_and_refresh_rewrite_only_changed_declarations() {
 fn native_selections_are_preserved_when_additional_tools_change() {
     let root = repo(&json!({"fixture": tool()}));
     fs::write(root.path().join(".nvmrc"), "24.x").unwrap();
-    let snapshot =
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(root.path(), Ecosystems::default()).unwrap();
     let mut node = snapshot.additional_tools()["fixture"].clone();
     node.adapter = "node".into();
     node.version = "24.0.0".into();
@@ -215,8 +206,7 @@ fn foreign_or_ambiguous_entries_fail_closed() {
         Lock::new(document).unwrap().canonical_bytes().unwrap(),
     )
     .unwrap();
-    let snapshot =
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(root.path(), Ecosystems::default()).unwrap();
     assert!(matches!(
         reconcile(&snapshot, Mode::Local, false, never),
         Err(Error::Storage(StorageError::Lock(_)))
@@ -225,13 +215,13 @@ fn foreign_or_ambiguous_entries_fail_closed() {
     // Both root configurations, or an unparsable one, are never guessed at.
     config(root.path(), "turbo.jsonc", &json!({}));
     assert!(matches!(
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()),
+        Snapshot::capture_with(root.path(), Ecosystems::default()),
         Err(StorageError::Declarations)
     ));
     fs::remove_file(root.path().join("turbo.jsonc")).unwrap();
     fs::write(root.path().join("turbo.json"), "{\"setup\": {}}").unwrap();
     assert!(matches!(
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()),
+        Snapshot::capture_with(root.path(), Ecosystems::default()),
         Err(StorageError::Declarations)
     ));
 }
@@ -241,8 +231,7 @@ fn turbo_jsonc_is_the_recorded_declaration_file() {
     let root = repo(&json!({}));
     fs::remove_file(root.path().join("turbo.json")).unwrap();
     config(root.path(), "turbo.jsonc", &json!({"fixture": tool()}));
-    let snapshot =
-        Snapshot::capture_with_git(root.path(), Ecosystems::default(), FakeGit::shared()).unwrap();
+    let snapshot = Snapshot::capture_with(root.path(), Ecosystems::default()).unwrap();
     let fixture = &snapshot.additional_tools()["fixture"];
     assert_eq!(fixture.declarations[0].file, "turbo.jsonc");
     assert!(covered("fixture", fixture));

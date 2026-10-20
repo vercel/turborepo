@@ -408,19 +408,18 @@ fn local_and_no_lock_setup_ignore_ambient_npmrc_drift_during_resolution() {
 
 #[test]
 fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
-    for case in 0..6 {
+    for case in 0..5 {
         let f = fresh();
         let u = LoopbackServer::new([], |_| {}).unwrap();
         match case {
             0 => fs::remove_file(f.owned.root().join(".nvmrc")).unwrap(),
             1 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"npm@11.x"}"#).unwrap(),
             2 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.x"}"#).unwrap(),
-            3 => fs::write(f.owned.root().join(".gitignore"), "").unwrap(),
-            4 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
+            3 => fs::write(f.owned.root().join("package.json"), r#"{"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{"name":"npm","version":"11.6.1","onFail":"error"}}}"#).unwrap(),
             _ => {},
         }
         assert!(
-            f.run(&u, if case == 5 { FROZEN } else { LOCAL }).is_err(),
+            f.run(&u, if case == 4 { FROZEN } else { LOCAL }).is_err(),
             "case {case}"
         );
         assert_eq!(u.hits(), 0);
@@ -431,7 +430,7 @@ fn local_unsupported_and_missing_frozen_fail_before_any_writer() {
 }
 #[test]
 fn local_post_stage_preconditions_abort_without_lock_or_generation_publication() {
-    for case in 0..11 {
+    for case in 0..9 {
         let f = fresh();
         let root = f.owned.root();
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
@@ -446,9 +445,8 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
                 2 => fs::write(root.join("apps/web/pnpm-workspace.yaml"), "packages: []").unwrap(),
                 3 => fs::write(root.join("apps/web/.git"), "gitdir: /not-probed").unwrap(),
                 4 => fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
-                5 => fs::write(root.join(".gitignore"), "").unwrap(),
-                6 => fs::write(root.join("turbo.json"), "{}").unwrap(),
-                7 => {
+                5 => fs::write(root.join("turbo.json"), "{}").unwrap(),
+                6 => {
                     let mut foreign: Value = serde_json::from_slice(
                         &fs::read(root.join(".turbo/setup-lock/staged")).unwrap(),
                     )
@@ -456,25 +454,21 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
                     foreign["tools"]["node"]["version"] = json!("24.9.0");
                     fs::write(root.join("turbo.lock"), foreign.to_string()).unwrap();
                 }
-                10 => fs::write(root.join("pnpm-workspace.yaml"), "packages: []").unwrap(),
-                8 => {
+                7 => {
                     fs::rename(root, root.with_extension("old")).unwrap();
                     fs::create_dir(root).unwrap();
                 }
-                _ => {
-                    fs::write(root.join(".turbo/sentinel"), "untracked must stay ignored").unwrap();
-                    f.git.track(".turbo/sentinel");
-                }
+                _ => fs::write(root.join("pnpm-workspace.yaml"), "packages: []").unwrap(),
             }
         });
         assert!(fired.get(), "case {case}");
         assert!(result.is_err(), "case {case}");
         assert_eq!(u.hits(), 4);
         assert!(f.manifest().is_none());
-        if case != 7 {
+        if case != 6 {
             assert!(!root.join("turbo.lock").exists());
         }
-        if case == 8 {
+        if case == 7 {
             fs::remove_dir(root).unwrap();
             fs::rename(root.with_extension("old"), root).unwrap();
         }
@@ -482,8 +476,8 @@ fn local_post_stage_preconditions_abort_without_lock_or_generation_publication()
     }
 }
 #[test]
-fn local_writer_wait_rechecks_policy_git_and_workspace() {
-    for name in ["turbo.json", ".gitignore", "pnpm-workspace.yaml"] {
+fn local_writer_wait_rechecks_policy_and_workspace() {
+    for name in ["turbo.json", "pnpm-workspace.yaml"] {
         let f = fresh();
         let (tx, rx) = std::sync::mpsc::channel();
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), move |p| {
