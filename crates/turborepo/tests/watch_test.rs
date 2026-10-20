@@ -1075,20 +1075,27 @@ fn watch_rapid_edits_produce_single_rebuild() {
         &["commit", "-m", "add build completion markers", "--quiet"],
     );
 
+    let output = tempfile::NamedTempFile::new().unwrap();
     let completed_file = test_dir.join("packages/a/.markers/complete");
     let wait_for_source = |source: &str| {
         let started = Instant::now();
         while fs::read_to_string(&completed_file).ok().as_deref() != Some(source) {
             assert!(
                 started.elapsed() < Duration::from_secs(30),
-                "a build must complete having consumed {source:?}"
+                "a build must complete having consumed {source:?}. CLI output:\n{}",
+                fs::read_to_string(output.path()).unwrap_or_default()
             );
             std::thread::sleep(Duration::from_millis(200));
         }
     };
     let src_file = test_dir.join("packages/a/src.js");
     let initial_source = fs::read_to_string(&src_file).unwrap();
-    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks_and_stdio(
+        &test_dir,
+        &["build"],
+        output.as_file().try_clone().unwrap().into(),
+        output.as_file().try_clone().unwrap().into(),
+    ));
     wait_for_source(&initial_source);
     assert_eq!(
         wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30)),

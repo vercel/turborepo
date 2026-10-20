@@ -1107,6 +1107,9 @@ impl WatchClient {
 }
 
 #[cfg(test)]
+mod coordinator_tests;
+
+#[cfg(test)]
 mod impacted_selection_tests;
 
 #[cfg(test)]
