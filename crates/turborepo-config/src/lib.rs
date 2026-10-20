@@ -174,11 +174,6 @@ pub enum Error {
     NoGlobalAuthFilePath,
     #[error("Global config directory not found.")]
     NoGlobalConfigDir,
-    #[error(
-        "Refusing to send a token to a repository-configured API URL. To authorize a custom remote \
-         cache, set its URL with --api, TURBO_API, or your global Turborepo configuration."
-    )]
-    UntrustedApiUrl,
 
     // ============================================================
     // File and IO errors
@@ -459,12 +454,12 @@ impl ConfigurationOptions {
         non_empty_str(self.api_url.as_deref()).unwrap_or(DEFAULT_API_URL)
     }
 
-    /// Repository files may select a cache, but cannot authorize sending ambient
-    /// credentials to a custom endpoint. Check the final merged configuration so
-    /// trusted CLI, environment, and global URL overrides remain supported.
-    fn validate_api_token_destination(&self) -> Result<(), Error> {
+    /// Warn when repository files select where credentials may be sent. Check
+    /// the final merged configuration so explicit CLI, environment, and global
+    /// URL selections remain supported without a warning.
+    fn api_token_destination_warning(&self) -> Option<&'static str> {
         if self.token().is_none() || self.api_url() == DEFAULT_API_URL {
-            return Ok(());
+            return None;
         }
 
         if matches!(
@@ -474,10 +469,14 @@ impl ConfigurationOptions {
                 | Some(ConfigurationSource::OverrideEnvironment)
                 | Some(ConfigurationSource::GlobalConfig)
         ) {
-            return Ok(());
+            return None;
         }
 
-        Err(Error::UntrustedApiUrl)
+        Some(
+            "Repository configuration selects a custom API URL that may receive your \
+             authentication token. Only use remote caches you trust. To explicitly authorize this \
+             URL, set it with --api, TURBO_API, or your global Turborepo configuration.",
+        )
     }
 
     pub fn login_url(&self) -> &str {
@@ -891,7 +890,9 @@ impl TurborepoConfigBuilder {
             },
         )?;
 
-        config.validate_api_token_destination()?;
+        if let Some(warning) = config.api_token_destination_warning() {
+            tracing::warn!("{warning}");
+        }
         Ok(config)
     }
 }
@@ -1555,7 +1556,7 @@ mod test {
     #[test_case::test_case("turbo.json")]
     #[test_case::test_case("turbo.jsonc")]
     #[test_case::test_case(".turbo/config.json")]
-    fn test_repository_api_url_requires_explicit_authorization(config_file: &str) {
+    fn test_repository_api_url_warns_without_explicit_authorization(config_file: &str) {
         const CUSTOM_API: &str = "http://127.0.0.1:9099";
         for token_source in ["auth", "global", "legacy", "env", "vercel_env", "cli"] {
             for authorization in ["none", "cli", "env", "global"] {
@@ -1621,21 +1622,18 @@ mod test {
                     .global_config_path
                     .create_with_contents(global.to_string())
                     .unwrap();
-                let result = builder.build_with_inputs(environment, inputs);
+                let config = builder.build_with_inputs(environment, inputs).unwrap();
+                assert_eq!(config.api_url(), CUSTOM_API);
+                assert_eq!(config.token(), Some("sentinel"));
                 // Local config takes precedence over global config. It must not
-                // inherit permission to send a token from the lower-priority URL.
-                if authorization == "none"
-                    || (authorization == "global" && config_file.starts_with(".turbo/"))
-                {
-                    assert!(
-                        matches!(result, Err(crate::Error::UntrustedApiUrl)),
-                        "{config_file}, {token_source}, {authorization}"
-                    );
-                } else {
-                    let config = result.unwrap();
-                    assert_eq!(config.api_url(), CUSTOM_API);
-                    assert_eq!(config.token(), Some("sentinel"));
-                }
+                // suppress the warning based on the lower-priority URL.
+                let should_warn = authorization == "none"
+                    || (authorization == "global" && config_file.starts_with(".turbo/"));
+                assert_eq!(
+                    config.api_token_destination_warning().is_some(),
+                    should_warn,
+                    "{config_file}, {token_source}, {authorization}"
+                );
             }
         }
     }
@@ -1651,20 +1649,20 @@ mod test {
                     .with_api_url(api_url.map(str::to_owned))
                     .with_api_url_source(Some(source))
                     .with_token(Some("sentinel".into()));
-                assert!(config.validate_api_token_destination().is_ok());
+                assert!(config.api_token_destination_warning().is_none());
             }
             for token in [None, Some("")] {
                 let config = ConfigurationOptions::default()
                     .with_api_url(Some("https://cache.example.com".into()))
                     .with_api_url_source(Some(source))
                     .with_token(token.map(str::to_owned));
-                assert!(config.validate_api_token_destination().is_ok());
+                assert!(config.api_token_destination_warning().is_none());
             }
         }
     }
 
     #[test]
-    fn test_api_token_destination_does_not_trust_url_lookalikes() {
+    fn test_api_token_destination_warns_for_url_lookalikes() {
         for api_url in [
             "http://vercel.com/api",
             "https://vercel.com.attacker.test/api",
@@ -1678,10 +1676,7 @@ mod test {
                 .with_api_url_source(Some(ConfigurationSource::TurboJson))
                 .with_token(Some("sentinel".into()));
             assert!(
-                matches!(
-                    config.validate_api_token_destination(),
-                    Err(crate::Error::UntrustedApiUrl)
-                ),
+                config.api_token_destination_warning().is_some(),
                 "{api_url}"
             );
         }
