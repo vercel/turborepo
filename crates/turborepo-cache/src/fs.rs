@@ -208,10 +208,9 @@ impl FSCache {
         let (restored_files, new_manifest) =
             cache_reader.restore(anchor, previous_manifest.as_ref())?;
 
-        let manifest_path_owned = manifest_path.to_owned();
-        std::thread::spawn(move || {
-            let _ = new_manifest.write_atomic(&manifest_path_owned);
-        });
+        // Write the manifest before returning: a detached writer is lost when
+        // the process exits first, and every later hit then restores again.
+        let _ = new_manifest.write_atomic(&manifest_path);
 
         let meta = CacheMetadata::read(
             &self
@@ -1691,6 +1690,53 @@ mod test {
         assert_eq!(metadata.time_saved, 50);
         assert_eq!(restored, files);
         assert_eq!(output.read_to_string()?, "cached");
+
+        Ok(())
+    }
+
+    /// The manifest of a restore must be on disk when `fetch` returns: turbo
+    /// can exit right after the last restore, and a manifest written later is
+    /// lost, so every following hit would restore every file again.
+    #[test]
+    fn fetch_writes_restore_manifest_before_returning() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let dist = repo_root_path.join_component("dist");
+        dist.create_dir_all()?;
+        let mut files = vec![AnchoredSystemPathBuf::from_raw("dist")?];
+        for i in 0..2000 {
+            let name = format!("f{i}.js");
+            dist.join_component(&name)
+                .create_with_contents(format!("export const v = {i};\n"))?;
+            files.push(AnchoredSystemPathBuf::from_raw(format!("dist/{name}"))?);
+        }
+        let hash = "manifest_written_before_return";
+
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache.put(repo_root_path, hash, &files, 50)?;
+
+        // Outputs are gone, as after a branch switch or a clean: every file
+        // is restored and gets a new mtime.
+        dist.remove_dir_all()?;
+        let (_, restored) = cache.fetch(repo_root_path, hash)?.expect("cache hit");
+        assert_eq!(restored.len(), files.len());
+
+        // Nothing changed since the restore, so the next lookup must take the
+        // fast path instead of restoring every file again.
+        assert!(
+            matches!(
+                cache.lookup(repo_root_path, hash, u64::MAX)?,
+                LocalLookup::Unchanged(..)
+            ),
+            "the restore manifest must describe the restored files"
+        );
+        let tmp = repo_root_path.join_components(&["cache", &format!("{hash}-manifest.json.tmp")]);
+        assert!(!tmp.exists(), "no partial manifest should be left behind");
 
         Ok(())
     }

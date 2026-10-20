@@ -203,6 +203,7 @@ pub async fn daemon_server(
                 PackageChangesWatcher::new(
                     args.repo_root,
                     args.file_events,
+                    args.package_discovery,
                     args.hash_watcher,
                     args.custom_turbo_json_path,
                     false,

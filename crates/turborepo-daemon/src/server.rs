@@ -198,6 +198,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
                 let args = PackageChangesWatcherArgs {
                     repo_root: self.repo_root.clone(),
                     file_events: self.watcher.source(),
+                    package_discovery: self.package_watcher.watch_discovery(),
                     hash_watcher: self.hash_watcher.clone(),
                     custom_turbo_json_path: self.custom_turbo_json_path.clone(),
                     allow_no_package_manager: self.allow_no_package_manager,

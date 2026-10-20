@@ -23,9 +23,7 @@ fn tool(id: &str, declarations: Vec<Declaration>) -> Tool {
         version: "24.0.0".into(),
         declarations,
         options: BTreeMap::new(),
-        installation: Installation::VerifySystem {
-            executables: vec![id.into()],
-        },
+        installation: serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{id:"bin/tool"}}}}})).unwrap(),
     }
 }
 
@@ -324,6 +322,37 @@ async fn unsafe_missing_and_malformed_sources_fail_before_output() -> TestResult
     )?;
     assert!(ManagedSetup::plan(&input).is_err());
     assert!(!temp.path().join("out").exists());
+    Ok(())
+}
+
+#[tokio::test]
+async fn removed_locks_fail_before_prune_creates_output() -> TestResult {
+    for docker in [false, true] {
+        for mixed in [false, true] {
+            let temp = tempfile::tempdir()?;
+            let input = fixture(temp.path(), docker)?;
+            let mut value: serde_json::Value =
+                serde_json::from_slice(&fs::read(temp.path().join("turbo.lock"))?)?;
+            if !mixed {
+                value["tools"] = json!({});
+            }
+            value["tools"]["node"] = json!({"adapter":"node","version":"24.0.0",
+                "declarations":[{"file":".nvmrc"}],"installation":{"kind":"verify-system","executables":["node"]}});
+            let bytes = value.to_string();
+            write(temp.path(), "turbo.lock", &bytes)?;
+            let error = prune(input, CommandEventBuilder::new("prune"))
+                .await
+                .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .contains("removed verify-system installations"),
+                "{error}"
+            );
+            assert!(!temp.path().join("out").exists());
+            assert_eq!(fs::read_to_string(temp.path().join("turbo.lock"))?, bytes);
+        }
+    }
     Ok(())
 }
 

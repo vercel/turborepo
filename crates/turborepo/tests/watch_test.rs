@@ -487,6 +487,120 @@ fn watch_task_inputs_reruns_on_turbo_root_input_without_root_tasks() {
 }
 
 #[test]
+fn watch_new_package_builds_and_rebuilds_on_source_and_dependency_changes() {
+    let (_tempdir, test_dir) = setup_watch_test();
+    let config = r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**"],
+      "outputs": []
+    }
+  }
+}
+"#;
+    fs::write(test_dir.join("turbo.json"), config).unwrap();
+    for pkg in ["a", "b"] {
+        let package_dir = test_dir.join("packages").join(pkg);
+        fs::create_dir(package_dir.join("src")).unwrap();
+        fs::rename(package_dir.join("src.js"), package_dir.join("src/src.js")).unwrap();
+    }
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "configure source inputs", "--quiet"],
+    );
+
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    for pkg in ["a", "b"] {
+        assert!(
+            wait_for_markers(&test_dir, pkg, 1, Duration::from_secs(30)) >= 1,
+            "package {pkg} should build before adding package c"
+        );
+    }
+
+    let package_dir = test_dir.join("packages/c");
+    fs::create_dir_all(package_dir.join("src")).unwrap();
+    let build_script = fs::read_to_string(test_dir.join("packages/a/build.js")).unwrap();
+    fs::write(
+        package_dir.join("build.js"),
+        build_script.replace("pkg-a", "pkg-c"),
+    )
+    .unwrap();
+    fs::copy(
+        test_dir.join("packages/a/src/src.js"),
+        package_dir.join("src/src.js"),
+    )
+    .unwrap();
+    fs::write(
+        package_dir.join("package.json"),
+        r#"{
+  "name": "pkg-c",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "pkg-a": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "add package c", "--quiet"]);
+
+    let c_initial = wait_for_markers(&test_dir, "c", 1, Duration::from_secs(30));
+    assert!(
+        c_initial >= 1,
+        "new package c should build without editing root configuration (#14842)"
+    );
+
+    fs::write(
+        package_dir.join("src/src.js"),
+        "module.exports = { c: 2 };\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "change package c source", "--quiet"],
+    );
+    let c_after_source = wait_for_markers(&test_dir, "c", c_initial + 1, Duration::from_secs(30));
+    assert!(
+        c_after_source > c_initial,
+        "new package c should rebuild after its source changes"
+    );
+
+    let a_before = marker_count(&test_dir, "a");
+    fs::write(
+        test_dir.join("packages/a/src/src.js"),
+        "module.exports = { a: 2 };\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "change package a source", "--quiet"],
+    );
+    assert!(
+        wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30)) > a_before,
+        "dependency package a should rebuild after its source changes"
+    );
+    assert!(
+        wait_for_markers(&test_dir, "c", c_after_source + 1, Duration::from_secs(30))
+            > c_after_source,
+        "new package c should rebuild after dependency package a changes"
+    );
+    assert_eq!(
+        fs::read_to_string(test_dir.join("turbo.json")).unwrap(),
+        config
+    );
+
+    drop(guard);
+}
+
+#[test]
 fn watch_file_change_reruns_affected_package() {
     let (_tempdir, test_dir) = setup_watch_test();
     let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
