@@ -524,6 +524,7 @@ impl WatchClient {
         let package_changes_watcher = PackageChangesWatcher::new(
             base.repo_root.clone(),
             watcher.source(),
+            package_watcher.watch_discovery(),
             hash_watcher.clone(),
             custom_turbo_json_path,
             base.opts.run_opts.single_package,

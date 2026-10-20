@@ -287,9 +287,7 @@ fn caller_composition_preserves_managers_and_rejects_bundled_ownership_collision
                     request: Some(version.into()),
                 }],
                 options: BTreeMap::new(),
-                installation: Installation::VerifySystem {
-                    executables: vec![id.into()],
-                },
+                installation: serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{id:"bin/tool"}}}}})).unwrap(),
             },
         );
     }

@@ -1160,9 +1160,9 @@
       ]
     },
     "ToolPolicy": {
-      "description": "How `turbo setup` prepares a toolchain's tools. `managed` provisions the locked version for this repository. `verify-system` uses an installed tool after verifying that it matches the locked version. `skip` neither provisions nor verifies the tool, which also skips the toolchain's dependencies.",
+      "description": "How `turbo setup` prepares a toolchain's tools. `managed` provisions the locked version for this repository. `skip` neither provisions nor verifies the tool, which also skips the toolchain's dependencies.",
       "type": "string",
-      "enum": ["managed", "verify-system", "skip"]
+      "enum": ["managed", "skip"]
     },
     "ToolchainSetupPolicy": {
       "description": "Setup policy for one toolchain. Omitted values use the root `setup` values, then the inferred default.",

@@ -7,10 +7,8 @@ use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
 
 use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
 use turborepo_setup::{
-    activation::External,
-    execution_identity::{ExecutionContext, ExecutionSnapshot, Libc, SelectedInstallation},
+    execution_identity::{ExecutionContext, ExecutionSnapshot, Libc},
     lock::{self, Ecosystems},
-    system_tool,
 };
 use turborepo_shim::capabilities::Requirement;
 use turborepo_tool_install::Store;
@@ -21,14 +19,6 @@ use crate::commands::setup::{
     effective,
 };
 
-pub(crate) fn select(
-    base: &crate::commands::CommandBase,
-) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
-    select_with(base, true)
-}
-
-/// Validates managed state like `select`, before local CLI handoff or
-/// telemetry, but leaves the verify-system probes to the run itself.
 pub(crate) fn validate(base: &crate::commands::CommandBase) -> Result<bool, turborepo_run::Error> {
     Ok(requirement(base)?.is_some())
 }
@@ -38,23 +28,17 @@ pub(crate) fn validate(base: &crate::commands::CommandBase) -> Result<bool, turb
 pub(crate) fn requirement(
     base: &crate::commands::CommandBase,
 ) -> Result<Option<Requirement>, turborepo_run::Error> {
-    Ok(select_with(base, false)?.map(|run| peer_requirement(run.snapshot())))
+    Ok(select(base)?.map(|run| peer_requirement(run.snapshot())))
 }
 
-/// The selection's lock schema, adapters, verify-system tools, and whether a
-/// `turbo setup --no-lock` record selected it, named as CLIs advertise them.
 fn peer_requirement(snapshot: &ExecutionSnapshot) -> Requirement {
-    let features = snapshot.tools().values().flat_map(|tool| {
-        let external = matches!(tool.installation, SelectedInstallation::VerifySystem { .. });
-        [
-            Some(tool.adapter.as_str()),
-            external.then_some("verify-system"),
-        ]
-    });
-    let clone_local = snapshot.clone_local().then_some("clone-local");
     Requirement::new(
         lock::SCHEMA_VERSION,
-        features.chain([clone_local]).flatten(),
+        snapshot
+            .tools()
+            .values()
+            .map(|tool| tool.adapter.as_str())
+            .chain(snapshot.clone_local().then_some("clone-local")),
     )
 }
 
@@ -96,9 +80,8 @@ pub(crate) fn activate_for_discovery(
     Ok(managed)
 }
 
-fn select_with(
+pub(crate) fn select(
     base: &crate::commands::CommandBase,
-    external: bool,
 ) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
     if !base.opts.future_flags.experimental_setup {
         return Ok(None);
@@ -128,13 +111,12 @@ fn select_with(
     let user_base = dirs_next::data_local_dir().ok_or_else(|| {
         turborepo_run::Error::ManagedTools("cannot locate setup user state directory".into())
     })?;
-    ManagedTools::inspect_with(
+    ManagedTools::inspect(
         base.repo_root.as_std_path(),
         base.opts.repo_opts.root_turbo_json_path.as_std_path(),
         true,
         &user_base,
         context,
-        external,
     )
     .map_err(turborepo_run::Error::ManagedTools)
 }
@@ -151,24 +133,12 @@ impl ManagedTools {
     /// A root turbo.lock, or without one the sealed selection of this clone's
     /// `turbo setup --no-lock` generation, selects managed mode. Either way
     /// activation is equally strict and never downloads.
-    #[cfg(test)]
     pub(crate) fn inspect(
         root: &Path,
         config: &Path,
         enabled: bool,
         user_base: &Path,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
-    ) -> Result<Option<Arc<ManagedRun>>, String> {
-        Self::inspect_with(root, config, enabled, user_base, context, true)
-    }
-
-    fn inspect_with(
-        root: &Path,
-        config: &Path,
-        enabled: bool,
-        user_base: &Path,
-        context: impl FnOnce() -> Result<ExecutionContext, String>,
-        external: bool,
     ) -> Result<Option<Arc<ManagedRun>>, String> {
         // A lock alone must never change unconfigured-repository behavior.
         if !enabled {
@@ -214,18 +184,11 @@ impl ManagedTools {
             Authorization::inspect(&canonical, user_base, context()?, ecosystems)
         }
         .map_err(explain)?;
-        let (snapshot, tools) = authorization
-            .with_current(|p| (p.snapshot().clone(), p.external().to_vec()))
+        let snapshot = authorization
+            .with_current(|p| p.snapshot().clone())
             .map_err(explain)?;
         let identity = snapshot.fingerprint().to_owned();
         let inherited_path = std::env::var_os("PATH");
-        // Once per run: a changed system tool fails here rather than running
-        // under the locked identity. Tasks then find it on the same PATH.
-        let notices = if external {
-            verify_external(&tools, inherited_path.as_deref(), &canonical)?
-        } else {
-            Vec::new()
-        };
         let tools = Arc::new(Self {
             authorization,
             inherited_path,
@@ -234,9 +197,7 @@ impl ManagedTools {
             clone_local,
         });
         tools.revalidate()?;
-        Ok(Some(Arc::new(
-            ManagedRun::new(snapshot, tools)?.with_notices(notices),
-        )))
+        Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
     }
 }
 
@@ -246,29 +207,6 @@ fn guidance(error: &authorization::Error, ci: bool, clone_local: bool) -> String
     } else {
         error.guidance(ci)
     }
-}
-
-/// Verifies each locked verify-system tool at its exact version on `path`,
-/// exactly as `turbo setup --check` does, and reports where it was found.
-fn verify_external(
-    tools: &[External],
-    path: Option<&std::ffi::OsStr>,
-    root: &Path,
-) -> Result<Vec<String>, String> {
-    let mut notices = Vec::new();
-    for tool in tools {
-        let verified =
-            system_tool::verify_tool(&tool.id, &tool.version, &tool.executables, path, root)
-                .map_err(|e| format!("verify-system {}: {e}", tool.id))?;
-        notices.extend(verified.into_iter().map(|tool| {
-            let path = tool.path.display();
-            format!(
-                "{} {} from PATH ({path}, verify-system)",
-                tool.id, tool.version
-            )
-        }));
-    }
-    Ok(notices)
 }
 
 /// Setup's ecosystems from the root configuration's flags and `setup` policy.
@@ -312,18 +250,15 @@ impl ManagedEnvironment for ManagedTools {
         self.authorization
             .with_current(|plan| {
                 let mut overrides = EnvironmentVariableMap::default();
-                // verify-system tools alone keep the caller's PATH unchanged.
-                if plan.path_prepend().is_some() {
-                    let path = plan
-                        .path(self.inherited_path.as_deref())
-                        .map_err(|e| e.to_string())?;
-                    overrides.insert(
-                        "PATH".into(),
-                        path.into_string().map_err(|_| {
-                            "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
-                        })?,
-                    );
-                }
+                let path = plan
+                    .path(self.inherited_path.as_deref())
+                    .map_err(|e| e.to_string())?;
+                overrides.insert(
+                    "PATH".into(),
+                    path.into_string().map_err(|_| {
+                        "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
+                    })?,
+                );
                 for (key, value) in plan.runtime_env() {
                     overrides.insert(
                         key.clone(),
@@ -346,8 +281,6 @@ impl ManagedEnvironment for ManagedTools {
 /// Conservative native execution identity. No readiness-only/unprobed labels.
 /// These initial adapters are supported only on native macOS, glibc Linux and
 /// Windows x64. Windows arm64 is unqualified and never borrows x64 artifacts.
-/// musl Linux gets its own identity, and the activation plan qualifies it only
-/// for locks whose every tool is verify-system.
 pub(crate) fn context() -> Result<ExecutionContext, String> {
     if !cfg!(any(
         target_os = "macos",
@@ -410,7 +343,7 @@ fn host_libc(
         Ok(Some(turborepo_platform::Libc::Musl { version })) => Ok(Libc::Musl { abi: version }),
         Err(error) => Err(format!(
             "cannot classify this Linux host's C library ({error}); managed run requires a glibc \
-             host, or a musl host whose tools are all verify-system"
+             host"
         )),
     }
 }
@@ -453,7 +386,6 @@ mod libc_tests {
         })));
         assert_eq!(gnu, Ok(Libc::Gnu { abi: "2.39".into() }));
         assert_eq!(host_libc(Ok(None)), Ok(Libc::None));
-        // musl hosts get their own family; activation admits verify-system only.
         let musl = host_libc(Ok(Some(Host::Musl {
             version: "1.2.5".into(),
         })));
@@ -488,7 +420,7 @@ mod requirement_tests {
         let tool = |adapter: &str, version: &str| {
             serde_json::json!({"adapter": adapter, "version": version,
                 "declarations": [{"file": "package.json", "field": adapter}],
-                "installation": {"kind": "verify-system", "executables": [adapter]}})
+                "installation": {"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{adapter:"bin/tool"}}}}}})
         };
         let lock = serde_json::json!({"schemaVersion": 0, "tools": {
             "node": tool("node", "24.0.0"), "pnpm": tool("pnpm", "10.0.0")}});
@@ -519,20 +451,17 @@ mod requirement_tests {
     }
 
     #[test]
-    fn requirements_name_adapters_verify_system_and_clone_local_selections() {
-        assert_eq!(requirement(false), ["node", "pnpm", "verify-system"]);
+    fn requirements_name_adapters_and_clone_local_selections() {
+        assert_eq!(requirement(false), ["node", "pnpm"]);
         let clone_local = requirement(true);
-        assert_eq!(
-            clone_local,
-            ["clone-local", "node", "pnpm", "verify-system"]
-        );
+        assert_eq!(clone_local, ["clone-local", "node", "pnpm"]);
     }
 
     #[test]
     fn every_selectable_adapter_and_mode_is_advertised_for_the_lock_schema() {
         assert_eq!(EXPERIMENTAL_LOCK_SCHEMA, SCHEMA_VERSION);
         assert!(ADAPTERS.contains(&additional::ADAPTER));
-        for name in ADAPTERS.iter().chain(&["verify-system", "clone-local"]) {
+        for name in ADAPTERS.iter().chain(&["clone-local"]) {
             assert!(FEATURES.contains(name), "{name} is not advertised");
         }
     }

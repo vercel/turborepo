@@ -89,7 +89,7 @@ fn bun_with_and_without_node_installs_the_baseline_build_and_repeats_without_tra
         );
 
         let plan = f.plan();
-        let bin = plan.path_prepend().unwrap().to_path_buf();
+        let bin = plan.path_prepend().to_path_buf();
         let mut names: Vec<_> = fs::read_dir(&bin)
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())

@@ -191,17 +191,6 @@ fn invoke_raw_options(
     )
 }
 
-fn invoke_path(
-    root: &Path,
-    words: &[&str],
-    ci: bool,
-    path: &std::ffi::OsStr,
-    read_only: bool,
-) -> (i32, String) {
-    let (code, stdout, stderr) = invoke_raw_options(root, words, ci, &[], Some(path), read_only);
-    (code, format!("{stdout}{stderr}"))
-}
-
 /// A run with an explicit PATH that may write when `read_only` is false, with
 /// whitespace-normalized output like `invoke`. The harness asserts that setup
 /// makes no HTTP connection, so `turbo run`'s standard telemetry is disabled.
@@ -283,11 +272,13 @@ fn frozen_and_local_unsupported_plans_are_read_only() {
     let root = temp.path();
     write(root, "turbo.json", ENABLED);
     write(root, ".nvmrc", "24.0.0");
-    write(
-        root,
-        "turbo.lock",
-        r#"{"schemaVersion":0,"tools":{"node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],"installation":{"kind":"verify-system","executables":["node"]}}}}"#,
-    );
+    let artifact = serde_json::json!({"distribution":{"url":"https://example.test/node.tgz",
+        "sha256":"a".repeat(64),"format":"tar-gz","executables":{"node":"bin/node"}}});
+    let lock = serde_json::json!({"schemaVersion":0,"tools":{"node":{"adapter":"node","version":"24.0.0",
+    "declarations":[{"file":".nvmrc","request":"24.0.0"}],"installation":{"kind":"managed","artifacts":{
+        "macos-arm64":artifact,"macos-x64":artifact,"linux-x64-gnu":artifact,"linux-arm64-gnu":artifact
+    }}}}});
+    write(root, "turbo.lock", &lock.to_string());
     failure(
         root,
         &["setup", "--frozen", "--tools-only"],
@@ -826,127 +817,100 @@ fn standalone_check_is_readonly_in_ci_offline_and_unsupported_hosts() {
 
 #[cfg(unix)]
 #[test]
-fn verify_system_locks_and_verifies_installed_tools_without_installing() {
+fn removed_config_and_locks_fail_before_probes_writes_or_handoff() {
     use std::os::unix::fs::PermissionsExt;
     let temp = tempfile::tempdir().unwrap();
-    let (root, bin) = (temp.path().join("repo"), temp.path().join("bin"));
-    fs::create_dir_all(&root).unwrap();
-    fs::create_dir_all(&bin).unwrap();
-    let tool = |name: &str, version: &str| {
-        let path = bin.join(name);
-        fs::write(&path, format!("#!/bin/sh\necho {version}\n")).unwrap();
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-    };
-    tool("node", "v24.0.0");
-    let pnpm =
-        "#!/bin/sh\ncase \"$1\" in --version) echo 10.0.0;; *) echo \"system-pnpm $*\";; esac\n";
-    fs::write(bin.join("pnpm"), pnpm).unwrap();
-    fs::set_permissions(bin.join("pnpm"), fs::Permissions::from_mode(0o755)).unwrap();
-    fs::create_dir_all(root.join("apps/web")).unwrap();
-    write(&root, "pnpm-workspace.yaml", "packages: ['apps/*']\n");
-    write(
-        &root,
-        "pnpm-lock.yaml",
-        "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  apps/web: {}\n",
-    );
-    write(
-        &root,
-        "apps/web/package.json",
-        r#"{"name":"web","scripts":{"build":"build"}}"#,
-    );
-    let git = Command::new("git")
-        .args(["init", "-q"])
-        .current_dir(&root)
-        .status();
-    assert!(git.unwrap().success());
-    write(&root, ".gitignore", "/.turbo/\n");
-    write(&root, ".nvmrc", "24.x\n");
-    write(&root, "package.json", r#"{"packageManager":"pnpm@10.0.0"}"#);
-    write(
-        &root,
-        "turbo.json",
-        r#"{"futureFlags":{"experimentalSetup":true},"tasks":{"build":{"cache":false}},
-            "setup":{"dependencies":"skip","javascript":{"tools":"verify-system"}}}"#,
-    );
-    // Fake tools come first; the host PATH only supplies git.
-    let host = std::env::var_os("PATH").unwrap_or_default();
-    let path =
-        std::env::join_paths(std::iter::once(bin.clone()).chain(std::env::split_paths(&host)))
-            .unwrap();
-
-    // Local setup locks the installed versions; nothing is downloaded or installed.
-    let (code, text) = invoke_path(&root, &["setup"], false, &path, false);
-    assert_eq!(code, 0, "{text}");
-    for expected in [
-        "javascript: tools verify-system (turbo.json setup policy)",
-        "turbo.lock created",
-        "node: locked 24.0.0",
-        "node 24.0.0: verified at",
-        "pnpm 10.0.0: verified at",
-    ] {
-        assert!(text.contains(expected), "{expected}: {text}");
-    }
-    let lock: serde_json::Value =
-        serde_json::from_slice(&fs::read(root.join("turbo.lock")).unwrap()).unwrap();
-    assert_eq!(lock["schemaVersion"], 0);
-    assert_eq!(lock["tools"].as_object().unwrap().len(), 2);
-    for (id, version) in [("node", "24.0.0"), ("pnpm", "10.0.0")] {
-        assert_eq!(lock["tools"][id]["adapter"], id);
-        assert_eq!(lock["tools"][id]["version"], version);
-        assert_eq!(
-            lock["tools"][id]["installation"],
-            serde_json::json!({"kind":"verify-system","executables":[id]}),
+    let root = temp.path();
+    let bin = root.join("bin");
+    fs::create_dir(&bin).unwrap();
+    for name in ["node", "pnpm", "task"] {
+        let script = format!(
+            "#!/bin/sh\n: > '{}'\nexit 97\n",
+            root.join("probe-ran").display()
         );
+        fs::write(bin.join(name), script).unwrap();
+        fs::set_permissions(bin.join(name), fs::Permissions::from_mode(0o755)).unwrap();
     }
-    assert!(!root.join(".turbo/tools").exists());
-
-    // Frozen repeats and checks are read-only and verify the locked versions.
-    for words in [["setup", "--frozen"], ["setup", "--check"]] {
-        let (code, text) = invoke_path(&root, &words, false, &path, true);
-        assert_eq!(code, 0, "{text}");
-        assert!(text.contains("node 24.0.0:"), "{text}");
+    write(root, ".nvmrc", "24.0.0\n");
+    write(
+        root,
+        "package.json",
+        r#"{"name":"fixture","packageManager":"pnpm@10.0.0","scripts":{"build":"task"}}"#,
+    );
+    let config = |tools: &str| {
+        format!(
+            r#"{{"futureFlags":{{"experimentalSetup":true}},"agentGuidance":false,
+        "noUpdateNotifier":true,"tasks":{{"build":{{"cache":false}}}},"setup":{{"dependencies":"skip","tools":"{tools}"}}}}"#
+        )
+    };
+    let commands: &[&[&str]] = &[
+        &["setup"],
+        &["setup", "--check"],
+        &["setup", "--plan"],
+        &["setup", "--frozen"],
+        &["setup", "--offline"],
+        &["setup", "--force"],
+        &["setup", "--update-lock", "--no-frozen"],
+        &["setup", "--no-lock", "--tools-only"],
+        &["run", "build", "--ui=stream"],
+        &["exec", "--", "node"],
+    ];
+    write(root, "turbo.json", &config("verify-system"));
+    for words in commands {
+        let (code, text) = invoke_on_path(root, words, false, bin.as_os_str(), true);
+        assert_eq!(code, 1, "{words:?}: {text}");
+        assert!(!root.join("probe-ran").exists());
     }
-    // Plain `turbo run` uses the verified tools from PATH and says so, in
-    // strict and loose modes, instead of failing as a missing installation.
-    for mode in ["--env-mode=strict", "--env-mode=loose"] {
-        let words = ["run", "build", mode, "--ui=stream"];
-        let (code, text) = invoke_on_path(&root, &words, false, &path, false);
-        assert_eq!(code, 0, "{text}");
-        for expected in [
-            "Using node 24.0.0 from PATH",
-            "Using pnpm 10.0.0 from PATH",
-            "system-pnpm run build",
-        ] {
-            assert!(text.contains(expected), "{expected}: {text}");
+    write(root, "turbo.lock", r#"{"schemaVersion":0,"tools":{}}"#);
+    let local = root
+        .join("node_modules")
+        .join(turborepo_shim::TurboState::scoped_platform_package_scope())
+        .join(turborepo_shim::TurboState::scoped_platform_package_dir());
+    fs::create_dir_all(local.join("bin")).unwrap();
+    fs::write(local.join("package.json"), r#"{"version":"9.9.9"}"#).unwrap();
+    let local_bin = local
+        .join("bin")
+        .join(turborepo_shim::TurboState::binary_name());
+    fs::write(
+        &local_bin,
+        format!(
+            "#!/bin/sh\n: > '{}'\nexit 97\n",
+            root.join("probe-ran").display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(local_bin, fs::Permissions::from_mode(0o755)).unwrap();
+    for words in commands {
+        let (code, text) = invoke_on_path(root, words, false, bin.as_os_str(), true);
+        assert_eq!(code, 1, "{words:?}: {text}");
+        assert!(!root.join("probe-ran").exists());
+    }
+    write(root, "turbo.json", &config("managed"));
+    for mixed in [false, true] {
+        let mut lock = serde_json::json!({"schemaVersion":0,"tools":{
+            "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
+                "installation":{"kind":"verify-system","executables":["node"]}}
+        }});
+        if mixed {
+            lock["tools"]["pnpm"] = serde_json::json!({"adapter":"pnpm","version":"10.0.0",
+                "declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
+                "installation":{"kind":"managed","artifacts":{"any":{"package":{
+                    "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":"a".repeat(64),
+                    "format":"tar-gz","rootPrefix":"package","executables":{"pnpm":"bin/pnpm.cjs"}}}}}});
+        }
+        write(root, "turbo.lock", &lock.to_string());
+        for ci in [false, true] {
+            for words in commands {
+                let (code, text) = invoke_on_path(root, words, ci, bin.as_os_str(), true);
+                assert_eq!(code, 1, "{words:?}: {text}");
+                assert!(
+                    diagnostic_contains(&text, "removed verify-system installations"),
+                    "{words:?}: {text}"
+                );
+                assert!(!root.join("probe-ran").exists());
+            }
         }
     }
-    assert!(!root.join(".turbo/tools").exists());
-    tool("node", "v24.1.0");
-    // A changed system tool never runs under the locked identity.
-    let words = ["run", "build", "--ui=stream"];
-    let (code, text) = invoke_on_path(&root, &words, false, &path, false);
-    assert_eq!(code, 1, "{text}");
-    assert!(diagnostic_contains(&text, "requires 24.0.0"), "{text}");
-    assert!(!text.contains("system-pnpm run"), "{text}");
-    for words in [
-        ["setup", "--frozen"],
-        ["setup", "--check"],
-        ["setup", "--force"],
-    ] {
-        let (code, text) = invoke_path(&root, &words, false, &path, true);
-        assert_eq!(code, 1, "{text}");
-        assert!(diagnostic_contains(&text, "requires 24.0.0"), "{text}");
-    }
-    // A managed lock is never silently trusted as an external tool.
-    write(&root, "turbo.json", ENABLED);
-    let (code, text) = invoke_path(
-        &root,
-        &["setup", "--frozen", "--tools-only"],
-        false,
-        &path,
-        true,
-    );
-    assert_eq!(code, 1, "{text}");
 }
 
 #[test]
@@ -1565,11 +1529,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     "Real prune output {}: owned typed Node/pnpm readiness passed",
                     output_root.display()
                 );
-                fs::write(
-                    plan.path_prepend().unwrap().join("../tools/pnpm/resource"),
-                    "damage",
-                )
-                .unwrap();
+                fs::write(plan.path_prepend().join("../tools/pnpm/resource"), "damage").unwrap();
                 let damaged = snapshot(pruned.root().parent().unwrap());
                 assert!(matches!(
                     ActivationPlan::inspect(&output_root, context.clone()),

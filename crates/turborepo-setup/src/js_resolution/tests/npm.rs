@@ -310,10 +310,6 @@ fn unsupported_native_choices_fail_before_traffic_and_preserved_npm_preflights_e
         ("executables", json!({"npm":"bin/npm-cli.js"})),
         ("options", json!({"opaque":["x"]})),
         ("adapter", json!("pnpm")),
-        (
-            "system",
-            json!({"kind":"verify-system","executables":["npm","npx"]}),
-        ),
     ] {
         let repo = root(Some("24.x"), json!({"packageManager":"npm@10.0.0"}));
         let old = apply(repo.path(), Mode::NoLock, false, &npm_fixture("10.0.0"))
@@ -325,7 +321,6 @@ fn unsupported_native_choices_fail_before_traffic_and_preserved_npm_preflights_e
         tool["installation"]["artifacts"] = json!({"macos-arm64":package,"windows-arm64":package});
         match field {
             "options" | "adapter" => tool[field] = bad,
-            "system" => tool["installation"] = bad,
             _ => tool["installation"]["artifacts"]["windows-arm64"]["package"][field] = bad,
         }
         let old = Lock::parse(&serde_json::to_vec(&document).unwrap()).unwrap();

@@ -67,6 +67,12 @@ impl Error {
             Self::Changed => repair(&"managed tools changed after this run selected them"),
             Self::Plan(Plan::InvalidLock) => invalid(&"its tool metadata does not apply here"),
             Self::Plan(Plan::Selection(error)) => invalid(error),
+            Self::Plan(Plan::Sources(Storage::Lock(
+                error @ turborepo_setup::lock::Error::RemovedInstallation,
+            )))
+            | Self::Sources(Storage::Lock(
+                error @ turborepo_setup::lock::Error::RemovedInstallation,
+            )) => error.to_string(),
             Self::Plan(Plan::Sources(Storage::Lock(error)))
             | Self::Sources(Storage::Lock(error)) => invalid(error),
             Self::Plan(Plan::Sources(Storage::Declarations))
@@ -131,7 +137,7 @@ pub(crate) struct Authorization {
     context: ExecutionContext,
     ecosystems: Ecosystems,
     plan: ActivationPlan,
-    trust: Option<TrustStore>,
+    trust: TrustStore,
     clone_local: bool,
 }
 
@@ -171,30 +177,18 @@ impl Authorization {
     ) -> Result<Self, Error> {
         let root = root.canonicalize()?;
         let sources = Snapshot::capture_with(&root, ecosystems)?;
-        // Only installed tools need setup's trusted record. verify-system tools
-        // activate nothing from the repository and keep no user state. A
-        // `--no-lock` clone always selects installed tools.
-        let installed = clone_local
-            || sources
-                .previous_lock()
-                .is_some_and(|lock| !lock.verify_system_only());
-        // musl hosts never install tools: say so before reading user state.
-        if installed && context.musl() {
+        if context.musl() {
             return Err(turborepo_setup::activation::Error::MuslHost.into());
         }
-        let trust = installed
-            .then(|| TrustStore::new(user_state_base, &root))
-            .transpose()?;
-        if let Some(trust) = &trust {
-            trust.preflight()?;
-        }
+        let trust = TrustStore::new(user_state_base, &root)?;
+        trust.preflight()?;
         // Initial authorization never trusts repo-writable publication stamps.
         let plan = if clone_local {
             ActivationPlan::verify_clone_local_captured(&sources, context.clone())?
         } else {
             ActivationPlan::verify_captured(&sources, context.clone())?
         };
-        if !authorized(trust.as_ref(), &plan)? {
+        if !trust.authorizes(&plan)? {
             return Err(Error::Untrusted);
         }
         sources.ensure_current()?;
@@ -244,18 +238,10 @@ impl Authorization {
         {
             return Err(Error::Changed);
         }
-        if !authorized(self.trust.as_ref(), &current)? {
+        if !self.trust.authorizes(&current)? {
             return Err(Error::Untrusted);
         }
         self.sources.ensure_current()?;
         Ok(use_plan(&current))
-    }
-}
-
-/// Without a trust store, only a plan that installs nothing is authorized.
-fn authorized(trust: Option<&TrustStore>, plan: &ActivationPlan) -> std::io::Result<bool> {
-    match trust {
-        Some(trust) => trust.authorizes(plan),
-        None => Ok(plan.tools().is_empty()),
     }
 }

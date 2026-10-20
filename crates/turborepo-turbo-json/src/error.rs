@@ -442,8 +442,8 @@ pub enum Error {
 
     #[error("Setup dependencies cannot be \"locked\" when tools are \"skip\".")]
     #[diagnostic(help(
-        "Dependency setup needs a managed or verified tool. Set `tools` to \"managed\" or \
-         \"verify-system\", or set `dependencies` to \"skip\"."
+        "Dependency setup needs a managed tool. Set `tools` to \"managed\", or set `dependencies` \
+         to \"skip\"."
     ))]
     SetupLockedDependenciesWithSkippedTools {
         #[label("locked dependencies with skipped tools")]

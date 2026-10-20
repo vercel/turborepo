@@ -334,6 +334,7 @@ enum Reason {
     Setup(String),
     /// The shell's PATHEXT lacks these export types.
     Pathext(String),
+    RemovedLock(String),
 }
 
 /// Host facts read once per prompt.
@@ -458,7 +459,7 @@ fn changes(
         .ok_or_else(|| "cannot locate the user state directory".to_owned())
         .and_then(|base| TrustStore::new(base, &root).map_err(|e| e.to_string()));
     // Fast path: unchanged root and inputs need no verification.
-    let mut stamp = Vec::new();
+    let mut stamp = b"managed-only-v1".to_vec();
     for file in [
         "turbo.lock",
         "turbo.json",
@@ -487,11 +488,18 @@ fn changes(
     let (status, bin, wanted, reason) = if !cfg!(any(unix, windows))
         || !host.qualified
         || !enabled(&root)
-        || (locked && external(&root))
     {
-        // Like `turbo run`, verify-system tools stay on the caller's PATH and
-        // need no setup record: there is nothing to activate.
         (Status::Off, None, none(), None)
+    } else if let Err(turborepo_setup::lock::StorageError::Lock(
+        error @ turborepo_setup::lock::Error::RemovedInstallation,
+    )) = turborepo_setup::lock::Lock::read(&root)
+    {
+        (
+            Status::Missing,
+            None,
+            none(),
+            Some(Reason::RemovedLock(error.to_string())),
+        )
     } else if musl() {
         // Like `turbo run`, musl hosts never activate managed artifacts.
         let status = if locked {
@@ -542,7 +550,8 @@ fn changes(
     });
     let entered_or_changed = previous
         .as_ref()
-        .is_none_or(|p| p.root != id || p.status != status);
+        .is_none_or(|p| p.root != id || p.status != status)
+        || matches!(&reason, Some(Reason::RemovedLock(_)));
     let notice = entered_or_changed
         .then(|| notice(status, reason.as_ref()))
         .flatten();
@@ -606,24 +615,17 @@ fn notice(status: Status, reason: Option<&Reason>) -> Option<String> {
         (Status::Missing, Some(Reason::Setup(reason))) => Some(format!(
             "cannot activate this repository's managed tools ({reason}). Run `turbo setup`."
         )),
+        (Status::Missing, Some(Reason::RemovedLock(reason))) => Some(reason.clone()),
         (Status::Missing, Some(Reason::Pathext(types))) => Some(format!(
             "this repository's managed tools need {types} in PATHEXT, so they are not active."
         )),
         (Status::Unsupported, _) => Some(
             "managed tools are not supported on musl Linux hosts such as Alpine, so none are \
-             active. Install the repository's tools in the image and use verify-system for them."
+             active. Use a supported macOS, GNU Linux or Windows x64 host for managed tools."
                 .to_owned(),
         ),
         (Status::Off | Status::Active, _) => None,
     }
-}
-
-/// turbo.lock selects only verify-system tools. An unreadable lock is not.
-fn external(root: &Path) -> bool {
-    turborepo_setup::lock::Lock::read(root)
-        .ok()
-        .flatten()
-        .is_some_and(|lock| !lock.tools().is_empty() && lock.verify_system_only())
 }
 
 /// The recorded bin as a PATH entry. Windows shells and `.cmd` forwarders
@@ -1077,7 +1079,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn verify_system_locks_and_musl_hosts_never_activate_managed_tools() {
+    fn removed_locks_and_musl_hosts_never_activate_managed_tools() {
         let temp = tempfile::tempdir().unwrap();
         let home = temp.path().join("home");
         let root = temp.path().join("repo");
@@ -1103,13 +1105,17 @@ mod tests {
                 .unwrap()
                 .status
         };
-        // verify-system tools need no setup record and stay on the caller's
-        // PATH, so no host is told to run `turbo setup`.
         fs::write(root.join("turbo.lock"), node("verify-system")).unwrap();
         for musl in [false, true] {
             let off = changes(None, "/usr/bin", Some(&root), Some(&home), || musl);
-            assert!(off.path.is_none() && off.notice.is_none(), "{off:?}");
-            assert_eq!(status(&off), Status::Off);
+            assert!(off.path.is_none(), "{off:?}");
+            assert!(
+                off.notice
+                    .as_deref()
+                    .unwrap()
+                    .contains("Back up and remove turbo.lock")
+            );
+            assert_eq!(status(&off), Status::Missing);
         }
         // A lock that needs managed tools says why musl hosts activate none.
         fs::write(root.join("turbo.lock"), node("managed")).unwrap();
@@ -1215,6 +1221,96 @@ mod tests {
         let stale = changes(None, "/usr/bin", Some(&web), Some(&home), || false);
         assert_eq!(stale.path, Some(prepend("/usr/bin", bin)));
         assert!(stale.notice.unwrap().contains("turbo.lock changed"));
+        let managed = serde_json::json!({"schemaVersion":0,"tools":{
+            "node":{"adapter":"node","version":"24.0.1","declarations":[{"file":".nvmrc"}],
+                "installation":{"kind":"managed","artifacts":{"any":{"distribution":{
+                    "url":"https://example.test/node.tgz","sha256":"a".repeat(64),"format":"tar-gz",
+                    "executables":{"node":"bin/node"}}}}}}
+        }});
+        fs::write(root.join("turbo.lock"), managed.to_string()).unwrap();
+        let stale = changes(None, "/usr/bin", Some(&web), Some(&home), || false);
+        assert_eq!(stale.path, Some(prepend("/usr/bin", bin)));
+        assert!(stale.notice.unwrap().contains("turbo.lock changed"));
+
+        for mixed in [false, true] {
+            let mut lock = serde_json::json!({"schemaVersion":0,"tools":{
+                "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc"}],
+                    "installation":{"kind":"verify-system","executables":["node"]}}
+            }});
+            if mixed {
+                lock["tools"]["extra"] = serde_json::json!({"adapter":"artifact","version":"1.0.0",
+                    "declarations":[{"file":"turbo.json"}],"installation":{"kind":"managed","artifacts":{
+                        "any":{"distribution":{"url":"https://example.test/extra.tgz","sha256":"a".repeat(64),
+                            "format":"tar-gz","executables":{"extra":"bin/extra"}}}}}});
+            }
+            fs::write(root.join("turbo.lock"), lock.to_string()).unwrap();
+            for base in [&home, &temp.path().join("no-record")] {
+                for musl in [false, true] {
+                    let mut stamp = Vec::new();
+                    for file in [
+                        "turbo.lock",
+                        "turbo.json",
+                        "turbo.jsonc",
+                        ".turbo/tools/manifest.json",
+                    ] {
+                        metadata(&mut stamp, &root.join(file));
+                    }
+                    let trust = TrustStore::new(base, &root).unwrap();
+                    metadata(&mut stamp, &trust.path());
+                    let previous = State {
+                        root: digest(root.as_os_str().as_encoded_bytes()),
+                        stamp: finish(&stamp, Some(bin)),
+                        status: Status::Active,
+                        saved: BTreeMap::from([(
+                            "GOTOOLCHAIN".into(),
+                            Saved {
+                                set: Some("local".into()),
+                                previous: Some("auto".into()),
+                            },
+                        )]),
+                        bin: Some(bin.to_owned()),
+                    };
+                    let host = Host {
+                        qualified: true,
+                        pathext: None,
+                    };
+                    let shell_path = prepend("/usr/bin", bin);
+                    let rejected = super::changes(
+                        Some(previous),
+                        &shell_path,
+                        Some(&web),
+                        Some(base),
+                        &host,
+                        || musl,
+                        |name| (name == "GOTOOLCHAIN").then(|| "local".into()),
+                    );
+                    assert_eq!(rejected.path.as_deref(), Some("/usr/bin"));
+                    assert_eq!(rejected.env, [("GOTOOLCHAIN".into(), Some("auto".into()))]);
+                    let notice = rejected.notice.as_deref().unwrap();
+                    assert!(notice.contains("Back up and remove turbo.lock"), "{notice}");
+                    assert!(!notice.contains("Run `turbo setup`."), "{notice}");
+                    let state =
+                        State::parse(rejected.state.clone().unwrap().as_deref().unwrap()).unwrap();
+                    assert_eq!(state.status, Status::Missing);
+                    assert!(state.bin.is_none());
+                    assert_eq!(
+                        super::changes(
+                            Some(state),
+                            "/usr/bin",
+                            Some(&web),
+                            Some(base),
+                            &host,
+                            || musl,
+                            |_| None
+                        ),
+                        Changes::default()
+                    );
+                    let output = render(HookShell::Bash, &rejected);
+                    assert!(output.contains("export PATH='/usr/bin'"));
+                    assert!(output.contains("export GOTOOLCHAIN='auto'"));
+                }
+            }
+        }
     }
 
     #[test]

@@ -38,6 +38,13 @@ pub enum Error {
          lock"
     )]
     Schema(u32),
+    #[error(
+        "turbo.lock uses removed verify-system installations. Change setup.tools to managed or \
+         skip, including toolchain overrides. Back up and remove turbo.lock, then run turbo setup \
+         locally on a supported host and commit the replacement. --update-lock cannot read this \
+         legacy lock."
+    )]
+    RemovedInstallation,
     #[error("invalid turbo.lock: {0}")]
     Invalid(&'static str),
 }
@@ -89,8 +96,6 @@ pub enum Installation {
     /// Native npm identity/provenance whose resources AND executable ownership
     /// belong to the selected managed Node. No duplicate artifact or inventory.
     Bundled { owner: String },
-    /// Explicit external-tool requirement. No fabricated artifact digest.
-    VerifySystem { executables: Vec<String> },
 }
 
 /// This is artifact selection, not runtime libc detection or cache
@@ -190,6 +195,19 @@ impl Lock {
         }
         // The recursive duplicate-key visitor keeps serde_json's depth limit.
         let UniqueJson(value) = serde_json::from_slice(bytes).map_err(|_| Error::Json)?;
+        if value
+            .get("tools")
+            .and_then(serde_json::Value::as_object)
+            .is_some_and(|tools| {
+                tools.values().any(|tool| {
+                    tool.pointer("/installation/kind")
+                        .and_then(serde_json::Value::as_str)
+                        == Some("verify-system")
+                })
+            })
+        {
+            return Err(Error::RemovedInstallation);
+        }
         let document = serde_json::from_value(value).map_err(|_| Error::Json)?;
         Self::new(document)
     }
@@ -256,15 +274,6 @@ impl Lock {
                     ));
                 }
             }
-            if let Installation::VerifySystem { executables } = &tool.installation
-                && (executables.is_empty()
-                    || executables.len() > MAX_EXECUTABLES
-                    || executables
-                        .iter()
-                        .any(|name| !portable_path(name) || name.contains('/')))
-            {
-                return Err(Error::Invalid("invalid verified-system executable names"));
-            }
             if let Installation::Managed { artifacts } = &tool.installation {
                 if artifacts.is_empty()
                     || (artifacts.contains_key(&Platform::Any) && artifacts.len() != 1)
@@ -299,7 +308,6 @@ impl Lock {
             for tool in document.tools.values() {
                 let executable_names: Vec<_> = match &tool.installation {
                     Installation::Bundled { .. } => Vec::new(),
-                    Installation::VerifySystem { executables } => executables.iter().collect(),
                     Installation::Managed { artifacts } => artifacts
                         .get(&platform)
                         .or_else(|| artifacts.get(&Platform::Any))
@@ -340,14 +348,6 @@ impl Lock {
     }
     pub fn tools(&self) -> &BTreeMap<String, Tool> {
         &self.0.tools
-    }
-
-    /// Every selection is verify-system: nothing is installed, recorded or
-    /// activated from the repository. True for an empty lock.
-    pub fn verify_system_only(&self) -> bool {
-        self.tools()
-            .values()
-            .all(|tool| matches!(tool.installation, Installation::VerifySystem { .. }))
     }
 }
 

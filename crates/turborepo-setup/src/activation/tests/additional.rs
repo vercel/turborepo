@@ -50,7 +50,7 @@ fn declared_executables_share_the_managed_bin_and_removal_is_drift() {
         ActivationPlan::verify_with(repo.path(), context(), Ecosystems::default()).unwrap(),
     ] {
         assert_eq!(plan.tools(), with_artifacts(&value));
-        assert_eq!(plan.path_prepend(), Some(bin.as_path()));
+        assert_eq!(plan.path_prepend(), bin.as_path());
         assert_eq!(plan.snapshot().tools().len(), 3);
         assert!(plan.runtime_env().is_empty());
     }
