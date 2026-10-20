@@ -1,6 +1,7 @@
 use std::{fs, sync::mpsc, thread, time::Duration};
 
 use super::*;
+use crate::git::fake_repository;
 
 #[cfg(unix)]
 mod inherited_lock;
@@ -9,19 +10,10 @@ mod inherited_lock;
 #[path = "../../../turborepo-tool-install/src/tests/inherited_child.rs"]
 mod inherited_child;
 
-fn repository(ignored: bool) -> tempfile::TempDir {
+fn repository() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
-    assert!(
-        Command::new("git")
-            .args(["init", "--quiet"])
-            .arg(root.path())
-            .status()
-            .unwrap()
-            .success()
-    );
-    if ignored {
-        fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
-    }
+    fake_repository(root.path()).unwrap();
+    fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
     root
 }
 
@@ -30,64 +22,17 @@ fn state(root: &Path, name: &str) -> std::path::PathBuf {
 }
 
 #[test]
-fn missing_or_overridden_ignore_reports_before_creating_state() {
-    let root = repository(false);
-    let error = WriterStorage::acquire(root.path()).err().unwrap();
-    assert!(error.to_string().contains("explicitly add /.turbo/"));
-    assert!(!root.path().join(".gitignore").exists());
-    assert!(!root.path().join(".turbo").exists());
-    fs::write(
-        root.path().join(".gitignore"),
-        "/.turbo/*\n!/.turbo/setup-lock/\n",
-    )
-    .unwrap();
-    assert!(WriterStorage::acquire(root.path()).is_err());
-    assert!(!root.path().join(".turbo").exists());
-    // Any `.git`, even a broken one, keeps the strict Git check.
-    let broken = tempfile::tempdir().unwrap();
-    fs::write(broken.path().join(".gitignore"), "/.turbo/\n").unwrap();
-    fs::write(broken.path().join(".git"), "").unwrap();
-    assert!(WriterStorage::acquire(broken.path()).is_err());
-    assert!(!broken.path().join(".turbo").exists());
-}
-
-#[test]
-fn roots_outside_any_repository_need_no_git() {
+fn storage_outside_any_repository_is_created() {
     let root = tempfile::tempdir().unwrap();
-    assert!(outside_git_repository(root.path()).unwrap());
     let nested = root.path().join("out/full");
     fs::create_dir_all(&nested).unwrap();
     drop(WriterStorage::acquire(&nested).unwrap());
     assert!(state(&nested, WRITER).exists());
-    fs::create_dir(root.path().join(".git")).unwrap();
-    assert!(!outside_git_repository(&nested).unwrap());
-}
-
-#[test]
-fn tracked_bookkeeping_is_rejected_without_recovery_or_mutation() {
-    for name in [WRITER, STAGED] {
-        let root = repository(true);
-        fs::create_dir_all(root.path().join(".turbo/setup-lock")).unwrap();
-        let path = state(root.path(), name);
-        fs::write(&path, "tracked user state").unwrap();
-        assert!(
-            Command::new("git")
-                .current_dir(root.path())
-                .args(["add", "--force", "--"])
-                .arg(&path)
-                .status()
-                .unwrap()
-                .success()
-        );
-        assert!(WriterStorage::acquire(root.path()).is_err());
-        assert_eq!(fs::read(&path).unwrap(), b"tracked user state");
-        assert!(!state(root.path(), if name == WRITER { STAGED } else { WRITER }).exists());
-    }
 }
 
 #[test]
 fn ignored_storage_keeps_root_clean_and_recovers_only_owned_stage() {
-    let root = repository(true);
+    let root = repository();
     let ignore = fs::read(root.path().join(".gitignore")).unwrap();
     let mut storage = WriterStorage::acquire(root.path()).unwrap();
     assert!(storage.read_lock().unwrap().is_none());
@@ -114,23 +59,19 @@ fn ignored_storage_keeps_root_clean_and_recovers_only_owned_stage() {
     #[cfg(not(unix))]
     let _ = writer;
     assert_eq!(fs::read(root.path().join(".gitignore")).unwrap(), ignore);
-    let output = Command::new("git")
-        .current_dir(root.path())
-        .args(["status", "--porcelain", "--untracked-files=all"])
-        .output()
-        .unwrap();
-    assert!(output.status.success());
-    assert_eq!(
-        String::from_utf8(output.stdout).unwrap(),
-        "?? .gitignore\n?? turbo.lock\n"
-    );
+    let mut entries: Vec<_> = fs::read_dir(root.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    entries.sort();
+    assert_eq!(entries, [".git", ".gitignore", ".turbo", TARGET]);
     assert!(!root.path().join(".turbo-lock.writer").exists());
     assert!(!root.path().join("staged").exists());
 }
 
 #[test]
 fn failed_staging_and_promotion_leave_previous_bytes() {
-    let root = repository(true);
+    let root = repository();
     let mut storage = WriterStorage::acquire(root.path()).unwrap();
     storage.replace(b"previous").unwrap();
     assert!(storage.replace(&vec![b'x'; MAX_BYTES + 1]).is_err());
@@ -158,7 +99,7 @@ fn failed_staging_and_promotion_leave_previous_bytes() {
 
 #[test]
 fn recovery_and_replacement_wait_for_the_same_persistent_inode() {
-    let root = repository(true);
+    let root = repository();
     let mut first = WriterStorage::acquire(root.path()).unwrap();
     first.replace(b"previous").unwrap();
     fs::write(state(root.path(), STAGED), "crashed stage").unwrap();
@@ -193,7 +134,7 @@ fn non_regular_files_are_never_recovered_or_overwritten() {
         ".turbo/setup-lock/writer",
         ".turbo/setup-lock/staged",
     ] {
-        let root = repository(true);
+        let root = repository();
         let path = root.path().join(name);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         if name.ends_with("writer") || name.ends_with("staged") {
@@ -204,7 +145,7 @@ fn non_regular_files_are_never_recovered_or_overwritten() {
         assert!(WriterStorage::acquire(root.path()).is_err());
         assert!(path.exists());
     }
-    let root = repository(true);
+    let root = repository();
     fs::create_dir(root.path().join(TARGET)).unwrap();
     let mut storage = WriterStorage::acquire(root.path()).unwrap();
     assert!(storage.read_lock().is_err());
@@ -230,7 +171,7 @@ fn directory_file_and_dangling_symlinks_never_escape_storage() {
             outside.path().join("file"),
             outside.path().join("missing"),
         ] {
-            let root = repository(true);
+            let root = repository();
             let path = root.path().join(name);
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             symlink(&target, &path).unwrap();
@@ -242,7 +183,7 @@ fn directory_file_and_dangling_symlinks_never_escape_storage() {
         }
     }
     for target in [outside.path().join("file"), outside.path().join("missing")] {
-        let root = repository(true);
+        let root = repository();
         symlink(target, root.path().join(TARGET)).unwrap();
         let mut storage = WriterStorage::acquire(root.path()).unwrap();
         assert!(storage.replace(b"candidate").is_err());
@@ -254,7 +195,7 @@ fn directory_file_and_dangling_symlinks_never_escape_storage() {
 #[cfg(unix)]
 #[test]
 fn recreating_the_cache_cannot_split_active_writer_transactions() {
-    let root = repository(true);
+    let root = repository();
     let mut first = WriterStorage::acquire(root.path()).unwrap();
     first.replace(b"previous").unwrap();
     fs::rename(root.path().join(".turbo"), root.path().join("old-cache")).unwrap();
@@ -282,7 +223,7 @@ fn recreating_the_cache_cannot_split_active_writer_transactions() {
 #[test]
 fn pinned_directory_handles_do_not_follow_a_replaced_cache_path() {
     use std::os::unix::fs::symlink;
-    let root = repository(true);
+    let root = repository();
     let outside = tempfile::tempdir().unwrap();
     let mut storage = WriterStorage::acquire(root.path()).unwrap();
     fs::rename(root.path().join(".turbo"), root.path().join("saved-cache")).unwrap();

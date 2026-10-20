@@ -1,18 +1,11 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 use super::*;
-use crate::lock::{Artifact, Document, Format, Platform, SCHEMA_VERSION};
+use crate::lock::{Artifact, Document, Ecosystems, Format, Platform, SCHEMA_VERSION};
 
 fn root(manager: Option<&str>) -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
-    assert!(
-        std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .arg(root.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    crate::git::fake_repository(root.path()).unwrap();
     fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
     fs::write(root.path().join(".nvmrc"), "24.x").unwrap();
     manifest(root.path(), manager);
@@ -30,7 +23,7 @@ fn manifest(root: &Path, manager: Option<&str>) {
     .unwrap();
 }
 fn snapshot(root: &Path) -> Snapshot {
-    Snapshot::capture(root).unwrap()
+    Snapshot::capture_with(root, Ecosystems::default()).unwrap()
 }
 fn selection(snapshot: &Snapshot, version: &str) -> Lock {
     Lock::new(Document {
@@ -579,6 +572,6 @@ fn unknown_adapters_aliases_sources_and_unsupported_managers_fail_closed() {
         }
     }
     let root = root(Some("aube@4.0.0"));
-    assert!(Snapshot::capture(root.path()).is_err());
+    assert!(Snapshot::capture_with(root.path(), Ecosystems::default()).is_err());
     assert!(!root.path().join(".turbo").exists());
 }

@@ -2173,8 +2173,8 @@ impl UvTaskContract {
                                     path_to_root,
                                     dependency.directory().to_unix().as_str(),
                                 );
-                                std::iter::once(format!("{directory}/**"))
-                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                toolchain::directory_source_globs(&directory)
+                                    .into_iter()
                                     .chain(
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
@@ -2223,8 +2223,8 @@ impl UvTaskContract {
                                     .map(|glob| join_prefix(path_to_root, &glob))
                                     .collect();
                                 let directory = join_prefix(path_to_root, directory);
-                                std::iter::once(format!("{directory}/**"))
-                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                toolchain::directory_source_globs(&directory)
+                                    .into_iter()
                                     .chain(
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
@@ -2366,14 +2366,34 @@ fn identity_stdout(mut command: Command, probe: &str) -> Result<String, String> 
         .ok_or_else(|| format!("{probe} returned no output"))
 }
 
+static MANAGED_BIN: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// The managed bin directory that managed `turbo run` authorized from the
+/// trusted setup record. Its uv is the only in-repository uv whose identity is
+/// accepted; repository content can never select it. Set once per process.
+pub fn trust_managed_bin(bin: std::path::PathBuf) {
+    let _ = MANAGED_BIN.set(bin);
+}
+
+/// A uv inside the repository could be repository content, so its identity is
+/// never trusted, unless it is exactly the managed uv.
+fn trusted_uv(
+    uv: &std::path::Path,
+    repo_root: &AbsoluteSystemPath,
+    managed_bin: Option<&std::path::Path>,
+) -> Result<(), String> {
+    if uv.starts_with(repo_root.as_std_path()) && uv.parent() != managed_bin {
+        return Err("the uv executable is inside the repository".to_string());
+    }
+    Ok(())
+}
+
 /// Resolve the exact uv frontend and Python interpreter selected for this
 /// workspace. Discovery remains available without either binary, but native
 /// command tasks stay uncached until both identities can be proven.
 fn toolchain_identities(repo_root: &AbsoluteSystemPath) -> Result<UvToolchainIdentity, String> {
     let uv = which::which("uv").map_err(|error| format!("unable to find uv: {error}"))?;
-    if uv.starts_with(repo_root.as_std_path()) {
-        return Err("the uv executable is inside the repository".to_string());
-    }
+    trusted_uv(&uv, repo_root, MANAGED_BIN.get().map(|bin| bin.as_path()))?;
     let mut uv_version = Command::new(&uv);
     uv_version
         .arg("--version")
@@ -3522,6 +3542,29 @@ mod test {
 
     use super::*;
     use crate::package_graph::{PackageName, PackageTaskContext, PackageTaskContextKind};
+
+    #[test]
+    fn only_the_managed_uv_inside_the_repository_is_trusted() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let bin = root.as_std_path().join(".turbo/tools/generation-1/bin");
+        let host = std::path::Path::new(if cfg!(windows) {
+            r"C:\bin\uv"
+        } else {
+            "/bin/uv"
+        });
+        assert!(trusted_uv(host, &root, None).is_ok());
+        assert!(trusted_uv(&bin.join("uv"), &root, Some(&bin)).is_ok());
+        // Repository content, including a lookalike generation, stays untrusted.
+        for uv in [
+            root.as_std_path().join("uv"),
+            root.as_std_path().join(".turbo/tools/generation-2/bin/uv"),
+            bin.join("nested/uv"),
+        ] {
+            assert!(trusted_uv(&uv, &root, Some(&bin)).is_err(), "{uv:?}");
+        }
+        assert!(trusted_uv(&bin.join("uv"), &root, None).is_err());
+    }
 
     #[test]
     fn test_workspace_metadata_external_closures() {
@@ -5604,6 +5647,10 @@ version = "0.1.0"
             io.input_globs
                 .contains(&"!../../packages/lib/**/.mypy_cache/**".to_string())
         );
+        assert!(
+            io.input_globs
+                .contains(&"!../../packages/lib/**/node_modules/**".to_string())
+        );
         assert!(io.input_globs.contains(&"!**/__pycache__/**".to_string()));
         assert!(io.input_globs.contains(&"!**/.pytest_cache/**".to_string()));
         assert!(io.input_globs.contains(&"!**/.ruff_cache/**".to_string()));
@@ -5887,6 +5934,11 @@ version = "0.1.0"
             workspace_lint
                 .input_globs
                 .contains(&"packages/lib/**".to_string())
+        );
+        assert!(
+            workspace_lint
+                .input_globs
+                .contains(&"!packages/lib/**/node_modules/**".to_string())
         );
     }
 

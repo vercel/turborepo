@@ -15,7 +15,7 @@ use super::*;
 use crate::{
     NodeArtifact, bundled_npm,
     lock::{
-        Platform, Snapshot,
+        Ecosystems, Platform, Snapshot,
         reconcile::{self, Mode},
     },
     node::lock_target,
@@ -140,14 +140,7 @@ impl World {
 }
 fn root(node: Option<&str>, manifest: Value) -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
-    assert!(
-        std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .arg(root.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    crate::git::fake_repository(root.path()).unwrap();
     fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
     if let Some(node) = node {
         fs::write(root.path().join(".nvmrc"), node).unwrap();
@@ -167,7 +160,7 @@ fn apply(
     offline: bool,
     world: &World,
 ) -> Result<reconcile::Outcome, reconcile::Error> {
-    let snapshot = Snapshot::capture(root).unwrap();
+    let snapshot = Snapshot::capture_with(root, Ecosystems::default()).unwrap();
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -258,7 +251,7 @@ fn exact_range_alias_portable_cohort_and_all_native_integrities() {
         assert_eq!(artifacts.len(), 1);
         assert_eq!(artifacts[&Platform::Any]["package"].sha256, sha256);
         assert_eq!(artifacts[&Platform::Any]["package"].executables.len(), 2);
-        let snapshot = Snapshot::capture(p).unwrap();
+        let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
         assert!(result.lock.matches_native(snapshot.declarations()).unwrap());
         for (id, tool) in result.lock.tools() {
             assert_eq!(&tool.declarations, &snapshot.declarations()[id]);
@@ -369,7 +362,7 @@ fn removed_bundled_npm_keeps_node_identity_and_export_ownership() {
     let repo = root(Some("24.x"), json!({}));
     let node = seed(repo.path()).tools()["node"].clone();
     write_manifest(repo.path(), json!({"packageManager":"npm@11.6.1"}));
-    let snapshot = Snapshot::capture(repo.path()).unwrap();
+    let snapshot = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
     let npm = bundled_npm::resolve(&snapshot, &node).unwrap();
     let old = Lock::new(Document {
         schema_version: lock::SCHEMA_VERSION,
@@ -459,7 +452,7 @@ fn fresh_source_drift_revalidation_fails_before_publication_and_next_traffic() {
     // Already stale captured inputs are refused by resolve itself, not merely
     // by reconcile's outer entry check.
     fs::write(p.join(".nvmrc"), "24.0.0").unwrap();
-    let snapshot = Snapshot::capture(p).unwrap();
+    let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
     let world = World::new(vec![], |_| {});
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -508,7 +501,7 @@ fn portable_registry_validation_keeps_npm_and_pnpm_release_mappings() {
             repo.path(),
             json!({"packageManager":format!("{id}@{version}")}),
         );
-        let declaration = Snapshot::capture(repo.path())
+        let declaration = Snapshot::capture_with(repo.path(), Ecosystems::default())
             .unwrap()
             .package_manager()
             .unwrap()

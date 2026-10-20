@@ -430,3 +430,25 @@ fn explicit_context_rejects_unknown_or_incomplete_compatibility() {
         ));
     }
 }
+
+#[test]
+fn clone_local_identity_marks_its_resolution_and_keeps_artifact_binding() {
+    let selected = ids(&["javascript", "npm", "pnpm"]);
+    let committed = snapshot(&fixture(), context());
+    let local =
+        ExecutionSnapshot::select_clone_local(&lock(&fixture()), context(), &selected).unwrap();
+    assert_eq!(local.tools(), committed.tools());
+    assert!(local.clone_local() && !committed.clone_local());
+    assert_ne!(local.fingerprint(), committed.fingerprint());
+    let mut expected: Value = serde_json::from_slice(committed.canonical_identity()).unwrap();
+    expected["resolution"] = json!("clone-local");
+    let actual: Value = serde_json::from_slice(local.canonical_identity()).unwrap();
+    assert_eq!(actual, expected);
+    // Different verified bytes still change a clone-local identity.
+    let mut changed = fixture();
+    changed["tools"]["npm"]["installation"]["artifacts"]["any"]["distribution"]["sha256"] =
+        json!("e".repeat(64));
+    let other =
+        ExecutionSnapshot::select_clone_local(&lock(&changed), context(), &selected).unwrap();
+    assert_ne!(other.fingerprint(), local.fingerprint());
+}

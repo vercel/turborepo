@@ -1,9 +1,12 @@
 //! Locked Cargo dependency prefetch with the managed toolchain. `cargo fetch
 //! --locked` only downloads: it never resolves, rewrites `Cargo.lock`, builds,
 //! or runs build scripts, so there are no native lifecycle hooks to authorize.
-//! Internal API: the dependency-policy CLI decides when this runs.
+//! `turbo setup` runs this when Rust dependency setup is enabled, with the
+//! managed activation environment.
 
 use std::{
+    collections::BTreeMap,
+    ffi::OsString,
     fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
@@ -41,7 +44,8 @@ pub enum Error {
 /// Where the clone's private Cargo home lives, without creating or checking
 /// it. Activation exposes this same directory to tasks as `CARGO_HOME`.
 pub fn cargo_home_path(root: &Path) -> PathBuf {
-    root.join(".turbo/cargo-home")
+    // Split components: `/` is not a separator under a `\\?\` root.
+    root.join(".turbo").join("cargo-home")
 }
 
 /// The repository's private Cargo home, beside managed tools rather than in
@@ -79,15 +83,23 @@ fn read_lock(root: &Path) -> Result<Option<Vec<u8>>, Error> {
 }
 
 /// Fetch every locked workspace dependency into `cargo_home` using the
-/// managed `cargo`. Offline mode uses only what that home already holds.
-/// Cargo's diagnostics are forwarded to stderr.
-pub fn prefetch(root: &Path, cargo: &Path, cargo_home: &Path, offline: bool) -> Result<(), Error> {
+/// managed `cargo`, with `env` (such as the managed `PATH` and rustup
+/// variables) over the inherited environment. Offline mode uses only what
+/// that home already holds. Cargo's diagnostics are forwarded to stderr.
+pub fn prefetch(
+    root: &Path,
+    cargo: &Path,
+    cargo_home: &Path,
+    offline: bool,
+    env: &BTreeMap<String, OsString>,
+) -> Result<(), Error> {
     let before = read_lock(root)?.ok_or(Error::MissingLock)?;
     let mut command = Command::new(cargo);
     command
         .current_dir(root)
         .args(["fetch", "--locked"])
         .args(offline.then_some("--offline"))
+        .envs(env)
         .env("CARGO_HOME", cargo_home)
         .env_remove("CARGO_NET_OFFLINE")
         .stdin(Stdio::null())
@@ -125,3 +137,6 @@ pub fn prefetch(root: &Path, cargo: &Path, cargo_home: &Path, offline: bool) -> 
 
 #[cfg(all(test, unix))]
 mod tests;
+
+#[cfg(all(test, windows))]
+mod windows_tests;

@@ -12,21 +12,29 @@ const TARGET: Platform = Platform::LinuxX64Gnu;
 const RUSTUP: &str =
     "#!/bin/sh\nprintf '%s|%s|%s|%s\\n' \"${0##*/}\" \"$RUSTUP_HOME\" \"$CARGO_HOME\" \"$*\"\n";
 
-fn serve(
+fn routes(
     installer: &str,
     checksum: impl Fn(Platform) -> String,
-) -> (LoopbackServer, RustupTransport) {
+    base: &str,
+) -> Vec<(String, Vec<u8>)> {
     let mut routes = vec![(
-        "/rustup/release-stable.toml".to_owned(),
+        format!("{base}/rustup/release-stable.toml"),
         b"schema-version = '1'\nversion = '1.29.1'\n".to_vec(),
     )];
     for platform in rustup::PLATFORMS {
         let url = rustup::installer_url(&semver::Version::new(1, 29, 1), platform).unwrap();
-        let path = url.strip_prefix(ORIGIN).unwrap().to_owned();
+        let path = format!("{base}{}", url.strip_prefix(ORIGIN).unwrap());
         routes.push((format!("{path}.sha256"), checksum(platform).into_bytes()));
         routes.push((path, installer.as_bytes().to_vec()));
     }
-    let server = LoopbackServer::new(routes, |_| {}).unwrap();
+    routes
+}
+
+fn serve(
+    installer: &str,
+    checksum: impl Fn(Platform) -> String,
+) -> (LoopbackServer, RustupTransport) {
+    let server = LoopbackServer::new(routes(installer, checksum, ""), |_| {}).unwrap();
     let transport = RustupTransport::loopback_http_for_tests(server.origin()).unwrap();
     (server, transport)
 }
@@ -41,14 +49,17 @@ fn official(platform: Platform) -> String {
     }
 }
 
-async fn resolved() -> (LoopbackServer, RustupTransport, Lock) {
-    let (server, transport) = serve(RUSTUP, official);
-    let declarations = vec![Declaration {
+fn declarations() -> Vec<Declaration> {
+    vec![Declaration {
         file: "rust-toolchain.toml".into(),
         field: None,
         request: None,
-    }];
-    let tool = transport.resolve(declarations).await.unwrap();
+    }]
+}
+
+async fn resolved() -> (LoopbackServer, RustupTransport, Lock) {
+    let (server, transport) = serve(RUSTUP, official);
+    let tool = transport.resolve(declarations()).await.unwrap();
     (server, transport, single(tool))
 }
 
@@ -199,6 +210,60 @@ async fn verified_bootstrap_publishes_one_shim_and_failures_keep_the_prior_gener
     assert!(store.is_current(&desired).unwrap());
 }
 
+/// One mirror base serves rustup's release, checksum, and installer paths
+/// and the channel manifests, and becomes the private rustup's distribution
+/// server. The lock keeps the official URLs.
+#[tokio::test]
+async fn one_mirror_base_serves_every_rustup_and_dist_path() {
+    let manifest = crate::rust_metadata::tests::fixture("1.99.0", "2026-10-01");
+    let mut routes = routes(RUSTUP, official, "/mirror");
+    routes.push((
+        "/mirror/dist/channel-rust-1.99.toml".into(),
+        manifest.into(),
+    ));
+    let server = LoopbackServer::new(routes, |_| {}).unwrap();
+    let fixture = OwnedSetupFixture::new().unwrap();
+    let base = format!("{}/mirror", server.origin());
+    let mirror = crate::mirror::Mirror::loopback_for_tests(&format!("{base}/")).unwrap();
+    let transport = RustupTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
+    let lock = single(transport.resolve(declarations()).await.unwrap());
+    let request = "[toolchain]\nchannel = \"1.99\"\n";
+    let toolchain = crate::rust_discovery::Toolchain::parse("rust-toolchain.toml", request);
+    let rust = crate::rust_resolution::resolve_official(&transport, &toolchain.unwrap()).await;
+    for tool in [&lock.tools()["rustup"], &rust.unwrap()] {
+        let Installation::Managed { artifacts } = &tool.installation else {
+            panic!("managed {}", tool.adapter);
+        };
+        let mut urls = artifacts.values().flat_map(|parts| parts.values());
+        assert!(urls.all(|artifact| artifact.url.starts_with(&format!("{ORIGIN}/"))));
+    }
+    let plan = RustupPlan::from_lock(&lock, TARGET).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let store = Store::open(repo.path()).unwrap();
+    let desired = [plan.inventory_tool().clone()];
+    let prepared = plan.prepare(&store, &desired, &transport, crate::Preparation::IfNeeded);
+    assert!(prepared.await.unwrap().is_some());
+    let requests = server.requests();
+    assert!(requests.iter().all(|path| path.starts_with("/mirror/")));
+    let installer = "/mirror/rustup/archive/1.29.1/x86_64-unknown-linux-gnu/rustup-init";
+    assert!(requests.iter().any(|path| path == installer));
+    assert!(requests.contains(&"/mirror/dist/channel-rust-1.99.toml".to_owned()));
+
+    let parent = tempfile::tempdir().unwrap();
+    let homes = PrivateHomes::create(parent.path()).unwrap();
+    let command = homes.command(Path::new("rustup"), &transport);
+    let envs: BTreeMap<_, _> = command.get_envs().collect();
+    let update = format!("{base}/rustup");
+    assert_eq!(
+        envs[OsStr::new("RUSTUP_DIST_SERVER")],
+        Some(OsStr::new(&base))
+    );
+    assert_eq!(
+        envs[OsStr::new("RUSTUP_UPDATE_ROOT")],
+        Some(OsStr::new(&update))
+    );
+}
+
 #[tokio::test]
 async fn windows_and_musl_installers_are_locked_but_not_promoted() {
     let repo = tempfile::tempdir().unwrap();
@@ -236,13 +301,18 @@ fn private_homes_confine_rustup_without_touching_home_or_path() {
     let binary = bin.path().join("rustup");
     fs::write(&binary, RUSTUP).unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
-    let mut command = homes.command(&binary);
+    let transport = RustupTransport::official(&fixture.policy().unwrap()).unwrap();
+    let mut command = homes.command(&binary, &transport);
     let envs: BTreeMap<_, _> = command.get_envs().collect();
     assert_eq!(envs[OsStr::new("RUSTUP_TOOLCHAIN")], None);
     assert_eq!(envs[OsStr::new("RUSTUP_DIST_ROOT")], None);
     assert_eq!(
         envs[OsStr::new("RUSTUP_DIST_SERVER")],
         Some(OsStr::new(ORIGIN))
+    );
+    assert_eq!(
+        envs[OsStr::new("RUSTUP_UPDATE_ROOT")],
+        Some(OsStr::new("https://static.rust-lang.org/rustup"))
     );
     assert!(!envs.contains_key(OsStr::new("PATH")));
     let output = command

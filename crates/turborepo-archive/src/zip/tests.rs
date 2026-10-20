@@ -471,6 +471,19 @@ fn unix_host_entries_ignore_dos_bit_0x4000_as_official_bun_archives_set_it() {
 }
 
 #[test]
+fn dos_host_entries_ignore_the_not_content_indexed_bit_as_official_uv_zips_set_it() {
+    let mut bytes = valid(true, false);
+    let at = central(&bytes);
+    // Made by zip 6.3 on a DOS host, with the archive and not-indexed bits.
+    put(&mut bytes, at + 4, 0x003f, 2);
+    put(&mut bytes, at + 38, 0x2020, 4);
+    assert!(unpack(bytes.clone(), Zip, limits()).is_ok());
+    // A reparse point beside it stays unsupported.
+    put(&mut bytes, at + 38, 0x2420, 4);
+    rejected(bytes, Zip, limits(), UnsupportedEntry);
+}
+
+#[test]
 fn extras_are_bounded_validated_and_never_link_metadata() {
     assert!(matches!(
         super::extras(&[0x55, 0x54, 1, 0, 0, 0x55, 0x54, 1, 0, 0], false),
@@ -575,6 +588,7 @@ fn failure_cleans_owned_staging_without_surrounding_writes() {
     let mut tree = Tree {
         staging,
         root: "pkg".into(),
+        rootless: false,
         nodes: BTreeMap::new(),
         limits: limits(),
         bytes: 0,

@@ -8,6 +8,58 @@ const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 const FORCE: &[&str] = &["--tools-only", "--no-frozen", "--force"];
 const CHECK: &[&str] = &["--tools-only", "--check", "--offline"];
 
+#[test]
+fn npm_telemetry_counts_managed_owners_and_artifact_bytes() {
+    use turborepo_telemetry::events::setup::{SetupDependencies, SetupLock, SetupMode};
+
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        let f = &n.f;
+        let u = n.upstream();
+        let artifacts = (f.node.len() + if bundled { 0 } else { n.npm.len() }) as u64;
+        let owners = if bundled { 1 } else { 2 };
+        for (flags, downloaded_bytes, tools_installed, tools_reused) in [
+            (FROZEN, artifacts, owners, 0),
+            (FROZEN, 0, 0, owners),
+            (FORCE, artifacts, owners, 0),
+        ] {
+            let mut report = telemetry::Report::default();
+            let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
+                let transports = f.transports(u.origin(), None);
+                run_reporting(
+                    args,
+                    setup_args,
+                    Some(transports),
+                    f.git.clone(),
+                    &mut report,
+                    || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
+                )
+            })
+            .unwrap();
+            assert_eq!(result.unwrap(), 0);
+            assert_eq!(
+                report,
+                telemetry::Report {
+                    gated: true,
+                    request: Some((
+                        SetupMode::Provision,
+                        if flags == FORCE {
+                            SetupLock::Write
+                        } else {
+                            SetupLock::Frozen
+                        },
+                        SetupDependencies::Skip
+                    )),
+                    downloaded_bytes,
+                    tools_installed,
+                    tools_reused,
+                }
+            );
+            n.untouched();
+        }
+    }
+}
+
 struct NpmFixture {
     f: Fixture,
     npm: Vec<u8>,
@@ -127,8 +179,8 @@ impl NpmFixture {
         crate::cli::dispatch_setup(&self.f.args(flags), |args, setup_args| {
             let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
             validate_request(&request)?;
-            let discovery = root::Discovery::capture(args)?;
-            let sources = turborepo_setup::lock::Snapshot::capture(self.f.owned.root())?;
+            let discovery = root::Discovery::capture(args, self.f.git.clone())?;
+            let sources = self.f.sources()?;
             let transports = provision::Transports {
                 trust_base: Some(self.f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
@@ -160,6 +212,7 @@ impl NpmFixture {
                 &discovery,
                 sources,
                 &request,
+                &dependencies::Dependencies::tools_only(),
                 Some(transports),
                 || {
                     Ok(self
@@ -211,7 +264,7 @@ fn npm_proposed_refresh_reuses_independent_npm_when_resolutions_are_unchanged() 
     assert!(
         report.ends_with(
             "Tracked changes: none. Resolution read upstream metadata and verified archives; \
-             nothing was installed, and no probes or tasks run."
+             nothing was installed, and no probes run."
         ),
         "{report}"
     );
@@ -250,7 +303,7 @@ fn npm_proposed_refresh_reuses_bundled_npm_when_resolutions_are_unchanged() {
     assert!(
         report.ends_with(
             "Tracked changes: none. Resolution read upstream metadata and verified archives; \
-             nothing was installed, and no probes or tasks run."
+             nothing was installed, and no probes run."
         ),
         "{report}"
     );
@@ -568,11 +621,7 @@ fn npm_failed_integrity_or_late_drift_never_publishes_a_partial_generation() {
             if p.ends_with(".tgz") {
                 match case {
                     2 => fs::write(root.join("package.json"), "{}").unwrap(),
-                    3 => fs::write(
-                        root.join("apps/web/.npmrc"),
-                        "registry=https://private.invalid",
-                    )
-                    .unwrap(),
+                    3 => fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                     _ => {}
                 }
             }
@@ -680,7 +729,7 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
     for bundled in [false, true] {
         let n = NpmFixture::new(bundled);
         n.f.run(&n.upstream(), FROZEN).unwrap();
-        let sources = turborepo_setup::lock::Snapshot::capture(n.f.owned.root()).unwrap();
+        let sources = n.f.sources().unwrap();
         let writer = sources.guard().unwrap();
         let store = turborepo_tool_install::Store::open(n.f.owned.root()).unwrap();
         std::thread::scope(|scope| {
@@ -719,4 +768,278 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
         );
         n.untouched();
     }
+}
+
+/// Bundled npm whose CLI records its arguments and first PATH entry, then
+/// runs `body` in the repository.
+fn installing(body: &str) -> NpmFixture {
+    let mut n = NpmFixture::new(true);
+    let prefix = n.f.node_path.rsplit('/').next().unwrap();
+    let cli =
+        format!("#!/bin/sh\necho \"$*\" >> npm-args\necho \"${{PATH%%:*}}\" > npm-path\n{body}\n");
+    n.f.node = first_lock::bundled_with(prefix.trim_end_matches(".tar.gz"), &cli);
+    let artifacts = &mut n.f.lock["tools"]["node"]["installation"]["artifacts"];
+    let parts = artifacts
+        .as_object_mut()
+        .unwrap()
+        .values_mut()
+        .next()
+        .unwrap();
+    parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&n.f.node)));
+    let lock = Lock::parse(n.f.lock.to_string().as_bytes()).unwrap();
+    fs::write(
+        n.f.owned.root().join("turbo.lock"),
+        lock.canonical_bytes().unwrap(),
+    )
+    .unwrap();
+    n
+}
+
+impl NpmFixture {
+    fn args(&self) -> Vec<String> {
+        let args = fs::read_to_string(self.f.owned.root().join("npm-args"));
+        args.unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+    fn no_tasks(&self) {
+        for path in ["task-ran", "hook-ran", "probe-ran"] {
+            assert!(!self.f.owned.root().join(path).exists(), "{path}");
+        }
+        assert_eq!(
+            fs::read(self.f.owned.root().join("package-lock.json")).unwrap(),
+            b"dependency lock sentinel"
+        );
+    }
+}
+
+#[test]
+fn locked_npm_dependencies_install_with_managed_npm_and_repeat_safely() {
+    let n = installing("mkdir -p node_modules && touch node_modules/.installed");
+    let root = n.f.owned.root();
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(n.args(), ["ci"]);
+    // The managed bin directory comes first, and it is the one exporting npm.
+    let path = fs::read_to_string(root.join("npm-path")).unwrap();
+    assert!(
+        std::path::Path::new(path.trim()).join("npm").exists(),
+        "{path}"
+    );
+    assert!(path.contains(".turbo"), "{path}");
+    assert!(root.join("node_modules/.installed").exists());
+    // A repeat reruns npm ci, so removed dependencies are repaired.
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert!(root.join("node_modules/.installed").exists());
+    assert_eq!(n.args(), ["ci", "ci"]);
+    // Checks never run the installer.
+    assert_eq!(n.f.run(&u, &["--check"]).unwrap(), 0);
+    assert_eq!(n.args().len(), 2);
+    n.no_tasks();
+}
+
+#[test]
+fn offline_npm_dependencies_install_from_the_npm_cache_without_traffic() {
+    // npm fails offline while `cold` exists, like a cache miss.
+    let n = installing("[ -f cold ] && exit 4\nmkdir -p node_modules");
+    let (root, lock) = (n.f.owned.root(), n.lock());
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    let hits = u.hits();
+    // An offline repeat reuses the trusted tools and runs npm offline.
+    fs::remove_dir_all(root.join("node_modules")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen", "--offline"]).unwrap(), 0);
+    assert!(root.join("node_modules").exists());
+    // A cache miss passes npm's status through; nothing is reported ready.
+    fs::write(root.join("cold"), "").unwrap();
+    assert_eq!(n.f.run(&u, &["--offline"]).unwrap(), 4);
+    assert_eq!(n.f.run(&u, &["--force", "--offline"]).unwrap(), 4);
+    assert_eq!(u.hits(), hits);
+    let offline = "ci --offline --no-update-notifier";
+    assert_eq!(n.args(), ["ci", offline, offline, offline]);
+    let plan = n.f.dependencies(&["--plan", "--offline"]).plan(root, &lock);
+    assert_eq!(
+        plan.unwrap()[0],
+        "javascript dependencies: npm ci --offline --no-update-notifier from package-lock.json \
+         with managed tools (package-lock.json stays unchanged)"
+    );
+    n.no_tasks();
+}
+
+#[test]
+fn npm_plans_and_checks_report_the_install_without_running_it() {
+    let n = installing("touch hook-ran");
+    let (root, lock) = (n.f.owned.root(), n.lock());
+    assert_eq!(
+        n.f.dependencies(&["--plan"]).plan(root, &lock).unwrap(),
+        [
+            "javascript dependencies: npm ci from package-lock.json with managed tools \
+             (package-lock.json stays unchanged)",
+        ]
+    );
+    let check = n.f.dependencies(&["--check"]).check(root, &lock).unwrap();
+    assert_eq!(
+        check,
+        [
+            "javascript dependencies: not checked; turbo setup reruns npm ci from \
+             package-lock.json, because dependency readiness is not tracked"
+        ]
+    );
+    assert_eq!(
+        n.f.dependencies(&["--plan", "--tools-only"])
+            .plan(root, &lock)
+            .unwrap(),
+        ["Dependencies skipped (--tools-only); dependency readiness was not checked."]
+    );
+    // Plans and checks run end to end without running npm.
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, &["--plan"]).unwrap(), 0);
+    assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(n.f.run(&u, &["--check"]).unwrap(), 0);
+    assert!(n.args().is_empty());
+    n.no_tasks();
+}
+
+#[test]
+fn npm_tools_only_skips_the_native_install() {
+    let n = installing("");
+    let u = n.upstream();
+    assert_eq!(n.f.run(&u, FROZEN).unwrap(), 0);
+    assert!(n.args().is_empty());
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(n.args(), ["ci"]);
+    n.no_tasks();
+}
+
+#[test]
+fn missing_stale_and_rewritten_npm_locks_fail_readably_and_stay_unchanged() {
+    let n = installing("");
+    let root = n.f.owned.root();
+    fs::remove_file(root.join("package-lock.json")).unwrap();
+    let u = n.upstream();
+    let error = n.f.run(&u, &["--frozen"]).unwrap_err().to_string();
+    assert!(
+        error.contains("requires a committed npm-shrinkwrap.json or package-lock.json"),
+        "{error}"
+    );
+    // Checked before any download or storage, and never created.
+    assert_eq!(u.hits(), 0);
+    assert!(!root.join(".turbo").exists() && !root.join("package-lock.json").exists());
+
+    // npm ci's failure status passes through; the next run recovers.
+    let n = installing("[ -f stale ] && exit 3\nmkdir -p node_modules");
+    let u = n.upstream();
+    fs::write(n.f.owned.root().join("stale"), "").unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 3);
+    fs::remove_file(n.f.owned.root().join("stale")).unwrap();
+    assert_eq!(n.f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert!(n.f.owned.root().join("node_modules").exists());
+    n.no_tasks();
+
+    // A lockfile the manager rewrites is restored, and setup fails.
+    let n = installing("echo rewritten > package-lock.json");
+    let error = n.f.run(&n.upstream(), &["--frozen"]).unwrap_err();
+    let error = error.to_string();
+    assert!(
+        error.contains("`npm ci` changed the committed package-lock.json"),
+        "{error}"
+    );
+    n.no_tasks();
+}
+
+const NO_LOCK: &[&str] = &["--no-lock", "--tools-only"];
+fn selection(f: &Fixture) -> Lock {
+    let current = turborepo_tool_install::Store::inspect(f.owned.root())
+        .unwrap()
+        .unwrap();
+    Lock::parse(current.record.unwrap().bytes()).unwrap()
+}
+
+#[test]
+fn npm_no_lock_provisions_bundled_or_registry_npm_that_turbo_run_activates() {
+    for bundled in [false, true] {
+        let n = NpmFixture::new(bundled);
+        let f = &n.f;
+        let root = f.owned.root();
+        fs::remove_file(root.join("turbo.lock")).unwrap();
+        let u = n.upstream();
+        assert_eq!(f.run(&u, NO_LOCK).unwrap(), 0);
+        assert_eq!(u.hits(), if bundled { 3 } else { 7 });
+        assert!(!root.join("turbo.lock").exists());
+        let pinned = selection(f);
+        let npm = &pinned.tools()["npm"];
+        assert_eq!(npm.version, n.version);
+        assert_eq!(
+            matches!(npm.installation, Installation::Bundled { .. }),
+            bundled
+        );
+        let current = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(current.tools.len(), if bundled { 1 } else { 2 });
+        // Healthy repeats keep pins and generation without traffic.
+        let empty = LoopbackServer::new([], |_| {}).unwrap();
+        assert_eq!(f.run(&empty, NO_LOCK).unwrap(), 0);
+        assert_eq!(empty.hits(), 0);
+        assert_eq!(selection(f), pinned);
+        let repeat = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        assert_eq!(repeat.bin, current.bin);
+        // Plain turbo run puts the same clone-local npm first on PATH.
+        let tools = crate::commands::managed::ManagedTools::inspect(
+            root,
+            &root.join("turbo.json"),
+            true,
+            f.owned.home(),
+            crate::commands::managed::context,
+        )
+        .unwrap()
+        .unwrap();
+        let overrides = tools.revalidate().unwrap();
+        let first = std::env::split_paths(std::ffi::OsStr::new(&overrides["PATH"]))
+            .next()
+            .unwrap();
+        for name in ["node", "npm", "npx"] {
+            assert!(first.join(name).is_file(), "{name}");
+        }
+        n.untouched();
+    }
+}
+
+#[test]
+fn npm_no_lock_pin_change_reconciles_owners_without_a_lock() {
+    let mut n = NpmFixture::new(true);
+    let root = n.f.owned.root().to_owned();
+    fs::remove_file(root.join("turbo.lock")).unwrap();
+    n.f.run(&n.upstream(), NO_LOCK).unwrap();
+    let before = selection(&n.f).tools()["node"].clone();
+    n.version = "11.0.0".into();
+    n.npm = NpmFixture::package(&n.version);
+    fs::write(
+        root.join("package.json"),
+        r#"{"packageManager":"npm@11.0.0"}"#,
+    )
+    .unwrap();
+    let u = n.upstream();
+    n.f.run(&u, NO_LOCK).unwrap();
+    assert_eq!(u.hits(), 5); // Ownership changes restage the exact same Node artifact.
+    assert!(!root.join("turbo.lock").exists());
+    let after = selection(&n.f);
+    assert_eq!(after.tools()["node"].version, before.version);
+    assert!(matches!(
+        after.tools()["npm"].installation,
+        Installation::Managed { .. }
+    ));
+    let current = turborepo_tool_install::Store::inspect(&root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(current.tools.len(), 2);
+    for name in ["npm", "npx"] {
+        let shim = fs::read_to_string(current.bin.join(name)).unwrap();
+        assert!(shim.contains(&format!("$tools/npm/bin/{name}-cli.js")));
+    }
+    n.untouched();
 }

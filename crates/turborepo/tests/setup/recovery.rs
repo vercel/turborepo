@@ -17,7 +17,7 @@ use std::{
 use nix::sys::signal::Signal;
 use sha2::{Digest, Sha256};
 
-use super::{ENABLED, diagnostic_contains, external_system_policy_blocked};
+use super::{ENABLED, diagnostic_contains};
 
 /// Uncompressed size of each Node fixture's filler file. It compresses to a
 /// few KiB but crosses `UNPACK_LIMIT` while being extracted.
@@ -53,7 +53,7 @@ pub(super) struct Run {
 }
 
 /// A committed Node/pnpm repository plus an isolated home and temp dir, with
-/// PATH limited to Git's directory (setup checks `.turbo/` ignore coverage).
+/// PATH limited to Git's directory (setup asks Git for the worktree root).
 pub(super) struct Repo {
     _temp: tempfile::TempDir,
     pub(super) root: PathBuf,
@@ -67,8 +67,7 @@ pub(super) struct Repo {
 }
 
 impl Repo {
-    /// None when the host's npm configuration blocks setup before any write.
-    pub(super) fn new() -> Option<Self> {
+    pub(super) fn new() -> Self {
         let temp = tempfile::tempdir().unwrap();
         let base = fs::canonicalize(temp.path()).unwrap();
         let [root, home, tmp] = ["repo", "home", "tmp"].map(|name| base.join(name));
@@ -119,9 +118,6 @@ impl Repo {
         repo.set_node("first");
         let check = repo.run(None, CHECK);
         let code = check.status.code().unwrap();
-        if external_system_policy_blocked(code, &check.text) {
-            return None;
-        }
         assert_eq!(code, 1, "{}", check.text);
         assert!(
             diagnostic_contains(
@@ -131,7 +127,7 @@ impl Repo {
             "{}",
             check.text
         );
-        Some(repo)
+        repo
     }
 
     fn git(&self, words: &[&str]) -> String {
@@ -379,7 +375,7 @@ fn partial_scratch(tmp: &Path) -> bool {
 
 #[test]
 fn killed_download_releases_locks_and_offline_lists_every_missing_artifact() {
-    let Some(repo) = Repo::new() else { return };
+    let repo = Repo::new();
     let (mut child, held) = repo.stalled_writer();
     child.kill().unwrap();
     assert_eq!(child.wait().unwrap().signal(), Some(Signal::SIGKILL as i32));
@@ -412,7 +408,7 @@ fn killed_download_releases_locks_and_offline_lists_every_missing_artifact() {
 
 #[test]
 fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
-    let Some(mut repo) = Repo::new() else { return };
+    let mut repo = Repo::new();
     let [node, _] = repo.seed();
     repo.killed_unpack();
     assert_eq!(repo.inventory(), None);
@@ -461,5 +457,79 @@ fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
     repo.expect(OFFLINE, 0, &[&format!("node 24.0.0: {installed}")]);
     assert_ne!(repo.inventory().unwrap(), first);
     repo.expect(CHECK, 0, &["node 24.0.0: ready", "pnpm 10.0.0: ready"]);
+    repo.assert_committed();
+}
+
+#[test]
+fn killed_additional_tool_download_publishes_nothing_and_recovers_from_the_cache() {
+    const OFFLINE_FORCE: &[&str] = &["setup", "--tools-only", "--offline", "--force"];
+    let repo = Repo::new();
+    // Node and pnpm come from the cache, so the tool is the first download.
+    repo.seed();
+    let tool = archive(
+        "fixture-1.2.3",
+        &[
+            ("bin/fixture", b"#!/bin/sh\necho fixture\n"),
+            ("share/data.txt", b"resource"),
+        ],
+    );
+    let artifact = serde_json::json!({
+        "url": "https://downloads.example.test/fixture-1.2.3.tar.gz", "sha256": sha256(&tool),
+        "format": "tar-gz", "rootPrefix": "fixture-1.2.3", "executables": {"fixture": "bin/fixture"}});
+    let config = serde_json::json!({"futureFlags": {"experimentalSetup": true}, "setup": {
+        "additionalTools": {"fixture": {"version": "1.2.3",
+            "artifacts": {repo.platform: artifact.clone()}}}}});
+    fs::write(repo.root.join("turbo.json"), config.to_string()).unwrap();
+    let path = repo.root.join("turbo.lock");
+    let mut lock: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    lock["tools"]["fixture"] = serde_json::json!({"adapter": "artifact", "version": "1.2.3",
+        "declarations": [{"file": "turbo.json", "field": "/setup/additionalTools/fixture",
+            "request": "1.2.3"}],
+        "installation": {"kind": "managed",
+            "artifacts": {repo.platform: {"artifact": artifact}}}});
+    fs::write(&path, lock.to_string()).unwrap();
+    repo.git(&["add", "-A"]);
+    repo.git(&["commit", "-q", "-m", "fixture"]);
+
+    let (mut child, held) = repo.stalled_writer();
+    child.kill().unwrap();
+    assert_eq!(child.wait().unwrap().signal(), Some(Signal::SIGKILL as i32));
+    drop(held);
+    repo.assert_committed();
+    assert!(
+        turborepo_tool_install::Store::inspect(&repo.root)
+            .unwrap()
+            .is_none()
+    );
+    let entry = repo.cache().join(repo.platform).join(sha256(&tool));
+    assert!(!entry.exists(), "no unverified bytes may be cached");
+    repo.expect(
+        CHECK,
+        1,
+        &["managed installation is missing; run turbo setup"],
+    );
+    // The dead process's locks are gone, and offline names only the tool.
+    let text = repo.expect(OFFLINE_FORCE, 1, &["fixture 1.2.3 [artifact]"]);
+    assert!(
+        !diagnostic_contains(&text, "node 24.0.0 [distribution]"),
+        "{text}"
+    );
+    assert!(
+        turborepo_tool_install::Store::inspect(&repo.root)
+            .unwrap()
+            .is_none()
+    );
+    // Verified bytes another clone cached complete the cohort without traffic.
+    fs::write(&entry, &tool).unwrap();
+    let installed = "installed from the shared download cache";
+    repo.expect(
+        OFFLINE_FORCE,
+        0,
+        &[
+            &format!("fixture 1.2.3: {installed}"),
+            &format!("node 24.0.0: {installed}"),
+        ],
+    );
+    repo.expect(CHECK, 0, &["fixture 1.2.3: ready", "node 24.0.0: ready"]);
     repo.assert_committed();
 }

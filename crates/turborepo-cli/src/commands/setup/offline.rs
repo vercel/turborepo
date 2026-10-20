@@ -1,9 +1,10 @@
-//! Trusted read-only offline repeats, with verified-cache repair for Node and
-//! registry adapters. Repository inventory alone never authorizes reuse.
-//! Cache misses are diagnosed before writers; no resolver or executable probe.
+//! Trusted read-only offline repeats, with verified-cache repair for Node,
+//! registry adapters, and additional tools. Repository inventory alone never
+//! authorizes reuse. Cache misses are diagnosed before writers; no resolver or
+//! executable probe.
 use turborepo_setup::{
     lock::{Installation, Platform, Snapshot},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
 };
 
 use super::{Error as SetupError, authorization::Authorization, check, provision, root::Discovery};
@@ -34,7 +35,7 @@ fn inspect(
     discovery: &Discovery,
     sources: &Snapshot,
     transports: Option<&provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, SetupError>,
     force: bool,
 ) -> Result<Vec<String>, SetupError> {
     let context = check::context()?;
@@ -101,7 +102,7 @@ fn inspect(
         .transpose()?
         .or_else(dirs_next::data_local_dir)
         .ok_or_else(|| std::io::Error::other("cannot locate setup user state directory"))?;
-    let authorization = Authorization::inspect(root, &base, context)
+    let authorization = Authorization::inspect(root, &base, context, sources.ecosystems())
         .map_err(|error| unavailable(error, &artifacts))?;
     // Keep the original discovery/source/lock expectations even though the
     // authorization consumer captures its own snapshot. Recheck them BEFORE the
@@ -128,10 +129,15 @@ fn inspect(
     Ok(lines)
 }
 
-fn report(lines: Vec<String>) -> i32 {
+/// Trusted reuse touches no tools; the caller reports dependencies, which
+/// may still install offline from the native caches.
+fn report(lines: Vec<String>) -> provision::Provisioned {
     println!("{}", lines.join("\n"));
-    println!("No resolution, downloads, writes, probes, or tasks run.");
-    0
+    println!("Tools: no resolution, downloads, writes, or probes.");
+    provision::Provisioned {
+        reused: lines.len(),
+        ..Default::default()
+    }
 }
 
 pub(super) fn run(
@@ -139,8 +145,8 @@ pub(super) fn run(
     sources: Snapshot,
     request: &super::SetupRequest,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, SetupError>,
-) -> Result<i32, SetupError> {
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, SetupError>,
+) -> Result<provision::Provisioned, SetupError> {
     let checked = inspect(
         discovery,
         &sources,
@@ -164,16 +170,16 @@ pub(super) fn run(
         .ok_or(SetupError::Unsupported("offline setup requires turbo.lock"))?;
     if lock
         .tools()
-        .keys()
-        .any(|id| !matches!(id.as_str(), "node" | "npm" | "pnpm"))
+        .iter()
+        .any(|(id, tool)| !provision::offline_cacheable(id, tool))
     {
         // Other adapters still support only the original trusted read-only repeat.
         return checked.map(report);
     }
     let plans = provision::plans(&sources, lock)?;
-    let transports = transports
-        .map(Ok)
-        .unwrap_or_else(|| provision::Transports::official(&preflight()?))?;
+    let transports = transports.map(Ok).unwrap_or_else(|| {
+        provision::Transports::official(&preflight()?, discovery.policy().mirrors())
+    })?;
     let available: Vec<_> = [
         plans
             .node
@@ -190,6 +196,12 @@ pub(super) fn run(
     ]
     .into_iter()
     .flatten()
+    .chain(plans.artifacts.iter().map(|plan| {
+        (
+            plan.inventory_tool().id.as_str(),
+            plan.cache_available(transports.node.cache()),
+        )
+    }))
     .collect();
     if checked.is_err() && available.iter().any(|(_, cached)| !cached) {
         // Retain the original storage/provenance cause when no verified repair

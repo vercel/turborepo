@@ -4,7 +4,11 @@
 //! retrieval is done through the query server (GraphQL execution), keeping
 //! the ls command in sync with `turbo query` semantics.
 
-use std::{fmt::Write, sync::Arc};
+use std::{
+    fmt::Write as _,
+    io::{self, Write},
+    sync::Arc,
+};
 
 use miette::Diagnostic;
 use serde::Serialize;
@@ -15,7 +19,7 @@ use turborepo_repository::package_graph::PackageName;
 use turborepo_run::builder::RunBuilder;
 use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{BOLD, BOLD_GREEN, ColorConfig, GREY, color, cprint, cprintln};
+use turborepo_ui::{BOLD, BOLD_GREEN, ColorConfig, GREY, color, cwrite, cwriteln};
 
 use crate::{cli, cli::OutputFormat, commands::CommandBase};
 
@@ -103,7 +107,7 @@ pub async fn run(
     let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
         || !base.opts.scope_opts.filter_patterns.is_empty();
     let run_builder =
-        RunBuilder::new(base.run_builder_input()?, None)?.skip_repo_index_and_scm_state();
+        RunBuilder::new(base.discovery_builder_input()?, None)?.skip_repo_index_and_scm_state();
     // Package details and task-based scope selection need the complete graph.
     // Listing has no requested tasks, so include all tasks before filtering.
     let needs_task_graph = !packages.is_empty() || run_builder.needs_task_graph_for_scope();
@@ -130,7 +134,12 @@ pub async fn run(
 
     if packages.is_empty() {
         let repo = query_packages(run, query_server, &filtered_pkgs, &package_manager_name).await?;
-        print_repo_details(&repo, color_config, output)?;
+        ignore_broken_pipe(print_repo_details(
+            &mut io::stdout().lock(),
+            &repo,
+            color_config,
+            output,
+        ))?;
     } else {
         match output {
             Some(OutputFormat::Json) => {
@@ -139,7 +148,8 @@ pub async fn run(
                 let list = PackageDetailsList {
                     packages: details_list,
                 };
-                println!("{}", serde_json::to_string_pretty(&list)?);
+                let json = serde_json::to_string_pretty(&list)?;
+                ignore_broken_pipe(writeln!(io::stdout().lock(), "{json}").map_err(Into::into))?;
             }
             Some(OutputFormat::Pretty) | None => {
                 // Preserve the existing partial-output behavior when an argument is missing:
@@ -157,9 +167,11 @@ pub async fn run(
                     let details =
                         query_package_details(run.clone(), query_server, &packages[..valid_count])
                             .await?;
-                    for detail in &details {
-                        print_package_detail(detail, color_config);
-                    }
+                    ignore_broken_pipe(print_package_details(
+                        &mut io::stdout().lock(),
+                        &details,
+                        color_config,
+                    ))?;
                 }
                 if let Some(package) = packages.get(valid_count) {
                     return Err(Error::PackageNotFound {
@@ -345,14 +357,24 @@ fn parse_package_detail(
     })
 }
 
+/// Treats a closed stdout (e.g. `turbo ls | head -1`) as a quiet success
+/// instead of an error, like other Unix tools do.
+fn ignore_broken_pipe(result: Result<(), cli::Error>) -> Result<(), cli::Error> {
+    match result {
+        Err(cli::Error::QueryOutput(error)) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        other => other,
+    }
+}
+
 fn print_repo_details(
+    out: &mut impl Write,
     repo: &RepositoryDetailsDisplay,
     color_config: ColorConfig,
     output: Option<OutputFormat>,
 ) -> Result<(), cli::Error> {
     match output {
         Some(OutputFormat::Json) => {
-            println!("{}", serde_json::to_string_pretty(repo)?);
+            writeln!(out, "{}", serde_json::to_string_pretty(repo)?)?;
         }
         Some(OutputFormat::Pretty) | None => {
             let package_copy = match repo.packages.count {
@@ -360,24 +382,40 @@ fn print_repo_details(
                 1 => "package",
                 _ => "packages",
             };
-            cprint!(
+            cwrite!(
+                out,
                 color_config,
                 BOLD,
                 "{} {} ",
                 repo.packages.count,
                 package_copy
-            );
-            cprintln!(color_config, GREY, "({})\n", repo.package_manager);
+            )?;
+            cwriteln!(out, color_config, GREY, "({})\n", repo.package_manager)?;
 
             for pkg in &repo.packages.items {
-                println!("  {} {}", pkg.name, GREY.apply_to(&pkg.path));
+                writeln!(out, "  {} {}", pkg.name, GREY.apply_to(&pkg.path))?;
             }
         }
     }
     Ok(())
 }
 
-fn print_package_detail(detail: &PackageDetailsDisplay, color_config: ColorConfig) {
+fn print_package_details(
+    out: &mut impl Write,
+    details: &[PackageDetailsDisplay],
+    color_config: ColorConfig,
+) -> Result<(), cli::Error> {
+    for detail in details {
+        print_package_detail(out, detail, color_config)?;
+    }
+    Ok(())
+}
+
+fn print_package_detail(
+    out: &mut impl Write,
+    detail: &PackageDetailsDisplay,
+    color_config: ColorConfig,
+) -> io::Result<()> {
     let name = color!(color_config, BOLD_GREEN, "{}", detail.name);
     let depends_on = color!(color_config, BOLD, "depends on");
     let dependencies = if detail.dependencies.is_empty() {
@@ -386,27 +424,29 @@ fn print_package_detail(detail: &PackageDetailsDisplay, color_config: ColorConfi
         detail.dependencies.join(", ")
     };
 
-    cprintln!(color_config, GREY, "{} ", detail.path);
-    println!(
+    cwriteln!(out, color_config, GREY, "{} ", detail.path)?;
+    writeln!(
+        out,
         "{} {}: {}",
         name,
         depends_on,
         color!(color_config, GREY, "{}", dependencies)
-    );
-    println!();
+    )?;
+    writeln!(out)?;
 
-    cprint!(color_config, BOLD, "tasks:");
+    cwrite!(out, color_config, BOLD, "tasks:")?;
     if detail.tasks.items.is_empty() {
-        println!(" <no tasks>");
+        writeln!(out, " <no tasks>")?;
     } else {
-        println!();
+        writeln!(out)?;
     }
     for task in &detail.tasks.items {
-        println!(
+        writeln!(
+            out,
             "  {}: {}",
             task.name,
             color!(color_config, GREY, "{}", task.command)
-        );
+        )?;
     }
-    println!();
+    writeln!(out)
 }

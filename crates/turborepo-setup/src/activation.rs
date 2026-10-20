@@ -1,5 +1,7 @@
 //! Read-only Node/npm/pnpm/Yarn/Bun/Rust/Go environment planning, plus
-//! uv/Python when enabled, not execution authorization.
+//! uv/Python when enabled, and repository-declared additional tools, not
+//! execution authorization. verify-system selections are listed as external
+//! tools for the consumer to verify on PATH.
 //! Repo-writable inventory proves readiness only. Consumers must separately
 //! authorize setup-recorded tools with trusted-root user state, gate managed
 //! mode, and revalidate before use. No CLI support is advertised by this
@@ -12,14 +14,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use turborepo_tool_install::{Current, Store, Tool, Verification};
+use turborepo_tool_install::{Record, Store, Tool, Verification};
 
 use crate::{
+    artifact_provision::{self, ArtifactPlan},
     bun_provision::BunPlan,
     execution_identity::{ExecutionContext, ExecutionSnapshot},
     go_discovery::GoVersion,
     go_provision::GoPlan,
-    lock::{Ecosystems, Installation, Lock, Platform, Snapshot, StorageError},
+    lock::{Ecosystems, Installation, Lock, Platform, Snapshot, StorageError, additional},
     node_provision::NodePlan,
     npm_provision::NpmPlan,
     package_manager::{Declaration, Manager},
@@ -42,15 +45,26 @@ pub enum Error {
     )]
     DeclarationDrift,
     #[error(
-        "activation planning supports managed Node/npm/pnpm/Yarn/Bun/Rust/Go, plus uv and Python \
-         with experimentalPythonWorkspaces; use a supported setup adapter"
+        "activation planning supports managed Node, npm, pnpm, Yarn, Bun, Rust, Go and additional \
+         tools, plus uv and Python with experimentalPythonWorkspaces, and verify-system Node.js \
+         and pnpm; use a supported setup adapter"
     )]
     UnsupportedAdapter,
+    /// A locked additional tool without an artifact for this platform, or
+    /// whose export would shadow another selected tool.
+    #[error(transparent)]
+    AdditionalTool(artifact_provision::Error),
     #[error(
-        "managed activation is unqualified for this platform; use a supported macOS/GNU Linux \
-         target"
+        "managed activation is unqualified for this platform; use a supported macOS, GNU Linux or \
+         Windows x64 target"
     )]
     UnsupportedPlatform,
+    /// musl hosts qualify only when every locked tool is verify-system.
+    #[error(
+        "managed tools are not supported on musl Linux hosts such as Alpine; install the \
+         repository's tools in the image and use verify-system for them"
+    )]
+    MuslHost,
     #[error(
         "invalid locked adapter metadata; run turbo setup locally and commit the repaired lock"
     )]
@@ -67,8 +81,20 @@ pub enum Error {
     Sources(#[from] StorageError),
     #[error("cannot select the locked execution snapshot; run turbo setup: {0}")]
     Selection(#[from] crate::execution_identity::Error),
+    #[error("invalid clone-local setup selection; run turbo setup --no-lock")]
+    InvalidSelection,
     #[error("cannot compose managed PATH with the caller PATH: {0}")]
     Path(#[from] std::env::JoinPathsError),
+}
+
+/// A locked `verify-system` tool. It is never installed, exported or trusted
+/// from repository state: consumers verify the exact version on the caller's
+/// PATH outside the repository and use it from there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct External {
+    pub id: String,
+    pub version: String,
+    pub executables: Vec<String>,
 }
 
 /// An owned selection bound to a checked repo-local generation. This is NOT a
@@ -76,10 +102,12 @@ pub enum Error {
 /// belong to the consumer. Planning never reads or mutates process environment.
 pub struct ActivationPlan {
     snapshot: ExecutionSnapshot,
-    bin: PathBuf,
+    // None when every selection is verify-system: nothing joins PATH.
+    bin: Option<PathBuf>,
     tools: Vec<Tool>,
-    // Managed Rust, Go and uv/Python values derive only from the generation,
-    // the lock and private clone paths, never from host or user settings.
+    external: Vec<External>,
+    // Rust, Go and uv/Python settings derived from this generation alone; see
+    // [`runtime_env`].
     runtime_env: BTreeMap<String, OsString>,
 }
 
@@ -130,6 +158,57 @@ impl ActivationPlan {
         Self::verify_captured(&sources, context)
     }
 
+    /// A `turbo setup --no-lock` clone: plan the sealed clone-local selection
+    /// its generation records, in place of turbo.lock, with the same
+    /// declaration, adapter and installation checks. A turbo.lock in the root
+    /// is the committed resolution and is never overridden. Node/npm/pnpm
+    /// ecosystems only, like `--no-lock` setup. The snapshot identity is
+    /// clone-local (see `ExecutionSnapshot::select_clone_local`).
+    pub fn inspect_clone_local(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
+        Self::qualify(&context)?;
+        // A clone-local selection is always an installed generation.
+        if context.musl() {
+            return Err(Error::MuslHost);
+        }
+        let sources = Snapshot::capture(repo)?;
+        Self::clone_local(&sources, context, Verification::Stamped)
+    }
+
+    /// `inspect_clone_local` over the caller's original sources, re-hashing
+    /// all installed bytes.
+    pub fn verify_clone_local_captured(
+        sources: &Snapshot,
+        context: ExecutionContext,
+    ) -> Result<Self, Error> {
+        Self::clone_local(sources, context, Verification::Full)
+    }
+
+    fn clone_local(
+        sources: &Snapshot,
+        context: ExecutionContext,
+        verification: Verification,
+    ) -> Result<Self, Error> {
+        Self::qualify(&context)?;
+        sources.ensure_current()?;
+        if sources.previous_lock().is_some() {
+            return Err(StorageError::Conflict.into());
+        }
+        let current = Store::inspect(sources.repository_root())
+            .map_err(Error::DamagedInventory)?
+            .ok_or(Error::MissingInventory)?;
+        let record = current.record.ok_or(Error::StaleInventory)?;
+        let native = crate::native_baseline::NativeRecord::decode(record.bytes())
+            .map_err(|_| Error::InvalidSelection)?;
+        Self::from_selection(
+            sources.repository_root(),
+            sources,
+            native.selection(),
+            Some(&record),
+            context,
+            verification,
+        )
+    }
+
     fn captured(
         sources: &Snapshot,
         context: ExecutionContext,
@@ -141,16 +220,19 @@ impl ActivationPlan {
     }
 
     fn qualify(context: &ExecutionContext) -> Result<(), Error> {
-        let platform = context.artifact_platform();
-        if !cfg!(unix)
-            || !matches!(
-                platform,
-                Platform::MacosX64
-                    | Platform::MacosArm64
-                    | Platform::LinuxX64Gnu
-                    | Platform::LinuxArm64Gnu
-            )
-        {
+        let qualified = match context.artifact_platform() {
+            Platform::MacosX64
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu
+            // No managed artifacts: `from_selection` then requires a lock
+            // whose every tool is verify-system.
+            | Platform::LinuxX64Musl
+            | Platform::LinuxArm64Musl => cfg!(unix),
+            Platform::WindowsX64 => cfg!(windows),
+            _ => false,
+        };
+        if !qualified {
             return Err(Error::UnsupportedPlatform);
         }
         Ok(())
@@ -163,16 +245,51 @@ impl ActivationPlan {
         verification: Verification,
     ) -> Result<Self, Error> {
         let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
+        Self::from_selection(repo, sources, lock, None, context, verification)
+    }
+
+    /// `lock` is turbo.lock, or with `recorded`, the clone-local selection
+    /// decoded from that exact generation record.
+    fn from_selection(
+        repo: &Path,
+        sources: &Snapshot,
+        lock: &Lock,
+        recorded: Option<&Record>,
+        context: ExecutionContext,
+        verification: Verification,
+    ) -> Result<Self, Error> {
+        // Before adapter checks, so musl users get the actionable reason.
+        if context.musl() && (recorded.is_some() || !lock.verify_system_only()) {
+            return Err(Error::MuslHost);
+        }
         let python = sources.ecosystems().python;
+        let external: Vec<_> = lock
+            .tools()
+            .iter()
+            .filter_map(|(id, tool)| match &tool.installation {
+                Installation::VerifySystem { executables } => Some(External {
+                    id: id.clone(),
+                    version: tool.version.clone(),
+                    executables: executables.clone(),
+                }),
+                _ => None,
+            })
+            .collect();
+        let is_external = |id: &str| external.iter().any(|tool| tool.id == id);
+        // Managed npm, pnpm and Yarn launch the managed Node, never a system one.
+        let installation = |id: &str, installation: &Installation| match installation {
+            Installation::Managed { .. } => !(is_external("node") && matches!(id, "pnpm" | "yarn")),
+            Installation::Bundled { .. } => id == "npm" && !is_external("node"),
+            Installation::VerifySystem { .. } => matches!(id, "node" | "pnpm"),
+        };
         if lock.tools().is_empty()
             || lock.tools().iter().any(|(id, tool)| {
-                id != &tool.adapter
-                    || !((SUPPORTED.contains(&id.as_str())
-                        || matches!(id.as_str(), "yarn" | "bun"))
-                        || (python && matches!(id.as_str(), "uv" | "python")))
-                    || !(matches!(tool.installation, Installation::Managed { .. })
-                        || (id == "npm"
-                            && matches!(tool.installation, Installation::Bundled { .. })))
+                let builtin = id == &tool.adapter
+                    && (SUPPORTED.contains(&id.as_str())
+                        || matches!(id.as_str(), "yarn" | "bun")
+                        || (python && matches!(id.as_str(), "uv" | "python")));
+                !(builtin || tool.adapter == additional::ADAPTER)
+                    || !installation(id, &tool.installation)
             })
         {
             return Err(Error::UnsupportedAdapter);
@@ -183,11 +300,14 @@ impl ActivationPlan {
             return Err(Error::DeclarationDrift);
         }
         sources
-            .check_native_coverage(None)
+            .check_native_coverage(Some(lock))
             .map_err(|_| Error::InvalidLock)?;
+        // Additional-tool entries are projections of the root configuration,
+        // so any difference, including a removed declaration, is drift.
         if !lock
             .matches_native(sources.declarations())
             .map_err(|_| Error::InvalidLock)?
+            || !sources.matches_additional(lock)
         {
             return Err(Error::DeclarationDrift);
         }
@@ -196,7 +316,17 @@ impl ActivationPlan {
             |tool: &Tool| semver::Version::parse(&tool.version).map_err(|_| Error::InvalidLock);
         let mut tools = Vec::new();
         // Python- and Go-only repositories lock no Node; pnpm still requires it.
-        let node = if lock.tools().contains_key("node") {
+        let locked = |id: &str| {
+            semver::Version::parse(&lock.tools()[id].version).map_err(|_| Error::InvalidLock)
+        };
+        if is_external("node")
+            && !sources
+                .node_requirements()?
+                .matches_locked_version(&locked("node")?)
+        {
+            return Err(Error::DeclarationDrift);
+        }
+        let node = if lock.tools().contains_key("node") && !is_external("node") {
             let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             if !sources
                 .node_requirements()?
@@ -214,13 +344,16 @@ impl ActivationPlan {
             .any(|id| lock.tools().contains_key(*id))
         {
             let manager = sources.package_manager()?.ok_or(Error::DeclarationDrift)?;
-            if let Some(tool) = manager_tool(lock, platform, node.as_ref(), &manager)? {
+            if is_external("pnpm") {
+                if manager.manager != Manager::Pnpm || !manager.matches(&locked("pnpm")?) {
+                    return Err(Error::DeclarationDrift);
+                }
+            } else if let Some(tool) = manager_tool(lock, platform, node.as_ref(), &manager)? {
                 tools.push(tool);
             }
         }
         // Inventory records tools in ID order.
-        let uv = lock.tools().contains_key("uv");
-        if uv {
+        if lock.tools().contains_key("uv") {
             let plan = UvPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             let requirement = sources.uv_requirement()?.ok_or(Error::DeclarationDrift)?;
             if !requirement.matches(&version(plan.inventory_tool())?) {
@@ -228,7 +361,7 @@ impl ActivationPlan {
             }
             tools.push(plan.inventory_tool().clone());
         }
-        let python = if lock.tools().contains_key("python") {
+        if lock.tools().contains_key("python") {
             let plan = PythonPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             let requirement = sources
                 .python_requirement()?
@@ -237,26 +370,21 @@ impl ActivationPlan {
                 return Err(Error::DeclarationDrift);
             }
             tools.push(plan.inventory_tool().clone());
-            Some(plan)
-        } else {
-            None
-        };
+        }
         // The Store records a generation's tools in id order.
-        let rust = match lock.tools().get("rust") {
-            None => None,
-            Some(_) if !lock.tools().contains_key("rustup") => return Err(Error::InvalidLock),
-            Some(tool) => {
-                // Same semantic binding as setup: the exact channel and options
-                // must still satisfy the captured root toolchain file.
-                let toolchain = sources.rust_toolchain()?.ok_or(Error::DeclarationDrift)?;
-                if !rust_provision::satisfies(&toolchain, tool) {
-                    return Err(Error::DeclarationDrift);
-                }
-                let rust = RustPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
-                tools.push(rust.inventory_tool().clone());
-                Some(rust)
+        if let Some(tool) = lock.tools().get("rust") {
+            if !lock.tools().contains_key("rustup") {
+                return Err(Error::InvalidLock);
             }
-        };
+            // Same semantic binding as setup: the exact channel and options
+            // must still satisfy the captured root toolchain file.
+            let toolchain = sources.rust_toolchain()?.ok_or(Error::DeclarationDrift)?;
+            if !rust_provision::satisfies(&toolchain, tool) {
+                return Err(Error::DeclarationDrift);
+            }
+            let rust = RustPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
+            tools.push(rust.inventory_tool().clone());
+        }
         if lock.tools().contains_key("rustup") {
             let rustup = RustupPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             tools.push(rustup.inventory_tool().clone());
@@ -278,15 +406,42 @@ impl ActivationPlan {
             }
             tools.push(go.inventory_tool().clone());
         }
+        // Declared executables share the managed bin directory with the
+        // built-in exports; their paths stay relative to the full installed
+        // tree, so executable-relative resources keep resolving.
+        let artifacts = ArtifactPlan::from_lock(lock, platform).map_err(|error| match error {
+            artifact_provision::Error::MissingTarget { .. } => Error::AdditionalTool(error),
+            _ => Error::InvalidLock,
+        })?;
+        let declared = artifacts.iter().map(ArtifactPlan::inventory_tool);
+        artifact_provision::check_exports(&tools, declared.clone())
+            .map_err(Error::AdditionalTool)?;
+        tools.extend(declared.cloned());
         // Inventory records its cohort in ID order.
         tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
-        let snapshot = ExecutionSnapshot::select(lock, context, &selected)?;
+        let snapshot = match recorded {
+            None => ExecutionSnapshot::select(lock, context, &selected)?,
+            Some(_) => ExecutionSnapshot::select_clone_local(lock, context, &selected)?,
+        };
+        // A clone-local plan always stays bound to its recorded inventory.
+        if tools.is_empty() && recorded.is_none() {
+            // Only verify-system tools: no inventory to read, nothing on PATH.
+            sources.ensure_current()?;
+            return Ok(Self {
+                snapshot,
+                bin: None,
+                tools,
+                external,
+                runtime_env: BTreeMap::new(),
+            });
+        }
         let current = Store::inspect_with(repo, verification)
             .map_err(Error::DamagedInventory)?
             .ok_or(Error::MissingInventory)?;
         // Complete set equality prevents unrelated exports sharing our PATH.
-        if current.tools != tools {
+        // A clone-local plan also stays bound to the record it decoded.
+        if current.tools != tools || recorded.is_some_and(|r| current.record.as_ref() != Some(r)) {
             return Err(Error::StaleInventory);
         }
         if let Some(node) = &node {
@@ -296,47 +451,19 @@ impl ActivationPlan {
             node.verify_bundled_npm(&tree)
                 .map_err(|_| Error::StaleInventory)?;
         }
-        let mut runtime_env = uv_env(&current, uv, python.as_ref())?;
-        if let Some(rust) = &rust {
-            // Shims run the toolchain binaries directly. These variables keep
-            // a task's rustup and Cargo on this private, installed toolchain
-            // and per-clone Cargo home, never the user's homes or overrides.
-            let home = current
-                .tool_tree(rust.inventory_tool())
-                .ok_or(Error::StaleInventory)?;
-            let cargo_home = crate::cargo_prefetch::cargo_home_path(repo);
-            // Cargo creates a missing home on first use; never create it here.
-            match std::fs::symlink_metadata(&cargo_home) {
-                Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
-                    return Err(Error::UnsafeCargoHome(cargo_home));
-                }
-                Err(e) if e.kind() != io::ErrorKind::NotFound => {
-                    return Err(StorageError::from(e).into());
-                }
-                _ => {}
-            }
-            runtime_env.insert("RUSTUP_HOME".into(), home.into_os_string());
-            runtime_env.insert("RUSTUP_TOOLCHAIN".into(), rust.toolchain().into());
-            runtime_env.insert("CARGO_HOME".into(), cargo_home.into_os_string());
-        }
-        if let Some(go) = &go {
-            // `GOTOOLCHAIN=local` stops toolchain switches and downloads. The
-            // caller's GOROOT reaches loose-mode tasks and strict-mode Go tasks,
-            // so pin it to this verified tree; otherwise the locked `go` would
-            // build with another release's standard library and tools.
-            for (key, value) in crate::go_provision::RUNTIME_ENV {
-                runtime_env.insert(key.to_owned(), OsString::from(value));
-            }
-            let root = current
-                .tool_tree(go.inventory_tool())
-                .ok_or(Error::StaleInventory)?;
-            runtime_env.insert("GOROOT".to_owned(), root.into_os_string());
-        }
+        // The shell hook derives the same values from its trusted record.
+        let runtime_env = runtime_env(repo, &current.bin, &tools)?;
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
-            bin: current.bin,
+            // PATH consumers such as cmd.exe do not resolve `%~dp0..` under a
+            // verbatim `\\?\` prefix; use the ordinary spelling when exact.
+            #[cfg(windows)]
+            bin: Some(dunce::simplified(&current.bin).to_path_buf()),
+            #[cfg(not(windows))]
+            bin: Some(current.bin),
             tools,
+            external,
             runtime_env,
         })
     }
@@ -346,12 +473,19 @@ impl ActivationPlan {
     }
 
     /// Validated installation bookkeeping only, never trusted-root evidence.
+    /// Empty when every selection is verify-system.
     pub fn tools(&self) -> &[Tool] {
         &self.tools
     }
 
-    pub fn path_prepend(&self) -> &Path {
-        &self.bin
+    /// Locked verify-system tools, which the consumer must verify on PATH.
+    pub fn external(&self) -> &[External] {
+        &self.external
+    }
+
+    /// The managed bin, or None when no managed tool is selected.
+    pub fn path_prepend(&self) -> Option<&Path> {
+        self.bin.as_deref()
     }
 
     /// Absolute values to set for tasks and turbo's own tool probes, after
@@ -363,7 +497,7 @@ impl ActivationPlan {
     /// Pure composition; the caller supplies PATH and decides whether/how to
     /// apply it after separate authorization. Preserve the original suffix.
     pub fn path(&self, inherited: Option<&OsStr>) -> Result<OsString, Error> {
-        let mut paths = vec![self.bin.clone()];
+        let mut paths: Vec<_> = self.bin.iter().cloned().collect();
         if let Some(inherited) = inherited {
             paths.extend(std::env::split_paths(inherited));
         }
@@ -371,28 +505,100 @@ impl ActivationPlan {
     }
 }
 
-/// The uv launchers' settings, for uv processes that do not start through
-/// them, plus the locked interpreter as uv's request. Uses uv's download key
-/// rather than a path: a path request makes `uv pip` install into the managed
-/// interpreter itself instead of the project's virtual environment.
-fn uv_env(
-    current: &Current,
-    uv: bool,
-    python: Option<&PythonPlan>,
+/// Every variable [`runtime_env`] may set, sorted. The shell hook restores only
+/// these from its saved state, so a tampered state cannot unset or overwrite
+/// any other variable.
+pub const HOOK_ENV: [&str; 10] = [
+    "CARGO_HOME",
+    "GOROOT",
+    "GOTOOLCHAIN",
+    "RUSTUP_AUTO_INSTALL",
+    "RUSTUP_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "UV_PYTHON",
+    "UV_PYTHON_DOWNLOADS",
+    "UV_PYTHON_INSTALL_DIR",
+    "UV_PYTHON_PREFERENCE",
+];
+
+/// The variables an installed generation's tools need beside PATH, from its
+/// `bin` and inventory tools alone. Managed run and exec set exactly these,
+/// and the shell hook derives them from its trusted record without reading the
+/// Store, so the prompt and tasks always agree. Never inherited or
+/// host-dependent settings:
+///
+/// - Rust: the generation's private `RUSTUP_HOME`, the exact `RUSTUP_TOOLCHAIN`
+///   and the clone's `CARGO_HOME`, never the user's homes or overrides. Windows
+///   exports are rustup proxies, which must never auto-install into the
+///   generation.
+/// - Go: `GOTOOLCHAIN=local` stops toolchain switches and downloads, and
+///   `GOROOT` pins this verified tree, so the locked `go` never builds with
+///   another release's standard library and tools. Windows `go.exe` is a hard
+///   link that finds its tree only through `GOROOT`.
+/// - uv/Python: the uv launchers' settings, for uv processes that do not start
+///   through them (every Windows uv), plus the locked interpreter as uv's
+///   request. That is uv's download key rather than a path: a path request
+///   makes `uv pip` install into the managed interpreter itself instead of the
+///   project's virtual environment.
+///
+/// Node and Bun are self-contained, and pnpm/Yarn shims launch the selected
+/// managed Node by path, so they need none.
+pub fn runtime_env(
+    root: &Path,
+    bin: &Path,
+    tools: &[Tool],
 ) -> Result<BTreeMap<String, OsString>, Error> {
     let mut env = BTreeMap::new();
-    if !uv && python.is_none() {
+    let tool = |id: &str| tools.iter().find(|tool| tool.id == id);
+    let (rust, go, uv, python) = (tool("rust"), tool("go"), tool("uv"), tool("python"));
+    if rust.is_none() && go.is_none() && uv.is_none() && python.is_none() {
         return Ok(env);
     }
-    let generation = current.bin.parent().ok_or(Error::StaleInventory)?;
-    env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
-    env.insert(
-        "UV_PYTHON_INSTALL_DIR".into(),
-        generation.join("tools").join("python").into_os_string(),
-    );
+    let generation = bin.parent().ok_or(Error::StaleInventory)?;
+    // Like `bin`, the ordinary spelling tools print and compare, never a
+    // verbatim `\\?\` path.
+    let plain = |path: PathBuf| {
+        #[cfg(windows)]
+        let path = dunce::simplified(&path).to_path_buf();
+        path.into_os_string()
+    };
+    let tree = |id: &str| plain(generation.join("tools").join(id));
+    if let Some(rust) = rust {
+        let host = crate::rustup::host(&rust.platform).ok_or(Error::InvalidLock)?;
+        let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
+        // Cargo creates a missing home on first use; never create it here.
+        match std::fs::symlink_metadata(&cargo_home) {
+            Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
+                return Err(Error::UnsafeCargoHome(cargo_home));
+            }
+            Err(e) if e.kind() != io::ErrorKind::NotFound => {
+                return Err(StorageError::from(e).into());
+            }
+            _ => {}
+        }
+        if cfg!(windows) {
+            env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
+        }
+        env.insert("RUSTUP_HOME".into(), tree("rust"));
+        let toolchain = format!("{}-{host}", rust.version);
+        env.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
+        env.insert("CARGO_HOME".into(), plain(cargo_home));
+    }
+    if go.is_some() {
+        for (key, value) in crate::go_provision::RUNTIME_ENV {
+            env.insert(key.to_owned(), OsString::from(value));
+        }
+        env.insert("GOROOT".into(), tree("go"));
+    }
+    if uv.is_some() || python.is_some() {
+        env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
+        env.insert("UV_PYTHON_INSTALL_DIR".into(), tree("python"));
+    }
     if let Some(python) = python {
+        let key = crate::python_resolution::installed_key(&python.version, &python.platform)
+            .ok_or(Error::InvalidLock)?;
         env.insert("UV_PYTHON_PREFERENCE".into(), "only-managed".into());
-        env.insert("UV_PYTHON".into(), python.key().into());
+        env.insert("UV_PYTHON".into(), key.into());
     }
     Ok(env)
 }

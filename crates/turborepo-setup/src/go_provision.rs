@@ -1,7 +1,8 @@
-//! Locked Go adapter: one verified official archive becomes the complete
-//! `go/` tree exposing `go` and `gofmt`. No resolution, module downloads, or
-//! subprocesses. Plans compose with the complete desired inventory;
-//! preparation never publishes.
+//! Locked Go adapter: one verified official archive (a `.tar.gz`, or the
+//! `.zip` on Windows) becomes the complete `go/` tree exposing `go` and
+//! `gofmt` (`go.exe` and `gofmt.exe` on Windows). No resolution, module
+//! downloads, or subprocesses. Plans compose with the complete desired
+//! inventory; preparation never publishes.
 
 use std::{fs, time::Duration};
 
@@ -32,8 +33,8 @@ pub enum Error {
     #[error("no locked Go archive for this target; update turbo.lock on a supported target")]
     MissingTarget,
     #[error(
-        "managed Go promotion is not qualified for Windows or musl; use a supported GNU \
-         Linux/macOS target"
+        "managed Go promotion is not qualified for Windows arm64 or musl; use a supported GNU \
+         Linux, macOS, or Windows x64 target"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this Go plan unchanged")]
@@ -107,7 +108,9 @@ impl GoPlan {
         transport: &GoTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedGo>, Error> {
-        if self.tool.platform.starts_with("windows-") || !cfg!(unix) {
+        // Unix trees promote on Unix and Windows x64 trees only on native
+        // Windows; Windows arm64 stays unqualified, as for Node.
+        if !crate::node_provision::promotable(&self.tool) {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.contains(&self.tool) {
@@ -138,10 +141,18 @@ impl GoPlan {
                 turborepo_download::Limits::new(256 * 1024 * 1024, Duration::from_secs(300))?,
             )
             .await?;
+        // `from_lock` bound the format to the platform's official archive.
+        let format = match self.artifact.format {
+            lock::Format::TarGz => turborepo_archive::Format::TarGz,
+            lock::Format::Zip => turborepo_archive::Format::Zip,
+            _ => return Err(Error::InvalidLock),
+        };
+        // Both formats share the `go/test` exclusion: the Windows zip carries
+        // the same UTF-8 named fixtures, flagged rather than PAX-named.
         let required: Vec<_> = self.tool.executables.values().map(String::as_str).collect();
         let tree = turborepo_archive::extract_excluding(
             &bytes,
-            turborepo_archive::Format::TarGz,
+            format,
             turborepo_archive::Limits::new(1024 * 1024 * 1024, 65_536, 4096, 64)?,
             Layout {
                 root: "go",
@@ -150,6 +161,7 @@ impl GoPlan {
             EXCLUDED,
         )?;
         Ok(PreparedGo {
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             tree,
             tool: self.tool.clone(),
         })
@@ -159,9 +171,15 @@ impl GoPlan {
 pub struct PreparedGo {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
 }
 
 impl PreparedGo {
+    /// Verified archive bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Callback for Store reconciliation: copy the verified tree, preserving
     /// executable modes; never run hooks.
     pub fn stage(
@@ -182,3 +200,5 @@ impl PreparedGo {
 
 #[cfg(all(test, unix))]
 mod tests;
+#[cfg(test)]
+mod zip_tests;

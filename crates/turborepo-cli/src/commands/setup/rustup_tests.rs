@@ -8,10 +8,10 @@ use turborepo_setup::{
 
 use super::*;
 
-const FLAGS: &str =
+pub(super) const FLAGS: &str =
     r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
 const CHECK: &[&str] = &["--check", "--tools-only"];
-const TOOLCHAIN: &str = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n";
+pub(super) const TOOLCHAIN: &str = "[toolchain]\nchannel = \"stable\"\nprofile = \"minimal\"\n";
 
 // Official-shaped channel manifest for this host's minimal profile, plus a
 // target-independent rust-src.
@@ -39,13 +39,45 @@ fn manifest(version: &str) -> String {
     text
 }
 
-fn triple() -> &'static str {
+pub(super) fn triple() -> &'static str {
     match provision::platform().unwrap() {
         turborepo_setup::lock::Platform::MacosArm64 => "aarch64-apple-darwin",
         turborepo_setup::lock::Platform::MacosX64 => "x86_64-apple-darwin",
         turborepo_setup::lock::Platform::LinuxX64Gnu => "x86_64-unknown-linux-gnu",
         _ => "aarch64-unknown-linux-gnu",
     }
+}
+
+/// Official release metadata and checksums plus the installer at `path`.
+pub(super) fn rust_routes(installer: &str, path: &str, stable: &str) -> Vec<(String, Vec<u8>)> {
+    let release = b"schema-version = '1'\nversion = '1.29.1'\n".to_vec();
+    let mut routes = vec![
+        (path.to_owned(), installer.as_bytes().to_vec()),
+        ("/rustup/release-stable.toml".into(), release),
+        (
+            "/dist/channel-rust-stable.toml".into(),
+            manifest(stable).into_bytes(),
+        ),
+    ];
+    for version in ["1.99.0", "1.100.0"] {
+        let path = format!("/dist/channel-rust-{version}.toml");
+        routes.push((path, manifest(version).into_bytes()));
+    }
+    let digest = format!("{:x}\n", Sha256::digest(installer)).into_bytes();
+    for (arch, os) in ["x86_64", "aarch64"].into_iter().flat_map(|arch| {
+        [
+            "apple-darwin",
+            "unknown-linux-gnu",
+            "unknown-linux-musl",
+            "pc-windows-msvc",
+        ]
+        .map(|os| (arch, os))
+    }) {
+        let exe = if os.contains("windows") { ".exe" } else { "" };
+        let path = format!("/rustup/archive/1.29.1/{arch}-{os}/rustup-init{exe}.sha256");
+        routes.push((path, digest.clone()));
+    }
+    routes
 }
 
 struct Repo {
@@ -57,7 +89,7 @@ impl Repo {
     fn new(flags: &str) -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
-        owned.init_git().unwrap();
+        owned.fake_git().unwrap();
         fs::write(root.join("turbo.json"), flags).unwrap();
         fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
         fs::write(root.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
@@ -82,6 +114,18 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
             path: format!("/rustup/archive/1.29.1/{}/rustup-init", triple()),
             installer,
         }
+    }
+    /// The installed toolchain's `cargo` records its arguments and managed
+    /// environment, then runs `body`. Call before `lock`.
+    fn record_cargo(&mut self, body: &str) {
+        let outside = self.owned.root().parent().unwrap().to_owned();
+        let cargo = format!(
+            "#!/bin/sh\necho \"$* ${{RUSTUP_TOOLCHAIN:+toolchain}} ${{CARGO_HOME##*/}}\" >> \
+             cargo-args\n{body}\n"
+        );
+        fs::write(outside.join("cargo"), cargo).unwrap();
+        let copy = format!("cp '{}/cargo' \"$tc/bin/cargo\"\n", outside.display());
+        self.installer.push_str(&copy);
     }
     fn lock(&self) {
         let platform = serde_json::to_value(provision::platform().unwrap()).unwrap();
@@ -112,36 +156,8 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
         };
         LoopbackServer::new([(self.path.clone(), body.as_bytes().to_vec())], |_| {}).unwrap()
     }
-    // Official release metadata and checksums plus the installer.
     fn resolver(&self, stable: &str) -> LoopbackServer {
-        let release = b"schema-version = '1'\nversion = '1.29.1'\n".to_vec();
-        let mut routes = vec![
-            (self.path.clone(), self.installer.clone().into_bytes()),
-            ("/rustup/release-stable.toml".into(), release),
-            (
-                "/dist/channel-rust-stable.toml".into(),
-                manifest(stable).into_bytes(),
-            ),
-        ];
-        for version in ["1.99.0", "1.100.0"] {
-            let path = format!("/dist/channel-rust-{version}.toml");
-            routes.push((path, manifest(version).into_bytes()));
-        }
-        let digest = format!("{:x}\n", Sha256::digest(&self.installer)).into_bytes();
-        for (arch, os) in ["x86_64", "aarch64"].into_iter().flat_map(|arch| {
-            [
-                "apple-darwin",
-                "unknown-linux-gnu",
-                "unknown-linux-musl",
-                "pc-windows-msvc",
-            ]
-            .map(|os| (arch, os))
-        }) {
-            let exe = if os.contains("windows") { ".exe" } else { "" };
-            let path = format!("/rustup/archive/1.29.1/{arch}-{os}/rustup-init{exe}.sha256");
-            routes.push((path, digest.clone()));
-        }
-        LoopbackServer::new(routes, |_| {}).unwrap()
+        LoopbackServer::new(rust_routes(&self.installer, &self.path, stable), |_| {}).unwrap()
     }
     fn locked(&self, id: &str) -> turborepo_setup::lock::Tool {
         let lock = turborepo_setup::lock::Lock::read(self.owned.root())
@@ -171,6 +187,7 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
                 }),
+                turborepo_setup::git::FakeGit::shared(),
                 || Ok(self.owned.policy_at(self.owned.root())?),
             )
         })
@@ -272,6 +289,27 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
 }
 
 #[test]
+fn managed_run_activates_locked_rust_in_cargo_repositories_by_policy() {
+    let repo = Repo::new(FLAGS);
+    repo.lock();
+    assert_eq!(repo.run(&repo.upstream(false), FROZEN).unwrap(), 0);
+    let (env, bin) = run_overrides(&repo.owned).unwrap();
+    assert!(bin.join("cargo").exists() && bin.join("rustc").exists());
+    assert_eq!(env["RUSTUP_TOOLCHAIN"], format!("1.99.0-{}", triple()));
+    let home = std::path::Path::new(&env["RUSTUP_HOME"]);
+    assert!(home.join("toolchains").is_dir(), "{env:?}");
+    let cargo_home = repo.owned.root().join(".turbo/cargo-home");
+    assert_eq!(std::path::Path::new(&env["CARGO_HOME"]), cargo_home);
+    // Like setup, a Rust skip policy ignores rust-toolchain.toml, so the locked
+    // selection is drift rather than an activation.
+    let skip = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true},"setup":{"rust":{"tools":"skip"}}}"#;
+    fs::write(repo.owned.root().join("turbo.json"), skip).unwrap();
+    let error = run_overrides(&repo.owned).unwrap_err();
+    assert!(error.contains("no longer match turbo.lock"), "{error}");
+    assert!(!cargo_home.exists(), "inspection never creates CARGO_HOME");
+}
+
+#[test]
 fn changed_components_or_targets_are_frozen_drift_before_any_install() {
     let repo = Repo::new(FLAGS);
     repo.lock();
@@ -361,6 +399,11 @@ fn local_setup_creates_targets_and_refreshes_rust_selections() {
     let repo = Repo::new(FLAGS);
     let file = repo.owned.root().join("rust-toolchain.toml");
     let local = &["--tools-only", "--no-frozen"];
+    // A Rust-only plan passes setup's own declaration gate and writes nothing.
+    let plan = &["--plan", "--tools-only", "--no-frozen"];
+    assert_eq!(repo.run(&repo.resolver("1.99.0"), plan).unwrap(), 0);
+    assert!(!repo.owned.root().join("turbo.lock").exists());
+    assert!(!repo.owned.root().join(".turbo").exists() && repo.calls().is_empty());
     assert_eq!(repo.run(&repo.resolver("1.99.0"), local).unwrap(), 0);
     assert_eq!(repo.locked("rust").version, "1.99.0");
     let rustup = repo.locked("rustup");
@@ -399,4 +442,30 @@ fn local_setup_creates_targets_and_refreshes_rust_selections() {
             installs.replace("VERSION", "1.100.0") + " --component rust-src",
         ]
     );
+}
+
+#[test]
+fn locked_cargo_dependencies_prefetch_with_the_managed_toolchain_and_home() {
+    let mut repo = Repo::new(FLAGS);
+    repo.record_cargo("[ -f stale ] && exit 101\ntrue");
+    repo.lock();
+    let root = repo.owned.root();
+    fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+    let upstream = repo.upstream(false);
+    for flags in [&["--frozen"][..], &["--frozen"], FROZEN] {
+        assert_eq!(repo.run(&upstream, flags).unwrap(), 0);
+    }
+    // A failed locked fetch passes cargo's exit status through.
+    fs::write(root.join("stale"), "").unwrap();
+    assert_eq!(repo.run(&upstream, &["--frozen"]).unwrap(), 101);
+    let args = fs::read_to_string(root.join("cargo-args")).unwrap();
+    let fetch = "fetch --locked toolchain cargo-home";
+    assert_eq!(args.lines().collect::<Vec<_>>(), [fetch; 3]);
+    assert!(root.join(".turbo/cargo-home").is_dir());
+    assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), b"version = 4\n");
+
+    fs::remove_file(root.join("Cargo.lock")).unwrap();
+    let error = repo.run(&upstream, &["--frozen"]).unwrap_err().to_string();
+    assert!(error.contains("requires a committed Cargo.lock"), "{error}");
+    assert!(!root.join("Cargo.lock").exists());
 }

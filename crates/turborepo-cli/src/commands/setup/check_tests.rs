@@ -44,7 +44,7 @@ impl Fixture {
         let before = snapshot(self.owned.root().parent().unwrap());
         let args = self.args(flags);
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
-            run_with_policy(args, setup, None, || {
+            run_with_policy(args, setup, None, self.git.clone(), || {
                 Ok(self
                     .owned
                     .policy_at(&self.owned.root().join("apps/web/src"))?)
@@ -56,14 +56,6 @@ impl Fixture {
         result
     }
     pub(super) fn install(&self, upstream: &Upstream) {
-        assert!(
-            std::process::Command::new("git")
-                .current_dir(self.owned.root())
-                .args(["add", "."])
-                .status()
-                .unwrap()
-                .success()
-        );
         assert_eq!(self.run(upstream, FROZEN).unwrap(), 0);
     }
 }
@@ -131,7 +123,7 @@ fn install_repeat_and_check_all_readonly_modes_without_traffic_or_locks() {
         assert_eq!(f.check(flags).unwrap(), 0);
     }
     assert_eq!(u.hits(), 3);
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
     // Held by another transaction. Check must neither wait for nor take locks.
@@ -198,7 +190,7 @@ fn check_damage_declaration_inventory_and_lock_drift_are_actionable_readonly_fai
 
 #[test]
 fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
-    for case in 0..7 {
+    for case in 0..5 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         match case {
@@ -208,17 +200,11 @@ fn check_unsupported_policy_and_adapters_fail_without_mutation_or_traffic() {
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            2 => fs::write(
-                f.owned.root().join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap(),
-            3 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
-            4 => {
+            2 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");
                 f.save();
             }
-            5 => {
+            3 => {
                 fs::write(f.owned.root().join("turbo.json"), r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#).unwrap();
                 fs::write(f.owned.root().join("Cargo.toml"), "not probed").unwrap();
             }
@@ -263,7 +249,7 @@ fn check_revalidates_captured_discovery_sources_and_policy_before_success() {
         let mut after_edit = None;
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
             let after_edit = std::cell::RefCell::new(&mut after_edit);
-            run_with_policy(args, setup, None, || {
+            run_with_policy(args, setup, None, f.git.clone(), || {
                 calls.set(calls.get() + 1);
                 if calls.get() == 2 {
                     let (path, contents) = match case {
@@ -279,7 +265,7 @@ fn check_revalidates_captured_discovery_sources_and_policy_before_success() {
                             f.owned.root().join("apps/web/.git"),
                             "gitdir: /not-probed".into(),
                         ),
-                        6 => (f.owned.home().join(".npmrc"), "".into()),
+                        6 => (f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into()),
                         7 => (
                             f.owned.root().join("turbo.json"),
                             r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#.into(),

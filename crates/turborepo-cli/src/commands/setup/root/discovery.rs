@@ -1,11 +1,12 @@
 //! Invocation-to-root state, not a replacement for the native/config byte
 //! snapshot.
 
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 mod markers;
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_setup::git::Git;
 use turborepo_turbo_json::FutureFlags;
 
 use super::{Error, SetupRoot, infer};
@@ -113,6 +114,8 @@ pub(in crate::commands::setup) struct Discovery {
     scope: ConfigScope,
     eligibility: SourceEligibility,
     inputs: Option<markers::Inputs>,
+    /// Answers every Git question setup asks for this invocation.
+    git: Arc<dyn Git>,
 }
 
 // Do not expose config contents, invocation paths, or policy in debug output.
@@ -123,11 +126,15 @@ impl fmt::Debug for Discovery {
 }
 
 impl Discovery {
-    pub fn capture(args: &Args) -> Result<Self, Error> {
-        Self::capture_at(args, &AbsoluteSystemPathBuf::cwd()?)
+    pub fn capture(args: &Args, git: Arc<dyn Git>) -> Result<Self, Error> {
+        Self::capture_at(args, &AbsoluteSystemPathBuf::cwd()?, git)
     }
 
-    fn capture_at(args: &Args, invocation: &AbsoluteSystemPath) -> Result<Self, Error> {
+    fn capture_at(
+        args: &Args,
+        invocation: &AbsoluteSystemPath,
+        git: Arc<dyn Git>,
+    ) -> Result<Self, Error> {
         let cwd = args.cwd.as_deref().map_or_else(
             || invocation.to_owned(),
             |cwd| AbsoluteSystemPathBuf::from_unknown(invocation, cwd),
@@ -142,7 +149,7 @@ impl Discovery {
         let scope = config_scope(&root, config.as_deref())?;
         let eligibility = SourceEligibility::from_flags(root.flags);
         let inputs = if root.flags.experimental_setup {
-            Some(markers::capture(&cwd, root.flags)?)
+            Some(markers::capture(&cwd, root.flags, &*git)?)
         } else {
             None
         };
@@ -154,6 +161,7 @@ impl Discovery {
             scope,
             eligibility,
             inputs,
+            git,
         })
     }
 
@@ -189,7 +197,9 @@ impl Discovery {
         self.snapshot_root()?;
         let current = infer(&self.cwd, self.explicit_cwd, self.config.as_deref())?;
         let same_inputs = match &self.inputs {
-            Some(expected) => markers::capture(&self.cwd, self.root.flags)? == *expected,
+            Some(expected) => {
+                markers::capture(&self.cwd, self.root.flags, &*self.git)? == *expected
+            }
             None => true,
         };
         Ok(same_inputs

@@ -2,6 +2,13 @@
 //! repo-scoped `uv`/`uvx` launchers. No resolution, Python installation,
 //! dependency sync or subprocesses. Plans compose with the complete desired
 //! inventory; preparation never publishes.
+//!
+//! Windows x64 exports the official `uv.exe` and `uvx.exe` as the Store's
+//! hard links instead of launchers, so programs that start `uv` without a
+//! shell still find it. Both are self-contained, and `uvx.exe` starts the
+//! `uv.exe` exported beside it. The managed activation that `turbo run`,
+//! `turbo exec` and setup's own `uv sync` apply supplies the launchers'
+//! interpreter settings there.
 
 use std::{fs, io, path::Path, time::Duration};
 
@@ -45,8 +52,8 @@ pub enum Error {
     )]
     MissingTarget,
     #[error(
-        "managed uv promotion is not qualified for Windows or musl; use a supported GNU \
-         Linux/macOS target or configure verify-system"
+        "managed uv promotion is not qualified for Windows arm64 or musl; use macOS, GNU Linux or \
+         Windows x64, or configure verify-system"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this uv plan unchanged")]
@@ -64,22 +71,22 @@ pub enum Error {
 pub struct UvPlan {
     tool: Tool,
     artifact: lock::Artifact,
-    launch_directory: String,
+    /// The Unix launchers' directory; Windows exports the binaries directly.
+    launch_directory: Option<String>,
 }
 
 impl UvPlan {
     /// Validate only the selected platform's metadata against the official
     /// layout, without modifying the lock or inferring other executables.
     pub fn from_lock(lock: &Lock, platform: Platform) -> Result<Self, Error> {
-        if !matches!(
-            platform,
+        let windows = match platform {
             Platform::MacosX64
-                | Platform::MacosArm64
-                | Platform::LinuxX64Gnu
-                | Platform::LinuxArm64Gnu
-        ) {
-            return Err(Error::UnsupportedTarget);
-        }
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu => false,
+            Platform::WindowsX64 => true,
+            _ => return Err(Error::UnsupportedTarget),
+        };
         let locked = lock.tools().get("uv").ok_or(Error::InvalidLock)?;
         let version = uv::exact_release(&locked.version).ok_or(Error::InvalidLock)?;
         if locked.adapter != "uv" || !locked.options.is_empty() {
@@ -100,7 +107,17 @@ impl UvPlan {
         ExpectedSha256::from_hex(&artifact.sha256)?;
         // Launcher semantics are part of reuse identity: a changed launcher must
         // restage instead of copying an older generation's tree.
-        let launch_directory = format!("launch-{}", &hex::encode(Sha256::digest(LAUNCHER))[..16]);
+        let launch_directory =
+            (!windows).then(|| format!("launch-{}", &hex::encode(Sha256::digest(LAUNCHER))[..16]));
+        let executables = match &launch_directory {
+            Some(launch) => artifact
+                .executables
+                .keys()
+                .map(|name| (name.clone(), format!("{launch}/{name}")))
+                .collect(),
+            // `uv.exe` and `uvx.exe` at the zip's top level.
+            None => artifact.executables.clone(),
+        };
         let spelling = serde_json::to_value(platform)
             .ok()
             .and_then(|value| value.as_str().map(str::to_owned))
@@ -111,11 +128,7 @@ impl UvPlan {
                 version: locked.version.clone(),
                 platform: spelling,
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact
-                    .executables
-                    .keys()
-                    .map(|name| (name.clone(), format!("{launch_directory}/{name}")))
-                    .collect(),
+                executables,
             },
             artifact,
             launch_directory,
@@ -147,7 +160,7 @@ impl UvPlan {
         transport: &UvTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedUv>, Error> {
-        if !cfg!(unix) {
+        if !host_matches(self.launch_directory.as_deref()) {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.contains(&self.tool) {
@@ -210,25 +223,33 @@ impl UvPlan {
             .values()
             .map(String::as_str)
             .collect();
+        // The plan matched the official layout: Unix tarballs nest under
+        // `uv-<target>/`, while Windows zips are flat.
+        let (format, root) = match (self.artifact.format, &self.artifact.root_prefix) {
+            (lock::Format::TarGz, Some(root)) => (turborepo_archive::Format::TarGz, root.as_str()),
+            (lock::Format::Zip, None) => (turborepo_archive::Format::Zip, ""),
+            _ => return Err(Error::InvalidLock),
+        };
         let tree = turborepo_archive::extract(
             bytes,
-            turborepo_archive::Format::TarGz,
+            format,
             turborepo_archive::Limits::new(512 * 1024 * 1024, 64, 4096, 8)?,
             Layout {
-                root: self
-                    .artifact
-                    .root_prefix
-                    .as_deref()
-                    .ok_or(Error::InvalidLock)?,
+                root,
                 required_files: &required,
             },
         )?;
-        if tree.root_path().join(&self.launch_directory).try_exists()? {
+        if let Some(launch) = &self.launch_directory
+            && tree.root_path().join(launch).try_exists()?
+        {
             return Err(Error::InvalidLock);
         }
         Ok(PreparedUv {
             tree,
             tool: self.tool.clone(),
+            // uv has no shared download cache. Archive bytes retained from
+            // resolution were still transferred during this setup run.
+            downloaded_bytes: bytes.as_bytes().len() as u64,
             launch_directory: self.launch_directory.clone(),
             entrypoints: self.artifact.executables.clone(),
         })
@@ -236,6 +257,11 @@ impl UvPlan {
 }
 
 impl PreparedUv {
+    /// Verified archive bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// The verified extracted uv binary, for offline queries during
     /// resolution only. Its private scratch tree is removed on drop.
     pub fn binary(&self) -> std::path::PathBuf {
@@ -246,19 +272,21 @@ impl PreparedUv {
 pub struct PreparedUv {
     tree: ExtractedArtifact,
     tool: Tool,
-    launch_directory: String,
+    downloaded_bytes: u64,
+    launch_directory: Option<String>,
     entrypoints: std::collections::BTreeMap<String, String>,
 }
 
 impl PreparedUv {
     /// Callback for Store::reconcile. Copy the FULL verified tree, then add
-    /// launchers that export the repo-scoped interpreter location.
+    /// launchers that export the repo-scoped interpreter location. Windows
+    /// adds none: the Store hard-links the official `.exe` files into bin.
     pub fn stage(
         &self,
         tool: &Tool,
         destination: &Path,
     ) -> Result<(), turborepo_tool_install::Error> {
-        if !cfg!(unix) {
+        if !host_matches(self.launch_directory.as_deref()) {
             return Err(turborepo_tool_install::Error::UnsupportedPlatform);
         }
         if tool != &self.tool
@@ -268,11 +296,13 @@ impl PreparedUv {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
         copy_tree(&self.tree.root_path(), destination)?;
-        let launchers = destination.join(&self.launch_directory);
-        fs::create_dir(&launchers)?;
+        let Some(launch) = &self.launch_directory else {
+            return Ok(());
+        };
+        fs::create_dir(destination.join(launch))?;
         for (name, path) in &self.tool.executables {
             let script = LAUNCHER
-                .replace("@LAUNCH@", &self.launch_directory)
+                .replace("@LAUNCH@", launch)
                 .replace("@ENTRYPOINT@", &self.entrypoints[name]);
             fs::write(destination.join(path), script)?;
             #[cfg(unix)]
@@ -285,5 +315,17 @@ impl PreparedUv {
     }
 }
 
+/// Unix plans stage launchers and Windows plans stage `.exe` exports, so each
+/// installs only on its own host family.
+fn host_matches(launch_directory: Option<&str>) -> bool {
+    if cfg!(windows) {
+        launch_directory.is_none()
+    } else {
+        cfg!(unix) && launch_directory.is_some()
+    }
+}
+
 #[cfg(all(test, unix))]
 mod tests;
+#[cfg(all(test, windows))]
+mod windows_tests;

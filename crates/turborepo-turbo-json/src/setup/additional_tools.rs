@@ -86,12 +86,14 @@ pub struct RawAdditionalToolArtifact {
     /// `binary` for a single executable file, or the archive format.
     #[deserializable(required)]
     pub format: Format,
-    /// The single top-level directory that contains every archive entry.
-    /// Required for archives and not allowed for binaries.
+    /// The single top-level directory that contains every archive entry. Omit
+    /// it for an archive whose entries sit at its top level. Not allowed for
+    /// binaries.
     #[serde(rename = "rootPrefix", skip_serializing_if = "Option::is_none")]
     pub root_prefix: Option<Spanned<String>>,
-    /// Executable names mapped to paths relative to `rootPrefix`. A binary has
-    /// exactly one entry, which names where the file is installed.
+    /// Executable names mapped to paths relative to `rootPrefix`, or to the
+    /// archive's top level without one. A binary has exactly one entry, which
+    /// names where the file is installed.
     #[deserializable(required)]
     pub executables: Executables,
 }
@@ -189,7 +191,33 @@ fn validate_tool<'a>(
                     return Err((path, reason.into()));
                 }
             }
+            if windows {
+                windows_executable(name, path)?;
+            }
         }
+    }
+    Ok(())
+}
+
+/// The managed bin directory exports a Windows executable as `name.exe` (a
+/// hard link) or `name.cmd` (a forwarder that names the target in a batch
+/// line), adding that suffix itself.
+fn windows_executable<'a>(name: &str, path: &'a Spanned<String>) -> Result<(), Invalid<'a>> {
+    let lower = path.to_ascii_lowercase();
+    let launcher = lower.ends_with(".cmd")
+        && path
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_./".contains(&b));
+    if !lower.ends_with(".exe") && !launcher {
+        let reason = format!(
+            "Windows executable {name:?} must be a `.exe` file or a `.cmd` launcher whose path \
+             uses only letters, digits, `-`, `_`, `.`, and `/`"
+        );
+        return Err((path, reason.into()));
+    }
+    if fold(name, true) != name.to_ascii_lowercase() {
+        let reason = format!("Windows executable {name:?} must omit its `.exe` or `.cmd` suffix");
+        return Err((path, reason.into()));
     }
     Ok(())
 }
@@ -219,14 +247,8 @@ fn validate_artifact(raw: &RawAdditionalToolArtifact) -> Result<(), Invalid<'_>>
             &raw.format,
             "a binary maps exactly one executable",
         )?,
-        (_, None) => {
-            return Err((
-                &raw.format,
-                "archives require a `rootPrefix`, the single top-level directory that contains \
-                 every entry"
-                    .into(),
-            ));
-        }
+        // Entries at the archive's top level, such as protoc's release zips.
+        (_, None) => {}
         (_, Some(prefix)) => ensure(
             portable_path(prefix) && !prefix.contains('/'),
             prefix,

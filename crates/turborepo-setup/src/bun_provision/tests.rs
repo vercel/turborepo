@@ -19,18 +19,24 @@ const SCRIPT: &str = "#!/bin/sh\nprintf '%s:' \"${0##*/}\"\nprintf '<%s>' \"$@\"
 fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
-fn serve(files: &[(&str, Vec<u8>)]) -> (LoopbackServer, BunTransport) {
+fn routes(files: &[(&str, Vec<u8>)], base: &str) -> Vec<(String, Vec<u8>)> {
     let manifest: String = files
         .iter()
         .map(|(name, bytes)| format!("{}  {name}\n", sha256(bytes)))
         .collect();
-    let mut routes = vec![(format!("{RELEASE}/SHASUMS256.txt"), manifest.into_bytes())];
+    let mut routes = vec![(
+        format!("{base}{RELEASE}/SHASUMS256.txt"),
+        manifest.into_bytes(),
+    )];
     routes.extend(
         files
             .iter()
-            .map(|(name, bytes)| (format!("{RELEASE}/{name}"), bytes.clone())),
+            .map(|(name, bytes)| (format!("{base}{RELEASE}/{name}"), bytes.clone())),
     );
-    let server = LoopbackServer::new(routes, |_| {}).unwrap();
+    routes
+}
+fn serve(files: &[(&str, Vec<u8>)]) -> (LoopbackServer, BunTransport) {
+    let server = LoopbackServer::new(routes(files, ""), |_| {}).unwrap();
     let transport = BunTransport::loopback_http_for_tests(server.origin()).unwrap();
     (server, transport)
 }
@@ -157,6 +163,36 @@ async fn locked_bun_and_bunx_shims_run_the_verified_release_binary() {
         assert!(reused.unwrap().is_none());
         assert_eq!(server.hits(), hits);
     }
+}
+
+/// A mirror serves the official release paths beneath its base. The lock keeps
+/// the official URLs, and the downloaded archive is still verified.
+#[tokio::test]
+async fn mirrors_serve_official_release_paths_beneath_their_base() {
+    let target = target(Platform::LinuxX64Gnu).unwrap();
+    let name = format!("bun-{target}.zip");
+    let archive = zip(&format!("bun-{target}/bun"), SCRIPT.as_bytes());
+    let routes = routes(&[(&name, archive)], "/mirror");
+    let server = LoopbackServer::new(routes, |_| {}).unwrap();
+    let fixture = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
+    let base = format!("{}/mirror/", server.origin());
+    let mirror = crate::mirror::Mirror::loopback_for_tests(&base).unwrap();
+    let transport = BunTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
+    let installation = transport.resolve_exact(VERSION).await.unwrap();
+    let lock = lock(&installation, "bun@1.2.23");
+    let bun = BunPlan::from_lock(&lock, Platform::LinuxX64Gnu).unwrap();
+    assert!(
+        bun.artifact
+            .url
+            .starts_with("https://github.com/oven-sh/bun/")
+    );
+    let repo = tempfile::tempdir().unwrap();
+    let store = Store::open(repo.path()).unwrap();
+    let desired = [bun.inventory_tool().clone()];
+    let prepared = bun.prepare_if_needed(&store, &desired, &transport).await;
+    assert!(prepared.unwrap().is_some());
+    let expected = ["SHASUMS256.txt", &name].map(|file| format!("/mirror{RELEASE}/{file}"));
+    assert_eq!(server.requests(), expected);
 }
 
 #[tokio::test]

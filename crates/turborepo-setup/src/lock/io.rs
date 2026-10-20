@@ -325,7 +325,7 @@ pub(super) fn rust_toolchain(
 }
 
 /// Explicit unconditional publication of a complete validated selection.
-/// Bookkeeping and recovery belong to ignored WriterStorage; readers never
+/// Bookkeeping and recovery belong to WriterStorage; readers never
 /// acquire it. Resolver callers must use lock/source snapshot CAS instead.
 pub fn write(root: &Path, lock: &Lock) -> Result<WriteOutcome, StorageError> {
     write_with(root, lock, || Ok(()))

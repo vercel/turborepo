@@ -3,7 +3,7 @@
 //! Offline uses only trusted healthy installs and verified cached artifacts.
 //! No probes, dependency execution or activation. Declared additional tools
 //! install through the generic artifact adapter.
-use std::{fs, io, path::Path, process::Command};
+use std::{fs, io, path::Path};
 
 use turborepo_setup::{
     artifact_cache::ArtifactCache,
@@ -21,12 +21,13 @@ use turborepo_setup::{
     python_resolution::PythonTransport,
     rust_provision::RustPlan,
     rustup_provision::{RustupPlan, RustupTransport},
-    source_policy::OfficialSourcePolicy,
+    source_policy::ToolDownloadPolicy,
     uv_provision::UvPlan,
     uv_resolution::UvTransport,
     yarn_provision::YarnPlan,
 };
 use turborepo_tool_install::Store;
+use turborepo_turbo_json::SetupMirrors;
 
 use super::Error;
 
@@ -37,23 +38,27 @@ pub(super) struct Transports {
     pub uv: UvTransport,
     pub rustup: RustupTransport,
     pub python: PythonTransport,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     pub trust_base: Option<std::path::PathBuf>,
-    /// Fixture override; otherwise built from the locked artifact origins.
+    /// A mirror or fixture; otherwise built from the locked artifact origins.
+    /// Either way it uses the shared download cache, and offline setup makes
+    /// it cache-only.
     pub artifact: Option<ArtifactTransport>,
     pub go: GoTransport,
     pub bun: BunTransport,
 }
 impl Transports {
-    pub fn official(policy: &OfficialSourcePolicy) -> Result<Self, Error> {
+    /// Official sources, unless `TURBO_SETUP_*` variables or the root
+    /// `setup.mirrors` policy select a mirror, in that order.
+    pub fn official(policy: &ToolDownloadPolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
         // Verified archive bytes are shared through the user's cache directory;
         // extraction and activation stay in each repository's .turbo/tools.
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
-        Self::configured(policy, &Mirrors::from_env()?, cache)
+        Self::configured(policy, &Mirrors::configured(mirrors)?, cache)
     }
 
     pub fn configured(
-        policy: &OfficialSourcePolicy,
+        policy: &ToolDownloadPolicy,
         mirrors: &Mirrors,
         cache: Option<ArtifactCache>,
     ) -> Result<Self, Error> {
@@ -65,23 +70,49 @@ impl Transports {
             Some(mirror) => NodeTransport::mirrored(policy, mirror)?,
             None => NodeTransport::official(policy)?,
         };
+        let bun = match &mirrors.bun {
+            Some(mirror) => BunTransport::mirrored(policy, mirror)?,
+            None => BunTransport::official(policy)?,
+        };
+        let uv = match &mirrors.uv {
+            Some(mirror) => UvTransport::mirrored(policy, mirror)?,
+            None => UvTransport::official(policy)?,
+        };
+        let python = match &mirrors.python {
+            Some(mirror) => PythonTransport::mirrored(policy, mirror)?,
+            None => PythonTransport::official(policy)?,
+        };
+        let go = match &mirrors.go {
+            Some(mirror) => GoTransport::mirrored(policy, mirror)?,
+            None => GoTransport::official(policy)?,
+        };
+        // Also the private rustup's distribution server.
+        let rustup = match &mirrors.rust {
+            Some(mirror) => RustupTransport::mirrored(policy, mirror)?,
+            None => RustupTransport::official(policy)?,
+        };
         Ok(Self {
             node: node.with_cache(cache.clone()),
             pnpm: registry()?.with_cache(cache.clone()),
             registry: registry()?,
-            uv: UvTransport::official(policy)?,
-            rustup: RustupTransport::official(policy)?,
-            python: PythonTransport::official(policy)?,
-            #[cfg(test)]
+            uv,
+            rustup,
+            python,
+            #[cfg(any(test, feature = "test-support"))]
             trust_base: None,
-            artifact: None,
-            go: GoTransport::official(policy)?,
-            bun: BunTransport::official(policy)?,
+            // Otherwise built from the locked artifact origins.
+            artifact: mirrors
+                .artifact
+                .as_ref()
+                .map(|mirror| ArtifactTransport::mirrored(policy, mirror))
+                .transpose()?,
+            go,
+            bun,
         })
     }
 
     pub(super) fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "test-support"))]
         if let Some(base) = &self.trust_base {
             return Ok(base.clone());
         }
@@ -89,8 +120,10 @@ impl Transports {
             .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
     }
 
-    // Only Node/registry adapters enter cached offline provisioning. Other
-    // adapters retain the read-only trusted-repeat path in offline::run.
+    // Only Node/registry adapters and additional tools enter cached offline
+    // provisioning; the additional-tool transport is made cache-only where it
+    // is built. Other adapters retain the read-only trusted-repeat path in
+    // offline::run.
     fn offline(self) -> Self {
         Self {
             node: self.node.offline(),
@@ -99,6 +132,12 @@ impl Transports {
             ..self
         }
     }
+}
+
+/// Adapters whose locked artifacts offline setup can install from the shared
+/// download cache.
+pub(super) fn offline_cacheable(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
+    matches!(id, "node" | "pnpm" | "npm") || tool.adapter == additional::ADAPTER
 }
 
 fn supported(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
@@ -139,8 +178,10 @@ pub(super) fn platform() -> Result<Platform, Error> {
         ("macos", "aarch64") => Ok(Platform::MacosArm64),
         ("linux", "x86_64") => glibc_host(Platform::LinuxX64Gnu),
         ("linux", "aarch64") => glibc_host(Platform::LinuxArm64Gnu),
+        ("windows", "x86_64") => windows_x64_platform(windows_host_machine()),
+        ("windows", "aarch64") => Err(Error::Unsupported(WINDOWS_ARM64)),
         _ => Err(Error::Unsupported(
-            "managed promotion requires macOS or GNU Linux",
+            "managed promotion requires macOS, GNU Linux or Windows x64",
         )),
     }
 }
@@ -151,12 +192,46 @@ fn glibc_host(platform: Platform) -> Result<Platform, Error> {
     use turborepo_platform::Libc;
     match turborepo_platform::host_libc() {
         Ok(Some(Libc::Glibc { .. })) => Ok(platform),
-        Ok(Some(Libc::Musl)) => Err(Error::MuslHost),
+        Ok(Some(Libc::Musl { .. })) => Err(Error::MuslHost),
         Ok(None) => Err(Error::Unsupported(
             "managed promotion requires macOS or GNU Linux",
         )),
         Err(error) => Err(Error::UnclassifiedLibc(error)),
     }
+}
+
+const WINDOWS_ARM64: &str = "managed setup is not qualified for Windows arm64, including x64 \
+                             turbo under emulation; use WSL or a Windows x64 machine";
+
+/// Releases ship the x64 binary as the Windows arm64 copy, so an x64 build
+/// must still check the host. Native arm64 is unqualified and never borrows
+/// x64 artifacts; an unidentified host fails closed.
+pub(super) fn windows_x64_platform(host_machine: Option<u16>) -> Result<Platform, Error> {
+    const AMD64: u16 = 0x8664;
+    const ARM64: u16 = 0xAA64;
+    match host_machine {
+        Some(AMD64) => Ok(Platform::WindowsX64),
+        Some(ARM64) => Err(Error::Unsupported(WINDOWS_ARM64)),
+        _ => Err(Error::Unsupported(
+            "managed setup could not confirm a Windows x64 host",
+        )),
+    }
+}
+
+/// The host's native machine (`IMAGE_FILE_MACHINE_*`), not this process's.
+#[cfg(windows)]
+pub(super) fn windows_host_machine() -> Option<u16> {
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, IsWow64Process2};
+    let (mut process, mut native) = (0, 0);
+    // SAFETY: the current-process pseudo-handle is always valid, and both
+    // out-pointers are live locals.
+    let ok = unsafe { IsWow64Process2(GetCurrentProcess(), &mut process, &mut native) } != 0;
+    ok.then_some(native)
+}
+
+#[cfg(not(windows))]
+pub(super) fn windows_host_machine() -> Option<u16> {
+    None
 }
 
 pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error> {
@@ -182,42 +257,6 @@ pub(super) fn storage(root: &Path) -> Result<(), Error> {
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-    }
-    // Nothing can be committed without a repository, so there is nothing to
-    // check. Any `.git` at or above the root keeps the strict checks below.
-    if turborepo_setup::writer_storage::outside_git_repository(root)? {
-        return Ok(());
-    }
-    let git = |arguments: &[&str]| {
-        Command::new("git")
-            .current_dir(root)
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .args(arguments)
-            .output()
-            .map_err(turborepo_setup::writer_storage::git_spawn_error)
-    };
-    let ignored = git(&["check-ignore", "--", ".turbo/"])?;
-    // Exit 128 is a Git failure (for example, a broken or untrusted `.git`), not
-    // a missing ignore rule; editing .gitignore would not help.
-    if ignored.status.code() == Some(128) {
-        return Err(io::Error::other(format!(
-            "Git could not check whether .turbo/ is ignored ({}); run turbo setup inside the \
-             repository's Git checkout",
-            String::from_utf8_lossy(&ignored.stderr).trim()
-        ))
-        .into());
-    }
-    let tracked = git(&["ls-files", "--", ".turbo/"])?;
-    if !ignored.status.success()
-        || ignored.stdout != b".turbo/\n"
-        || !tracked.status.success()
-        || !tracked.stdout.is_empty()
-    {
-        return Err(Error::Unsupported(
-            "storage must be untracked and Git-ignored; add /.turbo/ to .gitignore",
-        ));
     }
     Ok(())
 }
@@ -394,6 +433,16 @@ pub(super) fn plans(
     })
 }
 
+/// Aggregate results for the caller's report; no paths or versions.
+/// `downloaded_bytes` covers every verified artifact setup transferred itself,
+/// across all ecosystems; rustup's own toolchain downloads are not visible.
+#[derive(Debug, Default)]
+pub(super) struct Provisioned {
+    pub downloaded_bytes: u64,
+    pub installed: usize,
+    pub reused: usize,
+}
+
 pub(super) fn lock_report(
     previous: Option<&turborepo_setup::lock::Lock>,
     current: &turborepo_setup::lock::Lock,
@@ -486,8 +535,8 @@ pub(super) fn run(
     snapshot: Snapshot,
     request: &super::SetupRequest,
     transports: Option<Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
-) -> Result<i32, Error> {
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
+) -> Result<Provisioned, Error> {
     let (force, offline) = (request.force, request.offline);
     let resolution_mode = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
@@ -511,11 +560,11 @@ pub(super) fn run(
         // Do not let a non-cache adapter enter a network preparation path.
         if lock
             .tools()
-            .keys()
-            .any(|id| !matches!(id.as_str(), "node" | "pnpm" | "npm"))
+            .iter()
+            .any(|(id, tool)| !offline_cacheable(id, tool))
         {
             return Err(Error::Unsupported(
-                "offline cache repair supports Node, npm, and pnpm only",
+                "offline cache repair supports Node, npm, pnpm, and additional tools only",
             ));
         }
     } else if request.lock == super::LockMode::Frozen {
@@ -581,7 +630,7 @@ pub(super) fn run(
         let sources = transports
             .take()
             .map(Ok)
-            .unwrap_or_else(|| Transports::official(&policy))?;
+            .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
@@ -668,10 +717,17 @@ pub(super) fn run(
     .cloned()
     .collect();
     desired.extend(artifacts.iter().map(|plan| plan.inventory_tool().clone()));
+    // Activation rejects the same shadowing, so never install a cohort that
+    // `turbo run` would refuse.
+    let declared: Vec<_> = artifacts.iter().map(ArtifactPlan::inventory_tool).collect();
+    turborepo_setup::artifact_provision::check_exports(
+        desired.iter().filter(|tool| !declared.contains(tool)),
+        declared.iter().copied(),
+    )?;
     let policy = preflight()?;
     let mut transports = transports
         .map(Ok)
-        .unwrap_or_else(|| Transports::official(&policy))?;
+        .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
     if offline {
         transports = transports.offline();
     }
@@ -679,7 +735,15 @@ pub(super) fn run(
         Some(transport) => Some(transport),
         None if artifacts.is_empty() => None,
         None => Some(ArtifactTransport::new(&policy, &artifacts)?),
-    };
+    }
+    .map(|transport| {
+        let transport = transport.with_cache(transports.node.cache().cloned());
+        if offline {
+            transport.offline()
+        } else {
+            transport
+        }
+    });
     revalidate(discovery)?;
     storage(root)?;
     snapshot.ensure_current()?;
@@ -860,11 +924,41 @@ pub(super) fn run(
         };
         let mut prepared = Vec::new();
         if let Some(transport) = &artifact_transport {
+            use turborepo_setup::artifact_provision::Error::Offline;
             for plan in &artifacts {
                 recheck()?;
+                let tool = plan.inventory_tool();
+                // Same offline rules as Node: collect misses, and let a forced
+                // reinstall reuse the recorded tree when nothing is cached.
                 prepared.push(
-                    plan.prepare(&store, &desired, transport, preparation)
-                        .await?,
+                    match plan.prepare(&store, &desired, transport, preparation).await {
+                        Err(Offline) if reuse_installed => {
+                            match plan
+                                .prepare(
+                                    &store,
+                                    &desired,
+                                    transport,
+                                    turborepo_setup::Preparation::IfNeeded,
+                                )
+                                .await
+                            {
+                                Ok(None) => {
+                                    reused.push(tool.clone());
+                                    None
+                                }
+                                Err(Offline) => {
+                                    offline_missing.push(tool.id.as_str());
+                                    None
+                                }
+                                result => result?,
+                            }
+                        }
+                        Err(Offline) => {
+                            offline_missing.push(tool.id.as_str());
+                            None
+                        }
+                        result => result?,
+                    },
                 );
             }
         }
@@ -909,10 +1003,10 @@ pub(super) fn run(
         (Some(plan), Some(rustup)) => {
             let scratch = tempfile::Builder::new()
                 .prefix(".rustup-")
-                .tempdir_in(root.join(".turbo/tools"))?;
+                .tempdir_in(root.join(".turbo").join("tools"))?;
             let rustup =
                 rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
-            plan.prepare(&store, &desired, &rustup, preparation)?
+            plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?
         }
         _ => None,
     };
@@ -986,6 +1080,31 @@ pub(super) fn run(
     // trusted. On failure, rerunning setup freshly verifies it before repair.
     before_publish()?;
     trust.publish(&store)?;
+    // Every adapter that transfers verified bytes itself. A Rust toolchain is
+    // fetched by the private rustup, so only its installer is counted.
+    let mut provisioned = Provisioned {
+        downloaded_bytes: [
+            prepared_node.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_pnpm.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_npm.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_yarn.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_bun.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_uv.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_python.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_rustup.as_ref().map(|p| p.downloaded_bytes()),
+            prepared_go.as_ref().map(|p| p.downloaded_bytes()),
+        ]
+        .into_iter()
+        .flatten()
+        .chain(
+            prepared_artifacts
+                .iter()
+                .flatten()
+                .map(|p| p.downloaded_bytes()),
+        )
+        .sum(),
+        ..Provisioned::default()
+    };
     for tool in &desired {
         let (reused, source) = match additional(tool) {
             Some((plan, prepared)) => (prepared.is_none(), format!(" ({})", plan.source())),
@@ -1003,7 +1122,15 @@ pub(super) fn run(
                 String::new(),
             ),
         };
+        if reused {
+            provisioned.reused += 1;
+        } else {
+            provisioned.installed += 1;
+        }
         let from_cache = match tool.id.as_str() {
+            _ if additional(tool).is_some() => additional(tool)
+                .and_then(|(_, prepared)| prepared)
+                .is_some_and(|prepared| prepared.from_cache()),
             "node" => prepared_node.as_ref().is_some_and(|node| node.from_cache()),
             "pnpm" => prepared_pnpm.as_ref().is_some_and(|pnpm| pnpm.from_cache()),
             "npm" => prepared_npm.as_ref().is_some_and(|npm| npm.from_cache()),
@@ -1037,8 +1164,5 @@ pub(super) fn run(
     {
         println!("{line}");
     }
-    if turborepo_setup::writer_storage::outside_git_repository(root)? {
-        println!("No Git repository found; skipped checking that .turbo/ is Git-ignored.");
-    }
-    Ok(0)
+    Ok(provisioned)
 }

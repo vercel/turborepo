@@ -6,7 +6,6 @@
 use std::sync::Arc;
 
 use miette::Diagnostic;
-use shared_child::SharedChild;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::inference::RepoState;
@@ -59,15 +58,20 @@ impl TurboRunner for TurboCliRunner<'_> {
         cli::Args::is_setup_command(&words) || cli::Args::is_hook_command(&words)
     }
 
-    fn managed_run_schema(
+    fn managed_run_requirement(
         &self,
         root: &AbsoluteSystemPath,
         ui: ColorConfig,
-    ) -> Result<Option<u32>, Self::Error> {
-        // Without a root lock the repository is unmanaged: keep existing
-        // routing, including a local CLI's own argument diagnostics.
+    ) -> Result<Option<turborepo_shim::capabilities::Requirement>, Self::Error> {
+        // Without a root lock, or a `turbo setup --no-lock` selection in its
+        // place, the repository is unmanaged: keep existing routing, including
+        // a local CLI's own argument diagnostics. Unreadable inventory is left
+        // to managed selection to report.
         let lock = std::fs::symlink_metadata(root.join_component("turbo.lock").as_std_path());
-        if lock.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound) {
+        if lock.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            && turborepo_tool_install::Store::selects_record(root.as_std_path())
+                .is_ok_and(|selected| !selected)
+        {
             return Ok(None);
         }
         let words: Vec<_> = std::env::args_os().collect();
@@ -81,10 +85,13 @@ impl TurboRunner for TurboCliRunner<'_> {
                 unreachable!("Args::new exits for arguments that fail to parse");
             }
         };
+        let discovers = discovers_only(args.command.as_ref());
         let base = crate::commands::CommandBase::new(args, root.to_owned(), get_version(), ui)?;
-        crate::commands::managed::select(&base)
-            .map(|tools| tools.map(|_| 0))
-            .map_err(Into::into)
+        // Without a probe that needs a managed tool, routing is unchanged.
+        if discovers && !crate::commands::managed::discovery_probes_tools(&base.opts.future_flags) {
+            return Ok(None);
+        }
+        crate::commands::managed::requirement(&base).map_err(Into::into)
     }
 
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
@@ -104,13 +111,28 @@ fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>,
         return Ok(None);
     }
     let args = cli::Args::parse_args(words)?;
-    // Exec follows run's local CLI policy: validate before any handoff.
-    Ok((!args.version
-        && matches!(
+    // Exec, watch and the discovery commands follow run's local CLI policy:
+    // validate before any handoff.
+    let guarded = discovers_only(args.command.as_ref())
+        || matches!(
             args.command,
-            Some(cli::Command::Run { .. } | cli::Command::Exec { .. })
-        ))
-    .then_some(args))
+            Some(cli::Command::Run { .. } | cli::Command::Exec { .. } | cli::Command::Watch { .. })
+        );
+    Ok((!args.version && guarded).then_some(args))
+}
+
+/// Commands that discover the repository, which may probe its toolchains,
+/// without running tasks.
+fn discovers_only(command: Option<&cli::Command>) -> bool {
+    matches!(
+        command,
+        Some(
+            cli::Command::Ls { .. }
+                | cli::Command::Query { .. }
+                | cli::Command::Boundaries { .. }
+                | cli::Command::Devtools { .. }
+        )
+    )
 }
 
 /// Implementation of `ConfigProvider` that uses `turborepo-cli`'s configuration
@@ -210,13 +232,17 @@ impl VersionProvider for TurboVersionProvider {
     }
 }
 
-/// Implementation of `ChildSpawner` that uses `turborepo-cli`'s spawn_child
-/// function.
+/// Hands off to another turbo (a repository's local CLI) so that killing this
+/// turbo kills it and everything it started: on Unix this process becomes it,
+/// and on Windows it runs in a kill-on-close job object.
 struct TurboChildSpawner;
 
 impl ChildSpawner for TurboChildSpawner {
-    fn spawn(&self, command: std::process::Command) -> std::io::Result<Arc<SharedChild>> {
-        turborepo_process::spawn_child(command)
+    fn hand_off(
+        &self,
+        command: std::process::Command,
+    ) -> std::io::Result<std::process::ExitStatus> {
+        turborepo_process::hand_off(command)
     }
 }
 
@@ -359,6 +385,23 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
+    }
+
+    #[test]
+    fn managed_preflight_covers_every_task_running_and_discovery_command() {
+        for args in [
+            &["turbo", "run", "build"][..],
+            &["turbo", "run"],
+            &["turbo", "watch", "build"],
+            &["turbo", "exec", "--", "node"],
+            &["turbo", "ls"],
+            &["turbo", "query", "query { packages { items { name } } }"],
+            &["turbo", "query", "affected"],
+            &["turbo", "boundaries"],
+            &["turbo", "devtools", "--no-open"],
+        ] {
+            assert!(managed_run_args(words(args)).unwrap().is_some(), "{args:?}");
+        }
     }
 
     #[test]

@@ -254,7 +254,7 @@ pub struct GoTransport {
 }
 
 impl GoTransport {
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([
                 ApprovedOrigin::https(METADATA_ORIGIN)?,
@@ -262,6 +262,20 @@ impl GoTransport {
             ])?,
             metadata: METADATA_ORIGIN.into(),
             artifacts: ARTIFACT_ORIGIN.into(),
+        })
+    }
+
+    /// One validated mirror base serves both official paths: the index at
+    /// `<base>/dl/?mode=json&include=all` and archives at `<base>/go/<file>`.
+    /// No redirect leaves its origin.
+    pub fn mirrored(
+        _policy: &crate::source_policy::ToolDownloadPolicy,
+        mirror: &crate::mirror::Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            metadata: mirror.base().into(),
+            artifacts: mirror.base().into(),
         })
     }
 

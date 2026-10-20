@@ -32,7 +32,10 @@ pub enum Error {
     InvalidLock,
     #[error("package manager requires the selected managed Node in the complete desired inventory")]
     NodeBinding,
-    #[error("registry package promotion is unqualified for Windows, musl or non-Unix hosts")]
+    #[error(
+        "registry package promotion is unqualified for this host, Windows arm64 or musl; use \
+         macOS, GNU Linux or Windows x64"
+    )]
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
@@ -63,9 +66,9 @@ pub struct RegistryTransport {
     offline: bool,
 }
 impl RegistryTransport {
-    // TODO(TURBO-6216): Apply repository-configured mirrors. Never fall back
-    // to public npm or forward credentials across origins.
-    pub fn official(policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    // A configured mirror uses `mirrored` instead; neither falls back to
+    // public npm or forwards credentials across origins.
+    pub fn official(policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
             origin: policy.registry().into(),
@@ -77,7 +80,7 @@ impl RegistryTransport {
 
     /// Send the same registry requests to a validated mirror base only.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {
@@ -299,7 +302,14 @@ fn package_name(manager: Manager) -> Result<&'static str, Error> {
 fn native_release(manager: Manager, version: &Version) -> bool {
     manager == Manager::Pnpm && version.major >= 12
 }
-const NATIVE_BINARY: &str = "pnpm-native";
+/// The wrapper's own Corepack download location for this host
+/// (`bin/pnpm.mjs`), never a published file of any platform.
+const NATIVE_BINARY: &str = if cfg!(windows) {
+    "pnpm-native.exe"
+} else {
+    "pnpm-native"
+};
+const NATIVE_LOCATIONS: [&str; 2] = ["pnpm-native", "pnpm-native.exe"];
 const NATIVE_NAMES: [&str; 4] = ["pn", "pnpm", "pnpx", "pnx"];
 fn native_package(platform: Platform) -> Option<(&'static str, &'static str)> {
     Some(match platform {
@@ -460,10 +470,13 @@ fn extract_wrapper(bytes: &VerifiedArtifact, version: &str) -> Result<ExtractedA
         .get("bin")
         .and_then(|v| v.as_object())
         .map(|bin| bin.keys().map(String::as_str).collect::<BTreeSet<_>>());
-    if names != Some(BTreeSet::from(NATIVE_NAMES))
-        || tree.root_path().join(NATIVE_BINARY).try_exists()?
-    {
+    if names != Some(BTreeSet::from(NATIVE_NAMES)) {
         return Err(Error::InvalidPackage);
+    }
+    for location in NATIVE_LOCATIONS {
+        if tree.root_path().join(location).try_exists()? {
+            return Err(Error::InvalidPackage);
+        }
     }
     Ok(tree)
 }
@@ -557,15 +570,16 @@ impl RegistryPlan {
         manager: Manager,
     ) -> Result<Self, Error> {
         let id = package_name(manager)?;
-        if !cfg!(unix)
-            || !matches!(
-                platform,
-                Platform::MacosX64
-                    | Platform::MacosArm64
-                    | Platform::LinuxX64Gnu
-                    | Platform::LinuxArm64Gnu
-            )
-        {
+        let windows = platform == Platform::WindowsX64;
+        let qualified = match platform {
+            Platform::MacosX64
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu => cfg!(unix),
+            Platform::WindowsX64 => cfg!(windows),
+            _ => false,
+        };
+        if !qualified {
             return Err(Error::UnsupportedTarget);
         }
         let selected_node = NodePlan::from_lock(lock, platform).map_err(|_| Error::NodeBinding)?;
@@ -594,12 +608,19 @@ impl RegistryPlan {
             serde_json::to_vec(&(&node, authored.map(|pin| (pin.algorithm, &pin.digest))))
                 .map_err(|_| Error::InvalidLock)?;
         let launch_directory = format!("managed-node-{:x}", Sha256::digest(binding));
+        // Windows launchers are batch files so PATHEXT resolves `pnpm`.
+        let extension = if windows { ".cmd" } else { "" };
         let executables = native
             .as_ref()
             .unwrap_or(&artifact)
             .executables
             .keys()
-            .map(|name| (name.clone(), format!("{launch_directory}/{name}")))
+            .map(|name| {
+                (
+                    name.clone(),
+                    format!("{launch_directory}/{name}{extension}"),
+                )
+            })
             .collect();
         // Reuse identity binds every verified part.
         let artifact_sha256 = match &native {
@@ -700,6 +721,11 @@ impl RegistryPlan {
                 bytes
             }
         };
+        let mut downloaded_bytes = if from_cache {
+            0
+        } else {
+            bytes.as_bytes().len() as u64
+        };
         let (tree, native) = match &self.native {
             None => {
                 let executables = &self.artifact.executables;
@@ -728,6 +754,7 @@ impl RegistryPlan {
                         if let Some(cache) = &transport.cache {
                             let _ = cache.put(self.platform, &bytes);
                         }
+                        downloaded_bytes += bytes.as_bytes().len() as u64;
                         bytes
                     }
                 };
@@ -745,6 +772,7 @@ impl RegistryPlan {
         Ok(Some(PreparedRegistry {
             tree,
             native,
+            downloaded_bytes,
             tool: self.tool.clone(),
             launch_directory: self.launch_directory.clone(),
             entrypoints: self.artifact.executables.clone(),
@@ -757,6 +785,7 @@ pub struct PreparedRegistry {
     tree: ExtractedArtifact,
     /// The verified platform package and its binary path, for native pnpm.
     native: Option<(ExtractedArtifact, String)>,
+    downloaded_bytes: u64,
     tool: Tool,
     launch_directory: String,
     entrypoints: std::collections::BTreeMap<String, String>,
@@ -768,6 +797,12 @@ impl PreparedRegistry {
         self.from_cache
     }
 
+    /// Verified package bytes transferred for this preparation; cache hits
+    /// transfer nothing.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Copy verified resources; launch this generation's managed Node, or the
     /// native pnpm binary directly (`pnpx`/`pnx` as `pnpm dlx`, like pnpm's
     /// own Unix alias scripts).
@@ -776,7 +811,7 @@ impl PreparedRegistry {
         tool: &Tool,
         destination: &Path,
     ) -> Result<(), turborepo_tool_install::Error> {
-        if !cfg!(unix) {
+        if !cfg!(any(unix, windows)) {
             return Err(turborepo_tool_install::Error::UnsupportedPlatform);
         }
         if tool != &self.tool
@@ -792,27 +827,44 @@ impl PreparedRegistry {
             executable(&target)?;
         }
         // Owner-only like every other store directory, whatever the umask.
+        #[cfg_attr(not(unix), allow(unused_mut))]
         let mut launch = fs::DirBuilder::new();
         #[cfg(unix)]
         std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
         launch.create(destination.join(&self.launch_directory))?;
         for (name, path) in &self.tool.executables {
-            let id = &self.tool.id;
-            let command = match (&self.native, name.as_str()) {
-                (None, _) => format!(
-                    "\"$tools/node/bin/node\" \"$tools/{id}/{}\"",
-                    self.entrypoints[name]
-                ),
-                (Some(_), "pnpx" | "pnx") => format!("\"$tools/{id}/{NATIVE_BINARY}\" dlx"),
-                (Some(_), _) => format!("\"$tools/{id}/{NATIVE_BINARY}\""),
+            // The bin forwarder calls this file directly, so %~dp0 is always
+            // the launch directory. Entry points are fixed validated mappings.
+            // Native pnpm runs from the tool directory, never a bin hard link,
+            // so it still finds `dist/` beside its own image.
+            let script = if cfg!(windows) {
+                let command = match (&self.native, name.as_str()) {
+                    (None, _) => format!(
+                        "\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\{}\"",
+                        self.entrypoints[name].replace('/', "\\")
+                    ),
+                    (Some(_), "pnpx" | "pnx") => format!("\"%~dp0..\\{NATIVE_BINARY}\" dlx"),
+                    (Some(_), _) => format!("\"%~dp0..\\{NATIVE_BINARY}\""),
+                };
+                format!("@{command} %*\r\n")
+            } else {
+                let id = &self.tool.id;
+                let command = match (&self.native, name.as_str()) {
+                    (None, _) => format!(
+                        "\"$tools/node/bin/node\" \"$tools/{id}/{}\"",
+                        self.entrypoints[name]
+                    ),
+                    (Some(_), "pnpx" | "pnx") => format!("\"$tools/{id}/{NATIVE_BINARY}\" dlx"),
+                    (Some(_), _) => format!("\"$tools/{id}/{NATIVE_BINARY}\""),
+                };
+                format!(
+                    "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
+                     \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) \
+                     tools=\"$here/../tools\";; esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) \
+                     || exit 126\nexec {command} \"$@\"\n",
+                    self.launch_directory
+                )
             };
-            let script = format!(
-                "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
-                 \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) tools=\"$here/../tools\";; \
-                 esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) || exit 126\nexec {command} \
-                 \"$@\"\n",
-                self.launch_directory
-            );
             fs::write(destination.join(path), script)?;
             executable(&destination.join(path))?;
         }

@@ -452,11 +452,14 @@ async fn native_pnpm_locks_every_node_platform_binary_beside_the_pinned_wrapper(
     ]);
     let mut missing = natives.clone();
     missing[0].1 = fx::native(natives[0].0, false);
+    // Either host's Corepack location would shadow the verified binary.
     let shadow = fx::wrapper(&[("pnpm-native", fx::BINARY, 0o755)]);
+    let shadow_exe = fx::wrapper(&[("pnpm-native.exe", fx::BINARY, 0o755)]);
     for (wrapper, natives, layout) in [
         (&wrapper, &other, false),
         (&wrapper, &missing, true),
         (&shadow, &natives, false),
+        (&shadow_exe, &natives, false),
     ] {
         let server = LoopbackServer::new(fx::routes(wrapper, natives), |_| {}).unwrap();
         let transport = RegistryTransport::loopback_http_for_tests(server.origin()).unwrap();

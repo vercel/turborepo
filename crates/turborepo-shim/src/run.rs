@@ -3,12 +3,11 @@
 //! This module contains the main entry point for the shim, refactored to use
 //! injected traits instead of direct `crate::` imports from `turborepo-cli`.
 
-use std::{env, ffi::OsString, process, process::Stdio, sync::Arc, time::Duration};
+use std::{env, ffi::OsString, process, process::Stdio, time::Duration};
 
 use camino::Utf8PathBuf;
 use dunce::canonicalize as fs_canonicalize;
 use miette::Diagnostic;
-use shared_child::SharedChild;
 use thiserror::Error;
 use tracing::{debug, warn};
 use turbo_updater::{UpdateCheckConfig, display_update_check};
@@ -310,11 +309,11 @@ where
     S: ChildSpawner,
     V: VersionProvider,
 {
-    let schema = match runtime.runner.managed_run_schema(&repo_state.root, ui) {
-        Ok(schema) => schema,
+    let requirement = match runtime.runner.managed_run_requirement(&repo_state.root, ui) {
+        Ok(requirement) => requirement,
         Err(error) => return ShimResult::CliError(error),
     };
-    if let Some(schema) = schema {
+    if let Some(requirement) = requirement {
         // Managed mode never enters update checks or implicit CLI downloads.
         let local = match LocalTurboState::infer_managed(&repo_state.root) {
             Ok(local) => local,
@@ -324,13 +323,13 @@ where
             let capabilities =
                 crate::capabilities::Capabilities::current(runtime.version_provider.get_version());
             if let Err(error) =
-                crate::managed_run::select(schema, &capabilities, Some(local.binary()))
+                crate::managed_run::select(&requirement, &capabilities, Some(local.binary()))
             {
-                return ShimResult::ShimError(error.into());
+                return ShimResult::ShimError(error.declared(local.version()).into());
             }
             // Revalidate after the peer query, immediately before dispatch.
-            match runtime.runner.managed_run_schema(&repo_state.root, ui) {
-                Ok(Some(current)) if current == schema => {}
+            match runtime.runner.managed_run_requirement(&repo_state.root, ui) {
+                Ok(Some(current)) if current == requirement => {}
                 Err(error) => return ShimResult::CliError(error),
                 _ => {
                     return ShimResult::ShimError(Error::LocalTurboPath(
@@ -346,9 +345,8 @@ where
             }
             return spawn_local_turbo(runtime, &repo_state, local, shim_args);
         }
-        // No installed pin: execute this CLI's native, guarded Node/pnpm path.
-        // Its public complete-schema handshake stays unadvertised pending the
-        // complete platform/peer qualification; never substitute an installed pin.
+        // No installed pin: this CLI validated the selection and runs it.
+        // An installed pin is never substituted.
         unsafe {
             env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
         }
@@ -634,22 +632,9 @@ where
     S: ChildSpawner,
     V: VersionProvider,
 {
-    let child: Arc<SharedChild> = match runtime.child_spawner.spawn(command) {
-        Ok(child) => child,
-        Err(e) => return ShimResult::ShimError(err(e)),
-    };
-
-    // The child turbo process shares our process group and will receive
-    // SIGINT directly from the kernel when the user presses Ctrl+C.
-    // Ignore SIGINT in the shim *after* spawning so the child inherits
-    // the default disposition (and can register its own handler), while
-    // the shim stays alive to collect the child's exit status.
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGINT, libc::SIG_IGN);
-    }
-
-    let exit_status = match child.wait() {
+    // On Unix, turbo's spawner returns only if the other turbo cannot start:
+    // this process became it, so signals, Ctrl+C, and the status are its own.
+    let exit_status = match runtime.child_spawner.hand_off(command) {
         Ok(status) => status,
         Err(e) => return ShimResult::ShimError(err(e)),
     };
@@ -742,6 +727,8 @@ fn try_check_for_updates(
 
 #[cfg(test)]
 mod tests {
+    use std::process::ExitStatus;
+
     use turborepo_repository::inference::JavaScriptRoot;
 
     use super::*;
@@ -754,12 +741,12 @@ mod tests {
         struct ManagedRunner;
         impl TurboRunner for ManagedRunner {
             type Error = std::io::Error;
-            fn managed_run_schema(
+            fn managed_run_requirement(
                 &self,
                 _: &turbopath::AbsoluteSystemPath,
                 _: ColorConfig,
-            ) -> Result<Option<u32>, Self::Error> {
-                Ok(Some(0))
+            ) -> Result<Option<crate::capabilities::Requirement>, Self::Error> {
+                Ok(Some(crate::capabilities::Requirement::new(0, ["node"])))
             }
             fn run(&self, state: Option<RepoState>, _: ColorConfig) -> Result<i32, Self::Error> {
                 assert!(state.is_some());
@@ -768,12 +755,12 @@ mod tests {
         }
         struct CheckedSpawner(std::path::PathBuf);
         impl ChildSpawner for CheckedSpawner {
-            fn spawn(&self, command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+            fn hand_off(&self, command: process::Command) -> std::io::Result<ExitStatus> {
                 assert_eq!(
                     std::path::Path::new(command.get_program()).canonicalize()?,
                     self.0.canonicalize()?
                 );
-                DefaultChildSpawner.spawn(command)
+                DefaultChildSpawner.hand_off(command)
             }
         }
         for case in 0..4 {
@@ -852,7 +839,7 @@ mod tests {
         type Envs = Vec<(std::ffi::OsString, Option<std::ffi::OsString>)>;
         struct Recording(std::sync::Mutex<Envs>);
         impl ChildSpawner for Recording {
-            fn spawn(&self, command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+            fn hand_off(&self, command: process::Command) -> std::io::Result<ExitStatus> {
                 *self.0.lock().unwrap() = command
                     .get_envs()
                     .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
@@ -969,7 +956,7 @@ mod tests {
     struct UnexpectedChildSpawner;
 
     impl ChildSpawner for UnexpectedChildSpawner {
-        fn spawn(&self, _command: process::Command) -> std::io::Result<Arc<SharedChild>> {
+        fn hand_off(&self, _command: process::Command) -> std::io::Result<ExitStatus> {
             panic!("shim boundary tests must not spawn a child process")
         }
     }

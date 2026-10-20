@@ -29,8 +29,16 @@ fn files(root: &Path) -> Vec<PathBuf> {
 /// Only the fixture's `bin` is on PATH; its probe would leave a marker file.
 fn invoke(root: &Path, dir: &str, words: &[&str]) -> (i32, String, String) {
     let before = files(root);
-    let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
-        .env_clear()
+    let mut command = Command::new(env!("CARGO_BIN_EXE_turbo"));
+    command.env_clear();
+    // Keep what Windows needs to find and start a `.cmd` probe.
+    #[cfg(windows)]
+    for name in ["SystemRoot", "PATHEXT"] {
+        if let Some(value) = std::env::var_os(name) {
+            command.env(name, value);
+        }
+    }
+    let output = command
         .current_dir(root.join(dir))
         .args(words)
         .env("PATH", root.join("bin"))
@@ -65,11 +73,21 @@ fn failure(root: &Path, dir: &str, words: &[&str], expected: &str) {
     );
 }
 
-#[cfg(unix)]
+/// A `probe` in the fixture's `bin` that leaves a marker if anything runs it.
+fn probe(root: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let probe = root.join("bin/probe");
+        fs::write(&probe, "#!/bin/sh\ntouch \"$(dirname \"$0\")/ran\"\n").expect("probe");
+        fs::set_permissions(&probe, fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+    #[cfg(windows)]
+    fs::write(root.join("bin/probe.cmd"), "@type nul > \"%~dp0ran\"\r\n").expect("probe");
+}
+
 #[test]
 fn managed_exec_never_reaches_an_unvalidated_local_cli() {
-    use std::os::unix::fs::PermissionsExt;
-
     use turborepo_shim::TurboState;
     let temp = tempfile::tempdir().expect("tempdir");
     let root = temp.path();
@@ -83,8 +101,14 @@ fn managed_exec_never_reaches_an_unvalidated_local_cli() {
     }
     fs::write(package.join("package.json"), r#"{"version":"2.9.0"}"#).expect("package");
     let pin = package.join("bin").join(TurboState::binary_name());
+    // Reaching the pin leaves a marker on Unix and fails to start on Windows.
     fs::write(&pin, "#!/bin/sh\n: > pin-ran\n").expect("pin");
-    fs::set_permissions(&pin, fs::Permissions::from_mode(0o755)).expect("chmod");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&pin, fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+    probe(root);
     let repo = root.join("repo");
     fs::write(
         repo.join("package.json"),
@@ -109,13 +133,7 @@ fn exec_is_gated_and_never_runs_the_program_without_activation() {
     for dir in ["bin", "disabled", "enabled"] {
         fs::create_dir(root.join(dir)).expect("fixture directory");
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let probe = root.join("bin/probe");
-        fs::write(&probe, "#!/bin/sh\ntouch \"$(dirname \"$0\")/ran\"\n").expect("probe");
-        fs::set_permissions(&probe, fs::Permissions::from_mode(0o755)).expect("chmod");
-    }
+    probe(root);
     let disabled = root.join("disabled/turbo.json");
     for config in [
         None,

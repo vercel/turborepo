@@ -1,11 +1,18 @@
-//! Native local/frozen/no-lock provisioning, read-only checks and tools-only
-//! plans. No execution.
+//! Native local/frozen/no-lock provisioning, then locked dependency setup
+//! with the managed tools, plus read-only checks/plans. Never runs Turborepo
+//! tasks.
+
+use std::{sync::Arc, time::Instant};
 
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::toolchain::ToolchainId;
-use turborepo_setup::source_policy::OfficialSourcePolicy;
+use turborepo_setup::{
+    git::{Git, GitCli},
+    source_policy::ToolDownloadPolicy,
+};
 use turborepo_turbo_json::ToolPolicy;
+use turborepo_ui::ColorConfig;
 
 use crate::cli::{Args, SetupArgs};
 
@@ -14,14 +21,22 @@ mod acl;
 pub(crate) mod authorization;
 mod check;
 mod cleanup;
-mod effective;
+#[cfg(windows)]
+mod dacl;
+mod dependencies;
+pub(crate) mod effective;
+mod installer;
 mod lock_diagnostics;
+#[cfg(windows)]
+mod msvc;
 mod no_lock;
 mod offline;
 mod plan;
 mod provision;
 mod root;
+mod telemetry;
 pub(crate) mod trust;
+mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -38,15 +53,14 @@ pub enum Error {
     #[diagnostic(help("For an intentional lock refresh in CI, pass --no-frozen --update-lock."))]
     FrozenUpdateLock,
     #[error(
-        "this setup mode is not implemented; use local or frozen provisioning, --plan \
-         --tools-only reports or --check readiness checks"
+        "this setup mode is not implemented; use local or frozen provisioning, --plan reports or \
+         --check readiness checks"
     )]
     #[diagnostic(
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run. Dependency \
-             plans and checks are not implemented."
+             No tools, dependencies, or locks were changed."
         )
     )]
     NotImplemented,
@@ -65,9 +79,10 @@ pub enum Error {
     #[diagnostic(
         code(turbo::setup::unclassified_libc),
         help(
-            "turbo reads the ELF interpreter of /bin/sh and the libc.so.6 beside a glibc loader \
-             without running them. Managed setup requires a glibc host with those files; \
-             otherwise install the tools yourself and use verify-system."
+            "turbo reads the ELF interpreter of /bin/sh, then the libc.so.6 beside a glibc loader \
+             or the release a musl loader embeds, without running them. Managed setup requires a \
+             glibc host with those files; otherwise install the tools yourself and use \
+             verify-system."
         )
     )]
     UnclassifiedLibc(turborepo_platform::LibcError),
@@ -84,14 +99,14 @@ pub enum Error {
         code(turbo::setup::no_lock_node),
         help(
             "Declare Node in .nvmrc, .node-version, or package.json (devEngines.runtime or \
-             engines.node). --no-lock provisions only Node and an optional exact pnpm. No tools, \
-             dependencies, or locks were changed."
+             engines.node). --no-lock provisions only Node and an optional exact npm or pnpm. No \
+             tools, dependencies, or locks were changed."
         )
     )]
     NoLockNode,
     #[error(
-        "--no-lock provisions only Node and pnpm, but the repository declares {0}; clone-local \
-         setup for it is not supported yet"
+        "--no-lock provisions only Node with npm or pnpm, but the repository declares {0}; \
+         clone-local setup for it is not supported yet"
     )]
     #[diagnostic(
         code(turbo::setup::no_lock_tool),
@@ -146,7 +161,11 @@ pub enum Error {
     #[error(transparent)]
     Bun(#[from] turborepo_setup::bun_provision::Error),
     #[error(transparent)]
+    SystemTool(#[from] turborepo_setup::system_tool::Error),
+    #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
+    #[error(transparent)]
+    Dependencies(#[from] dependencies::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]
@@ -154,6 +173,9 @@ pub enum Error {
     Root(#[from] root::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+    #[cfg(windows)]
+    #[error(transparent)]
+    Signal(#[from] turborepo_signals::listeners::Error),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -178,32 +200,10 @@ struct SetupRequest {
     force: bool,
     offline: bool,
     tools_only: bool,
-    ignore_scripts: bool,
     update_lock: bool,
 }
 
 impl SetupRequest {
-    /// Lifecycle intent for a toolchain's dependency installer: CLI >
-    /// repository policy > native default.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "consumed by dependency installers (TURBO-6229)")
-    )]
-    fn lifecycle(
-        &self,
-        repository: Option<turborepo_turbo_json::LifecycleScripts>,
-    ) -> turborepo_setup::lifecycle::Request {
-        use turborepo_setup::lifecycle::{Intent, Request};
-        use turborepo_turbo_json::LifecycleScripts;
-        Request::new(
-            self.ignore_scripts,
-            repository.map(|scripts| match scripts {
-                LifecycleScripts::Native => Intent::Native,
-                LifecycleScripts::Skip => Intent::Skip,
-            }),
-        )
-    }
-
     fn new(args: &SetupArgs, is_ci: bool) -> Result<Self, Error> {
         // Explicit conflicts are enforced by the argument parser. --no-lock
         // overrides only the inferred CI default, not explicit --frozen.
@@ -229,42 +229,113 @@ impl SetupRequest {
             force: args.force,
             offline: args.offline,
             tools_only: args.tools_only,
-            ignore_scripts: args.ignore_scripts,
             update_lock: args.update_lock,
         })
     }
 }
 
-pub fn run(args: &Args, setup_args: &SetupArgs) -> Result<i32, Error> {
+/// The CLI entry point: setup, then standard telemetry about its outcome. Only
+/// after the outcome is final, so telemetry cannot affect it.
+pub fn run_with_telemetry(
+    args: &Args,
+    setup_args: &SetupArgs,
+    color_config: ColorConfig,
+) -> Result<i32, Error> {
+    let started = Instant::now();
+    let mut report = telemetry::Report::default();
+    let result = run_observed(args, setup_args, Arc::new(GitCli), &mut report);
+    telemetry::record(&report, &result, started.elapsed(), color_config);
+    result
+}
+
+/// Production setup without telemetry, so tests never initialize it.
+#[cfg(test)]
+pub fn run(args: &Args, setup_args: &SetupArgs, git: Arc<dyn Git>) -> Result<i32, Error> {
+    run_observed(args, setup_args, git, &mut telemetry::Report::default())
+}
+
+fn run_observed(
+    args: &Args,
+    setup_args: &SetupArgs,
+    git: Arc<dyn Git>,
+    report: &mut telemetry::Report,
+) -> Result<i32, Error> {
+    #[cfg(windows)]
+    exit_on_relayed_ctrl_c()?;
     let invocation = match args.cwd.as_deref() {
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
     };
-    run_with_policy(args, setup_args, None, || {
-        Ok(OfficialSourcePolicy::inspect(
-            invocation.as_std_path(),
-            None,
-        )?)
+    run_reporting(args, setup_args, None, git, report, || {
+        Ok(ToolDownloadPolicy::inspect(invocation.as_std_path())?)
     })
+}
+
+/// Setup runs before turbo's signal handler and has no graceful phase, so a
+/// console Ctrl+C ends it through the default handler. The npm wrapper relays
+/// Ctrl+C over a pipe instead under a package manager terminal; end setup the
+/// same way, so locks release with the process and the transaction resumes.
+#[cfg(windows)]
+fn exit_on_relayed_ctrl_c() -> Result<(), Error> {
+    const STATUS_CONTROL_C_EXIT: u32 = 0xC000_013A;
+    if let Some(mut relay) = turborepo_signals::listeners::wrapper_ctrl_c()? {
+        std::thread::spawn(move || {
+            if let Some(Some(_)) = relay.blocking_recv() {
+                crate::process_exit::exit(STATUS_CONTROL_C_EXIT as i32);
+            }
+        });
+    }
+    Ok(())
 }
 
 // Trusted internal fixture injection only: never a CLI flag, repo URL or env
 // override.
+#[cfg(all(
+    test,
+    any(
+        all(
+            any(target_arch = "x86_64", target_arch = "aarch64"),
+            any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
+        ),
+        all(windows, target_arch = "x86_64")
+    )
+))]
 fn run_with_policy(
     args: &Args,
     setup_args: &SetupArgs,
     transports: Option<provision::Transports>,
-    preflight: impl Fn() -> Result<OfficialSourcePolicy, Error>,
+    git: Arc<dyn Git>,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
+) -> Result<i32, Error> {
+    run_reporting(
+        args,
+        setup_args,
+        transports,
+        git,
+        &mut telemetry::Report::default(),
+        preflight,
+    )
+}
+
+fn run_reporting(
+    args: &Args,
+    setup_args: &SetupArgs,
+    transports: Option<provision::Transports>,
+    git: Arc<dyn Git>,
+    report: &mut telemetry::Report,
+    preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
     // Discovery reads files/Git metadata: no language-tool probes, environment
     // config pipeline, graph, package manager detection, or local CLI handoff.
-    let discovery = root::Discovery::capture(args)?;
+    let discovery = root::Discovery::capture(args, git)?;
     tracing::debug!("setup root: {}", discovery.root_path());
     if !discovery.flags().experimental_setup {
         return Err(Error::Disabled);
     }
+    report.gate_passed();
 
     let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
+    report.request(&request);
     let eligible = discovery.source_eligibility();
     let plan = effective::Plan::new(
         discovery.policy(),
@@ -282,11 +353,11 @@ fn run_with_policy(
     if args.test_run {
         return Err(Error::NotImplemented);
     }
+    // Rust, Python and Go have managed setup adapters; a skip policy ignores
+    // their declarations. Managed run derives the same ecosystems.
+    let ecosystems = effective::ecosystems(&discovery.flags(), discovery.policy());
     if plan.unsupported() {
         return Err(Error::Unsupported("verify-system non-JavaScript tools"));
-    }
-    if plan.explicit_dependencies() {
-        return Err(Error::NotImplemented);
     }
     let skipped = |id: &ToolchainId| {
         plan.toolchain(id)
@@ -295,18 +366,13 @@ fn run_with_policy(
     let javascript = plan
         .toolchain(&ToolchainId::JAVASCRIPT)
         .map_or(ToolPolicy::Skip, |t| t.tools.0);
-    if javascript == ToolPolicy::VerifySystem {
-        return Err(Error::Unsupported("verify-system JavaScript tools"));
-    }
     // Preserve current workspace gating, with explicit policy skips disabling
     // interpretation of that ecosystem's declarations.
     let snapshot = turborepo_setup::lock::Snapshot::capture_with(
         discovery.snapshot_root()?.as_std_path(),
-        turborepo_setup::lock::Ecosystems {
-            python: eligible.python() && !skipped(&ToolchainId::PYTHON),
-            rust: eligible.cargo() && !skipped(&ToolchainId::RUST),
-            go: eligible.go() && !skipped(&ToolchainId::GO),
-        },
+        // Python declarations are captured only when experimentalPythonWorkspaces
+        // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
+        ecosystems,
     )?;
     if snapshot.previous_lock().is_some_and(|lock| {
         lock.tools().values().any(|tool| {
@@ -328,6 +394,16 @@ fn run_with_policy(
     for line in plan.report() {
         println!("{line}");
     }
+    // Managed Rust's Windows linker is an external prerequisite: reported,
+    // never installed, and never a failure.
+    #[cfg(windows)]
+    if plan
+        .toolchain(&ToolchainId::RUST)
+        .is_some_and(|t| t.tools.0 != ToolPolicy::Skip)
+        && snapshot.declarations().contains_key("rust")
+    {
+        msvc::report();
+    }
     if javascript == ToolPolicy::Skip {
         // The current snapshot has no JavaScript enable switch. Never provision
         // JavaScript against an explicit skip while preparing a native cohort.
@@ -341,7 +417,7 @@ fn run_with_policy(
                      locked tools",
                 ));
             }
-            println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
+            println!("Nothing to prepare: every toolchain is skipped.");
             return Ok(0);
         }
         if snapshot
@@ -361,32 +437,164 @@ fn run_with_policy(
     ) {
         eprintln!("{report}");
     }
+    // Decided before any download, so a missing ecosystem lockfile fails first.
+    let dependencies = dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request)?;
+    let ecosystems = snapshot.ecosystems();
+    let resolution = if request.update_lock {
+        turborepo_setup::lock::reconcile::Mode::Refresh
+    } else {
+        turborepo_setup::lock::reconcile::Mode::Local
+    };
+    let trust_base = transports
+        .as_ref()
+        .map(provision::Transports::trust_base)
+        .transpose()?;
+    if javascript == ToolPolicy::VerifySystem {
+        return match request.mode {
+            Mode::Check => verify_system::check(&discovery, snapshot),
+            Mode::Plan => Err(Error::Unsupported("verify-system setup plans")),
+            Mode::Provision => verify_system::provision(
+                &discovery,
+                snapshot,
+                request.lock,
+                resolution,
+                request.force,
+            ),
+        };
+    }
     if request.mode == Mode::Check {
-        return check::run(&discovery, snapshot, request.tools_only, preflight);
+        return check::run(&discovery, snapshot, &dependencies, preflight);
     }
     if request.mode == Mode::Plan {
         println!(
             "{}",
-            plan::report(&discovery, snapshot, &request, transports, preflight)?
+            plan::report(
+                &discovery,
+                snapshot,
+                &request,
+                &dependencies,
+                transports,
+                preflight
+            )?
         );
         return Ok(0);
     }
-    let code = if request.offline {
+    // Offline setup reuses the trusted installation or verified cached bytes;
+    // enabled dependencies then install offline from the native caches.
+    // Clone-local --no-lock runs only when every dependency is skipped
+    // (`validate`).
+    let provisioned = if request.offline {
         offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
         provision::run(&discovery, snapshot, &request, transports, preflight)
     }?;
-    println!(
-        "Dependencies skipped ({}). No tasks run.",
-        if request.tools_only {
-            "--tools-only"
-        } else {
-            "dependency installation is not supported yet"
-        }
-    );
-    Ok(code)
+    report.downloaded_bytes = provisioned.downloaded_bytes;
+    report.tools_installed = provisioned.installed;
+    report.tools_reused = provisioned.reused;
+    let root = discovery.snapshot_root()?.as_std_path();
+    Ok(dependencies.install(root, ecosystems, trust_base)?)
+}
+
+/// Whether setup provisions for this host. On Windows only a confirmed x64
+/// machine qualifies: arm64 hosts, including x64 turbo under emulation, and
+/// unidentified hosts are refused.
+pub(crate) fn platform_supported() -> bool {
+    provision::platform().is_ok()
+}
+
+/// Records `root`'s current installation as trusted under `user_base`, or the
+/// real user state directory, exactly as setup publishes it, so binary tests
+/// can drive the shell hook. Returns the record's path. Fixture injection only.
+#[cfg(feature = "test-support")]
+pub fn record_trust_for_tests(
+    root: &std::path::Path,
+    user_base: Option<&std::path::Path>,
+) -> Result<std::path::PathBuf, String> {
+    let base = match user_base {
+        Some(base) => base.to_owned(),
+        None => dirs_next::data_local_dir().ok_or("cannot locate the user state directory")?,
+    };
+    let store = turborepo_tool_install::Store::open(root).map_err(|e| e.to_string())?;
+    let trust = trust::TrustStore::new(&base, root).map_err(|e| e.to_string())?;
+    trust.record(&store).map_err(|e| e.to_string())?;
+    Ok(trust.path())
+}
+
+/// `turbo setup --frozen --tools-only` against loopback fixture artifacts,
+/// publishing trust evidence under `user_base`, so binary tests can exercise
+/// real managed activation. Fixture injection only, like `run_with_policy`.
+#[cfg(feature = "test-support")]
+pub fn frozen_tools_for_tests(
+    invocation: &std::path::Path,
+    user_base: &std::path::Path,
+    origin: &str,
+    policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
+) -> Result<i32, String> {
+    setup_for_tests(
+        invocation,
+        user_base,
+        origin,
+        &["--frozen", "--tools-only"],
+        policy,
+    )
+}
+
+/// `turbo setup <flags>` from `invocation`, like `frozen_tools_for_tests`, so
+/// binary tests can also create `turbo.lock` from loopback release metadata.
+#[cfg(feature = "test-support")]
+pub fn setup_for_tests(
+    invocation: &std::path::Path,
+    user_base: &std::path::Path,
+    origin: &str,
+    flags: &[&str],
+    policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
+) -> Result<i32, String> {
+    use turborepo_setup::{
+        node_provision::NodeTransport, pnpm_provision::PnpmTransport,
+        registry_resolution::RegistryTransport,
+    };
+    let words = ["turbo", "setup"]
+        .iter()
+        .chain(flags)
+        .chain(&["--cwd"])
+        .map(std::ffi::OsString::from)
+        .chain([invocation.as_os_str().to_owned()])
+        .collect();
+    let args = Args::parse_args(words)?;
+    let Some(crate::cli::Command::Setup { setup_args }) = &args.command else {
+        unreachable!("the words select setup");
+    };
+    let transports = provision::Transports {
+        trust_base: Some(user_base.to_owned()),
+        registry: RegistryTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
+        node: NodeTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
+        pnpm: PnpmTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
+        uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(
+            origin,
+        )
+        .map_err(|e| e.to_string())?,
+        artifact: None,
+        go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+        bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
+            .map_err(|e| e.to_string())?,
+    };
+    // Like run_with_policy, never telemetry. Binary tests run real Git.
+    run_reporting(
+        &args,
+        setup_args,
+        Some(transports),
+        Arc::new(GitCli),
+        &mut telemetry::Report::default(),
+        || Ok(policy()?),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -398,7 +606,7 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     // Plans report locked reinstalls or proposed resolution, never both.
     let read_only = match request.mode {
         Mode::Check => !request.force && !request.update_lock,
-        Mode::Plan => tools_only && !(request.force && request.update_lock),
+        Mode::Plan => !(request.force && request.update_lock),
         Mode::Provision => false,
     };
     if read_only && request.lock != LockMode::NoLock {
@@ -406,9 +614,7 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
-    // Write normalization. Combined force/refresh remains fail-closed. Until
-    // dependency installers exist, plain setup provisions and checks exactly
-    // the tools --tools-only does and reports dependencies as skipped.
+    // Write normalization. Combined force/refresh remains fail-closed.
     if request.mode != Mode::Provision
         || (request.lock == LockMode::NoLock
             && (request.force || request.update_lock || request.offline))
@@ -423,6 +629,14 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
              --update-lock without --offline",
         ));
     }
+    // Installers run with the activation that turbo.lock records. Offline,
+    // they use their native offline modes (`dependencies`).
+    if !tools_only && request.lock == LockMode::NoLock {
+        return Err(Error::Unsupported(
+            "--no-lock cannot install locked dependencies, because installers run with the \
+             managed tools that turbo.lock records; add --tools-only",
+        ));
+    }
     Ok(())
 }
 
@@ -433,6 +647,10 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
 ))]
 #[path = "setup/tests.rs"]
 mod provisioning_tests;
+
+#[cfg(all(test, windows, target_arch = "x86_64"))]
+#[path = "setup/windows_tests.rs"]
+mod windows_provisioning_tests;
 
 #[cfg(test)]
 mod tests {
@@ -456,10 +674,36 @@ mod tests {
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
         let libc = turborepo_platform::host_libc();
         let host = cfg!(target_os = "macos") || matches!(libc, Ok(Some(Libc::Glibc { .. })));
+        // An x64 build qualifies only on an x64 host, not under arm64 emulation.
+        let windows = cfg!(all(windows, target_arch = "x86_64"))
+            && provision::windows_host_machine() == Some(0x8664);
         let platform = provision::platform();
-        assert_eq!(platform.is_ok(), arch && host);
-        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl))) {
+        assert_eq!(platform.is_ok(), (arch && host) || windows);
+        if cfg!(target_os = "linux") && arch && matches!(libc, Ok(Some(Libc::Musl { .. }))) {
             assert!(matches!(platform, Err(Error::MuslHost)));
+        }
+        if cfg!(windows) && provision::windows_host_machine() == Some(0xAA64) {
+            assert!(
+                platform.is_err_and(|e| e.to_string().contains("not qualified for Windows arm64"))
+            );
+        }
+    }
+
+    #[test]
+    fn windows_x64_builds_qualify_only_on_an_identified_x64_host() {
+        assert!(matches!(
+            provision::windows_x64_platform(Some(0x8664)),
+            Ok(turborepo_setup::lock::Platform::WindowsX64)
+        ));
+        let arm64 = provision::windows_x64_platform(Some(0xAA64)).unwrap_err();
+        assert!(
+            arm64
+                .to_string()
+                .contains("including x64 turbo under emulation; use WSL")
+        );
+        // x86, unknown, and an unanswered host query all fail closed.
+        for host in [Some(0x014C), Some(0), None] {
+            assert!(provision::windows_x64_platform(host).is_err(), "{host:?}");
         }
     }
 
@@ -585,38 +829,33 @@ mod tests {
     }
 
     #[test]
-    fn ignore_scripts_overrides_repository_lifecycle_policy() {
-        use turborepo_setup::lifecycle::{Intent, Origin};
-        use turborepo_turbo_json::LifecycleScripts;
-        let native = Some(LifecycleScripts::Native);
-        let cli = request(&["--tools-only", "--ignore-scripts"], false).unwrap();
-        assert!(validate_request(&cli).is_ok());
-        let resolved = cli.lifecycle(native);
-        assert_eq!(
-            (resolved.intent, resolved.origin),
-            (Intent::Skip, Origin::Cli)
-        );
-        let plain = request(&[], false).unwrap();
-        let resolved = plain.lifecycle(Some(LifecycleScripts::Skip));
-        assert_eq!(
-            (resolved.intent, resolved.origin),
-            (Intent::Skip, Origin::Repository)
-        );
-        assert_eq!(plain.lifecycle(None).origin, Origin::Default);
+    fn removed_ignore_scripts_is_rejected() {
+        for flags in [
+            vec!["--ignore-scripts"],
+            vec!["--tools-only", "--ignore-scripts"],
+            vec!["--plan", "--ignore-scripts"],
+        ] {
+            let words = ["turbo", "setup"].into_iter().chain(flags);
+            assert!(Args::parse_args(words.map(OsString::from).collect()).is_err());
+        }
     }
 
     #[test]
-    fn plain_setup_provisions_and_checks_like_tools_only_but_plan_does_not() {
+    fn plain_setup_plans_and_checks_include_locked_dependencies() {
         for ci in [false, true] {
             for flags in [
                 vec![],
                 vec!["--frozen"],
                 vec!["--no-frozen"],
                 vec!["--force"],
-                vec!["--no-lock"],
-                vec!["--offline"],
-                vec!["--offline", "--force"],
                 vec!["--no-frozen", "--update-lock"],
+                vec!["--plan"],
+                vec!["--check"],
+                vec!["--check", "--offline"],
+                // Native offline installs (`dependencies`).
+                vec!["--offline"],
+                vec!["--frozen", "--offline"],
+                vec!["--force", "--offline"],
             ] {
                 let request = request(&flags, ci).unwrap();
                 assert!(!request.tools_only);
@@ -651,5 +890,14 @@ mod tests {
                 Err(Error::Unsupported(message)) if message.starts_with("--offline cannot resolve --update-lock")
             ));
         }
+        // --no-lock (#14486) cannot install locked dependencies; with
+        // dependencies skipped it still provisions.
+        let no_lock = request(&["--no-lock"], false).unwrap();
+        assert_eq!(no_lock.mode, Mode::Provision);
+        assert!(matches!(
+            validate_request(&no_lock),
+            Err(Error::Unsupported(_))
+        ));
+        assert!(validate(&no_lock, true).is_ok());
     }
 }

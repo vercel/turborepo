@@ -264,22 +264,35 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
     assert!(select(&f).is_err()); // Lock exists, but setup never prepared evidence.
     assert!(!f.owned.home().join("turborepo").exists());
     assert!(!f.owned.root().join(".turbo").exists());
+    // A managed lock on a musl host gets musl guidance, not `turbo setup`,
+    // before any user state is read.
+    let musl = || {
+        use turborepo_platform::{Architecture, OperatingSystem, Platform};
+        turborepo_setup::execution_identity::ExecutionContext::new(
+            Platform::new(OperatingSystem::Linux, Architecture::X64),
+            turborepo_setup::execution_identity::Libc::Musl {
+                abi: "1.2.5".into(),
+            },
+            "x86_64-linux-6.1".into(),
+            std::collections::BTreeSet::from(["baseline".to_owned()]),
+        )
+        .map_err(|e| e.to_string())
+    };
+    let error = ManagedTools::inspect(f.owned.root(), &config, true, f.owned.home(), musl);
+    let error = error.err().unwrap();
+    assert!(error.contains("not supported on musl"), "{error}");
+    assert!(!error.contains("run turbo setup"), "{error}");
+    // Cargo repositories are no longer refused; they need the same setup.
     fs::write(
         f.owned.root().join("Cargo.toml"),
         "[workspace]\nmembers = []\n",
     )
     .unwrap();
-    let mut opts = input(&f, "strict").opts;
-    opts.future_flags.experimental_cargo_workspaces = true;
-    let root = turbopath::AbsoluteSystemPathBuf::try_from(f.owned.root()).unwrap();
-    let base = CommandBase::from_opts(opts, root, "fixture", turborepo_ui::ColorConfig::new(true));
-    assert!(
-        managed::select(&base)
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("Node/pnpm JS")
-    );
+    let cargo = r#"{"futureFlags":{"experimentalSetup":true,"experimentalCargoWorkspaces":true}}"#;
+    fs::write(&config, cargo).unwrap();
+    let error = select(&f).err().unwrap();
+    assert!(error.contains("run turbo setup"), "{error}");
+    assert!(!f.owned.root().join(".turbo").exists());
 }
 
 #[test]
@@ -397,3 +410,103 @@ fn deleted_shims_and_declaration_drift_never_download_and_setup_recovers() {
     assert_ne!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
     assert!(select(&f).unwrap().is_some());
 }
+
+const NO_LOCK: &[&str] = &["--no-lock", "--tools-only"];
+
+/// `runnable()` provisioned by `turbo setup --no-lock`, so without turbo.lock.
+fn clone_local() -> Fixture {
+    let f = runnable();
+    fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+    let routes = super::first_lock::routes_with(&f, "24.0.0", "10.0.0", NODE_RUNTIME);
+    f.run(&LoopbackServer::new(routes, |_| {}).unwrap(), NO_LOCK)
+        .unwrap();
+    assert!(!f.owned.root().join("turbo.lock").exists());
+    f
+}
+
+#[test]
+fn no_lock_setup_then_run_uses_clone_local_tools_in_strict_and_loose_modes() {
+    for mode in ["strict", "loose"] {
+        let f = clone_local();
+        let tools = select(&f).unwrap().unwrap();
+        let identity: Value =
+            serde_json::from_slice(tools.snapshot().canonical_identity()).unwrap();
+        assert_eq!(identity["resolution"], "clone-local");
+        let overrides = tools.revalidate().unwrap();
+        let first = std::env::split_paths(std::ffi::OsStr::new(&overrides["PATH"]))
+            .next()
+            .unwrap();
+        assert!(first.starts_with(f.owned.root()));
+        let output = execute(&f, mode, tools);
+        let lines: Vec<_> = output.lines().collect();
+        assert_eq!(
+            Path::new(lines[0]).canonicalize().unwrap(),
+            first.join("node").canonicalize().unwrap()
+        );
+        assert!(lines[3].contains("pnpm.cjs run build"));
+        f.no_execution();
+    }
+}
+
+#[test]
+fn no_lock_task_hashes_never_match_the_same_tools_under_a_committed_lock() {
+    let f = clone_local();
+    let local = select(&f).unwrap().unwrap();
+    let identity = local.cache_identity().to_owned();
+    let tools = local.snapshot().tools().clone();
+    let hash = execute(&f, "strict", local)
+        .lines()
+        .nth(2)
+        .unwrap()
+        .to_owned();
+    let current = turborepo_tool_install::Store::inspect(f.owned.root())
+        .unwrap()
+        .unwrap();
+    let selection = current.record.unwrap();
+    fs::write(f.owned.root().join("turbo.lock"), selection.bytes()).unwrap();
+    // Setup from that lock records its digest for the same generation.
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    f.run(&empty, NO_LOCK).unwrap();
+    assert_eq!(empty.hits(), 0);
+    let locked = select(&f).unwrap().unwrap();
+    assert_eq!(locked.snapshot().tools(), &tools);
+    assert_ne!(locked.cache_identity(), identity);
+    assert_ne!(execute(&f, "strict", locked).lines().nth(2).unwrap(), hash);
+}
+
+#[test]
+fn no_lock_run_fails_closed_with_clone_local_guidance() {
+    for case in 0..4 {
+        let f = clone_local();
+        let root = f.owned.root();
+        let current = turborepo_tool_install::Store::inspect(root)
+            .unwrap()
+            .unwrap();
+        match case {
+            0 => fs::write(root.join(".nvmrc"), "24.1.0\n").unwrap(),
+            1 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
+            2 => {
+                for entry in fs::read_dir(f.owned.home().join("turborepo/setup-roots")).unwrap() {
+                    fs::remove_file(entry.unwrap().path()).unwrap();
+                }
+            }
+            // Removing the clone-local inventory is the opt-out.
+            _ => fs::remove_dir_all(root.join(".turbo/tools")).unwrap(),
+        }
+        match select(&f) {
+            Ok(None) if case == 3 => {}
+            Err(error) if case < 3 => {
+                assert!(
+                    error.contains("run turbo setup --no-lock"),
+                    "{case}: {error}"
+                );
+                assert!(!error.contains("commit"), "{error}");
+            }
+            other => panic!("case {case}: {:?}", other.map(|tools| tools.is_some())),
+        }
+        f.no_execution();
+    }
+}
+
+#[path = "additional_activation_tests.rs"]
+mod additional;

@@ -6,6 +6,8 @@ use std::process::{Command, Output};
 
 use super::*;
 
+mod stamps;
+
 fn node() -> Tool {
     Tool {
         id: "node".into(),

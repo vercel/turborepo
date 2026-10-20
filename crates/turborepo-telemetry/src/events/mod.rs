@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub mod command;
 pub mod generic;
 pub mod repo;
+pub mod setup;
 pub mod task;
 
 /// All possible telemetry events must be included in this enum.

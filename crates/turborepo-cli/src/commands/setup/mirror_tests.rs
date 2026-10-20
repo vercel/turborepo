@@ -27,14 +27,15 @@ fn run_mirrored(
     let mirrors = Mirrors {
         node: mirror("/node/"),
         registry: mirror("/npm"),
+        ..Mirrors::default()
     };
-    let policy = || -> Result<OfficialSourcePolicy, Error> {
+    let policy = || -> Result<ToolDownloadPolicy, Error> {
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     };
     crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
         let mut transports = provision::Transports::configured(&policy()?, &mirrors, None)?;
         transports.trust_base = Some(f.owned.home().to_owned());
-        run_with_policy(args, setup_args, Some(transports), policy)
+        run_with_policy(args, setup_args, Some(transports), f.git.clone(), policy)
     })
     .unwrap()
 }
@@ -54,6 +55,30 @@ fn mirrors_create_and_install_locks_with_canonical_provenance() {
     let (official, mirrored_fixture) = (fresh(), fresh());
     let u = LoopbackServer::new(routes(&official, "24.0.0", "10.0.0"), |_| {}).unwrap();
     assert_eq!(official.run(&u, LOCAL).unwrap(), 0);
+    // Native ecosystem configuration neither blocks setup nor substitutes for
+    // explicitly selected tool mirrors, even when it names different sources.
+    for (path, contents) in [
+        (
+            mirrored_fixture.owned.home().join(".npmrc"),
+            "registry=https://ambient.invalid/npm\nstrict-ssl=false\n",
+        ),
+        (
+            mirrored_fixture.owned.root().join(".npmrc"),
+            "registry=https://ambient.invalid/project\n",
+        ),
+        (
+            mirrored_fixture.owned.root().join("uv.toml"),
+            "index-url = 'https://ambient.invalid/python'\n",
+        ),
+        (
+            mirrored_fixture.owned.root().join(".cargo/config.toml"),
+            "[source.crates-io]\nreplace-with = 'company'\n[source.company]\nregistry = \
+             'https://ambient.invalid/cargo'\n",
+        ),
+    ] {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
+    }
     let routes = mirrored(routes(&mirrored_fixture, "24.0.0", "10.0.0"));
     let m = LoopbackServer::new(routes, |_| {}).unwrap();
     assert_eq!(

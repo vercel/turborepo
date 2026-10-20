@@ -180,7 +180,7 @@ async fn official_resolution_reads_only_the_requested_channel_manifest() {
 }
 
 mod lock_updates {
-    use std::{fs, path::Path, process::Command};
+    use std::{fs, path::Path};
 
     use super::*;
     use crate::lock::{
@@ -244,11 +244,7 @@ mod lock_updates {
     #[test]
     fn edits_keep_the_locked_release_until_an_explicit_refresh() {
         let root = tempfile::tempdir().unwrap();
-        let git = Command::new("git")
-            .args(["init", "--quiet"])
-            .arg(root.path())
-            .status();
-        assert!(git.unwrap().success());
+        crate::git::fake_repository(root.path()).unwrap();
         fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
         let file = root.path().join("rust-toolchain.toml");
         fs::write(
@@ -293,14 +289,7 @@ mod lock_updates {
     #[test]
     fn rust_creation_and_removal_preserve_locked_uv_without_uv_traffic() {
         let root = tempfile::tempdir().unwrap();
-        assert!(
-            Command::new("git")
-                .args(["init", "--quiet"])
-                .arg(root.path())
-                .status()
-                .unwrap()
-                .success()
-        );
+        crate::git::fake_repository(root.path()).unwrap();
         fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
         fs::write(
             root.path().join("uv.toml"),

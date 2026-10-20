@@ -1,7 +1,7 @@
 use std::{
     backtrace::Backtrace,
     collections::HashMap,
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Seek, SeekFrom, Write},
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
@@ -19,8 +19,7 @@ use turborepo_types::SecretString;
 
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
-    artifact_body::{ARTIFACT_MEMORY_THRESHOLD, ArtifactBody},
-    cache_archive::CacheReader,
+    artifact_body::{ARTIFACT_MEMORY_THRESHOLD, Artifact, ArtifactBody},
     signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
     upload_progress::{UploadProgress, UploadProgressQuery},
 };
@@ -58,6 +57,27 @@ enum RemoteAccess {
     Write,
 }
 
+/// A downloaded artifact whose signature (if any) has been verified but which
+/// has not been restored yet.
+struct DownloadedArtifact {
+    duration: u64,
+    sha: Option<String>,
+    dirty_hash: Option<String>,
+    body: ArtifactBody,
+}
+
+type DownloadResult = Result<Option<DownloadedArtifact>, CacheError>;
+
+/// A download queued ahead of the task that will restore it.
+struct PrefetchSlot {
+    // Claimed by whichever side starts the download first: the prefetcher or
+    // the task's own fetch. The other side never requests the artifact.
+    claimed: Arc<AtomicBool>,
+    // The permit travels with the result so a finished download keeps
+    // counting against the prefetch limit until its task takes it.
+    result: tokio::sync::oneshot::Receiver<(DownloadResult, tokio::sync::OwnedSemaphorePermit)>,
+}
+
 fn replace_api_auth_token(api_auth: &mut APIAuth, token: SecretString) -> bool {
     if api_auth.token.expose() == token.expose() {
         return false;
@@ -79,6 +99,7 @@ pub struct HTTPCache {
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
     scm_state: LazyScmState,
+    prefetched: Mutex<HashMap<String, PrefetchSlot>>,
 }
 
 impl HTTPCache {
@@ -136,6 +157,7 @@ impl HTTPCache {
             outage_breaker: Default::default(),
             analytics_recorder,
             scm_state,
+            prefetched: Mutex::new(HashMap::new()),
         })
     }
 
@@ -404,9 +426,9 @@ impl HTTPCache {
         // rather than occupying a Tokio runtime worker.
         let anchor = anchor.to_owned();
         let files = files.to_vec();
-        let body = tokio::task::spawn_blocking(move || ArtifactBody::from_files(&anchor, &files))
-            .await??;
-        self.put_body(hash, Arc::new(body), duration).await
+        let artifact =
+            tokio::task::spawn_blocking(move || Artifact::from_files(&anchor, &files)).await??;
+        self.put_body(hash, artifact.body().clone(), duration).await
     }
 
     /// Uploads an already-built archive. Shared with the local cache so a
@@ -596,7 +618,7 @@ impl HTTPCache {
         Ok(self
             .fetch_with_archive(hash)
             .await?
-            .map(|(metadata, files, _body)| (metadata, files)))
+            .map(|(metadata, files, _artifact)| (metadata, files)))
     }
 
     /// Fetches and restores the artifact, also returning the verified archive
@@ -608,8 +630,135 @@ impl HTTPCache {
     pub(crate) async fn fetch_with_archive(
         &self,
         hash: &str,
-    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>, ArtifactBody)>, CacheError>
-    {
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>, Artifact)>, CacheError> {
+        let Some(DownloadedArtifact {
+            duration,
+            sha,
+            dirty_hash,
+            body,
+        }) = self.take_or_download(hash).await?
+        else {
+            self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
+            return Ok(None);
+        };
+
+        // Decompression and extraction are synchronous CPU and filesystem
+        // work; run them on the blocking pool so a large restore does not
+        // occupy a runtime worker.
+        let body = Arc::new(body);
+        let repo_root = self.repo_root.clone();
+        let (files, artifact) =
+            tokio::task::spawn_blocking(move || body.restore(&repo_root)).await??;
+
+        self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
+        Ok(Some((
+            CacheHitMetadata {
+                source: CacheSource::Remote,
+                time_saved: duration,
+                sha,
+                dirty_hash,
+            },
+            files,
+            artifact,
+        )))
+    }
+
+    /// Starts downloading `hashes` in the background, in order, skipping those
+    /// for which `skip` returns true. At most `concurrency` downloads are in
+    /// flight, the same as tasks fetching for themselves, and at most
+    /// `2 * concurrency` are in flight or finished but not yet taken by their
+    /// task, which bounds how far ahead (and how much memory) the prefetch
+    /// runs. Nothing is restored or recorded here: each artifact is still
+    /// restored, and its hit or miss logged, only when its task fetches it, so
+    /// this just moves the network round trip ahead of the task. Each hash is
+    /// requested at most once; if a task fetches before its download has
+    /// started, the task downloads it itself and the prefetcher skips it.
+    pub(crate) fn prefetch(
+        self: &Arc<Self>,
+        hashes: Vec<String>,
+        concurrency: usize,
+        skip: impl Fn(&str) -> bool + Send + 'static,
+    ) {
+        let mut queued = Vec::with_capacity(hashes.len());
+        {
+            let mut slots = self
+                .prefetched
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            for hash in hashes {
+                if slots.contains_key(&hash) {
+                    continue;
+                }
+                let (sender, result) = tokio::sync::oneshot::channel();
+                let claimed = Arc::new(AtomicBool::new(false));
+                slots.insert(
+                    hash.clone(),
+                    PrefetchSlot {
+                        claimed: claimed.clone(),
+                        result,
+                    },
+                );
+                queued.push((hash, claimed, sender));
+            }
+        }
+        if queued.is_empty() {
+            return;
+        }
+
+        let cache = self.clone();
+        tokio::spawn(async move {
+            let concurrency = concurrency.max(1);
+            let lookahead = Arc::new(tokio::sync::Semaphore::new(concurrency * 2));
+            let in_flight = Arc::new(tokio::sync::Semaphore::new(concurrency));
+            for (hash, claimed, sender) in queued {
+                let Ok(permit) = lookahead.clone().acquire_owned().await else {
+                    return;
+                };
+                let Ok(in_flight_permit) = in_flight.clone().acquire_owned().await else {
+                    return;
+                };
+                // Dropping a sender without claiming its slot makes the
+                // task's own fetch download the artifact, as if there were no
+                // prefetch.
+                if cache.is_disabled() {
+                    return;
+                }
+                if skip(&hash) || claimed.swap(true, Ordering::AcqRel) {
+                    continue;
+                }
+                let cache = cache.clone();
+                tokio::spawn(async move {
+                    let downloaded = cache.download(&hash).await;
+                    drop(in_flight_permit);
+                    let _ = sender.send((downloaded, permit));
+                });
+            }
+        });
+    }
+
+    /// Returns this hash's prefetched download, waiting for it if it is in
+    /// flight, or downloads it now if no prefetch has started it.
+    async fn take_or_download(&self, hash: &str) -> DownloadResult {
+        let slot = self
+            .prefetched
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(hash);
+        if let Some(PrefetchSlot { claimed, result }) = slot
+            && claimed.swap(true, Ordering::AcqRel)
+            && let Ok((downloaded, _permit)) = result.await
+        {
+            return downloaded;
+        }
+        // Boxed so this doesn't deepen the (already deep) future type of the
+        // task executor that awaits it.
+        Box::pin(self.download(hash)).await
+    }
+
+    /// Downloads an artifact into a spool and verifies its signature, without
+    /// restoring it. Returns `Ok(None)` when the remote cache doesn't have it.
+    #[tracing::instrument(skip_all)]
+    async fn download(&self, hash: &str) -> DownloadResult {
         let response = self
             .execute_with_token_refresh(RemoteAccess::Read, hash, |api_auth| {
                 let client = &self.client;
@@ -627,7 +776,6 @@ impl HTTPCache {
             .await?;
 
         let Some(response) = response else {
-            self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
             return Ok(None);
         };
 
@@ -705,39 +853,16 @@ impl HTTPCache {
 
         spool.seek(SeekFrom::Start(0))?;
         let body = ArtifactBody::from_spool(spool)?;
-        // Decompression and extraction are synchronous CPU and filesystem
-        // work; run them on the blocking pool so a large restore does not
-        // occupy a runtime worker.
-        let repo_root = self.repo_root.clone();
-        let reader = body.reader()?;
-        let files =
-            tokio::task::spawn_blocking(move || Self::restore_tar(&repo_root, reader)).await??;
-
-        self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
-        Ok(Some((
-            CacheHitMetadata {
-                source: CacheSource::Remote,
-                time_saved: duration,
-                sha,
-                dirty_hash,
-            },
-            files,
+        Ok(Some(DownloadedArtifact {
+            duration,
+            sha,
+            dirty_hash,
             body,
-        )))
+        }))
     }
 
     pub fn requests(&self) -> Arc<Mutex<UploadMap>> {
         self.uploads.clone()
-    }
-
-    #[tracing::instrument(skip_all)]
-    pub(crate) fn restore_tar(
-        root: &AbsoluteSystemPath,
-        body: impl Read,
-    ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
-        let mut cache_reader = CacheReader::from_reader(body, true)?;
-        let (files, _manifest) = cache_reader.restore(root, None)?;
-        Ok(files)
     }
 
     fn convert_api_error(hash: &str, err: turborepo_api_client::Error) -> CacheError {
@@ -766,7 +891,7 @@ mod test {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIClient, analytics};
+    use turborepo_api_client::{APIClient, CacheClient, analytics};
     use turborepo_types::SecretString;
     use turborepo_vercel_api_mock::start_test_server;
 
@@ -810,6 +935,233 @@ mod test {
             LazyScmState::resolved(None),
         )
         .unwrap()
+    }
+
+    /// A compressed archive containing one file, `name`, with `contents`.
+    fn archive_bytes(name: &str, contents: &str) -> Result<Vec<u8>> {
+        let source = tempdir()?;
+        let source_path = AbsoluteSystemPathBuf::try_from(source.path())?;
+        let file = AnchoredSystemPathBuf::from_raw(name)?;
+        source_path.resolve(&file).create_with_contents(contents)?;
+        let mut bytes = Vec::new();
+        {
+            let mut writer = crate::cache_archive::CacheWriter::from_writer(&mut bytes, true)?;
+            writer.add_files(&source_path, &[file])?;
+            writer.finish()?;
+        }
+        Ok(bytes)
+    }
+
+    enum PrefetchAccess {
+        Writable,
+        ReadOnly,
+        ForbiddenUpload { replace_token: bool },
+    }
+
+    #[test_case::test_case(PrefetchAccess::Writable ; "writable")]
+    #[test_case::test_case(PrefetchAccess::ReadOnly ; "status read only")]
+    #[test_case::test_case(PrefetchAccess::ForbiddenUpload { replace_token: false } ; "upload forbidden without replacement")]
+    #[test_case::test_case(PrefetchAccess::ForbiddenUpload { replace_token: true } ; "upload forbidden after replacement")]
+    #[tokio::test]
+    async fn prefetched_artifacts_are_requested_once_and_restored_on_fetch(
+        access: PrefetchAccess,
+    ) -> Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let artifact = archive_bytes("out.txt", "prefetched")?;
+        let hit = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::GET).path("/v8/artifacts/hit");
+                then.status(200)
+                    .header("x-artifact-duration", "42")
+                    .body(artifact.clone());
+            })
+            .await;
+        let miss = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::GET)
+                    .path("/v8/artifacts/miss");
+                then.status(404);
+            })
+            .await;
+        let skipped = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::GET)
+                    .path("/v8/artifacts/skipped");
+                then.status(200)
+                    .header("x-artifact-duration", "7")
+                    .body(artifact.clone());
+            })
+            .await;
+
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let cache = std::sync::Arc::new(HTTPCache::new(
+            APIClient::new(server.base_url(), None, None, "2.0.0", false)?,
+            &CacheOpts {
+                cache_dir: ".turbo/cache".into(),
+                cache: Default::default(),
+                workers: 0,
+                remote_cache_opts: None,
+                cache_max_age: None,
+                cache_max_size: None,
+            },
+            repo_root_path.clone(),
+            APIAuth {
+                team_id: Some("my-team".to_string()),
+                token: SecretString::new("my-token".to_string()),
+                team_slug: None,
+            },
+            None,
+            LazyScmState::resolved(None),
+        )?);
+
+        let put = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::PUT);
+                then.status(403).json_body(
+                    serde_json::json!({"error": {"code": "forbidden", "message": "read only"}}),
+                );
+            })
+            .await;
+        match access {
+            PrefetchAccess::Writable => {}
+            PrefetchAccess::ReadOnly => {
+                cache.disable_writes_read_only();
+            }
+            PrefetchAccess::ForbiddenUpload { replace_token } => {
+                let result = cache
+                    .execute_with_access_and_recovery(
+                        super::RemoteAccess::Write,
+                        "upload",
+                        |auth| {
+                            let client = &cache.client;
+                            async move {
+                                client
+                                    .put_artifact(
+                                        "upload",
+                                        tokio_stream::iter([Ok(bytes::Bytes::from_static(
+                                            b"body",
+                                        ))]),
+                                        4,
+                                        1,
+                                        None,
+                                        &auth.token,
+                                        auth.team_id.as_deref(),
+                                        None,
+                                        None,
+                                        None,
+                                    )
+                                    .await
+                            }
+                        },
+                        |_| async move {
+                            Ok::<_, ()>(
+                                replace_token.then(|| SecretString::new("replacement".into())),
+                            )
+                        },
+                    )
+                    .await;
+                assert!(matches!(
+                    result,
+                    Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+                ));
+                put.assert_calls_async(if replace_token { 2 } else { 1 })
+                    .await;
+            }
+        }
+        if !matches!(access, PrefetchAccess::Writable) {
+            assert!(cache.uploads_disabled());
+            assert!(!cache.is_disabled());
+            assert!(!cache.disable_writes_read_only());
+            assert!(matches!(
+                cache.put(&repo_root_path, "later-upload", &[], 1).await,
+                Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+            ));
+        }
+
+        cache.prefetch(
+            vec!["hit".into(), "miss".into(), "skipped".into()],
+            2,
+            |hash| hash == "skipped",
+        );
+        // Wait until the prefetcher has started both downloads, so the fetches
+        // below take its results instead of downloading themselves.
+        let claimed_by_prefetch = |hash: &str| {
+            cache
+                .prefetched
+                .lock()
+                .unwrap()
+                .get(hash)
+                .is_some_and(|slot| slot.claimed.load(std::sync::atomic::Ordering::Acquire))
+        };
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while !(claimed_by_prefetch("hit") && claimed_by_prefetch("miss")) {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await?;
+
+        let (metadata, files) = cache.fetch("hit").await?.expect("remote hit");
+        assert_eq!(metadata.time_saved, 42);
+        assert_eq!(files, vec![AnchoredSystemPathBuf::from_raw("out.txt")?]);
+        assert_eq!(
+            std::fs::read_to_string(repo_root_path.join_component("out.txt").as_std_path())?,
+            "prefetched"
+        );
+        assert!(cache.fetch("miss").await?.is_none());
+        // The prefetcher skipped this one, so the fetch downloads it itself.
+        assert!(cache.fetch("skipped").await?.is_some());
+
+        let denied = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::GET).path("/v8/artifacts/denied");
+                then.status(403)
+                    .json_body(serde_json::json!({"error": {"code": "forbidden", "message": "no read access"}}));
+            })
+            .await;
+        let result = cache
+            .execute_with_token_refresh_and_recovery(
+                "denied",
+                |auth| {
+                    let client = &cache.client;
+                    async move {
+                        client
+                            .fetch_artifact("denied", &auth.token, None, None)
+                            .await
+                    }
+                },
+                |_| async { Ok::<Option<SecretString>, ()>(None) },
+            )
+            .await;
+        assert!(matches!(
+            result,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(matches!(
+            cache.fetch("hit").await,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        assert!(matches!(
+            cache
+                .put(&repo_root_path, "after-read-denied", &[], 1)
+                .await,
+            Err(crate::CacheError::ForbiddenRemoteCacheWrite)
+        ));
+        denied.assert_calls_async(1).await;
+        put.assert_calls_async(match access {
+            PrefetchAccess::ForbiddenUpload {
+                replace_token: true,
+            } => 2,
+            PrefetchAccess::ForbiddenUpload {
+                replace_token: false,
+            } => 1,
+            PrefetchAccess::Writable | PrefetchAccess::ReadOnly => 0,
+        })
+        .await;
+        hit.assert_calls_async(1).await;
+        miss.assert_calls_async(1).await;
+        skipped.assert_calls_async(1).await;
+        Ok(())
     }
 
     #[tokio::test]

@@ -263,7 +263,7 @@
       "required": ["executables", "format", "sha256", "url"],
       "properties": {
         "executables": {
-          "description": "Executable names mapped to paths relative to `rootPrefix`. A binary has exactly one entry, which names where the file is installed.",
+          "description": "Executable names mapped to paths relative to `rootPrefix`, or to the archive's top level without one. A binary has exactly one entry, which names where the file is installed.",
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/String"
@@ -278,7 +278,7 @@
           ]
         },
         "rootPrefix": {
-          "description": "The single top-level directory that contains every archive entry. Required for archives and not allowed for binaries.",
+          "description": "The single top-level directory that contains every archive entry. Omit it for an archive whose entries sit at its top level. Not allowed for binaries.",
           "anyOf": [
             {
               "$ref": "#/definitions/String"
@@ -603,11 +603,6 @@
         }
       }
     },
-    "LifecycleScripts": {
-      "description": "Whether dependency setup lets package managers run lifecycle scripts. `native` keeps each package manager's defaults and committed allowlists or trust settings. `skip` passes the package manager's own flag for skipping them, and fails where the package manager has none.",
-      "type": "string",
-      "enum": ["native", "skip"]
-    },
     "Map_of_AdditionalToolArtifact": {
       "type": "object",
       "additionalProperties": {
@@ -908,6 +903,89 @@
         }
       }
     },
+    "SetupMirrors": {
+      "description": "Credential-free HTTPS mirrors for `turbo setup` downloads. Each value is a base URL that serves the same paths as the official source.",
+      "type": "object",
+      "properties": {
+        "bun": {
+          "description": "Replaces the `https://github.com` origin for Bun release checksums and archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "go": {
+          "description": "Replaces both the `https://go.dev` and `https://dl.google.com` origins for Go's release index and archives. The mirror serves both official paths, `/dl/?mode=json&include=all` and `/go/<archive>`, beneath its base.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "node": {
+          "description": "Replaces `https://nodejs.org/dist` for Node.js release metadata and archives.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "npmRegistry": {
+          "description": "Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn package metadata and tarballs.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "python": {
+          "description": "Replaces the `https://releases.astral.sh` origin for CPython build checksums and archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rust": {
+          "description": "Replaces the `https://static.rust-lang.org` origin for rustup and Rust toolchain downloads, keeping their official paths, like `RUSTUP_DIST_SERVER`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uv": {
+          "description": "Replaces the `https://releases.astral.sh` origin for uv's version index and release archives, keeping their official paths.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
     "SetupPolicy": {
       "description": "Repository policy for `turbo setup`. Only allowed in the root turbo.json and requires `futureFlags.experimentalSetup`.\n\nOptional: without it, `turbo setup` infers what to prepare from native declaration files, and detected tools are managed. Root `tools` and `dependencies` apply to every toolchain. A toolchain key overrides them for that toolchain.",
       "type": "object",
@@ -952,11 +1030,11 @@
             }
           ]
         },
-        "lifecycleScripts": {
-          "description": "Whether dependency setup runs lifecycle scripts for every toolchain.",
+        "mirrors": {
+          "description": "Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the official URLs, and environment variables override these values.",
           "anyOf": [
             {
-              "$ref": "#/definitions/LifecycleScripts"
+              "$ref": "#/definitions/SetupMirrors"
             },
             {
               "type": "null"
@@ -1090,17 +1168,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/DependencyPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "lifecycleScripts": {
-          "description": "Whether this toolchain's dependency setup runs lifecycle scripts.",
-          "anyOf": [
-            {
-              "$ref": "#/definitions/LifecycleScripts"
             },
             {
               "type": "null"

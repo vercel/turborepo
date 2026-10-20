@@ -25,12 +25,8 @@ fn tracked(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
 }
 #[test]
 fn no_lock_ci_repeat_preserves_24_0_pin_generation_and_zero_advance_metadata() {
-    for (legacy, flags) in [
-        (false, NO_LOCK),
-        (true, NO_LOCK),
-        (false, &["--no-lock"][..]),
-        (true, &["--no-lock"][..]),
-    ] {
+    // Plain --no-lock cannot install locked dependencies (TURBO-6229).
+    for (legacy, flags) in [(false, NO_LOCK), (true, NO_LOCK)] {
         let f = fresh();
         fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
         let before = tracked(&f);
@@ -256,7 +252,7 @@ fn no_lock_unsupported_native_shape_fails_before_writer_or_nonlock_changes() {
     for package in [
         json!({"packageManager":format!("pnpm@10.0.0+sha512.{}", "0".repeat(128))}),
         json!({"packageManager":"pnpm@10.0.0","devEngines":{"runtime":[{"name":"deno","version":"2.0.0"},{"name":"node","version":"24.x"}]}}),
-        json!({"packageManager":"npm@11.6.1"}),
+        json!({"packageManager":"yarn@4.5.0"}),
     ] {
         let f = fresh();
         fs::write(f.owned.root().join("package.json"), package.to_string()).unwrap();
@@ -274,7 +270,7 @@ fn no_lock_names_a_missing_node_declaration_or_unsupported_tool_before_any_chang
     for (package, nvmrc, unsupported) in [
         (json!({"packageManager":"pnpm@10.0.0"}), false, None),
         (json!({}), false, None),
-        (json!({"packageManager":"npm@11.6.1"}), true, Some("npm")),
+        (json!({"packageManager":"yarn@4.5.0"}), true, Some("yarn")),
     ] {
         let f = fresh();
         if !nvmrc {
@@ -297,13 +293,7 @@ fn no_lock_names_a_missing_node_declaration_or_unsupported_tool_before_any_chang
 #[test]
 fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_download() {
     for existing in [false, true] {
-        for name in [
-            "turbo.lock",
-            ".nvmrc",
-            "apps/web/.npmrc",
-            "pnpm-workspace.yaml",
-            ".gitignore",
-        ] {
+        for name in ["turbo.lock", ".nvmrc", "turbo.json", "pnpm-workspace.yaml"] {
             let f = fresh();
             if existing {
                 let seed = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
@@ -323,6 +313,8 @@ fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_downloa
                         root.join(name),
                         if name == "turbo.lock" {
                             "{}"
+                        } else if name == "turbo.json" {
+                            UNSUPPORTED_SETUP
                         } else {
                             "changed"
                         },
@@ -375,16 +367,12 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
                 0 => fs::write(staged.join("record.json"), "corrupt").unwrap(),
                 1 => fs::write(staged.join("tools/pnpm/dist/resource"), "corrupt").unwrap(),
                 2 => fs::write(f.owned.root().join("turbo.lock"), "{}").unwrap(),
-                3 => fs::write(
-                    f.owned.root().join("apps/web/.npmrc"),
-                    "registry=https://private.invalid",
-                )
-                .unwrap(),
+                3 => fs::write(f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                 _ => fs::write(f.owned.root().join("pnpm-workspace.yaml"), "packages: []").unwrap(),
             }
         });
         assert!(fired.get());
-        assert!(result.is_err());
+        assert!(result.is_err(), "case {case}");
         assert_eq!(f.manifest(), before);
         assert_eq!(current(&f).bin, old.bin);
         assert_eq!(
@@ -399,7 +387,7 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
     for writer in [true, false] {
         let f = fresh();
         let root = f.owned.root();
-        let snapshot = turborepo_setup::lock::Snapshot::capture(root).unwrap();
+        let snapshot = f.sources().unwrap();
         let guard = writer.then(|| snapshot.guard().unwrap());
         let store = (!writer).then(|| Store::open(root).unwrap());
         let (tx, rx) = std::sync::mpsc::channel();
@@ -416,11 +404,7 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
                 })
             });
             rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            fs::write(
-                root.join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap();
+            fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap();
             drop(guard);
             drop(store);
             assert!(pending.join().unwrap().is_err());
@@ -429,4 +413,99 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
         assert!(f.manifest().is_none());
         untouched(&f);
     }
+}
+fn trusted(f: &Fixture) -> (PathBuf, Value) {
+    let path = fs::read_dir(f.owned.home().join("turborepo/setup-roots"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    (path, value)
+}
+fn digest(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+fn locked_plan(f: &Fixture) -> turborepo_setup::activation::ActivationPlan {
+    let context = crate::commands::managed::context().unwrap();
+    turborepo_setup::activation::ActivationPlan::inspect(f.owned.root(), context).unwrap()
+}
+#[test]
+fn no_lock_records_clone_local_trust_that_a_committed_lock_never_inherits() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    f.run(&u, NO_LOCK).unwrap();
+    let (path, value) = trusted(&f);
+    let installed = current(&f);
+    assert!(value.get("lock_sha256").is_none());
+    let installation = &value["installation"];
+    assert_eq!(
+        installation["selection_sha256"],
+        digest(installed.record.as_ref().unwrap().bytes())
+    );
+    assert_eq!(
+        installation["manifest_sha256"],
+        digest(&f.manifest().unwrap())
+    );
+    assert_eq!(installation["bin"], installed.bin.to_str().unwrap());
+    let trust =
+        crate::commands::setup::trust::TrustStore::new(f.owned.home(), f.owned.root()).unwrap();
+    let recorded = trust.recorded().unwrap().unwrap();
+    assert_eq!(recorded.bin, installed.bin);
+    assert!(!recorded.stale);
+    let modified = fs::metadata(&path).unwrap().modified().unwrap();
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    f.run(&empty, NO_LOCK).unwrap();
+    assert_eq!(empty.hits(), 0);
+    assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
+    // The same selection committed as turbo.lock is another resolution: stale
+    // for the hook and never authority for the locked plan.
+    let lock = selection(&f).canonical_bytes().unwrap();
+    fs::write(f.owned.root().join("turbo.lock"), &lock).unwrap();
+    assert!(trust.recorded().unwrap().unwrap().stale);
+    assert!(!trust.authorizes(&locked_plan(&f)).unwrap());
+    // Setup from that lock records its digest instead, for the same generation.
+    f.run(&empty, NO_LOCK).unwrap();
+    assert_eq!(empty.hits(), 0);
+    assert_eq!(current(&f).bin, installed.bin);
+    assert_eq!(trusted(&f).1["lock_sha256"], digest(&lock));
+    assert!(trust.authorizes(&locked_plan(&f)).unwrap());
+    untouched(&f);
+}
+#[test]
+fn no_lock_freshly_verifies_untrusted_inventory_before_recording_it() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    f.run(&u, NO_LOCK).unwrap();
+    let pinned = selection(&f);
+    let old = current(&f).bin;
+    // A healthy inventory without user-state evidence, as if copied or
+    // committed, proves nothing about where its bytes came from.
+    fs::remove_file(trusted(&f).0).unwrap();
+    let trust =
+        crate::commands::setup::trust::TrustStore::new(f.owned.home(), f.owned.root()).unwrap();
+    assert!(trust.recorded().unwrap().is_none());
+    let paths = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let log = paths.clone();
+    let verify = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), move |p| {
+        log.lock().unwrap().push(p.to_owned());
+    })
+    .unwrap();
+    f.run(&verify, NO_LOCK).unwrap();
+    // Exact verified preparation of the pinned cohort, never re-resolution.
+    assert_eq!(verify.hits(), 3);
+    assert!(
+        paths
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|p| !p.ends_with("index.json") && !p.ends_with("SHASUMS256.txt"))
+    );
+    assert_eq!(selection(&f), pinned);
+    assert_ne!(current(&f).bin, old);
+    assert_eq!(trust.recorded().unwrap().unwrap().bin, current(&f).bin);
+    untouched(&f);
 }

@@ -41,8 +41,12 @@ fn canonical(lock: &Lock, root: &Path) {
     let bytes = lock.canonical_bytes().unwrap();
     assert_eq!(Lock::parse(&bytes).unwrap(), *lock);
     assert!(
-        lock.matches_native(Snapshot::capture(root).unwrap().declarations())
-            .unwrap()
+        lock.matches_native(
+            Snapshot::capture_with(root, Ecosystems::default())
+                .unwrap()
+                .declarations()
+        )
+        .unwrap()
     );
     let text = String::from_utf8(bytes).unwrap();
     for private in ["localhost", "127.0.0.1", root.to_str().unwrap()] {
@@ -250,7 +254,10 @@ fn node_drift_preserves_independent_npm_all_variants_and_authoritative_floating_
             .unwrap()
             .lock;
         write_manifest(repo.path(), json!({"packageManager":request}));
-        let declarations = Snapshot::capture(repo.path()).unwrap().declarations()["npm"].clone();
+        let declarations = Snapshot::capture_with(repo.path(), Ecosystems::default())
+            .unwrap()
+            .declarations()["npm"]
+            .clone();
         let mut old = old.document().clone();
         let npm = old.tools.get_mut("npm").unwrap();
         npm.declarations = declarations;
@@ -346,7 +353,7 @@ fn unsupported_native_choices_fail_before_traffic_and_preserved_npm_preflights_e
         serde_json::to_vec(&document).unwrap(),
     )
     .unwrap();
-    assert!(Snapshot::capture(repo.path()).is_err());
+    assert!(Snapshot::capture_with(repo.path(), Ecosystems::default()).is_err());
 }
 
 #[test]
@@ -450,7 +457,7 @@ fn registry_mismatch_integrity_and_drift_never_publish_partial_cohorts() {
         // No authored pin would use bundled npm, so force the independent path
         // while retaining the same authoritative Node release/artifact bytes.
         if pin.is_empty() {
-            let mut old = Snapshot::capture(p)
+            let mut old = Snapshot::capture_with(p, Ecosystems::default())
                 .unwrap()
                 .previous_lock()
                 .unwrap()

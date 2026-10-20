@@ -48,14 +48,7 @@ fn fixture(version: &str) -> Lock {
 
 pub(super) fn writer_root() -> tempfile::TempDir {
     let root = tempfile::tempdir().unwrap();
-    assert!(
-        std::process::Command::new("git")
-            .args(["init", "--quiet"])
-            .arg(root.path())
-            .status()
-            .unwrap()
-            .success()
-    );
+    crate::git::fake_repository(root.path()).unwrap();
     fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
     root
 }
@@ -204,7 +197,7 @@ fn publication_failure_preserves_previous_bytes_and_ignored_state() {
     assert!(
         write_with(root.path(), &fixture("25.0.0"), || {
             Err(io::Error::other("injected failure"))
-        })
+        },)
         .is_err()
     );
     assert_eq!(fs::read(root.path().join(LOCK_NAME)).unwrap(), previous);

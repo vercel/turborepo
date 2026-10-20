@@ -7,10 +7,13 @@ const REFRESH: &[&str] = &["--no-frozen", "--update-lock", "--tools-only"];
 
 fn go_routes(versions: &[&str]) -> Vec<(String, Vec<u8>)> {
     // Would visibly fail if any probe ran the managed toolchain.
+    go_routes_with(versions, "#!/bin/sh\ntouch probe-ran\nexit 91\n")
+}
+fn go_routes_with(versions: &[&str], go: &str) -> Vec<(String, Vec<u8>)> {
     let archive = archive(
         "go",
         &[
-            ("bin/go", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
+            ("bin/go", go),
             ("bin/gofmt", "#!/bin/sh\nexit 91\n"),
             ("src/go.mod", "module std\n"),
         ],
@@ -138,7 +141,7 @@ fn proposed(f: &Fixture, upstream: &LoopbackServer, flags: &[&str]) -> Result<St
     crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
         let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
         validate_request(&request)?;
-        let discovery = root::Discovery::capture(args)?;
+        let discovery = root::Discovery::capture(args, f.git.clone())?;
         let eligible = discovery.source_eligibility();
         let snapshot = turborepo_setup::lock::Snapshot::capture_with(
             discovery.snapshot_root()?.as_std_path(),
@@ -152,6 +155,7 @@ fn proposed(f: &Fixture, upstream: &LoopbackServer, flags: &[&str]) -> Result<St
             &discovery,
             snapshot,
             &request,
+            &dependencies::Dependencies::tools_only(),
             Some(provision::Transports {
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 trust_base: Some(f.owned.home().to_owned()),
@@ -311,6 +315,25 @@ fn check_reports_go_readiness_and_fails_closed_without_the_flag_or_on_damage() {
 }
 
 #[test]
+fn managed_run_pins_the_locked_go_toolchain_and_follows_the_workspace_flag() {
+    let f = go_only();
+    let u = LoopbackServer::new(go_routes(&["1.22.12"]), |_| {}).unwrap();
+    assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
+    let (env, bin) = run_overrides(&f.owned).unwrap();
+    assert!(bin.join("go").exists() && bin.join("gofmt").exists());
+    assert_eq!(env["GOTOOLCHAIN"], "local");
+    assert!(
+        std::path::Path::new(&env["GOROOT"]).join("bin/go").exists(),
+        "{env:?}"
+    );
+    // Setup ignores go.work without the flag, so run reads the selection as drift.
+    fs::write(f.owned.root().join("turbo.json"), ENABLED).unwrap();
+    let error = run_overrides(&f.owned).unwrap_err();
+    assert!(error.contains("no longer match turbo.lock"), "{error}");
+    assert!(!f.owned.root().join("probe-ran").exists());
+}
+
+#[test]
 fn unsupported_go_directives_fail_before_any_writer() {
     let f = go_only();
     let root = f.owned.root();
@@ -320,4 +343,35 @@ fn unsupported_go_directives_fail_before_any_writer() {
     assert!(error.contains("custom goV-suffix builds"), "{error}");
     assert_eq!(u.hits(), 0);
     assert!(!root.join(".turbo").exists() && !root.join("turbo.lock").exists());
+}
+
+#[test]
+fn locked_go_modules_prefetch_with_the_managed_goroot_and_read_only_sums() {
+    let f = go_only();
+    let root = f.owned.root();
+    fs::write(root.join("go.mod"), "module example.com/app\n\ngo 1.22\n").unwrap();
+    // Records each command with the activation's GOROOT (whose standard
+    // library it checks) and GOTOOLCHAIN, then lists or downloads modules.
+    let go = "#!/bin/sh\n[ -f \"$GOROOT/src/go.mod\" ] && goroot=goroot\necho \"$1 $goroot \
+              $GOTOOLCHAIN\" >> go-args\ncase \"$1\" in list) echo \"$PWD/go.mod\";; *) [ -f \
+              stale ] && { echo 'missing module' >&2; exit 3; };; esac\nexit 0\n";
+    let u = LoopbackServer::new(go_routes_with(&["1.22.12"], go), |_| {}).unwrap();
+    assert_eq!(f.run(&u, &["--no-frozen"]).unwrap(), 0);
+    // Go module setup runs no package code; tools-only setup never prefetches.
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    // A failed download passes go's exit status through.
+    fs::write(root.join("stale"), "").unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 3);
+    let args = fs::read_to_string(root.join("go-args")).unwrap();
+    let (list, download) = ("list goroot local", "mod goroot local");
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        [list, download, list, download, list, download]
+    );
+    assert_eq!(
+        fs::read(root.join("go.sum")).unwrap(),
+        b"ecosystem sentinel"
+    );
+    assert!(!root.join("probe-ran").exists());
 }

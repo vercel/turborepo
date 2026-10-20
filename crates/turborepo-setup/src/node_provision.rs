@@ -27,8 +27,8 @@ pub enum Error {
     )]
     MissingTarget,
     #[error(
-        "managed Node promotion is not qualified for Windows or musl; use a supported GNU \
-         Linux/macOS target or configure verify-system"
+        "managed Node promotion is not qualified for this host, Windows arm64 or musl; use a \
+         supported macOS, GNU Linux or Windows x64 target or configure verify-system"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this Node plan unchanged")]
@@ -60,7 +60,7 @@ pub struct NodeTransport {
     offline: bool,
 }
 impl NodeTransport {
-    pub fn official(_policy: &crate::source_policy::OfficialSourcePolicy) -> Result<Self, Error> {
+    pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             dist: "https://nodejs.org/dist".into(),
@@ -71,7 +71,7 @@ impl NodeTransport {
 
     /// Send the same official requests to a validated `/dist` mirror.
     pub fn mirrored(
-        _policy: &crate::source_policy::OfficialSourcePolicy,
+        _policy: &crate::source_policy::ToolDownloadPolicy,
         mirror: &Mirror,
     ) -> Result<Self, Error> {
         Ok(Self {
@@ -247,9 +247,9 @@ impl NodePlan {
     /// holding this Store lock throughout preparation and reconciliation.
     /// Reuse requires a healthy entire selected
     /// generation with an identical Node tool, not complete desired-set
-    /// equality. Unrelated tool changes need no Node download. Windows
-    /// trees may be inspected via download, but promotion remains
-    /// explicitly unqualified.
+    /// equality. Unrelated tool changes need no Node download. Only a
+    /// native Windows x64 host promotes Windows trees; arm64 stays
+    /// unqualified and never borrows the x64 artifact.
     pub async fn prepare_if_needed(
         &self,
         store: &Store,
@@ -270,7 +270,7 @@ impl NodePlan {
         transport: &NodeTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedNode>, Error> {
-        if self.windows || !cfg!(unix) {
+        if !promotable(&self.tool) {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.iter().any(|tool| tool == &self.tool) {
@@ -374,6 +374,12 @@ impl NodePlan {
         Ok(PreparedNode {
             tree,
             tool: self.tool.clone(),
+            // Cache hits transfer nothing.
+            downloaded_bytes: if from_cache {
+                0
+            } else {
+                bytes.as_bytes().len() as u64
+            },
             from_cache,
         })
     }
@@ -427,9 +433,15 @@ impl NodePlan {
 pub struct PreparedNode {
     tree: ExtractedArtifact,
     tool: Tool,
+    downloaded_bytes: u64,
     from_cache: bool,
 }
 impl PreparedNode {
+    /// Verified artifact bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
     /// Whether verified bytes came from the shared download cache.
     pub fn from_cache(&self) -> bool {
         self.from_cache
@@ -442,7 +454,7 @@ impl PreparedNode {
         tool: &Tool,
         destination: &Path,
     ) -> Result<(), turborepo_tool_install::Error> {
-        if tool.platform.starts_with("windows-") {
+        if !promotable(tool) {
             return Err(turborepo_tool_install::Error::UnsupportedPlatform);
         }
         if tool != &self.tool
@@ -455,6 +467,15 @@ impl PreparedNode {
         Ok(())
     }
 }
+/// Hosts promote only their own artifact family: Unix trees on Unix and
+/// Windows x64 trees on native Windows.
+pub(crate) fn promotable(tool: &Tool) -> bool {
+    match tool.platform.strip_prefix("windows-") {
+        Some(arch) => cfg!(windows) && arch == "x64",
+        None => cfg!(unix),
+    }
+}
+
 pub(crate) fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
     for entry in fs::read_dir(source)? {
         let entry = entry?;

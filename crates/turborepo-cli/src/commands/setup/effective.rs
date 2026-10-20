@@ -2,7 +2,25 @@
 //! inferred default. Reported before any download or installation.
 
 use turborepo_repository::toolchain::ToolchainId;
-use turborepo_turbo_json::{DependencyPolicy, SetupPolicy, ToolPolicy};
+use turborepo_setup::lock::Ecosystems;
+use turborepo_turbo_json::{DependencyPolicy, FutureFlags, SetupPolicy, ToolPolicy};
+
+/// The non-JavaScript ecosystems whose declarations setup captures: the
+/// workspace flag is on and the root policy manages the toolchain's tools (a
+/// skip policy ignores its declarations). Managed run must capture exactly the
+/// same way, or its Rust, Python and Go selections would read as drift.
+pub(crate) fn ecosystems(flags: &FutureFlags, policy: &SetupPolicy) -> Ecosystems {
+    let managed = |enabled: bool, id: ToolchainId| {
+        flags.experimental_setup
+            && enabled
+            && policy.toolchain(&id).tools.unwrap_or(ToolPolicy::Managed) == ToolPolicy::Managed
+    };
+    Ecosystems {
+        rust: managed(flags.experimental_cargo_workspaces, ToolchainId::RUST),
+        python: managed(flags.experimental_python_workspaces, ToolchainId::PYTHON),
+        go: managed(flags.experimental_go_workspaces, ToolchainId::GO),
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Source {
@@ -12,7 +30,7 @@ pub(super) enum Source {
 }
 
 impl Source {
-    fn label(self) -> &'static str {
+    pub(super) fn label(self) -> &'static str {
         match self {
             Self::Cli(flag) => flag,
             Self::Policy => "turbo.json setup policy",
@@ -72,11 +90,18 @@ impl Toolchain {
             DependencyPolicy::Locked => "locked",
             DependencyPolicy::Skip => "skipped",
         };
-        format!(
+        let mut line = format!(
             "{id}: tools {tools} ({}); dependencies {dependencies} ({})",
             tools_source.label(),
             dependencies_source.label()
-        )
+        );
+        if self.tools.0 == ToolPolicy::VerifySystem {
+            line.push_str(
+                "; turbo setup verifies the installed tools against turbo.lock but does not \
+                 install them, so consistency depends on each machine",
+            );
+        }
+        line
     }
 }
 
@@ -92,9 +117,7 @@ impl Plan {
         let eligible: Vec<_> = eligible.into_iter().collect();
         let configured = eligible.iter().any(|id| {
             let configured = policy.toolchain(id);
-            configured.tools.is_some()
-                || configured.dependencies.is_some()
-                || configured.lifecycle_scripts.is_some()
+            configured.tools.is_some() || configured.dependencies.is_some()
         });
         Self(
             eligible
@@ -107,6 +130,10 @@ impl Plan {
 
     pub fn toolchain(&self, id: &ToolchainId) -> Option<&Toolchain> {
         self.0.iter().find(|toolchain| toolchain.id == *id)
+    }
+
+    pub fn toolchains(&self) -> &[Toolchain] {
+        &self.0
     }
 
     /// Whether every eligible toolchain skips dependency setup.
@@ -128,16 +155,6 @@ impl Plan {
         self.0
             .iter()
             .all(|toolchain| toolchain.tools.0 == ToolPolicy::Skip)
-    }
-
-    /// Until dependency installers exist, don't silently downgrade an explicit
-    /// repository request. Inferred plain setup keeps main's tools-only
-    /// behavior.
-    pub fn explicit_dependencies(&self) -> bool {
-        self.0.iter().any(|toolchain| {
-            toolchain.tools.0 != ToolPolicy::Skip
-                && toolchain.dependencies == (DependencyPolicy::Locked, Source::Policy)
-        })
     }
 
     pub fn report(&self) -> Vec<String> {
@@ -182,7 +199,6 @@ mod tests {
         // Preserve the native adapters that landed after this policy stack:
         // managed Rust remains supported, but system Rust is still fail-closed.
         assert!(plan(r#"{"rust":{"tools":"verify-system"}}"#, false).unsupported());
-        assert!(plan(r#"{"dependencies":"locked"}"#, false).explicit_dependencies());
         let javascript = inferred.toolchain(&ToolchainId::JAVASCRIPT).unwrap();
         assert_eq!(javascript.tools, (ToolPolicy::Managed, Source::Inferred));
         assert_eq!(
@@ -207,12 +223,56 @@ mod tests {
     }
 
     #[test]
+    fn ecosystems_need_the_workspace_flag_and_managed_tools() {
+        let all = FutureFlags {
+            experimental_setup: true,
+            experimental_cargo_workspaces: true,
+            experimental_python_workspaces: true,
+            experimental_go_workspaces: true,
+            ..Default::default()
+        };
+        let every = Ecosystems {
+            rust: true,
+            python: true,
+            go: true,
+        };
+        assert_eq!(ecosystems(&all, &policy("{}")), every);
+        // A default skip applies to every toolchain; a toolchain override wins.
+        let skip = policy(r#"{"tools":"skip","rust":{"tools":"managed"}}"#);
+        let rust = Ecosystems {
+            rust: true,
+            ..Default::default()
+        };
+        assert_eq!(ecosystems(&all, &skip), rust);
+        let rust_skip = policy(r#"{"rust":{"tools":"skip"}}"#);
+        assert_eq!(
+            ecosystems(&all, &rust_skip),
+            Ecosystems {
+                rust: false,
+                ..every
+            }
+        );
+        // Flags gate even managed tools, and nothing applies without setup.
+        let no_cargo = FutureFlags {
+            experimental_cargo_workspaces: false,
+            ..all
+        };
+        assert!(!ecosystems(&no_cargo, &policy("{}")).rust);
+        let disabled = FutureFlags {
+            experimental_setup: false,
+            ..all
+        };
+        assert_eq!(ecosystems(&disabled, &policy("{}")), Ecosystems::default());
+    }
+
+    #[test]
     fn verify_system_is_reported_as_policy() {
         let plan = plan(r#"{"javascript":{"tools":"verify-system"}}"#, true);
         assert_eq!(
             plan.report()[0],
             "javascript: tools verify-system (turbo.json setup policy); dependencies skipped \
-             (--tools-only)"
+             (--tools-only); turbo setup verifies the installed tools against turbo.lock but does \
+             not install them, so consistency depends on each machine"
         );
     }
 }

@@ -1169,9 +1169,6 @@ pub struct SetupArgs {
     /// Skip dependency installation
     #[usage(long)]
     pub tools_only: bool,
-    /// Skip dependency lifecycle scripts with each package manager's own flag
-    #[usage(long)]
-    pub ignore_scripts: bool,
     /// Provision without writing turbo.lock; overrides CI-inferred frozen mode
     #[usage(long, conflicts = "update_lock")]
     pub no_lock: bool,
@@ -1208,7 +1205,8 @@ pub enum Command {
     /// powershell | Out-String)` to $PROFILE. Inside a repository with root
     /// futureFlags.experimentalSetup, the hook puts the tools `turbo setup`
     /// installed first on PATH and removes them when you leave. It never
-    /// installs tools or updates turbo.lock.
+    /// installs tools or updates turbo.lock. On native Windows, only
+    /// PowerShell is supported.
     Hook {
         shell: HookShell,
         /// Print the shell changes for the current directory

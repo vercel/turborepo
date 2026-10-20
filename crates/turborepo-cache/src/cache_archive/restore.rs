@@ -8,7 +8,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 use crate::{
     CacheError,
     cache_archive::{
-        restore_directory::{CachedDirTree, restore_directory},
+        restore_directory::{CachedDirTree, restore_directory, validate_restore_path},
         restore_manifest::RestoreManifest,
         restore_regular::{RegularRestore, restore_regular},
         restore_symlink::{
@@ -102,9 +102,9 @@ impl<'a> CacheReader<'a> {
                 }
                 Err(e) => return Err(e),
                 Ok((restored_path, regular)) => {
+                    let key = restored_path.to_unix().into_inner();
                     match regular {
                         Some(RegularRestore::Skipped) => {
-                            let key = restored_path.as_str().to_owned();
                             if let Some(existing) =
                                 previous_manifest.and_then(|m| m.files.get(&key))
                             {
@@ -113,15 +113,17 @@ impl<'a> CacheReader<'a> {
                             }
                         }
                         Some(RegularRestore::Written(Some(metadata))) => {
-                            let key = restored_path.as_str().to_owned();
                             let _ = new_manifest.record_file_metadata(key, &metadata);
                         }
                         Some(RegularRestore::Written(None)) => {
-                            let key = restored_path.as_str().to_owned();
                             let resolved = anchor.resolve(&restored_path);
                             let _ = new_manifest.record_file(key, &resolved);
                         }
-                        None => {}
+                        None => match entry.header().entry_type() {
+                            tar::EntryType::Directory => new_manifest.record_dir(key),
+                            tar::EntryType::Symlink => record_symlink(new_manifest, key, &entry)?,
+                            _ => {}
+                        },
                     }
                     restored.push(restored_path);
                 }
@@ -129,7 +131,7 @@ impl<'a> CacheReader<'a> {
         }
 
         let mut restored_symlinks =
-            Self::topologically_restore_symlinks(&mut dir_cache, anchor, &symlinks)?;
+            Self::topologically_restore_symlinks(&mut dir_cache, anchor, &symlinks, new_manifest)?;
         restored.append(&mut restored_symlinks);
         Ok(())
     }
@@ -138,6 +140,7 @@ impl<'a> CacheReader<'a> {
         dir_cache: &mut CachedDirTree,
         anchor: &AbsoluteSystemPath,
         symlinks: &[Entry<'_, T>],
+        new_manifest: &mut RestoreManifest,
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut graph = DiGraph::new();
         let mut entry_lookup = HashMap::new();
@@ -177,6 +180,7 @@ impl<'a> CacheReader<'a> {
                 continue;
             };
             let file = restore_symlink_allow_missing_target(dir_cache, anchor, entry)?;
+            record_symlink(new_manifest, file.to_unix().into_inner(), entry)?;
             restored.push(file);
         }
 
@@ -191,6 +195,8 @@ fn restore_entry<T: Read>(
     entry: &mut Entry<T>,
     manifest: Option<&RestoreManifest>,
 ) -> Result<(AnchoredSystemPathBuf, Option<RegularRestore>), CacheError> {
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
+    validate_restore_path(&processed_name)?;
     let header = entry.header();
 
     match header.entry_type() {
@@ -203,6 +209,26 @@ fn restore_entry<T: Read>(
             Backtrace::capture(),
         )),
     }
+}
+
+/// Records a symlink the restore just wrote, with the target it was written
+/// with, so the next fetch's fast path notices it being removed or retargeted.
+fn record_symlink<T: Read>(
+    manifest: &mut RestoreManifest,
+    key: String,
+    entry: &Entry<T>,
+) -> Result<(), CacheError> {
+    let target = entry
+        .link_name()?
+        .ok_or_else(|| CacheError::LinkTargetNotOnHeader(Backtrace::capture()))?;
+    let target = target.to_str().ok_or_else(|| {
+        CacheError::PathError(
+            turbopath::PathError::InvalidUnicode(target.to_string_lossy().to_string()),
+            Backtrace::capture(),
+        )
+    })?;
+    manifest.record_symlink(key, target);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -506,6 +532,131 @@ mod tests {
             .collect()
     }
 
+    #[test_case(".git"; "git_file")]
+    #[test_case(".git/hooks/post-checkout"; "hook")]
+    #[test_case("nested/.git/config"; "nested_repository")]
+    #[test_case(".GIT/hooks/post-checkout"; "uppercase")]
+    #[test_case("nested/.GiT/config"; "mixed_case")]
+    #[test_case(".g\u{200c}it/hooks/post-checkout"; "hfs_ignorable_character")]
+    #[cfg_attr(windows, test_case(".git./hooks/post-checkout"; "trailing_dot"))]
+    #[cfg_attr(windows, test_case(".git /hooks/post-checkout"; "trailing_space"))]
+    #[cfg_attr(windows, test_case(".git:payload"; "alternate_data_stream"))]
+    #[cfg_attr(windows, test_case("GIT~1/hooks/post-checkout"; "short_name"))]
+    fn restore_rejects_git_metadata_entries(path: &'static str) -> Result<()> {
+        for entry in [
+            RawTarEntry::File {
+                path,
+                body: b"malicious hook".to_vec(),
+            },
+            RawTarEntry::Directory { path },
+            // A missing target also exercises the deferred-symlink path.
+            RawTarEntry::Symlink {
+                link_path: path,
+                link_target: "missing",
+            },
+        ] {
+            let tar_bytes = generate_raw_tar(&[entry]);
+            let output_dir = tempdir()?;
+            let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+            let error = reader
+                .restore(&anchor, None)
+                .expect_err("Git metadata entry must be rejected");
+            assert!(
+                matches!(error, crate::CacheError::GitMetadataWrite(_, _))
+                    // The path parser already rejects some Windows aliases
+                    // before they reach the Git metadata check.
+                    || cfg!(windows) && matches!(error, crate::CacheError::PathError(_, _))
+            );
+            assert_eq!(fs::read_dir(output_dir.path())?.count(), 0);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn restore_preserves_existing_git_metadata() -> Result<()> {
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let hooks = output_dir.path().join(".git/hooks");
+        fs::create_dir_all(&hooks)?;
+        let hook = hooks.join("post-checkout");
+        fs::write(&hook, b"original hook")?;
+        let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+            path: ".git/hooks/post-checkout",
+            body: b"malicious hook".to_vec(),
+        }]);
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+        assert!(matches!(
+            reader.restore(&anchor, None),
+            Err(crate::CacheError::GitMetadataWrite(_, _))
+        ));
+        assert_eq!(fs::read(&hook)?, b"original hook");
+        Ok(())
+    }
+
+    #[test]
+    fn restore_rejects_git_metadata_writes_through_archive_symlink() -> Result<()> {
+        for entry in [
+            RawTarEntry::File {
+                path: "alias/hooks/post-checkout",
+                body: b"malicious hook".to_vec(),
+            },
+            RawTarEntry::Directory {
+                path: "alias/hooks",
+            },
+            RawTarEntry::Symlink {
+                link_path: "alias/hooks/post-checkout",
+                link_target: "../../target",
+            },
+        ] {
+            let output_dir = tempdir()?;
+            let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+            fs::create_dir(output_dir.path().join(".git"))?;
+            fs::write(output_dir.path().join("target"), b"target")?;
+            let tar_bytes = generate_raw_tar(&[
+                RawTarEntry::Symlink {
+                    link_path: "alias",
+                    link_target: ".git",
+                },
+                entry,
+            ]);
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+            assert!(matches!(
+                reader.restore(&anchor, None),
+                Err(crate::CacheError::GitMetadataWrite(_, _))
+            ));
+            // The symlink itself is harmless and must have been restored;
+            // rejection must happen at the subsequent write destination.
+            assert_eq!(
+                fs::read_link(output_dir.path().join("alias"))?,
+                Path::new(".git")
+            );
+            assert_eq!(fs::read_dir(output_dir.path().join(".git"))?.count(), 0);
+        }
+        Ok(())
+    }
+
+    #[test_case(".github/workflows/build.yml")]
+    #[test_case("dist/.gitignore")]
+    #[test_case("dist/.gitkeep")]
+    #[test_case("dist/file.git")]
+    fn restore_allows_non_metadata_git_names(path: &'static str) -> Result<()> {
+        let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+            path,
+            body: b"output".to_vec(),
+        }]);
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+        reader.restore(&anchor, None)?;
+        assert_eq!(fs::read(output_dir.path().join(path))?, b"output");
+        Ok(())
+    }
+
     #[test]
     fn restore_preserves_broken_symlink_that_stays_inside_anchor() -> Result<()> {
         let tar_bytes = generate_tar_with_symlink("missing-link", "missing-target");
@@ -681,6 +832,36 @@ mod tests {
             );
         }
 
+        Ok(())
+    }
+
+    /// A manifest that disagrees with its archive about what an entry is
+    /// must not spare the archive's regular file from being written.
+    #[cfg(unix)]
+    #[test]
+    fn restore_writes_regular_file_recorded_as_symlink() -> Result<()> {
+        let repo_root = tempdir()?;
+        let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        anchor.join_component("a.txt").create_with_contents("a")?;
+        let x = anchor.join_component("x");
+        x.symlink_to_file("a.txt")?;
+        let previous = crate::cache_archive::RestoreManifest::from_disk(
+            anchor,
+            &[AnchoredSystemPathBuf::from_raw("x")?],
+        );
+        assert!(previous.file_matches("x", &x));
+
+        let tar = generate_raw_tar(&[RawTarEntry::File {
+            path: "x",
+            body: b"regular".to_vec(),
+        }]);
+        let (_, manifest) =
+            CacheReader::from_reader(&tar[..], false)?.restore(anchor, Some(&previous))?;
+
+        assert!(!x.symlink_metadata()?.is_symlink());
+        assert_eq!(fs::read(x.as_path())?, b"regular");
+        assert_eq!(fs::read(anchor.join_component("a.txt").as_path())?, b"a");
+        assert!(!manifest.files["x"].is_symlink);
         Ok(())
     }
 
@@ -1323,6 +1504,44 @@ mod tests {
 
     mod absolute_path_tests {
         use super::*;
+
+        #[cfg(windows)]
+        #[test_case::test_case("C:/Windows/Temp/evil.txt", tar::EntryType::Regular ; "file")]
+        #[test_case::test_case("C:/Windows/Temp/evil/", tar::EntryType::Directory ; "directory")]
+        #[test_case::test_case("C:/", tar::EntryType::Directory ; "drive root")]
+        #[test_case::test_case("C:evil.txt", tar::EntryType::Regular ; "drive-relative file")]
+        #[test_case::test_case("C:evil/", tar::EntryType::Directory ; "drive-relative directory")]
+        fn test_windows_drive_prefixed_path_rejected(
+            path: &str,
+            entry_type: tar::EntryType,
+        ) -> Result<()> {
+            // Bypass tar::Builder's path validation to model an untrusted artifact.
+            let mut tar_bytes = generate_raw_tar_with_unsafe_path(path, b"");
+            let mut header = Header::from_byte_slice(&tar_bytes[..512]).clone();
+            header.set_entry_type(entry_type);
+            header.set_cksum();
+            tar_bytes[..512].copy_from_slice(header.as_bytes());
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor, None);
+            assert!(
+                matches!(
+                    result,
+                    Err(crate::CacheError::PathError(
+                        turbopath::PathError::NotRelative(_),
+                        _
+                    ))
+                ),
+                "drive-prefixed path {path} should be rejected before restoration, got: {result:?}"
+            );
+            assert_eq!(fs::read_dir(output_dir.path())?.count(), 0);
+
+            Ok(())
+        }
 
         #[test]
         fn test_absolute_path_file_rejected() -> Result<()> {

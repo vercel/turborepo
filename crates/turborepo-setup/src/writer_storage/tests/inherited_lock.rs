@@ -1,4 +1,7 @@
-use std::os::unix::{fs::MetadataExt, io::AsRawFd};
+use std::{
+    os::unix::{fs::MetadataExt, io::AsRawFd},
+    process::Command,
+};
 
 use super::{inherited_child::InheritedChild, *};
 
@@ -25,7 +28,7 @@ fn released(file: &File) {
 
 #[test]
 fn owner_drop_releases_inherited_locks_before_child_exec() {
-    let root = repository(true);
+    let root = repository();
     let owner = WriterStorage::acquire(root.path()).unwrap();
     let inode = fs::metadata(state(root.path(), WRITER)).unwrap().ino();
     let mut child = InheritedChild::spawn(&[owner.root.file.as_raw_fd(), owner._guard.as_raw_fd()]);
@@ -52,7 +55,7 @@ fn owner_drop_releases_inherited_locks_before_child_exec() {
 
 #[test]
 fn fork_copy_drop_cannot_unlock_surviving_parent() {
-    let root = repository(true);
+    let root = repository();
     let mut owner = WriterStorage::acquire(root.path()).unwrap();
     let retained_root = owner.root.file.try_clone().unwrap();
     let retained_writer = owner._guard.try_clone().unwrap();
@@ -98,7 +101,7 @@ fn fork_copy_drop_cannot_unlock_surviving_parent() {
 
 // Exercise the actual acquisition cleanup guards, not an extra lock wrapper.
 fn fork_copy_of_failed_acquisition(stop_after: usize) {
-    let root = repository(true);
+    let root = repository();
     drop(WriterStorage::acquire(root.path()).unwrap());
     let (root_probe, writer_probe) = probes(root.path());
     let mut descriptors = Vec::new();
@@ -153,7 +156,7 @@ fn fork_copy_of_failed_acquisition_writer() {
 
 #[test]
 fn fork_copy_transfer_preserves_acquiring_pid() {
-    let root = repository(true);
+    let root = repository();
     let file = File::open(root.path()).unwrap();
     let mut guard = AcquiredLock::acquire(&file).unwrap();
     let acquiring_pid = std::process::id();
@@ -178,21 +181,22 @@ fn fork_copy_transfer_preserves_acquiring_pid() {
 }
 
 #[test]
-fn failed_ignore_check_releases_inherited_root_lock() {
-    let root = repository(false);
+fn failed_storage_open_releases_inherited_root_lock() {
+    let root = repository();
+    fs::write(root.path().join(".turbo"), "not a directory").unwrap();
     let mut child = None;
-    let error = WriterStorage::acquire_with(root.path(), |lock| {
-        let file = lock.file.unwrap();
-        child = Some(InheritedChild::spawn(&[file.as_raw_fd()]));
-        Ok(())
-    })
-    .err()
-    .unwrap();
-    assert!(error.to_string().contains("explicitly add /.turbo/"));
+    assert!(
+        WriterStorage::acquire_with(root.path(), |lock| {
+            let file = lock.file.unwrap();
+            child = Some(InheritedChild::spawn(&[file.as_raw_fd()]));
+            Ok(())
+        })
+        .is_err()
+    );
     child.as_mut().unwrap().assert_open();
-    assert!(!root.path().join(".turbo").exists());
+    assert!(root.path().join(".turbo").is_file());
     released(&File::open(root.path()).unwrap());
-    fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
+    fs::remove_file(root.path().join(".turbo")).unwrap();
     let next = WriterStorage::acquire(root.path()).unwrap();
     drop(child);
     let (root_probe, writer_probe) = probes(root.path());
@@ -203,7 +207,7 @@ fn failed_ignore_check_releases_inherited_root_lock() {
 
 #[test]
 fn failed_recovery_releases_both_inherited_locks() {
-    let root = repository(true);
+    let root = repository();
     let mut descriptors = Vec::new();
     let mut child = None;
     let error = WriterStorage::acquire_with(root.path(), |lock| {
@@ -241,7 +245,7 @@ fn failed_recovery_releases_both_inherited_locks() {
 
 #[test]
 fn failed_acquisition_never_unlocks_shared_owner_descriptors() {
-    let root = repository(true);
+    let root = repository();
     let owner = WriterStorage::acquire(root.path()).unwrap();
     let (root_probe, writer_probe) = probes(root.path());
     for file in [&owner.root.file, &owner._guard] {
@@ -266,7 +270,7 @@ fn failed_acquisition_never_unlocks_shared_owner_descriptors() {
 
 #[test]
 fn abrupt_exit_recovers_stage_without_owner_drop() {
-    let root = repository(true);
+    let root = repository();
     {
         let mut owner = WriterStorage::acquire(root.path()).unwrap();
         owner.replace(b"previous").unwrap();

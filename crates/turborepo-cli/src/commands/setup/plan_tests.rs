@@ -4,8 +4,8 @@ const PLAN: &[&str] = &["--plan", "--tools-only"];
 
 impl Fixture {
     fn plan_report(&self, force: bool) -> Result<String, Error> {
-        let discovery = root::Discovery::capture(&self.args(PLAN))?;
-        let sources = turborepo_setup::lock::Snapshot::capture(self.owned.root())?;
+        let discovery = root::Discovery::capture(&self.args(PLAN), self.git.clone())?;
+        let sources = self.sources()?;
         plan::inspect(&discovery, sources, force, || {
             Ok(self
                 .owned
@@ -19,7 +19,7 @@ impl Fixture {
              node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org{}\n  SHA-256: {:x}\n\
              pnpm 10.0.0: {action}\n  Declaration: package.json#/packageManager (pnpm@10.0.0)\n  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n  SHA-256: {:x}\n\
              Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-             Tracked changes: none. No downloads, probes, or tasks run.",
+             Tracked changes: none. No downloads or probes run.",
             self.node_path,
             Sha256::digest(&self.node),
             Sha256::digest(&self.pnpm),
@@ -71,7 +71,7 @@ fn locked_plans_report_missing_reuse_and_force_in_every_readonly_mode() {
         assert_eq!(f.owned.root().join(".turbo").exists(), installed);
     }
     assert_eq!(u.hits(), 3);
-    let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+    let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
     std::thread::scope(|scope| {
@@ -105,7 +105,7 @@ fn node_only_plan_ignores_disabled_ecosystems_without_probing_or_creating_storag
         "Locked tools-only plan (turbo.lock unchanged):\n\
          node 24.0.0: install (missing installation)\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org{}\n  SHA-256: {:x}\n\
          Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-         Tracked changes: none. No downloads, probes, or tasks run.",
+         Tracked changes: none. No downloads or probes run.",
         f.node_path, Sha256::digest(&f.node),
     ));
     assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
@@ -195,62 +195,8 @@ fn damaged_plans_never_report_reuse_or_change_any_owned_bytes() {
 }
 
 #[test]
-fn plan_storage_gates_match_provisioning_and_recheck_before_reporting() {
-    for installed in [false, true] {
-        for late in [false, true] {
-            let f = Fixture::new();
-            let u = Upstream::new(&f, false, None);
-            if installed {
-                f.install(&u);
-            }
-            let edit = || {
-                if installed {
-                    track(f.owned.root());
-                } else {
-                    fs::write(f.owned.root().join(".gitignore"), "").unwrap();
-                }
-            };
-            if !late {
-                edit();
-            }
-            let expected = std::cell::RefCell::new(snapshot(f.owned.root().parent().unwrap()));
-            let discovery = root::Discovery::capture(&f.args(PLAN)).unwrap();
-            let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
-            let calls = std::cell::Cell::new(0);
-            let result = plan::inspect(&discovery, sources, installed, || {
-                calls.set(calls.get() + 1);
-                if late && calls.get() == 2 {
-                    edit();
-                    *expected.borrow_mut() = snapshot(f.owned.root().parent().unwrap());
-                }
-                Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
-            });
-            assert!(
-                result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("storage must be untracked and Git-ignored")
-            );
-            assert!(
-                f.run(&u, FROZEN)
-                    .unwrap_err()
-                    .to_string()
-                    .contains("storage must be untracked and Git-ignored")
-            );
-            assert_eq!(
-                snapshot(f.owned.root().parent().unwrap()),
-                expected.into_inner()
-            );
-            assert_eq!(u.hits(), if installed { 3 } else { 0 });
-            assert_eq!(f.owned.root().join(".turbo").exists(), installed);
-            f.no_execution();
-        }
-    }
-}
-
-#[test]
 fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
-    for case in 0..13 {
+    for case in 0..11 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         let mut flags = PLAN.to_vec();
@@ -265,29 +211,23 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                 flags.push("--frozen");
             }
             2 => fs::write(f.owned.root().join("turbo.lock"), "invalid").unwrap(),
-            3 => fs::write(
-                f.owned.root().join("apps/web/.npmrc"),
-                "registry=https://private.invalid",
-            )
-            .unwrap(),
-            4 => fs::write(f.owned.home().join(".npmrc"), "").unwrap(),
-            5 => {
+            3 => {
                 f.lock["tools"]["node"]["adapter"] = json!("generic-download");
                 f.save();
             }
-            6 => {
+            4 => {
                 f.lock["tools"]["pnpm"]["version"] = json!("11.0.0");
                 f.save();
             }
-            7 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
-            8 => fs::write(
+            5 => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+            6 => fs::write(
                 f.owned.root().join("turbo.json"),
                 r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#,
             )
             .unwrap(),
-            9 => flags.push("--no-lock"),
-            10 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
-            11 => {
+            7 => flags.push("--no-lock"),
+            8 => flags.extend(["--update-lock", "--no-frozen", "--force"]),
+            9 => {
                 let artifacts = f.lock["tools"]["node"]["installation"]["artifacts"]
                     .as_object_mut()
                     .unwrap();
@@ -310,7 +250,7 @@ fn missing_stale_unsupported_and_denied_plans_fail_without_writes_or_traffic() {
                     .contains("frozen setup requires turbo.lock")
             );
         }
-        if matches!(case, 9 | 10) {
+        if matches!(case, 7 | 8) {
             assert!(matches!(error, Error::NotImplemented));
         }
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
@@ -355,7 +295,7 @@ fn footer(change: Option<&str>) -> String {
     format!(
         "Dependencies skipped (--tools-only); dependency readiness was not checked.\nTracked \
          changes: {}. Resolution read upstream metadata and verified archives; nothing was \
-         installed, and no probes or tasks run.",
+         installed, and no probes run.",
         change.map_or("none".into(), |change| format!(
             "turbo.lock would be {change}; nothing was written"
         ))
@@ -365,17 +305,29 @@ fn footer(change: Option<&str>) -> String {
 impl Fixture {
     /// The real parser, request normalization and plan dispatch, captured.
     fn proposed(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<String, Error> {
+        self.proposed_in(upstream, flags, Default::default())
+    }
+
+    /// Captures sources like setup does when `ecosystems` are enabled.
+    fn proposed_in(
+        &self,
+        upstream: &LoopbackServer,
+        flags: &[&str],
+        ecosystems: turborepo_setup::lock::Ecosystems,
+    ) -> Result<String, Error> {
         let mut report = None;
         crate::cli::dispatch_setup(&self.args(flags), |args, setup_args| {
             let request = SetupRequest::new(setup_args, turborepo_ci::is_ci())?;
             validate_request(&request)?;
-            let discovery = root::Discovery::capture(args)?;
-            let sources = turborepo_setup::lock::Snapshot::capture(self.owned.root())?;
+            let discovery = root::Discovery::capture(args, self.git.clone())?;
+            let sources =
+                turborepo_setup::lock::Snapshot::capture_with(self.owned.root(), ecosystems)?;
             let transports = Some(loopback(self, upstream));
             report = Some(plan::report(
                 &discovery,
                 sources,
                 &request,
+                &dependencies::Dependencies::tools_only(),
                 transports,
                 || {
                     Ok(self
@@ -490,6 +442,45 @@ fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
 }
 
 #[test]
+fn proposed_first_lock_resolves_rust_alongside_node_and_pnpm() {
+    use super::rustup::{FLAGS, TOOLCHAIN, rust_routes, triple};
+    // Node, pnpm, and Rust declarations without turbo.lock, as in this repository.
+    let f = super::first_lock::fresh();
+    let root = f.owned.root();
+    fs::write(root.join("turbo.json"), FLAGS).unwrap();
+    fs::write(root.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+    fs::write(root.join("rust-toolchain.toml"), TOOLCHAIN).unwrap();
+    let installer = format!("/rustup/archive/1.29.1/{}/rustup-init", triple());
+    let mut routes = super::first_lock::routes(&f, "24.0.0", "10.0.0");
+    routes.extend(rust_routes("never run\n", &installer, "1.99.0"));
+    let u = LoopbackServer::new(routes, |_| {}).unwrap();
+    // The real dispatch captures Rust declarations under the Cargo flag.
+    assert_eq!(f.readonly(|| f.run(&u, PROPOSE).unwrap()), 0);
+    let rust = turborepo_setup::lock::Ecosystems {
+        rust: true,
+        ..Default::default()
+    };
+    let report = f.readonly(|| f.proposed_in(&u, PROPOSE, rust).unwrap());
+    assert!(
+        report.starts_with("Proposed tools-only plan (turbo.lock would be created):\n"),
+        "{report}"
+    );
+    for tool in ["node 24.0.0", "pnpm 10.0.0", "rust 1.99.0", "rustup 1.29.1"] {
+        assert!(
+            report.contains(&format!("\n{tool}: install (missing installation)\n")),
+            "{tool}: {report}"
+        );
+    }
+    for change in ["rust: locked 1.99.0", "rustup: locked 1.29.1"] {
+        assert!(
+            report.contains(&format!("\n  {change}\n")),
+            "{change}: {report}"
+        );
+    }
+    assert!(!root.join(".turbo").exists());
+}
+
+#[test]
 fn proposed_plans_fail_offline_and_force_requires_a_lock_without_traffic() {
     let f = super::first_lock::fresh();
     let u = LoopbackServer::new([], |_| {}).unwrap();
@@ -512,8 +503,8 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
     for case in 0..7 {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
-        let discovery = root::Discovery::capture(&f.args(PLAN)).unwrap();
-        let sources = turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap();
+        let discovery = root::Discovery::capture(&f.args(PLAN), f.git.clone()).unwrap();
+        let sources = f.sources().unwrap();
         let calls = std::cell::Cell::new(0);
         let edited = std::cell::RefCell::new(None);
         let result = plan::inspect(&discovery, sources, false, || {
@@ -532,7 +523,7 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
                         f.owned.root().join("apps/web/.git"),
                         "gitdir: /not-probed".into(),
                     ),
-                    _ => (f.owned.home().join(".npmrc"), "".into()),
+                    _ => (f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into()),
                 };
                 fs::write(path, contents).unwrap();
                 *edited.borrow_mut() = Some(snapshot(f.owned.root().parent().unwrap()));

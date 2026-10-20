@@ -91,27 +91,24 @@ fn toolchain_values_override_root_values() {
 }
 
 #[test]
-fn lifecycle_scripts_resolve_per_toolchain() {
-    let policy =
-        parse(r#"{"lifecycleScripts":"skip","python":{"lifecycleScripts":"native"}}"#).unwrap();
-    assert!(policy.is_configured());
-    let scripts = |id| policy.toolchain(&id).lifecycle_scripts;
-    assert_eq!(
-        scripts(ToolchainId::JAVASCRIPT),
-        Some(LifecycleScripts::Skip)
-    );
-    assert_eq!(scripts(ToolchainId::PYTHON), Some(LifecycleScripts::Native));
-    let unset = parse(r#"{"javascript":{"tools":"managed"}}"#).unwrap();
-    assert_eq!(
-        unset.toolchain(&ToolchainId::JAVASCRIPT).lifecycle_scripts,
-        None
-    );
+fn removed_lifecycle_controls_are_rejected() {
+    for value in ["native", "skip"] {
+        for setup in [
+            format!(r#"{{"lifecycleScripts":"{value}"}}"#),
+            format!(r#"{{"javascript":{{"lifecycleScripts":"{value}"}}}}"#),
+            format!(r#"{{"python":{{"lifecycleScripts":"{value}"}}}}"#),
+            format!(r#"{{"rust":{{"lifecycleScripts":"{value}"}}}}"#),
+            format!(r#"{{"go":{{"lifecycleScripts":"{value}"}}}}"#),
+        ] {
+            assert!(parse(&setup).is_err(), "{setup}");
+        }
+    }
 }
 
 #[test]
 fn policy_loads_deterministically_and_round_trips() {
-    let setup =
-        r#"{"go":{"tools":"skip"},"dependencies":"skip","javascript":{"tools":"verify-system"}}"#;
+    let setup = r#"{"go":{"tools":"skip"},"dependencies":"skip","javascript":{"tools":"verify-system"},
+        "mirrors":{"npmRegistry":"https://npm.example/registry"}}"#;
     assert_eq!(parse(setup).unwrap(), parse(setup).unwrap());
     let raw = root(ALL_FLAGS, setup).unwrap();
     assert_eq!(
@@ -119,9 +116,74 @@ fn policy_loads_deterministically_and_round_trips() {
         serde_json::json!({
             "dependencies": "skip",
             "javascript": {"tools": "verify-system"},
-            "go": {"tools": "skip"}
+            "go": {"tools": "skip"},
+            "mirrors": {"npmRegistry": "https://npm.example/registry"}
         })
     );
+}
+
+#[test]
+fn mirrors_keep_their_bases_and_count_as_policy() {
+    let policy = parse(
+        r#"{"mirrors":{"node":"https://mirror.example/nodejs/dist/","npmRegistry":"https://mirror.example:8443/npm",
+            "bun":"https://mirror.example/github","uv":"https://mirror.example/astral","python":"https://mirror.example/astral",
+            "go":"https://mirror.example/golang","rust":"https://mirror.example/rust"}}"#,
+    )
+    .unwrap();
+    assert!(policy.is_configured());
+    assert_eq!(
+        policy.mirrors(),
+        &SetupMirrors {
+            node: Some("https://mirror.example/nodejs/dist/".into()),
+            npm_registry: Some("https://mirror.example:8443/npm".into()),
+            bun: Some("https://mirror.example/github".into()),
+            uv: Some("https://mirror.example/astral".into()),
+            python: Some("https://mirror.example/astral".into()),
+            go: Some("https://mirror.example/golang".into()),
+            rust: Some("https://mirror.example/rust".into()),
+        }
+    );
+    let empty = parse(r#"{"mirrors":{}}"#).unwrap();
+    assert_eq!(empty.mirrors(), &SetupMirrors::default());
+    assert!(!empty.is_configured());
+}
+
+#[test_case("node", "https://user:s3cret@mirror.example/dist"; "userinfo")]
+#[test_case("node", "https://s3cret@mirror.example/dist"; "username")]
+#[test_case("npmRegistry", "https://@mirror.example/s3cret"; "empty userinfo")]
+#[test_case("npmRegistry", "https://mirror.example/npm?token=s3cret"; "query")]
+#[test_case("node", "https://mirror.example/dist#s3cret"; "fragment")]
+#[test_case("node", "http://mirror.example/s3cret"; "plain http")]
+#[test_case("npmRegistry", "mirror.example/s3cret"; "relative")]
+#[test_case("node", ""; "empty")]
+#[test_case("bun", "http://mirror.example/s3cret"; "plain http bun")]
+#[test_case("python", "https://s3cret@mirror.example/astral"; "python userinfo")]
+#[test_case("go", "https://mirror.example/golang?s3cret"; "go query")]
+#[test_case("rust", "http://mirror.example/s3cret"; "plain http rust")]
+fn invalid_mirrors_point_at_masked_values(key: &str, value: &str) {
+    // The other mirror is valid but still never rendered.
+    let other = if key == "node" { "npmRegistry" } else { "node" };
+    let setup =
+        format!(r#"{{"mirrors":{{"{key}":"{value}","{other}":"https://ok.example/s3cret"}}}}"#);
+    let error = parse(&setup).unwrap_err();
+    let message = error.to_string();
+    assert!(
+        message.contains(&format!("setup.mirrors.{key}")),
+        "{message}"
+    );
+    let Error::SetupInvalidMirror {
+        span: Some(span),
+        text,
+        ..
+    } = error
+    else {
+        panic!("expected a mirror diagnostic: {message}");
+    };
+    let source = text.inner();
+    let labeled = &source[span.offset()..span.offset() + span.len()];
+    assert!(labeled.bytes().all(|b| b == b'*'), "{source}");
+    assert!(source.contains(r#""mirrors""#) && !source.contains("s3cret"));
+    assert!(!message.contains("s3cret") && !message.contains("example"));
 }
 
 #[test_case(r#"{"tools":"skip","dependencies":"locked"}"#; "root")]
@@ -146,6 +208,9 @@ fn locked_dependencies_require_tools(setup: &str) {
 #[test_case(r#"{"rust":"skip"}"#; "toolchain shorthand")]
 #[test_case(r#"{"rust":{"version":"1.80.0"}}"#; "unknown toolchain key")]
 #[test_case(r#""skip""#; "non object")]
+#[test_case(r#"{"mirrors":{"yarn":"https://mirror.example"}}"#; "unknown mirror")]
+#[test_case(r#"{"mirrors":{"node":1}}"#; "non string mirror")]
+#[test_case(r#"{"mirrors":"https://mirror.example"}"#; "mirror shorthand")]
 fn invalid_values_identify_their_source(setup: &str) {
     let Err(Error::Parse(error)) = parse(setup) else {
         panic!("expected a parse error for {setup}");

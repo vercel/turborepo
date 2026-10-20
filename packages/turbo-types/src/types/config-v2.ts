@@ -8,7 +8,6 @@ export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
 export type ToolPolicy = "managed" | "verify-system" | "skip";
 export type DependencyPolicy = "locked" | "skip";
-export type LifecycleScripts = "native" | "skip";
 export type ArtifactPlatform =
   | "macos-x64"
   | "macos-arm64"
@@ -568,15 +567,6 @@ export interface SetupPolicy {
    */
   dependencies?: DependencyPolicy;
 
-  /**
-   * Whether dependency setup runs package-manager lifecycle scripts for every
-   * toolchain.
-   *
-   * - `"native"`: Keep each package manager's defaults and committed allowlists or trust settings.
-   * - `"skip"`: Skip them with the package manager's own flag, or fail where it has none.
-   */
-  lifecycleScripts?: LifecycleScripts;
-
   /** Setup policy for the JavaScript toolchain. */
   javascript?: ToolchainSetupPolicy;
 
@@ -591,6 +581,35 @@ export interface SetupPolicy {
 
   /** Tools that no built-in adapter manages, keyed by tool ID. */
   additionalTools?: Record<string, AdditionalTool>;
+
+  /**
+   * Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the
+   * official URLs, and environment variables override these values.
+   */
+  mirrors?: SetupMirrors;
+}
+
+export interface SetupMirrors {
+  /** Replaces `https://nodejs.org/dist` for Node.js release metadata and archives. */
+  node?: string;
+
+  /** Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn packages. */
+  npmRegistry?: string;
+
+  /** Replaces the `https://github.com` origin for Bun releases, keeping official paths. */
+  bun?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for uv, keeping official paths. */
+  uv?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for CPython, keeping official paths. */
+  python?: string;
+
+  /** Replaces `https://go.dev` and `https://dl.google.com` for Go, keeping official paths. */
+  go?: string;
+
+  /** Replaces the `https://static.rust-lang.org` origin for rustup and Rust, keeping official paths. */
+  rust?: string;
 }
 
 export interface AdditionalTool {
@@ -611,10 +630,10 @@ export interface AdditionalToolArtifact {
   /** `binary` for a single executable file, or the archive format. */
   format: ArtifactFormat;
 
-  /** The single top-level archive directory. Required for archives only. */
+  /** The single top-level archive directory. Omit it for archives without one. */
   rootPrefix?: string;
 
-  /** Executable names mapped to paths relative to `rootPrefix`. */
+  /** Executable names mapped to paths relative to `rootPrefix` or the archive top level. */
   executables: Record<string, string>;
 }
 
@@ -624,9 +643,6 @@ export interface ToolchainSetupPolicy {
 
   /** How `turbo setup` prepares this toolchain's dependencies. */
   dependencies?: DependencyPolicy;
-
-  /** Whether this toolchain's dependency setup runs lifecycle scripts. */
-  lifecycleScripts?: LifecycleScripts;
 }
 
 export interface StartupInput {

@@ -51,6 +51,10 @@ use crate::{
     relationships::Relationship,
 };
 
+/// Below this many workspaces, JavaScript discovery parses `package.json`
+/// manifests on the calling thread instead of the rayon pool.
+const PARALLEL_MANIFEST_PARSE_MIN_WORKSPACES: usize = 32;
+
 /// Identifies a toolchain: the language ecosystem a package belongs to.
 ///
 /// Open by design (see the module's design rules): any string can be a
@@ -730,6 +734,23 @@ pub struct DerivedTaskIO {
     pub outputs: DerivedOutputs,
 }
 
+/// Input globs covering the sources of a directory a toolchain task reads
+/// besides its own package, such as a local dependency.
+///
+/// Explicit input globs hash the filesystem (unlike default hashing, which is
+/// git-index based), so files written by Git, Turborepo, and JavaScript
+/// package managers inside the directory are excluded. Otherwise a
+/// dependency's task logs or `node_modules` would change its dependents'
+/// hashes.
+pub(crate) fn directory_source_globs(directory: &str) -> [String; 4] {
+    [
+        format!("{directory}/**"),
+        format!("!{directory}/.git/**"),
+        format!("!{directory}/.turbo/**"),
+        format!("!{directory}/**/node_modules/**"),
+    ]
+}
+
 /// The JavaScript contributor: packages discovered from `package.json`
 /// manifests.
 ///
@@ -832,7 +853,7 @@ fn npm_direct_command(
 #[cfg(windows)]
 fn pnpm_direct_command(
     package_manager_binary: &std::path::Path,
-) -> Option<(std::path::PathBuf, OsString)> {
+) -> Option<(std::path::PathBuf, Vec<OsString>)> {
     if !package_manager_binary
         .file_name()?
         .to_str()?
@@ -842,6 +863,19 @@ fn pnpm_direct_command(
     }
 
     let bin_dir = package_manager_binary.parent()?;
+    // npm installs pnpm next to its shim. Prefer the native executable so
+    // Ctrl+C does not leave cmd.exe waiting at its batch termination prompt.
+    let pnpm_exe = bin_dir.join("node_modules").join("pnpm").join("pnpm.exe");
+    // Match the full template to preserve Corepack and custom launcher behavior.
+    if pnpm_exe.is_file()
+        && std::fs::read_to_string(package_manager_binary).is_ok_and(|shim| {
+            shim.lines()
+                .eq(include_str!("fixtures/pnpm-native.cmd").lines())
+        })
+    {
+        return Some((pnpm_exe, Vec::new()));
+    }
+
     let node = bin_dir.join("node.exe");
     let pnpm_cli = bin_dir
         .parent()?
@@ -850,7 +884,7 @@ fn pnpm_direct_command(
         .join("bin")
         .join("pnpm.mjs");
 
-    (node.is_file() && pnpm_cli.is_file()).then(|| (node, pnpm_cli.into_os_string()))
+    (node.is_file() && pnpm_cli.is_file()).then(|| (node, vec![pnpm_cli.into_os_string()]))
 }
 
 #[cfg(windows)]
@@ -867,9 +901,9 @@ pub(crate) fn package_manager_command(
     if matches!(
         package_manager,
         PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
-    ) && let Some((node, pnpm_cli)) = pnpm_direct_command(package_manager_binary)
+    ) && let Some((program, args)) = pnpm_direct_command(package_manager_binary)
     {
-        return (node.into_os_string(), vec![pnpm_cli]);
+        return (program.into_os_string(), args);
     }
 
     (package_manager_binary.as_os_str().to_owned(), Vec::new())
@@ -911,19 +945,30 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
             let workspace_root =
                 WorkspaceRoot::new(package_manager.command(), self.repo_root.clone());
             // Parse manifests in parallel; manifest parsing dominates discovery
-            // time on large repositories.
+            // time on large repositories. A handful of manifests parse faster on
+            // the calling thread than fanned out across the rayon pool, where
+            // every woken worker also allocates in its own memory region.
             let _span = tracing::info_span!("manifest_parse").entered();
             let packages = turborepo_rayon_compat::block_in_place(|| {
-                use rayon::prelude::*;
-                response
-                    .workspaces
-                    .into_par_iter()
-                    .map(|workspace| {
-                        let (package_json, _) = workspace.into_paths();
-                        let descriptor = self.package_json_loader.load(&package_json)?;
-                        Ok(Self::package_from_json(package_json, descriptor))
-                    })
-                    .collect::<Result<Vec<_>, Error>>()
+                let parse = |workspace: discovery::WorkspaceData| -> Result<_, Error> {
+                    let (package_json, _) = workspace.into_paths();
+                    let descriptor = self.package_json_loader.load(&package_json)?;
+                    Ok(Self::package_from_json(package_json, descriptor))
+                };
+                if response.workspaces.len() < PARALLEL_MANIFEST_PARSE_MIN_WORKSPACES {
+                    response
+                        .workspaces
+                        .into_iter()
+                        .map(parse)
+                        .collect::<Result<Vec<_>, Error>>()
+                } else {
+                    use rayon::prelude::*;
+                    response
+                        .workspaces
+                        .into_par_iter()
+                        .map(parse)
+                        .collect::<Result<Vec<_>, Error>>()
+                }
             })?;
             Ok(DiscoveredPackages::new(packages, vec![workspace_root]))
         })
@@ -1273,6 +1318,112 @@ mod tests {
 
         assert_eq!(program, node.into_os_string());
         assert_eq!(args, vec![pnpm_cli.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn pnpm_cmd_unwraps_npm_installation() {
+        for (package_manager, shim_name, with_node, line_ending) in [
+            (PackageManager::Pnpm, "pnpm.cmd", false, "\n"),
+            (PackageManager::Pnpm6, "pnpm.CMD", true, "\r\n"),
+            (PackageManager::Pnpm9, "pnpm.cmd", true, "\n"),
+            (PackageManager::Pnpm, "pnpm.CMD", false, "\r\n"),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let prefix = tempdir.path().join("First Last");
+            let pnpm_cmd = prefix.join(shim_name);
+            let pnpm_exe = prefix.join("node_modules").join("pnpm").join("pnpm.exe");
+            std::fs::create_dir_all(pnpm_exe.parent().unwrap()).unwrap();
+            // Generated by npm's cmd-shim 7.0.0 for pnpm.exe.
+            let shim = include_str!("fixtures/pnpm-native.cmd")
+                .replace("\r\n", "\n")
+                .replace('\n', line_ending);
+            std::fs::write(&pnpm_cmd, shim).unwrap();
+            std::fs::write(&pnpm_exe, "").unwrap();
+            if with_node {
+                std::fs::write(prefix.join("node.exe"), "").unwrap();
+            }
+
+            let (program, args) = package_manager_command(&package_manager, &pnpm_cmd);
+
+            assert_eq!(program, pnpm_exe.into_os_string());
+            assert!(args.is_empty());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn pnpm_cmd_preserves_other_launchers_with_adjacent_executable() {
+        let npm_shim = include_str!("fixtures/pnpm-native.cmd");
+        for shim in [
+            include_str!("fixtures/pnpm-corepack.cmd").to_string(),
+            format!("{npm_shim}\necho additional behavior\n"),
+            npm_shim.replace("SET dp0=%~dp0", "SET dp0=C:\\other"),
+            npm_shim.replace("pnpm.exe", "another.exe"),
+            "@echo off\nrem node_modules\\pnpm\\pnpm.exe\ncustom-launcher %*\n".to_string(),
+        ] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let pnpm_cmd = tempdir.path().join("pnpm.cmd");
+            let pnpm_exe = tempdir
+                .path()
+                .join("node_modules")
+                .join("pnpm")
+                .join("pnpm.exe");
+            std::fs::create_dir_all(pnpm_exe.parent().unwrap()).unwrap();
+            std::fs::write(&pnpm_cmd, shim).unwrap();
+            std::fs::write(&pnpm_exe, "").unwrap();
+
+            let (program, args) = package_manager_command(&PackageManager::Pnpm, &pnpm_cmd);
+
+            assert_eq!(program, pnpm_cmd.into_os_string());
+            assert!(args.is_empty());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn pnpm_cmd_falls_back_when_native_shim_cannot_be_read() {
+        for unreadable in ["missing", "directory", "invalid utf8"] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let pnpm_cmd = tempdir.path().join("pnpm.cmd");
+            let pnpm_exe = tempdir
+                .path()
+                .join("node_modules")
+                .join("pnpm")
+                .join("pnpm.exe");
+            std::fs::create_dir_all(pnpm_exe.parent().unwrap()).unwrap();
+            std::fs::write(&pnpm_exe, "").unwrap();
+            match unreadable {
+                "directory" => std::fs::create_dir(&pnpm_cmd).unwrap(),
+                "invalid utf8" => std::fs::write(&pnpm_cmd, [0xff]).unwrap(),
+                _ => {}
+            }
+            assert!(std::fs::read_to_string(&pnpm_cmd).is_err());
+
+            let (program, args) = package_manager_command(&PackageManager::Pnpm, &pnpm_cmd);
+
+            assert_eq!(program, pnpm_cmd.into_os_string());
+            assert!(args.is_empty());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn pnpm_cmd_falls_back_when_npm_executable_is_a_directory() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let pnpm_cmd = tempdir.path().join("pnpm.cmd");
+        let pnpm_exe = tempdir
+            .path()
+            .join("node_modules")
+            .join("pnpm")
+            .join("pnpm.exe");
+        std::fs::write(&pnpm_cmd, include_str!("fixtures/pnpm-native.cmd")).unwrap();
+        std::fs::create_dir_all(&pnpm_exe).unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Pnpm, &pnpm_cmd);
+
+        assert_eq!(program, pnpm_cmd.into_os_string());
+        assert!(args.is_empty());
     }
 
     #[cfg(windows)]
