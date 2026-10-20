@@ -174,6 +174,11 @@ pub enum Error {
     NoGlobalAuthFilePath,
     #[error("Global config directory not found.")]
     NoGlobalConfigDir,
+    #[error(
+        "Refusing to send a token to a repository-configured API URL. To authorize a custom remote \
+         cache, set its URL with --api, TURBO_API, or your global Turborepo configuration."
+    )]
+    UntrustedApiUrl,
 
     // ============================================================
     // File and IO errors
@@ -452,6 +457,27 @@ impl ConfigurationOptions {
 
     pub fn api_url(&self) -> &str {
         non_empty_str(self.api_url.as_deref()).unwrap_or(DEFAULT_API_URL)
+    }
+
+    /// Repository files may select a cache, but cannot authorize sending ambient
+    /// credentials to a custom endpoint. Check the final merged configuration so
+    /// trusted CLI, environment, and global URL overrides remain supported.
+    fn validate_api_token_destination(&self) -> Result<(), Error> {
+        if self.token().is_none() || self.api_url() == DEFAULT_API_URL {
+            return Ok(());
+        }
+
+        if matches!(
+            self.api_url_source(),
+            Some(ConfigurationSource::Cli)
+                | Some(ConfigurationSource::Environment)
+                | Some(ConfigurationSource::OverrideEnvironment)
+                | Some(ConfigurationSource::GlobalConfig)
+        ) {
+            return Ok(());
+        }
+
+        Err(Error::UntrustedApiUrl)
     }
 
     pub fn login_url(&self) -> &str {
@@ -861,14 +887,12 @@ impl TurborepoConfigBuilder {
                 let current_source_config = current_source.get_configuration_options(&acc)?;
                 let current_source_config = current_source_config.with_url_sources(source);
                 acc.merge(current_source_config);
-                Ok(acc)
+                Ok::<_, Error>(acc)
             },
-        );
+        )?;
 
-        // We explicitly do a let and return to help the Rust compiler see that there
-        // are no references still held by the folding.
-        #[allow(clippy::let_and_return)]
-        config
+        config.validate_api_token_destination()?;
+        Ok(config)
     }
 }
 
@@ -1524,6 +1548,143 @@ mod test {
             config.login_url_source(),
             Some(ConfigurationSource::TurboJson)
         );
+    }
+
+    // Use explicit auth paths and environment snapshots so these tests never
+    // read developer credentials or depend on process-wide environment changes.
+    #[test_case::test_case("turbo.json")]
+    #[test_case::test_case("turbo.jsonc")]
+    #[test_case::test_case(".turbo/config.json")]
+    fn test_repository_api_url_requires_explicit_authorization(config_file: &str) {
+        const CUSTOM_API: &str = "http://127.0.0.1:9099";
+        for token_source in ["auth", "global", "legacy", "env", "vercel_env", "cli"] {
+            for authorization in ["none", "cli", "env", "global"] {
+                let tmp = TempDir::new().unwrap();
+                let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+                let repo = root.join_component("repo");
+                repo.create_dir_all().unwrap();
+                let config_path = repo.join_components(&config_file.split('/').collect::<Vec<_>>());
+                config_path.ensure_dir().unwrap();
+                let remote = serde_json::json!({
+                    "apiUrl": CUSTOM_API,
+                    "teamId": "team_test"
+                });
+                let contents = if config_file.starts_with(".turbo/") {
+                    remote
+                } else {
+                    serde_json::json!({"remoteCache": remote})
+                };
+                config_path
+                    .create_with_contents(contents.to_string())
+                    .unwrap();
+
+                let inputs = crate::ConfigurationFileInputs {
+                    global_config_path: root.join_component("config.json"),
+                    global_auth_path: root.join_component("auth.json"),
+                    legacy_auth_path: Some(root.join_component("legacy-auth.json")),
+                };
+                let mut global = serde_json::json!({});
+                let mut environment = HashMap::new();
+                let mut builder = TurborepoConfigBuilder::new(&repo);
+                match token_source {
+                    "auth" => inputs
+                        .global_auth_path
+                        .create_with_contents(r#"{"token":"sentinel"}"#)
+                        .unwrap(),
+                    "global" => global["token"] = "sentinel".into(),
+                    "legacy" => inputs
+                        .legacy_auth_path
+                        .as_ref()
+                        .unwrap()
+                        .create_with_contents(r#"{"token":"sentinel"}"#)
+                        .unwrap(),
+                    "env" => {
+                        environment.insert("TURBO_TOKEN".into(), "sentinel".into());
+                    }
+                    "vercel_env" => {
+                        environment.insert("VERCEL_ARTIFACTS_TOKEN".into(), "sentinel".into());
+                        environment.insert("VERCEL_ARTIFACTS_OWNER".into(), "team_test".into());
+                    }
+                    "cli" => builder = builder.with_token(Some("sentinel".into())),
+                    _ => unreachable!(),
+                }
+                match authorization {
+                    "cli" => builder = builder.with_api_url(Some(CUSTOM_API.into())),
+                    "env" => {
+                        environment.insert("TURBO_API".into(), CUSTOM_API.into());
+                    }
+                    "global" => global["apiUrl"] = CUSTOM_API.into(),
+                    "none" => {}
+                    _ => unreachable!(),
+                }
+                inputs
+                    .global_config_path
+                    .create_with_contents(global.to_string())
+                    .unwrap();
+                let result = builder.build_with_inputs(environment, inputs);
+                // Local config takes precedence over global config. It must not
+                // inherit permission to send a token from the lower-priority URL.
+                if authorization == "none"
+                    || (authorization == "global" && config_file.starts_with(".turbo/"))
+                {
+                    assert!(
+                        matches!(result, Err(crate::Error::UntrustedApiUrl)),
+                        "{config_file}, {token_source}, {authorization}"
+                    );
+                } else {
+                    let config = result.unwrap();
+                    assert_eq!(config.api_url(), CUSTOM_API);
+                    assert_eq!(config.token(), Some("sentinel"));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_api_token_destination_default_and_unauthenticated() {
+        for source in [
+            ConfigurationSource::TurboJson,
+            ConfigurationSource::LocalConfig,
+        ] {
+            for api_url in [None, Some(""), Some(DEFAULT_API_URL)] {
+                let config = ConfigurationOptions::default()
+                    .with_api_url(api_url.map(str::to_owned))
+                    .with_api_url_source(Some(source))
+                    .with_token(Some("sentinel".into()));
+                assert!(config.validate_api_token_destination().is_ok());
+            }
+            for token in [None, Some("")] {
+                let config = ConfigurationOptions::default()
+                    .with_api_url(Some("https://cache.example.com".into()))
+                    .with_api_url_source(Some(source))
+                    .with_token(token.map(str::to_owned));
+                assert!(config.validate_api_token_destination().is_ok());
+            }
+        }
+    }
+
+    #[test]
+    fn test_api_token_destination_does_not_trust_url_lookalikes() {
+        for api_url in [
+            "http://vercel.com/api",
+            "https://vercel.com.attacker.test/api",
+            "https://vercel.com@attacker.test/api",
+            "https://vercel.com:8443/api",
+            "https://vercel.com/api/../../../attacker",
+            "not a url",
+        ] {
+            let config = ConfigurationOptions::default()
+                .with_api_url(Some(api_url.into()))
+                .with_api_url_source(Some(ConfigurationSource::TurboJson))
+                .with_token(Some("sentinel".into()));
+            assert!(
+                matches!(
+                    config.validate_api_token_destination(),
+                    Err(crate::Error::UntrustedApiUrl)
+                ),
+                "{api_url}"
+            );
+        }
     }
 
     #[test]
