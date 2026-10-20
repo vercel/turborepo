@@ -19,7 +19,7 @@ impl Fixture {
              node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org{}\n  SHA-256: {:x}\n\
              pnpm 10.0.0: {action}\n  Declaration: package.json#/packageManager (pnpm@10.0.0)\n  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n  SHA-256: {:x}\n\
              Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-             Tracked changes: none. No downloads, probes, or tasks run.",
+             Tracked changes: none. No downloads or probes run.",
             self.node_path,
             Sha256::digest(&self.node),
             Sha256::digest(&self.pnpm),
@@ -105,7 +105,7 @@ fn node_only_plan_ignores_disabled_ecosystems_without_probing_or_creating_storag
         "Locked tools-only plan (turbo.lock unchanged):\n\
          node 24.0.0: install (missing installation)\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org{}\n  SHA-256: {:x}\n\
          Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-         Tracked changes: none. No downloads, probes, or tasks run.",
+         Tracked changes: none. No downloads or probes run.",
         f.node_path, Sha256::digest(&f.node),
     ));
     assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
@@ -349,7 +349,7 @@ fn footer(change: Option<&str>) -> String {
     format!(
         "Dependencies skipped (--tools-only); dependency readiness was not checked.\nTracked \
          changes: {}. Resolution read upstream metadata and verified archives; nothing was \
-         installed, and no probes or tasks run.",
+         installed, and no probes run.",
         change.map_or("none".into(), |change| format!(
             "turbo.lock would be {change}; nothing was written"
         ))
