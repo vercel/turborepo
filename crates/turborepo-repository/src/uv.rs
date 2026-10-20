@@ -2297,21 +2297,13 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", windows))]
 fn host_compatibility_identity() -> Option<String> {
-    let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok()?;
-    let os_release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
-    let runtime = ["/usr/bin/ldd", "/bin/ldd"].into_iter().find_map(|path| {
-        let path = std::path::Path::new(path);
-        path.exists().then(|| {
-            let output = Command::new(path).arg("--version").output().ok()?;
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let value = format!("{stdout}{stderr}");
-            (!value.trim().is_empty()).then(|| value.trim().to_string())
-        })?
-    })?;
-    Some(format!("{kernel}\n{os_release}\n{runtime}"))
+    Some(format!(
+        "{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    ))
 }
 
 #[cfg(target_os = "macos")]
@@ -2319,15 +2311,6 @@ fn host_compatibility_identity() -> Option<String> {
     let mut command = Command::new("/usr/bin/sw_vers");
     command.arg("-productVersion");
     successful_stdout(command)
-}
-
-#[cfg(windows)]
-fn host_compatibility_identity() -> Option<String> {
-    Some(format!(
-        "{}-{}",
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    ))
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
@@ -4915,6 +4898,19 @@ version = "0.1.0"
         assert_eq!(
             bundled.bundled_uv_build_requirement(),
             Some("uv_build>=0.12,<0.13")
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_host_compatibility_identity_contains_only_platform() {
+        assert_eq!(
+            host_compatibility_identity(),
+            Some(format!(
+                "{}-{}",
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            ))
         );
     }
 

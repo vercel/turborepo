@@ -4,8 +4,7 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 use crate::{
-    git::FakeGit, lock::Platform, rust_metadata::tests::fixture,
-    source_policy::test_support::LoopbackServer,
+    lock::Platform, rust_metadata::tests::fixture, source_policy::test_support::LoopbackServer,
 };
 
 fn toolchain(body: &str) -> Toolchain {
@@ -217,13 +216,12 @@ mod lock_updates {
 
     fn update(root: &Path, server: &LoopbackServer, mode: Mode) -> Lock {
         let transport = RustupTransport::loopback_http_for_tests(server.origin()).unwrap();
-        let snapshot = Snapshot::capture_with_git(
+        let snapshot = Snapshot::capture_with(
             root,
             Ecosystems {
                 rust: true,
                 ..Default::default()
             },
-            FakeGit::shared(),
         )
         .unwrap();
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -303,8 +301,7 @@ mod lock_updates {
             python: true,
             go: false,
         };
-        let snapshot =
-            Snapshot::capture_with_git(root.path(), ecosystems, FakeGit::shared()).unwrap();
+        let snapshot = Snapshot::capture_with(root.path(), ecosystems).unwrap();
         let requirement = snapshot.uv_requirement().unwrap().unwrap();
         let platform = crate::lock::Platform::LinuxX64Gnu;
         let official =
@@ -357,8 +354,7 @@ mod lock_updates {
             if remove {
                 fs::remove_file(&file).unwrap();
             }
-            let snapshot =
-                Snapshot::capture_with_git(root.path(), ecosystems, FakeGit::shared()).unwrap();
+            let snapshot = Snapshot::capture_with(root.path(), ecosystems).unwrap();
             let selected = reconcile::reconcile(&snapshot, Mode::Local, false, |request| {
                 runtime
                     .block_on(crate::native_resolution::resolve_with_rust(

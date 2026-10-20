@@ -195,6 +195,11 @@ impl AsyncCache {
         }
     }
 
+    /// See [`CacheMultiplexer::disable_remote_writes`].
+    pub fn disable_remote_writes(&self) {
+        self.real_cache.disable_remote_writes();
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.real_cache.exists(key).await

@@ -54,7 +54,7 @@ pub(super) fn run(
         trust.preflight()?;
         preflight()?;
         provision::revalidate(discovery)?;
-        provision::storage(root, discovery.git())?;
+        provision::storage(root)?;
         snapshot.ensure_current()?;
         Ok::<_, Error>(())
     };
