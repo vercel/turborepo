@@ -537,9 +537,18 @@ function runTurboChild(env, useCtrlCPipe) {
     }
   };
 
+  const handleSighup = () => {
+    if (!child.killed) {
+      child.kill("SIGHUP");
+    }
+  };
+
   const cleanup = () => {
     process.off("SIGINT", handleSigint);
     process.off("SIGTERM", handleSigterm);
+    if (process.platform !== "win32") {
+      process.off("SIGHUP", handleSighup);
+    }
     process.stdin.off("data", handleInput);
     restoreStdin();
     ctrlCPipe?.destroy();
@@ -547,6 +556,9 @@ function runTurboChild(env, useCtrlCPipe) {
 
   process.on("SIGINT", handleSigint);
   process.on("SIGTERM", handleSigterm);
+  if (process.platform !== "win32") {
+    process.on("SIGHUP", handleSighup);
+  }
 
   child.once("error", (error) => {
     cleanup();
