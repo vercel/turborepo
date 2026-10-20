@@ -1021,13 +1021,29 @@ fn test_task_level_affected_iff_task_hash_changes() {
 
 #[test]
 fn test_task_level_affected_tracked_outputs_match_hashes() {
-    for (file, tracked, inputs, expected) in [
-        ("dist/LICENSE", true, r#"["src/**"]"#, true),
-        ("dist/excluded.txt", true, r#"["src/**"]"#, false),
-        ("dist/generated.txt", false, r#"["src/**"]"#, false),
-        ("src/index.ts", true, r#"["src/**"]"#, true),
-        ("dist/excluded.txt", true, r#"["$TURBO_DEFAULT$"]"#, true),
-        ("dist/LICENSE", true, r#"["src/**", "!dist/**"]"#, true),
+    #[derive(Clone, Copy, Debug)]
+    enum Change {
+        Committed,
+        Untracked,
+        RemovedFromIndex,
+        Deleted,
+    }
+    use Change::*;
+
+    for (file, change, inputs, expected) in [
+        ("dist/LICENSE", Committed, r#"["src/**"]"#, true),
+        ("dist/excluded.txt", Committed, r#"["src/**"]"#, false),
+        ("dist/generated.txt", Untracked, r#"["src/**"]"#, false),
+        ("src/index.ts", Committed, r#"["src/**"]"#, true),
+        (
+            "dist/excluded.txt",
+            Committed,
+            r#"["$TURBO_DEFAULT$"]"#,
+            true,
+        ),
+        ("dist/LICENSE", Committed, r#"["src/**", "!dist/**"]"#, true),
+        ("dist/LICENSE", RemovedFromIndex, r#"["src/**"]"#, true),
+        ("dist/LICENSE", Deleted, r#"["src/**"]"#, true),
     ] {
         let tempdir = tempfile::tempdir().unwrap();
         let dir = tempdir.path();
@@ -1061,9 +1077,16 @@ fn test_task_level_affected_tracked_outputs_match_hashes() {
 
         let before = typecheck_hash(dir).unwrap();
         let path = format!("packages/lib-a/{file}");
-        fs::write(dir.join(&path), "changed").unwrap();
-        if tracked {
-            git(dir, &["add", "-f", &path]);
+        match change {
+            Deleted => fs::remove_file(dir.join(&path)).unwrap(),
+            _ => fs::write(dir.join(&path), "changed").unwrap(),
+        }
+        match change {
+            Committed | Deleted => git(dir, &["add", "-A", "--", &path]),
+            RemovedFromIndex => git(dir, &["rm", "--cached", "--", &path]),
+            Untracked => {}
+        }
+        if !matches!(change, Untracked) {
             git(dir, &["commit", "-m", "change selected file", "--quiet"]);
         }
         let after = typecheck_hash(dir).unwrap();
@@ -1075,7 +1098,7 @@ fn test_task_level_affected_tracked_outputs_match_hashes() {
         assert_eq!(
             typecheck_affected(dir),
             (expected, expected),
-            "(run, query) affectedness for {file}, tracked={tracked}, inputs={inputs}"
+            "(run, query) affectedness for {file}, change={change:?}, inputs={inputs}"
         );
     }
 }

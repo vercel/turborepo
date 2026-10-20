@@ -65,6 +65,32 @@ impl SCM {
         }
     }
 
+    /// Select changed paths tracked in the index or HEAD, including staged
+    /// deletions. Committed deletions require provenance from the compared
+    /// diff.
+    pub fn tracked_changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
+        let Self::Git(git) = self else {
+            return Ok(HashSet::new());
+        };
+        let pathspec = git.root.anchor(turbo_root)?;
+        let pathspec = if pathspec.as_str().is_empty() {
+            String::new()
+        } else {
+            format!(":(literal){}", pathspec.to_unix())
+        };
+        let output = git.execute_git_command(
+            &["ls-files", "--cached", "--with-tree=HEAD", "-z"],
+            &pathspec,
+        )?;
+        let mut tracked = HashSet::new();
+        git.add_files_from_stdout(&mut tracked, turbo_root, output)?;
+        Ok(changed_files.intersection(&tracked).cloned().collect())
+    }
+
     /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
@@ -987,7 +1013,7 @@ mod tests {
 
     use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
     use which::which;
 
     use super::{CIEnv, InvalidRange, default_base_ref, previous_content};
@@ -1032,6 +1058,60 @@ mod tests {
 
         let path = repo_root.path().to_path_buf();
         Ok((repo_root, path))
+    }
+
+    #[test]
+    fn tracked_changed_files_exclude_generated_outputs_and_keep_deletions() -> Result<(), Error> {
+        for nested in [false, true] {
+            let (_repo, path) = setup_repository(Some("main"))?;
+            let dir = if nested {
+                path.join("nested[repo]")
+            } else {
+                path.clone()
+            };
+            fs::create_dir_all(&dir)?;
+            fs::write(dir.join(".gitignore"), "ignored.txt\n")?;
+            for file in ["tracked.txt", "removed.txt", "deleted.txt"] {
+                fs::write(dir.join(file), "original")?;
+            }
+            run_git(&path, &["add", "."]);
+            run_git(&path, &["commit", "-m", "Initial"]);
+            fs::write(dir.join("generated.txt"), "generated")?;
+            fs::write(dir.join("ignored.txt"), "generated")?;
+            fs::write(dir.join("staged.txt"), "staged")?;
+            run_git(&dir, &["add", "staged.txt"]);
+            run_git(&dir, &["rm", "--cached", "removed.txt"]);
+            fs::remove_file(dir.join("deleted.txt"))?;
+            let root = AbsoluteSystemPath::from_std_path(&dir)?;
+            let scm = SCM::new(root);
+            let changed: HashSet<_> = [
+                "tracked.txt",
+                "removed.txt",
+                "deleted.txt",
+                "staged.txt",
+                "generated.txt",
+                "ignored.txt",
+            ]
+            .into_iter()
+            .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+            .collect();
+            let expected: HashSet<_> = ["tracked.txt", "removed.txt", "deleted.txt", "staged.txt"]
+                .into_iter()
+                .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+                .collect();
+            assert_eq!(scm.tracked_changed_files(root, &changed)?, expected);
+            assert!(
+                SCM::Manual
+                    .tracked_changed_files(root, &changed)?
+                    .is_empty()
+            );
+            run_git(&dir, &["add", "-u"]);
+            run_git(&path, &["commit", "-m", "Remove tracked files"]);
+            let selected = scm.tracked_changed_files(root, &changed)?;
+            assert!(!selected.contains(&AnchoredSystemPathBuf::from_raw("deleted.txt")?));
+            assert!(!selected.contains(&AnchoredSystemPathBuf::from_raw("removed.txt")?));
+        }
+        Ok(())
     }
 
     #[test]
