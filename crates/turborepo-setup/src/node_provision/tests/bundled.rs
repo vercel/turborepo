@@ -4,7 +4,6 @@ use super::*;
 use crate::{
     bundled_npm,
     execution_identity::{ExecutionContext, ExecutionSnapshot, Libc, SelectedInstallation},
-    git::FakeGit,
     lock::{Document, Ecosystems, Snapshot, WriteOutcome, reconcile},
     node_resolution::{ChecksumManifest, resolve},
 };
@@ -20,7 +19,7 @@ fn capture(root: &Path, manifest: Value) -> Snapshot {
         serde_json::to_vec(&manifest).unwrap(),
     )
     .unwrap();
-    Snapshot::capture_with_git(root, Ecosystems::default(), FakeGit::shared()).unwrap()
+    Snapshot::capture_with(root, Ecosystems::default()).unwrap()
 }
 fn node(snapshot: &Snapshot, bytes: &[u8]) -> lock::Tool {
     let index = serde_json::to_vec(
@@ -101,9 +100,7 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
             matches!(&committed.tools()["npm"].installation, Installation::Bundled { owner } if owner == "node")
         );
         let before = fs::read(repo.path().join("turbo.lock")).unwrap();
-        let frozen =
-            Snapshot::capture_with_git(repo.path(), Ecosystems::default(), FakeGit::shared())
-                .unwrap();
+        let frozen = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
         reconcile::reconcile(&frozen, reconcile::Mode::Frozen, true, |_| {
             panic!("no resolution")
         })

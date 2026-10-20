@@ -8,7 +8,7 @@ use turbopath::{
 };
 use wax::{Glob, Program, any};
 
-use crate::{Error, GitHashes, OidHash};
+use crate::{Error, GitHashes, OidHash, package_deps::InputSelection};
 
 fn expand_dir_pattern<'a>(base: &AbsoluteSystemPath, pattern: &'a str) -> Cow<'a, str> {
     if is_glob_pattern(pattern) {
@@ -141,6 +141,7 @@ pub(crate) fn hash_discovered_files(
     Ok(hashes)
 }
 
+#[cfg(test)]
 pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
@@ -149,9 +150,41 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     git_root: Option<&AbsoluteSystemPath>,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
+    get_input_file_hashes_without_git(
+        turbo_root,
+        package_path,
+        inputs,
+        InputSelection::Package {
+            include_default_files,
+        },
+        git_root,
+        cached_attrs,
+    )
+}
+
+pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
+    turbo_root: &AbsoluteSystemPath,
+    package_path: &AnchoredSystemPath,
+    inputs: &[S],
+    selection: InputSelection,
+    git_root: Option<&AbsoluteSystemPath>,
+    cached_attrs: Option<&crate::crlf::GitAttrs>,
+) -> Result<GitHashes, Error> {
+    let include_configs = matches!(selection, InputSelection::Package { .. });
+    let include_default_files = matches!(
+        selection,
+        InputSelection::Package {
+            include_default_files: true
+        }
+    );
     let full_package_path = turbo_root.resolve(package_path);
     let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
+    let exact_exclusions = if include_configs {
+        Vec::new()
+    } else {
+        crate::package_deps::exact_input_exclusions(package_unix_path.as_str(), inputs)?
+    };
 
     let effective_attrs_root = git_root.unwrap_or(turbo_root);
     let git_metadata_path = effective_attrs_root.join_component(".git");
@@ -189,6 +222,16 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             globwalk::WalkType::Files,
         )?;
         for file_path in &files {
+            if !exact_exclusions.is_empty() {
+                let repo_relative =
+                    AnchoredSystemPathBuf::relative_path_between(turbo_root, file_path).to_unix();
+                if exact_exclusions
+                    .iter()
+                    .any(|glob| glob.is_match(repo_relative.as_str()))
+                {
+                    continue;
+                }
+            }
             let relative_path =
                 AnchoredSystemPathBuf::relative_path_between(&full_package_path, file_path)
                     .to_unix();
@@ -200,6 +243,10 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
                 hashes.insert(relative_path, hash);
             }
         }
+    }
+
+    if !include_configs && local_inclusions.is_empty() {
+        return Ok(hashes);
     }
 
     let mut walker_builder = WalkBuilder::new(&full_package_path);
@@ -216,26 +263,27 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         let effective_pattern = expand_dir_pattern(&full_package_path, inclusion);
         includes.push(to_glob(effective_pattern.as_ref())?);
     }
-    let include_pattern = if includes.is_empty() && external_inclusions.is_empty() {
-        None
-    } else {
-        // Add in package.json and turbo.json to input patterns. Both file paths are
-        // relative to pkgPath
-        //
-        // - package.json is an input because if the `scripts` in the package.json
-        //   change (i.e. the tasks that turbo executes), we want a cache miss, since
-        //   any existing cache could be invalid.
-        // - turbo.json because it's the definition of the tasks themselves. The root
-        //   turbo.json is similarly included in the global hash. This file may not
-        //   exist in the workspace, but that is ok, because it will get ignored
-        //   downstream.
-        let turbo_g = to_glob("package.json")?;
-        let package_g = to_glob("turbo.json")?;
-        includes.push(turbo_g);
-        includes.push(package_g);
+    let include_pattern =
+        if include_configs && includes.is_empty() && external_inclusions.is_empty() {
+            None
+        } else {
+            // Add in package.json and turbo.json to input patterns. Both file paths are
+            // relative to pkgPath
+            //
+            // - package.json is an input because if the `scripts` in the package.json
+            //   change (i.e. the tasks that turbo executes), we want a cache miss, since
+            //   any existing cache could be invalid.
+            // - turbo.json because it's the definition of the tasks themselves. The root
+            //   turbo.json is similarly included in the global hash. This file may not
+            //   exist in the workspace, but that is ok, because it will get ignored
+            //   downstream.
+            if include_configs {
+                includes.push(to_glob("package.json")?);
+                includes.push(to_glob("turbo.json")?);
+            }
 
-        Some(any(includes)?)
-    };
+            Some(any(includes)?)
+        };
     let exclude_pattern = if excludes.is_empty() {
         None
     } else {
@@ -278,6 +326,16 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         }
 
         let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
+        if !exact_exclusions.is_empty() {
+            let repo_relative =
+                AnchoredSystemPathBuf::relative_path_between(turbo_root, path).to_unix();
+            if exact_exclusions
+                .iter()
+                .any(|glob| glob.is_match(repo_relative.as_str()))
+            {
+                continue;
+            }
+        }
         let relative_path = full_package_path.anchor(path)?;
         let relative_path = relative_path.to_unix();
 
