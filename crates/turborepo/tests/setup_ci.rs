@@ -38,9 +38,7 @@ fn standalone_ci_missing_and_stale_locks_render_local_repair_guidance_without_wr
         .unwrap();
         fs::write(root.join(".nvmrc"), declaration).unwrap();
         if lock {
-            // The stale declaration must be diagnosed before the executor
-            // considers this unsupported installation kind.
-            fs::write(root.join("turbo.lock"), r#"{"schemaVersion":0,"tools":{"node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],"installation":{"kind":"verify-system","executables":["node"]}}}}"#).unwrap();
+            fs::write(root.join("turbo.lock"), r#"{"schemaVersion":0,"tools":{"node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],"installation":{"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/node.tgz","sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","format":"tar-gz","executables":{"node":"bin/node"}}}}}}}}"#).unwrap();
         }
         let proxy = TcpListener::bind("127.0.0.1:0").unwrap();
         proxy.set_nonblocking(true).unwrap();

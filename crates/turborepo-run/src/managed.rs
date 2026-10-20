@@ -11,7 +11,6 @@ use crate::{EnvironmentVariableMap, ManagedEnvironment};
 pub struct ManagedRun {
     snapshot: ExecutionSnapshot,
     environment: Arc<dyn ManagedEnvironment>,
-    notices: Vec<String>,
 }
 
 impl ManagedRun {
@@ -27,19 +26,7 @@ impl ManagedRun {
         Ok(Self {
             snapshot,
             environment,
-            notices: Vec::new(),
         })
-    }
-
-    /// What the run prelude reports about the selection, such as the
-    /// verify-system tools taken from PATH.
-    pub fn with_notices(mut self, notices: Vec<String>) -> Self {
-        self.notices = notices;
-        self
-    }
-
-    pub fn notices(&self) -> &[String] {
-        &self.notices
     }
 
     pub fn snapshot(&self) -> &ExecutionSnapshot {
