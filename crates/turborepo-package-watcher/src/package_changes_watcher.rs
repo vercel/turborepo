@@ -912,28 +912,27 @@ impl Subscriber {
             let mut discovery_open = true;
 
             loop {
-                if let Some(discovery) = pending_discovery.take() {
-                    if !repo_state
+                if let Some(discovery) = pending_discovery.take()
+                    && !repo_state
                         .pkg_dep_graph
                         .resolved_single_package(self.single_package)
-                        && workspace_membership_changed(
-                            &self.repo_root,
-                            &discovery,
-                            &repo_state.pkg_dep_graph,
-                        )
-                    {
-                        if let Some(new_state) = self.initialize_repo_state().await {
-                            repo_state = new_state;
-                            change_mapper = match repo_state.get_change_mapper() {
-                                Some(mapper) => mapper,
-                                None => break,
-                            };
-                            self.package_change_events_tx
-                                .send(PackageChangeEvent::Rediscover)
-                                .ok();
-                        } else {
-                            pending_discovery = Some(discovery);
-                        }
+                    && workspace_membership_changed(
+                        &self.repo_root,
+                        &discovery,
+                        &repo_state.pkg_dep_graph,
+                    )
+                {
+                    if let Some(new_state) = self.initialize_repo_state().await {
+                        repo_state = new_state;
+                        change_mapper = match repo_state.get_change_mapper() {
+                            Some(mapper) => mapper,
+                            None => break,
+                        };
+                        self.package_change_events_tx
+                            .send(PackageChangeEvent::Rediscover)
+                            .ok();
+                    } else {
+                        pending_discovery = Some(discovery);
                     }
                 }
 
