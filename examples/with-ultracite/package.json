@@ -1,0 +1,26 @@
+{
+  "name": "my-turborepo",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "check": "ultracite check",
+    "check-types": "turbo run check-types",
+    "dev": "turbo run dev",
+    "fix": "ultracite fix"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "turbo": "2.11.5",
+    "typescript": "7.0.2",
+    "ultracite": "7.12.1"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.6.0"
+    }
+  }
+}

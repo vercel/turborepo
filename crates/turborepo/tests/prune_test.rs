@@ -1,0 +1,2094 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
+
+mod common;
+
+use std::{collections::BTreeMap, fs, path::Path};
+
+use common::{combined_output, run_turbo, setup};
+
+fn ls_dir(dir: &Path) -> Vec<String> {
+    let mut entries: Vec<String> = fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().to_string())
+        .collect();
+    entries.sort();
+    entries
+}
+
+/// Golden inventory of a pruned tree: relative path, content hash, and kind.
+///
+/// Directories are recorded as `dir`; files include a sha256 of their bytes
+/// and a portable permission class (`ro` / `rw`). Paths use forward slashes.
+fn inventory_tree(root: &Path) -> String {
+    fn walk(base: &Path, current: &Path, out: &mut BTreeMap<String, String>) {
+        let mut entries: Vec<_> = fs::read_dir(current)
+            .unwrap_or_else(|error| panic!("read_dir {}: {error}", current.display()))
+            .map(|entry| entry.expect("dir entry"))
+            .collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let rel = path
+                .strip_prefix(base)
+                .expect("path under base")
+                .to_string_lossy()
+                .replace('\\', "/");
+            let meta = entry.metadata().expect("metadata");
+            if meta.is_dir() {
+                out.insert(rel, "dir".to_string());
+                walk(base, &path, out);
+            } else if meta.is_file() {
+                let bytes = fs::read(&path).expect("read file");
+                // Stable FNV-1a fingerprint — good enough for golden inventories
+                // without pulling a crypto hash into the turbo test crate.
+                let mut hash: u64 = 0xcbf29ce484222325;
+                for byte in &bytes {
+                    hash ^= u64::from(*byte);
+                    hash = hash.wrapping_mul(0x100000001b3);
+                }
+                let perms = if meta.permissions().readonly() {
+                    "ro"
+                } else {
+                    "rw"
+                };
+                out.insert(rel, format!("file\t{hash:016x}\t{perms}"));
+            }
+        }
+    }
+
+    let mut inventory = BTreeMap::new();
+    walk(root, root, &mut inventory);
+    inventory
+        .into_iter()
+        .map(|(path, kind)| format!("{path}\t{kind}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn prune_retained_packages(stdout: &str) -> Vec<String> {
+    let mut packages: Vec<String> = stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix(" - Added ").map(str::to_string))
+        .collect();
+    packages.sort();
+    packages
+}
+
+/// An installable, registry-free workspace with task-only dependency owners.
+fn setup_task_aware_prune(dir: &Path, flag: Option<bool>) {
+    use serde_json::json;
+
+    let root = json!({
+        "name": "task-aware-prune",
+        "private": true,
+        "packageManager": "npm@10.5.0",
+        "workspaces": ["packages/*"],
+        "dependencies": {"root-dep": "*"}
+    });
+    let mut lock_packages = serde_json::Map::new();
+    lock_packages.insert(String::new(), root.clone());
+    fs::write(dir.join("package.json"), root.to_string()).unwrap();
+    for name in [
+        "web",
+        "install",
+        "dev-only",
+        "tool",
+        "leaf",
+        "tool-install",
+        "peer",
+        "optional-peer",
+        "final",
+        "root-dep",
+        "root-tool",
+        "unrelated",
+        "config",
+    ] {
+        let mut package = json!({
+            "name": name,
+            "version": "1.0.0",
+            "scripts": {"build": "echo built", "generate": "echo generated", "prepare": "echo prepared"}
+        });
+        if name == "web" {
+            package["dependencies"] = json!({"install": "*"});
+            package["devDependencies"] = json!({"dev-only": "*"});
+        } else if name == "tool" {
+            package["dependencies"] = json!({"tool-install": "*"});
+            package["peerDependencies"] = json!({"peer": "*", "optional-peer": "*"});
+            package["peerDependenciesMeta"] = json!({"optional-peer": {"optional": true}});
+        }
+        let path = format!("packages/{name}");
+        fs::create_dir_all(dir.join(&path)).unwrap();
+        fs::write(dir.join(&path).join("package.json"), package.to_string()).unwrap();
+        lock_packages.insert(path.clone(), package);
+        lock_packages.insert(
+            format!("node_modules/{name}"),
+            json!({"resolved": path, "link": true}),
+        );
+    }
+    fs::write(
+        dir.join("package-lock.json"),
+        json!({
+            "name": "task-aware-prune", "lockfileVersion": 3, "requires": true,
+            "packages": lock_packages
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let mut config = json!({"tasks": {
+        "build": {}, "generate": {}, "prepare": {},
+        "web#build": {"dependsOn": ["tool#generate"]},
+        "tool#generate": {"dependsOn": ["leaf#generate"]},
+        // A valid task DAG whose projection has a web -> tool -> leaf -> web cycle.
+        "leaf#generate": {"dependsOn": ["web#prepare"]},
+        "web#prepare": {"dependsOn": ["//#prepare"]},
+        "//#prepare": {"dependsOn": ["root-tool#generate"]},
+        "//#unrelated": {"dependsOn": ["missing#build"]},
+        "unrelated#build": {"dependsOn": ["missing#build"]}
+    }});
+    if let Some(flag) = flag {
+        config["futureFlags"] = json!({"affectedUsingTaskInputs": flag});
+    }
+    fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+    // This task is not reached by tool#generate. It becomes an entrypoint only
+    // after the install closure retains tool-install in a subsequent pass.
+    fs::write(
+        dir.join("packages/tool-install/turbo.json"),
+        json!({
+            "extends": ["//"], "tasks": {"extra": {"dependsOn": ["final#generate"]}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(dir.join("packages/unrelated/turbo.json"), "not JSON").unwrap();
+    fs::write(dir.join(".gitignore"), "node_modules\nout\n").unwrap();
+    setup::setup_git(dir).unwrap();
+}
+
+#[test]
+fn test_prune_task_aware_flag_off_preserves_package_closure() {
+    // Keep pairwise CLI coverage for omitted versus explicit-off flags and
+    // production mode. The full planning matrix now lives in the prune crate.
+    for (flag, production) in [(None, false), (Some(false), true)] {
+        let tempdir = tempfile::tempdir().unwrap();
+        setup_task_aware_prune(tempdir.path(), flag);
+        fs::write(tempdir.path().join("packages/web/turbo.json"), "not JSON").unwrap();
+        let mut args = vec!["prune", "web"];
+        if production {
+            args.push("--production");
+        }
+        let output = run_turbo(tempdir.path(), &args);
+        assert!(output.status.success(), "{}", combined_output(&output));
+        let mut expected = vec!["install", "root-dep", "web"];
+        if !production {
+            expected.insert(0, "dev-only");
+        }
+        assert_eq!(
+            prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+            expected
+        );
+    }
+}
+
+#[test]
+fn test_prune_task_aware_fixed_point() {
+    for production in [false, true] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            setup_task_aware_prune(tempdir.path(), Some(true));
+            let mut args = vec!["prune", "web"];
+            if production {
+                args.push("--production");
+            }
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(tempdir.path(), &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+            let mut expected = vec![
+                "final",
+                "install",
+                "leaf",
+                "peer",
+                "root-dep",
+                "root-tool",
+                "tool",
+                "tool-install",
+                "web",
+            ];
+            if !production {
+                expected.insert(0, "dev-only");
+            }
+            assert_eq!(
+                prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+                expected
+            );
+            let out = tempdir.path().join(if docker { "out/full" } else { "out" });
+            assert_eq!(ls_dir(&out.join("packages")), expected);
+            if docker {
+                assert_eq!(ls_dir(&tempdir.path().join("out/json/packages")), expected);
+            }
+            let output = run_turbo(&out, &["run", "build", "--filter=web", "--dry=json"]);
+            assert!(
+                output.status.success(),
+                "pruned task graph: {}",
+                combined_output(&output)
+            );
+        }
+    }
+}
+
+#[test]
+fn test_prune_task_aware_inherited_package_configuration() {
+    use serde_json::json;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_task_aware_prune(dir, Some(true));
+    // Override web#build with an inherited package configuration, including an
+    // array extension. The config owner has no manifest or task edge from web.
+    fs::write(
+        dir.join("packages/config/turbo.json"),
+        json!({
+            "extends": ["//"], "tasks": {"build": {"dependsOn": ["leaf#generate"]}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(dir.join("packages/web/turbo.json"), json!({
+        "extends": ["//", "config"], "tasks": {"build": {"dependsOn": ["$TURBO_EXTENDS$", "final#generate"]}}
+    }).to_string()).unwrap();
+    let output = run_turbo(dir, &["prune", "web"]);
+    assert!(output.status.success(), "{}", combined_output(&output));
+    assert_eq!(
+        prune_retained_packages(&String::from_utf8_lossy(&output.stdout)),
+        [
+            "config",
+            "dev-only",
+            "final",
+            "install",
+            "leaf",
+            "root-dep",
+            "root-tool",
+            "web"
+        ]
+    );
+    let output = run_turbo(
+        &dir.join("out"),
+        &["run", "build", "--filter=web", "--dry=json"],
+    );
+    assert!(
+        output.status.success(),
+        "inherited pruned task graph: {}",
+        combined_output(&output)
+    );
+}
+
+#[test]
+fn test_prune_production_docker_excludes_dev_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--production", "--docker"],
+    );
+    assert!(
+        output.status.success(),
+        "prune --production --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let full_packages = ls_dir(&tempdir.path().join("out/full/packages"));
+    assert_eq!(full_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/full/packages/util").exists());
+
+    let json_packages = ls_dir(&tempdir.path().join("out/json/packages"));
+    assert_eq!(json_packages, vec!["shared".to_string()]);
+    assert!(!tempdir.path().join("out/json/packages/util").exists());
+}
+
+// --- docker.t ---
+
+#[test]
+fn test_prune_docker() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+
+    // out/json contents
+    let json_entries = ls_dir(&tempdir.path().join("out/json"));
+    assert_eq!(
+        json_entries,
+        vec![
+            ".npmrc",
+            "apps",
+            "package.json",
+            "packages",
+            "patches",
+            "pnpm-lock.yaml",
+            "pnpm-workspace.yaml"
+        ]
+    );
+
+    // out/full contents
+    let full_entries = ls_dir(&tempdir.path().join("out/full"));
+    assert_eq!(
+        full_entries,
+        vec![
+            ".npmrc",
+            "apps",
+            "package.json",
+            "packages",
+            "patches",
+            "pnpm-workspace.yaml",
+            "turbo.json"
+        ]
+    );
+
+    // out contents
+    let out_entries = ls_dir(&tempdir.path().join("out"));
+    assert_eq!(
+        out_entries,
+        vec!["full", "json", "pnpm-lock.yaml", "pnpm-workspace.yaml"]
+    );
+
+    // pnpm patches in package.json
+    let pkg_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/json/package.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        pkg_json["pnpm"]["patchedDependencies"]["is-number@7.0.0"],
+        "patches/is-number@7.0.0.patch"
+    );
+}
+
+#[test]
+fn test_prune_docker_preserves_task_env_mode() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    let turbo_json = fs::read_to_string(&turbo_json_path).unwrap().replace(
+        r#""build": {"#,
+        r#""build": {
+      "envMode": "loose","#,
+    );
+    fs::write(&turbo_json_path, turbo_json).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let pruned_turbo_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/full/turbo.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(pruned_turbo_json["tasks"]["build"]["envMode"], "loose");
+}
+
+/// Regression for #14372: pnpm cleans workspace catalogs before checking a
+/// frozen lockfile, so snapshots from removed importers must not survive prune.
+#[test]
+fn test_prune_pnpm_catalog_snapshots() {
+    for catalog_prune in [None, Some(false), Some(true)] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            fs::write(
+                dir.join("package.json"),
+                r#"{"name":"repo","private":true,"packageManager":"pnpm@12.9.1",
+                    "devDependencies":{"is-odd":"catalog:tools"}}"#,
+            )
+            .unwrap();
+            for (app, dependency) in [("app-a", "is-number"), ("app-b", "is-odd")] {
+                let path = dir.join("apps").join(app);
+                fs::create_dir_all(&path).unwrap();
+                fs::write(
+                    path.join("package.json"),
+                    serde_json::json!({"name": app, "dependencies": {dependency: "catalog:"}})
+                        .to_string(),
+                )
+                .unwrap();
+            }
+            let mut workspace = String::from(
+                "packages:\n  - apps/*\ncatalog:\n  is-number: 7.0.0\n  is-odd: \
+                 3.0.1\ncatalogs:\n  tools:\n    is-odd: 3.0.1\n",
+            );
+            if let Some(enabled) = catalog_prune {
+                workspace.push_str(&format!("catalogPrune: {enabled}\n"));
+            }
+            fs::write(dir.join("pnpm-workspace.yaml"), &workspace).unwrap();
+            let lockfile = r#"lockfileVersion: '9.0'
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+catalogs:
+  default:
+    is-number: {specifier: 7.0.0, version: 7.0.0}
+    is-odd: {specifier: 3.0.1, version: 3.0.1}
+  tools:
+    is-odd: {specifier: 3.0.1, version: 3.0.1}
+importers:
+  .:
+    devDependencies:
+      is-odd: {specifier: 'catalog:tools', version: 3.0.1}
+  apps/app-a:
+    dependencies:
+      is-number: {specifier: 'catalog:', version: 7.0.0}
+  apps/app-b:
+    dependencies:
+      is-odd: {specifier: 'catalog:', version: 3.0.1}
+packages:
+  is-number@6.0.0:
+    resolution: {integrity: sha512-test}
+  is-number@7.0.0:
+    resolution: {integrity: sha512-test}
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-test}
+snapshots:
+  is-number@6.0.0: {}
+  is-number@7.0.0: {}
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+            fs::write(dir.join("pnpm-lock.yaml"), lockfile).unwrap();
+            let mut args = vec!["prune", "app-a"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let contents = fs::read_to_string(dir.join("out/pnpm-lock.yaml")).unwrap();
+            let catalogs = contents
+                .split("catalogs:\n")
+                .nth(1)
+                .unwrap()
+                .split("\nimporters:")
+                .next()
+                .unwrap();
+            assert_eq!(
+                catalogs.trim(),
+                r#"default:
+    is-number:
+      specifier: 7.0.0
+      version: 7.0.0
+  tools:
+    is-odd:
+      specifier: 3.0.1
+      version: 3.0.1"#
+            );
+            assert!(!contents.contains("apps/app-b:"));
+            // is-odd remains a root dependency, but not a default-catalog reference.
+            assert!(contents.contains("is-odd@3.0.1:"));
+            let expected_workspace = workspace.replace("  - apps/*", "- apps/*");
+            let workspace_paths = if docker {
+                vec![
+                    "out/pnpm-workspace.yaml",
+                    "out/full/pnpm-workspace.yaml",
+                    "out/json/pnpm-workspace.yaml",
+                ]
+            } else {
+                vec!["out/pnpm-workspace.yaml"]
+            };
+            for path in workspace_paths {
+                let actual = fs::read_to_string(dir.join(path)).unwrap();
+                assert_eq!(actual, expected_workspace, "workspace config in {path}");
+            }
+            if docker {
+                assert_eq!(
+                    fs::read_to_string(dir.join("out/json/pnpm-lock.yaml")).unwrap(),
+                    contents
+                );
+            }
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-lock.yaml")).unwrap(),
+                lockfile
+            );
+        }
+    }
+}
+
+/// npm 12 patch files and declarations follow the pruned lockfile in both
+/// layouts, including when the removed patch belongs to an optional peer.
+/// Regressions for https://github.com/vercel/turborepo/issues/14426 and
+/// https://github.com/vercel/turborepo/issues/14469.
+#[test]
+fn test_prune_npm_patches() {
+    const PATCH: &str = "patches/is-number@7.0.0.patch";
+    for app in ["web", "docs"] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            setup::copy_fixture("npm_patches", dir).unwrap();
+            // Model a transitive optional peer that is hoisted only because
+            // another workspace (web) depends on it. Pruning docs must not
+            // retain that peer or its patch merely because it can be resolved.
+            let lockfile_path = dir.join("package-lock.json");
+            let mut lockfile: serde_json::Value =
+                serde_json::from_slice(&fs::read(&lockfile_path).unwrap()).unwrap();
+            lockfile["packages"]["node_modules/ms"]["peerDependencies"] =
+                serde_json::json!({"is-number": "^7.0.0"});
+            lockfile["packages"]["node_modules/ms"]["peerDependenciesMeta"] =
+                serde_json::json!({"is-number": {"optional": true}});
+            fs::write(&lockfile_path, serde_json::to_vec(&lockfile).unwrap()).unwrap();
+            let original_manifest = fs::read(dir.join("package.json")).unwrap();
+            let original_lockfile = fs::read(dir.join("package-lock.json")).unwrap();
+            let original_patch = fs::read(dir.join(PATCH)).unwrap();
+            let original_lockfile_json: serde_json::Value =
+                serde_json::from_slice(&original_lockfile).unwrap();
+            let mut args = vec!["prune", app];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let retains_patch = app == "web";
+            let roots = if docker {
+                vec!["out/json", "out/full"]
+            } else {
+                vec!["out"]
+            };
+            for root in roots {
+                let root = dir.join(root);
+                let manifest: serde_json::Value =
+                    serde_json::from_slice(&fs::read(root.join("package.json")).unwrap()).unwrap();
+                let expected = if retains_patch {
+                    serde_json::json!({"is-number@7.0.0": PATCH})
+                } else {
+                    serde_json::json!({})
+                };
+                assert_eq!(manifest["patchedDependencies"], expected);
+                assert_eq!(root.join(PATCH).exists(), retains_patch);
+                if retains_patch {
+                    assert_eq!(fs::read(root.join(PATCH)).unwrap(), original_patch);
+                }
+                assert_eq!(ls_dir(&root.join("apps")), [app]);
+            }
+            let pruned_lockfile = fs::read(dir.join("out/package-lock.json")).unwrap();
+            let lockfile: serde_json::Value = serde_json::from_slice(&pruned_lockfile).unwrap();
+            assert_eq!(lockfile["lockfileVersion"], 4);
+            if retains_patch {
+                assert_eq!(
+                    lockfile["packages"]["node_modules/is-number"]["patched"],
+                    original_lockfile_json["packages"]["node_modules/is-number"]["patched"]
+                );
+            } else {
+                assert!(lockfile["packages"].get("node_modules/is-number").is_none());
+            }
+            if docker {
+                assert_eq!(
+                    fs::read(dir.join("out/json/package-lock.json")).unwrap(),
+                    pruned_lockfile
+                );
+            }
+            assert_eq!(
+                fs::read(dir.join("package.json")).unwrap(),
+                original_manifest
+            );
+            assert_eq!(
+                fs::read(dir.join("package-lock.json")).unwrap(),
+                original_lockfile
+            );
+            assert_eq!(fs::read(dir.join(PATCH)).unwrap(), original_patch);
+        }
+    }
+}
+
+/// Unlike catalogs, pnpm prunes release-age exclusions after installation, and
+/// they do not participate in frozen-lockfile validation. Preserve the policy
+/// even when its entries reference packages or versions removed from the
+/// lockfile.
+#[test]
+fn test_prune_pnpm_minimum_release_age_exclude_prune() {
+    for exclude_prune in [None, Some(false), Some(true)] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            fs::write(
+                dir.join("package.json"),
+                r#"{"name":"repo","private":true,"packageManager":"pnpm@12.9.1"}"#,
+            )
+            .unwrap();
+            for (app, dependency, version) in [
+                ("app-a", "is-odd", "3.0.1"),
+                ("app-b", "is-number", "7.0.0"),
+            ] {
+                let path = dir.join("apps").join(app);
+                fs::create_dir_all(&path).unwrap();
+                fs::write(
+                    path.join("package.json"),
+                    serde_json::json!({"name": app, "dependencies": {dependency: version}})
+                        .to_string(),
+                )
+                .unwrap();
+            }
+            let mut workspace = String::from(
+                r#"packages:
+- apps/*
+minimumReleaseAge: 2880
+minimumReleaseAgeExclude:
+- is-odd
+- is-odd@3.0.1
+- is-number@6.0.0
+- is-number@7.0.0
+- is-number@6.0.0 || 7.0.0
+- '@scope/unused@1.0.0'
+- '@scope/*'
+"#,
+            );
+            if let Some(enabled) = exclude_prune {
+                workspace.push_str(&format!("minimumReleaseAgeExcludePrune: {enabled}\n"));
+            }
+            fs::write(dir.join("pnpm-workspace.yaml"), &workspace).unwrap();
+            let lockfile = r#"lockfileVersion: '9.0'
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+importers:
+  .: {}
+  apps/app-a:
+    dependencies:
+      is-odd: {specifier: 3.0.1, version: 3.0.1}
+  apps/app-b:
+    dependencies:
+      is-number: {specifier: 7.0.0, version: 7.0.0}
+packages:
+  is-number@6.0.0:
+    resolution: {integrity: sha512-test}
+  is-number@7.0.0:
+    resolution: {integrity: sha512-test}
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-test}
+snapshots:
+  is-number@6.0.0: {}
+  is-number@7.0.0: {}
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+            fs::write(dir.join("pnpm-lock.yaml"), lockfile).unwrap();
+            let mut args = vec!["prune", "app-a"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+
+            let contents = fs::read_to_string(dir.join("out/pnpm-lock.yaml")).unwrap();
+            assert!(contents.contains("apps/app-a:"));
+            assert!(!contents.contains("apps/app-b:"));
+            assert!(contents.contains("is-odd@3.0.1:"));
+            // Keep the transitive version, but remove the excluded version that
+            // was only used by app-b. Neither change should rewrite the policy.
+            assert!(contents.contains("is-number@6.0.0:"));
+            assert!(!contents.contains("is-number@7.0.0:"));
+            let workspace_paths = if docker {
+                vec![
+                    "out/pnpm-workspace.yaml",
+                    "out/full/pnpm-workspace.yaml",
+                    "out/json/pnpm-workspace.yaml",
+                ]
+            } else {
+                vec!["out/pnpm-workspace.yaml"]
+            };
+            for path in workspace_paths {
+                let actual = fs::read_to_string(dir.join(path)).unwrap();
+                assert_eq!(actual, workspace, "workspace config in {path}");
+            }
+            if docker {
+                assert_eq!(
+                    fs::read_to_string(dir.join("out/json/pnpm-lock.yaml")).unwrap(),
+                    contents
+                );
+            }
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-workspace.yaml")).unwrap(),
+                workspace
+            );
+            assert_eq!(
+                fs::read_to_string(dir.join("pnpm-lock.yaml")).unwrap(),
+                lockfile
+            );
+        }
+    }
+}
+
+#[test]
+fn test_prune_docker_filters_pnpm_workspace_patched_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    fs::write(
+        tempdir.path().join("pnpm-workspace.yaml"),
+        r#"packages:
+  - "apps/*"
+  - "packages/*"
+
+patchedDependencies:
+  is-number@7.0.0: patches/is-number@7.0.0.patch
+  is-odd@3.0.1: patches/is-odd@3.0.1.patch
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("patches/is-odd@3.0.1.patch"),
+        "patch for out-of-closure dependency\n",
+    )
+    .unwrap();
+
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    fs::write(
+        &lockfile_path,
+        lockfile.replace(
+            "patchedDependencies:\n  is-number@7.0.0:",
+            "patchedDependencies:\n  is-odd@3.0.1:\n    hash: unusedpatchhash\n    path: \
+             patches/is-odd@3.0.1.patch\n  is-number@7.0.0:",
+        ),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    for workspace_yaml in [
+        "out/pnpm-workspace.yaml",
+        "out/json/pnpm-workspace.yaml",
+        "out/full/pnpm-workspace.yaml",
+    ] {
+        let contents = fs::read_to_string(tempdir.path().join(workspace_yaml)).unwrap();
+        assert!(
+            contents.contains("is-number@7.0.0"),
+            "{workspace_yaml} should retain in-closure patch:\n{contents}"
+        );
+        assert!(
+            !contents.contains("is-odd@3.0.1"),
+            "{workspace_yaml} should drop out-of-closure patch:\n{contents}"
+        );
+    }
+}
+
+/// Regression test for https://github.com/vercel/turborepo/issues/13301
+///
+/// pnpm supports semver ranges in `patchedDependencies` keys (e.g.
+/// `is-number@<=7.0.0`). Prune must keep patches whose range matches a
+/// package in the pruned closure.
+#[test]
+fn test_prune_docker_keeps_version_range_patches() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    // Rewrite the exact patch key to a semver range everywhere it's declared.
+    for file in ["pnpm-lock.yaml", "package.json"] {
+        let path = tempdir.path().join(file);
+        let contents = fs::read_to_string(&path).unwrap();
+        fs::write(
+            &path,
+            contents
+                .replace("is-number@7.0.0:", "is-number@<=7.0.0:")
+                .replace("\"is-number@7.0.0\"", "\"is-number@<=7.0.0\""),
+        )
+        .unwrap();
+    }
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let pruned_lockfile = fs::read_to_string(tempdir.path().join("out/pnpm-lock.yaml")).unwrap();
+    assert!(
+        pruned_lockfile.contains("is-number@<=7.0.0"),
+        "pruned lockfile should retain range patch key:\n{pruned_lockfile}"
+    );
+
+    let pkg_json: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(tempdir.path().join("out/json/package.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        pkg_json["pnpm"]["patchedDependencies"]["is-number@<=7.0.0"],
+        "patches/is-number@7.0.0.patch"
+    );
+
+    assert!(
+        tempdir
+            .path()
+            .join("out/json/patches/is-number@7.0.0.patch")
+            .exists(),
+        "patch file should be copied into pruned output"
+    );
+}
+
+/// A symlink followed by `..` must be resolved by the filesystem, not
+/// eliminated lexically before checking containment.
+#[cfg(unix)]
+#[test]
+fn test_prune_rejects_patch_symlink_parent_traversal() {
+    for fixture in ["npm_patches", "monorepo_with_root_dep"] {
+        for docker in [false, true] {
+            let tempdir = tempfile::tempdir().unwrap();
+            let dir = tempdir.path();
+            setup::copy_fixture(fixture, dir).unwrap();
+            let outside = tempfile::tempdir().unwrap();
+            fs::create_dir(outside.path().join("child")).unwrap();
+            let secret = outside.path().join("host.patch");
+            fs::write(&secret, "host contents must not be exported\n").unwrap();
+            std::os::unix::fs::symlink(outside.path().join("child"), dir.join("patches/link"))
+                .unwrap();
+            // The lexically normalized path points to this harmless decoy;
+            // filesystem resolution of link/.. instead reaches the host file.
+            fs::write(dir.join("patches/host.patch"), "repository decoy\n").unwrap();
+            let malicious_path = "patches/link/../host.patch";
+            let lockfile = if fixture == "npm_patches" {
+                "package-lock.json"
+            } else {
+                "pnpm-lock.yaml"
+            };
+            for name in ["package.json", lockfile] {
+                let path = dir.join(name);
+                let contents = fs::read_to_string(&path).unwrap();
+                fs::write(
+                    path,
+                    contents.replace("patches/is-number@7.0.0.patch", malicious_path),
+                )
+                .unwrap();
+            }
+            let mut args = vec!["prune", "web"];
+            if docker {
+                args.push("--docker");
+            }
+            let output = run_turbo(dir, &args);
+            let output_text = combined_output(&output);
+            assert!(
+                !output.status.success(),
+                "unexpected success: {output_text}"
+            );
+            assert!(
+                output_text.contains("Invalid patched dependency path"),
+                "unexpected output: {output_text}"
+            );
+            for root in ["out", "out/full", "out/json"] {
+                assert!(!dir.join(root).join("patches/host.patch").exists());
+            }
+            assert_eq!(
+                fs::read_to_string(secret).unwrap(),
+                "host contents must not be exported\n"
+            );
+        }
+    }
+}
+
+/// Safe source symlinks must resolve before `..`, while output paths must
+/// use their validated normalized components rather than a pre-existing link.
+#[cfg(unix)]
+#[test]
+fn test_prune_copies_patch_to_validated_destination() {
+    for docker in [false, true] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup::copy_fixture("npm_patches", dir).unwrap();
+        fs::create_dir_all(dir.join("internal/child")).unwrap();
+        fs::write(dir.join("internal/actual.patch"), "canonical source\n").unwrap();
+        fs::write(dir.join("patches/actual.patch"), "lexical decoy\n").unwrap();
+        std::os::unix::fs::symlink("../internal/child", dir.join("patches/link")).unwrap();
+        let patch_path = "patches/link/../actual.patch";
+        for name in ["package.json", "package-lock.json"] {
+            let path = dir.join(name);
+            let contents = fs::read_to_string(&path).unwrap();
+            fs::write(
+                path,
+                contents.replace("patches/is-number@7.0.0.patch", patch_path),
+            )
+            .unwrap();
+        }
+
+        let outside = tempfile::tempdir().unwrap();
+        fs::create_dir(outside.path().join("child")).unwrap();
+        let host_file = outside.path().join("actual.patch");
+        fs::write(&host_file, "host file must not be overwritten\n").unwrap();
+        let roots = if docker {
+            vec!["out/full", "out/json"]
+        } else {
+            vec!["out"]
+        };
+        for root in &roots {
+            let patches = dir.join(root).join("patches");
+            fs::create_dir_all(&patches).unwrap();
+            std::os::unix::fs::symlink(outside.path().join("child"), patches.join("link")).unwrap();
+        }
+        let mut args = vec!["prune", "web"];
+        if docker {
+            args.push("--docker");
+        }
+        let output = run_turbo(dir, &args);
+        assert!(output.status.success(), "{}", combined_output(&output));
+        for root in roots {
+            assert_eq!(
+                fs::read_to_string(dir.join(root).join("patches/actual.patch")).unwrap(),
+                "canonical source\n"
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(host_file).unwrap(),
+            "host file must not be overwritten\n"
+        );
+    }
+}
+
+#[test]
+fn test_prune_rejects_patch_paths_with_parent_dir() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    let outside_dir = tempfile::tempdir_in(tempdir.path().parent().unwrap()).unwrap();
+    let outside_dir_name = outside_dir
+        .path()
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
+    let outside_patch_name = "outside.patch";
+    let malicious_patch_path = format!("../{outside_dir_name}/{outside_patch_name}");
+    fs::write(
+        outside_dir.path().join(outside_patch_name),
+        "outside repo\n",
+    )
+    .unwrap();
+
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    fs::write(
+        &lockfile_path,
+        lockfile.replace("patches/is-number@7.0.0.patch", &malicious_patch_path),
+    )
+    .unwrap();
+
+    let package_json_path = tempdir.path().join("package.json");
+    let package_json = fs::read_to_string(&package_json_path).unwrap();
+    fs::write(
+        &package_json_path,
+        package_json.replace("patches/is-number@7.0.0.patch", &malicious_patch_path),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    let combined_output = combined_output(&output);
+
+    assert!(!output.status.success());
+    assert!(
+        combined_output.contains("Invalid patched dependency path"),
+        "unexpected output: {combined_output}"
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join(&outside_dir_name)
+            .join(outside_patch_name)
+            .exists()
+    );
+}
+
+#[test]
+fn test_prune_allows_patch_paths_with_non_escaping_parent_dir() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+
+    let patch_path = "patches/../patches/is-number@7.0.0.patch";
+    let lockfile_path = tempdir.path().join("pnpm-lock.yaml");
+    let lockfile = fs::read_to_string(&lockfile_path).unwrap();
+    fs::write(
+        &lockfile_path,
+        lockfile.replace("patches/is-number@7.0.0.patch", patch_path),
+    )
+    .unwrap();
+
+    let package_json_path = tempdir.path().join("package.json");
+    let package_json = fs::read_to_string(&package_json_path).unwrap();
+    fs::write(
+        &package_json_path,
+        package_json.replace("patches/is-number@7.0.0.patch", patch_path),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/patches/is-number@7.0.0.patch")
+            .exists()
+    );
+}
+
+#[test]
+fn test_prune_docker_creates_bin_stubs() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("monorepo_with_root_dep", tempdir.path()).unwrap();
+    fs::write(
+        tempdir.path().join(".npmrc"),
+        "script-shell=bash\nupdate-notifier=false\n",
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("packages/shared/package.json"),
+        r#"{
+  "name": "shared",
+  "bin": {
+    "shared-tool": "bin/shared-tool.js",
+    "nested-tool": "nested/tool.js"
+  },
+  "scripts": {
+    "build": "echo 'building'"
+  }
+}
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("packages/shared/bin")).unwrap();
+    fs::write(
+        tempdir.path().join("packages/shared/bin/shared-tool.js"),
+        "console.log('shared-tool');\n",
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("packages/shared/nested")).unwrap();
+    fs::write(
+        tempdir.path().join("packages/shared/nested/tool.js"),
+        "console.log('nested-tool');\n",
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json_tool = tempdir
+        .path()
+        .join("out/json/packages/shared/bin/shared-tool.js");
+    let json_nested_tool = tempdir
+        .path()
+        .join("out/json/packages/shared/nested/tool.js");
+    assert!(json_tool.exists(), "bin stub should exist in out/json");
+    assert!(
+        json_nested_tool.exists(),
+        "nested bin stub should exist in out/json"
+    );
+    assert_eq!(fs::metadata(json_tool).unwrap().len(), 0);
+    assert_eq!(fs::metadata(json_nested_tool).unwrap().len(), 0);
+
+    assert_eq!(
+        fs::read_to_string(
+            tempdir
+                .path()
+                .join("out/full/packages/shared/bin/shared-tool.js")
+        )
+        .unwrap(),
+        "console.log('shared-tool');\n"
+    );
+}
+
+// --- out-dir.t ---
+
+#[test]
+fn test_prune_out_dir() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let out_dir = tempfile::tempdir().unwrap();
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "prune",
+            "web",
+            &format!("--out-dir={}", out_dir.path().display()),
+        ],
+    );
+    assert!(output.status.success());
+
+    let pkg_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(out_dir.path().join("package.json")).unwrap())
+            .unwrap();
+    assert_eq!(pkg_json["name"], "monorepo");
+    assert_eq!(pkg_json["packageManager"], "pnpm@7.25.1");
+    assert_eq!(
+        pkg_json["pnpm"]["patchedDependencies"]["is-number@7.0.0"],
+        "patches/is-number@7.0.0.patch"
+    );
+}
+
+#[test]
+fn test_prune_does_not_overmatch_root_gitignore_entries() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let nested_coverage_dir = tempdir.path().join("apps/web/src/api/coverage");
+    fs::create_dir_all(&nested_coverage_dir).unwrap();
+    fs::write(
+        nested_coverage_dir.join("test.js"),
+        "console.log('covered');\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/web/src/api/.gitignore"),
+        "ignored.js\n",
+    )
+    .unwrap();
+    fs::write(
+        tempdir.path().join("apps/web/src/api/ignored.js"),
+        "ignored\n",
+    )
+    .unwrap();
+    fs::write(tempdir.path().join(".gitignore"), "/apps/web/coverage\n").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/apps/web/src/api/coverage/test.js")
+            .exists(),
+        "nested coverage file should not match root-anchored coverage ignore entry"
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join("out/apps/web/src/api/ignored.js")
+            .exists(),
+        "workspace-local .gitignore entries should still be respected"
+    );
+}
+
+#[test]
+fn test_prune_respects_root_gitignore_in_workspaces() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    fs::write(tempdir.path().join(".gitignore"), "node_modules\n").unwrap();
+
+    let nested_node_modules = tempdir.path().join("packages/shared/node_modules/dep");
+    fs::create_dir_all(&nested_node_modules).unwrap();
+    fs::write(
+        nested_node_modules.join("index.js"),
+        "module.exports = {};\n",
+    )
+    .unwrap();
+    fs::remove_dir_all(tempdir.path().join(".git")).unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["prune", "web", "--docker", "--use-gitignore"],
+    );
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !tempdir
+            .path()
+            .join("out/full/packages/shared/node_modules")
+            .exists(),
+        "root node_modules ignore should apply to copied workspace package"
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/full/packages/shared/package.json")
+            .exists(),
+        "workspace package contents should still be copied"
+    );
+}
+
+// --- produces-valid-turbo-json.t ---
+
+#[test]
+fn test_prune_produces_valid_turbo_json() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    // Prune docs
+    let output = run_turbo(tempdir.path(), &["prune", "docs"]);
+    assert!(output.status.success());
+
+    // Pruned turbo.json should not have tasks referencing pruned workspaces
+    let pruned_turbo: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(tempdir.path().join("out/turbo.json")).unwrap())
+            .unwrap();
+    assert!(pruned_turbo["tasks"]["build"].is_object());
+
+    // Verify turbo can read the produced turbo.json
+    let output = run_turbo(&tempdir.path().join("out"), &["build", "--dry=json"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let mut packages: Vec<String> = json["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect();
+    packages.sort();
+    assert_eq!(packages, vec!["docs", "shared", "util"]);
+
+    // Add remoteCache fields
+    let _ = fs::remove_dir_all(tempdir.path().join("out"));
+    let turbo_json_path = tempdir.path().join("turbo.json");
+    // Strip comments (turbo.json has // comments which aren't valid JSON)
+    let raw = fs::read_to_string(&turbo_json_path).unwrap();
+    let stripped: String = raw
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut turbo: serde_json::Value = serde_json::from_str(&stripped).unwrap();
+    turbo["remoteCache"] = serde_json::json!({
+        "enabled": true,
+        "timeout": 1000,
+        "apiUrl": "my-domain.com/cache"
+    });
+    fs::write(
+        &turbo_json_path,
+        serde_json::to_string_pretty(&turbo).unwrap(),
+    )
+    .unwrap();
+
+    run_turbo(tempdir.path(), &["prune", "docs"]);
+    let pruned: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(tempdir.path().join("out/turbo.json")).unwrap())
+            .unwrap();
+    assert_eq!(pruned["remoteCache"]["enabled"], true);
+    assert_eq!(pruned["remoteCache"]["timeout"], 1000);
+    assert_eq!(pruned["remoteCache"]["apiUrl"], "my-domain.com/cache");
+
+    // Set enabled to false
+    let _ = fs::remove_dir_all(tempdir.path().join("out"));
+    turbo["remoteCache"]["enabled"] = serde_json::json!(false);
+    fs::write(
+        &turbo_json_path,
+        serde_json::to_string_pretty(&turbo).unwrap(),
+    )
+    .unwrap();
+
+    run_turbo(tempdir.path(), &["prune", "docs"]);
+    let pruned: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(tempdir.path().join("out/turbo.json")).unwrap())
+            .unwrap();
+    assert_eq!(pruned["remoteCache"]["enabled"], false);
+}
+
+// --- composable-config.t ---
+
+#[test]
+fn test_prune_composable_config() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        true,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "docs"]);
+    assert!(output.status.success());
+
+    // Run turbo inside pruned output
+    let output = run_turbo(&tempdir.path().join("out"), &["run", "new-task"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("docs:new-task:"));
+    assert!(stdout.contains("building"));
+    assert!(stdout.contains("1 successful, 1 total"));
+}
+
+// --- JSONC configuration materialization ---
+
+#[test]
+fn test_prune_copies_jsonc_configuration() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    fs::rename(
+        tempdir.path().join("turbo.json"),
+        tempdir.path().join("turbo.jsonc"),
+    )
+    .unwrap();
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(output.status.success(), "{}", combined_output(&output));
+
+    let out_entries = ls_dir(&tempdir.path().join("out"));
+    assert!(
+        out_entries.contains(&"turbo.jsonc".to_string()),
+        "turbo.jsonc should be in output: {out_entries:?}"
+    );
+}
+
+// --- resolutions.t ---
+
+#[test]
+fn test_prune_resolutions() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("berry_resolutions", tempdir.path()).unwrap();
+
+    // Prune a: should have resolved is-odd
+    let output = run_turbo(tempdir.path(), &["prune", "a"]);
+    assert!(output.status.success());
+    let yarn_lock = fs::read_to_string(tempdir.path().join("out/yarn.lock")).unwrap();
+    assert!(yarn_lock.contains("\"is-odd@npm:3.0.0\":"));
+    assert!(yarn_lock.contains("resolution: \"is-odd@npm:3.0.0\""));
+
+    // Prune b: should NOT have the override
+    let output = run_turbo(tempdir.path(), &["prune", "b"]);
+    assert!(output.status.success());
+    let yarn_lock = fs::read_to_string(tempdir.path().join("out/yarn.lock")).unwrap();
+    assert!(yarn_lock.contains("\"is-odd@npm:^3.0.1\":"));
+    assert!(yarn_lock.contains("resolution: \"is-odd@npm:3.0.1\""));
+}
+
+// --- global-dependencies.t ---
+
+#[test]
+fn test_prune_copies_global_dependencies_with_future_flag() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    // Create root-level files that will be referenced by globalDependencies
+    fs::write(
+        tempdir.path().join("tsconfig.json"),
+        r#"{"compilerOptions":{}}"#,
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("config")).unwrap();
+    fs::write(tempdir.path().join("config/base.json"), "{}").unwrap();
+    fs::write(tempdir.path().join("config/ignore-me.md"), "ignored").unwrap();
+
+    // Rewrite turbo.json with globalDependencies and the future flag enabled
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["tsconfig.json", "config/**", "!config/**/*.md"],
+        "futureFlags": {
+            "pruneIncludesGlobalFiles": true
+        },
+        "tasks": {
+            "build": { "outputs": [] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Global dependency files should be in the output
+    assert!(
+        tempdir.path().join("out/tsconfig.json").exists(),
+        "tsconfig.json should be in pruned output"
+    );
+    assert!(
+        tempdir.path().join("out/config/base.json").exists(),
+        "config/base.json should be in pruned output"
+    );
+
+    // Excluded file should NOT be in the output
+    assert!(
+        !tempdir.path().join("out/config/ignore-me.md").exists(),
+        "config/ignore-me.md should be excluded from pruned output"
+    );
+}
+
+#[test]
+fn test_prune_skips_global_dependencies_without_future_flag() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("tsconfig.json"),
+        r#"{"compilerOptions":{}}"#,
+    )
+    .unwrap();
+
+    // turbo.json with globalDependencies but NO future flag
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["tsconfig.json"],
+        "tasks": {
+            "build": { "outputs": [] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(output.status.success());
+
+    // Without the flag, global dependency files should NOT be copied
+    assert!(
+        !tempdir.path().join("out/tsconfig.json").exists(),
+        "tsconfig.json should NOT be in pruned output without future flag"
+    );
+}
+
+#[test]
+fn test_prune_global_dependencies_docker() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("tsconfig.json"),
+        r#"{"compilerOptions":{}}"#,
+    )
+    .unwrap();
+
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["tsconfig.json"],
+        "futureFlags": {
+            "pruneIncludesGlobalFiles": true
+        },
+        "tasks": {
+            "build": { "outputs": [] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // In docker mode, global dependency files should be in both full and json
+    assert!(
+        tempdir.path().join("out/full/tsconfig.json").exists(),
+        "tsconfig.json should be in out/full/"
+    );
+    assert!(
+        tempdir.path().join("out/json/tsconfig.json").exists(),
+        "tsconfig.json should be in out/json/"
+    );
+}
+
+#[test]
+fn test_prune_global_deps_does_not_overwrite_pruned_turbo_json() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    // A glob that matches turbo.json itself
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["*.json"],
+        "futureFlags": {
+            "pruneIncludesGlobalFiles": true
+        },
+        "tasks": {
+            "build": { "outputs": [] },
+            "web#build": { "dependsOn": ["web#gen"] },
+            "web#gen": { "outputs": ["gen.txt"] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The pruned turbo.json should NOT contain tasks for non-pruned workspaces.
+    // If the original was copied over the pruned version, it would still be the
+    // full config (which is fine here since we only have web tasks, but the key
+    // point is that it went through prune_tasks).
+    let pruned_contents = fs::read_to_string(tempdir.path().join("out/turbo.json")).unwrap();
+    let pruned: serde_json::Value = serde_json::from_str(&pruned_contents).unwrap();
+    let tasks = pruned["tasks"].as_object().unwrap();
+
+    // The pruned turbo.json should have gone through prune_tasks, so it should
+    // be a valid JSON object (not the JSONC original with comments).
+    assert!(
+        tasks.contains_key("build"),
+        "pruned turbo.json should contain generic tasks"
+    );
+}
+
+// --- key-order.t ---
+
+#[test]
+fn test_prune_preserves_package_json_key_order() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let original_contents = fs::read_to_string(tempdir.path().join("package.json")).unwrap();
+    let original: serde_json::Value = serde_json::from_str(&original_contents).unwrap();
+    let original_keys: Vec<_> = original.as_object().unwrap().keys().cloned().collect();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(output.status.success());
+
+    let pruned_contents = fs::read_to_string(tempdir.path().join("out/package.json")).unwrap();
+    let pruned: serde_json::Value = serde_json::from_str(&pruned_contents).unwrap();
+    let pruned_keys: Vec<_> = pruned.as_object().unwrap().keys().cloned().collect();
+
+    // The fixture has non-alphabetical key order (name, packageManager,
+    // devDependencies, pnpm). Verify prune doesn't sort them.
+    assert_eq!(
+        original_keys, pruned_keys,
+        "pruned package.json should preserve original key order"
+    );
+}
+
+// --- yarn-pnp.t ---
+
+#[test]
+fn test_prune_yarn_pnp() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("berry_resolutions", tempdir.path()).unwrap();
+
+    // Remove linker override
+    let _ = fs::remove_file(tempdir.path().join(".yarnrc.yml"));
+
+    let output = run_turbo(tempdir.path(), &["prune", "a"]);
+    assert!(output.status.success());
+
+    // .pnp.cjs should NOT be in output
+    let out_entries = ls_dir(&tempdir.path().join("out"));
+    assert!(
+        !out_entries.contains(&".pnp.cjs".to_string()),
+        ".pnp.cjs should not be in output: {out_entries:?}"
+    );
+    assert_eq!(out_entries, vec!["package.json", "packages", "yarn.lock"]);
+}
+
+// --- pnpm per-workspace lockfile ---
+
+/// Initialize a git repo without overwriting the fixture's .npmrc.
+/// The standard `setup_git` replaces .npmrc with npm boilerplate, which would
+/// destroy the `shared-workspace-lockfile=false` setting the fixture needs.
+fn init_git_preserving_npmrc(dir: &Path) {
+    let npmrc = fs::read_to_string(dir.join(".npmrc")).ok();
+    setup::setup_git(dir).unwrap();
+    if let Some(contents) = npmrc {
+        fs::write(dir.join(".npmrc"), contents).unwrap();
+        std::process::Command::new("git")
+            .args(["add", ".npmrc"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["commit", "--amend", "--no-edit", "--quiet"])
+            .current_dir(dir)
+            .output()
+            .unwrap();
+    }
+}
+
+#[test]
+fn test_prune_pnpm_per_workspace_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("pnpm_per_workspace_lockfile", tempdir.path()).unwrap();
+    init_git_preserving_npmrc(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Per-workspace lockfiles should be preserved for included workspaces
+    assert!(
+        tempdir.path().join("out/apps/web/pnpm-lock.yaml").exists(),
+        "web's per-workspace lockfile should be in pruned output"
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/packages/ui/pnpm-lock.yaml")
+            .exists(),
+        "ui's per-workspace lockfile should be in pruned output"
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/packages/config/pnpm-lock.yaml")
+            .exists(),
+        "config's per-workspace lockfile should be in pruned output"
+    );
+
+    // Excluded workspace should not be present
+    assert!(
+        !tempdir.path().join("out/apps/docs").exists(),
+        "docs should not be in pruned output"
+    );
+
+    // Root lockfile should be the original (just the "." importer)
+    let root_lockfile = fs::read_to_string(tempdir.path().join("out/pnpm-lock.yaml")).unwrap();
+    assert!(
+        root_lockfile.contains(".: {}"),
+        "root lockfile should be the original with only the root importer"
+    );
+
+    // .npmrc should be unmodified
+    let npmrc = fs::read_to_string(tempdir.path().join("out/.npmrc")).unwrap();
+    assert!(
+        npmrc.contains("shared-workspace-lockfile=false"),
+        ".npmrc should preserve shared-workspace-lockfile=false"
+    );
+}
+
+#[test]
+fn test_prune_pnpm_per_workspace_lockfile_docker() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("pnpm_per_workspace_lockfile", tempdir.path()).unwrap();
+    init_git_preserving_npmrc(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // full/ should have per-workspace lockfiles
+    assert!(
+        tempdir
+            .path()
+            .join("out/full/apps/web/pnpm-lock.yaml")
+            .exists(),
+        "web's lockfile should be in out/full/"
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/full/packages/ui/pnpm-lock.yaml")
+            .exists(),
+        "ui's lockfile should be in out/full/"
+    );
+
+    // json/ should also have per-workspace lockfiles (needed for pnpm install)
+    assert!(
+        tempdir
+            .path()
+            .join("out/json/apps/web/pnpm-lock.yaml")
+            .exists(),
+        "web's lockfile should be in out/json/"
+    );
+    assert!(
+        tempdir
+            .path()
+            .join("out/json/packages/ui/pnpm-lock.yaml")
+            .exists(),
+        "ui's lockfile should be in out/json/"
+    );
+
+    // Root lockfile at out/ level should be the original
+    let root_lockfile = fs::read_to_string(tempdir.path().join("out/pnpm-lock.yaml")).unwrap();
+    assert!(
+        root_lockfile.contains(".: {}"),
+        "root lockfile should be the original"
+    );
+
+    // json/ root lockfile should also be the original
+    let json_lockfile = fs::read_to_string(tempdir.path().join("out/json/pnpm-lock.yaml")).unwrap();
+    assert!(
+        json_lockfile.contains(".: {}"),
+        "json root lockfile should be the original"
+    );
+
+    // .npmrc should be unmodified in both directories
+    let full_npmrc = fs::read_to_string(tempdir.path().join("out/full/.npmrc")).unwrap();
+    assert!(
+        full_npmrc.contains("shared-workspace-lockfile=false"),
+        ".npmrc in full/ should preserve shared-workspace-lockfile=false"
+    );
+    let json_npmrc = fs::read_to_string(tempdir.path().join("out/json/.npmrc")).unwrap();
+    assert!(
+        json_npmrc.contains("shared-workspace-lockfile=false"),
+        ".npmrc in json/ should preserve shared-workspace-lockfile=false"
+    );
+}
+
+#[test]
+fn test_prune_pnpm_v11_multi_document_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("pnpm_v11_multi_document_lockfile", tempdir.path()).unwrap();
+    setup::setup_git(tempdir.path()).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(
+        !tempdir.path().join("out/apps/docs").exists(),
+        "docs should not be in pruned output"
+    );
+
+    let root_lockfile = fs::read_to_string(tempdir.path().join("out/pnpm-lock.yaml")).unwrap();
+    assert!(
+        root_lockfile.starts_with("---\nlockfileVersion: '9.0'\n"),
+        "pruned lockfile should preserve the leading pnpm-managed document"
+    );
+    assert_eq!(
+        root_lockfile.matches("lockfileVersion: '9.0'").count(),
+        2,
+        "pruned lockfile should remain a two-document YAML stream"
+    );
+    assert!(
+        root_lockfile.contains("configDependencies:"),
+        "pruned lockfile should preserve pnpm v11 config dependency metadata"
+    );
+    assert!(
+        root_lockfile.contains("packageManagerDependencies:"),
+        "pruned lockfile should preserve pnpm-managed package manager metadata"
+    );
+    assert!(
+        root_lockfile.contains("my-configs:"),
+        "pruned lockfile should retain leading document entries"
+    );
+    assert!(
+        root_lockfile.contains("apps/web:")
+            && root_lockfile.contains("packages/ui:")
+            && root_lockfile.contains("packages/config:"),
+        "pruned lockfile should keep the selected workspace graph"
+    );
+    assert!(
+        !root_lockfile.contains("apps/docs:"),
+        "pruned lockfile should still trim workspaces from the dependency document"
+    );
+}
+
+/// Golden fixture covering retained packages, relative file set, content
+/// hashes, and standard/Docker layer placement for the separated JS render +
+/// layout path.
+#[test]
+fn test_prune_docker_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_docker_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+
+    let out = tempdir.path().join("out");
+    insta::assert_snapshot!("prune_docker_out_top_level", ls_dir(&out).join("\n"));
+    insta::assert_snapshot!(
+        "prune_docker_full_inventory",
+        inventory_tree(&out.join("full"))
+    );
+    insta::assert_snapshot!(
+        "prune_docker_json_inventory",
+        inventory_tree(&out.join("json"))
+    );
+}
+
+#[test]
+fn test_prune_standard_golden_inventory() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    insta::assert_snapshot!(
+        "prune_standard_retained_packages",
+        prune_retained_packages(&stdout).join("\n")
+    );
+    insta::assert_snapshot!(
+        "prune_standard_out_inventory",
+        inventory_tree(&tempdir.path().join("out"))
+    );
+}
+
+// --- file: dependencies ---
+
+/// Prepare the shared file-dependency fixture for a prune run: the shared
+/// vendored package gains a symlink, a read-only file, and a `.gitignore` with
+/// an ignored sibling.
+///
+/// The read-only file is the observable for "copied once per destination":
+/// re-copying the same source over an existing read-only destination file
+/// fails with `EACCES`, so a prune that duplicates shared `file:` dependency
+/// copies cannot succeed.
+///
+/// The ignore files are written here, after `setup_integration_test` has
+/// committed the fixture, so they don't affect how the fixture itself is
+/// checked into the repository.
+fn setup_shared_file_dependency(dir: &Path) {
+    let vendored_lib = dir.join("vendored/sdk/lib");
+    fs::write(vendored_lib.join(".gitignore"), "ignored.txt\n").unwrap();
+    fs::write(
+        vendored_lib.join("ignored.txt"),
+        "this file is gitignored and must not be copied\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            vendored_lib.join("readonly.txt"),
+            fs::Permissions::from_mode(0o444),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("index.js", vendored_lib.join("link.js")).unwrap();
+    }
+}
+
+fn assert_shared_file_dependency_copied(root: &Path, vendored_dir: &Path) {
+    // Shared dependency contents are identical to the source in every
+    // destination, including the read-only file.
+    for file in [
+        "package.json",
+        "lib/index.js",
+        "lib/data.txt",
+        "lib/readonly.txt",
+    ] {
+        let expected = fs::read_to_string(root.join("vendored/sdk").join(file)).unwrap();
+        let copied = fs::read_to_string(vendored_dir.join("vendored/sdk").join(file))
+            .unwrap_or_else(|error| {
+                panic!("missing {file} in {}: {error}", vendored_dir.display())
+            });
+        assert_eq!(copied, expected, "{file} should match the source");
+    }
+
+    // Ignore rules inside the vendored package are still respected.
+    assert!(
+        !vendored_dir.join("vendored/sdk/lib/ignored.txt").exists(),
+        "gitignored vendored file should not be copied into {}",
+        vendored_dir.display()
+    );
+    // The vendored .gitignore itself travels with the package.
+    assert!(vendored_dir.join("vendored/sdk/lib/.gitignore").exists());
+
+    // Symlinks inside the vendored package are copied as symlinks.
+    #[cfg(unix)]
+    {
+        let link = vendored_dir.join("vendored/sdk/lib/link.js");
+        assert!(
+            link.symlink_metadata().unwrap().file_type().is_symlink(),
+            "vendored symlink should be copied as a symlink"
+        );
+        assert_eq!(fs::read_link(&link).unwrap(), Path::new("index.js"));
+    }
+
+    // A `file:` dependency referenced by only one workspace is not
+    // over-deduplicated away.
+    assert!(
+        vendored_dir.join("vendored/other/asset.txt").exists(),
+        "single-workspace file: dependency should be copied into {}",
+        vendored_dir.display()
+    );
+}
+
+#[test]
+fn test_prune_docker_copies_shared_file_dependency_once_per_destination() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_shared_file_deps",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+    setup_shared_file_dependency(tempdir.path());
+
+    // Retains web and docs, which both depend on `file:../../vendored/sdk`.
+    // Before shared sources were deduplicated, the second copy of the
+    // read-only vendored file into the same destination failed with
+    // `EACCES` on Unix.
+    let output = run_turbo(tempdir.path(), &["prune", "web", "docs", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        combined_output(&output)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Added web"));
+    assert!(stdout.contains("Added docs"));
+
+    let out = tempdir.path().join("out");
+    for destination in ["full", "json"] {
+        assert_shared_file_dependency_copied(tempdir.path(), &out.join(destination));
+    }
+    // Both retained workspaces are present in both destinations.
+    for destination in ["full", "json"] {
+        for app in ["web", "docs"] {
+            assert!(out.join(destination).join("apps").join(app).exists());
+        }
+    }
+}
+
+#[test]
+fn test_prune_copies_shared_file_dependency() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_shared_file_deps",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+    setup_shared_file_dependency(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "docs"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        combined_output(&output)
+    );
+
+    assert_shared_file_dependency_copied(tempdir.path(), &tempdir.path().join("out"));
+    assert!(tempdir.path().join("out/apps/web").exists());
+    assert!(tempdir.path().join("out/apps/docs").exists());
+}

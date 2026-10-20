@@ -1,0 +1,21 @@
+{
+  "name": "@hebo/auth",
+  "version": "0.1.1",
+  "dependencies": {
+    "@better-auth/api-key": "catalog:",
+    "@better-auth/prisma-adapter": "^1.5.3",
+    "@elysiajs/cors": "catalog:",
+    "@elysiajs/opentelemetry": "catalog:",
+    "@hebo/shared-api": "workspace:*",
+    "@prisma/client": "catalog:",
+    "@upyo/core": "^0.4.0",
+    "@upyo/smtp": "^0.4.0",
+    "better-auth": "catalog:",
+    "elysia": "catalog:"
+  },
+  "devDependencies": {
+    "@hebo/typescript-config": "workspace:*",
+    "@types/bun": "catalog:",
+    "prisma": "catalog:"
+  }
+}

@@ -57,9 +57,9 @@ impl fmt::Display for Yarn1Lockfile {
             let mut keys = match seen_key {
                 Some(seen_key) => {
                     added_keys.insert(seen_key);
-                    let all_keys = reverse_lookup
-                        .get(seen_key.as_str())
-                        .expect("entry in lockfile should appear as a key in reverse lookup");
+                    let Some(all_keys) = reverse_lookup.get(seen_key.as_str()) else {
+                        continue;
+                    };
                     all_keys.iter().copied().collect::<Vec<_>>()
                 }
                 None => {
@@ -74,7 +74,7 @@ impl fmt::Display for Yarn1Lockfile {
             let wrapped_keys = keys.into_iter().map(maybe_wrap).collect::<Vec<_>>();
             let key_line = wrapped_keys.join(", ");
 
-            f.write_fmt(format_args!("\n{}:\n{}\n", key_line, entry))?;
+            f.write_fmt(format_args!("\n{key_line}:\n{entry}\n"))?;
         }
         Ok(())
     }
@@ -226,13 +226,13 @@ fn encode_map<'a, I: Iterator<Item = (&'a str, &'a str)>>(
     Ok(())
 }
 
-fn maybe_wrap(s: &str) -> Cow<str> {
+fn maybe_wrap(s: &str) -> Cow<'_, str> {
     match should_wrap_key(s) {
         // yarn uses JSON.stringify to escape strings
         // we approximate this behavior using serde_json
         true => serde_json::to_string(s)
-            .expect("failed at encoding string as json")
-            .into(),
+            .map(Cow::Owned)
+            .unwrap_or_else(|_| Cow::Borrowed(s)),
         false => s.into(),
     }
 }

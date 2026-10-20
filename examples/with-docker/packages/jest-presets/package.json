@@ -4,10 +4,15 @@
   "private": true,
   "license": "MIT",
   "files": [
-    "node/jest-preset.ts"
+    "node/esbuild-transformer.js",
+    "node/jest-preset.js"
   ],
+  "exports": {
+    "./node": "./node/jest-preset.js",
+    "./node/jest-preset": "./node/jest-preset.js"
+  },
   "dependencies": {
-    "jest": "^29.7.0",
-    "ts-jest": "^29.2.5"
+    "esbuild": "0.28.2",
+    "jest": "30.5.1"
   }
 }

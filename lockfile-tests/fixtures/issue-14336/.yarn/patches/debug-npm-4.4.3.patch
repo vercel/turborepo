@@ -1,0 +1,9 @@
+diff --git a/src/index.js b/src/index.js
+index bf4c57f259df2e16761b45e2636db307c89ba419..d233e14e6c17a0a8279e83340d50cf2b761e3dcb 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -8,3 +8,4 @@ if (typeof process === 'undefined' || process.type === 'renderer' || process.bro
+ } else {
+ 	module.exports = require('./node.js');
+ }
++module.exports.patchedByRepro = true;

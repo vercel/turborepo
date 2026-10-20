@@ -5,6 +5,12 @@ const { platform } = require("process");
 
 const path = process.argv[2];
 
+if (!path) {
+  console.error("Error: Missing required argument <cwd-path>.");
+  console.error("Usage: node server.js <path-to-project>");
+  process.exit(1);
+}
+
 async function main() {
   let errored = false;
 

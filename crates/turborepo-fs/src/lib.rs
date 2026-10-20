@@ -1,13 +1,20 @@
+//! File system utilities for used by Turborepo.
+//! At the moment only used for `turbo prune` to copy over package directories.
+
 #![deny(clippy::all)]
 
 use std::{
-    fs::{DirBuilder, FileType, Metadata},
+    collections::{HashMap, HashSet},
+    fs::{DirBuilder, FileType, Permissions},
     io,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, PoisonError},
 };
 
+// `fs_err` preserves paths in the error messages unlike `std::fs`
 use fs_err as fs;
 use ignore::WalkBuilder;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -23,70 +30,492 @@ pub fn recursive_copy(
     src: impl AsRef<AbsoluteSystemPath>,
     dst: impl AsRef<AbsoluteSystemPath>,
     use_gitignore: bool,
+    gitignore_root: Option<&AbsoluteSystemPath>,
 ) -> Result<(), Error> {
-    let src = src.as_ref();
-    let dst = dst.as_ref();
-    let src_metadata = src.symlink_metadata()?;
+    CopyPlan::unplanned(use_gitignore, gitignore_root).copy(src, dst)
+}
 
-    if src_metadata.is_dir() {
-        let walker = WalkBuilder::new(src.as_path())
-            .hidden(false)
-            .git_ignore(use_gitignore)
-            .git_global(false)
-            .git_exclude(use_gitignore)
-            .build();
+/// One path found beneath a source directory during a walk.
+struct PlannedEntry {
+    /// Path of the entry relative to the source directory.
+    suffix: AnchoredSystemPathBuf,
+    kind: PlannedEntryKind,
+}
 
-        for entry in walker {
-            match entry {
-                Err(e) => {
-                    if e.io_error().is_some() {
-                        // Matches go behavior where we translate path errors
-                        // into skipping the path we're currently walking
-                        continue;
-                    } else {
-                        return Err(e.into());
-                    }
+#[derive(Clone)]
+enum PlannedEntryKind {
+    /// Permissions are captured during the walk so the copy can recreate the
+    /// directory without a second `stat`.
+    Directory(Permissions),
+    File(FileType),
+}
+
+/// Copies of directories out of one repository, sharing a single walk.
+///
+/// Honoring the ignore files that live *above* a source directory means
+/// anchoring its walk at the repository root (see [`recursive_copy`]). Walking
+/// from the root once per source re-reads every directory on the way down and
+/// recompiles every ignore file above it, so the cost of copying `n` packages
+/// grows with `n * repository fan-out`. Planning the copies together walks the
+/// repository once and hands each source the entries that belong to it.
+///
+/// Sources that were not planned, or that do not resolve their ignore rules
+/// from a shared root, are walked on demand by [`CopyPlan::copy`].
+pub struct CopyPlan {
+    use_gitignore: bool,
+    gitignore_root: Option<AbsoluteSystemPathBuf>,
+    planned: HashMap<AbsoluteSystemPathBuf, Vec<PlannedEntry>>,
+}
+
+impl CopyPlan {
+    /// A plan that walks every source on demand.
+    pub fn unplanned(use_gitignore: bool, gitignore_root: Option<&AbsoluteSystemPath>) -> Self {
+        Self {
+            use_gitignore,
+            gitignore_root: gitignore_root.map(|root| root.to_owned()),
+            planned: HashMap::new(),
+        }
+    }
+
+    /// Resolve the contents of every source directory that shares a walk root
+    /// with the others, so that copying them performs one walk in total.
+    pub fn new<'a>(
+        srcs: impl IntoIterator<Item = &'a AbsoluteSystemPath>,
+        use_gitignore: bool,
+        gitignore_root: Option<&AbsoluteSystemPath>,
+    ) -> Result<Self, Error> {
+        let mut plan = Self::unplanned(use_gitignore, gitignore_root);
+        let Some(root) = gitignore_root else {
+            return Ok(plan);
+        };
+
+        // Only sources that resolve their ignore rules from the shared root
+        // benefit from a shared walk. Anything else keeps walking itself,
+        // which is what it would have done on its own anyway.
+        let shared: Vec<&AbsoluteSystemPath> = srcs
+            .into_iter()
+            .filter(|src| walk_root_for(src, use_gitignore, Some(root)) == root)
+            .filter(|src| {
+                src.symlink_metadata()
+                    .is_ok_and(|metadata| metadata.is_dir())
+            })
+            .collect();
+
+        if !shared.is_empty() {
+            collect_entries(root, &shared, use_gitignore, true, &mut plan.planned)?;
+        }
+
+        Ok(plan)
+    }
+
+    /// Copy `src` into `dst`, reusing the planned walk when there is one.
+    pub fn copy(
+        &self,
+        src: impl AsRef<AbsoluteSystemPath>,
+        dst: impl AsRef<AbsoluteSystemPath>,
+    ) -> Result<(), Error> {
+        let src = src.as_ref();
+        let dst = dst.as_ref();
+
+        if let Some(entries) = self.planned.get(src) {
+            return copy_entries(src, dst, entries);
+        }
+
+        let src_metadata = src.symlink_metadata()?;
+        if !src_metadata.is_dir() {
+            return copy_file_with_type(src, src_metadata.file_type(), dst);
+        }
+
+        let walk_root = walk_root_for(src, self.use_gitignore, self.gitignore_root.as_deref());
+        let mut entries = HashMap::new();
+        collect_entries(walk_root, &[src], self.use_gitignore, false, &mut entries)?;
+        match entries.get(src) {
+            Some(entries) => copy_entries(src, dst, entries),
+            None => Ok(()),
+        }
+    }
+}
+
+/// Where a copy of `src` has to start walking for its ignore rules to match
+/// what git would do. Parent `.gitignore` files need to be evaluated from
+/// their own directory so rooted patterns keep the same meaning.
+fn walk_root_for<'a>(
+    src: &'a AbsoluteSystemPath,
+    use_gitignore: bool,
+    gitignore_root: Option<&'a AbsoluteSystemPath>,
+) -> &'a AbsoluteSystemPath {
+    match gitignore_root {
+        Some(root)
+            if use_gitignore
+                && src != root
+                && src.as_std_path().starts_with(root.as_std_path()) =>
+        {
+            root
+        }
+        _ => src,
+    }
+}
+
+/// Walk `walk_root` once and record the entries belonging to each source in
+/// `srcs`. Every source must be `walk_root` or live beneath it.
+///
+/// Each source's entries are recorded so that a directory comes before
+/// anything inside it. A `parallel` walk reads directories and records entries
+/// on several threads, then orders each source's entries by depth, which keeps
+/// that guarantee.
+fn collect_entries(
+    walk_root: &AbsoluteSystemPath,
+    srcs: &[&AbsoluteSystemPath],
+    use_gitignore: bool,
+    parallel: bool,
+    out: &mut HashMap<AbsoluteSystemPathBuf, Vec<PlannedEntry>>,
+) -> Result<(), Error> {
+    let walk_from_root = !(srcs.len() == 1 && srcs[0] == walk_root);
+
+    let mut builder = WalkBuilder::new(walk_root.as_path());
+    builder
+        .hidden(false)
+        .parents(false)
+        .require_git(false)
+        .git_ignore(use_gitignore)
+        .git_global(false)
+        .git_exclude(use_gitignore);
+
+    let sources: Arc<HashSet<PathBuf>> = Arc::new(
+        srcs.iter()
+            .map(|src| src.as_std_path().to_path_buf())
+            .collect(),
+    );
+
+    if walk_from_root {
+        // Directories that have to be descended into to reach a source.
+        let mut approaches: HashSet<PathBuf> = HashSet::new();
+        for src in srcs {
+            for ancestor in src.as_std_path().ancestors().skip(1) {
+                if !ancestor.starts_with(walk_root.as_std_path()) {
+                    break;
                 }
-                Ok(entry) => {
-                    let path = entry.path();
-                    let path = AbsoluteSystemPath::from_std_path(path)?;
-                    let file_type = entry
-                        .file_type()
-                        .expect("all dir entries aside from stdin should have a file type");
+                approaches.insert(ancestor.to_path_buf());
+            }
+        }
 
-                    // Note that we also don't currently copy broken symlinks
-                    if file_type.is_symlink() && path.stat().is_err() {
-                        // If we have a broken link, skip this entry
-                        continue;
-                    }
+        let filter_sources = sources.clone();
+        builder.filter_entry(move |entry| {
+            let path = entry.path();
+            if owning_sources(&filter_sources, path).next().is_some() {
+                return true;
+            }
+            entry
+                .file_type()
+                .is_some_and(|file_type| file_type.is_dir())
+                && approaches.contains(path)
+        });
+    }
 
-                    let suffix = AnchoredSystemPathBuf::new(src, path)?;
-                    let target = dst.resolve(&suffix);
-                    if file_type.is_dir() {
-                        let src_metadata = entry.metadata()?;
-                        make_dir_copy(&target, &src_metadata)?;
-                    } else {
-                        copy_file_with_type(path, file_type, &target)?;
-                    }
+    if !parallel {
+        for entry in builder.build() {
+            if let Some((path, kind)) = classify_entry(&sources, entry)? {
+                record_entry(&sources, &path, kind, out)?;
+            }
+        }
+        return Ok(());
+    }
+
+    let found = Mutex::new(HashMap::new());
+    let first_error = Mutex::new(None);
+    builder.build_parallel().visit(&mut CollectVisitorBuilder {
+        sources: &sources,
+        found: &found,
+        first_error: &first_error,
+    });
+    if let Some(error) = first_error
+        .into_inner()
+        .unwrap_or_else(PoisonError::into_inner)
+    {
+        return Err(error);
+    }
+
+    for (owner, mut entries) in found.into_inner().unwrap_or_else(PoisonError::into_inner) {
+        // A directory is shallower than everything beneath it, so ordering by
+        // depth creates each directory before anything is copied into it.
+        entries.sort_unstable_by_key(|(depth, _)| *depth);
+        let recorded = out
+            .entry(AbsoluteSystemPath::from_std_path(&owner)?.to_owned())
+            .or_default();
+        if recorded.is_empty() {
+            *recorded = entries.into_iter().map(|(_, entry)| entry).collect();
+        } else {
+            recorded.extend(entries.into_iter().map(|(_, entry)| entry));
+            recorded.sort_by_cached_key(|entry| entry.suffix.as_path().components().count());
+        }
+    }
+
+    Ok(())
+}
+
+/// Decide whether a walked entry is copied, and how.
+///
+/// Returns `None` for entries that belong to no source, broken symlinks,
+/// special files, and I/O errors, which skip the path being walked.
+fn classify_entry(
+    sources: &HashSet<PathBuf>,
+    entry: Result<ignore::DirEntry, ignore::Error>,
+) -> Result<Option<(PathBuf, PlannedEntryKind)>, Error> {
+    let entry = match entry {
+        Err(e) => {
+            if e.io_error().is_some() {
+                // Matches go behavior where we translate path errors
+                // into skipping the path we're currently walking
+                return Ok(None);
+            } else {
+                return Err(e.into());
+            }
+        }
+        Ok(entry) => entry,
+    };
+
+    if owning_sources(sources, entry.path()).next().is_none() {
+        return Ok(None);
+    }
+
+    let file_type = match entry.file_type() {
+        Some(file_type) => file_type,
+        None => entry.metadata()?.file_type(),
+    };
+
+    // Note that we also don't currently copy broken symlinks
+    if file_type.is_symlink()
+        && AbsoluteSystemPath::from_std_path(entry.path())?
+            .stat()
+            .is_err()
+    {
+        // If we have a broken link, skip this entry
+        return Ok(None);
+    }
+
+    let kind = if file_type.is_dir() {
+        PlannedEntryKind::Directory(entry.metadata()?.permissions())
+    } else if file_type.is_file() || file_type.is_symlink() {
+        PlannedEntryKind::File(file_type)
+    } else {
+        // Skip special files (sockets, FIFOs, device nodes)
+        return Ok(None);
+    };
+
+    Ok(Some((entry.into_path(), kind)))
+}
+
+/// Record `path` for every source that contains it.
+fn record_entry(
+    sources: &HashSet<PathBuf>,
+    path: &Path,
+    kind: PlannedEntryKind,
+    out: &mut HashMap<AbsoluteSystemPathBuf, Vec<PlannedEntry>>,
+) -> Result<(), Error> {
+    let path = AbsoluteSystemPath::from_std_path(path)?;
+    for owner in owning_sources(sources, path.as_std_path()) {
+        let owner = AbsoluteSystemPath::from_std_path(owner)?;
+        let suffix = AnchoredSystemPathBuf::new(owner, path)?;
+        out.entry(owner.to_owned()).or_default().push(PlannedEntry {
+            suffix,
+            kind: kind.clone(),
+        });
+    }
+    Ok(())
+}
+
+/// Planned entries of one source, each with its depth below the source.
+type DepthEntries = Vec<(usize, PlannedEntry)>;
+
+struct CollectVisitorBuilder<'s> {
+    sources: &'s HashSet<PathBuf>,
+    found: &'s Mutex<HashMap<PathBuf, DepthEntries>>,
+    first_error: &'s Mutex<Option<Error>>,
+}
+
+impl<'s> ignore::ParallelVisitorBuilder<'s> for CollectVisitorBuilder<'s> {
+    fn build(&mut self) -> Box<dyn ignore::ParallelVisitor + 's> {
+        Box::new(CollectVisitor {
+            sources: self.sources,
+            local: HashMap::new(),
+            found: self.found,
+            first_error: self.first_error,
+        })
+    }
+}
+
+/// Records one walker thread's entries per source and hands them over when the
+/// thread finishes, so threads do not contend on every entry.
+struct CollectVisitor<'s> {
+    sources: &'s HashSet<PathBuf>,
+    local: HashMap<PathBuf, DepthEntries>,
+    found: &'s Mutex<HashMap<PathBuf, DepthEntries>>,
+    first_error: &'s Mutex<Option<Error>>,
+}
+
+impl CollectVisitor<'_> {
+    fn record(&mut self, path: &Path, kind: PlannedEntryKind) -> Result<(), Error> {
+        let absolute = AbsoluteSystemPath::from_std_path(path)?;
+        for owner in owning_sources(self.sources, path) {
+            let suffix =
+                AnchoredSystemPathBuf::new(AbsoluteSystemPath::from_std_path(owner)?, absolute)?;
+            let depth = suffix.as_path().components().count();
+            let entry = (
+                depth,
+                PlannedEntry {
+                    suffix,
+                    kind: kind.clone(),
+                },
+            );
+            match self.local.get_mut(owner) {
+                Some(entries) => entries.push(entry),
+                None => {
+                    self.local.insert(owner.to_path_buf(), vec![entry]);
                 }
             }
         }
         Ok(())
-    } else {
-        Ok(copy_file_with_type(src, src_metadata.file_type(), dst)?)
+    }
+}
+
+impl ignore::ParallelVisitor for CollectVisitor<'_> {
+    fn visit(&mut self, entry: Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
+        let recorded = match classify_entry(self.sources, entry) {
+            Ok(Some((path, kind))) => self.record(&path, kind),
+            Ok(None) => Ok(()),
+            Err(error) => Err(error),
+        };
+        match recorded {
+            Ok(()) => ignore::WalkState::Continue,
+            Err(error) => {
+                record_first_error(self.first_error, error);
+                ignore::WalkState::Quit
+            }
+        }
+    }
+}
+
+impl Drop for CollectVisitor<'_> {
+    fn drop(&mut self) {
+        let mut found = self.found.lock().unwrap_or_else(PoisonError::into_inner);
+        for (owner, entries) in self.local.drain() {
+            found.entry(owner).or_default().extend(entries);
+        }
+    }
+}
+
+/// The sources that contain `path`, nearest first. A source contains itself.
+fn owning_sources<'a>(
+    sources: &'a HashSet<PathBuf>,
+    path: &'a Path,
+) -> impl Iterator<Item = &'a Path> {
+    path.ancestors()
+        .filter(move |ancestor| sources.contains(*ancestor))
+}
+
+/// Below this many files a source is copied on the calling thread; handing a
+/// handful of copies to the thread pool costs more than it saves.
+const PARALLEL_COPY_MIN_FILES: usize = 16;
+
+fn copy_entries(
+    src: &AbsoluteSystemPath,
+    dst: &AbsoluteSystemPath,
+    entries: &[PlannedEntry],
+) -> Result<(), Error> {
+    let file_count = entries
+        .iter()
+        .filter(|entry| matches!(entry.kind, PlannedEntryKind::File(_)))
+        .count();
+    if file_count < PARALLEL_COPY_MIN_FILES {
+        for entry in entries {
+            let target = dst.resolve(&entry.suffix);
+            match &entry.kind {
+                PlannedEntryKind::Directory(permissions) => make_dir_copy(&target, permissions)?,
+                PlannedEntryKind::File(file_type) => {
+                    copy_planned_file(&src.resolve(&entry.suffix), *file_type, &target)?
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    // Copying a file is dominated by per-file system calls rather than by
+    // bytes moved, and every copy is independent of the others. Directories
+    // are created in walk order, which visits a directory before anything
+    // inside it, so each file's parent exists by the time its copy is spawned.
+    let first_error: Mutex<Option<Error>> = Mutex::new(None);
+    rayon::scope(|scope| {
+        for entry in entries {
+            let target = dst.resolve(&entry.suffix);
+            match &entry.kind {
+                PlannedEntryKind::Directory(permissions) => {
+                    if let Err(error) = make_dir_copy(&target, permissions) {
+                        record_first_error(&first_error, error);
+                        return;
+                    }
+                }
+                PlannedEntryKind::File(file_type) => {
+                    let file_type = *file_type;
+                    let first_error = &first_error;
+                    scope.spawn(move |_| {
+                        if let Err(error) =
+                            copy_planned_file(&src.resolve(&entry.suffix), file_type, &target)
+                        {
+                            record_first_error(first_error, error);
+                        }
+                    });
+                }
+            }
+        }
+    });
+
+    match first_error
+        .into_inner()
+        .unwrap_or_else(PoisonError::into_inner)
+    {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+fn record_first_error(slot: &Mutex<Option<Error>>, error: Error) {
+    let mut slot = slot.lock().unwrap_or_else(PoisonError::into_inner);
+    if slot.is_none() {
+        *slot = Some(error);
+    }
+}
+
+/// Copy a file whose parent directory was already created from the plan.
+///
+/// The parent is only created here if the copy reports it missing, which
+/// saves the two `ensure_dir` system calls per file on the common path.
+fn copy_planned_file(
+    from: &AbsoluteSystemPath,
+    from_type: FileType,
+    to: &AbsoluteSystemPath,
+) -> Result<(), Error> {
+    if from_type.is_symlink() {
+        return copy_file_with_type(from, from_type, to);
+    }
+    match fs::copy(from.as_path(), to.as_path()) {
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            copy_file_with_type(from, from_type, to)
+        }
+        Err(error) => Err(error.into()),
     }
 }
 
 fn make_dir_copy(
     dir: impl AsRef<AbsoluteSystemPath>,
-    #[allow(unused_variables)] src_metadata: &Metadata,
+    #[allow(unused_variables)] src_permissions: &Permissions,
 ) -> Result<(), Error> {
     let dir = dir.as_ref();
     let mut builder = DirBuilder::new();
     #[cfg(not(windows))]
     {
-        use std::os::unix::{fs::DirBuilderExt, prelude::MetadataExt};
-        builder.mode(src_metadata.mode());
+        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+        builder.mode(src_permissions.mode());
     }
     builder.recursive(true);
     builder.create(dir.as_path())?;
@@ -147,9 +576,10 @@ mod tests {
         let (_dst_tmp, dst_dir) = tmp_dir()?;
         let dst_file = dst_dir.join_component("dest");
 
-        let err = copy_file(src_file, dst_file).unwrap_err();
-        let Error::Path(err) = err else {
-            panic!("expected path error");
+        let err = match copy_file(src_file, dst_file) {
+            Err(Error::Path(err)) => err,
+            Err(err) => panic!("expected path error, got {err}"),
+            Ok(()) => panic!("expected path error, got success"),
         };
         assert!(err.is_io_error(io::ErrorKind::NotFound));
         Ok(())
@@ -167,7 +597,7 @@ mod tests {
         src_file.create_with_contents("src")?;
 
         copy_file(&src_file, &dst_file)?;
-        assert_file_matches(&src_file, &dst_file);
+        assert_file_matches(&src_file, &dst_file)?;
         Ok(())
     }
 
@@ -187,7 +617,7 @@ mod tests {
         src_symlink.symlink_to_file(src_target.as_path())?;
 
         copy_file(&src_symlink, &dst_file)?;
-        assert_target_matches(&dst_file, &src_target);
+        assert_target_matches(&dst_file, &src_target)?;
         Ok(())
     }
 
@@ -210,7 +640,7 @@ mod tests {
         src_symlink.symlink_to_dir(src_target.as_path())?;
 
         copy_file(&src_symlink, &dst_file)?;
-        assert_target_matches(&dst_file, &src_target);
+        assert_target_matches(&dst_file, &src_target)?;
 
         let target = dst_file.read_link()?;
         assert_eq!(target.read_dir()?.count(), 1);
@@ -231,7 +661,7 @@ mod tests {
         src_file.set_readonly()?;
 
         copy_file(&src_file, &dst_file)?;
-        assert_file_matches(&src_file, &dst_file);
+        assert_file_matches(&src_file, &dst_file)?;
         assert!(dst_file.is_readonly()?);
         Ok(())
     }
@@ -279,23 +709,23 @@ mod tests {
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
 
-        recursive_copy(&src_dir, &dst_dir, true)?;
+        recursive_copy(&src_dir, &dst_dir, true, None)?;
 
         // Ensure double copy doesn't error
-        recursive_copy(&src_dir, &dst_dir, true)?;
+        recursive_copy(&src_dir, &dst_dir, true, None)?;
 
         let dst_child_path = dst_dir.join_component("child");
         let dst_a_path = dst_child_path.join_component("a");
-        assert_file_matches(&a_path, dst_a_path);
+        assert_file_matches(&a_path, dst_a_path)?;
 
         let dst_b_path = dst_dir.join_component("b");
-        assert_file_matches(&b_path, dst_b_path);
+        assert_file_matches(&b_path, dst_b_path)?;
 
         let dst_link_path = dst_child_path.join_component("link");
         assert_target_matches(
             dst_link_path,
             ["..", "b"].join(std::path::MAIN_SEPARATOR_STR),
-        );
+        )?;
 
         let dst_broken_path = dst_child_path.join_component("broken");
         assert!(!dst_broken_path.as_path().exists());
@@ -315,7 +745,7 @@ mod tests {
 
         let dst_c_path = dst_other_path.join_component("c");
 
-        assert_file_matches(&c_path, dst_c_path);
+        assert_file_matches(&c_path, dst_c_path)?;
 
         Ok(())
     }
@@ -354,7 +784,7 @@ mod tests {
         hidden.create_with_contents("polo")?;
 
         let (_dst_tmp, dst_dir) = tmp_dir()?;
-        recursive_copy(&src_dir, &dst_dir, use_gitignore)?;
+        recursive_copy(&src_dir, &dst_dir, use_gitignore, None)?;
 
         assert!(dst_dir.join_component(".gitignore").exists());
         assert_eq!(
@@ -369,17 +799,297 @@ mod tests {
         Ok(())
     }
 
-    fn assert_file_matches(a: impl AsRef<AbsoluteSystemPath>, b: impl AsRef<AbsoluteSystemPath>) {
-        let a = a.as_ref();
-        let b = b.as_ref();
-        let a_contents = fs::read_to_string(a.as_path()).unwrap();
-        let b_contents = fs::read_to_string(b.as_path()).unwrap();
-        assert_eq!(a_contents, b_contents);
+    #[test_case(true)]
+    #[test_case(false)]
+    fn test_recursive_copy_respects_repo_gitignore(use_gitignore: bool) -> Result<(), Error> {
+        let (_root_tmp, root) = tmp_dir()?;
+        root.join_component(".git").create_dir_all()?;
+        root.join_component(".gitignore")
+            .create_with_contents("node_modules\n/apps/web/coverage\n*.log\n")?;
+
+        let web = root.join_components(&["apps", "web"]);
+        web.create_dir_all()?;
+        web.join_component("package.json")
+            .create_with_contents("{}")?;
+
+        let node_modules = web.join_components(&["node_modules", "dep", "index.js"]);
+        node_modules.ensure_dir()?;
+        node_modules.create_with_contents("dep")?;
+
+        let coverage = web.join_components(&["coverage", "report.txt"]);
+        coverage.ensure_dir()?;
+        coverage.create_with_contents("report")?;
+
+        let nested_coverage = web.join_components(&["src", "api", "coverage", "keep.js"]);
+        nested_coverage.ensure_dir()?;
+        nested_coverage.create_with_contents("keep")?;
+
+        web.join_components(&["src", "api", ".gitignore"])
+            .create_with_contents("ignored.js\n")?;
+        web.join_components(&["src", "api", "ignored.js"])
+            .create_with_contents("ignored")?;
+
+        let keep_log = web.join_components(&["logs", "keep.log"]);
+        keep_log.ensure_dir()?;
+        web.join_components(&["logs", ".gitignore"])
+            .create_with_contents("!keep.log\n")?;
+        keep_log.create_with_contents("keep")?;
+        web.join_components(&["logs", "drop.log"])
+            .create_with_contents("drop")?;
+
+        let (_dst_tmp, dst_dir) = tmp_dir()?;
+        recursive_copy(&web, &dst_dir, use_gitignore, Some(&root))?;
+
+        assert!(dst_dir.join_component("package.json").exists());
+        assert!(
+            dst_dir
+                .join_components(&["src", "api", "coverage", "keep.js"])
+                .exists()
+        );
+
+        assert_eq!(
+            !dst_dir
+                .join_components(&["node_modules", "dep", "index.js"])
+                .exists(),
+            use_gitignore
+        );
+        assert_eq!(
+            !dst_dir
+                .join_components(&["coverage", "report.txt"])
+                .exists(),
+            use_gitignore
+        );
+        assert_eq!(
+            !dst_dir
+                .join_components(&["src", "api", "ignored.js"])
+                .exists(),
+            use_gitignore
+        );
+        assert!(dst_dir.join_components(&["logs", "keep.log"]).exists());
+        assert_eq!(
+            !dst_dir.join_components(&["logs", "drop.log"]).exists(),
+            use_gitignore
+        );
+
+        Ok(())
     }
 
-    fn assert_target_matches(link: impl AsRef<AbsoluteSystemPath>, expected: impl AsRef<Path>) {
+    /// A repository whose ignore rules exercise every place the walk root
+    /// matters: a root ignore file, a package-level ignore file, a negation
+    /// that only the nearest ignore file can express, and an anchored root
+    /// pattern that must not match the same relative path in another package.
+    fn ignore_fixture() -> Result<(tempfile::TempDir, AbsoluteSystemPathBuf), Error> {
+        let (tmp, root) = tmp_dir()?;
+        root.join_component(".git").create_dir_all()?;
+        root.join_component(".gitignore")
+            .create_with_contents("node_modules\n/apps/web/coverage\n*.log\n")?;
+
+        for package in fixture_packages() {
+            let dir = root.join_components(&package);
+            dir.create_dir_all()?;
+            dir.join_component("package.json")
+                .create_with_contents("{}")?;
+            let source = dir.join_components(&["src", "index.ts"]);
+            source.ensure_dir()?;
+            source.create_with_contents("export {}")?;
+            let dep = dir.join_components(&["node_modules", "dep", "index.js"]);
+            dep.ensure_dir()?;
+            dep.create_with_contents("dep")?;
+            let coverage = dir.join_components(&["coverage", "report.txt"]);
+            coverage.ensure_dir()?;
+            coverage.create_with_contents("report")?;
+            let keep = dir.join_components(&["logs", "keep.log"]);
+            keep.ensure_dir()?;
+            keep.create_with_contents("keep")?;
+            dir.join_components(&["logs", ".gitignore"])
+                .create_with_contents("!keep.log\n")?;
+            dir.join_components(&["logs", "drop.log"])
+                .create_with_contents("drop")?;
+        }
+
+        Ok((tmp, root))
+    }
+
+    fn fixture_packages() -> [[&'static str; 2]; 3] {
+        [["apps", "web"], ["apps", "docs"], ["packages", "ui"]]
+    }
+
+    /// Every path under `dir`, relative to it, sorted.
+    fn listing(dir: &AbsoluteSystemPath) -> Result<Vec<String>, Error> {
+        fn collect(
+            base: &AbsoluteSystemPath,
+            dir: &AbsoluteSystemPath,
+            paths: &mut Vec<String>,
+        ) -> Result<(), Error> {
+            for entry in fs::read_dir(dir.as_path())? {
+                let entry = entry?;
+                let path = AbsoluteSystemPathBuf::try_from(entry.path().as_path())?;
+                paths.push(AnchoredSystemPathBuf::new(base, &path)?.to_string());
+                if entry.file_type()?.is_dir() {
+                    collect(base, &path, paths)?;
+                }
+            }
+            Ok(())
+        }
+
+        let mut paths = Vec::new();
+        collect(dir, dir, &mut paths)?;
+        paths.sort();
+        Ok(paths)
+    }
+
+    #[test_case(true)]
+    #[test_case(false)]
+    fn test_copy_plan_matches_individual_copies(use_gitignore: bool) -> Result<(), Error> {
+        let (_root_tmp, root) = ignore_fixture()?;
+        let packages: Vec<AbsoluteSystemPathBuf> = fixture_packages()
+            .iter()
+            .map(|package| root.join_components(package))
+            .collect();
+
+        let plan = CopyPlan::new(
+            packages.iter().map(|package| package.as_ref()),
+            use_gitignore,
+            Some(&root),
+        )?;
+
+        for package in &packages {
+            let (_planned_tmp, planned_dst) = tmp_dir()?;
+            let (_single_tmp, single_dst) = tmp_dir()?;
+
+            plan.copy(package, &planned_dst)?;
+            recursive_copy(package, &single_dst, use_gitignore, Some(&root))?;
+
+            assert_eq!(
+                listing(&planned_dst)?,
+                listing(&single_dst)?,
+                "planned copy of {package} should match an individual copy"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_copy_plan_honors_ignore_files_above_the_package() -> Result<(), Error> {
+        let (_root_tmp, root) = ignore_fixture()?;
+        let web = root.join_components(&["apps", "web"]);
+        let docs = root.join_components(&["apps", "docs"]);
+
+        let plan = CopyPlan::new([web.as_ref(), docs.as_ref()], true, Some(&root))?;
+
+        let (_web_tmp, web_dst) = tmp_dir()?;
+        plan.copy(&web, &web_dst)?;
+        let (_docs_tmp, docs_dst) = tmp_dir()?;
+        plan.copy(&docs, &docs_dst)?;
+
+        for dst in [&web_dst, &docs_dst] {
+            assert!(dst.join_components(&["src", "index.ts"]).exists());
+            // `node_modules` from the root ignore file
+            assert!(!dst.join_component("node_modules").exists());
+            // `*.log` from the root ignore file, and the nearer negation of it
+            assert!(dst.join_components(&["logs", "keep.log"]).exists());
+            assert!(!dst.join_components(&["logs", "drop.log"]).exists());
+        }
+
+        // `/apps/web/coverage` is anchored at the root, so it must not take
+        // the identically named directory in another package with it.
+        assert!(
+            !web_dst
+                .join_components(&["coverage", "report.txt"])
+                .exists()
+        );
+        assert!(
+            docs_dst
+                .join_components(&["coverage", "report.txt"])
+                .exists()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_copy_plan_honors_ignore_files_without_git_metadata() -> Result<(), Error> {
+        let (_root_tmp, root) = ignore_fixture()?;
+        root.join_component(".git").remove_dir_all()?;
+        let web = root.join_components(&["apps", "web"]);
+
+        let plan = CopyPlan::new([web.as_ref()], true, Some(&root))?;
+        let (_web_tmp, web_dst) = tmp_dir()?;
+        plan.copy(&web, &web_dst)?;
+
+        assert!(web_dst.join_components(&["src", "index.ts"]).exists());
+        assert!(!web_dst.join_component("node_modules").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_copy_plan_walks_unplanned_sources() -> Result<(), Error> {
+        let (_root_tmp, root) = ignore_fixture()?;
+        let web = root.join_components(&["apps", "web"]);
+        let ui = root.join_components(&["packages", "ui"]);
+
+        // Only `web` is planned; `ui` has to fall back to its own walk.
+        let plan = CopyPlan::new([web.as_ref()], true, Some(&root))?;
+
+        let (_ui_tmp, planned_dst) = tmp_dir()?;
+        plan.copy(&ui, &planned_dst)?;
+        let (_single_tmp, single_dst) = tmp_dir()?;
+        recursive_copy(&ui, &single_dst, true, Some(&root))?;
+
+        assert_eq!(listing(&planned_dst)?, listing(&single_dst)?);
+        assert!(!planned_dst.join_component("node_modules").exists());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_copy_plan_copies_nested_packages_into_both_sources() -> Result<(), Error> {
+        let (_root_tmp, root) = ignore_fixture()?;
+        let web = root.join_components(&["apps", "web"]);
+        let nested = web.join_components(&["nested", "pkg"]);
+        nested.create_dir_all()?;
+        nested
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+
+        let plan = CopyPlan::new([web.as_ref(), nested.as_ref()], true, Some(&root))?;
+
+        let (_web_tmp, web_dst) = tmp_dir()?;
+        plan.copy(&web, &web_dst)?;
+        let (_nested_tmp, nested_dst) = tmp_dir()?;
+        plan.copy(&nested, &nested_dst)?;
+
+        assert!(
+            web_dst
+                .join_components(&["nested", "pkg", "package.json"])
+                .exists()
+        );
+        assert!(nested_dst.join_component("package.json").exists());
+
+        Ok(())
+    }
+
+    fn assert_file_matches(
+        a: impl AsRef<AbsoluteSystemPath>,
+        b: impl AsRef<AbsoluteSystemPath>,
+    ) -> Result<(), Error> {
+        let a = a.as_ref();
+        let b = b.as_ref();
+        let a_contents = fs::read_to_string(a.as_path())?;
+        let b_contents = fs::read_to_string(b.as_path())?;
+        assert_eq!(a_contents, b_contents);
+        Ok(())
+    }
+
+    fn assert_target_matches(
+        link: impl AsRef<AbsoluteSystemPath>,
+        expected: impl AsRef<Path>,
+    ) -> Result<(), Error> {
         let link = link.as_ref();
-        let path = link.read_link().unwrap();
+        let path = link.read_link()?;
         assert_eq!(path.as_path(), expected.as_ref());
+        Ok(())
     }
 }

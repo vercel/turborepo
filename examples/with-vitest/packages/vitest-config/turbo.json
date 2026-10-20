@@ -1,17 +1,22 @@
 {
   "extends": ["//"],
   "tasks": {
-    "collect-json-reports": {
-      "cache": false
-    },
-    "merge-json-reports": {
-      "dependsOn": ["collect-json-reports"],
-      "inputs": ["coverage/raw/**"],
-      "outputs": ["coverage/merged/**"]
+    "merge-blob-reports": {
+      "dependsOn": ["build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/*/coverage/blob/**",
+        "$TURBO_ROOT$/packages/*/coverage/blob/**"
+      ],
+      "outputs": ["coverage/merged-blob/**"]
     },
     "report": {
-      "dependsOn": ["merge-json-reports"],
-      "inputs": ["coverage/merge"],
+      "dependsOn": ["merge-blob-reports"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/apps/*/coverage/blob/**",
+        "$TURBO_ROOT$/packages/*/coverage/blob/**"
+      ],
       "outputs": ["coverage/report/**"]
     },
     "view-report": {

@@ -2,7 +2,7 @@
 name = "turborepo-fs"
 version = "0.1.0"
 license = "MIT"
-edition = "2024"
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -11,8 +11,9 @@ workspace = true
 
 [dependencies]
 fs-err = "2.9.0"
-ignore = "0.4.22"
-thiserror = "1.0.38"
+ignore = "0.4.24"
+rayon = "1"
+thiserror = { workspace = true }
 turbopath = { workspace = true }
 
 [dev-dependencies]

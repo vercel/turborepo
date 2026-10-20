@@ -1,0 +1,12 @@
+{
+	"extends": ["@repo/typescript-config/svelte.json", "./.svelte-kit/tsconfig.json"],
+	"compilerOptions": {
+		"allowArbitraryExtensions": true,
+		"declaration": true,
+		"declarationMap": true,
+		"strictNullChecks": true,
+		"types": ["svelte"]
+	},
+	"include": ["./src/**/*.svelte", "./src/**/*.ts"],
+	"exclude": ["node_modules", ".svelte-kit"]
+}

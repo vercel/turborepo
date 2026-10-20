@@ -1,7 +1,7 @@
-import { beforeEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import * as path from "node:path";
-import { Workspace, Package, PackageManager } from "../js/dist/index.js";
+import { Workspace, Package } from "../js/dist/index.js";
 
 type PackageReduced = Pick<Package, "name" | "relativePath">;
 
@@ -16,29 +16,29 @@ describe("affectedPackages", () => {
     {
       description: "app change",
       files: ["apps/app/file.txt"],
-      expected: [{ name: "app-a", relativePath: "apps/app" }],
+      expected: [{ name: "app-a", relativePath: "apps/app" }]
     },
     {
       description: "lib change",
       files: ["packages/ui/a.txt"],
-      expected: [{ name: "ui", relativePath: "packages/ui" }],
+      expected: [{ name: "ui", relativePath: "packages/ui" }]
     },
     {
       description: "global change",
       files: ["package.json"],
       expected: [
         { name: "app-a", relativePath: "apps/app" },
-        { name: "ui", relativePath: "packages/ui" },
-      ],
+        { name: "ui", relativePath: "packages/ui" }
+      ]
     },
     {
       description: "a lockfile change will affect all packages",
       files: ["pnpm-lock.yaml"],
       expected: [
         { name: "app-a", relativePath: "apps/app" },
-        { name: "ui", relativePath: "packages/ui" },
-      ],
-    },
+        { name: "ui", relativePath: "packages/ui" }
+      ]
+    }
   ];
 
   for (const { description, files, expected } of tests) {
@@ -51,13 +51,56 @@ describe("affectedPackages", () => {
       ).map((pkg) => {
         return {
           name: pkg.name,
-          relativePath: pkg.relativePath,
+          relativePath: pkg.relativePath
         };
       });
 
       assert.deepEqual(reduced, expected);
     });
   }
+
+  it("supports devEngines.packageManager for npm", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/npm-monorepo");
+    const workspace = await Workspace.find(dir);
+
+    const reduced: PackageReduced[] = (
+      await workspace.affectedPackages(["apps/app/file.txt"])
+    ).map((pkg) => {
+      return {
+        name: pkg.name,
+        relativePath: pkg.relativePath
+      };
+    });
+
+    assert.deepEqual(reduced, [{ name: "app-a", relativePath: "apps/app" }]);
+  });
+
+  it("maps changed files to active toolchain packages", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/polyglot-monorepo");
+    const workspace = await Workspace.find(dir);
+    const reduced = (
+      await workspace.affectedPackages(["python/shared/py_shared.py"])
+    ).map(({ name, relativePath }) => ({ name, relativePath }));
+
+    assert.deepEqual(reduced, [
+      { name: "py-shared", relativePath: "python/shared" }
+    ]);
+  });
+
+  it("treats active toolchain lockfiles as global changes", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/polyglot-monorepo");
+    const workspace = await Workspace.find(dir);
+    const reduced = (await workspace.affectedPackages(["uv.lock"])).map(
+      ({ name, relativePath }) => ({ name, relativePath })
+    );
+
+    assert.deepEqual(reduced, [
+      { name: "web", relativePath: "apps/web" },
+      { name: "core", relativePath: "crates/core" },
+      { name: "py-api", relativePath: "python/api" },
+      { name: "py-shared", relativePath: "python/shared" }
+    ]);
+  });
 
   describe("optimizedLockfileUpdates", () => {
     it("errors if not provided comparison ref", async () => {
@@ -82,13 +125,13 @@ describe("affectedPackages", () => {
       ).map((pkg) => {
         return {
           name: pkg.name,
-          relativePath: pkg.relativePath,
+          relativePath: pkg.relativePath
         };
       });
 
       assert.deepEqual(reduced, [
         { name: "app-a", relativePath: "apps/app" },
-        { name: "ui", relativePath: "packages/ui" },
+        { name: "ui", relativePath: "packages/ui" }
       ]);
     });
   });

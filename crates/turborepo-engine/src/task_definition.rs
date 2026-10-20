@@ -1,0 +1,415 @@
+//! Task definition conversion from processed turbo.json.
+//!
+//! This module provides the `TaskDefinitionFromProcessed` trait for converting
+//! `ProcessedTaskDefinition` to `TaskDefinition`.
+
+use turbopath::RelativeUnixPath;
+use turborepo_errors::Spanned;
+use turborepo_task_id::TaskName;
+use turborepo_turbo_json::{
+    ProcessedTaskDefinition, TOPOLOGICAL_PIPELINE_DELIMITER, TaskInputsFromProcessed,
+    task_outputs_from_processed,
+};
+use turborepo_types::{TaskDefinition, TaskInputs};
+
+use crate::BuilderError;
+
+/// Extension trait for creating TaskDefinition from processed task definitions.
+///
+/// This allows for clean conversion from the turbo.json parsed representation
+/// to the engine's internal task definition format.
+pub trait TaskDefinitionFromProcessed {
+    /// Creates a TaskDefinition from a ProcessedTaskDefinition
+    fn from_processed(
+        processed: ProcessedTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<TaskDefinition, BuilderError>;
+
+    /// Helper method for tests that still use RawTaskDefinition.
+    /// This is available in all builds to allow dependent crates' tests to use
+    /// it.
+    fn from_raw(
+        raw_task: turborepo_turbo_json::RawTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<TaskDefinition, BuilderError>;
+}
+
+impl TaskDefinitionFromProcessed for TaskDefinition {
+    fn from_processed(
+        processed: ProcessedTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<TaskDefinition, BuilderError> {
+        // Convert outputs with turbo_root resolution
+        let outputs = processed
+            .outputs
+            .map(|outputs| task_outputs_from_processed(outputs, path_to_repo_root))
+            .transpose()?
+            .unwrap_or_default();
+
+        let cache = processed.cache.is_none_or(|c| c.into_inner());
+        let interactive = processed
+            .interactive
+            .as_ref()
+            .map(|value| value.value)
+            .unwrap_or_default();
+
+        if let Some(interactive) = &processed.interactive {
+            let (span, text) = interactive.span_and_text("turbo.json");
+            if cache && interactive.value {
+                return Err(BuilderError::TurboJson(
+                    turborepo_turbo_json::Error::InteractiveNoCacheable { span, text },
+                ));
+            }
+        }
+
+        let persistent = *processed.persistent.unwrap_or_default();
+        let interruptible = processed.interruptible.unwrap_or_default();
+        if *interruptible && !persistent {
+            let (span, text) = interruptible.span_and_text("turbo.json");
+            return Err(BuilderError::TurboJson(
+                turborepo_turbo_json::Error::InterruptibleButNotPersistent { span, text },
+            ));
+        }
+
+        let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();
+        let mut task_dependencies: Vec<Spanned<TaskName>> = Vec::new();
+        if let Some(depends_on) = processed.depends_on {
+            for dependency in depends_on.deps {
+                let (dependency, depspan) = dependency.split();
+                let dependency: String = dependency.into();
+                if let Some(topo_dependency) =
+                    dependency.strip_prefix(TOPOLOGICAL_PIPELINE_DELIMITER)
+                {
+                    topological_dependencies.push(depspan.to(topo_dependency.to_string().into()));
+                } else {
+                    task_dependencies.push(depspan.to(dependency.into()));
+                }
+            }
+        }
+
+        task_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
+        topological_dependencies.sort_by(|a, b| a.value.cmp(&b.value));
+
+        let env = processed.env.map(|env| env.vars).unwrap_or_default();
+
+        // Convert inputs with turbo_root resolution
+        let inputs = processed
+            .inputs
+            .map(|inputs| TaskInputs::from_processed(inputs, path_to_repo_root))
+            .transpose()?
+            .unwrap_or_default();
+
+        let pass_through_env = processed.pass_through_env.map(|env| env.vars);
+
+        let with = processed.with.map(|with_tasks| with_tasks.tasks);
+
+        Ok(TaskDefinition {
+            tags: processed.tags.map(|tags| tags.labels).unwrap_or_default(),
+            outputs,
+            cache,
+            topological_dependencies,
+            task_dependencies,
+            env,
+            inputs,
+            pass_through_env,
+            output_logs: *processed.output_logs.unwrap_or_default(),
+            persistent,
+            interruptible: *interruptible,
+            interactive,
+            env_mode: processed.env_mode.map(|mode| *mode.as_inner()),
+            with,
+            experimental_ci: processed.experimental_ci.map(Spanned::into_inner),
+            // Deliberately not converted here: the engine builder resolves
+            // the override across the whole chain (scoped vs unscoped
+            // positions, toolchain fan-out) and sets it afterward. See
+            // `resolve_command_override`.
+            command: None,
+        })
+    }
+
+    fn from_raw(
+        raw_task: turborepo_turbo_json::RawTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<TaskDefinition, BuilderError> {
+        use turborepo_turbo_json::FutureFlags;
+        // Use default FutureFlags for backward compatibility
+        let processed = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default())?;
+        <TaskDefinition as TaskDefinitionFromProcessed>::from_processed(
+            processed,
+            path_to_repo_root,
+        )
+    }
+}
+
+/// Prepends global input globs to a task's `TaskInputs`.
+///
+/// When `futureFlags.globalConfiguration` is enabled, global input files
+/// are treated as implicit inputs for every task instead of being folded
+/// into the global hash. This lets tasks exclude specific global files
+/// via negation globs (e.g. `!$TURBO_ROOT$/config.txt`).
+///
+/// If the task had no explicit `inputs` key (i.e. it was using the
+/// default "hash everything in the package" behavior), `default` is set
+/// to `true` so that package files are still included alongside the
+/// global inputs.
+pub fn prepend_global_inputs(
+    inputs: &mut TaskInputs,
+    had_explicit_inputs: bool,
+    global_deps: &[String],
+    path_to_repo_root: &RelativeUnixPath,
+) {
+    if global_deps.is_empty() {
+        return;
+    }
+
+    if !had_explicit_inputs {
+        inputs.default = true;
+    }
+
+    let mut global_globs: Vec<String> = global_deps
+        .iter()
+        .map(|dep| {
+            if let Some(exclusion) = dep.strip_prefix('!') {
+                format!("!{path_to_repo_root}/{exclusion}")
+            } else {
+                format!("{path_to_repo_root}/{dep}")
+            }
+        })
+        .collect();
+    global_globs.append(&mut inputs.globs);
+    inputs.globs = global_globs;
+    inputs.eager = true;
+}
+
+#[cfg(test)]
+mod tests {
+    use turbopath::RelativeUnixPathBuf;
+    use turborepo_types::TaskInputs;
+
+    use super::*;
+
+    #[test]
+    fn test_task_tags_resolution() {
+        use turborepo_turbo_json::{FutureFlags, RawPackageTurboJson, RawRootTurboJson};
+
+        let root = RawRootTurboJson::parse(
+            r#"{"tasks":{"build":{"tags":["root","root"]}}}"#,
+            "turbo.json",
+        )
+        .unwrap();
+        let root_task = root
+            .tasks
+            .unwrap()
+            .get(&TaskName::from("build"))
+            .unwrap()
+            .value
+            .clone();
+        for (config, expected) in [
+            (r#"{}"#, vec!["root", "root"]),
+            (
+                r#"{"tags":["package","","$TURBO_EXTENDS$","package"]}"#,
+                vec!["root", "root", "package", "", "package"],
+            ),
+            (r#"{"tags":[]}"#, vec![]),
+            (r#"{"tags":["$TURBO_EXTENDS$"]}"#, vec!["root", "root"]),
+            (r#"{"extends":false,"tags":["package"]}"#, vec!["package"]),
+            (
+                r#"{"extends":false,"tags":["$TURBO_EXTENDS$","package"]}"#,
+                vec!["package"],
+            ),
+            (r#"{"extends":false,"tags":["$TURBO_EXTENDS$"]}"#, vec![]),
+            (r#"{"extends":false,"tags":[]}"#, vec![]),
+        ] {
+            let package = RawPackageTurboJson::parse(
+                &format!(r#"{{"extends":["//"],"tasks":{{"build":{config}}}}}"#),
+                "packages/web/turbo.json",
+            )
+            .unwrap();
+            let raw = package
+                .tasks
+                .unwrap()
+                .get(&TaskName::from("build"))
+                .unwrap()
+                .value
+                .clone();
+            let processed =
+                ProcessedTaskDefinition::from_raw(raw.clone(), &FutureFlags::default()).unwrap();
+            let mut merged = if raw.extends.as_ref().is_some_and(|extends| !extends.value) {
+                assert!(
+                    turborepo_turbo_json::HasConfigBeyondExtends::has_config_beyond_extends(&raw)
+                );
+                assert!(processed.has_config_beyond_extends());
+                ProcessedTaskDefinition::default()
+            } else {
+                ProcessedTaskDefinition::from_raw(root_task.clone(), &FutureFlags::default())
+                    .unwrap()
+            };
+            merged.merge(processed);
+            let task =
+                TaskDefinition::from_processed(merged, RelativeUnixPath::new("../..").unwrap())
+                    .unwrap();
+            assert_eq!(task.tags, expected, "{config}");
+        }
+        for (tags, expected) in [
+            (r#"["$TURBO_EXTENDS$","root","root"]"#, vec!["root", "root"]),
+            (r#"["$TURBO_EXTENDS$"]"#, vec![]),
+        ] {
+            let root = RawRootTurboJson::parse(
+                &format!(r#"{{"tasks":{{"build":{{"tags":{tags}}}}}}}"#),
+                "turbo.json",
+            )
+            .unwrap();
+            let raw = root
+                .tasks
+                .unwrap()
+                .get(&TaskName::from("build"))
+                .unwrap()
+                .value
+                .clone();
+            let task = TaskDefinition::from_raw(raw, RelativeUnixPath::new(".").unwrap()).unwrap();
+            assert_eq!(
+                task.tags, expected,
+                "marker must be stripped without a parent"
+            );
+        }
+        assert!(TaskDefinition::default().tags.is_empty());
+        assert!(
+            TaskDefinition::from_raw(Default::default(), RelativeUnixPath::new(".").unwrap())
+                .unwrap()
+                .tags
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_basic() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec!["src/**".to_string()],
+            default: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(
+            &mut inputs,
+            true,
+            &["config.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(
+            inputs.globs,
+            vec!["../../config.txt", "src/**"],
+            "global dep should be prepended with root-relative path"
+        );
+        assert!(
+            !inputs.default,
+            "default should remain false when task had explicit inputs"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_marks_jit_only_task_eager() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec![],
+            default: false,
+            jit_globs: vec!["src/**".to_string()],
+            jit_default: false,
+            eager: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(
+            &mut inputs,
+            true,
+            &["config.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(inputs.globs, vec!["../../config.txt"]);
+        assert!(
+            inputs.eager,
+            "task is no longer jit only once global inputs are prepended, so the eager pass has \
+             to run or those globs never get hashed"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_leaves_jit_only_task_alone_without_global_inputs() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec![],
+            default: false,
+            jit_globs: vec!["src/**".to_string()],
+            jit_default: false,
+            eager: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(&mut inputs, true, &[], &path_to_root);
+
+        assert!(inputs.globs.is_empty());
+        assert!(
+            !inputs.eager,
+            "a task that is still jit only should not start hashing eagerly"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_sets_default_when_no_explicit_inputs() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs::default();
+
+        prepend_global_inputs(
+            &mut inputs,
+            false,
+            &["config.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(inputs.globs, vec!["../../config.txt"]);
+        assert!(
+            inputs.default,
+            "default should be set to true so package files are still hashed"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_handles_negation() {
+        let path_to_root = RelativeUnixPathBuf::new("..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec!["**".to_string()],
+            default: false,
+            ..Default::default()
+        };
+
+        prepend_global_inputs(
+            &mut inputs,
+            true,
+            &["config/**".to_string(), "!config/local.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(
+            inputs.globs,
+            vec!["../config/**", "!../config/local.txt", "**"],
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_noop_when_empty() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec!["src/**".to_string()],
+            default: false,
+            ..Default::default()
+        };
+        let original = inputs.clone();
+
+        prepend_global_inputs(&mut inputs, true, &[], &path_to_root);
+
+        assert_eq!(inputs.globs, original.globs);
+        assert_eq!(inputs.default, original.default);
+    }
+}

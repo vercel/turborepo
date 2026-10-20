@@ -1,10 +1,9 @@
-import { PrismaClient } from "../generated/client";
+import "dotenv/config";
+import postgres from "@prisma/orm-postgres/runtime";
+import type { Contract } from "../generated/contract.d";
+import contractJson from "../generated/contract.json" with { type: "json" };
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
-
-export const prisma =
-  globalForPrisma.prisma || new PrismaClient();
-
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
-
-export * from "../generated/client";
+export const db = postgres<Contract>({
+  contractJson,
+  url: process.env.DATABASE_URL!,
+});

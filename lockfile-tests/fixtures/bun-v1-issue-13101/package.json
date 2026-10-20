@@ -1,0 +1,15 @@
+{
+  "name": "turbo-prune-patch-repro",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "turbo": "2.9.14"
+  },
+  "packageManager": "bun@1.3.14",
+  "patchedDependencies": {
+    "is-odd@3.0.1": "patches/is-odd@3.0.1.patch"
+  }
+}

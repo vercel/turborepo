@@ -1,0 +1,16 @@
+[package]
+name = "turborepo-frameworks"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+turborepo-repository = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,1279 @@
+//! Shim run logic with trait-based dependency injection.
+//!
+//! This module contains the main entry point for the shim, refactored to use
+//! injected traits instead of direct `crate::` imports from `turborepo-cli`.
+
+use std::{env, ffi::OsString, process, process::Stdio, time::Duration};
+
+use camino::Utf8PathBuf;
+use dunce::canonicalize as fs_canonicalize;
+use miette::Diagnostic;
+use thiserror::Error;
+use tracing::{debug, warn};
+use turbo_updater::{UpdateCheckConfig, display_update_check};
+use turbopath::AbsoluteSystemPathBuf;
+use turborepo_repository::{
+    inference::{RepoMode, RepoState},
+    package_manager::PackageManager,
+};
+use turborepo_ui::ColorConfig;
+use which::which;
+
+use crate::{
+    ChildSpawner, ConfigProvider, ShimConfigurationOptions, TurboRunner, VersionProvider,
+    local_turbo_config::LocalTurboConfig,
+    local_turbo_state::{LocalTurboState, turbo_version_has_shim},
+    parser::ShimArgs,
+};
+
+const TURBO_GLOBAL_WARNING_DISABLED: &str = "TURBO_GLOBAL_WARNING_DISABLED";
+/// Set by the shim when running as global turbo so the CLI can
+/// re-emit the warning through `turborepo_log` after logger init.
+pub const GLOBAL_WARNING_ENV_VAR: &str = "__TURBO_GLOBAL_WARNING";
+
+/// Environment variable name for the invocation directory.
+/// This is set by the shim to communicate the original invocation directory
+/// to the CLI when spawning local turbo or running the global turbo.
+pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
+
+/// The `--cwd` the shim consumed before starting a local CLI at the
+/// repository root. Unset when no `--cwd` was given.
+pub const INVOCATION_CWD_ENV_VAR: &str = "TURBO_INVOCATION_CWD";
+
+/// Runtime container for injected shim dependencies.
+///
+/// This struct holds all the trait implementations needed by the shim to
+/// execute. By using trait objects, we avoid circular dependencies with
+/// `turborepo-cli`.
+///
+/// # Type Parameters
+///
+/// * `R` - Implementation of `TurboRunner` for running the CLI
+/// * `C` - Implementation of `ConfigProvider` for loading configuration
+/// * `S` - Implementation of `ChildSpawner` for spawning child processes
+/// * `V` - Implementation of `VersionProvider` for getting the current version
+pub struct ShimRuntime<R, C, S, V>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    /// The turbo runner implementation
+    pub runner: R,
+    /// The config provider implementation
+    pub config_provider: C,
+    /// The child spawner implementation
+    pub child_spawner: S,
+    /// The version provider implementation
+    pub version_provider: V,
+}
+
+impl<R, C, S, V> ShimRuntime<R, C, S, V>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    /// Create a new ShimRuntime with the given implementations.
+    pub fn new(runner: R, config_provider: C, child_spawner: S, version_provider: V) -> Self {
+        Self {
+            runner,
+            config_provider,
+            child_spawner,
+            version_provider,
+        }
+    }
+}
+
+/// Errors that can occur during shim execution (excluding CLI errors).
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ManagedRun(#[from] crate::managed_run::Error),
+    /// Error from argument parsing
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Args(#[from] crate::parser::Error),
+
+    /// Error from repository inference
+    #[error(transparent)]
+    Inference(#[from] turborepo_repository::inference::Error),
+
+    /// Failed to execute local turbo process
+    #[error("Failed to execute local `turbo` process.")]
+    LocalTurboProcess(#[source] std::io::Error),
+
+    /// Failed to resolve local turbo path
+    #[error("Failed to resolve local `turbo` path: {0}")]
+    LocalTurboPath(String),
+
+    /// Failed to find the package manager's runner
+    #[error("Failed to find `{command}`: {source}")]
+    PackageManagerNotFound {
+        command: &'static str,
+        #[source]
+        source: which::Error,
+    },
+
+    /// Failed to execute turbo via the package manager
+    #[error("Failed to execute `turbo` via the repository's package manager.")]
+    DownloadedTurboProcess(#[source] std::io::Error),
+
+    /// Failed to resolve repository root
+    #[error("Failed to resolve repository root: {0}")]
+    RepoRootPath(AbsoluteSystemPathBuf),
+
+    /// Path error
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+}
+
+/// Result type for shim execution that distinguishes between shim errors and
+/// CLI errors.
+///
+/// This allows the caller to handle CLI errors with their proper type,
+/// preserving the full miette Diagnostic chain (including related errors).
+pub enum ShimResult<E> {
+    /// Successful execution with exit code
+    Ok(i32),
+    /// Shim-level error (arg parsing, inference, process spawning, etc.)
+    ShimError(Error),
+    /// CLI-level error (from the TurboRunner)
+    CliError(E),
+}
+
+/// Main entry point for the shim with injected dependencies.
+///
+/// This function handles the complete shim logic including arg parsing:
+/// 1. Normalizes environment variables
+/// 2. Parses command-line arguments
+/// 3. Sets up error reporting
+/// 4. Determines whether to run local or global turbo
+/// 5. Executes the appropriate turbo binary
+///
+/// # Arguments
+///
+/// * `runtime` - The runtime container with all injected dependencies
+///
+/// # Returns
+///
+/// A `ShimResult` containing either the exit code, a shim error, or a CLI
+/// error.
+pub fn run<R, C, S, V>(runtime: &ShimRuntime<R, C, S, V>) -> ShimResult<R::Error>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    normalize_config_dir_env_vars();
+    let args = match ShimArgs::parse() {
+        Ok(args) => args,
+        Err(e) => return ShimResult::ShimError(e.into()),
+    };
+    run_with_args(runtime, args)
+}
+
+/// Main entry point for the shim with injected dependencies and pre-parsed
+/// args.
+///
+/// This function handles the complete shim logic:
+/// 1. Sets up error reporting based on color configuration
+/// 2. Determines whether to run local or global turbo
+/// 3. Executes the appropriate turbo binary
+///
+/// # Arguments
+///
+/// * `runtime` - The runtime container with all injected dependencies
+/// * `args` - Pre-parsed shim arguments
+///
+/// # Returns
+///
+/// A `ShimResult` containing either the exit code, a shim error, or a CLI
+/// error.
+#[tracing::instrument(skip_all)]
+pub fn run_with_args<R, C, S, V>(
+    runtime: &ShimRuntime<R, C, S, V>,
+    args: ShimArgs,
+) -> ShimResult<R::Error>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    let color_config = args.color_config();
+
+    if color_config.should_strip_ansi {
+        // Let's not crash just because we failed to set up the hook
+        let _ = miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
+                    .color(false)
+                    .unicode(false)
+                    .build(),
+            )
+        }));
+    } else {
+        let _ = miette::set_hook(Box::new(|_| {
+            Box::new(
+                miette::MietteHandlerOpts::new()
+                    .show_related_errors_as_nested()
+                    .build(),
+            )
+        }));
+    }
+
+    debug!(
+        "Global turbo version: {}",
+        runtime.version_provider.get_version()
+    );
+
+    // If skip_infer is passed, we're probably running local turbo with
+    // global turbo having handled the inference. We can run without any
+    // concerns.
+    if runtime.runner.is_global_command() || args.skip_infer {
+        return run_cli(runtime, None, color_config);
+    }
+
+    // If the TURBO_BINARY_PATH is set, we do inference but we do not use
+    // it to execute local turbo. We simply use it to set the `--single-package`
+    // and `--cwd` flags.
+    if is_turbo_binary_path_set() {
+        let repo_state = {
+            let _span = tracing::info_span!("repo_inference").entered();
+            match RepoState::infer_with_config(&args.cwd, args.root_turbo_json.as_deref()) {
+                Ok(state) => state,
+                Err(e) => return ShimResult::ShimError(e.into()),
+            }
+        };
+        debug!("Repository Root: {}", repo_state.root);
+        return run_cli(runtime, Some(repo_state), color_config);
+    }
+
+    let repo_result = {
+        let _span = tracing::info_span!("repo_inference").entered();
+        RepoState::infer_with_config(&args.cwd, args.root_turbo_json.as_deref())
+    };
+    match repo_result {
+        Ok(repo_state) => {
+            debug!("Repository Root: {}", repo_state.root);
+            run_correct_turbo(runtime, repo_state, args, color_config)
+        }
+        Err(err @ turborepo_repository::inference::Error::NotFound(_)) => {
+            // A missing repository can still run global turbo. Malformed repository
+            // configuration must retain its inference error instead of falling back.
+            debug!("Repository inference failed: {}", err);
+            debug!("Running command as global turbo");
+            run_cli(runtime, None, color_config)
+        }
+        Err(err) => ShimResult::ShimError(err.into()),
+    }
+}
+
+/// Helper to run the CLI through the runtime's runner.
+fn run_cli<R, C, S, V>(
+    runtime: &ShimRuntime<R, C, S, V>,
+    repo_state: Option<RepoState>,
+    ui: ColorConfig,
+) -> ShimResult<R::Error>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    match runtime.runner.run(repo_state, ui) {
+        Ok(code) => ShimResult::Ok(code),
+        Err(e) => ShimResult::CliError(e),
+    }
+}
+
+/// Attempts to run correct turbo by finding nearest package.json,
+/// then finding local turbo installation. If the current binary is the
+/// local turbo installation, then we run current turbo. Otherwise we
+/// kick over to the local turbo installation.
+fn run_correct_turbo<R, C, S, V>(
+    runtime: &ShimRuntime<R, C, S, V>,
+    repo_state: RepoState,
+    shim_args: ShimArgs,
+    ui: ColorConfig,
+) -> ShimResult<R::Error>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    let requirement = match runtime.runner.managed_run_requirement(&repo_state.root, ui) {
+        Ok(requirement) => requirement,
+        Err(error) => return ShimResult::CliError(error),
+    };
+    if let Some(requirement) = requirement {
+        // Managed mode never enters update checks or implicit CLI downloads.
+        let local = match LocalTurboState::infer_managed(&repo_state.root) {
+            Ok(local) => local,
+            Err(e) => return ShimResult::ShimError(Error::LocalTurboPath(e.to_string())),
+        };
+        if let Some(local) = local {
+            let capabilities =
+                crate::capabilities::Capabilities::current(runtime.version_provider.get_version());
+            if let Err(error) =
+                crate::managed_run::select(&requirement, &capabilities, Some(local.binary()))
+            {
+                return ShimResult::ShimError(error.declared(local.version()).into());
+            }
+            // Revalidate after the peer query, immediately before dispatch.
+            match runtime.runner.managed_run_requirement(&repo_state.root, ui) {
+                Ok(Some(current)) if current == requirement => {}
+                Err(error) => return ShimResult::CliError(error),
+                _ => {
+                    return ShimResult::ShimError(Error::LocalTurboPath(
+                        "managed root changed during CLI selection; run turbo setup".into(),
+                    ));
+                }
+            }
+            if local.local_is_self() {
+                unsafe {
+                    env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+                }
+                return run_cli(runtime, Some(repo_state), ui);
+            }
+            return spawn_local_turbo(runtime, &repo_state, local, shim_args);
+        }
+        // No installed pin: this CLI validated the selection and runs it.
+        // An installed pin is never substituted.
+        unsafe {
+            env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+        }
+        return run_cli(runtime, Some(repo_state), ui);
+    }
+    let package_manager = repo_state
+        .javascript
+        .as_ref()
+        .and_then(|javascript| javascript.package_manager.as_ref().ok());
+
+    if let Some(turbo_state) = LocalTurboState::infer(&repo_state.root) {
+        let config = runtime
+            .config_provider
+            .get_config(&repo_state.root, shim_args.root_turbo_json.as_ref());
+
+        try_check_for_updates(&shim_args, turbo_state.version(), &config, package_manager);
+
+        if turbo_state.local_is_self() {
+            unsafe {
+                env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+            }
+            debug!("Currently running turbo is local turbo.");
+            run_cli(runtime, Some(repo_state), ui)
+        } else {
+            spawn_local_turbo(runtime, &repo_state, turbo_state, shim_args)
+        }
+    } else if let Some(local_config) = LocalTurboConfig::infer(&repo_state) {
+        debug!(
+            "Found configuration for turbo version {}",
+            local_config.turbo_version()
+        );
+        spawn_downloaded_turbo(
+            runtime,
+            &repo_state,
+            local_config.turbo_version(),
+            shim_args,
+        )
+    } else {
+        let version = runtime.version_provider.get_version();
+        let config = runtime
+            .config_provider
+            .get_config(&repo_state.root, shim_args.root_turbo_json.as_ref());
+        try_check_for_updates(&shim_args, version, &config, package_manager);
+
+        // cli::run checks for this env var, rather than an arg, so that we can support
+        // calling old versions without passing unknown flags.
+        unsafe {
+            env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+        }
+        debug!("Running command as global turbo");
+
+        let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
+            .map_or(true, |disable| !matches!(disable.as_str(), "1" | "true"));
+
+        let declared_version = repo_state.javascript.as_ref().and_then(|javascript| {
+            javascript
+                .package_json
+                .dependencies
+                .as_ref()
+                .and_then(|deps| deps.get("turbo"))
+                .or_else(|| {
+                    javascript
+                        .package_json
+                        .dev_dependencies
+                        .as_ref()
+                        .and_then(|deps| deps.get("turbo"))
+                })
+        });
+
+        if should_warn_on_global {
+            let message = if let Some(declared_version) = declared_version {
+                format!(
+                    "No locally installed `turbo` found in your repository. Using globally \
+                     installed version ({version}), which can cause unexpected \
+                     behavior.\n\nInstalling the version in your repository ({declared_version}) \
+                     before calling `turbo` will result in more predictable behavior across \
+                     environments."
+                )
+            } else {
+                format!(
+                    "No locally installed `turbo` found in your repository. Using globally \
+                     installed version ({version}). Using a specified version in your repository \
+                     will result in more predictable behavior."
+                )
+            };
+            debug!(%message, "global turbo warning");
+            unsafe {
+                env::set_var(GLOBAL_WARNING_ENV_VAR, &message);
+            }
+        }
+        run_cli(runtime, Some(repo_state), ui)
+    }
+}
+
+fn spawn_local_turbo<R, C, S, V>(
+    runtime: &ShimRuntime<R, C, S, V>,
+    repo_state: &RepoState,
+    local_turbo_state: LocalTurboState,
+    mut shim_args: ShimArgs,
+) -> ShimResult<R::Error>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    let local_turbo_path = match fs_canonicalize(local_turbo_state.binary()) {
+        Ok(path) => path,
+        Err(_) => {
+            return ShimResult::ShimError(Error::LocalTurboPath(
+                local_turbo_state.binary().to_string_lossy().to_string(),
+            ));
+        }
+    };
+    debug!(
+        "Running local turbo binary in {}\n",
+        local_turbo_path.display()
+    );
+    let cwd = match fs_canonicalize(&repo_state.root) {
+        Ok(path) => path,
+        Err(_) => return ShimResult::ShimError(Error::RepoRootPath(repo_state.root.clone())),
+    };
+
+    let raw_args = modify_args_for_local(&mut shim_args, repo_state, local_turbo_state.version());
+
+    // We spawn a process that executes the local turbo
+    // that we've found in node_modules/.bin/turbo.
+    let mut command = process::Command::new(local_turbo_path);
+    command
+        .args(&raw_args)
+        // rather than passing an argument that local turbo might not understand, set
+        // an environment variable that can be optionally used
+        .env(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path())
+        .current_dir(cwd)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    // Never let an outer invocation's value leak into this handoff.
+    command.env_remove(INVOCATION_CWD_ENV_VAR);
+    if shim_args.cwd != shim_args.invocation_dir {
+        command.env(INVOCATION_CWD_ENV_VAR, shim_args.cwd.as_path());
+    }
+
+    spawn_child_turbo(runtime, command, Error::LocalTurboProcess)
+}
+
+fn spawn_downloaded_turbo<R, C, S, V>(
+    runtime: &ShimRuntime<R, C, S, V>,
+    repo_state: &RepoState,
+    turbo_version: &str,
+    mut shim_args: ShimArgs,
+) -> ShimResult<R::Error>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    let package_manager = package_manager_for_download(repo_state);
+    let (executable, runner_args) = turbo_download_command(&package_manager, turbo_version);
+    debug!("Running turbo@{turbo_version} via {executable}");
+    let command_path = match which(executable) {
+        Ok(path) => path,
+        Err(source) => {
+            return ShimResult::ShimError(Error::PackageManagerNotFound {
+                command: executable,
+                source,
+            });
+        }
+    };
+    let mut command = process::Command::new(command_path);
+    command.args(runner_args);
+    if let Err(err) =
+        configure_downloaded_turbo(&mut command, repo_state, turbo_version, &mut shim_args)
+    {
+        return ShimResult::ShimError(err);
+    }
+
+    spawn_child_turbo(runtime, command, Error::DownloadedTurboProcess)
+}
+
+fn package_manager_for_download(repo_state: &RepoState) -> PackageManager {
+    repo_state
+        .javascript
+        .as_ref()
+        .and_then(|javascript| javascript.package_manager.as_ref().ok())
+        .cloned()
+        // Also support repositories identifying their manager only by a lockfile.
+        .or_else(|| PackageManager::detect_package_manager(&repo_state.root).ok())
+        .unwrap_or(PackageManager::Npm)
+}
+
+fn turbo_download_command(
+    package_manager: &PackageManager,
+    turbo_version: &str,
+) -> (&'static str, Vec<String>) {
+    let package = format!("turbo@{turbo_version}");
+    match package_manager {
+        // Yarn Classic has no dlx command, so retain the npx fallback.
+        PackageManager::Npm | PackageManager::Yarn => ("npx", vec!["-y".into(), package]),
+        PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
+            ("pnpm", vec!["dlx".into(), package])
+        }
+        PackageManager::Berry => ("yarn", vec!["dlx".into(), package]),
+        PackageManager::Bun => ("bun", vec!["x".into(), package]),
+        PackageManager::Nub { .. } => ("nubx", vec![package]),
+        PackageManager::Aube { .. } => ("aubx", vec![package]),
+    }
+}
+
+fn configure_downloaded_turbo(
+    command: &mut process::Command,
+    repo_state: &RepoState,
+    turbo_version: &str,
+    shim_args: &mut ShimArgs,
+) -> Result<(), Error> {
+    let cwd = fs_canonicalize(&repo_state.root)
+        .map_err(|_| Error::RepoRootPath(repo_state.root.clone()))?;
+    let raw_args = modify_args_for_local(shim_args, repo_state, turbo_version);
+
+    // Use an environment variable rather than an argument old Turbo may not
+    // understand.
+    command
+        .args(&raw_args)
+        .env(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path())
+        .current_dir(cwd)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    Ok(())
+}
+
+fn modify_args_for_local(
+    shim_args: &mut ShimArgs,
+    repo_state: &RepoState,
+    local_version: &str,
+) -> Vec<OsString> {
+    let supports_skip_infer_and_single_package = turbo_version_has_shim(local_version);
+    let already_has_single_package_flag = shim_args
+        .remaining_turbo_args
+        .contains(&"--single-package".to_string());
+    let should_add_single_package_flag = repo_state.mode == RepoMode::SinglePackage
+        && !already_has_single_package_flag
+        && supports_skip_infer_and_single_package;
+
+    debug!(
+        "supports_skip_infer_and_single_package {:?}",
+        supports_skip_infer_and_single_package
+    );
+
+    let mut raw_args: Vec<OsString> = if supports_skip_infer_and_single_package {
+        vec!["--skip-infer".into()]
+    } else {
+        Vec::new()
+    };
+
+    raw_args.extend(shim_args.remaining_turbo_args.drain(..).map(OsString::from));
+
+    // The shim consumes this flag and changes cwd to the repository root.
+    // Preserve its already-resolved absolute path before the task-args boundary.
+    if let Some(config) = &shim_args.root_turbo_json {
+        raw_args.push(format!("--root-turbo-json={config}").into());
+    }
+
+    // We add this flag after the raw args to avoid accidentally passing it
+    // as a global flag instead of as a run flag.
+    if should_add_single_package_flag {
+        raw_args.push("--single-package".into());
+    }
+
+    raw_args.push("--".into());
+    raw_args.append(&mut shim_args.forwarded_args);
+
+    raw_args
+}
+
+fn spawn_child_turbo<R, C, S, V>(
+    runtime: &ShimRuntime<R, C, S, V>,
+    command: process::Command,
+    err: fn(std::io::Error) -> Error,
+) -> ShimResult<R::Error>
+where
+    R: TurboRunner,
+    C: ConfigProvider,
+    S: ChildSpawner,
+    V: VersionProvider,
+{
+    // On Unix, turbo's spawner returns only if the other turbo cannot start:
+    // this process became it, so signals, Ctrl+C, and the status are its own.
+    let exit_status = match runtime.child_spawner.hand_off(command) {
+        Ok(status) => status,
+        Err(e) => return ShimResult::ShimError(err(e)),
+    };
+    let exit_code = exit_status.code().unwrap_or_else(|| {
+        debug!("child turbo failed to report exit code");
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            let signal = exit_status.signal();
+            let core_dumped = exit_status.core_dumped();
+            debug!(
+                "child turbo caught signal {:?}. Core dumped? {}",
+                signal, core_dumped
+            );
+        }
+        2
+    });
+
+    ShimResult::Ok(exit_code)
+}
+
+/// Checks for `TURBO_BINARY_PATH` variable. If it is set,
+/// we do not try to find local turbo, we simply run the command as
+/// the current binary. This is due to legacy behavior of `TURBO_BINARY_PATH`
+/// that lets users dynamically set the path of the turbo binary. Because
+/// that conflicts with finding a local turbo installation and
+/// executing that binary, these two features are fundamentally incompatible.
+fn is_turbo_binary_path_set() -> bool {
+    env::var("TURBO_BINARY_PATH").is_ok()
+}
+
+fn normalize_config_dir_env_vars() {
+    // Normalize relative config dir env vars to absolute paths early in CLI startup
+    for var in ["TURBO_CONFIG_DIR_PATH", "VERCEL_CONFIG_DIR_PATH"] {
+        if let Ok(val) = env::var(var) {
+            match turbopath::AbsoluteSystemPathBuf::new(val.as_str()) {
+                Ok(_) => {
+                    // already absolute, nothing to do
+                }
+                Err(turbopath::PathError::NotAbsolute(_)) => {
+                    match turbopath::AbsoluteSystemPathBuf::from_cwd(Utf8PathBuf::from(val)) {
+                        Ok(abs) => unsafe { env::set_var(var, abs.as_str()) },
+                        Err(_) => {
+                            // invalid value; leave as-is so downstream error
+                            // handling can report it
+                        }
+                    }
+                }
+                Err(_) => {
+                    // invalid value; leave as-is so downstream error handling
+                    // can report it
+                }
+            }
+        }
+    }
+}
+
+fn try_check_for_updates(
+    args: &ShimArgs,
+    current_version: &str,
+    config: &ShimConfigurationOptions,
+    package_manager: Option<&PackageManager>,
+) {
+    let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
+
+    if args.should_check_for_update() {
+        let footer = "Follow @turborepo for updates: https://x.com/turborepo";
+
+        let interval = if args.force_update_check {
+            // force update check
+            Some(Duration::ZERO)
+        } else {
+            // use default (24 hours)
+            None
+        };
+        // check for updates
+        let _ = display_update_check(UpdateCheckConfig {
+            package_name: "turbo",
+            github_repo: "https://github.com/vercel/turborepo",
+            footer: Some(footer),
+            current_version,
+            // use default for timeout (800ms)
+            timeout: None,
+            interval,
+            package_manager,
+            config_no_update: config.no_update_notifier(),
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::ExitStatus;
+
+    use turborepo_repository::inference::JavaScriptRoot;
+
+    use super::*;
+    use crate::DefaultChildSpawner;
+
+    #[cfg(unix)]
+    #[test]
+    fn managed_dispatch_preserves_compatible_peers_and_never_downloads_or_substitutes_pins() {
+        use std::os::unix::fs::PermissionsExt;
+        struct ManagedRunner;
+        impl TurboRunner for ManagedRunner {
+            type Error = std::io::Error;
+            fn managed_run_requirement(
+                &self,
+                _: &turbopath::AbsoluteSystemPath,
+                _: ColorConfig,
+            ) -> Result<Option<crate::capabilities::Requirement>, Self::Error> {
+                Ok(Some(crate::capabilities::Requirement::new(0, ["node"])))
+            }
+            fn run(&self, state: Option<RepoState>, _: ColorConfig) -> Result<i32, Self::Error> {
+                assert!(state.is_some());
+                Ok(7)
+            }
+        }
+        struct CheckedSpawner(std::path::PathBuf);
+        impl ChildSpawner for CheckedSpawner {
+            fn hand_off(&self, command: process::Command) -> std::io::Result<ExitStatus> {
+                assert_eq!(
+                    std::path::Path::new(command.get_program()).canonicalize()?,
+                    self.0.canonicalize()?
+                );
+                DefaultChildSpawner.hand_off(command)
+            }
+        }
+        for case in 0..4 {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            root.join_component("package.json").create_with_contents(
+                br#"{"name":"fixture","packageManager":"pnpm@10.0.0","devDependencies":{"turbo":"2.0.0"}}"#).unwrap();
+            root.join_component("turbo.json")
+                .create_with_contents(br#"{"futureFlags":{"experimentalSetup":true}}"#)
+                .unwrap();
+            let package = root.join_components(&[
+                "node_modules",
+                crate::TurboState::scoped_platform_package_scope(),
+                crate::TurboState::scoped_platform_package_dir(),
+            ]);
+            let binary = package.join_components(&["bin", crate::TurboState::binary_name()]);
+            let marker = root.join_component("peer-ran");
+            if case != 0 {
+                std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+                package
+                    .join_component("package.json")
+                    .create_with_contents(br#"{"version":"2.0.0"}"#)
+                    .unwrap();
+                if case != 1 {
+                    let schemas = if case == 3 { "[0]" } else { "[]" };
+                    let script = format!(
+                        "#!/bin/sh\nif [ \"$1\" = '--__internal-managed-run-capabilities' ]; \
+                         then\n  printf '%s\\n' \
+                         '{{\"abiVersion\":1,\"cliVersion\":\"fixture\",\"managedRunSchemas\":\
+                         {schemas}}}'\nelse\n  touch '{}'\n  exit 17\nfi\n",
+                        marker
+                    );
+                    std::fs::write(&binary, script).unwrap();
+                    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755))
+                        .unwrap();
+                }
+            }
+            let runtime = ShimRuntime::new(
+                ManagedRunner,
+                MockConfigProvider,
+                CheckedSpawner(binary.as_std_path().to_owned()),
+                MockVersionProvider,
+            );
+            let state = RepoState::infer_with_config(&root, None).unwrap();
+            let result = run_correct_turbo(
+                &runtime,
+                state,
+                boundary_args(&root, &[]),
+                ColorConfig::new(true),
+            );
+            match case {
+                0 => assert!(matches!(result, ShimResult::Ok(7))),
+                1 => assert!(matches!(
+                    result,
+                    ShimResult::ShimError(Error::LocalTurboPath(_))
+                )),
+                2 => assert!(matches!(
+                    result,
+                    ShimResult::ShimError(Error::ManagedRun(_))
+                )),
+                _ => assert!(matches!(result, ShimResult::Ok(17))),
+            }
+            assert_eq!(marker.exists(), case == 3);
+        }
+    }
+
+    #[test]
+    fn local_handoff_carries_only_this_invocations_cwd() {
+        struct Unmanaged;
+        impl TurboRunner for Unmanaged {
+            type Error = std::io::Error;
+            fn run(&self, _: Option<RepoState>, _: ColorConfig) -> Result<i32, Self::Error> {
+                panic!("an installed local CLI must receive the handoff")
+            }
+        }
+        type Envs = Vec<(std::ffi::OsString, Option<std::ffi::OsString>)>;
+        struct Recording(std::sync::Mutex<Envs>);
+        impl ChildSpawner for Recording {
+            fn hand_off(&self, command: process::Command) -> std::io::Result<ExitStatus> {
+                *self.0.lock().unwrap() = command
+                    .get_envs()
+                    .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
+                    .collect();
+                Err(std::io::Error::other("recorded"))
+            }
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(br#"{"packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        let package = root.join_components(&[
+            "node_modules",
+            crate::TurboState::scoped_platform_package_scope(),
+            crate::TurboState::scoped_platform_package_dir(),
+        ]);
+        let binary = package.join_components(&["bin", crate::TurboState::binary_name()]);
+        std::fs::create_dir_all(binary.parent().unwrap()).unwrap();
+        binary.create_with_contents(b"").unwrap();
+        package
+            .join_component("package.json")
+            .create_with_contents(br#"{"version":"2.9.0"}"#)
+            .unwrap();
+        for (extra, expected) in [
+            (&[][..], None),
+            (&["--cwd", "apps"][..], Some(root.join_component("apps"))),
+        ] {
+            let runtime = ShimRuntime::new(
+                Unmanaged,
+                MockConfigProvider,
+                Recording(Default::default()),
+                MockVersionProvider,
+            );
+            let words = ["turbo", "exec", "--no-update-notifier"]
+                .iter()
+                .chain(extra)
+                .chain(&["--", "node", "--cwd", "elsewhere"])
+                .map(|word| word.to_string());
+            let args = ShimArgs::parse_from_iter(root.clone(), words).unwrap();
+            let state = RepoState::infer_with_config(&root, None).unwrap();
+            let result = run_correct_turbo(&runtime, state, args, ColorConfig::new(true));
+            assert!(matches!(
+                result,
+                ShimResult::ShimError(Error::LocalTurboProcess(_))
+            ));
+            let envs = runtime.child_spawner.0.lock().unwrap().clone();
+            let expected = expected.map(|path| path.as_std_path().as_os_str().to_owned());
+            assert!(
+                envs.contains(&(INVOCATION_CWD_ENV_VAR.into(), expected)),
+                "{envs:?}"
+            );
+        }
+    }
+
+    // Mock implementations for testing
+    struct MockRunner;
+    impl TurboRunner for MockRunner {
+        type Error = std::io::Error;
+        fn is_global_command(&self) -> bool {
+            true
+        }
+        fn run(&self, repo_state: Option<RepoState>, _ui: ColorConfig) -> Result<i32, Self::Error> {
+            assert!(repo_state.is_none(), "global command must bypass inference");
+            Ok(0)
+        }
+    }
+
+    struct MockConfigProvider;
+    impl ConfigProvider for MockConfigProvider {
+        fn get_config(
+            &self,
+            _root: &turbopath::AbsoluteSystemPath,
+            _root_turbo_json: Option<&AbsoluteSystemPathBuf>,
+        ) -> ShimConfigurationOptions {
+            ShimConfigurationOptions::default()
+        }
+    }
+
+    struct MockVersionProvider;
+    impl VersionProvider for MockVersionProvider {
+        fn get_version(&self) -> &'static str {
+            "2.0.0"
+        }
+    }
+
+    struct InferenceRunner {
+        expected_root: Option<AbsoluteSystemPathBuf>,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl TurboRunner for InferenceRunner {
+        type Error = std::io::Error;
+
+        fn is_global_command(&self) -> bool {
+            false
+        }
+
+        fn run(&self, repo_state: Option<RepoState>, _ui: ColorConfig) -> Result<i32, Self::Error> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            match (&self.expected_root, repo_state) {
+                (Some(root), Some(state)) => {
+                    assert_eq!(&state.root, root);
+                    assert_eq!(state.mode, RepoMode::MultiPackage);
+                    assert!(state.javascript.is_none());
+                }
+                (None, None) => {}
+                _ => panic!("unexpected repository passed to CLI runner"),
+            }
+            Ok(0)
+        }
+    }
+
+    struct UnexpectedChildSpawner;
+
+    impl ChildSpawner for UnexpectedChildSpawner {
+        fn hand_off(&self, _command: process::Command) -> std::io::Result<ExitStatus> {
+            panic!("shim boundary tests must not spawn a child process")
+        }
+    }
+
+    fn inference_runtime(
+        expected_root: Option<AbsoluteSystemPathBuf>,
+    ) -> ShimRuntime<InferenceRunner, MockConfigProvider, UnexpectedChildSpawner, MockVersionProvider>
+    {
+        ShimRuntime::new(
+            InferenceRunner {
+                expected_root,
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            },
+            MockConfigProvider,
+            UnexpectedChildSpawner,
+            MockVersionProvider,
+        )
+    }
+
+    fn boundary_args(invocation_dir: &AbsoluteSystemPathBuf, extra: &[&str]) -> ShimArgs {
+        ShimArgs::parse_from_iter(
+            invocation_dir.clone(),
+            ["turbo", "run", "build", "--no-update-notifier"]
+                .into_iter()
+                .chain(extra.iter().copied())
+                .map(str::to_owned),
+        )
+        .unwrap()
+    }
+
+    #[test_case::test_case(&["--root-turbo-json", "turbo.jsonc"] ; "separate value")]
+    #[test_case::test_case(&["--root-turbo-json=turbo.jsonc"] ; "equals value")]
+    fn local_handoff_preserves_resolved_config_before_forwarded_arguments(extra: &[&str]) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("package.json")
+            .create_with_contents(b"{}")
+            .unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(b"{}")
+            .unwrap();
+        let state = RepoState::infer_with_config(&root, None).unwrap();
+        let mut args = boundary_args(&root, extra);
+        args.forwarded_args = vec![
+            "--root-turbo-json=task-value".into(),
+            "argument with spaces".into(),
+        ];
+        let raw = modify_args_for_local(&mut args, &state, "2.0.0");
+        let separator = raw.iter().position(|arg| arg == "--").unwrap();
+        assert!(
+            raw[..separator].contains(
+                &format!("--root-turbo-json={}", root.join_component("turbo.jsonc")).into()
+            )
+        );
+        assert_eq!(
+            &raw[separator + 1..],
+            &["--root-turbo-json=task-value", "argument with spaces"]
+        );
+    }
+
+    #[test_case::test_case("experimentalCargoWorkspaces", "Cargo.toml", "[workspace]\nmembers = []\n" ; "cargo")]
+    #[test_case::test_case("experimentalPythonWorkspaces", "pyproject.toml", "[tool.uv.workspace]\nmembers = []\n" ; "python")]
+    #[test_case::test_case("experimentalGoWorkspaces", "go.work", "go 1.24\n" ; "go")]
+    fn native_root_reaches_cli_without_package_json(flag: &str, manifest: &str, contents: &str) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(manifest)
+            .create_with_contents(contents.as_bytes())
+            .unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(format!(r#"{{"futureFlags":{{"{flag}":true}}}}"#).as_bytes())
+            .unwrap();
+        assert!(!root.join_component("package.json").exists());
+
+        let runtime = inference_runtime(Some(root.clone()));
+        assert!(matches!(
+            run_with_args(&runtime, boundary_args(&root, &[])),
+            ShimResult::Ok(0)
+        ));
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[test_case::test_case(&["--cwd", "native", "--root-turbo-json", "custom.json"] ; "separate values")]
+    #[test_case::test_case(&["--cwd=native", "--root-turbo-json=custom.json"] ; "equals values")]
+    fn custom_config_is_resolved_from_invocation_not_cwd(extra: &[&str]) {
+        let tmp = tempfile::tempdir().unwrap();
+        let invocation_dir = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let root = invocation_dir.join_component("native");
+        root.create_dir_all().unwrap();
+        root.join_component("Cargo.toml")
+            .create_with_contents(b"[workspace]\nmembers = []\n")
+            .unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(b"{}")
+            .unwrap();
+        let config = invocation_dir.join_component("custom.json");
+        config
+            .create_with_contents(br#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#)
+            .unwrap();
+        let args = boundary_args(&invocation_dir, extra);
+        assert_eq!(args.cwd, root);
+        assert_eq!(args.root_turbo_json.as_ref(), Some(&config));
+
+        let runtime = inference_runtime(Some(root));
+        assert!(matches!(run_with_args(&runtime, args), ShimResult::Ok(0)));
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[test]
+    fn missing_repository_falls_back_to_cli() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let runtime = inference_runtime(None);
+        assert!(matches!(
+            run_with_args(&runtime, boundary_args(&root, &[])),
+            ShimResult::Ok(0)
+        ));
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            1
+        );
+    }
+
+    #[test_case::test_case("turbo.json", b"{", b"[workspace]\nmembers = []\n", &[] ; "malformed config")]
+    #[test_case::test_case("custom.json", b"{", b"[workspace]\nmembers = []\n", &["--root-turbo-json=custom.json"] ; "malformed custom config")]
+    #[test_case::test_case("turbo.json", br#"{"futureFlags":{"experimentalCargoWorkspaces":true}}"#, b"[workspace", &[] ; "malformed native manifest")]
+    fn malformed_inference_does_not_run_cli(
+        config_name: &str,
+        config: &[u8],
+        manifest: &[u8],
+        extra: &[&str],
+    ) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(config_name)
+            .create_with_contents(config)
+            .unwrap();
+        root.join_component("Cargo.toml")
+            .create_with_contents(manifest)
+            .unwrap();
+        let runtime = inference_runtime(None);
+        match run_with_args(&runtime, boundary_args(&root, extra)) {
+            ShimResult::ShimError(Error::Inference(err)) => {
+                assert!(!matches!(
+                    err,
+                    turborepo_repository::inference::Error::NotFound(_)
+                ));
+            }
+            _ => panic!("malformed inference must preserve its error"),
+        }
+        assert_eq!(
+            runtime
+                .runner
+                .calls
+                .load(std::sync::atomic::Ordering::SeqCst),
+            0
+        );
+    }
+
+    #[test]
+    fn test_download_runners() {
+        for (manager, executable, prefix) in [
+            (PackageManager::Npm, "npx", vec!["-y"]),
+            (PackageManager::Yarn, "npx", vec!["-y"]),
+            (PackageManager::Berry, "yarn", vec!["dlx"]),
+            (PackageManager::Pnpm, "pnpm", vec!["dlx"]),
+            (PackageManager::Pnpm6, "pnpm", vec!["dlx"]),
+            (PackageManager::Pnpm9, "pnpm", vec!["dlx"]),
+            (PackageManager::Bun, "bun", vec!["x"]),
+            (
+                PackageManager::Nub {
+                    lockfile: Box::new(PackageManager::Npm),
+                },
+                "nubx",
+                vec![],
+            ),
+            (
+                PackageManager::Aube {
+                    lockfile: Box::new(PackageManager::Npm),
+                },
+                "aubx",
+                vec![],
+            ),
+        ] {
+            let (actual_executable, args) = turbo_download_command(&manager, "2.0.3");
+            assert_eq!(actual_executable, executable);
+            let expected: Vec<_> = prefix.into_iter().chain(["turbo@2.0.3"]).collect();
+            assert_eq!(args, expected);
+        }
+    }
+
+    #[test]
+    fn test_bun_download_with_and_without_package_manager() -> Result<(), Box<dyn std::error::Error>>
+    {
+        for package_json in [
+            br#"{"packageManager":"bun@1.3.0"}"#.as_slice(),
+            br#"{"devEngines":{"packageManager":{"name":"bun","version":"1.4.2"}}}"#.as_slice(),
+            br#"{}"#.as_slice(),
+        ] {
+            let tmpdir = tempfile::tempdir()?;
+            let root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+            root.join_component("package.json")
+                .create_with_contents(package_json)?;
+            root.join_component("bun.lock")
+                .create_with_contents(b"{}")?;
+            let repo = RepoState::infer(&root)?;
+            assert_eq!(package_manager_for_download(&repo), PackageManager::Bun);
+            assert_eq!(
+                turbo_download_command(&package_manager_for_download(&repo), "2.0.3"),
+                ("bun", vec!["x".into(), "turbo@2.0.3".into()])
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_download_configuration() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = tempfile::tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(tmpdir.path())?;
+        let invocation_dir = root.join_component("app");
+        let repo = RepoState {
+            root: root.clone(),
+            mode: RepoMode::SinglePackage,
+            javascript: Some(JavaScriptRoot {
+                package_json: Default::default(),
+                package_manager: Ok(PackageManager::Bun),
+            }),
+        };
+        for (version, expected) in [
+            (
+                "2.0.3",
+                vec![
+                    "x",
+                    "turbo@2.0.3",
+                    "--skip-infer",
+                    "run",
+                    "build",
+                    "--single-package",
+                    "--",
+                    "--task-flag",
+                ],
+            ),
+            (
+                "1.6.0",
+                vec!["x", "turbo@1.6.0", "run", "build", "--", "--task-flag"],
+            ),
+        ] {
+            let mut args = ShimArgs {
+                cwd: root.clone(),
+                invocation_dir: invocation_dir.clone(),
+                skip_infer: false,
+                verbosity: 0,
+                force_update_check: false,
+                remaining_turbo_args: vec!["run".into(), "build".into()],
+                forwarded_args: vec!["--task-flag".into()],
+                color: false,
+                no_color: false,
+                root_turbo_json: None,
+                profile: None,
+                anon_profile: None,
+                heap: None,
+            };
+            let (executable, runner_args) = turbo_download_command(&PackageManager::Bun, version);
+            let mut command = process::Command::new(executable);
+            command.args(runner_args);
+            configure_downloaded_turbo(&mut command, &repo, version, &mut args)?;
+            assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
+            assert_eq!(
+                command.get_current_dir(),
+                Some(fs_canonicalize(&root)?.as_path())
+            );
+            assert!(command.get_envs().any(|(key, value)| {
+                key == INVOCATION_DIR_ENV_VAR
+                    && value == Some(invocation_dir.as_std_path().as_os_str())
+            }));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_global_command_runtime_creation_and_routing() {
+        let runtime = ShimRuntime::new(
+            MockRunner,
+            MockConfigProvider,
+            DefaultChildSpawner,
+            MockVersionProvider,
+        );
+        assert_eq!(runtime.version_provider.get_version(), "2.0.0");
+        let mut args = ShimArgs::parse().unwrap();
+        args.skip_infer = false;
+        args.force_update_check = false;
+        args.remaining_turbo_args = vec!["--help".into()];
+        assert!(RepoState::infer(&args.cwd).is_ok());
+        assert!(matches!(run_with_args(&runtime, args), ShimResult::Ok(0)));
+    }
+
+    #[test]
+    fn test_is_turbo_binary_path_set() {
+        // This tests the function when env var is not set
+        unsafe {
+            std::env::remove_var("TURBO_BINARY_PATH");
+        }
+        assert!(!is_turbo_binary_path_set());
+    }
+}

@@ -8,7 +8,7 @@ use std::{
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
 
-use crate::{check_path, AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation};
+use crate::{AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation, check_path};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Serialize, Deserialize)]
 #[serde(transparent)]
@@ -127,14 +127,14 @@ impl AnchoredSystemPathBuf {
         let traverse_count = these_components.len() - prefix_len;
         // For every remaining non-matching segment in self, add a directory traversal
         // Then, add every non-matching segment from other
-        let path = std::iter::repeat(Utf8Component::ParentDir)
-            .take(traverse_count)
+        let path = std::iter::repeat_n(Utf8Component::ParentDir, traverse_count)
             .chain(other_components.into_iter().skip(prefix_len))
             .collect::<Utf8PathBuf>();
 
-        let path: Utf8PathBuf = path_clean::clean(path)
-            .try_into()
-            .expect("clean should preserve utf8");
+        let path: Utf8PathBuf = match path_clean::clean(path).try_into() {
+            Ok(path) => path,
+            Err(err) => panic!("clean should preserve utf8: {err:?}"),
+        };
 
         Self(path)
     }
@@ -172,6 +172,16 @@ impl AnchoredSystemPathBuf {
             }
         }
 
+        // Reject prefixes as well as roots: Windows drive-relative paths like
+        // `C:foo` replace the anchor during joins despite not being absolute.
+        // Check before stripping the trailing slash so `C:/` stays rooted.
+        if Utf8Path::new(path)
+            .components()
+            .any(|component| matches!(component, Utf8Component::Prefix(_) | Utf8Component::RootDir))
+        {
+            return Err(PathError::NotRelative(path.to_string()));
+        }
+
         // Remove trailing slash
         let stripped_path = path.strip_suffix('/').unwrap_or(path);
 
@@ -197,7 +207,7 @@ impl AnchoredSystemPathBuf {
         self.0.push(path.as_ref());
     }
 
-    pub fn components(&self) -> Utf8Components {
+    pub fn components(&self) -> Utf8Components<'_> {
         self.0.components()
     }
 
@@ -262,6 +272,19 @@ mod tests {
         assert_eq!(result, expected);
     }
 
+    #[cfg(windows)]
+    #[test_case("C:/Windows/Temp/evil.txt" ; "drive-qualified file")]
+    #[test_case("C:/Windows/Temp/evil/" ; "drive-qualified directory")]
+    #[test_case("C:/" ; "drive root")]
+    #[test_case("C:evil.txt" ; "drive-relative file")]
+    #[test_case("C:evil/" ; "drive-relative directory")]
+    fn test_from_system_path_rejects_windows_prefixed_path(path: &str) {
+        assert!(matches!(
+            AnchoredSystemPathBuf::from_system_path(Path::new(path)),
+            Err(crate::PathError::NotRelative(_))
+        ));
+    }
+
     #[test_case(Path::new("test.txt"), Ok("test.txt"), Ok("test.txt") ; "hello world")]
     #[test_case(Path::new("something/"), Ok("something"), Ok("something") ; "Unix directory")]
     #[test_case(Path::new("something\\"), Ok("something\\"), Err("Path is not safe for windows: something\\".to_string()) ; "Windows unsafe")]
@@ -282,7 +305,7 @@ mod tests {
                 assert_eq!(result.as_str(), expected)
             }
             (Err(result), Err(expected)) => assert_eq!(result, expected),
-            (result, expected) => panic!("Expected {:?}, got {:?}", expected, result),
+            (result, expected) => panic!("Expected {expected:?}, got {result:?}"),
         }
     }
 }

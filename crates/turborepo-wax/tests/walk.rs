@@ -1,18 +1,14 @@
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 #![cfg(feature = "walk")]
 
 use std::{collections::HashSet, path::PathBuf};
 
-use build_fs_tree::{dir, file, Build, FileSystemTree};
+use build_fs_tree::{Build, FileSystemTree, dir, file};
 use tempfile::TempDir;
 use wax::{
-    walk::{Entry, FileIterator, WalkBehavior},
     Glob,
+    walk::{Entry, FileIterator, WalkBehavior},
 };
-
-// TODO: Rust's testing framework does not provide a mechanism for maintaining
-//       shared state. This means that tests that write to the file system must
-//       do so individually rather than writing before and after all tests have
-//       run. This should probably be avoided.
 
 /// Writes a testing directory tree to a temporary location on the file system.
 fn temptree() -> (TempDir, PathBuf) {

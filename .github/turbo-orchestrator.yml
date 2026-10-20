@@ -30,10 +30,10 @@
 
 labeler:
   labels:
-    # needs: triage when not any of the turborepo team
-    - label: "needs: triage"
+    # Removes the PR from release notes when its chore or ci
+    - label: "release-notes-ignore"
       when:
-        isNotPRAuthorMatch: "^(padmaia|anthonyshew|dimitropoulos|tknickman|chris-olszewski|NicholasLYang)$"
+        isPRTitleMatch: "^(?:(\bchore\b|\bci\b)|.*?\\((\bchore\b|\bci\b)\\)).*?:"
 
     # areas
     - label: "area: ci"
@@ -80,10 +80,3 @@ labeler:
       when:
         isAnyFilePathMatch: '^version\.txt$'
         isPRTitleMatch: '^release\(turborepo\):.*$'
-events:
-  onPublish:
-    turbo:
-      - runWorkflow: bench-turborepo.yml
-        when: any
-      - runWorkflow: update-examples-on-release.yml
-        when: latest

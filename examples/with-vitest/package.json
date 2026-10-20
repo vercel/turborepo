@@ -1,17 +1,25 @@
 {
   "name": "vitest",
   "private": true,
+  "type": "module",
   "scripts": {
     "test": "turbo run test",
-    "view-report": "turbo run view-report"
+    "test:projects": "vitest run",
+    "test:projects:watch": "vitest --watch",
+    "report": "turbo run test && turbo run report",
+    "view-report": "turbo run test && turbo run view-report"
   },
   "devDependencies": {
-    "prettier": "^3.5.0",
-    "turbo": "^2.4.4",
-    "typescript": "5.7.3"
+    "@biomejs/biome": "2.5.15",
+    "@repo/vitest-config": "workspace:*",
+    "pnpm": "12.8.1",
+    "prettier": "3.9.9",
+    "turbo": "2.11.6",
+    "typescript": "7.0.2",
+    "vitest": "5.0.3"
   },
-  "packageManager": "pnpm@9.0.0",
+  "packageManager": "pnpm@12.8.1",
   "engines": {
-    "node": ">=18"
+    "node": ">=24.21.0"
   }
 }

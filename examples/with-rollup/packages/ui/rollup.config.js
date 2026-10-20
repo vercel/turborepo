@@ -1,4 +1,4 @@
-import typescript from "@rollup/plugin-typescript";
+import swc from "@rollup/plugin-swc";
 
 export default [
   {
@@ -16,5 +16,17 @@ export default [
 ].map((entry) => ({
   ...entry,
   external: ["react/jsx-runtime"],
-  plugins: [typescript()],
+  plugins: [
+    swc({
+      swc: {
+        jsc: {
+          transform: {
+            react: {
+              runtime: "automatic",
+            },
+          },
+        },
+      },
+    }),
+  ],
 }));

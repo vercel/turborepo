@@ -1,0 +1,33 @@
+{
+  "name": "with-rsbuild-module-federation",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=24.21.0"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.5.1",
+      "onFail": "download"
+    }
+  },
+  "workspaces": [
+    "host",
+    "remote",
+    "shared-ui"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:filter": "turbo run dev --filter",
+    "build": "turbo run build",
+    "build:filter": "turbo run build --filter",
+    "preview": "turbo run preview",
+    "preview:filter": "turbo run preview --filter",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "2.11.2"
+  }
+}

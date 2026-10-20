@@ -1,0 +1,56 @@
+{
+  "name": "@eventmate/database",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "default": "./index.ts"
+    },
+    "./prisma": {
+      "types": "./prisma/index.ts",
+      "default": "./prisma/index.ts"
+    },
+    "./enums": {
+      "types": "./prisma/generated/prisma/enums.ts",
+      "default": "./prisma/generated/prisma/enums.ts"
+    },
+    "./seed": {
+      "types": "./prisma/seed/index.ts",
+      "default": "./prisma/seed/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "bun run generate",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:dev:skip-shadow": "PRISMA_MIGRATE_SKIP_SHADOW_DATABASE=1 prisma migrate dev",
+    "migrate:status": "prisma migrate status",
+    "seed": "bun run ./prisma/seed/seed.ts",
+    "seed:users": "bun run ./prisma/seed/seed-test-users.ts",
+    "seed:statistics": "bun run ./prisma/seed/seed-statistics.ts",
+    "seed:ai-stats": "bun run ./prisma/seed/seed-ai-stats.ts",
+    "backfill:coupons": "bun run ./prisma/seed/backfill-subscription-coupons.ts",
+    "postinstall": "bun run generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "catalog:",
+    "@prisma/client": "catalog:",
+    "dotenv": "catalog:",
+    "pg": "catalog:",
+    "recharts": "^3.1.2"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "catalog:",
+    "@paralleldrive/cuid2": "^3.3.0",
+    "@types/node": "catalog:",
+    "@types/pg": "^8.20.0",
+    "@typescript/native-preview": "catalog:",
+    "bun-types": "^1.3.11",
+    "prisma": "catalog:"
+  }
+}

@@ -1,22 +1,59 @@
 # Turborepo starter
 
-This Turborepo starter is maintained by the Turborepo core team.
+This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
 This example is based on the `basic` example (`npx create-turbo@latest`) to demonstrate how to use Vitest and get the most out of Turborepo's caching.
 
-For this reason, the only commands in the root package.json are `turbo run test` and `turbo run view-report`.
+This example demonstrates two approaches to Vitest configuration:
 
-`turbo run test`: Runs the test in each package using Turborepo.
-`turbo run view-report`: Collects coverage from each package and shows it in a merged report.
+1. **Package-level caching (Recommended)**: Each package has its own Vitest configuration that imports shared settings from `@repo/vitest-config`. This approach leverages Turborepo's caching effectively.
+
+2. **Vitest Projects**: A root `vitest.config.ts` uses Vitest's projects feature for unified test running during development.
+
+## Getting Started
+
+First, install dependencies and build the shared configuration package:
+
+```bash
+pnpm install
+pnpm --filter=@repo/vitest-config build
+```
+
+## Available Commands
+
+- `pnpm test`: Runs tests in each package using Turborepo (leverages caching)
+- `pnpm test:projects`: Runs tests using Vitest's projects feature
+- `pnpm test:projects:watch`: Runs tests using Vitest's projects feature in watch mode
+- `pnpm report`: Merges package coverage with Vitest's native `--merge-reports` command
+- `pnpm view-report`: Creates the merged coverage report and opens it in your browser
+
+## Configuration Structure
+
+The example uses a shared `@repo/vitest-config` package that exports:
+
+- `sharedConfig`: Base configuration with coverage settings
+- `baseConfig`: For Node.js packages (like `math`)
+- `uiConfig`: For packages requiring jsdom environment (like `web`, `docs`)
+
+## Merged Coverage Reports
+
+Package-level test tasks write Vitest blob reports to each package's `coverage/blob` directory, so Turborepo can cache each package's coverage blob independently. After running tests, use Vitest's native merge command to create a combined HTML and text coverage report:
+
+```bash
+pnpm test
+pnpm report
+```
+
+The `merge-blob-reports` task stages the package blobs into `packages/vitest-config/coverage/merged-blob`, then the `report` task runs `vitest --merge-reports` to write the merged HTML report to `packages/vitest-config/coverage/report`.
 
 ### Remote Caching
 
 > [!TIP]
 > Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
 
-Turborepo can use a technique known as [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
 By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
 
@@ -37,9 +74,9 @@ npx turbo link
 
 Learn more about the power of Turborepo:
 
-- [Tasks](https://turbo.build/repo/docs/core-concepts/monorepos/running-tasks)
-- [Caching](https://turbo.build/repo/docs/core-concepts/caching)
-- [Remote Caching](https://turbo.build/repo/docs/core-concepts/remote-caching)
-- [Filtering](https://turbo.build/repo/docs/core-concepts/monorepos/filtering)
-- [Configuration Options](https://turbo.build/repo/docs/reference/configuration)
-- [CLI Usage](https://turbo.build/repo/docs/reference/command-line-reference)
+- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
+- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
+- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
+- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
+- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
+- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)

@@ -3,7 +3,7 @@ import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import fs from "fs-extra";
 import type { Transformer, TransformerArgs } from "../types";
 import type { TransformerResults } from "../runner";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 
 // transformer details
 const TRANSFORMER = "add-package-names";
@@ -26,7 +26,7 @@ async function readPkgJson(
 
 export function getNewPkgName({
   pkgPath,
-  pkgName,
+  pkgName
 }: {
   pkgPath: string;
   pkgName?: string;
@@ -50,12 +50,12 @@ export function getNewPkgName({
 
 export async function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): Promise<TransformerResults> {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info('Validating that each package has a unique "name"...');
@@ -65,21 +65,21 @@ export async function transformer({
     project = await getWorkspaceDetails({ root });
   } catch (e) {
     return runner.abortTransform({
-      reason: `Unable to determine package manager for ${root}`,
+      reason: `Unable to determine package manager for ${root}`
     });
   }
 
   const packagePaths: Array<string> = [project.paths.packageJson];
   const packagePromises: Array<Promise<PartialPackageJson | null>> = [
-    readPkgJson(project.paths.packageJson),
+    readPkgJson(project.paths.packageJson)
   ];
 
   // add all workspace package.json files
-  project.workspaceData.workspaces.forEach((workspace) => {
+  for (const workspace of project.workspaceData.workspaces) {
     const pkgJsonPath = workspace.paths.packageJson;
     packagePaths.push(pkgJsonPath);
     packagePromises.push(readPkgJson(pkgJsonPath));
-  });
+  }
 
   // await, and then zip the paths and promise results together
   const packageContent = await Promise.all(packagePromises);
@@ -87,30 +87,69 @@ export async function transformer({
     packagePaths.map((pkgJsonPath, idx) => [pkgJsonPath, packageContent[idx]])
   );
 
-  // wait for all package.json files to be read
-  const names = new Set();
+  // Collect existing names and detect duplicates.
+  const nameToPackages = new Map<string, Array<string>>();
   for (const [pkgJsonPath, pkgJsonContent] of Object.entries(
     packageToContent
   )) {
-    if (pkgJsonContent) {
-      // name is missing or isn't unique
-      if (!pkgJsonContent.name || names.has(pkgJsonContent.name)) {
-        const newName = getNewPkgName({
-          pkgPath: pkgJsonPath,
-          pkgName: pkgJsonContent.name,
-        });
-        runner.modifyFile({
-          filePath: pkgJsonPath,
-          after: {
-            ...pkgJsonContent,
-            name: newName,
-          },
-        });
-        names.add(newName);
-      } else {
-        names.add(pkgJsonContent.name);
-      }
+    if (pkgJsonContent?.name) {
+      const existing = nameToPackages.get(pkgJsonContent.name) || [];
+      existing.push(pkgJsonPath);
+      nameToPackages.set(pkgJsonContent.name, existing);
     }
+  }
+
+  const duplicates = [...nameToPackages.entries()].filter(
+    ([, paths]) => paths.length > 1
+  );
+  if (duplicates.length > 0) {
+    const messages = duplicates.map(([name, paths]) => {
+      const relativePaths = paths.map((p) => path.relative(root, p));
+      return `  - "${name}" found in: ${relativePaths.join(", ")}`;
+    });
+    return runner.abortTransform({
+      reason: `Found packages with duplicate "name" fields:\n${messages.join("\n")}\nPlease resolve these duplicates manually and re-run the codemod.`
+    });
+  }
+
+  // Add names only to packages that are missing one. A generated name can
+  // collide with an existing one (or another generated one), so check them all
+  // before writing anything.
+  const existingNames = new Set(nameToPackages.keys());
+  const newNames: Array<[string, PartialPackageJson, string]> = [];
+  const collisions: Array<string> = [];
+  for (const [pkgJsonPath, pkgJsonContent] of Object.entries(
+    packageToContent
+  )) {
+    if (pkgJsonContent && !pkgJsonContent.name) {
+      const newName = getNewPkgName({
+        pkgPath: pkgJsonPath,
+        pkgName: undefined
+      });
+      if (existingNames.has(newName)) {
+        collisions.push(
+          `  - "${newName}" for ${path.relative(root, pkgJsonPath)}`
+        );
+      }
+      existingNames.add(newName);
+      newNames.push([pkgJsonPath, pkgJsonContent, newName]);
+    }
+  }
+
+  if (collisions.length > 0) {
+    return runner.abortTransform({
+      reason: `Generated names would duplicate existing "name" fields:\n${collisions.join("\n")}\nPlease add a "name" to these packages manually and re-run the codemod.`
+    });
+  }
+
+  for (const [pkgJsonPath, pkgJsonContent, newName] of newNames) {
+    runner.modifyFile({
+      filePath: pkgJsonPath,
+      after: {
+        ...pkgJsonContent,
+        name: newName
+      }
+    });
   }
 
   return runner.finish();
@@ -120,7 +159,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

@@ -13,8 +13,14 @@ pub enum Error {
     ReqwestError(#[from] reqwest::Error),
     #[error("Skipping HTTP Request. Too many failures have occurred.\nLast error: {0}")]
     TooManyFailures(#[from] Box<reqwest::Error>),
+    #[error("Skipping HTTP Request. Too many failures have occurred without an error response.")]
+    RetryExhaustedWithoutError,
+    #[error("Skipping artifact request: rate-limit wait exceeded the retry time budget.")]
+    RateLimitWaitExceeded,
     #[error("Unable to set up TLS.")]
     TlsError(#[source] reqwest::Error),
+    #[error("HTTP client initialization was cancelled (runtime shutting down)")]
+    HttpClientCancelled,
     #[error("Error parsing header: {0}")]
     InvalidHeader(#[from] ToStrError),
     #[error("Error parsing '{url}' as URL: {err}")]
@@ -39,8 +45,8 @@ pub enum Error {
         text: String,
     },
     #[error(
-        "[HTTP {status}] request to {url} returned \"{message}\" \nTry logging in again, or force \
-         a refresh of your token (turbo login --sso-team=your-team --force)."
+        "[HTTP {status}] request to {url} returned \"{message}\" \nTry logging in again with \
+         `turbo login`."
     )]
     InvalidToken {
         status: u16,

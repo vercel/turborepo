@@ -5,28 +5,28 @@ import { transformer } from "../src/transforms/stabilize-ui";
 describe("stabilize-ui", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "stabilize-ui",
+    test: "stabilize-ui"
   });
 
   it("adds no config where there was none", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
-      fixture: "no-config",
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-config"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
-      },
+          outputs: ["dist"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -43,23 +43,23 @@ describe("stabilize-ui", () => {
 
   it("removes config if it was already enabled", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
-      fixture: "enabled",
+    const { root, read, readOptional } = useFixture({
+      fixture: "enabled"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
-      },
+          outputs: ["dist"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -76,24 +76,24 @@ describe("stabilize-ui", () => {
 
   it("renames config if disabled", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
-      fixture: "disabled",
+    const { root, read, readOptional } = useFixture({
+      fixture: "disabled"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
+          outputs: ["dist"]
+        }
       },
-      ui: "stream",
+      ui: "stream"
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -110,22 +110,38 @@ describe("stabilize-ui", () => {
 
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({
-      fixture: "no-turbo-json",
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-turbo-json"
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
     expect(result.fatalError).toBeDefined();
     expect(result.fatalError?.message).toMatch(
-      /No turbo\.json found at .*?\. Is the path correct\?/
+      /No turbo\.json or turbo\.jsonc found at .*?\. Is the path correct\?/
+    );
+  });
+
+  it("errors if both turbo.json and turbo.jsonc exist", () => {
+    const { root, write } = useFixture({ fixture: "no-config" });
+    write("turbo.json", '{ "tasks": {} }');
+    write("turbo.jsonc", '{ "tasks": {} }');
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain(
+      "Found both turbo.json and turbo.jsonc"
     );
   });
 });

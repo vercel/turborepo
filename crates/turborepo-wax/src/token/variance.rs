@@ -7,9 +7,8 @@ use std::{
 use itertools::Itertools as _;
 
 use crate::{
-    encode,
+    PATHS_ARE_CASE_INSENSITIVE, encode,
     token::{self, Separator, Token},
-    PATHS_ARE_CASE_INSENSITIVE,
 };
 
 pub trait Invariance:
@@ -214,11 +213,7 @@ impl Mul<usize> for InvariantSize {
     type Output = Self;
 
     fn mul(self, n: usize) -> Self::Output {
-        InvariantSize(
-            self.0
-                .checked_mul(n)
-                .expect("overflow determining invariant size"),
-        )
+        InvariantSize(self.0.saturating_mul(n))
     }
 }
 
@@ -261,9 +256,7 @@ impl<'t> InvariantText<'t> {
             self
         } else {
             let InvariantText { fragments } = self;
-            let n = (n - 1)
-                .checked_mul(fragments.len())
-                .expect("overflow determining invariant text");
+            let n = (n - 1).saturating_mul(fragments.len());
             let first = fragments.clone();
             InvariantText {
                 fragments: first
@@ -513,19 +506,15 @@ where
         // root in invariant prefixes.
         prefix.push_str(separator);
     }
-    // TODO: Replace `map`, `take_while`, and `flatten` with `map_while` when it
-    // stabilizes.
     prefix.push_str(
         &token::components(tokens)
-            .map(|component| {
+            .map_while(|component| {
                 component
                     .variance::<InvariantText>()
                     .as_invariance()
                     .map(InvariantText::to_string)
                     .map(Cow::into_owned)
             })
-            .take_while(Option::is_some)
-            .flatten()
             .join(separator),
     );
     prefix
@@ -593,9 +582,8 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use crate::token::{
-        self,
+        self, TokenTree,
         variance::{self, Boundedness, InvariantSize, Variance},
-        TokenTree,
     };
 
     #[test]

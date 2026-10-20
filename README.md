@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://turbo.build">
+  <a href="https://turborepo.dev">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/4060187/196936123-f6e1db90-784d-4174-b774-92502b718836.png">
       <img src="https://user-images.githubusercontent.com/4060187/196936104-5797972c-ab10-4834-bd61-0d1e5f442c9c.png" height="128">
@@ -15,15 +15,15 @@
   <a aria-label="Join the community on GitHub" href="https://github.com/vercel/turborepo/discussions"><img alt="" src="https://img.shields.io/badge/Join%20the%20community-blueviolet.svg?style=for-the-badge&logo=turborepo&labelColor=000000&logoWidth=20&logoColor=white"></a>
 </p>
 
-Turborepo is a high-performance build system for JavaScript and TypeScript codebases, written in Rust.
+Turborepo is the build system for coding agents.
 
 ## Getting Started
 
-Visit https://turbo.build/repo to get started with Turborepo.
+Visit https://turborepo.dev to get started with Turborepo.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.
+See [CONTRIBUTING.md](https://github.com/vercel/turborepo/blob/main/CONTRIBUTING.md) for more information.
 
 ## Community
 
@@ -35,20 +35,14 @@ Our [Code of Conduct](https://github.com/vercel/turborepo/blob/main/CODE_OF_COND
 
 ## Who is using Turborepo?
 
-Turborepo is used by the world's leading companies. Check out the [Turborepo Showcase](https://turbo.build/showcase) to learn more.
+Turborepo is used by the world's leading companies. Check out the [Turborepo Showcase](https://turborepo.dev/showcase) to learn more.
 
 ## Updates
 
 Follow [@turborepo](https://x.com/turborepo) on X for project updates.
 
-## Authors
-
-**Turborepo**
-
-- Jared Palmer ([@jaredpalmer](https://x.com/jaredpalmer))
-
 ## Security
 
 If you believe you have found a security vulnerability in Turborepo, we encourage you to responsibly disclose this and not open a public issue. We will investigate all legitimate reports. Email `security@vercel.com` to disclose any security vulnerabilities.
 
-https://vercel.com/security
+https://security.vercel.com/

@@ -1,0 +1,170 @@
+---
+title: Installation
+description: Learn how to get started with Turborepo.
+product: turborepo
+type: guide
+summary: Install Turborepo globally and in your repository.
+prerequisites:
+  - /docs/getting-started
+related:
+  - /docs/getting-started/add-to-existing-repository
+  - /docs/getting-started/examples
+---
+
+Get started with Turborepo in a few moments using:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+```bash title="Terminal"
+pnpm dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="yarn">
+```bash title="Terminal"
+yarn dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="npm">
+```bash title="Terminal"
+npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="bun">
+```bash title="Terminal"
+bunx create-turbo@latest
+```
+
+</Tab>
+
+
+<Tab value="nub">
+```bash title="Terminal"
+nubx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="aube">
+```bash title="Terminal"
+aubx create-turbo@latest
+```
+
+</Tab>
+
+</PackageManagerTabs>
+
+The starter repository will have:
+
+- Two deployable applications
+- Three shared libraries for use in the rest of the monorepo
+
+For more details on the starter, [visit the README for the basic starter on GitHub](https://github.com/vercel/turborepo/tree/main/examples/basic). You can also [use an example](/docs/getting-started/examples) that more closely fits your tooling interests.
+
+## Installing `turbo`
+
+You can install `turbo` globally and pin a version in your repository. When a local binary is installed, the global binary defers to it.
+
+### Global installation
+
+A global install of `turbo` brings flexibility and speed to your local workflows.
+
+<Tabs items={["macOS and Linux", "Windows x64"]}>
+  <Tab value="macOS and Linux">
+
+```sh title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh
+```
+
+  </Tab>
+  <Tab value="Windows x64">
+
+```powershell title="PowerShell"
+irm https://turborepo.dev/install.ps1 | iex
+```
+
+  </Tab>
+</Tabs>
+
+<Callout type="info">
+  See the [support policy](/docs/support-policy#platforms) for supported platforms.
+</Callout>
+
+<Callout type="info">
+  The binaries are also available directly in the [GitHub release assets](https://github.com/vercel/turborepo/releases), starting with 2.11.5. To install an older version, use your package manager.
+</Callout>
+
+After installing `turbo`, you can run commands from your terminal. For example:
+
+- `turbo build`: Run `build` scripts following your repository's dependency graph
+- `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package (without running it)
+- `turbo generate`: Run [Generators](/docs/guides/generating-code) to add new code to your repository
+- `cd apps/docs && turbo build`: Run the `build` script in the `docs` package and its dependencies. For more, visit the [Automatic Package Scoping section](/docs/crafting-your-repository/running-tasks#automatic-package-scoping).
+
+<Callout type="info">
+  `turbo` is an alias for [`turbo run`](/docs/reference/run). For example,
+  `turbo build` and `turbo run build` will both run your `build` task.
+</Callout>
+
+#### Using global `turbo` in CI
+
+To use the global binary in CI, see [Constructing CI](/docs/crafting-your-repository/constructing-ci#global-turbo-in-ci).
+
+### Repository installation
+
+To pin the `turbo` version used in a repository, add it as a `devDependency` at the root:
+
+<PackageManagerTabs>
+
+  <Tab value="pnpm">
+    ```bash title="Terminal"
+    pnpm add turbo --save-dev --ignore-workspace-root-check
+    ```
+
+  </Tab>
+
+  <Tab value="yarn">
+    ```bash title="Terminal"
+    yarn add turbo --dev --ignore-workspace-root-check
+    ```
+
+  </Tab>
+
+  <Tab value="npm">
+  ```bash title="Terminal"
+  npm install turbo --save-dev
+  ```
+
+  </Tab>
+
+  <Tab value="bun">
+  ```bash title="Terminal"
+  bun install turbo --dev
+  ```
+
+  </Tab>
+
+  
+<Tab value="nub">
+  ```bash title="Terminal"
+  nub add turbo --save-dev
+  ```
+
+  </Tab>
+
+<Tab value="aube">
+  ```bash title="Terminal"
+  aube add turbo --save-dev
+  ```
+
+  </Tab>
+
+</PackageManagerTabs>
+
+When you invoke the global binary from this repository, it uses the installed local version instead.

@@ -33,5 +33,5 @@ function oneWayHashWithSalt({ input, salt }: { input: string; salt: string }) {
 export default {
   buildUserAgent,
   oneWayHashWithSalt,
-  defaultConfigPath,
+  defaultConfigPath
 };

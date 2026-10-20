@@ -1,6 +1,4 @@
 #![feature(error_generic_member_access)]
-#![feature(io_error_more)]
-#![feature(assert_matches)]
 #![deny(clippy::all)]
 
 //! Turborepo's library for interacting with source control management (SCM).
@@ -10,32 +8,45 @@
 use std::{
     backtrace::{self, Backtrace},
     collections::HashMap,
+    fmt,
     io::Read,
     process::{Child, Command},
+    sync::OnceLock,
 };
 
 use bstr::io::BufReadExt;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
+    RelativeUnixPathBuf,
+};
 
-pub mod clone;
+pub(crate) mod crlf;
+mod env_local;
 pub mod git;
 mod hash_object;
 mod ls_tree;
 pub mod manual;
 pub mod package_deps;
+mod repo_index;
+pub mod slowest_files;
 mod status;
+pub mod worktree;
+
+#[cfg(test)]
+mod git_index_regression_tests;
+mod git_path;
+#[cfg(test)]
+mod test_utils;
+
+pub use repo_index::{RepoGitIndex, walk_candidate_files};
+pub use slowest_files::{SlowestFile, SlowestFiles};
+pub use turborepo_hash::OidHash;
+pub use worktree::WorktreeInfo;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[cfg(feature = "git2")]
-    #[error("Git error on {1}: {0}")]
-    Git2(
-        #[source] git2::Error,
-        String,
-        #[backtrace] backtrace::Backtrace,
-    ),
     #[error("Git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
@@ -47,6 +58,14 @@ pub enum Error {
     GitVersion(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    #[error("I/O error while hashing {path}: {source}")]
+    HashFile {
+        path: AbsoluteSystemPathBuf,
+        #[source]
+        source: std::io::Error,
+        #[backtrace]
+        backtrace: backtrace::Backtrace,
+    },
     #[error("Path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
     #[error("Could not find git binary")]
@@ -56,6 +75,13 @@ pub enum Error {
         #[from] std::string::FromUtf8Error,
         #[backtrace] backtrace::Backtrace,
     ),
+    #[error("Git path contains non-UTF-8 bytes from {origin}: {path}")]
+    UnsupportedGitPath {
+        origin: &'static str,
+        path: String,
+        #[backtrace]
+        backtrace: backtrace::Backtrace,
+    },
     #[error("Package traversal error: {0}")]
     Ignore(#[from] ignore::Error, #[backtrace] backtrace::Backtrace),
     #[error("Invalid glob: {0}")]
@@ -66,9 +92,36 @@ pub enum Error {
     Walk(#[from] globwalk::WalkError),
     #[error("Unable to resolve base branch. Please set with `TURBO_SCM_BASE`.")]
     UnableToResolveRef,
+    #[error("Invalid git ref `{0}`: refs must not begin with `-`")]
+    InvalidGitRef(String),
 }
 
-pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
+pub type GitHashes = HashMap<RelativeUnixPathBuf, OidHash>;
+
+fn is_os_resource_error(e: &std::io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(24) // EMFILE: too many open files
+        | Some(12) // ENOMEM: out of memory
+    )
+}
+
+fn walk_error_is_resource_exhaustion(e: &globwalk::WalkError) -> bool {
+    // Walk the error source chain looking for an underlying io::Error.
+    let mut source: Option<&dyn std::error::Error> = Some(e);
+    while let Some(err) = source {
+        if let Some(io_err) = err.downcast_ref::<std::io::Error>()
+            && is_os_resource_error(io_err)
+        {
+            return true;
+        }
+        source = err.source();
+    }
+    // wax wraps errors in ways that can break the downcast chain.
+    // Fall back to checking the Display string.
+    let msg = e.to_string();
+    msg.contains("Too many open files") || msg.contains("os error 24")
+}
 
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
@@ -81,9 +134,28 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
-    #[cfg(feature = "git2")]
-    pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
-        Error::Git2(error, error_context, Backtrace::capture())
+    pub(crate) fn hash_file(path: AbsoluteSystemPathBuf, source: std::io::Error) -> Self {
+        tracing::info!(%path, error = %source, "file hashing failed");
+        Error::HashFile {
+            path,
+            source,
+            backtrace: Backtrace::capture(),
+        }
+    }
+
+    /// Returns true if this error indicates OS resource exhaustion (e.g. too
+    /// many open files) where a fallback to manual hashing would also fail.
+    pub fn is_resource_exhaustion(&self) -> bool {
+        match self {
+            Error::Io(e, _) => is_os_resource_error(e),
+            Error::HashFile { source, .. } => is_os_resource_error(source),
+            Error::Walk(e) => walk_error_is_resource_exhaustion(e),
+            _ => false,
+        }
+    }
+
+    pub fn is_unsupported_git_path(&self) -> bool {
+        matches!(self, Error::UnsupportedGitPath { .. })
     }
 }
 
@@ -132,9 +204,14 @@ pub(crate) fn wait_for_success<R: Read, T>(
                 child.try_wait().ok();
             }
         };
+
+        if parse_err.is_unsupported_git_path() {
+            return Err(parse_err);
+        }
+
         let stderr_output = read_git_error_to_string(stderr);
         let stderr_text = stderr_output
-            .map(|stderr| format!(" stderr: {}", stderr))
+            .map(|stderr| format!(" stderr: {stderr}"))
             .unwrap_or_default();
         let err_text = format!(
             "'{}' in {}{}{}",
@@ -154,7 +231,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
     // We successfully parsed, but the command failed.
     let stderr_output = read_git_error_to_string(stderr);
     let stderr_text = stderr_output
-        .map(|stderr| format!(" stderr: {}", stderr))
+        .map(|stderr| format!(" stderr: {stderr}"))
         .unwrap_or_default();
     if matches!(exit_status.code(), Some(129)) {
         return Err(Error::GitVersion(stderr_text));
@@ -164,17 +241,55 @@ pub(crate) fn wait_for_success<R: Read, T>(
             .code()
             .map(|code| code.to_string())
             .unwrap_or("unknown".to_string());
-        format!(" exited with code {}", code)
+        format!(" exited with code {code}")
     };
     let path_text = root_path.as_ref();
-    let err_text = format!("'{}' in {}{}{}", command, path_text, exit_text, stderr_text);
+    let err_text = format!("'{command}' in {path_text}{exit_text}{stderr_text}");
     Err(Error::Git(err_text, Backtrace::capture()))
 }
 
-#[derive(Debug, Clone)]
 pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
+    attrs: OnceLock<Option<crlf::GitAttrs>>,
+    github_actions_remote_base_ref_fallback: bool,
+    /// Optional recorder for the slowest-to-hash files. Set by long-running
+    /// consumers (the file watcher) so they can diagnose a stalled startup.
+    slowest_files: Option<std::sync::Arc<SlowestFiles>>,
+    /// Change-detection results started early by [`SCM::prefetch_changes`].
+    /// Shared by clones so the handle that consumes a result need not be the
+    /// one that started it.
+    change_prefetch: std::sync::Arc<git::ChangePrefetch>,
+}
+
+impl GitRepo {
+    pub(crate) fn git_attrs(&self) -> Option<&crlf::GitAttrs> {
+        self.attrs
+            .get_or_init(|| crlf::GitAttrs::load(&self.root))
+            .as_ref()
+    }
+}
+
+impl Clone for GitRepo {
+    fn clone(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            bin: self.bin.clone(),
+            attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
+            slowest_files: self.slowest_files.clone(),
+            change_prefetch: self.change_prefetch.clone(),
+        }
+    }
+}
+
+impl fmt::Debug for GitRepo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GitRepo")
+            .field("root", &self.root)
+            .field("bin", &self.bin)
+            .finish()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -186,6 +301,10 @@ enum GitError {
 }
 
 impl GitRepo {
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve the structured git-root error without boxing on this error path"
+    )]
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
@@ -193,7 +312,14 @@ impl GitRepo {
         let bin = Self::find_bin()?;
         let root =
             find_git_root(path_in_repo).map_err(|e| GitError::Root(path_in_repo.to_owned(), e))?;
-        Ok(Self { root, bin })
+        Ok(Self {
+            root,
+            bin,
+            attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
+            slowest_files: None,
+            change_prefetch: Default::default(),
+        })
     }
 
     pub fn find_bin() -> Result<AbsoluteSystemPathBuf, which::Error> {
@@ -216,8 +342,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     if !rev_parse.status.success() {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         return Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: {}",
-            stderr
+            "git rev-parse --show-cdup error: {stderr}"
         )));
     }
     let cursor = std::io::Cursor::new(rev_parse.stdout);
@@ -229,8 +354,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     } else {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: no values on stdout. stderr: {}",
-            stderr
+            "git rev-parse --show-cdup error: no values on stdout. stderr: {stderr}"
         )))
     }
 }
@@ -252,15 +376,231 @@ impl SCM {
             })
     }
 
+    /// Creates an SCM instance using a pre-resolved git root, avoiding the
+    /// `git rev-parse --show-cdup` subprocess call that `new` would perform.
+    /// Falls back to `new` if the git binary cannot be found.
+    #[tracing::instrument]
+    pub fn new_with_git_root(
+        path_in_repo: &AbsoluteSystemPath,
+        git_root: AbsoluteSystemPathBuf,
+    ) -> SCM {
+        match GitRepo::find_bin() {
+            Ok(bin) => SCM::Git(GitRepo {
+                root: git_root,
+                bin,
+                attrs: OnceLock::new(),
+                github_actions_remote_base_ref_fallback: false,
+                slowest_files: None,
+                change_prefetch: Default::default(),
+            }),
+            Err(e) => {
+                debug!(
+                    "git binary not found: {}, continuing with manual hashing",
+                    e
+                );
+                SCM::Manual
+            }
+        }
+    }
+
+    pub fn with_github_actions_remote_base_ref_fallback(mut self, enabled: bool) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.github_actions_remote_base_ref_fallback = enabled;
+        }
+        self
+    }
+
+    /// Attach a recorder that tracks the slowest-to-hash files. Long-running
+    /// consumers (the file watcher) use this to diagnose a stalled startup
+    /// caused by hashing a very large file. No-op for `SCM::Manual`.
+    pub fn with_slowest_files_recorder(mut self, recorder: std::sync::Arc<SlowestFiles>) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.slowest_files = Some(recorder);
+        }
+        self
+    }
+
     pub fn is_manual(&self) -> bool {
         matches!(self, SCM::Manual)
+    }
+
+    pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
+        match self {
+            SCM::Git(git) => Some(&git.root),
+            SCM::Manual => None,
+        }
+    }
+
+    /// Builds a repo index scoped to the given packages for one logical
+    /// transaction (e.g. one watch-mode debounce window): tracked state plus
+    /// untracked-file discovery limited to those package prefixes. Untracked
+    /// entries are required so that newly added files still change the
+    /// package hash. Returns `None` for manual SCM mode or on failure;
+    /// callers should fall back to per-package git subprocesses.
+    pub fn build_repo_index_for_packages(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        package_paths: &[AnchoredSystemPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => {
+                let mut index = match RepoGitIndex::new_tracked(git) {
+                    Ok(index) => index,
+                    Err(e) => {
+                        debug!("failed to build repo index: {e}. Hashing per-package.");
+                        return None;
+                    }
+                };
+                let prefixes: Vec<RelativeUnixPathBuf> = package_paths
+                    .iter()
+                    .filter_map(|package_path| {
+                        git.root
+                            .anchor(repo_root.resolve(package_path))
+                            .ok()
+                            .map(|anchored| anchored.to_unix())
+                    })
+                    .collect();
+                if let Err(e) = index.populate_untracked_for_prefixes(git, &prefixes) {
+                    debug!(
+                        "failed to populate untracked files in repo index: {e}. Hashing \
+                         per-package."
+                    );
+                    return None;
+                }
+                Some(index)
+            }
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build a repo-wide git index that caches `git ls-tree` and `git status`
+    /// results. Returns `None` for manual SCM mode or when the package count
+    /// is too small to benefit. Callers should build this once before parallel
+    /// file hashing and pass it through to `get_package_file_hashes`.
+    pub fn build_repo_index(&self, package_count: usize) -> Option<RepoGitIndex> {
+        // The repo index trades 2N subprocess spawns for 2 repo-wide git
+        // commands + a BTreeMap build. For small repos, the overhead of
+        // scanning the entire repo outweighs the subprocess savings.
+        if package_count < 16 {
+            debug!(
+                "skipping repo index for small repo (package_count={})",
+                package_count,
+            );
+            return None;
+        }
+
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built successfully");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index: {}. Will hash per-package.",
+                        e
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build the repo index without a package-count threshold.
+    ///
+    /// This is intended for early, speculative construction: we spawn it on a
+    /// background thread before the package graph is built so the git I/O
+    /// overlaps with package discovery. If the repo turns out to be small the
+    /// caller can simply ignore the result.
+    pub fn build_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index eagerly: {}. Will hash per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build only the tracked portion of the repo index.
+    ///
+    /// This is intended for speculative startup work on the `turbo run` path.
+    /// Untracked-file discovery can be layered on later once the selected
+    /// package set is known.
+    pub fn build_tracked_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_tracked(git) {
+                Ok(index) => {
+                    debug!("tracked repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build tracked repo git index eagerly: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build the full repo index (tracked + untracked) using parallel git
+    /// subprocesses for the tracked index, and a race between
+    /// `walk_candidate_files` and `git ls-files --others` for untracked
+    /// discovery. The race ensures optimal performance on both macOS
+    /// (where the walk wins) and Linux (where ls-files wins).
+    pub fn build_repo_index_from_subprocesses(
+        &self,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_from_subprocess_and_walk(git, prefixes) {
+                Ok(index) => {
+                    debug!("repo git index built from subprocess + walk race");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index from subprocesses: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    pub fn populate_repo_index_untracked(
+        &self,
+        repo_index: &mut RepoGitIndex,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Result<(), Error> {
+        match self {
+            SCM::Git(git) => repo_index.populate_untracked_for_prefixes(git, prefixes),
+            SCM::Manual => Ok(()),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
-        assert_matches::assert_matches,
+        assert_matches,
         io::Read,
         process::{Command, Stdio},
     };
@@ -268,7 +608,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::find_git_root;
-    use crate::{wait_for_success, Error};
+    use crate::{Error, wait_for_success};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -373,5 +713,26 @@ mod tests {
         // We should, however, have our injected error of "any error" in the error
         // message.
         assert!(err.to_string().contains("any error"));
+    }
+
+    #[test]
+    fn test_wait_for_success_preserves_unsupported_git_path_errors() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let mut cmd = Command::new("git")
+            .arg("--version")
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stderr = cmd.stderr.take().unwrap();
+        let parse_result: Result<(), super::Error> = Err(Error::UnsupportedGitPath {
+            origin: "test git path",
+            path: "bad-\\xff".to_string(),
+            backtrace: std::backtrace::Backtrace::capture(),
+        });
+
+        let err =
+            wait_for_success(cmd, &mut stderr, "git --version", &root, parse_result).unwrap_err();
+        assert_matches!(err, Error::UnsupportedGitPath { .. });
     }
 }

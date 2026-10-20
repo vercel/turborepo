@@ -1,6 +1,8 @@
 {
   "extends": "@turbo/tsconfig/base.json",
   "compilerOptions": {
-    "rootDir": "."
+    "rootDir": ".",
+    "strictNullChecks": true,
+    "target": "ES2020"
   }
 }

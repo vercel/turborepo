@@ -1,0 +1,23 @@
+{
+  "$schema": "../../docs/public/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "command": ["pnpm", "exec", "tsdown"]
+    },
+    "test": {
+      "command": ["pnpm", "exec", "jest"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
+    }
+  }
+}

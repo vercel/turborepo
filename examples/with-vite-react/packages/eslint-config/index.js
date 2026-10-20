@@ -1,19 +1,14 @@
-module.exports = {
-  env: {
-    node: true,
+const eslint = require("@eslint/js");
+const eslintConfigPrettier = require("eslint-config-prettier");
+const tseslint = require("typescript-eslint");
+
+module.exports = tseslint.config(
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+  eslintConfigPrettier,
+  {
+    rules: {
+      "@typescript-eslint/no-non-null-assertion": "off",
+    },
   },
-  parser: "@typescript-eslint/parser",
-  extends: [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended",
-    "prettier",
-  ],
-  plugins: ["@typescript-eslint"],
-  parserOptions: {
-    sourceType: "module",
-    ecmaVersion: 2020,
-  },
-  rules: {
-    "@typescript-eslint/no-non-null-assertion": "off",
-  },
-};
+);

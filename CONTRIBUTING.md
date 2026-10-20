@@ -4,11 +4,13 @@ Thank you for your interest in contributing to Turborepo!
 - [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
-  - [TLS implementation](#tls-implementation)
+  - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
+- [Running Rust checks](#running-rust-checks)
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
+  - [Links in error messages](#links-in-error-messages)
   - [Verbose logging](#verbose-logging)
   - [Crash logs](#crash-logs)
   - [Terminal UI debugging](#terminal-ui-debugging)
@@ -17,20 +19,23 @@ Thank you for your interest in contributing to Turborepo!
   - [Contributing to an existing example](#contributing-to-an-existing-example)
   - [Philosophy for new examples](#philosophy-for-new-examples)
     - [Designing a new example](#designing-a-new-example)
-    - [Testing examples](#testing-examples)
+  - [Testing examples](#testing-examples)
 
 ## General dependencies
 
-You will need to have these dependences installed on your machine to work on this repository:
+You will need to have these dependencies installed on your machine to work on this repository:
 
-- [Rust](https://www.rust-lang.org/tools/install) ([Repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
-- [NodeJS](https://nodejs.org/en) v20
-- [pnpm](https://pnpm.io/) v8
+- [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
+- [Node.js](https://nodejs.org/en) v24
+- [pnpm](https://pnpm.io/) v12
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
+- [Zig](https://ziglang.org/download/) 0.17.x — required to build `libghostty-vt` for the TUI (`libghostty-vt-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
 
 ### Optional dependencies
 
+- [Bun](https://bun.sh) is required to build `@turbo/gen` (the `turbo gen` code generator). The `@turbo/gen` package is compiled into a standalone binary using `bun build --compile`.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) is required to run the Python workspace integration tests (`crates/turborepo/tests/uv_workspace_test.rs`); tests that execute uv skip when it is not installed.
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
   - Linux: `sudo apt update && sudo apt install jq zstd`
@@ -43,13 +48,19 @@ In general, there are two major areas in the repository:
 
 - The `crates` directory with the Rust code for the `turbo` binary
 - The `packages` directory with JavaScript packages
-- the `examples` directory with examples of how to use Turborepo with other tools and frameworks
+- The `examples` directory with examples of how to use Turborepo with other tools and frameworks
 - The `docs` directory with the documentation for Turborepo
 
 ## Building Turborepo
 
 1. Run `pnpm install` at the root of the repository
-2. Run `cargo build`
+2. Run `cargo build -p turbo`
+
+The focused `cargo build -p turbo` builds just the `turbo` CLI and its
+dependencies, skipping the workspace's other top-level targets (such as the
+LSP, schema generator, and N-API addon) that you don't need for CLI
+development. Use a plain `cargo build` when you want to build and verify every
+workspace member.
 
 ### TLS Implementation
 
@@ -62,6 +73,18 @@ and `rustls-tls` features.
 
 By default, the `rustls-tls` feature is selected so that `cargo build` works
 out of the box. If you wish to select `native-tls`, you may do so by running `cargo build --no-default-features --features native-tls`.
+
+### OpenTelemetry Observability
+
+Turborepo includes OpenTelemetry (OTel) support for exporting metrics in default builds.
+
+If you need to build without OTel support, use:
+
+```bash
+cargo build -p turbo --no-default-features --features rustls-tls
+```
+
+`experimentalObservability` is still gated by `futureFlags.experimentalObservability` in `turbo.json`.
 
 ## Running tests
 
@@ -85,30 +108,26 @@ cargo test -p <module>
 ```
 
 - Integration tests
-  ```bash
-  pnpm test -- --filter=turborepo-tests-integration
-  ```
-- A single integration test
-  e.g to run everything in `turborepo-tests/integration/tests/run-summary`:
 
   ```bash
-  # Build `turbo` first because the next command doesn't run through `turbo`
-  pnpm -- turbo run build --filter=cli
-  pnpm test -F turborepo-tests-integration -- "run-summary"
+  cargo test -p turbo
   ```
 
-- Updating integration tests
+- A single integration test file
 
   ```bash
-  turbo run build --filter=cli
-  pnpm --filter turborepo-tests-integration test:interactive
+  cargo test -p turbo --test force_test
   ```
 
-  You can pass a test name to run a single test, or a directory to run all tests in that directory.
+## Running Rust checks
 
-  ```bash
-  pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
-  ```
+Run Clippy with:
+
+```bash
+cargo lint
+```
+
+Rust targets deny `.unwrap()`, `.unwrap_err()`, `.unwrap_none()`, and `.expect()` by default. Tests are exempt from that panic-extraction policy, but still linted for other Clippy warnings. Existing implementation-code violations are temporarily allowed at crate roots while they are removed incrementally.
 
 ## Manually testing `turbo`
 
@@ -125,10 +144,10 @@ devturbo run build --skip-infer
 A non-exhaustive list of things to check on:
 
 - Features related to your changes
-- Test with and without daemon
+- Test with and without daemon (daemon is deprecated for `turbo run` but still used by `turbo watch`)
 - Installation scenarios
   - Global only. `turbo` is installed as global binary without a local `turbo` in repository.
-  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. turbo` is invoked via a root package
+  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. `turbo` is invoked via a root package
     script.
   - Global and local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to
     local `turbo`
@@ -145,6 +164,42 @@ There are many open-source Turborepos out in the community that you can test wit
 
 ## Debugging tips
 
+## Logging & Output
+
+All output in Turborepo flows through `turborepo-log`. Use the following decision tree when adding new output:
+
+| What you're writing              | Use this                                                               | Why                                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Internal debug/trace info        | `tracing::{debug,trace,info,warn}!`                                    | Developer diagnostics, filtered by `TURBO_LOG_VERBOSITY`. Not user-facing.                                                                 |
+| User-facing warning/error/status | `turborepo_log::{warn,error,info}(Source::turbo(Subsystem::X), ...)`   | Renders in both terminal and TUI via sinks. Structured, sanitized.                                                                         |
+| Task child process output        | `TaskHandle::task_output(channel, bytes)`                              | Routes through `GroupingLayer` for grouped/passthrough buffering, then to sinks for rendering. `TerminalSink` adds per-line task prefixes. |
+| Task-scoped error/warning        | `task_handle.emit(LogEvent::new(Level::Error, Source::task(id), msg))` | Appears inline in the task's output stream (grouped with child process bytes).                                                             |
+| Cache status message             | `task_handle.task_output(OutputChannel::Stdout, message.as_bytes())`   | Plain text, rendered with task prefix by `TerminalSink`. Also call `TaskSender::status()` for TUI lifecycle.                               |
+
+### Adding a new subsystem
+
+To emit logs from a new area of the codebase, add a variant to the `Subsystem` enum in `crates/turborepo-log/src/event.rs`. The enum is `#[non_exhaustive]` so this is non-breaking. Each variant maps to a lowercase string via the `Display` impl.
+
+### Architecture
+
+```
+Task Executor / Commands
+        |
+   GroupingLayer          <- per-task buffering (passthrough vs grouped)
+        |
+     Logger               <- broadcasts to all sinks
+        |
+   +---------+---------+
+   |         |         |
+Terminal   TuiSink   FileSink
+ Sink
+```
+
+- `TerminalSink`: Owns line prefixing (ColorSelector, per-task line buffers), CI group markers, and color rendering.
+- `TuiSink`: Routes task output to the TUI's task panes, normalizes `\n` to `\r\n` for the VT100 parser.
+- `FileSink` / `CollectorSink`: Structured JSON capture.
+- `GroupingLayer`: Manages per-task buffering. In passthrough mode (stream), events flow immediately. In grouped mode, events buffer per-task and flush atomically on task completion.
+
 ### Links in error messages
 
 Many of Turborepo's error messages include links to information or documentation to help end users.
@@ -157,7 +212,7 @@ TURBO_SITE="http://localhost:3000" cargo build
 
 ### Verbose logging
 
-Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for.
+Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for:
 
 ```bash
 turbo build --vvv
@@ -171,19 +226,27 @@ In the event of a crash, Rust's crash logs will be written to your temp director
 
 The architecture of the Terminal UI makes for a tricky debugging experience. Because the UI writes to the console through `stdout` in a specific way, using `println!()` statements won't work as expected.
 
-Instead, use `eprintln!()` to print to `stdout` and output `stdout` to a file:
+Instead, use `eprintln!()` to print to `stderr` and redirect `stderr` to a file:
 
 ```bash
 # devturbo is an alias to the debug binary of `turbo` in this case
-devturbo run build --ui=tui --skip-infer 2&> ~/tmp/logs.txt
+devturbo run build --ui=tui --skip-infer 2> ~/tmp/logs.txt
 ```
 
 > [!IMPORTANT]
 > The `--skip-infer` flag is required so that `turbo` doesn't try to use a locally installed binary of `turbo`. Forgetting to use this flag will cause `devturbo` to defer to the binary installed into the repository rather than the one you're developing.
 
+On Linux, the black-box Terminal UI tests run as part of the standard Rust suite. Run them directly with:
+
+```bash
+cargo nextest run --package turbo --test tui_test
+```
+
+Known TUI regressions are marked ignored. Reproduce them with `--run-ignored ignored-only`.
+
 ## Publishing `turbo` to the npm registry
 
-See [the publishing guide](./release.md).
+See [the publishing guide](./RELEASE.md).
 
 ## Contributing to examples
 
@@ -224,7 +287,7 @@ Key characteristics of a great example include:
 - One technology added to the `basic` example
 - An updated README at the root of the example directory. Make sure to include any steps required to run the example
 - All tasks in `turbo.json` in the example run successfully without any code changes needed
-- Works with every package manager listed in our [Support Policy](https://turbo.build/repo/docs/getting-started/support-policy#package-managers)
+- Works with every package manager listed in our [Support Policy](https://turborepo.dev/docs/getting-started/support-policy#package-managers)
 
 Once you've created your example (with prior approval, as discussed above), you can submit a pull request to the repository.
 

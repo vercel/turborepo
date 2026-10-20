@@ -1,0 +1,11 @@
+{
+  "name": "turbo-prune-patch-repro",
+  "private": true,
+  "packageManager": "yarn@4.18.1",
+  "workspaces": [
+    "packages/*"
+  ],
+  "resolutions": {
+    "debug@npm:^4.0.0": "patch:debug@npm%3A4.4.3#~/.yarn/patches/debug-npm-4.4.3.patch"
+  }
+}

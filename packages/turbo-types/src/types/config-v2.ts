@@ -1,12 +1,23 @@
 export type OutputLogs =
   | "full"
+  | "none"
   | "hash-only"
   | "new-only"
-  | "errors-only"
-  | "none";
-export type EnvMode = "strict" | "loose";
-export type UI = "tui" | "stream";
-
+  | "errors-only";
+export type EnvMode = "loose" | "strict";
+export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
+export type ToolPolicy = "managed" | "verify-system" | "skip";
+export type DependencyPolicy = "locked" | "skip";
+export type ArtifactPlatform =
+  | "macos-x64"
+  | "macos-arm64"
+  | "linux-x64-gnu"
+  | "linux-arm64-gnu"
+  | "linux-x64-musl"
+  | "linux-arm64-musl"
+  | "windows-x64"
+  | "windows-arm64";
+export type ArtifactFormat = "binary" | "tar" | "tar-gz" | "zip";
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
@@ -14,14 +25,14 @@ export type RelativeUnixPath = string;
 export type EnvWildcard = string;
 
 export interface BaseSchema {
-  /** @defaultValue `https://turbo.build/schema.v2.json` */
+  /** @defaultValue `https://turborepo.dev/schema.v2.json` */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#tasks
+   * Documentation: https://turborepo.dev/docs/reference/configuration#tasks
    *
    * @defaultValue `{}`
    */
@@ -53,8 +64,8 @@ export interface WorkspaceSchema extends BaseSchema {
    */
   extends: Array<string>;
   /**
-   * Used to tag a package for boundaries rules. Boundaries rules can restrict
-   * which packages a tag group can import or be imported by.
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
    */
   tags?: Array<string>;
   /**
@@ -64,6 +75,20 @@ export interface WorkspaceSchema extends BaseSchema {
 }
 
 export interface RootSchema extends BaseSchema {
+  /**
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
+   */
+  tags?: Array<string>;
+
+  /**
+   * Controls whether turbo maintains a root AGENTS.md block for AI agents.
+   * Set to true to opt in to future automatic updates.
+   *
+   * @defaultValue `false`
+   */
+  agentGuidance?: boolean;
+
   /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
@@ -78,7 +103,7 @@ export interface RootSchema extends BaseSchema {
    * that are not represented in the traditional dependency graph
    * (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globaldependencies
+   * Documentation: https://turborepo.dev/docs/reference/configuration#globaldependencies
    *
    * @defaultValue `[]`
    */
@@ -89,17 +114,17 @@ export interface RootSchema extends BaseSchema {
    *
    * The variables included in this list will affect all task hashes.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalenv
+   * Documentation: https://turborepo.dev/docs/reference/configuration#globalenv
    *
    * @defaultValue `[]`
    */
   globalEnv?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#globalpassthroughenv
+   * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
    * @defaultValue `null`
    */
@@ -108,7 +133,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
    *
    * @defaultValue `{}`
    */
@@ -117,14 +142,26 @@ export interface RootSchema extends BaseSchema {
   /**
    * Enable use of the UI for `turbo`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#ui
+   * Documentation: https://turborepo.dev/docs/reference/configuration#ui
    *
    * @defaultValue `"stream"`
    */
   ui?: UI;
 
   /**
-   * Disable check for `packageManager` in root `package.json`
+   * Set/limit the maximum concurrency for task execution. Must be an integer greater than or equal to `1` or a percentage value like `50%`.
+   *
+   *  - Use `1` to force serial execution (one task at a time).
+   *  - Use `100%` to use all available logical processors.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#concurrency
+   *
+   * @defaultValue `"10"`
+   */
+  concurrency?: string;
+
+  /**
+   * Disable package manager declaration checks in root `package.json`.
    *
    * This is highly discouraged as it leaves `turbo` dependent on system
    * configuration to infer the correct package manager.
@@ -138,16 +175,38 @@ export interface RootSchema extends BaseSchema {
   /**
    * Specify the filesystem cache directory.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#cachedir
+   * Documentation: https://turborepo.dev/docs/reference/configuration#cachedir
    *
    * @defaultValue `".turbo/cache"`
    */
   cacheDir?: RelativeUnixPath;
 
   /**
-   * Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
+   * Maximum age of local cache entries before automatic eviction.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#daemon
+   * Accepts a human-readable duration string (e.g. `"7d"`, `"24h"`, `"2w"`).
+   * Set to `"0"` to disable eviction (the default).
+   * Entries older than this value are removed at the start of each run.
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxAge?: string;
+
+  /**
+   * Maximum total size of the local filesystem cache.
+   *
+   * Accepts a human-readable size string (e.g. `"10GB"`, `"500MB"`).
+   * When exceeded, the oldest entries are evicted until the cache is
+   * under the limit. Set to `"0"` to disable (the default).
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxSize?: string;
+
+  /**
+   * Deprecated: The daemon is no longer used for `turbo run` and this option will be removed in version 3.0.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#daemon
    *
    * @defaultValue `false`
    */
@@ -159,7 +218,7 @@ export interface RootSchema extends BaseSchema {
    * - `"strict"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
    * - `"loose"`: Allow all environment variables for the process to be available.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#envmode
+   * Documentation: https://turborepo.dev/docs/reference/configuration#envmode
    *
    * @defaultValue `"strict"`
    */
@@ -169,9 +228,459 @@ export interface RootSchema extends BaseSchema {
    * Configuration for `turbo boundaries`. Allows users to restrict a package's dependencies and dependents
    */
   boundaries?: RootBoundariesConfig;
+
+  /**
+   * When set to `true`, disables the update notification that appears when a new version of `turbo` is available.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#noupdatenotifier
+   *
+   * @defaultValue `false`
+   */
+  noUpdateNotifier?: boolean;
+
+  /**
+   * Global configuration block.
+   *
+   * When `futureFlags.globalConfiguration` is enabled, global settings
+   * like `inputs`, `env`, `ui`, etc. are placed here instead of at the
+   * top level.
+   */
+  global?: GlobalConfig;
+
+  /**
+   * Opt into breaking changes prior to major releases, experimental features, and beta features.
+   *
+   * @defaultValue `{}`
+   */
+  futureFlags?: FutureFlags;
+
+  /**
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
+   * and requires `futureFlags.experimentalSetup`.
+   */
+  setup?: SetupPolicy;
+}
+
+export interface FutureFlags {
+  /**
+   * When using `outputLogs: "errors-only"`, show task hashes when tasks
+   * complete successfully. This provides visibility into which tasks are
+   * running without showing full output logs.
+   *
+   * @defaultValue `false`
+   */
+  errorsOnlyShowHash?: boolean;
+  /**
+   * Enable experimental OpenTelemetry exporter support.
+   *
+   * When enabled, Turborepo will honor the `experimentalObservability`
+   * configuration block (if present) to send run summaries to an
+   * observability backend.
+   *
+   * @defaultValue `false`
+   */
+  experimentalObservability?: boolean;
+  /**
+   * Enforce a minimum length of 32 bytes for
+   * `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is
+   * enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force
+   * tag collision feasible.
+   *
+   * @defaultValue `false`
+   */
+  longerSignatureKey?: boolean;
+  /**
+   * Use task-level `inputs` globs to determine which tasks are affected by
+   * changed files when running with `--affected`. When enabled, only tasks
+   * whose declared inputs match the changed files are selected, rather than
+   * selecting all tasks in changed packages.
+   *
+   * @defaultValue `false`
+   */
+  affectedUsingTaskInputs?: boolean;
+  /**
+   * When GitHub Actions reports a base branch that is not available as a
+   * local ref, fall back to `origin/<branch>`. This supports detached
+   * checkouts where only remote-tracking refs are present.
+   *
+   * @defaultValue `false`
+   */
+  githubActionsRemoteBaseRefFallback?: boolean;
+  /**
+   * Use task-level `inputs` globs to determine which tasks to re-run when
+   * files change in `turbo watch`. When enabled, only tasks whose declared
+   * inputs match the changed files are re-executed, rather than re-running
+   * all tasks in changed packages.
+   *
+   * @defaultValue `false`
+   */
+  watchUsingTaskInputs?: boolean;
+  /**
+   * Include files matching `globalDependencies` globs in the `turbo prune`
+   * output. Without this flag, `globalDependencies` entries are preserved in
+   * the pruned `turbo.json` but the actual files are not copied.
+   *
+   * @defaultValue `false`
+   */
+  pruneIncludesGlobalFiles?: boolean;
+  /**
+   * Resolve `--filter` at the task level instead of the package level.
+   * Git-range filters (e.g. `--filter=[main]`) will match against task
+   * `inputs` globs, and the `...` dependency/dependent syntax will
+   * traverse the task graph in addition to the package graph.
+   *
+   * @defaultValue `false`
+   */
+  filterUsingTasks?: boolean;
+  /**
+   * Select requested task entrypoints according to whether the task resolves
+   * a command in the repository. When any package can run a requested task,
+   * packages without a command are skipped as entrypoints. Tasks with no
+   * command anywhere remain available for graph-only orchestration.
+   *
+   * @defaultValue `false`
+   */
+  strictTaskEntrypointSelection?: boolean;
+  /**
+   * Move global configuration keys under a top-level `global` key.
+   *
+   * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
+   * etc. must be placed inside the `global` block with new names:
+   * `globalDependencies` becomes `inputs`, `globalEnv` becomes `env`,
+   * and `globalPassThroughEnv` becomes `passThroughEnv`.
+   *
+   * @defaultValue `false`
+   */
+  globalConfiguration?: boolean;
+  /**
+   * Treat the crates of a Cargo workspace as Turborepo packages.
+   *
+   * When enabled, Rust crates are discovered via `cargo metadata` and
+   * participate in the package graph: they resolve in `--filter`
+   * expressions, propagate `--affected`, and appear in `turbo query`.
+   * Filtered builds execute each selected crate. Unfiltered builds prefer
+   * entrypoints, falling back to libraries when no entrypoints exist.
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`, and
+   * `format` tasks are selectable per crate with `--filter`. An
+   * unfiltered run executes one workspace-wide Cargo verification command;
+   * filtered runs use the selected crates, or the workspace command when the
+   * workspace package is selected directly.
+   *
+   * All crates implicitly register `build` and the verification tasks;
+   * entrypoints with one binary also register `run` and `dev`. The workspace
+   * package registers the verification tasks. Normal task definitions
+   * configure or override these defaults, and package configuration can
+   * exclude them with `extends: false`.
+   *
+   * Task caching uses Cargo-derived inputs and caches entrypoint build
+   * deliverables. Library builds and formatting default to uncached. This
+   * feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalCargoWorkspaces?: boolean;
+
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python packages are discovered from the root
+   * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
+   * package graph: they resolve in `--filter` expressions, propagate
+   * `--affected`, and appear in `turbo query`. Buildable packages register `build`
+   * (`uv build --package`), and all packages register `format` and `check`.
+   * Direct pytest declarations register ownership-scoped `test` tasks; the
+   * user-named workspace package registers workspace-wide quality tasks.
+   * External dependencies hash from `uv.lock` per
+   * package, and `turbo prune` produces a reachability-pruned `uv.lock`
+   * and root `pyproject.toml`. uv is the only supported Python package
+   * manager. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalPythonWorkspaces?: boolean;
+
+  /**
+   * Treat the modules listed in a `go.work` file as Turborepo packages.
+   *
+   * When enabled, Go modules are discovered from the repository-root
+   * `go.work` via the Go toolchain and participate in the package graph:
+   * they resolve in `--filter` expressions, propagate `--affected`, and
+   * appear in `turbo query`. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalGoWorkspaces?: boolean;
+
+  /**
+   * Opt into experimental setup features that are still in progress.
+   *
+   * All future setup surfaces must require this flag. The `turbo.lock`
+   * format is unstable. This parser-only foundation ships no setup commands
+   * and does not interpret `turbo.lock` or change run or hash behavior.
+   *
+   * @defaultValue `false`
+   */
+  experimentalSetup?: boolean;
+}
+
+export interface GlobalConfig {
+  /**
+   * A list of globs for files that implicitly affect all tasks.
+   *
+   * These files are prepended to every task's `inputs` instead of being
+   * included in the global hash. Tasks can exclude specific files via
+   * negation globs (e.g. `"inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/tsconfig.json"]`).
+   *
+   * Replaces `globalDependencies` when `futureFlags.globalConfiguration` is enabled.
+   *
+   * @defaultValue `[]`
+   */
+  inputs?: Array<string>;
+
+  /**
+   * A list of environment variables for implicit global hash dependencies.
+   *
+   * Replaces `globalEnv` when `futureFlags.globalConfiguration` is enabled.
+   *
+   * @defaultValue `[]`
+   */
+  env?: Array<EnvWildcard>;
+
+  /**
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key.
+   *
+   * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
+   *
+   * @defaultValue `null`
+   */
+  passThroughEnv?: null | Array<EnvWildcard>;
+
+  /**
+   * Configuration options that control how turbo interfaces with the remote cache.
+   *
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
+   *
+   * @defaultValue `{}`
+   */
+  remoteCache?: RemoteCache;
+
+  /**
+   * Enable use of the UI for `turbo`.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#ui
+   *
+   * @defaultValue `"stream"`
+   */
+  ui?: UI;
+
+  /**
+   * Set/limit the maximum concurrency for task execution.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#concurrency
+   *
+   * @defaultValue `"10"`
+   */
+  concurrency?: string;
+
+  /**
+   * Disable package manager declaration checks in root `package.json`.
+   *
+   * @defaultValue `false`
+   */
+  dangerouslyDisablePackageManagerCheck?: boolean;
+
+  /**
+   * Specify the filesystem cache directory.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#cachedir
+   *
+   * @defaultValue `".turbo/cache"`
+   */
+  cacheDir?: RelativeUnixPath;
+
+  /**
+   * Maximum age of local cache entries before automatic eviction.
+   *
+   * Accepts a human-readable duration string (e.g. `"7d"`, `"24h"`, `"2w"`).
+   * Set to `"0"` to disable eviction (the default).
+   * Entries older than this value are removed at the start of each run.
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxAge?: string;
+
+  /**
+   * Maximum total size of the local filesystem cache.
+   *
+   * Accepts a human-readable size string (e.g. `"10GB"`, `"500MB"`).
+   * When exceeded, the oldest entries are evicted until the cache is
+   * under the limit. Set to `"0"` to disable (the default).
+   *
+   * @defaultValue `"0"`
+   */
+  cacheMaxSize?: string;
+
+  /**
+   * Deprecated: The daemon is no longer used for `turbo run`.
+   *
+   * @defaultValue `false`
+   */
+  daemon?: boolean;
+
+  /**
+   * Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#envmode
+   *
+   * @defaultValue `"strict"`
+   */
+  envMode?: EnvMode;
+
+  /**
+   * When set to `true`, disables the update notification.
+   *
+   * @defaultValue `false`
+   */
+  noUpdateNotifier?: boolean;
+}
+
+export interface SetupPolicy {
+  /**
+   * How `turbo setup` prepares tools for every toolchain.
+   *
+   * - `"managed"`: Provision the locked version for this repository.
+   * - `"verify-system"`: Use an installed tool after verifying that it matches the locked version.
+   * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
+   *
+   * Without `setup`, `turbo setup` infers what to prepare from native
+   * declaration files, and detected tools are managed. Toolchain keys
+   * override root values.
+   */
+  tools?: ToolPolicy;
+
+  /**
+   * How `turbo setup` prepares dependencies for every toolchain.
+   *
+   * - `"locked"`: Install from the committed ecosystem lockfile without changing it.
+   * - `"skip"`: Do not install dependencies.
+   */
+  dependencies?: DependencyPolicy;
+
+  /** Setup policy for the JavaScript toolchain. */
+  javascript?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`. */
+  rust?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Python toolchain. Requires `futureFlags.experimentalPythonWorkspaces`. */
+  python?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`. */
+  go?: ToolchainSetupPolicy;
+
+  /** Tools that no built-in adapter manages, keyed by tool ID. */
+  additionalTools?: Record<string, AdditionalTool>;
+
+  /**
+   * Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the
+   * official URLs, and environment variables override these values.
+   */
+  mirrors?: SetupMirrors;
+}
+
+export interface SetupMirrors {
+  /** Replaces `https://nodejs.org/dist` for Node.js release metadata and archives. */
+  node?: string;
+
+  /** Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn packages. */
+  npmRegistry?: string;
+
+  /** Replaces the `https://github.com` origin for Bun releases, keeping official paths. */
+  bun?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for uv, keeping official paths. */
+  uv?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for CPython, keeping official paths. */
+  python?: string;
+
+  /** Replaces `https://go.dev` and `https://dl.google.com` for Go, keeping official paths. */
+  go?: string;
+
+  /** Replaces the `https://static.rust-lang.org` origin for rustup and Rust, keeping official paths. */
+  rust?: string;
+}
+
+export interface AdditionalTool {
+  /** The exact version of the tool. Ranges and channels are not allowed. */
+  version: string;
+
+  /** Artifacts keyed by platform. Platforms without an artifact are unsupported. */
+  artifacts: Partial<Record<ArtifactPlatform, AdditionalToolArtifact>>;
+}
+
+export interface AdditionalToolArtifact {
+  /** HTTPS download URL without credentials, a query, or a fragment. */
+  url: string;
+
+  /** Lowercase hex SHA-256 digest of the downloaded bytes. */
+  sha256: string;
+
+  /** `binary` for a single executable file, or the archive format. */
+  format: ArtifactFormat;
+
+  /** The single top-level archive directory. Omit it for archives without one. */
+  rootPrefix?: string;
+
+  /** Executable names mapped to paths relative to `rootPrefix` or the archive top level. */
+  executables: Record<string, string>;
+}
+
+export interface ToolchainSetupPolicy {
+  /** How `turbo setup` prepares this toolchain's tools. */
+  tools?: ToolPolicy;
+
+  /** How `turbo setup` prepares this toolchain's dependencies. */
+  dependencies?: DependencyPolicy;
+}
+
+export interface StartupInput {
+  mode: "startup";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface JitInput {
+  mode: "jit";
+  globs?: Array<string>;
+  withDefaults?: boolean;
+}
+
+export interface DependencyOutputsInput {
+  mode: "dependencyOutputs";
+  from?: Array<string>;
+  globs?: Array<string>;
 }
 
 export interface Pipeline {
+  /**
+   * A human-readable description of what this task does.
+   *
+   * This field is for documentation purposes only and does not affect
+   * task execution or caching behavior.
+   */
+  description?: string;
+
+  /**
+   * Arbitrary string labels for this task. Package configurations replace
+   * inherited tags by default; an empty array clears them. Include
+   * `$TURBO_EXTENDS$` to append labels to inherited tags.
+   *
+   * @defaultValue `[]`
+   */
+  tags?: Array<string>;
+
   /**
    * The list of tasks that this task depends on.
    *
@@ -184,7 +693,7 @@ export interface Pipeline {
    * same package (e.g. "A package's test and lint commands depend on its own build being
    * completed first.")
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#dependson
+   * Documentation: https://turborepo.dev/docs/reference/configuration#dependson
    *
    * @defaultValue `[]`
    */
@@ -198,7 +707,7 @@ export interface Pipeline {
    * You no longer need to use the $ prefix.
    * (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#env
+   * Documentation: https://turborepo.dev/docs/reference/configuration#env
    *
    * @defaultValue `[]`
    */
@@ -209,7 +718,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#passthroughenv
+   * Documentation: https://turborepo.dev/docs/reference/configuration#passthroughenv
    *
    * @defaultValue `null`
    */
@@ -222,7 +731,7 @@ export interface Pipeline {
    * produce no artifacts other than logs (such as linters). Logs are always treated as a
    * cacheable artifact and never need to be specified.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#outputs
+   * Documentation: https://turborepo.dev/docs/reference/configuration#outputs
    *
    * @defaultValue `[]`
    */
@@ -233,7 +742,7 @@ export interface Pipeline {
    *
    * Setting cache to false is useful for long-running "watch" or development mode tasks.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#cache
+   * Documentation: https://turborepo.dev/docs/reference/configuration#cache
    *
    * @defaultValue `true`
    */
@@ -250,11 +759,11 @@ export interface Pipeline {
    *
    * If omitted or empty, all files in the package are considered as inputs.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#inputs
+   * Documentation: https://turborepo.dev/docs/reference/configuration#inputs
    *
    * @defaultValue `[]`
    */
-  inputs?: Array<string>;
+  inputs?: Array<string | StartupInput | JitInput | DependencyOutputsInput>;
 
   /**
    * Output mode for the task.
@@ -269,7 +778,7 @@ export interface Pipeline {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turbo.build/repo/docs/reference/run#--output-logs-option
+   * Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
    *
    * @defaultValue `"full"`
    */
@@ -280,7 +789,7 @@ export interface Pipeline {
    * turbo that this is a long-running task and will ensure that other tasks
    * cannot depend on it.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#persistent
+   * Documentation: https://turborepo.dev/docs/reference/configuration#persistent
    *
    * @defaultValue `false`
    */
@@ -291,7 +800,7 @@ export interface Pipeline {
    * Interactive tasks must be marked with "cache": false as the input
    * they receive from stdin can change the outcome of the task.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#interactive
+   * Documentation: https://turborepo.dev/docs/reference/configuration#interactive
    *
    * @defaultValue `false`
    */
@@ -304,11 +813,22 @@ export interface Pipeline {
    * not be restarted by default. To enable restarting persistent tasks, set
    * `interruptible` to true.
    *
-   * Documentation: https://turbo.build/repo/docs/reference/configuration#interruptible
+   * Documentation: https://turborepo.dev/docs/reference/configuration#interruptible
    *
    * @defaultValue `false`
    */
   interruptible?: boolean;
+
+  /**
+   * A list of tasks that will run alongside this task.
+   *
+   * Tasks in this list will not be run until completion before this task starts execution.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#with
+   *
+   * @defaultValue `[]`
+   */
+  with?: Array<string>;
 }
 
 export interface RemoteCache {
@@ -326,7 +846,7 @@ export interface RemoteCache {
    * Indicates if the remote cache is enabled. When `false`, Turborepo will disable
    * all remote cache operations, even if the repo has a valid token. If true, remote caching
    * is enabled, but still requires the user to login and link their repo to a remote cache.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
    *
    * @defaultValue `true`
    */
@@ -343,14 +863,14 @@ export interface RemoteCache {
   preflight?: boolean;
   /**
    * Set endpoint for API calls to the remote cache.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com/api"`
    */
   apiUrl?: string;
   /**
    * Set endpoint for requesting tokens during `turbo login`.
-   * Documentation: https://turbo.build/repo/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com"`
    */

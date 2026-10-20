@@ -1,0 +1,52 @@
+[package]
+name = "turborepo-task-graph"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Task graph execution for Turborepo runs"
+
+[lints]
+workspace = true
+
+[dependencies]
+console = { workspace = true }
+convert_case = "0.6.0"
+futures = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+petgraph = { workspace = true }
+rayon = "1.7.0"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt"] }
+tracing = { workspace = true }
+wax = { workspace = true }
+which = { workspace = true }
+
+turbopath = { workspace = true }
+turborepo-engine = { workspace = true }
+turborepo-env = { workspace = true }
+turborepo-errors = { workspace = true }
+turborepo-hash = { workspace = true }
+turborepo-log = { workspace = true }
+turborepo-microfrontends-config = { workspace = true }
+turborepo-process = { workspace = true }
+turborepo-rayon-compat = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-run-cache = { workspace = true }
+turborepo-run-context = { workspace = true }
+turborepo-run-summary = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-task-access = { workspace = true }
+turborepo-task-executor = { workspace = true }
+turborepo-task-hash = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-telemetry = { workspace = true }
+turborepo-types = { workspace = true }
+turborepo-ui = { workspace = true, features = ["tui"] }
+
+[dev-dependencies]
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+turborepo-microfrontends = { workspace = true }
+turborepo-repository = { workspace = true, features = ["test-util"] }

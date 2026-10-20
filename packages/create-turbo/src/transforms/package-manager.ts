@@ -2,7 +2,7 @@ import { convert } from "@turbo/workspaces";
 import type { TransformInput, TransformResult } from "./types";
 
 const meta = {
-  name: "package-manager",
+  name: "package-manager"
 };
 
 export async function transform(args: TransformInput): TransformResult {
@@ -15,8 +15,8 @@ export async function transform(args: TransformInput): TransformResult {
       to: packageManager.name,
       options: {
         // skip install after conversion- we will do it later
-        skipInstall: true,
-      },
+        skipInstall: true
+      }
     });
   } else {
     return { result: "not-applicable", ...meta };

@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 use tracing::{error, trace};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_dirs::config_dir;
-use turborepo_ui::{color, ColorConfig, BOLD, GREY, UNDERLINE};
+use turborepo_ui::{BOLD, ColorConfig, GREY, UNDERLINE, color};
 use uuid::Uuid;
 
 static DEBUG_ENV_VAR: &str = "TURBO_TELEMETRY_DEBUG";
@@ -82,12 +82,12 @@ impl TelemetryConfig {
         // file and write a new one, otherwise return the error
         let config = match settings {
             Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
-            Err(ConfigError::FileParse { .. }) => {
+            Err(err @ ConfigError::FileParse { .. }) => {
                 config_path
                     .remove_file()
                     .map_err(|e| ConfigError::Message(e.to_string()))?;
                 write_new_config(&config_path)?;
-                return Err(settings.unwrap_err());
+                return Err(err);
             }
             // Propagate other errors
             Err(err) => return Err(err),
@@ -111,16 +111,20 @@ impl TelemetryConfig {
     }
 
     pub fn one_way_hash(input: &str) -> String {
-        match TelemetryConfig::with_default_config_path() {
-            Ok(config) => config.one_way_hash_with_config_salt(input),
-            Err(_) => TelemetryConfig::one_way_hash_with_tmp_salt(input),
+        // The salt is generated once and then never changes for the lifetime
+        // of the config file, so read it once per process instead of
+        // re-reading and re-parsing the config file on every call — this
+        // runs several times per task during a run.
+        static CONFIG_SALT: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+        let salt = CONFIG_SALT.get_or_init(|| {
+            TelemetryConfig::with_default_config_path()
+                .ok()
+                .map(|config| config.config.telemetry_salt)
+        });
+        match salt {
+            Some(salt) => one_way_hash_with_salt(salt, input),
+            None => TelemetryConfig::one_way_hash_with_tmp_salt(input),
         }
-    }
-
-    /// Obfuscate with the config salt - this is used for all sensitive event
-    /// data
-    fn one_way_hash_with_config_salt(&self, input: &str) -> String {
-        one_way_hash_with_salt(&self.config.telemetry_salt, input)
     }
 
     /// Obfuscate with a temporary salt - this is used as a fallback when the
@@ -135,7 +139,11 @@ impl TelemetryConfig {
     }
 
     pub fn show_alert(&mut self, color_config: ColorConfig) {
-        if !self.has_seen_alert() && self.is_enabled() && Self::is_telemetry_warning_enabled() {
+        if !self.has_seen_alert()
+            && self.is_enabled()
+            && Self::is_telemetry_warning_enabled()
+            && turborepo_ci::Vendor::get_constant() != Some("VERCEL")
+        {
             eprintln!(
                 "\n{}\n{}\n{}\n{}\n{}\n",
                 color!(color_config, BOLD, "{}", "Attention:"),
@@ -167,7 +175,7 @@ impl TelemetryConfig {
                         color_config,
                         GREY,
                         "{}",
-                        "https://turbo.build/repo/docs/telemetry"
+                        "https://turborepo.dev/docs/telemetry"
                     )
                 ),
             );
@@ -187,18 +195,7 @@ impl TelemetryConfig {
     }
 
     pub fn is_enabled(&self) -> bool {
-        let do_not_track = env::var(DO_NOT_TRACK_ENV_VAR).unwrap_or("0".to_string());
-        let turbo_telemetry_disabled = env::var(DISABLED_ENV_VAR).unwrap_or("0".to_string());
-
-        if do_not_track == "1"
-            || do_not_track == "true"
-            || turbo_telemetry_disabled == "1"
-            || turbo_telemetry_disabled == "true"
-        {
-            return false;
-        }
-
-        self.config.telemetry_enabled
+        !is_disabled_by_env() && self.config.telemetry_enabled
     }
 
     pub fn is_telemetry_warning_enabled() -> bool {
@@ -241,7 +238,7 @@ impl TelemetryConfig {
 
 fn default_config_path() -> Result<AbsoluteSystemPathBuf, ConfigError> {
     let config_dir = config_dir()
-        .map_err(|e| ConfigError::Message(format!("Invalid config directory: {}", e)))?
+        .map_err(|e| ConfigError::Message(format!("Invalid config directory: {e}")))?
         .ok_or(ConfigError::Message(
             "Unable to find telemetry config directory".to_string(),
         ))?;
@@ -265,13 +262,19 @@ fn write_new_config(file_path: &AbsoluteSystemPath) -> Result<(), ConfigError> {
     Ok(())
 }
 
+pub(crate) fn is_disabled_by_env() -> bool {
+    [DO_NOT_TRACK_ENV_VAR, DISABLED_ENV_VAR]
+        .iter()
+        .any(|name| matches!(env::var(name).as_deref(), Ok("1" | "true")))
+}
+
 pub fn is_debug() -> bool {
     let debug = env::var(DEBUG_ENV_VAR).unwrap_or("0".to_string());
     debug == "1" || debug == "true"
 }
 
 fn one_way_hash_with_salt(salt: &str, input: &str) -> String {
-    let salted = format!("{}{}", salt, input);
+    let salted = format!("{salt}{input}");
     let mut hasher = Sha256::new();
     hasher.update(salted.as_bytes());
     let generic = hasher.finalize();

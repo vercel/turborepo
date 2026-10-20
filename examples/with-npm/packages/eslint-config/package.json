@@ -2,18 +2,25 @@
   "name": "@repo/eslint-config",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "exports": {
+    "./library.js": "./library.js",
+    "./next.js": "./next.js",
+    "./react-internal.js": "./react-internal.js"
+  },
   "files": [
     "library.js",
     "next.js",
     "react-internal.js"
   ],
-  "devDependencies": {
-    "@vercel/style-guide": "^5.2.0",
-    "eslint-config-turbo": "^2.0.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-only-warn": "^1.1.0",
-    "@typescript-eslint/parser": "^7.1.0",
-    "@typescript-eslint/eslint-plugin": "^6.17.0",
-    "typescript": "5.5.4"
+  "dependencies": {
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "16.3.5",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-config-turbo": "2.10.13",
+    "typescript-eslint": "8.70.0"
+  },
+  "peerDependencies": {
+    "eslint": "10.10.0"
   }
 }

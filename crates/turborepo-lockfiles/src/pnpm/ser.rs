@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Serialize, ser::Error};
 
 use super::{LockfileVersion, VersionFormat};
 
@@ -12,7 +12,7 @@ impl Serialize for LockfileVersion {
             VersionFormat::Float => serializer.serialize_f32(
                 self.version
                     .parse()
-                    .expect("Expected lockfile version to be valid f32"),
+                    .map_err(|err| S::Error::custom(format!("invalid lockfile version: {err}")))?,
             ),
         }
     }

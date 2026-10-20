@@ -12,7 +12,7 @@ New Transformers will be automatically surfaced to the `transform` CLI command a
 
 ## How it works
 
-Transformers are loaded automatically from the `src/transforms/` directory via the [`loadTransforms`](../utils/loadTransformers.ts) function.
+Transformers are loaded automatically from the `src/transforms/` directory via the [`loadTransformers`](../utils/load-transformers.ts) function.
 
 All new transformers must contain a default export that matches the [`Transformer`](../types.ts) type:
 
@@ -27,7 +27,7 @@ export type Transformer = {
 
 ## Writing a Transform
 
-Transforms are ran using the [TransformRunner](../runner/Runner.ts). This class is designed to make writing transforms as simple as possible by abstracting away all of the boilerplate that determines what should be logged, saved, or output as a result.
+Transforms are run using the [TransformRunner](../runner/Runner.ts). This class is designed to make writing transforms as simple as possible by abstracting away all of the boilerplate that determines what should be logged, saved, or output as a result.
 
 To use the TransformRunner:
 

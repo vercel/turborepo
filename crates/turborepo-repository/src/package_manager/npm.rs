@@ -1,6 +1,11 @@
-use turbopath::AbsoluteSystemPath;
+use std::collections::HashSet;
 
-use crate::package_manager::{Error, PackageManager};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+
+use crate::{
+    package_json::PackageJson,
+    package_manager::{Error, PackageManager},
+};
 
 pub const LOCKFILE: &str = "package-lock.json";
 
@@ -37,16 +42,57 @@ impl Iterator for NpmDetector<'_> {
     }
 }
 
+pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
+    package_json: &PackageJson,
+    patches: &[R],
+) -> PackageJson {
+    let mut pruned_json = package_json.clone();
+    let patches_set = patches.iter().map(|r| r.as_ref()).collect::<HashSet<_>>();
+    if let Some(existing_patches) = pruned_json.patched_dependencies.as_mut() {
+        existing_patches.retain(|_, patch_path| patches_set.contains(patch_path.as_ref()));
+    }
+    pruned_json
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs::File;
 
     use anyhow::Result;
+    use serde_json::json;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use test_case::test_case;
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-    use super::LOCKFILE;
+    use super::*;
     use crate::package_manager::PackageManager;
+
+    #[test_case(&[]; "no retained patches")]
+    #[test_case(&["patches/foo.patch"]; "one retained patch")]
+    #[test_case(&["patches/foo.patch", "patches/bar.patch"]; "all retained patches")]
+    fn test_patch_pruning(paths: &[&str]) {
+        let package_json = PackageJson::from_value(json!({
+            "name": "npm-patches",
+            "patchedDependencies": {
+                "foo@1.0.0": "patches/foo.patch",
+                "@scope/bar@2.0.0": "patches/bar.patch"
+            }
+        }))
+        .unwrap();
+        let patches: Vec<_> = paths
+            .iter()
+            .map(|path| RelativeUnixPathBuf::new(*path).unwrap())
+            .collect();
+        let repo_root = tempfile::tempdir().unwrap();
+        let pruned = PackageManager::Npm.prune_patched_packages(
+            &package_json,
+            &patches,
+            &AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap(),
+        );
+        let actual: HashSet<_> = pruned.patched_dependencies.unwrap().into_values().collect();
+        assert_eq!(actual, patches.into_iter().collect());
+        assert_eq!(package_json.patched_dependencies.unwrap().len(), 2);
+    }
 
     #[test]
     fn test_detect_npm() -> Result<()> {

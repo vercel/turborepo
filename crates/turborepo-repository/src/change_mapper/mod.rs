@@ -11,16 +11,23 @@ pub use package::{
     GlobalDepsPackageChangeMapper, PackageChangeMapper, PackageMapping,
 };
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use wax::Program;
 
 use crate::package_graph::{
-    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName, WorkspacePackage,
+    ChangedPackagesError, ExternalDependencyChange, PackageGraph, PackageName,
+    RelationshipProjectionError, WorkspacePackage,
 };
 
 mod package;
 
-const DEFAULT_GLOBAL_DEPS: &[&str] = ["package.json", "turbo.json", "turbo.jsonc"].as_slice();
+const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
+
+/// Managed toolchain resolution affects every package and task, even when
+/// configured global dependency globs exclude the lockfile.
+pub fn is_default_global_file(file: &str, managed_setup: bool) -> bool {
+    DEFAULT_GLOBAL_DEPS.contains(&file) || (managed_setup && file == "turbo.lock")
+}
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -37,9 +44,12 @@ pub enum LockfileContents {
     /// previous lockfile (i.e. `git status`, or perhaps a lockfile that was
     /// deleted or otherwise inaccessible with the information we have)
     UnknownChange,
-    /// We know the lockfile changed and have the contents of the previous
-    /// lockfile
-    Changed(Vec<u8>),
+    /// We know the lockfile changed and have its repository-relative path and
+    /// the contents of the previous lockfile.
+    Changed {
+        path: AnchoredSystemPathBuf,
+        previous_contents: Vec<u8>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -87,6 +97,10 @@ pub enum AllPackageChangeReason {
         from_ref: Option<String>,
         to_ref: Option<String>,
     },
+    ScmError {
+        error: String,
+    },
+    ConservativeFallback,
 }
 
 pub fn merge_changed_packages<T: Hash + Eq>(
@@ -109,6 +123,7 @@ pub struct ChangeMapper<'a, PD> {
 
     ignore_patterns: Vec<String>,
     package_detector: PD,
+    managed_setup: bool,
 }
 
 impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
@@ -121,15 +136,22 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             pkg_graph,
             ignore_patterns,
             package_detector,
+            managed_setup: false,
         }
     }
 
-    fn default_global_file_changed(
-        changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Option<&AnchoredSystemPathBuf> {
+    pub fn with_managed_setup(mut self, managed_setup: bool) -> Self {
+        self.managed_setup = managed_setup;
+        self
+    }
+
+    fn default_global_file_changed<'b>(
+        &self,
+        changed_files: &'b HashSet<AnchoredSystemPathBuf>,
+    ) -> Option<&'b AnchoredSystemPathBuf> {
         changed_files
             .iter()
-            .find(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
+            .find(|f| is_default_global_file(f.as_str(), self.managed_setup))
     }
 
     pub fn changed_packages(
@@ -137,7 +159,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_contents: LockfileContents,
     ) -> Result<PackageChanges, ChangeMapError> {
-        if let Some(file) = Self::default_global_file_changed(&changed_files) {
+        if let Some(file) = self.default_global_file_changed(&changed_files) {
             debug!("global file changed");
             return Ok(PackageChanges::All(
                 AllPackageChangeReason::DefaultGlobalFileChanged {
@@ -155,10 +177,13 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 
             PackageChanges::Some(mut changed_pkgs) => {
                 match lockfile_contents {
-                    LockfileContents::Changed(previous_lockfile_contents) => {
+                    LockfileContents::Changed {
+                        path,
+                        previous_contents,
+                    } => {
                         // if we run into issues, don't error, just assume all packages have changed
                         let Ok(lockfile_changes) =
-                            self.get_changed_packages_from_lockfile(&previous_lockfile_contents)
+                            self.get_changed_packages_from_lockfile(&path, &previous_contents)
                         else {
                             debug!(
                                 "unable to determine lockfile changes, assuming all packages \
@@ -187,6 +212,15 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                             }),
                         );
 
+                        if let Err(error) =
+                            self.add_relationship_affected_packages(&mut changed_pkgs)
+                        {
+                            tracing::error!(%error, "relationship affectedness projection failed");
+                            return Ok(PackageChanges::All(
+                                AllPackageChangeReason::ConservativeFallback,
+                            ));
+                        }
+
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
 
@@ -205,6 +239,14 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     // We don't know if the lockfile changed or not, so we can't assume anything
                     LockfileContents::Unchanged => {
                         debug!("the lockfile did not change");
+                        if let Err(error) =
+                            self.add_relationship_affected_packages(&mut changed_pkgs)
+                        {
+                            tracing::error!(%error, "relationship affectedness projection failed");
+                            return Ok(PackageChanges::All(
+                                AllPackageChangeReason::ConservativeFallback,
+                            ));
+                        }
                         Ok(PackageChanges::Some(changed_pkgs))
                     }
                 }
@@ -231,22 +273,27 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         let mut changed_packages = HashMap::new();
         for file in files {
             match self.package_detector.detect_package(file) {
-                // Internal root dependency changed so global hash has changed
-                PackageMapping::Package((pkg, _)) if root_internal_deps.contains(&pkg) => {
-                    debug!(
-                        "{} changes root internal dependency: \"{}\"\nshortest path from root: \
-                         {:?}",
-                        file.to_string(),
-                        pkg.name,
-                        self.pkg_graph.root_internal_dependency_explanation(&pkg),
-                    );
-                    return PackageChanges::All(AllPackageChangeReason::RootInternalDepChanged {
-                        root_internal_dep: pkg.name.clone(),
-                    });
-                }
-                PackageMapping::Package((pkg, reason)) => {
-                    debug!("{} changes \"{}\"", file.to_string(), pkg.name);
-                    changed_packages.insert(pkg, reason);
+                PackageMapping::Packages(packages) => {
+                    for (pkg, reason) in packages {
+                        // Any co-located owner may be a root dependency, which
+                        // changes the global hash and invalidates every package.
+                        if root_internal_deps.contains(&pkg) {
+                            debug!(
+                                "{} changes root internal dependency: \"{}\"\nshortest path from \
+                                 root: {:?}",
+                                file.to_string(),
+                                pkg.name,
+                                self.pkg_graph.root_internal_dependency_explanation(&pkg),
+                            );
+                            return PackageChanges::All(
+                                AllPackageChangeReason::RootInternalDepChanged {
+                                    root_internal_dep: pkg.name,
+                                },
+                            );
+                        }
+                        debug!("{} changes \"{}\"", file.to_string(), pkg.name);
+                        changed_packages.insert(pkg, reason);
+                    }
                 }
                 PackageMapping::All(reason) => {
                     debug!("all packages changed due to {file:?}");
@@ -259,20 +306,49 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         PackageChanges::Some(changed_packages)
     }
 
+    fn add_relationship_affected_packages(
+        &self,
+        changed_packages: &mut HashMap<WorkspacePackage, PackageInclusionReason>,
+    ) -> Result<(), RelationshipProjectionError> {
+        let mut directly_changed: Vec<_> = changed_packages
+            .keys()
+            .map(|package| package.name.clone())
+            .collect();
+        directly_changed.sort();
+        for dependency in directly_changed {
+            let affected_packages = self
+                .pkg_graph
+                .affected_relationships()
+                .additional_affected_by(&dependency)?;
+            for name in affected_packages {
+                if name == dependency {
+                    continue;
+                }
+                let context = self
+                    .pkg_graph
+                    .package_task_context(&name)
+                    .ok_or_else(|| RelationshipProjectionError::UnknownPackage(name.clone()))?;
+                changed_packages
+                    .entry(WorkspacePackage {
+                        name,
+                        path: context.directory().to_owned(),
+                    })
+                    .or_insert_with(|| PackageInclusionReason::DependencyChanged {
+                        dependency: dependency.clone(),
+                    });
+            }
+        }
+        Ok(())
+    }
+
     fn get_changed_packages_from_lockfile(
         &self,
+        path: &AnchoredSystemPath,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        let previous_lockfile = self
-            .pkg_graph
-            .package_manager()
-            .parse_lockfile(self.pkg_graph.root_package_json(), lockfile_content)?;
-
-        let additional_packages = self
-            .pkg_graph
-            .changed_packages_from_lockfile(previous_lockfile.as_ref())?;
-
-        Ok(additional_packages)
+        self.pkg_graph
+            .changed_packages_from_lockfile_contents(path, lockfile_content)
+            .map_err(Into::into)
     }
 
     pub fn lockfile_changed(
@@ -280,11 +356,11 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         changed_files: &HashSet<AnchoredSystemPathBuf>,
         lockfile_path: &AbsoluteSystemPath,
     ) -> bool {
-        let lockfile_path_relative = turbo_root
-            .anchor(lockfile_path)
-            .expect("lockfile should be in repo");
+        let Ok(lockfile_path_relative) = turbo_root.anchor(lockfile_path) else {
+            return false;
+        };
 
-        changed_files.iter().any(|f| f == &lockfile_path_relative)
+        changed_files.contains(&lockfile_path_relative)
     }
 }
 
@@ -292,29 +368,114 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
 pub enum ChangeMapError {
     #[error(transparent)]
     Wax(#[from] wax::BuildError),
-    #[error("Package manager error: {0}")]
-    PackageManager(#[from] crate::package_manager::Error),
-    #[error("No lockfile")]
-    NoLockfile,
-    #[error("Lockfile error: {0}")]
-    Lockfile(turborepo_lockfiles::Error),
-}
-
-impl From<ChangedPackagesError> for ChangeMapError {
-    fn from(value: ChangedPackagesError) -> Self {
-        match value {
-            ChangedPackagesError::NoLockfile => Self::NoLockfile,
-            ChangedPackagesError::Lockfile(e) => Self::Lockfile(e),
-        }
-    }
+    #[error(transparent)]
+    ChangedPackages(#[from] ChangedPackagesError),
 }
 
 #[cfg(test)]
 mod test {
-    use test_case::test_case;
+    use std::collections::HashSet;
 
-    use super::ChangeMapper;
-    use crate::change_mapper::package::DefaultPackageChangeMapper;
+    use test_case::test_case;
+    use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+
+    use super::*;
+    use crate::{
+        change_mapper::package::DefaultPackageChangeMapper, package_graph::PackageGraph,
+        package_json::PackageJson, package_manager::PackageManager,
+    };
+
+    struct UnknownPackageMapper;
+
+    impl PackageChangeMapper for UnknownPackageMapper {
+        fn detect_package(&self, _file: &AnchoredSystemPath) -> PackageMapping {
+            PackageMapping::Packages(vec![(
+                WorkspacePackage {
+                    name: PackageName::from("missing"),
+                    path: AnchoredSystemPathBuf::from_raw("missing").unwrap(),
+                },
+                PackageInclusionReason::FileChanged {
+                    file: AnchoredSystemPathBuf::from_raw("missing/file.txt").unwrap(),
+                },
+            )])
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_relationship_package_conservatively_changes_all_packages() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_single_package_mode(true)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await
+            .unwrap();
+        let mapper = ChangeMapper::new(&graph, Vec::new(), UnknownPackageMapper);
+
+        let changes = mapper
+            .changed_packages(
+                HashSet::from([AnchoredSystemPathBuf::from_raw("missing/file.txt").unwrap()]),
+                LockfileContents::Unchanged,
+            )
+            .unwrap();
+        assert_eq!(
+            changes,
+            PackageChanges::All(AllPackageChangeReason::ConservativeFallback)
+        );
+    }
+
+    #[tokio::test]
+    async fn managed_setup_lock_is_a_default_global_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let graph = PackageGraph::builder(root, PackageJson::default())
+            .with_single_package_mode(true)
+            .with_package_manager(PackageManager::Npm)
+            .build()
+            .await
+            .unwrap();
+        let file = AnchoredSystemPathBuf::from_raw("turbo.lock").unwrap();
+        for managed_setup in [false, true] {
+            let detector =
+                GlobalDepsPackageChangeMapper::new(&graph, ["!turbo.lock"].into_iter()).unwrap();
+            let mapper = ChangeMapper::new(&graph, vec!["turbo.lock".to_string()], detector)
+                .with_managed_setup(managed_setup);
+            let changes = mapper
+                .changed_packages(HashSet::from([file.clone()]), LockfileContents::Unchanged)
+                .unwrap();
+            assert_eq!(
+                changes,
+                if managed_setup {
+                    PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged {
+                        file: file.clone(),
+                    })
+                } else {
+                    PackageChanges::Some(HashMap::new())
+                }
+            );
+        }
+        assert!(!is_default_global_file("packages/a/turbo.lock", true));
+    }
+
+    #[test]
+    fn out_of_repo_lockfile_is_ignored() {
+        let repo = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(repo.path()).unwrap();
+        let outside_root = AbsoluteSystemPath::from_std_path(outside.path()).unwrap();
+        let lockfile_path = outside_root.join_component("package.lock");
+        let changed_files =
+            HashSet::from([AnchoredSystemPathBuf::from_raw("package.lock").unwrap()]);
+
+        assert!(
+            !ChangeMapper::<DefaultPackageChangeMapper>::lockfile_changed(
+                repo_root,
+                &changed_files,
+                &lockfile_path,
+            )
+        );
+    }
 
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
@@ -361,8 +522,6 @@ mod test {
             &lockfile_path,
         );
 
-        // we don't want to implement PartialEq on the error type,
-        // so simply compare the debug representations
         assert_eq!(changes, expected);
     }
 }

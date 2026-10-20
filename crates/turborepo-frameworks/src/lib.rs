@@ -1,0 +1,667 @@
+//! Framework detection and configuration inference for Turborepo.
+//! Automatically identifies JavaScript frameworks and what environment
+//! variables impact it.
+
+use std::{collections::HashMap, sync::OnceLock};
+
+use serde::Deserialize;
+use turborepo_repository::{
+    external_resolution::PackageExternalDeclarations, relationships::DependencyKind,
+};
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+enum Strategy {
+    All,
+    Some,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct Matcher {
+    strategy: Strategy,
+    dependencies: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EnvConditionKey {
+    key: String,
+    value: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EnvConditional {
+    when: EnvConditionKey,
+    include: Vec<String>,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Framework {
+    slug: Slug,
+    env_wildcards: Vec<String>,
+    env_conditionals: Option<Vec<EnvConditional>>,
+    dependency_match: Matcher,
+}
+
+#[derive(Debug, PartialEq, Clone, Deserialize)]
+#[serde(transparent)]
+pub struct Slug(String);
+
+impl Framework {
+    pub fn slug(&self) -> Slug {
+        self.slug.clone()
+    }
+
+    pub fn env(&self, env_at_execution_start: &HashMap<String, String>) -> Vec<String> {
+        let mut env_vars = self.env_wildcards.clone();
+
+        if let Some(env_conditionals) = &self.env_conditionals {
+            for conditional in env_conditionals {
+                let (key, expected_value) = (&conditional.when.key, &conditional.when.value);
+
+                if let Some(actual_value) = env_at_execution_start.get(key)
+                    && (expected_value.is_none() || expected_value.as_ref() == Some(actual_value))
+                {
+                    env_vars.extend(conditional.include.iter().cloned());
+                }
+            }
+        }
+
+        env_vars
+    }
+}
+
+static FRAMEWORKS: OnceLock<Result<Vec<Framework>, serde_json::Error>> = OnceLock::new();
+
+const FRAMEWORKS_JSON: &str =
+    include_str!("../../../packages/turbo-types/src/json/frameworks.json");
+
+fn get_frameworks() -> Result<&'static [Framework], &'static serde_json::Error> {
+    FRAMEWORKS
+        .get_or_init(|| serde_json::from_str(FRAMEWORKS_JSON))
+        .as_ref()
+        .map(Vec::as_slice)
+}
+
+impl Matcher {
+    pub fn test(&self, declarations: PackageExternalDeclarations<'_>, is_monorepo: bool) -> bool {
+        let has_dep = |dep: &str| -> bool {
+            declarations.iter().any(|declaration| {
+                let kind_matches = if is_monorepo {
+                    !matches!(declaration.kind(), DependencyKind::Peer { .. })
+                } else {
+                    matches!(
+                        declaration.kind(),
+                        DependencyKind::Production | DependencyKind::Development
+                    )
+                };
+                let name = if is_monorepo {
+                    declaration.package_name()
+                } else {
+                    declaration.declaration_name()
+                };
+                kind_matches && name == dep
+            })
+        };
+
+        match self.strategy {
+            Strategy::All => self.dependencies.iter().all(|dep| has_dep(dep)),
+            Strategy::Some => self.dependencies.iter().any(|dep| has_dep(dep)),
+        }
+    }
+}
+
+impl Slug {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn framework(&self) -> Option<&Framework> {
+        let frameworks = get_frameworks().ok()?;
+        frameworks
+            .iter()
+            .find(|framework| framework.slug.as_str() == self.as_str())
+    }
+}
+
+impl std::fmt::Display for Slug {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+pub fn infer_framework(
+    declarations: PackageExternalDeclarations<'_>,
+    is_monorepo: bool,
+) -> Option<&'static Framework> {
+    let frameworks = get_frameworks().ok()?;
+
+    frameworks
+        .iter()
+        .find(|framework| framework.dependency_match.test(declarations, is_monorepo))
+}
+
+#[cfg(test)]
+#[allow(clippy::expect_used)]
+mod tests {
+    use std::collections::{BTreeMap, HashMap};
+
+    use test_case::test_case;
+    use turborepo_repository::{
+        external_resolution::{ExternalDeclaration, PackageExternalDeclarations},
+        package_json::PackageJson,
+    };
+
+    use super::*;
+
+    fn get_framework_by_slug(slug: &str) -> &Framework {
+        get_frameworks()
+            .expect("framework JSON failed to parse")
+            .iter()
+            .find(|framework| framework.slug.as_str() == slug)
+            .expect("framework not found")
+    }
+
+    fn deps(pairs: &[(&str, &str)]) -> Option<BTreeMap<String, String>> {
+        Some(
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        )
+    }
+
+    #[test_case(PackageJson::default(), None, true; "empty dependencies")]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("blitz", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("blitzjs")),
+        true;
+        "blitz"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("blitz", "*"), ("next", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("blitzjs")),
+        true;
+        "Order is preserved (returns blitz, not next)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("next", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("nextjs")),
+        true;
+        "Finds next without blitz"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("solid-js", "*"), ("solid-start", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("solidstart")),
+        true;
+        "match all strategy works (solid)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("nuxt", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("nuxtjs")),
+        true;
+        "match some strategy works (nuxt)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@remix-run/react", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@remix-run/dev", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix with @remix-run/dev)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@remix-run/serve", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix with @remix-run/serve)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@remix-run/dev", "*"), ("@remix-run/react", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix with @remix-run/dev and @remix-run/react)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@react-router/dev", "*"), ("vite", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("vite")),
+        true;
+        "react router with vite matches vite"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("react-scripts", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("create-react-app")),
+        true;
+        "match some strategy works (create-react-app)"
+    )]
+    #[test_case(
+        PackageJson {
+                            dependencies: Some(
+                vec![("next", "*")]
+                    .into_iter()
+                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
+                    .collect()
+              ),
+                            ..Default::default()
+        },
+        Some(get_framework_by_slug("nextjs")),
+        false;
+        "Finds next in non-monorepo"
+    )]
+    #[test_case(
+        PackageJson {
+                            dev_dependencies: Some(
+                vec![("vite", "*")]
+                    .into_iter()
+                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
+                    .collect()
+              ),
+                            ..Default::default()
+        },
+        Some(get_framework_by_slug("vite")),
+        false;
+        "Finds vite in devDependencies in non-monorepo"
+    )]
+    #[test_case(PackageJson::default(), None, false; "empty dependencies in non-monorepo")]
+    #[test_case(
+        PackageJson {
+                                dev_dependencies: deps(&[("vite", "*")]),
+                                ..Default::default()
+        },
+        None,
+        true;
+        "devDependencies in package_json ignored in monorepo mode"
+    )]
+    #[test_case(
+        PackageJson {
+                                dependencies: deps(&[("solid-js", "*")]),
+                dev_dependencies: deps(&[("solid-start", "*")]),
+                                ..Default::default()
+        },
+        Some(get_framework_by_slug("solidstart")),
+        false;
+        "Strategy::All matches deps split across dependencies and devDependencies"
+    )]
+    #[test_case(
+        PackageJson {
+                                dev_dependencies: deps(&[("react-scripts", "*")]),
+                                ..Default::default()
+        },
+        Some(get_framework_by_slug("create-react-app")),
+        false;
+        "Strategy::Some matches devDependency in non-monorepo"
+    )]
+    fn test_infer_framework(
+        workspace_info: PackageJson,
+        expected: Option<&Framework>,
+        is_monorepo: bool,
+    ) {
+        let declarations =
+            if is_monorepo {
+                workspace_info
+                    .dependencies
+                    .iter()
+                    .flatten()
+                    .map(|(name, specifier)| {
+                        ExternalDeclaration::new(
+                            "workspace",
+                            name,
+                            name,
+                            specifier,
+                            DependencyKind::Production,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                workspace_info
+                    .dependencies
+                    .iter()
+                    .flatten()
+                    .map(|(name, specifier)| (name, specifier, DependencyKind::Production))
+                    .chain(
+                        workspace_info.dev_dependencies.iter().flatten().map(
+                            |(name, specifier)| (name, specifier, DependencyKind::Development),
+                        ),
+                    )
+                    .map(|(name, specifier, kind)| {
+                        ExternalDeclaration::new("workspace", name, name, specifier, kind)
+                    })
+                    .collect::<Vec<_>>()
+            };
+        let framework = infer_framework(
+            PackageExternalDeclarations::new(&declarations, "workspace"),
+            is_monorepo,
+        );
+        assert_eq!(framework, expected);
+    }
+
+    #[test]
+    fn aliases_and_peer_declarations_preserve_framework_behavior() {
+        let declarations = vec![
+            ExternalDeclaration::new(
+                "workspace",
+                "next-alias",
+                "next",
+                "npm:next@latest",
+                DependencyKind::Production,
+            ),
+            ExternalDeclaration::new(
+                "workspace",
+                "blitz",
+                "blitz",
+                "*",
+                DependencyKind::Peer { optional: false },
+            ),
+        ];
+        let view = PackageExternalDeclarations::new(&declarations, "workspace");
+
+        assert_eq!(
+            infer_framework(view, true),
+            Some(get_framework_by_slug("nextjs"))
+        );
+        assert_eq!(infer_framework(view, false), None);
+    }
+
+    #[test]
+    fn optional_declarations_preserve_single_package_behavior() {
+        let declarations = vec![ExternalDeclaration::new(
+            "workspace",
+            "next",
+            "next",
+            "latest",
+            DependencyKind::Optional,
+        )];
+        let view = PackageExternalDeclarations::new(&declarations, "workspace");
+
+        assert_eq!(
+            infer_framework(view, true),
+            Some(get_framework_by_slug("nextjs"))
+        );
+        assert_eq!(infer_framework(view, false), None);
+    }
+
+    #[test]
+    fn discovered_packages_infer_nextjs_only_for_the_matching_app() {
+        use std::{
+            future::Future,
+            path::Path,
+            task::{Context, Poll, Waker},
+        };
+
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, PackageDiscovery},
+            package_graph::{PackageGraph, PackageName},
+            package_manager::PackageManager,
+        };
+
+        struct Discovery;
+        impl PackageDiscovery for Discovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                Ok(DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![],
+                })
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let root = Path::new(if cfg!(windows) { r"C:\repo" } else { "/repo" });
+        let manifests = [
+            (
+                "apps/web",
+                r#"{"name":"web","dependencies":{"next":"^15.0.0"}}"#,
+            ),
+            (
+                "packages/ui",
+                r#"{"name":"ui","dependencies":{"react":"^19.0.0"}}"#,
+            ),
+            (
+                "apps/alias",
+                r#"{"name":"alias","dependencies":{"next-alias":"npm:next@^15.0.0"}}"#,
+            ),
+            (
+                "apps/peer",
+                r#"{"name":"peer","peerDependencies":{"next":"^15.0.0"}}"#,
+            ),
+        ]
+        .into_iter()
+        .map(|(dir, manifest)| {
+            (
+                root.join(dir)
+                    .join("package.json")
+                    .try_into()
+                    .expect("absolute path"),
+                PackageJson::from_value(serde_json::from_str(manifest).expect("valid JSON"))
+                    .expect("valid manifest"),
+            )
+        })
+        .collect();
+        let mut build = std::pin::pin!(
+            PackageGraph::builder(
+                root.try_into().expect("absolute root"),
+                PackageJson::default()
+            )
+            .with_package_discovery(Discovery)
+            .with_package_jsons(Some(manifests))
+            .without_external_dependencies()
+            .build()
+        );
+        let graph = match build.as_mut().poll(&mut Context::from_waker(Waker::noop())) {
+            Poll::Ready(result) => result.expect("package graph builds"),
+            Poll::Pending => panic!("injected package graph should not require async I/O"),
+        };
+
+        let nextjs = get_framework_by_slug("nextjs");
+        let detected =
+            infer_framework(graph.external_declarations(&PackageName::from("web")), true)
+                .expect("web should infer Next.js");
+        assert_eq!(detected, nextjs);
+        assert_eq!(
+            infer_framework(graph.external_declarations(&PackageName::from("ui")), true),
+            None,
+        );
+        let alias_name = PackageName::from("alias");
+        let alias = graph.external_declarations(&alias_name);
+        assert_eq!(
+            alias
+                .iter()
+                .map(|d| (d.declaration_name(), d.package_name()))
+                .collect::<Vec<_>>(),
+            vec![("next-alias", "next-alias")],
+        );
+        assert_eq!(infer_framework(alias, true), None);
+        assert_eq!(
+            infer_framework(
+                graph.external_declarations(&PackageName::from("peer")),
+                true
+            ),
+            None,
+        );
+
+        let env = detected.env(&HashMap::new());
+        assert!(env.contains(&"NEXT_PUBLIC_*".to_string()));
+        assert!(!env.contains(&"VERCEL_DEPLOYMENT_ID".to_string()));
+        let env = detected.env(&HashMap::from([(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        )]));
+        assert!(env.contains(&"VERCEL_DEPLOYMENT_ID".to_string()));
+    }
+
+    #[test]
+    fn test_env_with_no_conditions() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let env_at_execution_start = HashMap::new();
+        let env_vars = framework.env(&env_at_execution_start);
+
+        assert_eq!(
+            env_vars,
+            framework.env_wildcards.clone(),
+            "Expected env_wildcards when no conditionals exist"
+        );
+    }
+
+    #[test]
+    fn test_env_with_matching_condition() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+
+        let env_vars = framework.env(&env_at_execution_start);
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected VERCEL_DEPLOYMENT_ID to be included when condition is met"
+        );
+    }
+
+    #[test]
+    fn test_env_with_non_matching_condition() {
+        let framework = get_framework_by_slug("nextjs");
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "0".to_string(),
+        );
+
+        let env_vars = framework.env(&env_at_execution_start);
+
+        assert_eq!(
+            env_vars,
+            framework.env_wildcards.clone(),
+            "Expected only env_wildcards when condition is not met"
+        );
+    }
+
+    #[test]
+    fn test_env_with_condition_without_value_requirement() {
+        let mut framework = get_framework_by_slug("nextjs").clone();
+
+        if let Some(env_conditionals) = framework.env_conditionals.as_mut() {
+            env_conditionals[0].when.value = None;
+        }
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "random".to_string(),
+        );
+
+        let env_vars = framework.env(&env_at_execution_start);
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected VERCEL_DEPLOYMENT_ID to be included when condition key exists, regardless \
+             of value"
+        );
+    }
+
+    #[test]
+    fn test_env_with_multiple_conditions() {
+        let mut framework = get_framework_by_slug("nextjs").clone();
+
+        if let Some(env_conditionals) = framework.env_conditionals.as_mut() {
+            env_conditionals.push(EnvConditional {
+                when: EnvConditionKey {
+                    key: "ANOTHER_CONDITION".to_string(),
+                    value: Some("true".to_string()),
+                },
+                include: vec!["ADDITIONAL_ENV_VAR".to_string()],
+            });
+        }
+
+        let mut env_at_execution_start = HashMap::new();
+        env_at_execution_start.insert(
+            "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+            "1".to_string(),
+        );
+        env_at_execution_start.insert("ANOTHER_CONDITION".to_string(), "true".to_string());
+
+        let env_vars = framework.env(&env_at_execution_start);
+
+        let mut expected_vars = framework.env_wildcards.clone();
+        expected_vars.push("VERCEL_DEPLOYMENT_ID".to_string());
+        expected_vars.push("ADDITIONAL_ENV_VAR".to_string());
+
+        assert_eq!(
+            env_vars, expected_vars,
+            "Expected both VERCEL_DEPLOYMENT_ID and ADDITIONAL_ENV_VAR when both conditions are \
+             met"
+        );
+    }
+
+    #[test]
+    fn test_framework_slug_roundtrip() {
+        for framework in get_frameworks().expect("framework JSON failed to parse") {
+            assert_eq!(Some(framework), framework.slug().framework());
+        }
+    }
+
+    #[test]
+    fn test_remix_and_react_router_env_wildcards() {
+        let remix = get_framework_by_slug("remix");
+        assert_eq!(remix.env(&HashMap::new()), vec!["REMIX_*".to_string()]);
+
+        let vite = get_framework_by_slug("vite");
+        assert_eq!(vite.env(&HashMap::new()), vec!["VITE_*".to_string()]);
+    }
+}

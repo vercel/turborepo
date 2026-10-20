@@ -1,0 +1,34 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "repro-root",
+    },
+    "packages/backend": {
+      "name": "@repo/backend",
+      "version": "0.0.0",
+      "dependencies": {
+        "@repo/utils": "*",
+      },
+      "devDependencies": {
+        "@repo/test-recordings": "*",
+      },
+    },
+    "packages/test-recordings": {
+      "name": "@repo/test-recordings",
+      "version": "0.0.0",
+    },
+    "packages/utils": {
+      "name": "@repo/utils",
+      "version": "0.0.0",
+    },
+  },
+  "packages": {
+    "@repo/backend": ["@repo/backend@workspace:packages/backend"],
+
+    "@repo/test-recordings": ["@repo/test-recordings@workspace:packages/test-recordings"],
+
+    "@repo/utils": ["@repo/utils@workspace:packages/utils"],
+  }
+}

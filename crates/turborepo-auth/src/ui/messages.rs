@@ -1,4 +1,4 @@
-use turborepo_ui::{ColorConfig, BOLD, CYAN};
+use turborepo_ui::{BOLD, CYAN, ColorConfig};
 
 pub fn print_cli_authorized(user: &str, color_config: &ColorConfig) {
     println!(

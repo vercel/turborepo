@@ -1,3 +1,14 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+allowBuilds:
+  "@parcel/watcher": true
+  core-js: false
+  core-js-pure: false
+  es5-ext: false
+  gatsby: true
+  gatsby-cli: true
+  lmdb: true
+  msgpackr-extract: true
+  sharp: true

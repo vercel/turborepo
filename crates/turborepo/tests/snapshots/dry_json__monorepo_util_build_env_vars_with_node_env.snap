@@ -1,0 +1,17 @@
+---
+source: crates/turborepo/tests/dry_json.rs
+expression: env_vars
+---
+{
+  "specified": {
+    "env": [
+      "NODE_ENV"
+    ],
+    "passThroughEnv": null
+  },
+  "configured": [
+    "NODE_ENV=b493d48364afe44d11c0165cf470a4164d1e2609911ef998be868d46ade3de4e"
+  ],
+  "inferred": [],
+  "passthrough": null
+}

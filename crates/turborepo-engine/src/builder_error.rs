@@ -1,0 +1,118 @@
+//! Builder error types for the engine.
+
+// Allow unused_assignments for fields used by miette's Diagnostic derive macro
+// These fields are accessed via the derive macro attributes (#[label], #[source_code], #[related])
+// but clippy doesn't recognize this usage pattern
+#![allow(unused_assignments)]
+// Allow large error types - these are diagnostic errors that need rich context
+#![allow(clippy::result_large_err)]
+
+use miette::Diagnostic;
+use thiserror::Error;
+use turborepo_repository::package_graph::{PackageName, RelationshipProjectionError};
+
+use crate::{
+    InvalidTaskNameError,
+    builder_errors::{
+        CyclicExtends, MissingPackageFromTaskError, MissingPackageTaskError,
+        MissingRootTaskInTurboJsonError, MissingTaskError, MissingTurboJsonExtends,
+    },
+    validate::Error as TaskNameValidateError,
+};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
+    #[error("Missing tasks in project")]
+    MissingTasks(#[related] Vec<MissingTaskError>),
+    #[error("No package.json found for {workspace}")]
+    MissingPackageJson { workspace: PackageName },
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingRootTaskInTurboJson(Box<MissingRootTaskInTurboJsonError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingPackageFromTask(Box<MissingPackageFromTaskError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingPackageTask(Box<MissingPackageTaskError>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingTurboJsonExtends(Box<MissingTurboJsonExtends>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CyclicExtends(Box<CyclicExtends>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Config(#[from] turborepo_config::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TurboJson(#[from] turborepo_turbo_json::Error),
+    #[error("Invalid turbo.json configuration")]
+    Validation {
+        #[related]
+        errors: Vec<turborepo_config::Error>,
+    },
+    #[error(transparent)]
+    Graph(#[from] turborepo_graph_utils::Error),
+    #[error(transparent)]
+    RelationshipProjection(#[from] RelationshipProjectionError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidTaskName(Box<InvalidTaskNameError>),
+    #[error("Engine builder cannot be constructed without a turbo.json loader")]
+    MissingTurboJsonLoader,
+    #[error(
+        "Cannot pass arguments to aggregate task `{task_id}` because it does not run a process. \
+         Run one of its qualified dependency tasks instead: {alternatives}."
+    )]
+    AggregatePassThrough {
+        task_id: String,
+        alternatives: String,
+    },
+    #[error(
+        "Task `{task_id}` cannot cache Python virtual environment `{environment}` as output \
+         `{output}`. Virtual environments are machine-specific; remove this output and cache \
+         portable artifacts such as `dist/**` instead."
+    )]
+    PythonVirtualEnvironmentOutput {
+        task_id: String,
+        environment: String,
+        output: String,
+    },
+}
+
+impl From<TaskNameValidateError> for Error {
+    fn from(err: TaskNameValidateError) -> Self {
+        match err {
+            TaskNameValidateError::InvalidTaskName(e) => Error::InvalidTaskName(e),
+        }
+    }
+}
+
+impl Error {
+    /// Checks if the error is a missing turbo.json configuration error
+    pub fn is_missing_turbo_json(&self) -> bool {
+        matches!(
+            self,
+            Self::Config(err) if err.is_no_turbo_json()
+        ) || matches!(
+            self,
+            Self::TurboJson(turborepo_turbo_json::Error::NoTurboJSON)
+        )
+    }
+
+    /// Alias for `is_missing_turbo_json` to match the naming in
+    /// turborepo-config
+    pub fn is_no_turbo_json(&self) -> bool {
+        self.is_missing_turbo_json()
+    }
+
+    /// Creates an Error from validation errors, or returns Ok(()) if no errors
+    pub fn from_validation(errors: Vec<turborepo_config::Error>) -> Result<(), Self> {
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(Error::Validation { errors })
+        }
+    }
+}

@@ -1,0 +1,7 @@
+[install]
+# Only allow packages published at least 3 days ago, to protect against supply-chain attacks
+minimumReleaseAge = 259200  # in seconds
+minimumReleaseAgeExcludes = ["eas-cli"]
+
+[run]
+bun = true

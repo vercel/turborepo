@@ -1,11 +1,46 @@
 #!/usr/bin/env node
 
 import picocolors from "picocolors";
-import { logger } from "@turbo/utils";
+import {
+  logger,
+  createNotifyUpdate,
+  getAvailablePackageManagers
+} from "@turbo/utils";
+import { getWorkspaceDetails } from "@turbo/workspaces";
+import { gte } from "semver";
 import { Command } from "commander";
 import cliPkg from "../package.json";
 import { transform, migrate } from "./commands";
-import { notifyUpdate } from "./utils/notifyUpdate";
+
+const notifyUpdate = createNotifyUpdate({
+  packageInfo: cliPkg,
+  upgradeCommand: async () => {
+    try {
+      const { packageManager } = await getWorkspaceDetails({
+        root: process.cwd()
+      });
+      if (packageManager === "yarn") {
+        const available = await getAvailablePackageManagers({
+          projectRoot: process.cwd()
+        });
+        const yarnVersion = available.yarn;
+        if (yarnVersion && gte(yarnVersion, "2.0.0")) {
+          return "yarn dlx @turbo/codemod";
+        }
+        return "yarn global add @turbo/codemod";
+      } else if (packageManager === "pnpm") {
+        return "pnpm i -g @turbo/codemod";
+      } else if (packageManager === "nub") {
+        return "nub add -g @turbo/codemod";
+      } else if (packageManager === "aube") {
+        return "aube add -g @turbo/codemod";
+      }
+      return "npm i -g @turbo/codemod";
+    } catch {
+      return "npm i -g @turbo/codemod";
+    }
+  }
+});
 
 const codemodCli = new Command();
 
@@ -66,13 +101,12 @@ codemodCli
 
 codemodCli
   .parseAsync()
-  .then(notifyUpdate)
+  .then(() => notifyUpdate())
   .catch(async (reason) => {
     logger.log();
     logger.log(picocolors.red("Unexpected error. Please report it as a bug:"));
     logger.log(reason);
 
     logger.log();
-    await notifyUpdate();
-    process.exit(1);
+    await notifyUpdate(1);
   });

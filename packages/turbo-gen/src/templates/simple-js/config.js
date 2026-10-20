@@ -18,26 +18,26 @@ module.exports = function generator(plop) {
             return "file name is required";
           }
           return true;
-        },
+        }
       },
       {
         type: "list",
         name: "type",
         message: "What type of file should be created?",
-        choices: [".md", ".txt"],
+        choices: [".md", ".txt"]
       },
       {
         type: "input",
         name: "title",
-        message: "What should be the title of the new file?",
-      },
+        message: "What should be the title of the new file?"
+      }
     ],
     actions: [
       {
         type: "add",
         path: "{{ turbo.paths.root }}/{{ dashCase file }}{{ type }}",
-        templateFile: "templates/turborepo-generators.hbs",
-      },
-    ],
+        templateFile: "templates/turborepo-generators.hbs"
+      }
+    ]
   });
 };

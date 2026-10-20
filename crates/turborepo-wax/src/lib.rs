@@ -2,8 +2,18 @@
 //! paths and directory trees. Globs use a familiar syntax and support
 //! expressive features with semantics that emphasize component boundaries.
 //!
+//! # Pattern syntax
+//!
+//! Patterns use forward slashes to separate path components. `*` matches any
+//! sequence of characters within one component, while `**` can match across
+//! components. `?` matches one character within a component; character classes
+//! such as `[a-z]`, alternatives such as `{jpg,jpeg}`, and bounded repetitions
+//! such as `<pattern:n,m>` provide additional matching options. Backslash
+//! escapes glob metacharacters. Use `(?i)` for case-insensitive matching and
+//! `(?-i)` for case-sensitive matching.
+//!
 //! See the [repository documentation](https://github.com/olson-sean-k/wax/blob/master/README.md)
-//! for details about glob expressions and patterns.
+//! for more details about glob expressions and patterns.
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(
@@ -12,6 +22,8 @@
 #![doc(
     html_logo_url = "https://raw.githubusercontent.com/olson-sean-k/wax/master/doc/wax.svg?sanitize=true"
 )]
+#![allow(dead_code)]
+#![allow(unused_assignments)]
 #![allow(clippy::all)]
 #![deny(
     clippy::cast_lossless,
@@ -20,7 +32,6 @@
     clippy::explicit_into_iter_loop,
     clippy::filter_map_next,
     clippy::flat_map_option,
-    clippy::from_iter_instead_of_collect,
     clippy::if_not_else,
     clippy::manual_ok_or,
     clippy::map_unwrap_or,
@@ -30,7 +41,6 @@
     clippy::unreadable_literal,
     clippy::unused_self
 )]
-
 mod capture;
 mod diagnostics;
 mod encode;
@@ -352,10 +362,6 @@ impl From<WalkError> for GlobError {
     }
 }
 
-// TODO: `Diagnostic` is implemented with macros for brevity and to ensure
-// complete coverage of       features. However, this means that documentation
-// does not annotate the implementation with       a feature flag requirement.
-// If possible, perhaps in a later version of Rust, close this       gap.
 /// Describes errors that occur when building a [`Program`] from a glob
 /// expression.
 ///
@@ -611,9 +617,10 @@ impl<'t> Glob<'t> {
         encode::compile(tokens)
     }
 
-    // TODO: Document pattern syntax in the crate documentation and refer to it
-    // here.
     /// Constructs a [`Glob`] from a glob expression.
+    ///
+    /// See the crate-level [pattern syntax](crate#pattern-syntax) for supported
+    /// operators.
     ///
     /// A glob expression is UTF-8 encoded text that resembles a Unix path
     /// consisting of nominal components delimited by separators and
@@ -693,11 +700,19 @@ impl<'t> Glob<'t> {
     /// [`RuleError`]: crate::RuleError
     /// [`walk`]: crate::Glob::walk
     pub fn partition(self) -> (PathBuf, Self) {
-        let Glob { tree, .. } = self;
+        let Glob { tree, program } = self;
+        let original = tree.clone();
         let (prefix, tree) = tree.partition();
-        let program =
-            Glob::compile(tree.as_ref().tokens()).expect("failed to compile partitioned glob");
-        (prefix, Glob { tree, program })
+        match Glob::compile(tree.as_ref().tokens()) {
+            Ok(program) => (prefix, Glob { tree, program }),
+            Err(_) => (
+                PathBuf::new(),
+                Glob {
+                    tree: original,
+                    program,
+                },
+            ),
+        }
     }
 
     /// Clones any borrowed data into an owning instance.
@@ -836,6 +851,16 @@ pub struct Any<'t> {
 }
 
 impl<'t> Any<'t> {
+    /// Clones borrowed token text into an owning combinator without recompiling
+    /// its regex. Useful when combining dynamically constructed expressions.
+    pub fn into_owned(self) -> Any<'static> {
+        let Any { tree, program } = self;
+        Any {
+            tree: tree.into_owned(),
+            program,
+        }
+    }
+
     fn compile(token: &Token<'t, ()>) -> Result<Regex, CompileError> {
         encode::compile([token])
     }
@@ -1000,7 +1025,7 @@ where
 // It is possible to call this function using a mutable reference, which may appear to mutate the
 // parameter in place.
 #[must_use]
-pub fn escape(unescaped: &str) -> Cow<str> {
+pub fn escape(unescaped: &str) -> Cow<'_, str> {
     const ESCAPE: char = '\\';
 
     if unescaped.chars().any(is_meta_character) {
@@ -1045,7 +1070,7 @@ pub const fn is_contextual_meta_character(x: char) -> bool {
     matches!(x, '-')
 }
 
-fn parse_and_check(expression: &str) -> Result<Checked<Tokenized>, BuildError> {
+fn parse_and_check(expression: &str) -> Result<Checked<Tokenized<'_>>, BuildError> {
     let tokenized = token::parse(expression)?;
     let checked = rule::check(tokenized)?;
     Ok(checked)
@@ -1078,6 +1103,23 @@ mod tests {
         );
         assert_eq!(crate::escape("左{}右"), "左\\{\\}右");
         assert_eq!(crate::escape("*中*"), "\\*中\\*");
+    }
+
+    #[test]
+    fn owned_any_outlives_source_expressions() {
+        let owned = {
+            let expressions = [String::from("packages/*"), String::from("工具/**")];
+            crate::any(expressions.iter().map(String::as_str))
+                .unwrap()
+                .into_owned()
+        };
+        assert!(owned.is_match("packages/web"));
+        assert!(owned.is_match("工具/猫/file"));
+        assert!(!owned.is_match("apps/web"));
+        // The owned token tree must remain usable by another combinator.
+        let nested = crate::any([owned]).unwrap();
+        assert!(nested.is_match("工具/猫/file"));
+        assert!(!nested.is_match("apps/web"));
     }
 
     #[test]
@@ -1933,33 +1975,43 @@ mod tests {
     fn query_glob_variance() {
         assert!(Glob::new("").unwrap().variance().is_invariant());
         assert!(Glob::new("/a/file.ext").unwrap().variance().is_invariant());
-        assert!(Glob::new("/a/{file.ext}")
-            .unwrap()
-            .variance()
-            .is_invariant());
-        assert!(Glob::new("{a/b/file.ext}")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/a/{file.ext}")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
+        assert!(
+            Glob::new("{a/b/file.ext}")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
         assert!(Glob::new("{a,a}").unwrap().variance().is_invariant());
         #[cfg(windows)]
         assert!(Glob::new("{a,A}").unwrap().variance().is_invariant());
         assert!(Glob::new("<a/b:2>").unwrap().variance().is_invariant());
         #[cfg(unix)]
-        assert!(Glob::new("/[a]/file.ext")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/[a]/file.ext")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
         #[cfg(unix)]
-        assert!(Glob::new("/[a-a]/file.ext")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/[a-a]/file.ext")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
         #[cfg(unix)]
-        assert!(Glob::new("/[a-aaa-a]/file.ext")
-            .unwrap()
-            .variance()
-            .is_invariant());
+        assert!(
+            Glob::new("/[a-aaa-a]/file.ext")
+                .unwrap()
+                .variance()
+                .is_invariant()
+        );
 
         assert!(Glob::new("/a/{b,c}").unwrap().variance().is_variant());
         assert!(Glob::new("<a/b:1,>").unwrap().variance().is_variant());
@@ -1968,14 +2020,18 @@ mod tests {
         assert!(Glob::new("/a/*.ext").unwrap().variance().is_variant());
         assert!(Glob::new("/a/b*").unwrap().variance().is_variant());
         #[cfg(unix)]
-        assert!(Glob::new("/a/(?i)file.ext")
-            .unwrap()
-            .variance()
-            .is_variant());
+        assert!(
+            Glob::new("/a/(?i)file.ext")
+                .unwrap()
+                .variance()
+                .is_variant()
+        );
         #[cfg(windows)]
-        assert!(Glob::new("/a/(?-i)file.ext")
-            .unwrap()
-            .variance()
-            .is_variant());
+        assert!(
+            Glob::new("/a/(?-i)file.ext")
+                .unwrap()
+                .variance()
+                .is_variant()
+        );
     }
 }

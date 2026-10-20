@@ -1,12 +1,17 @@
 use std::{
     fs::File,
-    io::{BufRead, BufReader, BufWriter, Write},
+    io::{BufWriter, ErrorKind, Read, Write},
 };
 
-use tracing::{debug, warn};
+use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 
 use crate::Error;
+
+/// Log-file writes are coalesced up to this size. Task output arrives in
+/// chunks of up to 8 KiB, so the default 8 KiB buffer meant about one
+/// `write(2)` per chunk.
+const LOG_FILE_BUFFER_BYTES: usize = 64 * 1024;
 
 /// Receives logs and multiplexes them to a log file and/or a prefixed
 /// writer
@@ -29,16 +34,24 @@ impl<W> Default for LogWriter<W> {
 impl<W: Write> LogWriter<W> {
     pub fn with_log_file(&mut self, log_file_path: &AbsoluteSystemPath) -> Result<(), Error> {
         log_file_path.ensure_dir().map_err(|err| {
-            warn!("error creating log file directory: {:?}", err);
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Logs),
+                format!("error creating log file directory: {err:?}"),
+            )
+            .emit();
             Error::CannotWriteLogs(err)
         })?;
 
         let log_file = log_file_path.create().map_err(|err| {
-            warn!("error creating log file: {:?}", err);
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Logs),
+                format!("error creating log file: {err:?}"),
+            )
+            .emit();
             Error::CannotWriteLogs(err)
         })?;
 
-        self.log_file = Some(BufWriter::new(log_file));
+        self.log_file = Some(BufWriter::with_capacity(LOG_FILE_BUFFER_BYTES, log_file));
 
         Ok(())
     }
@@ -82,81 +95,66 @@ impl<W: Write> Write for LogWriter<W> {
     }
 }
 
-pub fn replay_logs<W: Write>(
-    mut output: W,
-    log_file_name: &AbsoluteSystemPath,
-) -> Result<(), Error> {
+pub fn replay_logs<W: Write>(output: W, log_file_name: &AbsoluteSystemPath) -> Result<(), Error> {
     debug!("start replaying logs");
 
     let log_file = File::open(log_file_name).map_err(|err| {
-        warn!("error opening log file: {:?}", err);
+        turborepo_log::warn(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Logs),
+            format!("error opening log file: {err:?}"),
+        )
+        .emit();
         Error::CannotReadLogs(err)
     })?;
 
-    let mut log_reader = BufReader::new(log_file);
-
-    let mut buffer = Vec::new();
-    loop {
-        let num_bytes = log_reader
-            .read_until(b'\n', &mut buffer)
-            .map_err(Error::CannotReadLogs)?;
-        if num_bytes == 0 {
-            break;
-        }
-
-        // If the log file doesn't end with a newline, then we add one to ensure the
-        // underlying writer receives a full line.
-        if !buffer.ends_with(b"\n") {
-            buffer.push(b'\n');
-        }
-        output.write_all(&buffer).map_err(Error::CannotReadLogs)?;
-
-        buffer.clear();
-    }
+    replay_lines(output, log_file).map_err(Error::CannotReadLogs)?;
 
     debug!("finish replaying logs");
 
     Ok(())
 }
 
-/// Replay logs, but enforce crlf line endings
-// TODO: refactor to share code with `replay_logs`
-pub fn replay_logs_with_crlf<W: Write>(
-    mut output: W,
-    log_file_name: &AbsoluteSystemPath,
-) -> Result<(), Error> {
-    debug!("start replaying logs");
+/// Forward `reader` to `output` in large chunks that each end at a newline.
+///
+/// Every write to `output` is a run of whole lines, the same boundaries a
+/// line-at-a-time copy produces, so sinks that process each write on its own
+/// see identical input. A final line without a trailing newline gets one so
+/// the underlying writer always receives full lines.
+fn replay_lines<W: Write, R: Read>(mut output: W, mut reader: R) -> std::io::Result<()> {
+    const REPLAY_CHUNK_BYTES: usize = 64 * 1024;
 
-    let log_file = File::open(log_file_name).map_err(|err| {
-        warn!("error opening log file: {:?}", err);
-        Error::CannotReadLogs(err)
-    })?;
-
-    let mut log_reader = BufReader::new(log_file);
-
-    let mut buffer = Vec::new();
+    let mut buffer = vec![0u8; REPLAY_CHUNK_BYTES];
+    // Bytes at the start of `buffer` that belong to an unfinished line.
+    let mut pending = 0;
     loop {
-        let num_bytes = log_reader
-            .read_until(b'\n', &mut buffer)
-            .map_err(Error::CannotReadLogs)?;
-        if num_bytes == 0 {
-            break;
+        if pending == buffer.len() {
+            // A single line longer than the buffer: grow until it fits.
+            buffer.resize(buffer.len() * 2, 0);
         }
-
-        let line_without_lf = buffer.strip_suffix(b"\n").unwrap_or(&buffer);
-        let line_without_crlf = line_without_lf
-            .strip_suffix(b"\r")
-            .unwrap_or(line_without_lf);
-
-        output
-            .write_all(line_without_crlf)
-            .map_err(Error::CannotReadLogs)?;
-        output.write_all(b"\r\n").map_err(Error::CannotReadLogs)?;
-
-        buffer.clear();
+        let read = match reader.read(&mut buffer[pending..]) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(err) if err.kind() == ErrorKind::Interrupted => continue,
+            Err(err) => return Err(err),
+        };
+        let end = pending + read;
+        // `buffer[..pending]` has no newline, so only the new bytes need a scan.
+        match buffer[pending..end].iter().rposition(|&b| b == b'\n') {
+            Some(index) => {
+                let lines_end = pending + index + 1;
+                output.write_all(&buffer[..lines_end])?;
+                buffer.copy_within(lines_end..end, 0);
+                pending = end - lines_end;
+            }
+            None => pending = end,
+        }
     }
 
-    debug!("finish replaying logs");
+    if pending > 0 {
+        buffer.truncate(pending);
+        buffer.push(b'\n');
+        output.write_all(&buffer)?;
+    }
 
     Ok(())
 }
@@ -169,115 +167,107 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
-    use crate::{
-        logs::replay_logs, replay_logs_with_crlf, ColorConfig, LogWriter, PrefixedUI,
-        PrefixedWriter, BOLD, CYAN,
-    };
+    use crate::{LogWriter, logs::replay_logs};
 
     #[test]
     fn test_log_writer() -> Result<()> {
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
-        let mut prefixed_writer_output = Vec::new();
+        let mut display_output = Vec::new();
         let mut log_writer = LogWriter::default();
-        let color_config = ColorConfig::new(false);
 
         log_writer.with_log_file(&log_file_path)?;
-        log_writer.with_writer(PrefixedWriter::new(
-            color_config,
-            CYAN.apply_to(">".to_string()),
-            &mut prefixed_writer_output,
-        ));
+        log_writer.with_writer(&mut display_output);
 
         writeln!(log_writer, "one fish")?;
         writeln!(log_writer, "two fish")?;
-        writeln!(log_writer, "red fish")?;
-        writeln!(log_writer, "blue fish")?;
 
         log_writer.flush()?;
 
-        assert_eq!(
-            String::from_utf8(prefixed_writer_output)?,
-            "\u{1b}[36m>\u{1b}[0mone fish\n\u{1b}[36m>\u{1b}[0mtwo fish\n\u{1b}[36m>\u{1b}[0mred \
-             fish\n\u{1b}[36m>\u{1b}[0mblue fish\n"
-        );
+        assert_eq!(String::from_utf8(display_output)?, "one fish\ntwo fish\n");
 
         let log_file_contents = log_file_path.read_to_string()?;
-
-        assert_eq!(
-            log_file_contents,
-            "one fish\ntwo fish\nred fish\nblue fish\n"
-        );
+        assert_eq!(log_file_contents, "one fish\ntwo fish\n");
 
         Ok(())
     }
 
     #[test]
     fn test_replay_logs() -> Result<()> {
-        let color_config = ColorConfig::new(false);
-        let mut output = Vec::new();
-        let mut err = Vec::new();
-        let mut prefixed_ui = PrefixedUI::new(color_config, &mut output, &mut err)
-            .with_output_prefix(CYAN.apply_to(">".to_string()))
-            .with_warn_prefix(BOLD.apply_to(">!".to_string()));
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
-        fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
-        replay_logs(prefixed_ui.output_prefixed_writer(), &log_file_path)?;
+        fs::write(&log_file_path, "one fish\ntwo fish\n")?;
+        let mut output = Vec::new();
+        replay_logs(&mut output, &log_file_path)?;
+        assert_eq!(String::from_utf8(output)?, "one fish\ntwo fish\n");
+        Ok(())
+    }
 
-        assert_eq!(
-            String::from_utf8(output)?,
-            "\u{1b}[36m>\u{1b}[0m\n\u{1b}[36m>\u{1b}[0mone fish\n\u{1b}[36m>\u{1b}[0mtwo \
-             fish\n\u{1b}[36m>\u{1b}[0mred fish\n\u{1b}[36m>\u{1b}[0mblue fish\n"
-        );
+    /// Records each write separately so tests can check chunk boundaries.
+    #[derive(Default)]
+    struct WriteRecorder(Vec<Vec<u8>>);
 
+    impl Write for WriteRecorder {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.push(buf.to_vec());
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    /// The previous line-at-a-time replay, used as the reference output.
+    fn replay_per_line(contents: &[u8]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for line in contents.split_inclusive(|b| *b == b'\n') {
+            out.extend_from_slice(line);
+            if !line.ends_with(b"\n") {
+                out.push(b'\n');
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn test_replay_lines_writes_whole_lines_in_chunks() -> Result<()> {
+        let mut contents = Vec::new();
+        for i in 0..20_000 {
+            contents.extend_from_slice(format!("line {i}\r\n").as_bytes());
+            if i % 1000 == 0 {
+                // A line longer than the replay buffer.
+                contents.extend(std::iter::repeat_n(b'x', 150_000));
+                contents.push(b'\n');
+            }
+        }
+        contents.extend_from_slice(b"no trailing newline");
+
+        let mut recorder = WriteRecorder::default();
+        super::replay_lines(&mut recorder, contents.as_slice())?;
+
+        assert!(recorder.0.len() < 1000, "replay should write in chunks");
+        assert!(recorder.0.iter().all(|chunk| chunk.ends_with(b"\n")));
+        assert_eq!(recorder.0.concat(), replay_per_line(&contents));
+        Ok(())
+    }
+
+    #[test]
+    fn test_replay_lines_empty() -> Result<()> {
+        let mut recorder = WriteRecorder::default();
+        super::replay_lines(&mut recorder, &b""[..])?;
+        assert!(recorder.0.is_empty());
         Ok(())
     }
 
     #[test]
     fn test_replay_logs_invalid_utf8() -> Result<()> {
-        let color_config = ColorConfig::new(true);
-        let mut output = Vec::new();
-        let mut err = Vec::new();
-        let mut prefixed_ui = PrefixedUI::new(color_config, &mut output, &mut err)
-            .with_output_prefix(CYAN.apply_to(">".to_string()))
-            .with_warn_prefix(BOLD.apply_to(">!".to_string()));
         let dir = tempdir()?;
         let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
         fs::write(&log_file_path, [0, 159, 146, 150, b'\n'])?;
-        replay_logs(prefixed_ui.output_prefixed_writer(), &log_file_path)?;
-
-        assert_eq!(output, [b'>', 0, 159, 146, 150, b'\n']);
-        Ok(())
-    }
-
-    #[test]
-    fn test_replay_logs_crlf() -> Result<()> {
-        let dir = tempdir()?;
-        let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
-        fs::write(&log_file_path, "\none fish\ntwo fish\nred fish\nblue fish")?;
         let mut output = Vec::new();
-        replay_logs_with_crlf(&mut output, &log_file_path)?;
-        let output_str = std::str::from_utf8(&output)?;
-        assert_eq!(
-            output_str,
-            "\r\none fish\r\ntwo fish\r\nred fish\r\nblue fish\r\n"
-        );
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_replay_logs_crlf_noop() -> Result<()> {
-        let dir = tempdir()?;
-        let log_file_path = AbsoluteSystemPathBuf::try_from(dir.path().join("test.txt"))?;
-        let contents = "\r\none fish\r\ntwo fish\r\nred fish\r\nblue fish\r\n";
-        fs::write(&log_file_path, contents)?;
-        let mut output = Vec::new();
-        replay_logs_with_crlf(&mut output, &log_file_path)?;
-        let output_str = std::str::from_utf8(&output)?;
-        assert_eq!(output_str, contents,);
-
+        replay_logs(&mut output, &log_file_path)?;
+        assert_eq!(output, [0, 159, 146, 150, b'\n']);
         Ok(())
     }
 }

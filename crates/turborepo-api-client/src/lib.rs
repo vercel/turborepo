@@ -1,18 +1,35 @@
+//! HTTP client for interacting with the Remote Cache API.
+//! Provides authentication, caching, and telemetry endpoints for Remote Cache
+//! operations. By default configured for Vercel API
+
 #![feature(error_generic_member_access)]
-#![feature(assert_matches)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env, future::Future, time::Duration};
+use std::{
+    backtrace::Backtrace,
+    collections::HashMap,
+    env,
+    future::Future,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+#[cfg(feature = "rustls-tls")]
+use std::{io::Cursor, path::Path};
 
-use lazy_static::lazy_static;
-use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
+#[cfg(feature = "rustls-tls")]
+use rustls_pemfile::{self, Item};
 use serde::Deserialize;
-use turborepo_ci::{is_ci, Vendor};
+use sha2::{Digest, Sha256};
+use turborepo_ci::{Vendor, is_ci};
+use turborepo_types::SecretString;
 use turborepo_vercel_api::{
-    token::ResponseTokenMetadata, APIError, CachingStatus, CachingStatusResponse,
-    PreflightResponse, Team, TeamsResponse, UserResponse, VerificationResponse, VerifiedSsoUser,
+    APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse, User,
+    UserResponse, VerificationResponse, VerifiedSsoUser,
+    token::{ResponseTokenMetadata, Scope},
 };
 use url::Url;
 
@@ -21,39 +38,65 @@ pub use crate::error::{Error, Result};
 pub mod analytics;
 mod error;
 mod retry;
+mod shared_http_client;
 pub mod telemetry;
-
 pub use bytes::Bytes;
+pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
+#[cfg(feature = "rustls-tls")]
+use turborepo_tls as tls;
 
-lazy_static! {
-    static ref AUTHORIZATION_REGEX: Regex =
-        Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
+fn allows_authorization_header(allowed_headers: &str) -> bool {
+    allowed_headers == "*"
+        || allowed_headers
+            .split(',')
+            .any(|header| header.trim().eq_ignore_ascii_case("authorization"))
+}
+
+fn response_error(response: Response, status: StatusCode) -> Error {
+    match response.error_for_status() {
+        Ok(response) => Error::UnknownStatus {
+            code: status.to_string(),
+            message: format!("request to {} returned unexpected status", response.url()),
+            backtrace: Backtrace::capture(),
+        },
+        Err(err) => err.into(),
+    }
 }
 
 pub trait Client {
-    fn get_user(&self, token: &str) -> impl Future<Output = Result<UserResponse>> + Send;
-    fn get_teams(&self, token: &str) -> impl Future<Output = Result<TeamsResponse>> + Send;
+    fn get_user(&self, token: &SecretString) -> impl Future<Output = Result<UserResponse>> + Send;
+    fn get_teams(&self, token: &SecretString)
+    -> impl Future<Output = Result<TeamsResponse>> + Send;
     fn get_team(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: &str,
     ) -> impl Future<Output = Result<Option<Team>>> + Send;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
     fn verify_sso_token(
         &self,
-        token: &str,
+        token: &SecretString,
         token_name: &str,
     ) -> impl Future<Output = Result<VerifiedSsoUser>> + Send;
     fn handle_403(response: Response) -> impl Future<Output = Error> + Send;
     fn make_url(&self, endpoint: &str) -> Result<Url>;
 }
 
+/// Metadata returned for a hit by POST /v8/artifacts.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactQueryHit {
+    pub task_duration_ms: u64,
+    pub sha: Option<String>,
+    pub dirty_hash: Option<String>,
+}
+
 pub trait CacheClient {
     fn get_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
@@ -61,11 +104,11 @@ pub trait CacheClient {
     fn fetch_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<Option<Response>>> + Send;
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     fn put_artifact(
         &self,
         hash: &str,
@@ -73,20 +116,22 @@ pub trait CacheClient {
         body_len: usize,
         duration: u64,
         tag: Option<&str>,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
+        sha: Option<&str>,
+        dirty_hash: Option<&str>,
     ) -> impl Future<Output = Result<()>> + Send;
     fn artifact_exists(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<Option<Response>>> + Send;
     fn get_caching_status(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<CachingStatusResponse>> + Send;
@@ -95,24 +140,30 @@ pub trait CacheClient {
 pub trait TokenClient {
     fn get_metadata(
         &self,
-        token: &str,
+        token: &SecretString,
     ) -> impl Future<Output = Result<ResponseTokenMetadata>> + Send;
-    fn delete_token(&self, token: &str) -> impl Future<Output = Result<()>> + Send;
+    fn delete_token(&self, token: &SecretString) -> impl Future<Output = Result<()>> + Send;
 }
+
+type ArtifactRateLimitKey = (Option<String>, Option<String>, [u8; 32]);
 
 #[derive(Clone)]
 pub struct APIClient {
     client: reqwest::Client,
-    cache_client: reqwest::Client,
     base_url: String,
     user_agent: String,
     use_preflight: bool,
+    timeout: Option<Duration>,
+    upload_timeout: Option<Duration>,
+    // Kept on APIClient, not the shared reqwest client: different API clients
+    // (and different teams/tokens on the same client) must not block each other.
+    artifact_rate_limits: Arc<Mutex<HashMap<ArtifactRateLimitKey, retry::RateLimit>>>,
 }
 
 #[derive(Clone)]
 pub struct APIAuth {
     pub team_id: Option<String>,
-    pub token: String,
+    pub token: SecretString,
     pub team_slug: Option<String>,
 }
 
@@ -120,7 +171,7 @@ impl std::fmt::Debug for APIAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("APIAuth")
             .field("team_id", &self.team_id)
-            .field("token", &"***")
+            .field("token", &self.token)
             .field("team_slug", &self.team_slug)
             .finish()
     }
@@ -133,30 +184,22 @@ pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
 }
 
 impl Client for APIClient {
-    async fn get_user(&self, token: &str) -> Result<UserResponse> {
-        let url = self.make_url("/v2/user")?;
-        let request_builder = self
-            .client
-            .get(url)
-            .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {}", token))
-            .header("Content-Type", "application/json");
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
-                .await?
-                .into_response()
-                .error_for_status()?;
+    #[tracing::instrument(skip_all)]
+    async fn get_user(&self, token: &SecretString) -> Result<UserResponse> {
+        if token.expose().starts_with("vca_") {
+            return self.get_vercel_app_user(token).await;
+        }
 
-        Ok(response.json().await?)
+        self.get_legacy_user(token).await
     }
 
-    async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+    #[tracing::instrument(skip_all)]
+    async fn get_teams(&self, token: &SecretString) -> Result<TeamsResponse> {
         let request_builder = self
-            .client
-            .get(self.make_url("/v2/teams?limit=100")?)
+            .api_request(Method::GET, self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token));
+            .bearer_auth(token.expose());
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -167,14 +210,14 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
-    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+    #[tracing::instrument(skip_all)]
+    async fn get_team(&self, token: &SecretString, team_id: &str) -> Result<Option<Team>> {
         let endpoint = format!("/v2/teams/{team_id}");
         let response = self
-            .client
-            .get(self.make_url(&endpoint)?)
+            .api_request(Method::GET, self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token))
+            .bearer_auth(token.expose())
             .send()
             .await?
             .error_for_status()?;
@@ -182,20 +225,24 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
     fn add_ci_header(mut request_builder: RequestBuilder) -> RequestBuilder {
-        if is_ci() {
-            if let Some(vendor_constant) = Vendor::get_constant() {
-                request_builder = request_builder.header("x-artifact-client-ci", vendor_constant);
-            }
+        if is_ci()
+            && let Some(vendor_constant) = Vendor::get_constant()
+        {
+            request_builder = request_builder.header("x-artifact-client-ci", vendor_constant);
         }
 
         request_builder
     }
 
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+    #[tracing::instrument(skip_all)]
+    async fn verify_sso_token(
+        &self,
+        token: &SecretString,
+        token_name: &str,
+    ) -> Result<VerifiedSsoUser> {
         let request_builder = self
-            .client
-            .get(self.make_url("/registration/verify")?)
-            .query(&[("token", token), ("tokenName", token_name)])
+            .api_request(Method::GET, self.make_url("/registration/verify")?)
+            .query(&[("token", token.expose()), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
         let response =
@@ -228,7 +275,7 @@ impl Client for APIClient {
                 return Error::InvalidJson {
                     err,
                     text: body.clone(),
-                }
+                };
             }
         };
 
@@ -242,7 +289,7 @@ impl Client for APIClient {
                     return Error::UnknownCachingStatus(
                         status_string.to_string(),
                         Backtrace::capture(),
-                    )
+                    );
                 }
             };
 
@@ -265,25 +312,60 @@ impl Client for APIClient {
     }
 }
 
+impl APIClient {
+    /// Query multiple artifacts without downloading their bodies. An invalid or
+    /// unsupported response is an error so callers can fall back to HEAD.
+    pub async fn query_artifacts(
+        &self,
+        hashes: &[String],
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> Result<HashMap<String, Option<ArtifactQueryHit>>> {
+        let request = self
+            .api_request(Method::POST, self.make_url("/v8/artifacts")?)
+            .header("User-Agent", self.user_agent.clone())
+            .header("Content-Type", "application/json")
+            .bearer_auth(token.expose())
+            .json(&serde_json::json!({ "hashes": hashes }));
+        let request = Self::add_team_params(request, team_id, team_slug);
+        let response = retry::make_rate_limited_request(
+            request,
+            retry::RetryStrategy::Timeout,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?
+        .into_response();
+        if response.status() == StatusCode::FORBIDDEN {
+            return Err(Self::handle_403(response).await);
+        }
+        Ok(response.error_for_status()?.json().await?)
+    }
+}
+
 impl CacheClient for APIClient {
+    #[tracing::instrument(skip_all)]
     async fn get_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
     ) -> Result<Option<Response>> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
+
+        Self::add_team_params_to_url(&mut request_url, team_id, team_slug);
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(
+                .do_preflight_with_rate_limit(
                     token,
                     request_url.clone(),
                     "GET",
                     "Authorization, User-Agent",
+                    Some(self.artifact_rate_limit(token, team_id, team_slug)),
                 )
                 .await?;
 
@@ -292,18 +374,19 @@ impl CacheClient for APIClient {
         };
 
         let mut request_builder = self
-            .client
-            .request(method, request_url)
+            .api_request(method, request_url)
             .header("User-Agent", self.user_agent.clone());
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
 
-        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
-
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
+        let response = retry::make_rate_limited_request(
+            request_builder,
+            retry::RetryStrategy::Timeout,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?;
         let response = response.into_response();
 
         match response.status() {
@@ -317,7 +400,7 @@ impl CacheClient for APIClient {
     async fn artifact_exists(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
@@ -329,7 +412,7 @@ impl CacheClient for APIClient {
     async fn fetch_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
@@ -345,20 +428,26 @@ impl CacheClient for APIClient {
         body_length: usize,
         duration: u64,
         tag: Option<&str>,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
+        sha: Option<&str>,
+        dirty_hash: Option<&str>,
     ) -> Result<()> {
-        let mut request_url = self.make_url(&format!("/v8/artifacts/{}", hash))?;
+        let mut request_url = self.make_url(&format!("/v8/artifacts/{hash}"))?;
         let mut allow_auth = true;
+
+        Self::add_team_params_to_url(&mut request_url, team_id, team_slug);
 
         if self.use_preflight {
             let preflight_response = self
-                .do_preflight(
+                .do_preflight_with_rate_limit(
                     token,
                     request_url.clone(),
                     "PUT",
-                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag",
+                    "Authorization, Content-Type, User-Agent, x-artifact-duration, \
+                     x-artifact-tag, x-artifact-sha, x-artifact-dirty-hash",
+                    Some(self.artifact_rate_limit(token, team_id, team_slug)),
                 )
                 .await?;
 
@@ -369,8 +458,7 @@ impl CacheClient for APIClient {
         let stream = Body::wrap_stream(artifact_body);
 
         let mut request_builder = self
-            .cache_client
-            .put(request_url)
+            .upload_request(Method::PUT, request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
@@ -378,10 +466,8 @@ impl CacheClient for APIClient {
             .body(stream);
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
-
-        request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
         request_builder = Self::add_ci_header(request_builder);
 
@@ -389,10 +475,21 @@ impl CacheClient for APIClient {
             request_builder = request_builder.header("x-artifact-tag", tag);
         }
 
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Connection)
-                .await?
-                .into_response();
+        if let Some(sha) = sha {
+            request_builder = request_builder.header("x-artifact-sha", sha);
+        }
+
+        if let Some(dirty_hash) = dirty_hash {
+            request_builder = request_builder.header("x-artifact-dirty-hash", dirty_hash);
+        }
+
+        let response = retry::make_rate_limited_request(
+            request_builder,
+            retry::RetryStrategy::Connection,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?
+        .into_response();
 
         if response.status() == StatusCode::FORBIDDEN {
             return Err(Self::handle_403(response).await);
@@ -402,40 +499,71 @@ impl CacheClient for APIClient {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_caching_status(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<CachingStatusResponse> {
         let request_builder = self
-            .client
-            .get(self.make_url("/v8/artifacts/status")?)
+            .api_request(Method::GET, self.make_url("/v8/artifacts/status")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", token));
+            .bearer_auth(token.expose());
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
-                .await?
-                .into_response()
-                .error_for_status()?;
+        let response = retry::make_rate_limited_request(
+            request_builder,
+            retry::RetryStrategy::Timeout,
+            self.artifact_rate_limit(token, team_id, team_slug),
+        )
+        .await?
+        .into_response()
+        .error_for_status()?;
 
         Ok(response.json().await?)
     }
 }
 
+#[derive(Deserialize, Debug)]
+struct VercelAppTokenIntrospectionResponse {
+    active: bool,
+    #[serde(default)]
+    scope: Option<String>,
+    #[serde(default)]
+    exp: Option<u64>,
+    #[serde(default)]
+    iat: Option<u64>,
+    #[serde(default)]
+    client_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UserinfoResponse {
+    sub: String,
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    preferred_username: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+}
+
 impl TokenClient for APIClient {
-    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
+    #[tracing::instrument(skip_all)]
+    async fn get_metadata(&self, token: &SecretString) -> Result<ResponseTokenMetadata> {
+        if token.expose().starts_with("vca_") {
+            return self.get_vercel_app_token_metadata(token).await;
+        }
+
         let endpoint = "/v5/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
-            .client
-            .get(url)
+            .api_request(Method::GET, url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {}", token))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -482,19 +610,23 @@ impl TokenClient for APIClient {
                     url: self.make_url(endpoint)?.to_string(),
                 })
             }
-            _ => Err(response.error_for_status().unwrap_err().into()),
+            _ => Err(response_error(response, status)),
         }
     }
 
     /// Invalidates the given token on the server.
-    async fn delete_token(&self, token: &str) -> Result<()> {
+    #[tracing::instrument(skip_all)]
+    async fn delete_token(&self, token: &SecretString) -> Result<()> {
+        if token.expose().starts_with("vca_") {
+            return self.delete_vercel_app_token(token).await;
+        }
+
         let endpoint = "/v3/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
-            .client
-            .delete(url)
+            .api_request(Method::DELETE, url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {}", token))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -537,7 +669,7 @@ impl TokenClient for APIClient {
                     url: self.make_url(endpoint)?.to_string(),
                 })
             }
-            _ => Err(response.error_for_status().unwrap_err().into()),
+            _ => Err(response_error(response, status)),
         }
     }
 }
@@ -560,37 +692,215 @@ impl APIClient {
         version: &str,
         use_preflight: bool,
     ) -> Result<Self> {
-        // for the api client, the timeout applies for the entire duration
-        // of the request, including the connection phase
-        let client = reqwest::Client::builder();
-        let client = if let Some(dur) = timeout {
-            client.timeout(dur)
-        } else {
-            client
-        }
-        .build()
-        .map_err(Error::TlsError)?;
-
-        // for the cache client, the timeout applies only to the request
-        // connection time, while the upload timeout applies to the entire
-        // request
-        let cache_client = reqwest::Client::builder();
-        let cache_client = match (timeout, upload_timeout) {
-            (Some(dur), Some(upload_dur)) => cache_client.connect_timeout(dur).timeout(upload_dur),
-            (Some(dur), None) | (None, Some(dur)) => cache_client.timeout(dur),
-            (None, None) => cache_client,
-        }
-        .build()
-        .map_err(Error::TlsError)?;
-
+        let client = Self::build_http_client(timeout)?;
         let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
-            cache_client,
             base_url: base_url.as_ref().to_string(),
             user_agent,
             use_preflight,
+            timeout,
+            upload_timeout,
+            artifact_rate_limits: Arc::default(),
         })
+    }
+
+    /// Creates an APIClient using a pre-built `reqwest::Client`, avoiding
+    /// redundant TLS initialization when a client already exists.
+    pub fn new_with_client(
+        client: reqwest::Client,
+        base_url: impl AsRef<str>,
+        timeout: Option<Duration>,
+        upload_timeout: Option<Duration>,
+        version: &str,
+        use_preflight: bool,
+    ) -> Self {
+        let user_agent = build_user_agent(version);
+        APIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+            use_preflight,
+            timeout,
+            upload_timeout,
+            artifact_rate_limits: Arc::default(),
+        }
+    }
+
+    /// Builds a shared HTTP client with optional connect timeout. This is
+    /// the single TLS initialization point — all consumers should share the
+    /// resulting client.
+    #[tracing::instrument(skip_all)]
+    pub fn build_http_client(connect_timeout: Option<Duration>) -> Result<reqwest::Client> {
+        Self::build_http_client_with_native_roots(connect_timeout, true)
+    }
+
+    /// Builds an HTTP client using only the bundled Mozilla CA bundle
+    /// (webpki-roots). This is instant (~0ms) because no system Keychain
+    /// access is needed. Sufficient for all standard HTTPS connections.
+    #[tracing::instrument(skip_all)]
+    pub fn build_http_client_webpki_only(
+        connect_timeout: Option<Duration>,
+    ) -> Result<reqwest::Client> {
+        Self::build_http_client_with_native_roots(connect_timeout, false)
+    }
+
+    fn build_http_client_with_native_roots(
+        connect_timeout: Option<Duration>,
+        #[allow(unused_variables)] native_roots: bool,
+    ) -> Result<reqwest::Client> {
+        // Make sure rustls can verify P-521 certificate chains before we build
+        // any client. ring (rustls' default provider) cannot, which breaks
+        // remote caches sitting behind P-521 issuers. See `turborepo-tls`.
+        #[cfg(feature = "rustls-tls")]
+        tls::ensure_crypto_provider();
+
+        let build = |#[allow(unused_variables)] use_native: bool| {
+            let mut builder = reqwest::Client::builder();
+            #[cfg(feature = "rustls-tls")]
+            {
+                builder = builder
+                    .tls_built_in_webpki_certs(true)
+                    .tls_built_in_native_certs(use_native);
+                // When native certs are disabled (webpki-only fast path),
+                // manually load certificates from SSL_CERT_FILE / SSL_CERT_DIR
+                // so that custom CAs (e.g. corporate proxies, self-hosted
+                // caches) work even before the full native client is ready.
+                // This is pure file I/O — no macOS Keychain — so it stays fast.
+                if !use_native {
+                    builder = Self::add_env_certificates(builder);
+                }
+            }
+            if let Some(dur) = connect_timeout {
+                builder = builder.connect_timeout(dur);
+            }
+            builder.build()
+        };
+
+        match build(native_roots) {
+            Ok(client) => Ok(client),
+            Err(e) if native_roots => {
+                // The system certificate store may be inaccessible (e.g.
+                // "Access is denied" on locked-down Windows machines).
+                // Fall back to the bundled Mozilla CA bundle which doesn't
+                // require any OS-level access.
+                tracing::warn!(
+                    "System certificate store is unavailable ({e}), using bundled certificates"
+                );
+                build(false).map_err(Error::TlsError)
+            }
+            Err(e) => Err(Error::TlsError(e)),
+        }
+    }
+
+    /// Loads root certificates from `SSL_CERT_FILE` and `SSL_CERT_DIR`
+    /// environment variables into the given client builder.
+    #[cfg(feature = "rustls-tls")]
+    fn add_env_certificates(mut builder: reqwest::ClientBuilder) -> reqwest::ClientBuilder {
+        if let Ok(cert_file) = env::var("SSL_CERT_FILE") {
+            match std::fs::read(&cert_file) {
+                Ok(pem) if !pem.is_empty() => {
+                    builder =
+                        Self::append_certificates_from_bytes(builder, &pem, Path::new(&cert_file));
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::debug!("Failed to read SSL_CERT_FILE ({cert_file}): {e}");
+                }
+            }
+        }
+
+        if let Ok(cert_dir) = env::var("SSL_CERT_DIR")
+            && let Ok(entries) = std::fs::read_dir(&cert_dir)
+        {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file()
+                    && let Ok(pem) = std::fs::read(&path)
+                    && !pem.is_empty()
+                {
+                    builder = Self::append_certificates_from_bytes(builder, &pem, path.as_path());
+                }
+            }
+        }
+
+        builder
+    }
+
+    #[cfg(feature = "rustls-tls")]
+    fn append_certificates_from_bytes(
+        mut builder: reqwest::ClientBuilder,
+        bytes: &[u8],
+        source: &Path,
+    ) -> reqwest::ClientBuilder {
+        let mut cursor = Cursor::new(bytes);
+        let mut added_any = false;
+        let mut saw_item = false;
+        for item in rustls_pemfile::read_all(&mut cursor) {
+            saw_item = true;
+            match item {
+                Ok(Item::X509Certificate(cert_der)) => {
+                    match reqwest::Certificate::from_der(&cert_der) {
+                        Ok(cert) => {
+                            builder = builder.add_root_certificate(cert);
+                            added_any = true;
+                        }
+                        Err(e) => {
+                            tracing::debug!(
+                                "Failed to parse DER certificate from {}: {e}",
+                                source.display()
+                            );
+                        }
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to parse certificates from {}: {e}",
+                        source.display()
+                    );
+                }
+            }
+        }
+
+        if added_any {
+            return builder;
+        }
+
+        if let Ok(cert) = reqwest::Certificate::from_pem(bytes) {
+            return builder.add_root_certificate(cert);
+        }
+
+        if let Ok(cert) = reqwest::Certificate::from_der(bytes) {
+            return builder.add_root_certificate(cert);
+        }
+
+        if saw_item {
+            tracing::debug!("No X509 certificates found in {}", source.display());
+        } else {
+            tracing::debug!("No certificates found in {}", source.display());
+        }
+        builder
+    }
+
+    fn artifact_rate_limit(
+        &self,
+        token: &SecretString,
+        team_id: Option<&str>,
+        team_slug: Option<&str>,
+    ) -> retry::RateLimit {
+        // Keep credentials out of the map, which lives for the lifetime of this client.
+        let key = (
+            team_id.map(str::to_owned),
+            team_slug.map(str::to_owned),
+            Sha256::digest(token.expose().as_bytes()).into(),
+        );
+        self.artifact_rate_limits
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .entry(key)
+            .or_default()
+            .clone()
     }
 
     pub fn base_url(&self) -> &str {
@@ -601,25 +911,68 @@ impl APIClient {
         self.base_url = base_url;
     }
 
+    /// Creates a request builder with the standard API timeout applied.
+    fn api_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.timeout {
+            builder = builder.timeout(dur);
+        }
+        add_ai_agent_header(builder)
+    }
+
+    /// Creates a request builder with upload timeout semantics:
+    /// connect_timeout is set on the shared client, and the total
+    /// request timeout uses upload_timeout (falling back to api timeout).
+    fn upload_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.upload_timeout.or(self.timeout) {
+            builder = builder.timeout(dur);
+        }
+        add_ai_agent_header(builder)
+    }
+
+    #[tracing::instrument(skip_all)]
     async fn do_preflight(
         &self,
-        token: &str,
+        token: &SecretString,
         request_url: Url,
         request_method: &str,
         request_headers: &str,
     ) -> Result<PreflightResponse> {
+        self.do_preflight_with_rate_limit(token, request_url, request_method, request_headers, None)
+            .await
+    }
+
+    async fn do_preflight_with_rate_limit(
+        &self,
+        token: &SecretString,
+        request_url: Url,
+        request_method: &str,
+        request_headers: &str,
+        rate_limit: Option<retry::RateLimit>,
+    ) -> Result<PreflightResponse> {
         let request_builder = self
-            .client
-            .request(Method::OPTIONS, request_url)
+            .api_request(Method::OPTIONS, request_url)
             .header("User-Agent", self.user_agent.clone())
             .header("Access-Control-Request-Method", request_method)
             .header("Access-Control-Request-Headers", request_headers)
-            .header("Authorization", format!("Bearer {}", token));
+            .bearer_auth(token.expose());
 
-        let response =
-            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+        let response = match rate_limit {
+            Some(rate_limit) => {
+                retry::make_rate_limited_request(
+                    request_builder,
+                    retry::RetryStrategy::Timeout,
+                    rate_limit,
+                )
                 .await?
-                .into_response();
+            }
+            None => {
+                retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                    .await?
+            }
+        }
+        .into_response();
 
         let headers = response.headers();
         let location = if let Some(location) = headers.get("Location") {
@@ -641,7 +994,7 @@ impl APIClient {
                     return Err(Error::InvalidUrl {
                         url: location.to_string(),
                         err: e,
-                    })
+                    });
                 }
             }
         } else {
@@ -652,7 +1005,7 @@ impl APIClient {
             .get("Access-Control-Allow-Headers")
             .map_or("", |h| h.to_str().unwrap_or(""));
 
-        let allow_auth = AUTHORIZATION_REGEX.is_match(allowed_headers);
+        let allow_auth = allows_authorization_header(allowed_headers);
 
         Ok(PreflightResponse {
             location,
@@ -676,6 +1029,8 @@ impl APIClient {
             team_slug,
         } = api_auth;
 
+        Self::add_team_params_to_url(&mut url, team_id.as_deref(), team_slug.as_deref());
+
         if self.use_preflight {
             let preflight_response = self
                 .do_preflight(
@@ -691,22 +1046,43 @@ impl APIClient {
         }
 
         let mut request_builder = self
-            .client
-            .request(method, url)
+            .api_request(method, url)
             .header("Content-Type", "application/json");
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {}", token));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
-
-        request_builder =
-            Self::add_team_params(request_builder, team_id.as_deref(), team_slug.as_deref());
 
         if let Some(constant) = turborepo_ci::Vendor::get_constant() {
             request_builder = request_builder.header("x-artifact-client-ci", constant);
         }
 
         Ok(request_builder)
+    }
+
+    /// Adds the team parameters to a URL before a preflight request is made.
+    ///
+    /// Remote Caches need the team to resolve a request, so the parameters have
+    /// to be part of the preflight request itself. They must not be appended
+    /// afterwards either: a preflight response may point at signed storage, and
+    /// such URLs sign their own query string, so appending a parameter to the
+    /// returned location invalidates the signature.
+    fn add_team_params_to_url(url: &mut Url, team_id: Option<&str>, team_slug: Option<&str>) {
+        let team_id = team_id.filter(|team_id| team_id.starts_with("team_"));
+
+        if team_id.is_none() && team_slug.is_none() {
+            return;
+        }
+
+        let mut query = url.query_pairs_mut();
+
+        if let Some(team_id) = team_id {
+            query.append_pair("teamId", team_id);
+        }
+
+        if let Some(team_slug) = team_slug {
+            query.append_pair("slug", team_slug);
+        }
     }
 
     fn add_team_params(
@@ -724,6 +1100,152 @@ impl APIClient {
             request_builder = request_builder.query(&[("slug", slug)]);
         }
         request_builder
+    }
+
+    /// Introspects a Vercel App token (prefixed "vca_") using the RFC 7662
+    /// endpoint.
+    async fn get_vercel_app_token_metadata(
+        &self,
+        token: &SecretString,
+    ) -> Result<ResponseTokenMetadata> {
+        let url = self.make_url("/login/oauth/token/introspect")?;
+        let request_builder = self
+            .api_request(Method::POST, url)
+            .header("User-Agent", self.user_agent.clone())
+            .form(&[("token", token.expose())]);
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        let resp: VercelAppTokenIntrospectionResponse = response.json().await?;
+
+        if !resp.active {
+            return Err(Error::InvalidToken {
+                status: 200,
+                url: self.make_url("/login/oauth/token/introspect")?.to_string(),
+                message: "token is not active".to_string(),
+            });
+        }
+
+        Ok(ResponseTokenMetadata {
+            scopes: resp
+                .scope
+                .map(|s| {
+                    s.split_whitespace()
+                        .map(|scope_str| Scope {
+                            scope_type: scope_str.to_string(),
+                            expires_at: resp.exp.map(|e| e as u128 * 1000),
+                            team_id: None,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            active_at: resp.iat.unwrap_or(0) as u128 * 1000,
+            client_id: resp.client_id,
+        })
+    }
+
+    /// Fetches user info for a Vercel App token (prefixed `vca_`) using the
+    /// OpenID Connect userinfo endpoint.
+    async fn get_vercel_app_user(&self, token: &SecretString) -> Result<UserResponse> {
+        let url = self.make_url("/login/oauth/userinfo")?;
+        let request_builder = self
+            .api_request(Method::GET, url)
+            .header("User-Agent", self.user_agent.clone())
+            .bearer_auth(token.expose());
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        let UserinfoResponse {
+            sub,
+            email,
+            preferred_username,
+            name,
+        } = response.json().await?;
+        let username = preferred_username.unwrap_or_default();
+        let name = name.or((!username.is_empty()).then(|| username.clone()));
+        // Some OIDC userinfo responses omit email. Keep login working by
+        // falling back to another stable identifier we can display to the user.
+        let email = email
+            .or((!username.is_empty()).then(|| username.clone()))
+            .or_else(|| name.clone())
+            .unwrap_or_else(|| sub.clone());
+
+        Ok(UserResponse {
+            user: User {
+                id: sub,
+                name,
+                username,
+                email,
+            },
+        })
+    }
+
+    async fn get_legacy_user(&self, token: &SecretString) -> Result<UserResponse> {
+        let url = self.make_url("/v2/user")?;
+        let request_builder = self
+            .api_request(Method::GET, url)
+            .header("User-Agent", self.user_agent.clone())
+            .bearer_auth(token.expose())
+            .header("Content-Type", "application/json");
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        Ok(response.json().await?)
+    }
+
+    /// Revokes a Vercel App token (prefixed "vca_") using the RFC 7009
+    /// endpoint. Introspects the token first to discover the correct client_id.
+    async fn delete_vercel_app_token(&self, token: &SecretString) -> Result<()> {
+        let client_id = self.introspect_client_id(token).await?;
+
+        let url = self.make_url("/login/oauth/token/revoke")?;
+        let request_builder = self
+            .api_request(Method::POST, url)
+            .header("User-Agent", self.user_agent.clone())
+            .form(&[("token", token.expose()), ("client_id", &client_id)]);
+
+        retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+            .await?
+            .into_response()
+            .error_for_status()?;
+
+        Ok(())
+    }
+
+    /// Introspects a token to discover its client_id.
+    async fn introspect_client_id(&self, token: &SecretString) -> Result<String> {
+        let url = self.make_url("/login/oauth/token/introspect")?;
+        let request_builder = self
+            .api_request(Method::POST, url)
+            .header("User-Agent", self.user_agent.clone())
+            .form(&[("token", token.expose())]);
+
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response()
+                .error_for_status()?;
+
+        let resp: VercelAppTokenIntrospectionResponse = response.json().await?;
+        resp.client_id.ok_or_else(|| Error::InvalidToken {
+            status: 200,
+            url: self
+                .make_url("/login/oauth/token/introspect")
+                .map(|u| u.to_string())
+                .unwrap_or_default(),
+            message: "token is not active".to_string(),
+        })
     }
 }
 
@@ -764,6 +1286,28 @@ impl AnonAPIClient {
             user_agent,
         })
     }
+
+    /// Creates an AnonAPIClient using a pre-built `reqwest::Client`, avoiding
+    /// redundant TLS initialization.
+    pub fn new_with_client(
+        client: reqwest::Client,
+        base_url: impl AsRef<str>,
+        version: &str,
+    ) -> Self {
+        let user_agent = build_user_agent(version);
+        AnonAPIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+        }
+    }
+}
+
+pub(crate) fn add_ai_agent_header(builder: RequestBuilder) -> RequestBuilder {
+    match turborepo_ai_agents::get_agent() {
+        Some(agent) => builder.header("x-ai-agent", agent),
+        None => builder,
+    }
 }
 
 fn build_user_agent(version: &str) -> String {
@@ -783,16 +1327,168 @@ mod test {
     use anyhow::Result;
     use bytes::Bytes;
     use insta::assert_snapshot;
+    use turborepo_vercel_api::telemetry::{TelemetryEvent, TelemetryGenericEvent};
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
 
-    use crate::{APIClient, CacheClient, Client};
+    use crate::{
+        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString, TokenClient,
+        telemetry::TelemetryClient,
+    };
+
+    #[test]
+    fn api_auth_debug_redacts_token() {
+        let auth = APIAuth {
+            team_id: Some("team-123".to_string()),
+            token: SecretString::new("real-secret-token".to_string()),
+            team_slug: Some("my-team".to_string()),
+        };
+        let debug = format!("{:?}", auth);
+        assert!(
+            !debug.contains("real-secret-token"),
+            "Debug output should not contain the raw token"
+        );
+        assert!(debug.contains("***"));
+        assert!(debug.contains("team-123"));
+        assert!(debug.contains("my-team"));
+    }
+
+    #[test]
+    fn add_team_params_to_url_appends_slug() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, None, Some("my-team"));
+
+        assert_eq!(
+            url.as_str(),
+            "https://cache.example/v8/artifacts/abc123?slug=my-team"
+        );
+    }
+
+    #[test]
+    fn add_team_params_to_url_appends_team_id_and_slug() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, Some("team_123"), Some("my-team"));
+
+        assert_eq!(
+            url.as_str(),
+            "https://cache.example/v8/artifacts/abc123?teamId=team_123&slug=my-team"
+        );
+    }
+
+    #[test]
+    fn add_team_params_to_url_ignores_team_id_without_prefix() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, Some("123"), Some("my-team"));
+
+        assert_eq!(
+            url.as_str(),
+            "https://cache.example/v8/artifacts/abc123?slug=my-team"
+        );
+    }
+
+    #[test]
+    fn add_team_params_to_url_leaves_url_untouched_when_unlinked() {
+        let mut url = Url::parse("https://cache.example/v8/artifacts/abc123").unwrap();
+
+        APIClient::add_team_params_to_url(&mut url, None, None);
+
+        assert_eq!(url.as_str(), "https://cache.example/v8/artifacts/abc123");
+    }
+
+    #[tokio::test]
+    async fn query_artifacts_sends_one_authenticated_batch_and_parses_metadata()
+    -> anyhow::Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let query = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::POST)
+                    .path("/v8/artifacts")
+                    .query_param("teamId", "team_123")
+                    .query_param("slug", "my-team")
+                    .header("authorization", "Bearer secret-token")
+                    .json_body(serde_json::json!({"hashes": ["hit", "miss"]}));
+                then.status(200).json_body(serde_json::json!({
+                    "hit": {"size": 12, "taskDurationMs": 456, "sha": "abc", "dirtyHash": "def"},
+                    "miss": null
+                }));
+            })
+            .await;
+        let client = APIClient::new(server.base_url(), None, None, "2.0.0", false)?;
+        let results = client
+            .query_artifacts(
+                &["hit".into(), "miss".into()],
+                &SecretString::new("secret-token".into()),
+                Some("team_123"),
+                Some("my-team"),
+            )
+            .await?;
+        query.assert_calls_async(1).await;
+        let hit = results.get("hit").unwrap().as_ref().unwrap();
+        assert_eq!(hit.task_duration_ms, 456);
+        assert_eq!(hit.sha.as_deref(), Some("abc"));
+        assert_eq!(hit.dirty_hash.as_deref(), Some("def"));
+        assert!(results.get("miss").unwrap().is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn fetch_artifact_does_not_leak_credentials_to_preflight_location() -> anyhow::Result<()>
+    {
+        let storage = httpmock::MockServer::start_async().await;
+        let get = storage
+            .mock_async(|w, t| {
+                w.method(httpmock::Method::GET)
+                    .path("/signed/artifact")
+                    .query_param("sig", "abc")
+                    .query_param_missing("teamId")
+                    .query_param_missing("slug")
+                    .header_missing("authorization");
+                t.status(200).body("artifact");
+            })
+            .await;
+        let cache = httpmock::MockServer::start_async().await;
+        let location = format!("{}/signed/artifact?sig=abc", storage.base_url());
+        let options = cache
+            .mock_async(|w, t| {
+                w.method(httpmock::Method::OPTIONS)
+                    .path("/v8/artifacts/security-test")
+                    .query_param("slug", "my-team");
+                t.status(200).header("Location", &location);
+            })
+            .await;
+        let client = APIClient::new(
+            cache.base_url(),
+            Some(Duration::from_secs(10)),
+            None,
+            "2.0.0",
+            true,
+        )?;
+        let token = SecretString::new("secret-token".into());
+        let response = client
+            .fetch_artifact("security-test", &token, None, Some("my-team"))
+            .await?
+            .unwrap();
+        assert_eq!(response.text().await?, "artifact");
+        options.assert_calls_async(1).await;
+        get.assert_calls_async(1).await;
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
-        let base_url = format!("http://localhost:{}", port);
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
+        let base_url = format!("http://localhost:{port}");
 
         let client = APIClient::new(
             &base_url,
@@ -802,10 +1498,12 @@ mod test {
             true,
         )?;
 
+        let empty_token = SecretString::new(String::new());
+
         let response = client
             .do_preflight(
-                "",
-                Url::parse(&format!("{}/preflight/absolute-location", base_url)).unwrap(),
+                &empty_token,
+                Url::parse(&format!("{base_url}/preflight/absolute-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -815,8 +1513,8 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
-                Url::parse(&format!("{}/preflight/relative-location", base_url)).unwrap(),
+                &empty_token,
+                Url::parse(&format!("{base_url}/preflight/relative-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -828,8 +1526,8 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
-                Url::parse(&format!("{}/preflight/allow-auth", base_url)).unwrap(),
+                &empty_token,
+                Url::parse(&format!("{base_url}/preflight/allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
@@ -839,14 +1537,25 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
-                Url::parse(&format!("{}/preflight/no-allow-auth", base_url)).unwrap(),
+                &empty_token,
+                Url::parse(&format!("{base_url}/preflight/no-allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
             )
             .await?;
 
         assert!(!response.allow_authorization_header);
+
+        let response = client
+            .do_preflight(
+                &empty_token,
+                Url::parse(&format!("{base_url}/preflight/wildcard-allow-auth")).unwrap(),
+                "GET",
+                "Authorization, User-Agent",
+            )
+            .await?;
+
+        assert!(response.allow_authorization_header);
 
         handle.abort();
         Ok(())
@@ -879,9 +1588,16 @@ mod test {
 
     #[tokio::test]
     async fn test_content_length() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
-        let base_url = format!("http://localhost:{}", port);
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
+        let base_url = format!("http://localhost:{port}");
 
         let client = APIClient::new(
             &base_url,
@@ -893,6 +1609,7 @@ mod test {
         let body = b"hello world!";
         let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
 
+        let token = SecretString::new("token".to_string());
         client
             .put_artifact(
                 "eggs",
@@ -900,7 +1617,9 @@ mod test {
                 body.len(),
                 123,
                 None,
-                "token",
+                &token,
+                None,
+                None,
                 None,
                 None,
             )
@@ -909,6 +1628,469 @@ mod test {
         handle.abort();
         let _ = handle.await;
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_record_telemetry_success() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
+        let base_url = format!("http://localhost:{port}");
+
+        let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
+
+        let events = vec![
+            TelemetryEvent::Generic(TelemetryGenericEvent {
+                id: "test-id-1".to_string(),
+                key: "test_key".to_string(),
+                value: "test_value".to_string(),
+                parent_id: None,
+            }),
+            TelemetryEvent::Generic(TelemetryGenericEvent {
+                id: "test-id-2".to_string(),
+                key: "test_key_2".to_string(),
+                value: "test_value_2".to_string(),
+                parent_id: Some("test-id-1".to_string()),
+            }),
+        ];
+
+        let result = client
+            .record_telemetry(events, "test-telemetry-id", "test-session-id")
+            .await;
+
+        assert!(result.is_ok());
+
+        handle.abort();
+        let _ = handle.await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_record_telemetry_empty_events() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
+        let base_url = format!("http://localhost:{port}");
+
+        let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
+
+        let events = vec![];
+
+        let result = client
+            .record_telemetry(events, "test-telemetry-id", "test-session-id")
+            .await;
+
+        assert!(result.is_ok());
+
+        handle.abort();
+        let _ = handle.await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_record_telemetry_with_different_event_types() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
+        let base_url = format!("http://localhost:{port}");
+
+        let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
+
+        let events = vec![TelemetryEvent::Generic(TelemetryGenericEvent {
+            id: "generic-id".to_string(),
+            key: "generic_key".to_string(),
+            value: "generic_value".to_string(),
+            parent_id: None,
+        })];
+
+        let result = client
+            .record_telemetry(events, "test-telemetry-id", "test-session-id")
+            .await;
+
+        assert!(result.is_ok());
+
+        handle.abort();
+        let _ = handle.await;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_user() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_user(&token).await?;
+        assert_eq!(
+            response.user.id,
+            turborepo_vercel_api_mock::EXPECTED_USER_ID
+        );
+        assert_eq!(
+            response.user.username,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        assert_eq!(
+            response.user.email,
+            turborepo_vercel_api_mock::EXPECTED_EMAIL
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_teams() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_teams(&token).await?;
+        assert_eq!(response.teams.len(), 1);
+        assert_eq!(
+            response.teams[0].id,
+            turborepo_vercel_api_mock::EXPECTED_TEAM_ID
+        );
+        assert_eq!(
+            response.teams[0].slug,
+            turborepo_vercel_api_mock::EXPECTED_TEAM_SLUG
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_caching_status() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_caching_status(&token, None, None).await?;
+        assert!(matches!(
+            response.status,
+            turborepo_vercel_api::CachingStatus::Enabled
+        ));
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_put_and_fetch_artifact() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(10)),
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let body = b"cached artifact data";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "test-hash-123",
+                artifact_body,
+                body.len(),
+                456,
+                None,
+                &token,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+        let response = client
+            .fetch_artifact("test-hash-123", &token, None, None)
+            .await?;
+        assert!(response.is_some());
+
+        let exists = client
+            .artifact_exists("test-hash-123", &token, None, None)
+            .await?;
+        assert!(exists.is_some());
+
+        let missing = client
+            .artifact_exists("nonexistent-hash", &token, None, None)
+            .await?;
+        assert!(missing.is_none());
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_client_with_upload_timeout() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // Ensure separate timeout and upload_timeout both work
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(30)),
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        // Regular API calls should work (uses client with regular timeout)
+        let user = client.get_user(&token).await?;
+        assert_eq!(user.user.id, turborepo_vercel_api_mock::EXPECTED_USER_ID);
+
+        // Cache upload should work (uses cache_client with upload timeout)
+        let body = b"upload timeout test";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "upload-test",
+                artifact_body,
+                body.len(),
+                789,
+                None,
+                &token,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_client_no_timeout() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // No timeout specified — should still work
+        let client = APIClient::new(&base_url, None, None, "2.0.0", false)?;
+        let token = SecretString::new("test-token".to_string());
+
+        let user = client.get_user(&token).await?;
+        assert_eq!(user.user.id, turborepo_vercel_api_mock::EXPECTED_USER_ID);
+
+        let body = b"no timeout test";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "no-timeout",
+                artifact_body,
+                body.len(),
+                100,
+                None,
+                &token,
+                None,
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_anon_client_no_timeout() -> Result<()> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // timeout=0 means no timeout
+        let client = AnonAPIClient::new(&base_url, 0, "2.0.0")?;
+
+        let events = vec![TelemetryEvent::Generic(TelemetryGenericEvent {
+            id: "no-timeout-id".to_string(),
+            key: "key".to_string(),
+            value: "value".to_string(),
+            parent_id: None,
+        })];
+
+        let result = client
+            .record_telemetry(events, "test-id", "test-session")
+            .await;
+        assert!(result.is_ok());
+
+        handle.abort();
+        Ok(())
+    }
+
+    /// Starts a mock server and returns an APIClient pointed at it, along with
+    /// the server handle for cleanup.
+    async fn start_vca_test_client() -> Result<(APIClient, tokio::task::JoinHandle<Result<()>>)> {
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        Ok((client, handle))
+    }
+
+    #[tokio::test]
+    async fn test_get_user_vca_token() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_test_token".to_string());
+
+        let response = client.get_user(&token).await?;
+        assert_eq!(
+            response.user.id,
+            turborepo_vercel_api_mock::EXPECTED_USER_ID
+        );
+        assert_eq!(
+            response.user.email,
+            turborepo_vercel_api_mock::EXPECTED_EMAIL
+        );
+        assert_eq!(
+            response.user.username,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        assert_eq!(
+            response.user.name,
+            Some(turborepo_vercel_api_mock::EXPECTED_USERNAME.to_string())
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_user_vca_token_without_email() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_missing_email".to_string());
+
+        let response = client.get_user(&token).await?;
+        assert_eq!(
+            response.user.id,
+            turborepo_vercel_api_mock::EXPECTED_USER_ID
+        );
+        assert_eq!(
+            response.user.email,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        assert_eq!(
+            response.user.username,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        assert_eq!(
+            response.user.name,
+            Some(turborepo_vercel_api_mock::EXPECTED_USERNAME.to_string())
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_metadata_vca_token() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_test_token".to_string());
+
+        let metadata = client.get_metadata(&token).await?;
+        assert_eq!(metadata.scopes.len(), 1);
+        assert_eq!(metadata.scopes[0].scope_type, "openid");
+        assert_eq!(metadata.scopes[0].expires_at, Some(1700000000u128 * 1000));
+        assert_eq!(metadata.active_at, 1690000000u128 * 1000);
+        assert_eq!(
+            metadata.client_id.as_deref(),
+            Some(turborepo_vercel_api_mock::EXPECTED_CLIENT_ID)
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_token_vca_token() -> Result<()> {
+        let (client, handle) = start_vca_test_client().await?;
+        let token = SecretString::new("vca_test_token".to_string());
+
+        let result = client.delete_token(&token).await;
+        assert!(result.is_ok());
+
+        handle.abort();
         Ok(())
     }
 }

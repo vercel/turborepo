@@ -1,10 +1,37 @@
-#![feature(assert_matches)]
-#![feature(error_generic_member_access)]
+//! Repository detection and package discovery for Turborepo.
+//! Handles monorepo structure, package graph construction, and dependency
+//! analysis.
+//!
+//! Primarily in a separate crate from the rest of the logic so the
+//! `@turbo/repository` NPM package can avoid depending on the entire Turborepo
+//! binary.
 
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
+// Repository and package-manager APIs return shared structured errors across
+// 54 production functions. Keep this crate-wide exemption until error layouts
+// are reviewed separately from lint suppression cleanup.
+#![allow(clippy::result_large_err)]
+
+pub mod bootstrap;
+pub mod cargo;
+pub mod change_knowledge;
 pub mod change_mapper;
 pub mod discovery;
+pub mod external_resolution;
+pub mod global_deps;
+pub mod go;
 pub mod inference;
+mod knowledge;
+mod manifest_parser;
+pub mod native_tasks;
 pub mod package_graph;
 pub mod package_json;
 pub mod package_manager;
+pub mod prune_knowledge;
+pub mod relationships;
+pub mod static_dependencies;
+pub mod task_contracts;
+pub mod toolchain;
+pub mod uv;
 pub mod workspaces;

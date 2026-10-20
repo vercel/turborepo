@@ -1,0 +1,39 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "@foretagsplatsen/frontend",
+    },
+    "packages/a": {
+      "name": "a",
+      "version": "0.0.1",
+      "dependencies": {
+        "b": "*",
+      },
+      "devDependencies": {
+        "b": "workspace:*",
+        "is-number": "^7.0.0",
+      },
+    },
+    "packages/b": {
+      "name": "b",
+      "version": "0.0.1",
+      "devDependencies": {
+        "is-number": "6.0.0",
+      },
+      "peerDependencies": {
+        "is-number": "6.0.0",
+      },
+    },
+  },
+  "packages": {
+    "a": ["a@workspace:packages/a"],
+
+    "b": ["b@workspace:packages/b"],
+
+    "is-number": ["is-number@7.0.0", "https://registry.npmjs.org/is-number/-/is-number-7.0.0.tgz", {}, "sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng=="],
+
+    "b/is-number": ["is-number@6.0.0", "https://registry.npmjs.org/is-number/-/is-number-6.0.0.tgz", {}, "sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg=="],
+  }
+}

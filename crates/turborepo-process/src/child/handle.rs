@@ -1,0 +1,1115 @@
+use std::{io, time::Duration};
+
+use portable_pty::{Child as PtyChild, MasterPty as PtyController, native_pty_system};
+#[cfg(unix)]
+use sysinfo::{PidExt, ProcessExt, System, SystemExt};
+use tokio::{process::Command as TokioCommand, sync::mpsc};
+use tracing::debug;
+
+use super::{ChildCommand, ChildExit, ChildIO, ChildInput, ChildOutput};
+use crate::{Command, PtySize};
+
+const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
+#[cfg(any(unix, windows))]
+const PROCESS_TREE_DRAIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
+#[cfg(windows)]
+const WINDOWS_DESCENDANT_DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub(super) struct ChildHandle {
+    pid: Option<u32>,
+    imp: ChildHandleImpl,
+    #[cfg(unix)]
+    shutdown_semantics: ShutdownSemantics,
+    #[cfg(unix)]
+    pub(super) target_identity: Option<TargetIdentity>,
+    #[cfg(unix)]
+    pty_controller_fd: Option<libc::c_int>,
+    #[cfg(unix)]
+    graceful_descendants: Vec<GracefulDescendant>,
+    #[cfg(windows)]
+    _job: Option<crate::job_object::JobObject>,
+    #[cfg(windows)]
+    root_identity: Option<std::sync::Arc<crate::job_object::ProcessIdentity>>,
+    /// Shared handle to the ConPTY input pipe, used to deliver a Ctrl-C
+    /// keystroke during graceful shutdown. ConPTY children are attached to a
+    /// pseudoconsole rather than turbo's console, so console Ctrl-C events
+    /// never reach them on their own.
+    #[cfg(windows)]
+    pty_input: Option<SharedPtyInput>,
+}
+
+#[cfg(windows)]
+type SharedPtyInput = std::sync::Arc<std::sync::Mutex<Box<dyn io::Write + Send>>>;
+
+/// A `Write` handle to the ConPTY input pipe that shares ownership with
+/// `ChildHandle::pty_input` so the shutdown path can inject a Ctrl-C while
+/// stdin forwarding holds the writer.
+#[cfg(windows)]
+struct SharedPtyWriter(SharedPtyInput);
+
+#[cfg(windows)]
+impl io::Write for SharedPtyWriter {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .flush()
+    }
+}
+
+enum ChildHandleImpl {
+    Tokio(Option<tokio::process::Child>),
+    Pty(Box<dyn PtyChild + Send + Sync>),
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+enum GracefulInterruptTarget {
+    DirectChild,
+    ProcessGroup,
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+struct ShutdownSemantics {
+    // Who should receive the first graceful interrupt.
+    graceful_interrupt_target: GracefulInterruptTarget,
+    // Whether we should keep waiting on the process group after the direct child exits.
+    wait_for_process_group_after_child_exit: bool,
+}
+
+#[cfg(unix)]
+impl ShutdownSemantics {
+    fn process_group() -> Self {
+        Self {
+            graceful_interrupt_target: GracefulInterruptTarget::ProcessGroup,
+            wait_for_process_group_after_child_exit: true,
+        }
+    }
+
+    fn direct_child() -> Self {
+        Self {
+            graceful_interrupt_target: GracefulInterruptTarget::DirectChild,
+            wait_for_process_group_after_child_exit: true,
+        }
+    }
+}
+
+/// Per-descendant bookkeeping captured immediately before the initial graceful
+/// interrupt.
+///
+/// We remember which captured descendants the initial interrupt already
+/// targeted (directly or through their process group) so the
+/// remaining-descendant fallback does not deliver a duplicate signal to them
+/// while still draining every captured survivor.
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct GracefulDescendant {
+    pub(super) pid: libc::pid_t,
+    /// The descendant's process group at capture time, when resolvable. `None`
+    /// leaves the descendant eligible for the direct fallback.
+    pub(super) process_group_id: Option<libc::pid_t>,
+    /// Whether a successful initial signal request targeted this descendant.
+    /// This does not imply its signal handler has run.
+    pub(super) initially_signaled: bool,
+}
+
+#[cfg(unix)]
+impl GracefulDescendant {
+    fn captured(pid: libc::pid_t) -> Self {
+        let process_group_id = unsafe { libc::getpgid(pid) };
+        Self {
+            pid,
+            process_group_id: (process_group_id != -1).then_some(process_group_id),
+            initially_signaled: false,
+        }
+    }
+
+    fn mark_initially_signaled(&mut self) {
+        self.initially_signaled = true;
+    }
+
+    /// Record a direct PID delivery. The flag is only set when the kill
+    /// syscall was accepted, so a failed delivery stays eligible for the
+    /// fallback.
+    pub(super) fn record_direct_delivery(&mut self, delivered: bool) {
+        if delivered {
+            self.mark_initially_signaled();
+        }
+    }
+}
+
+#[cfg(unix)]
+fn capture_descendants(root_pid: libc::pid_t) -> Vec<GracefulDescendant> {
+    descendant_pids(root_pid)
+        .into_iter()
+        .map(GracefulDescendant::captured)
+        .collect()
+}
+
+/// Mark the captured descendants that belong to the process group that just
+/// accepted the initial signal.
+///
+/// This must only run after the group kill syscall succeeds and only against
+/// the membership snapshot taken before delivery, so a failed delivery leaves
+/// every descendant eligible for the fallback.
+#[cfg(unix)]
+pub(super) fn mark_group_targets(
+    descendants: &mut [GracefulDescendant],
+    delivered_process_group_id: libc::pid_t,
+) {
+    for descendant in descendants {
+        if descendant.process_group_id == Some(delivered_process_group_id) {
+            descendant.mark_initially_signaled();
+        }
+    }
+}
+
+/// Surviving captured descendants that the initial interrupt did not target,
+/// and which the fallback should therefore signal directly.
+#[cfg(unix)]
+pub(super) fn descendants_needing_fallback(
+    descendants: &[GracefulDescendant],
+    mut is_alive: impl FnMut(libc::pid_t) -> bool,
+) -> Vec<libc::pid_t> {
+    descendants
+        .iter()
+        .filter(|descendant| !descendant.initially_signaled && is_alive(descendant.pid))
+        .map(|descendant| descendant.pid)
+        .collect()
+}
+
+#[cfg(unix)]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct TargetIdentity {
+    pub(super) process_group_id: libc::pid_t,
+    pub(super) session_id: libc::pid_t,
+}
+
+#[cfg(unix)]
+fn target_identity(target_pid: libc::pid_t) -> io::Result<TargetIdentity> {
+    let process_group_id = unsafe { libc::getpgid(target_pid) };
+    if process_group_id == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    let session_id = unsafe { libc::getsid(target_pid) };
+    if session_id == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    Ok(TargetIdentity {
+        process_group_id,
+        session_id,
+    })
+}
+
+#[cfg(unix)]
+pub(super) fn process_group_matches_identity(
+    target_pid: libc::pid_t,
+    identity: TargetIdentity,
+) -> bool {
+    let process_group_id = unsafe { libc::getpgid(target_pid) };
+    if process_group_id != -1 {
+        if process_group_id != identity.process_group_id {
+            return false;
+        }
+
+        let session_id = unsafe { libc::getsid(target_pid) };
+        return session_id != -1 && session_id == identity.session_id;
+    }
+
+    let result = unsafe { libc::kill(-identity.process_group_id, 0) };
+    result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(unix)]
+pub(super) fn signal_process_group(process_group_id: libc::pid_t, signal: libc::c_int) -> bool {
+    unsafe { libc::kill(-process_group_id, signal) == 0 }
+}
+
+#[cfg(windows)]
+fn run_child_console_helper(pid: u32, command: &str) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+
+    std::process::Command::new(exe)
+        .arg("__internal_windows_ctrl_c")
+        .arg(command)
+        .arg(pid.to_string())
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+#[cfg(windows)]
+fn send_ctrl_c_to_child_console(pid: u32) -> bool {
+    run_child_console_helper(pid, "ctrl_c")
+}
+
+#[cfg(unix)]
+fn capture_target_identity(pid: Option<u32>) -> Option<TargetIdentity> {
+    pid.and_then(|pid| match target_identity(pid as libc::pid_t) {
+        Ok(identity) => Some(identity),
+        Err(err) => {
+            debug!("failed to capture target identity for process {pid}: {err}");
+            None
+        }
+    })
+}
+
+#[cfg(unix)]
+fn descendant_pids(root_pid: libc::pid_t) -> Vec<libc::pid_t> {
+    // Only the process table is needed here. `System::new_all` would also
+    // refresh the users list, which on musl calls the non-reentrant
+    // `getgrgid`/`getpwuid`. This function runs concurrently (once per child)
+    // during graceful shutdown, and racing those libc calls corrupts musl's
+    // heap and segfaults (#13254).
+    let mut system = System::new();
+    system.refresh_processes();
+
+    let root_pid = sysinfo::Pid::from_u32(root_pid as u32);
+    let mut descendants = Vec::new();
+    let mut stack = vec![root_pid];
+
+    while let Some(parent_pid) = stack.pop() {
+        for (pid, process) in system.processes() {
+            if process.parent() == Some(parent_pid) {
+                stack.push(*pid);
+                descendants.push(pid.as_u32() as libc::pid_t);
+            }
+        }
+    }
+
+    descendants
+}
+
+#[cfg(unix)]
+fn is_pid_alive(pid: libc::pid_t) -> bool {
+    let result = unsafe { libc::kill(pid, 0) };
+    result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+impl ChildHandle {
+    #[tracing::instrument(skip(command))]
+    pub(super) fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
+        #[cfg(windows)]
+        let command_for_fallback = command.clone();
+
+        let mut command = std::process::Command::from(command);
+
+        // Create a new process group so we can send signals (e.g. SIGINT) to
+        // the child and all of its descendants via kill(-pgid, sig).
+        #[cfg(unix)]
+        use std::os::unix::process::CommandExt as _;
+        #[cfg(unix)]
+        command.process_group(0);
+
+        #[cfg(windows)]
+        let job = match crate::job_object::JobObject::new() {
+            Ok(job) => Some(job),
+            Err(err) => {
+                debug!("failed to create Windows JobObject: {err}");
+                None
+            }
+        };
+
+        #[cfg(windows)]
+        let wrapper_ctrl_c = std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD").is_some();
+
+        #[cfg(windows)]
+        use std::os::windows::process::CommandExt as _;
+
+        #[cfg(windows)]
+        if wrapper_ctrl_c {
+            command.show_window(windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE as u16);
+        }
+
+        #[cfg(windows)]
+        if job.is_some() {
+            let mut creation_flags = windows_sys::Win32::System::Threading::CREATE_SUSPENDED
+                | windows_sys::Win32::System::Threading::CREATE_BREAKAWAY_FROM_JOB;
+            if wrapper_ctrl_c {
+                creation_flags |= windows_sys::Win32::System::Threading::CREATE_NEW_CONSOLE
+                    | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+            }
+            command.creation_flags(creation_flags);
+        } else if wrapper_ctrl_c {
+            command.creation_flags(
+                windows_sys::Win32::System::Threading::CREATE_NEW_CONSOLE
+                    | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW,
+            );
+        }
+
+        let mut command = TokioCommand::from(command);
+
+        #[cfg(not(windows))]
+        let mut child = command.spawn()?;
+
+        #[cfg(windows)]
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(err) if job.is_some() => {
+                debug!("failed to spawn child with job breakaway: {err}");
+                let mut fallback_command = TokioCommand::from(command_for_fallback);
+                let mut creation_flags = windows_sys::Win32::System::Threading::CREATE_SUSPENDED;
+                if wrapper_ctrl_c {
+                    creation_flags |= windows_sys::Win32::System::Threading::CREATE_NEW_CONSOLE
+                        | windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+                }
+                if wrapper_ctrl_c {
+                    fallback_command
+                        .as_std_mut()
+                        .show_window(windows_sys::Win32::UI::WindowsAndMessaging::SW_HIDE as u16);
+                }
+                fallback_command.creation_flags(creation_flags);
+                fallback_command.spawn()?
+            }
+            Err(err) => return Err(err),
+        };
+        let pid = child.id();
+
+        #[cfg(windows)]
+        let root_identity = match (pid, child.raw_handle()) {
+            (Some(pid), Some(handle)) => {
+                match crate::job_object::ProcessIdentity::duplicate_from(pid, handle) {
+                    Ok(identity) => Some(std::sync::Arc::new(identity)),
+                    Err(err) => {
+                        debug!("failed to retain process identity for child {pid}: {err}");
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+
+        #[cfg(unix)]
+        let target_identity = capture_target_identity(pid);
+
+        #[cfg(windows)]
+        let job = job.and_then(|job| match child.raw_handle() {
+            Some(handle) => match job.assign_suspended_process(handle) {
+                Ok(true) => Some(job),
+                Ok(false) => None,
+                Err(err) => {
+                    debug!("failed to resume suspended process after job assignment: {err}");
+                    child.start_kill().ok();
+                    None
+                }
+            },
+            None => {
+                debug!("failed to get child process handle for job assignment");
+                child.start_kill().ok();
+                None
+            }
+        });
+
+        let stdin = child.stdin.take().map(ChildInput::Std);
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| io::Error::other("child process must be started with piped stdout"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| io::Error::other("child process must be started with piped stderr"))?;
+
+        Ok(SpawnResult {
+            handle: Self {
+                pid,
+                imp: ChildHandleImpl::Tokio(Some(child)),
+                #[cfg(unix)]
+                shutdown_semantics: ShutdownSemantics::process_group(),
+                #[cfg(unix)]
+                target_identity,
+                #[cfg(unix)]
+                pty_controller_fd: None,
+                #[cfg(unix)]
+                graceful_descendants: Vec::new(),
+                #[cfg(windows)]
+                _job: job,
+                #[cfg(windows)]
+                root_identity: root_identity.clone(),
+                #[cfg(windows)]
+                pty_input: None,
+            },
+            io: ChildIO {
+                stdin,
+                output: Some(ChildOutput::Std { stdout, stderr }),
+            },
+            controller: None,
+            #[cfg(windows)]
+            root_identity,
+        })
+    }
+
+    #[tracing::instrument(skip(command, pty_termios))]
+    pub(super) fn spawn_pty(
+        command: Command,
+        size: PtySize,
+        #[cfg(unix)] pty_termios: Option<libc::termios>,
+    ) -> io::Result<SpawnResult> {
+        let keep_stdin_open = command.will_open_stdin();
+
+        let command = portable_pty::CommandBuilder::from(command);
+        let pty_system = native_pty_system();
+        let size = portable_pty::PtySize {
+            rows: size.rows,
+            cols: size.cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        };
+        let pair = pty_system
+            .openpty(size)
+            .map_err(|err| match err.downcast() {
+                Ok(err) => err,
+                Err(err) => io::Error::other(err),
+            })?;
+
+        let controller = pair.master;
+        let receiver = pair.slave;
+
+        #[cfg(unix)]
+        {
+            if let Some(file_desc) = controller.as_raw_fd()
+                && let Some(mut termios) = pty_termios.or_else(|| {
+                    let mut termios = std::mem::MaybeUninit::<libc::termios>::uninit();
+                    let result = unsafe { libc::tcgetattr(file_desc, termios.as_mut_ptr()) };
+                    (result == 0).then(|| unsafe { termios.assume_init() })
+                })
+            {
+                // We unset ECHOCTL to disable rendering of the closing of stdin
+                // as ^D
+                termios.c_lflag &= !(libc::ECHOCTL as libc::tcflag_t);
+                if unsafe { libc::tcsetattr(file_desc, libc::TCSANOW, &termios) } != 0 {
+                    let e = io::Error::last_os_error();
+                    debug!("unable to configure PTY termios: {e}");
+                }
+            }
+        }
+
+        let child = receiver
+            .spawn_command(command)
+            .map_err(|err| match err.downcast() {
+                Ok(err) => err,
+                Err(err) => io::Error::other(err),
+            })?;
+
+        let pid = child.process_id();
+
+        #[cfg(windows)]
+        let root_identity = match (pid, child.as_raw_handle()) {
+            (Some(pid), Some(handle)) => {
+                match crate::job_object::ProcessIdentity::duplicate_from(pid, handle) {
+                    Ok(identity) => Some(std::sync::Arc::new(identity)),
+                    Err(err) => {
+                        debug!("failed to retain process identity for PTY child {pid}: {err}");
+                        None
+                    }
+                }
+            }
+            _ => None,
+        };
+
+        #[cfg(unix)]
+        let target_identity = capture_target_identity(pid);
+
+        #[cfg(windows)]
+        let job = pid.and_then(|pid| {
+            crate::job_object::JobObject::new()
+                .and_then(|job| job.assign_pid(pid).map(|_| job))
+                .map_err(|e| debug!("failed to set up job object for PTY process {pid}: {e}"))
+                .ok()
+        });
+
+        #[cfg(unix)]
+        let pty_controller_fd = controller.as_raw_fd();
+
+        let stdin = controller.take_writer().ok();
+        let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
+
+        #[cfg(windows)]
+        let mut stdin = stdin;
+
+        // portable-pty 0.9.0 creates ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR,
+        // which sends a Device Status Report (DSR) cursor position request
+        // (\x1b[6n) on the output pipe during initialization. ConPTY blocks
+        // until the host responds with a Cursor Position Report on stdin.
+        // Without this response the PTY hangs indefinitely.
+        // See https://github.com/vercel/turborepo/issues/11808
+        #[cfg(windows)]
+        if let Some(ref mut writer) = stdin {
+            // Respond with cursor at position (1,1). The actual position
+            // doesn't matter — ConPTY just needs a valid CPR to unblock.
+            if let Err(e) = writer.write_all(b"\x1b[1;1R") {
+                debug!("failed to write ConPTY cursor position response: {e}");
+            }
+        }
+
+        // Keep a shared handle to the ConPTY input pipe so graceful shutdown
+        // can deliver a Ctrl-C keystroke even while stdin forwarding (or an
+        // exec stdin guard) owns the writer. This also keeps the input pipe
+        // open for the child's lifetime: ConPTY terminates children when
+        // their input pipe closes.
+        #[cfg(windows)]
+        let (stdin, pty_input) = match stdin {
+            Some(writer) => {
+                let shared: SharedPtyInput = std::sync::Arc::new(std::sync::Mutex::new(writer));
+                let writer: Box<dyn io::Write + Send> = Box::new(SharedPtyWriter(shared.clone()));
+                (Some(writer), Some(shared))
+            }
+            None => (None, None),
+        };
+
+        let stdin = if keep_stdin_open {
+            stdin.map(ChildInput::Pty)
+        } else {
+            None
+        };
+
+        Ok(SpawnResult {
+            handle: Self {
+                pid,
+                imp: ChildHandleImpl::Pty(child),
+                #[cfg(unix)]
+                shutdown_semantics: ShutdownSemantics::direct_child(),
+                #[cfg(unix)]
+                target_identity,
+                #[cfg(unix)]
+                pty_controller_fd,
+                #[cfg(unix)]
+                graceful_descendants: Vec::new(),
+                #[cfg(windows)]
+                _job: job,
+                #[cfg(windows)]
+                root_identity: root_identity.clone(),
+                #[cfg(windows)]
+                pty_input,
+            },
+            io: ChildIO { stdin, output },
+            controller: Some(controller),
+            #[cfg(windows)]
+            root_identity,
+        })
+    }
+
+    pub(super) fn pid(&self) -> Option<u32> {
+        self.pid
+    }
+
+    #[cfg(unix)]
+    fn process_group_id(&self) -> Option<libc::pid_t> {
+        self.target_identity
+            .map(|identity| identity.process_group_id)
+            .or(self.pid.map(|pid| pid as libc::pid_t))
+    }
+
+    #[cfg(unix)]
+    fn foreground_process_group_id(&self) -> Option<libc::pid_t> {
+        self.pty_controller_fd
+            .and_then(|fd| match unsafe { libc::tcgetpgrp(fd) } {
+                process_group_id if process_group_id > 0 => Some(process_group_id),
+                _ => None,
+            })
+    }
+
+    /// Deliver the initial graceful signal to a resolved process group.
+    ///
+    /// Descendant membership was snapshotted before this call. Descendants are
+    /// marked as already targeted only after the kernel accepts the group
+    /// signal; a failed delivery leaves them unmarked so the
+    /// remaining-descendant fallback can retry them directly.
+    #[cfg(unix)]
+    fn signal_initial_process_group(
+        &mut self,
+        process_group_id: Option<libc::pid_t>,
+        signal: libc::c_int,
+    ) {
+        let Some(process_group_id) = process_group_id else {
+            debug!("missing process group id for graceful interrupt");
+            return;
+        };
+
+        debug!("sending signal {signal} to process group -{process_group_id}");
+        if !signal_process_group(process_group_id, signal) {
+            debug!("failed to send signal {signal} to process group -{process_group_id}");
+            return;
+        }
+
+        mark_group_targets(&mut self.graceful_descendants, process_group_id);
+    }
+
+    #[cfg(unix)]
+    pub(super) fn send_graceful_interrupt(&mut self, pid: libc::pid_t) {
+        let child_process_group_id = self.process_group_id();
+        let foreground_process_group_id = self.foreground_process_group_id();
+        let graceful_process_group_id = foreground_process_group_id.or(child_process_group_id);
+        self.graceful_descendants = capture_descendants(pid);
+        let captured_pids = self
+            .graceful_descendants
+            .iter()
+            .map(|descendant| descendant.pid)
+            .collect::<Vec<_>>();
+
+        debug!(
+            "graceful interrupt target={:?}, child pid={pid}, child pgid={:?}, pty foreground \
+             pgid={:?}, descendant pids={:?}",
+            self.shutdown_semantics.graceful_interrupt_target,
+            child_process_group_id,
+            foreground_process_group_id,
+            captured_pids
+        );
+
+        match self.shutdown_semantics.graceful_interrupt_target {
+            GracefulInterruptTarget::DirectChild => {
+                if self.graceful_descendants.len() > 1 {
+                    debug!(
+                        "sending SIGINT to process group because PTY child has nested descendants"
+                    );
+                    self.signal_initial_process_group(graceful_process_group_id, libc::SIGINT);
+                    return;
+                }
+
+                if !self.graceful_descendants.is_empty() {
+                    debug!("sending SIGINT to descendant processes {:?}", captured_pids);
+                    for descendant in &mut self.graceful_descendants {
+                        let delivered = unsafe { libc::kill(descendant.pid, libc::SIGINT) } == 0;
+                        descendant.record_direct_delivery(delivered);
+                        if !delivered {
+                            debug!("failed to send SIGINT to descendant {}", descendant.pid);
+                        }
+                    }
+                    return;
+                }
+
+                if let (Some(foreground_process_group_id), Some(child_process_group_id)) =
+                    (foreground_process_group_id, child_process_group_id)
+                    && foreground_process_group_id != child_process_group_id
+                {
+                    debug!(
+                        "sending SIGINT to foreground process group -{foreground_process_group_id}"
+                    );
+                    signal_process_group(foreground_process_group_id, libc::SIGINT);
+                    return;
+                }
+
+                debug!("sending SIGINT to child {pid}");
+                if unsafe { libc::kill(pid, libc::SIGINT) } == -1 {
+                    debug!("failed to send SIGINT to {pid}");
+                }
+            }
+            GracefulInterruptTarget::ProcessGroup => {
+                self.signal_initial_process_group(graceful_process_group_id, libc::SIGINT);
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    pub(super) fn send_interrupt_to_remaining_descendants(&self) -> bool {
+        if !matches!(
+            self.shutdown_semantics.graceful_interrupt_target,
+            GracefulInterruptTarget::DirectChild
+        ) {
+            return false;
+        }
+
+        let remaining_descendants =
+            descendants_needing_fallback(&self.graceful_descendants, is_pid_alive);
+
+        if !remaining_descendants.is_empty() {
+            debug!(
+                "sending SIGINT to remaining descendant processes {:?}",
+                remaining_descendants
+            );
+            for pid in remaining_descendants {
+                let _ = unsafe { libc::kill(pid, libc::SIGINT) };
+            }
+        }
+
+        // Descendants the initial interrupt already reached may still be
+        // running cleanup, so the caller must drain every captured survivor
+        // even when no fallback signal was necessary.
+        self.has_running_descendants()
+    }
+
+    #[cfg(unix)]
+    fn has_running_descendants(&self) -> bool {
+        self.graceful_descendants
+            .iter()
+            .any(|descendant| is_pid_alive(descendant.pid))
+    }
+
+    #[cfg(unix)]
+    fn kill_remaining_descendants(&self) {
+        for descendant in &self.graceful_descendants {
+            if is_pid_alive(descendant.pid) {
+                debug!("killing remaining descendant process {}", descendant.pid);
+                let _ = unsafe { libc::kill(descendant.pid, libc::SIGKILL) };
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    fn should_wait_for_process_group_after_child_exit(&self) -> bool {
+        self.shutdown_semantics
+            .wait_for_process_group_after_child_exit
+    }
+
+    #[cfg(unix)]
+    fn has_running_process_group(&self, pid: libc::pid_t) -> bool {
+        if let Some(identity) = self.target_identity {
+            return process_group_matches_identity(pid, identity);
+        }
+
+        let process_group_id = self.process_group_id().unwrap_or(pid);
+
+        let result = unsafe { libc::kill(-process_group_id, 0) };
+        result == 0 || io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+    }
+
+    #[cfg(unix)]
+    fn kill_process_group(&self, pid: libc::pid_t) {
+        let process_group_id = self.process_group_id().unwrap_or(pid);
+
+        debug!("killing process group {}", process_group_id);
+        signal_process_group(process_group_id, libc::SIGKILL);
+    }
+
+    #[cfg(unix)]
+    pub(super) async fn wait_for_process_group_exit(
+        &mut self,
+        pid: libc::pid_t,
+        deadline: Option<tokio::time::Instant>,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
+        command_rx_open: &mut bool,
+    ) -> ChildExit {
+        if !self.should_wait_for_process_group_after_child_exit() {
+            return ChildExit::Interrupted;
+        }
+
+        while self.has_running_process_group(pid) {
+            match deadline {
+                Some(deadline) => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing process group");
+                                    self.kill_process_group(pid);
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep_until(deadline) => {
+                            debug!("graceful shutdown timed out, killing process group");
+                            self.kill_process_group(pid);
+                            return ChildExit::Killed;
+                        }
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+                None => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing process group");
+                                    self.kill_process_group(pid);
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+            }
+        }
+
+        ChildExit::Interrupted
+    }
+
+    #[cfg(unix)]
+    pub(super) async fn wait_for_remaining_descendants_exit(
+        &mut self,
+        deadline: Option<tokio::time::Instant>,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
+        command_rx_open: &mut bool,
+    ) -> ChildExit {
+        while self.has_running_descendants() {
+            match deadline {
+                Some(deadline) => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing remaining descendants");
+                                    self.kill_remaining_descendants();
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep_until(deadline) => {
+                            debug!("graceful shutdown timed out, killing remaining descendants");
+                            self.kill_remaining_descendants();
+                            return ChildExit::Killed;
+                        }
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+                None => {
+                    tokio::select! {
+                        command = command_rx.recv(), if *command_rx_open => {
+                            match command {
+                                Some(ChildCommand::Kill) => {
+                                    debug!("graceful shutdown interrupted, killing remaining descendants");
+                                    self.kill_remaining_descendants();
+                                    return ChildExit::Killed;
+                                }
+                                Some(ChildCommand::Shutdown(_)) => {}
+                                None => *command_rx_open = false,
+                            }
+                        }
+                        _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
+                    }
+                }
+            }
+        }
+
+        ChildExit::Interrupted
+    }
+
+    /// Attempt to deliver a Ctrl-C to a ConPTY child by writing ETX to the
+    /// pseudoconsole's input pipe. ConPTY translates the keystroke into a
+    /// CTRL_C_EVENT for the attached process tree, mirroring what happens
+    /// when a user types Ctrl-C in a real console. Returns whether the
+    /// keystroke was written.
+    ///
+    /// When the npm package wrapper captures Ctrl-C in raw mode, Windows does
+    /// not generate the console event. In that case, synthesize it here so
+    /// non-ConPTY children still receive the same event as direct `turbo` use.
+    #[cfg(windows)]
+    pub(super) fn send_graceful_interrupt(&self) -> bool {
+        let Some(pty_input) = &self.pty_input else {
+            if std::env::var_os("__TURBO_WINDOWS_CTRL_C_FD").is_some()
+                && let Some(pid) = self.pid
+            {
+                let sent = send_ctrl_c_to_child_console(pid);
+                if sent {
+                    debug!("generated console Ctrl-C for child console {pid}");
+                } else {
+                    debug!("failed to generate console Ctrl-C for child console {pid}");
+                }
+                return sent;
+            }
+            return false;
+        };
+
+        let mut writer = pty_input
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match writer.write_all(b"\x03").and_then(|()| writer.flush()) {
+            Ok(()) => {
+                debug!("wrote Ctrl-C to ConPTY input for child {:?}", self.pid);
+                true
+            }
+            Err(err) => {
+                debug!("failed to write Ctrl-C to ConPTY input: {err}");
+                false
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    fn has_active_windows_job(&self) -> bool {
+        self._job
+            .as_ref()
+            .is_some_and(|job| match job.active_processes() {
+                Ok(active_processes) => active_processes > 0,
+                Err(err) => {
+                    debug!("failed to query job object: {err}");
+                    false
+                }
+            })
+    }
+
+    #[cfg(windows)]
+    fn has_running_windows_descendants(&self) -> bool {
+        match &self.root_identity {
+            Some(identity) => match crate::job_object::has_descendant_processes(identity) {
+                Ok(has_descendants) => has_descendants,
+                Err(err) => {
+                    debug!("failed to query descendant processes: {err}");
+                    false
+                }
+            },
+            None => false,
+        }
+    }
+
+    #[cfg(windows)]
+    fn terminate_windows_process_tree(&self) {
+        if let Some(job) = &self._job
+            && let Err(err) = job.terminate()
+        {
+            debug!("failed to terminate job object: {err}");
+        }
+
+        if let Some(identity) = &self.root_identity
+            && let Err(err) = crate::job_object::terminate_descendant_processes(identity)
+        {
+            debug!("failed to terminate descendant process tree: {err}");
+        }
+    }
+
+    #[cfg(windows)]
+    pub(super) async fn wait_for_job_exit(
+        &mut self,
+        deadline: Option<tokio::time::Instant>,
+        command_rx: &mut mpsc::Receiver<ChildCommand>,
+        command_rx_open: &mut bool,
+    ) -> ChildExit {
+        // PID snapshots are only a fallback for runners where Job Object
+        // assignment fails. After the parent exits they can match unrelated
+        // reused PIDs, so never let that path wait forever.
+        let descendant_drain_deadline = self
+            ._job
+            .is_none()
+            .then(|| tokio::time::Instant::now() + WINDOWS_DESCENDANT_DRAIN_TIMEOUT);
+
+        loop {
+            let has_active_job = self.has_active_windows_job();
+            let has_descendants = self._job.is_none() && self.has_running_windows_descendants();
+
+            if !has_active_job && !has_descendants {
+                break;
+            }
+
+            tokio::select! {
+                command = command_rx.recv(), if *command_rx_open => {
+                    match command {
+                        Some(ChildCommand::Kill) => {
+                            debug!("process tree drain interrupted, terminating job object");
+                            self.terminate_windows_process_tree();
+                            return ChildExit::Killed;
+                        }
+                        Some(ChildCommand::Shutdown(_)) => {}
+                        None => *command_rx_open = false,
+                    }
+                }
+                _ = async {
+                    if let Some(deadline) = deadline {
+                        tokio::time::sleep_until(deadline).await;
+                    }
+                }, if deadline.is_some() => {
+                    debug!("graceful shutdown timed out, terminating Windows process tree");
+                    self.terminate_windows_process_tree();
+                    return ChildExit::Killed;
+                }
+                _ = async {
+                    if let Some(deadline) = descendant_drain_deadline {
+                        tokio::time::sleep_until(deadline).await;
+                    }
+                }, if has_descendants && descendant_drain_deadline.is_some() => {
+                    debug!("timed out waiting for Windows descendant process tree after direct child exit");
+                    break;
+                }
+                _ = tokio::time::sleep(PROCESS_TREE_DRAIN_POLL_INTERVAL) => {}
+            }
+        }
+
+        ChildExit::Interrupted
+    }
+
+    /// Perform a `wait` syscall on the child until it exits
+    pub(super) async fn wait(&mut self) -> io::Result<Option<i32>> {
+        match &mut self.imp {
+            ChildHandleImpl::Tokio(child) => {
+                let result = match child {
+                    Some(child) => child.wait().await.map(|status| status.code()),
+                    None => Ok(None),
+                };
+
+                #[cfg(windows)]
+                if result.is_ok() {
+                    // Drop the process handle before querying the Job Object so
+                    // the exited direct child is not counted during tree drain.
+                    child.take();
+                }
+
+                result
+            }
+            ChildHandleImpl::Pty(child) => {
+                // TODO: we currently poll the child to see if it has finished yet which is less
+                // than ideal
+                loop {
+                    match child.try_wait() {
+                        Ok(Some(status)) => {
+                            // portable_pty maps the status of being killed by a signal to a 1 exit
+                            // code. The only way to tell if the task
+                            // exited normally with exit code 1 or got killed by a signal is to
+                            // display it as the signal will be included
+                            // in the message.
+                            let exit_code = if status.exit_code() == 1
+                                && status.to_string().contains("Terminated by")
+                            {
+                                None
+                            } else {
+                                // This is safe as the portable_pty::ExitStatus's exit code is just
+                                // converted from a i32 to an u32 before we get it
+                                Some(status.exit_code() as i32)
+                            };
+                            return Ok(exit_code);
+                        }
+                        Ok(None) => {
+                            // child hasn't finished, we sleep for a short time
+                            tokio::time::sleep(CHILD_POLL_INTERVAL).await;
+                        }
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
+        }
+    }
+
+    pub(super) async fn kill(&mut self) -> io::Result<()> {
+        #[cfg(unix)]
+        if let Some(process_group_id) = self.process_group_id() {
+            signal_process_group(process_group_id, libc::SIGKILL);
+        }
+
+        match &mut self.imp {
+            ChildHandleImpl::Tokio(Some(child)) => child.kill().await,
+            ChildHandleImpl::Tokio(None) => Ok(()),
+            ChildHandleImpl::Pty(child) => {
+                let mut killer = child.clone_killer();
+                tokio::task::spawn_blocking(move || killer.kill())
+                    .await
+                    .map_err(|err| io::Error::other(format!("pty kill task failed: {err}")))?
+            }
+        }
+    }
+}
+
+pub(super) struct SpawnResult {
+    pub(super) handle: ChildHandle,
+    pub(super) io: ChildIO,
+    pub(super) controller: Option<Box<dyn PtyController + Send>>,
+    #[cfg(windows)]
+    pub(super) root_identity: Option<std::sync::Arc<crate::job_object::ProcessIdentity>>,
+}

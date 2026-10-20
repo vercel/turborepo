@@ -1,0 +1,28 @@
+{
+  "$schema": "../../docs/public/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "src/client.test.ts",
+        "src/config.test.ts",
+        "src/utils.test.ts"
+      ]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
+    }
+  }
+}

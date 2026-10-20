@@ -1,6 +1,8 @@
 import type { Schema } from "@turbo/types";
 
-export type PackageManager = "npm" | "yarn" | "pnpm" | "bun";
+export type PackageManager = "npm" | "yarn" | "pnpm" | "bun" | "nub" | "aube";
+
+export type ExitCode = 0 | 1;
 
 export type DependencyList = Record<string, string>;
 

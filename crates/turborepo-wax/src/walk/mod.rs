@@ -82,16 +82,13 @@ use std::{
 use thiserror::Error;
 use walkdir::{DirEntry, Error, WalkDir};
 
-pub use crate::walk::glob::{GlobEntry, GlobWalker};
+pub use crate::walk::glob::{FilterAny, GlobEntry, GlobWalker};
 use crate::{
-    walk::{
-        filter::{
-            CancelWalk, HierarchicalIterator, Isomeric, SeparatingFilter, SeparatingFilterInput,
-            Separation, TreeResidue, WalkCancellation,
-        },
-        glob::FilterAny,
-    },
     BuildError, Pattern,
+    walk::filter::{
+        CancelWalk, HierarchicalIterator, Isomeric, SeparatingFilter, SeparatingFilterInput,
+        Separation, TreeResidue, WalkCancellation,
+    },
 };
 
 type FileFiltrate<T> = Result<T, WalkError>;
@@ -131,8 +128,10 @@ trait SplitAtDepth {
 impl SplitAtDepth for Path {
     fn split_at_depth(&self, depth: usize) -> (&Path, &Path) {
         let ancestor = self.ancestors().nth(depth).unwrap_or(Path::new(""));
-        let descendant = self.strip_prefix(ancestor).unwrap();
-        (ancestor, descendant)
+        match self.strip_prefix(ancestor) {
+            Ok(descendant) => (ancestor, descendant),
+            Err(_) => (Path::new(""), self),
+        }
     }
 }
 
@@ -149,9 +148,7 @@ impl JoinAndGetDepth for Path {
             // If `path` is absolute, then it replaces `self` (`joined` and `path` are the
             // same). In this case, the depth of the join is the depth of
             // `joined` (there is no root sub-path).
-            depth
-                .checked_add(1)
-                .expect("overflow determining join depth")
+            depth.saturating_add(1)
         } else if path.has_root() {
             depth
         } else {
@@ -186,29 +183,28 @@ impl WalkError {
     pub fn depth(&self) -> usize {
         self.depth
     }
+
+    pub fn is_link_cycle(&self) -> bool {
+        matches!(self.kind, WalkErrorKind::LinkCycle { .. })
+    }
 }
 
 impl From<walkdir::Error> for WalkError {
     fn from(error: walkdir::Error) -> Self {
         let depth = error.depth();
         let path = error.path().map(From::from);
-        if error.io_error().is_some() {
+        let root = error.loop_ancestor().map(From::from);
+        if let Some(error) = error.into_io_error() {
             WalkError {
                 depth,
-                kind: WalkErrorKind::Io {
-                    path,
-                    error: error.into_io_error().expect("incongruent error kind"),
-                },
+                kind: WalkErrorKind::Io { path, error },
             }
         } else {
             WalkError {
                 depth,
                 kind: WalkErrorKind::LinkCycle {
-                    root: error
-                        .loop_ancestor()
-                        .expect("incongruent error kind")
-                        .into(),
-                    leaf: path.expect("incongruent error kind"),
+                    root: root.unwrap_or_default(),
+                    leaf: path.unwrap_or_default(),
                 },
             }
         }
@@ -543,7 +539,9 @@ impl TryFrom<walkdir::Error> for WaxDirEntry {
             .filter(|e| e.kind() == ErrorKind::NotFound)
             .is_some()
         {
-            let path = error.path().expect("not found errors always have paths");
+            let Some(path) = error.path() else {
+                return Err(error);
+            };
 
             if let Some(symlink_meta) = std::fs::symlink_metadata(path)
                 .ok()
@@ -617,11 +615,8 @@ impl Entry for TreeEntry {
     }
 
     fn root_relative_paths(&self) -> (&Path, &Path) {
-        self.path().split_at_depth(
-            self.depth()
-                .checked_add(self.prefix)
-                .expect("overflow determining root-relative paths"),
-        )
+        self.path()
+            .split_at_depth(self.depth().saturating_add(self.prefix))
     }
 
     fn metadata(&self) -> Result<Metadata, WalkError> {
@@ -903,6 +898,24 @@ pub trait FileIterator:
             filter,
         })
     }
+
+    /// Filters file entries against a pre-compiled [`FilterAny`].
+    ///
+    /// This is the pre-compiled equivalent of [`not`]. Use this when the same
+    /// exclusion patterns are applied to multiple iterators to avoid
+    /// re-compiling the patterns each time.
+    ///
+    /// [`FilterAny`]: crate::walk::glob::FilterAny
+    /// [`not`]: crate::walk::FileIterator::not
+    fn not_any(self, filter: FilterAny) -> Not<Self>
+    where
+        Self: Sized,
+    {
+        Not {
+            input: self,
+            filter,
+        }
+    }
 }
 
 impl<T, R, I> FileIterator for I
@@ -1075,24 +1088,20 @@ impl From<EntryResidue> for TreeResidue<()> {
     }
 }
 
-// TODO: Rust's testing framework does not provide a mechanism for maintaining
-// shared state. This       means that tests that write to the file system must
-// do so individually rather than writing       before and after all tests have
-// run. This should probably be avoided.
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, path::PathBuf};
 
-    use build_fs_tree::{dir, file, Build, FileSystemTree};
+    use build_fs_tree::{Build, FileSystemTree, dir, file};
     use path_slash::PathBufExt;
     use tempfile::TempDir;
 
     use crate::{
-        walk::{
-            filter::{HierarchicalIterator, Separation, TreeResidue},
-            Entry, FileIterator, LinkBehavior, PathExt, WalkBehavior,
-        },
         Glob,
+        walk::{
+            Entry, FileIterator, LinkBehavior, PathExt, WalkBehavior,
+            filter::{HierarchicalIterator, Separation, TreeResidue},
+        },
     };
 
     macro_rules! assert_set_eq {
@@ -1311,10 +1320,7 @@ mod tests {
         // on windows the slash path doesn't escape the colon. to make
         // it a valid glob, we must
         #[cfg(windows)]
-        let slash_path = {
-            let regex = regex::Regex::new("([A-Z]):").unwrap();
-            regex.replace(&slash_path, "$1\\:")
-        };
+        let slash_path = { regex::regex!("([A-Z]):").replace(&slash_path, "$1\\:") };
 
         let glob_exp = format!("{}/{}", slash_path, "**/*.rs");
 

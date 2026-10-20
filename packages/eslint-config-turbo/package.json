@@ -1,28 +1,30 @@
 {
   "name": "eslint-config-turbo",
-  "version": "2.4.5-canary.2",
+  "version": "2.11.9",
   "description": "ESLint config for Turborepo",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/vercel/turborepo",
-    "directory": "packages/eslint-config-turbo"
-  },
+  "keywords": [
+    "eslint",
+    "eslint-config",
+    "eslintconfig",
+    "turbo",
+    "turborepo"
+  ],
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
-  "scripts": {
-    "build": "bunchee",
-    "lint": "eslint src",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+  "license": "MIT",
+  "author": "Vercel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vercel/turborepo.git",
+    "directory": "packages/eslint-config-turbo"
   },
-  "keywords": [
-    "turbo",
-    "eslint",
-    "turborepo",
-    "eslintconfig",
-    "eslint-config"
+  "files": [
+    "dist"
   ],
+  "type": "commonjs",
   "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
   "exports": {
     "./flat": {
       "import": {
@@ -36,8 +38,8 @@
     },
     ".": {
       "import": {
-        "types": "./dist/es/index.d.mts",
-        "default": "./dist/es/index.mjs"
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
       },
       "require": {
         "types": "./dist/cjs/index.d.ts",
@@ -45,25 +47,20 @@
       }
     }
   },
-  "author": "Vercel",
   "dependencies": {
     "eslint-plugin-turbo": "workspace:*"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.2",
+    "@eslint/core": "^1.1.0",
+    "@turbo/tsconfig": "workspace:*",
+    "@types/node": "20.11.30",
+    "bunchee": "6.9.4",
+    "eslint": "10.2.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2"
   },
   "peerDependencies": {
     "eslint": ">6.6.0",
     "turbo": ">2.0.0"
-  },
-  "license": "MIT",
-  "devDependencies": {
-    "@turbo/eslint-config": "workspace:*",
-    "@turbo/tsconfig": "workspace:*",
-    "@types/eslint": "^8.56.10",
-    "@types/node": "^20",
-    "bunchee": "^6.3.4"
-  },
-  "files": [
-    "dist"
-  ],
-  "module": "./dist/es/index.mjs",
-  "types": "./dist/cjs/index.d.ts"
+  }
 }

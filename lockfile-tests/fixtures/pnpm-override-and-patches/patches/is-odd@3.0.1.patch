@@ -1,0 +1,10 @@
+diff --git a/index.js b/index.js
+index 79d1f22a8e7a27efb8841bb83cb682ea1ff3a59c..ce3722059108565de2de0676ff0ffcab2bc5813d 100644
+--- a/index.js
++++ b/index.js
+@@ -23,3 +23,5 @@ module.exports = function isOdd(value) {
+   return (n % 2) === 1;
+ };
+ 
++
++// repro: patched marker

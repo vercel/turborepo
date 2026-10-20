@@ -7,22 +7,23 @@
 
 use std::time::Duration;
 
-use futures::{stream::FuturesUnordered, StreamExt};
 use thiserror::Error;
 use tokio::{
     select,
     sync::{mpsc, oneshot},
-    task::{JoinError, JoinHandle},
+    task::{JoinError, JoinHandle, JoinSet},
 };
 use tracing::debug;
-use turborepo_api_client::{analytics::AnalyticsClient, APIAuth};
+use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
 pub use turborepo_vercel_api::AnalyticsEvent;
 use uuid::Uuid;
 
-const BUFFER_THRESHOLD: usize = 10;
+// Bound each request to 100 events; any partial batch is sent at the end of the
+// run. The API's request body limit is not specified here; this is an event
+// count, not a byte limit.
+const BUFFER_THRESHOLD: usize = 100;
 
 static EVENT_TIMEOUT: Duration = Duration::from_millis(200);
-static NO_TIMEOUT: Duration = Duration::from_secs(24 * 60 * 60);
 static REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Error)]
@@ -60,9 +61,9 @@ pub fn start_analytics(
         buffer: Vec::new(),
         session_id,
         api_auth,
-        senders: FuturesUnordered::new(),
         exit_ch: cancel_tx,
         client,
+        requests: JoinSet::new(),
     };
     let handle = worker.start();
 
@@ -97,16 +98,15 @@ struct Worker<C> {
     buffer: Vec<AnalyticsEvent>,
     session_id: Uuid,
     api_auth: APIAuth,
-    senders: FuturesUnordered<JoinHandle<()>>,
     // Used to cancel the worker
     exit_ch: oneshot::Sender<()>,
     client: C,
+    requests: JoinSet<()>,
 }
 
 impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
     pub fn start(mut self) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let mut timeout = tokio::time::sleep(NO_TIMEOUT);
             loop {
                 select! {
                     // We want the events to be prioritized over closing
@@ -118,46 +118,56 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                             // There are no senders left so we can shut down
                             break;
                         }
-                        if self.buffer.len() == BUFFER_THRESHOLD {
+                        if self.buffer.len() >= BUFFER_THRESHOLD {
                             self.flush_events();
-                            timeout = tokio::time::sleep(NO_TIMEOUT);
-                        } else {
-                            timeout = tokio::time::sleep(EVENT_TIMEOUT);
                         }
-                    }
-                    _ = timeout => {
-                        self.flush_events();
-                        timeout = tokio::time::sleep(NO_TIMEOUT);
                     }
                     _ = self.exit_ch.closed() => {
                         break;
                     }
                 }
             }
+            // Stop accepting new events, then drain anything already queued before the
+            // final flush. Closing a handle does not require dropping every sender.
+            self.rx.close();
+            while let Some(event) = self.rx.recv().await {
+                self.buffer.push(event);
+                if self.buffer.len() >= BUFFER_THRESHOLD {
+                    self.flush_events();
+                }
+            }
             self.flush_events();
-            while let Some(result) = self.senders.next().await {
+            // If close_with_timeout expires, dropping the JoinHandle detaches this
+            // worker, allowing pending requests to finish in the background.
+            while let Some(result) = self.requests.join_next().await {
                 if let Err(err) = result {
-                    debug!("failed to send analytics event. error: {}", err)
+                    debug!("analytics request task failed: {}", err);
                 }
             }
         })
     }
 
     pub fn flush_events(&mut self) {
+        // Reap completed requests during long runs rather than retaining every
+        // task in the set until shutdown.
+        while let Some(result) = self.requests.try_join_next() {
+            if let Err(err) = result {
+                debug!("analytics request task failed: {}", err);
+            }
+        }
         if !self.buffer.is_empty() {
             let events = std::mem::take(&mut self.buffer);
-            let handle = self.send_events(events);
-            self.senders.push(handle);
+            self.send_events(events);
         }
     }
 
-    fn send_events(&self, mut events: Vec<AnalyticsEvent>) -> JoinHandle<()> {
+    fn send_events(&mut self, mut events: Vec<AnalyticsEvent>) {
         let session_id = self.session_id;
         let client = self.client.clone();
         let api_auth = self.api_auth.clone();
         add_session_id(session_id, &mut events);
 
-        tokio::spawn(async move {
+        self.requests.spawn(async move {
             // We don't log an error for a timeout because
             // that's what the Go code does.
             if let Ok(Err(err)) =
@@ -166,7 +176,7 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
             {
                 debug!("failed to record cache usage analytics. error: {}", err)
             }
-        })
+        });
     }
 }
 
@@ -188,10 +198,12 @@ mod tests {
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
-    use turborepo_api_client::{analytics::AnalyticsClient, APIAuth};
+    use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
+    use turborepo_types::SecretString;
     use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
+    use uuid::Uuid;
 
-    use crate::start_analytics;
+    use crate::{BUFFER_THRESHOLD, add_session_id, start_analytics};
 
     #[derive(Clone)]
     struct DummyClient {
@@ -219,21 +231,6 @@ mod tests {
         }
     }
 
-    // Asserts that we get the message after the timeout
-    async fn expect_timeout_then_message(rx: &mut UnboundedReceiver<()>) {
-        let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
-
-        select! {
-            _ = rx.recv() => {
-                panic!("Expected to wait out the flush timeout")
-            }
-            _ = timeout => {
-            }
-        }
-
-        rx.recv().await;
-    }
-
     // Asserts that we get the message immediately before the timeout
     async fn expected_immediate_message(rx: &mut UnboundedReceiver<()>) {
         let timeout = tokio::time::sleep(std::time::Duration::from_millis(150));
@@ -258,7 +255,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: "foo".to_string(),
+                token: SecretString::new("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -280,13 +277,17 @@ mod tests {
         // Should have no events since we haven't flushed yet
         assert_eq!(found.len(), 0);
 
-        expect_timeout_then_message(&mut rx).await;
+        // Even after the former idle flush timeout, the partial batch waits
+        // until the run ends.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(250), rx.recv())
+                .await
+                .is_err()
+        );
+        analytics_handle.close().await.unwrap();
         let found = client.events();
         assert_eq!(found.len(), 1);
-        let payloads = &found[0];
-        assert_eq!(payloads.len(), 2);
-
-        drop(analytics_handle);
+        assert_eq!(found[0].len(), 2);
     }
 
     #[tokio::test]
@@ -300,14 +301,14 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: "foo".to_string(),
+                token: SecretString::new("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
             client.clone(),
         );
 
-        for _ in 0..12 {
+        for _ in 0..BUFFER_THRESHOLD + 2 {
             analytics_sender
                 .send(AnalyticsEvent {
                     session_id: None,
@@ -325,16 +326,108 @@ mod tests {
         assert_eq!(found.len(), 1);
 
         let payloads = &found[0];
-        assert_eq!(payloads.len(), 10);
+        assert_eq!(payloads.len(), BUFFER_THRESHOLD);
 
-        expect_timeout_then_message(&mut rx).await;
+        assert!(
+            tokio::time::timeout(Duration::from_millis(250), rx.recv())
+                .await
+                .is_err()
+        );
+        analytics_handle.close().await.unwrap();
         let found = client.events();
         assert_eq!(found.len(), 2);
+        assert_eq!(found[1].len(), 2);
+    }
 
-        let payloads = &found[1];
-        assert_eq!(payloads.len(), 2);
+    #[derive(Clone, Copy)]
+    struct SlowClient;
 
-        drop(analytics_handle);
+    impl AnalyticsClient for SlowClient {
+        async fn record_analytics(
+            &self,
+            _api_auth: &APIAuth,
+            _events: Vec<AnalyticsEvent>,
+        ) -> Result<(), turborepo_api_client::Error> {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_close_does_not_block_on_slow_client() {
+        let (analytics_sender, analytics_handle) = start_analytics(
+            APIAuth {
+                token: SecretString::new("foo".to_string()),
+                team_id: Some("bar".to_string()),
+                team_slug: None,
+            },
+            SlowClient,
+        );
+
+        for _ in 0..2 {
+            analytics_sender
+                .send(AnalyticsEvent {
+                    session_id: None,
+                    source: CacheSource::Local,
+                    event: CacheEvent::Hit,
+                    hash: "".to_string(),
+                    duration: 0,
+                })
+                .unwrap();
+        }
+        drop(analytics_sender);
+
+        // The bounded public close should return even when HTTP is slow.
+        tokio::time::timeout(
+            Duration::from_secs(1),
+            analytics_handle.close_with_timeout(),
+        )
+        .await
+        .expect("bounded close blocked waiting for slow HTTP response");
+    }
+
+    #[derive(Clone)]
+    struct DelayedClient {
+        tx: mpsc::UnboundedSender<()>,
+    }
+
+    impl AnalyticsClient for DelayedClient {
+        async fn record_analytics(
+            &self,
+            _api_auth: &APIAuth,
+            _events: Vec<AnalyticsEvent>,
+        ) -> Result<(), turborepo_api_client::Error> {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            self.tx.send(()).unwrap();
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_close_waits_for_final_request() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let (analytics_sender, analytics_handle) = start_analytics(
+            APIAuth {
+                token: SecretString::new("foo".to_string()),
+                team_id: Some("bar".to_string()),
+                team_slug: None,
+            },
+            DelayedClient { tx },
+        );
+        analytics_sender
+            .send(AnalyticsEvent {
+                session_id: None,
+                source: CacheSource::Local,
+                event: CacheEvent::Hit,
+                hash: "final".to_string(),
+                duration: 0,
+            })
+            .unwrap();
+        tokio::time::timeout(Duration::from_secs(1), analytics_handle.close())
+            .await
+            .expect("timeout before close")
+            .expect("analytics worker panicked");
+        assert_eq!(rx.try_recv(), Ok(()));
     }
 
     #[tokio::test]
@@ -348,7 +441,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: "foo".to_string(),
+                token: SecretString::new("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -371,7 +464,7 @@ mod tests {
         let found = client.events();
         assert!(found.is_empty());
 
-        tokio::time::timeout(Duration::from_millis(5), analytics_handle.close())
+        tokio::time::timeout(Duration::from_secs(1), analytics_handle.close())
             .await
             .expect("timeout before close")
             .expect("analytics worker panicked");
@@ -379,5 +472,135 @@ mod tests {
         assert_eq!(found.len(), 1);
         let payloads = &found[0];
         assert_eq!(payloads.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_close_drains_queued_events_with_sender_alive() {
+        let (tx, _rx) = mpsc::unbounded_channel();
+        let client = DummyClient {
+            events: Default::default(),
+            tx,
+        };
+        let (analytics_sender, analytics_handle) = start_analytics(
+            APIAuth {
+                token: SecretString::new("foo".to_string()),
+                team_id: Some("bar".to_string()),
+                team_slug: None,
+            },
+            client.clone(),
+        );
+
+        let count = BUFFER_THRESHOLD * 2 + 3;
+        for index in 0..count {
+            analytics_sender
+                .send(AnalyticsEvent {
+                    session_id: None,
+                    source: CacheSource::Local,
+                    event: CacheEvent::Hit,
+                    hash: index.to_string(),
+                    duration: 0,
+                })
+                .unwrap();
+        }
+        // Don't drop the sender: closing must still drain the channel and wait
+        // for all the requests, including the final partial batch.
+        tokio::time::timeout(Duration::from_secs(1), analytics_handle.close())
+            .await
+            .expect("timeout before close")
+            .expect("analytics worker panicked");
+
+        let batches = client.events();
+        assert!(batches.iter().all(|batch| batch.len() <= BUFFER_THRESHOLD));
+        let mut hashes: Vec<_> = batches
+            .iter()
+            .flat_map(|batch| batch.iter().map(|event| event.hash.clone()))
+            .collect();
+        hashes.sort();
+        let mut expected: Vec<_> = (0..count).map(|index| index.to_string()).collect();
+        expected.sort();
+        assert_eq!(hashes, expected);
+        assert!(
+            batches
+                .iter()
+                .flatten()
+                .all(|event| event.session_id.is_some())
+        );
+        assert!(analytics_sender.is_closed());
+    }
+
+    #[tokio::test]
+    async fn test_client_error_handling() {
+        let client = ErrorClient;
+
+        let (analytics_sender, analytics_handle) = start_analytics(
+            APIAuth {
+                token: SecretString::new("foo".to_string()),
+                team_id: Some("bar".to_string()),
+                team_slug: None,
+            },
+            client,
+        );
+
+        // Send an event that will cause the client to error
+        assert!(
+            analytics_sender
+                .send(AnalyticsEvent {
+                    session_id: None,
+                    source: CacheSource::Local,
+                    event: CacheEvent::Hit,
+                    hash: "".to_string(),
+                    duration: 0,
+                })
+                .is_ok(),
+            "sender should swallow client errors"
+        );
+
+        // Wait a bit for the error to be handled
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Should not panic when closing
+        analytics_handle.close_with_timeout().await;
+    }
+
+    #[test]
+    fn test_add_session_id() {
+        let mut events = vec![
+            AnalyticsEvent {
+                session_id: None,
+                source: CacheSource::Local,
+                event: CacheEvent::Hit,
+                hash: "hash1".to_string(),
+                duration: 100,
+            },
+            AnalyticsEvent {
+                session_id: Some("existing".to_string()),
+                source: CacheSource::Remote,
+                event: CacheEvent::Miss,
+                hash: "hash2".to_string(),
+                duration: 200,
+            },
+        ];
+
+        let session_id = Uuid::new_v4();
+        add_session_id(session_id, &mut events);
+
+        assert_eq!(events[0].session_id, Some(session_id.to_string()));
+        assert_eq!(events[1].session_id, Some(session_id.to_string()));
+    }
+
+    #[derive(Clone, Copy)]
+    struct ErrorClient;
+
+    impl AnalyticsClient for ErrorClient {
+        async fn record_analytics(
+            &self,
+            _api_auth: &APIAuth,
+            _events: Vec<AnalyticsEvent>,
+        ) -> Result<(), turborepo_api_client::Error> {
+            // Simulate an error using a simple error type
+            Err(turborepo_api_client::Error::ReadError(
+                std::io::Error::other("test error"),
+            ))
+        }
     }
 }

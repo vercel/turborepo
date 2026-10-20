@@ -1,0 +1,16 @@
+---
+source: crates/turborepo/tests/boundaries.rs
+expression: query_output
+---
+{
+  "data": {
+    "boundaries": {
+      "items": [
+        {
+          "message": "Circular package dependency detected: @repo/pkg-a -> @repo/pkg-b -> @repo/pkg-c -> @repo/pkg-a",
+          "import": null
+        }
+      ]
+    }
+  }
+}

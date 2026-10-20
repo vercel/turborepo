@@ -3,39 +3,34 @@
   "version": "0.0.0",
   "private": true,
   "description": "",
-  "homepage": "https://turbo.build/repo",
   "keywords": [],
-  "author": "Vercel",
-  "main": "src/index.ts",
+  "homepage": "https://turborepo.dev",
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
   "license": "MIT",
+  "author": "Vercel",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-test-utils"
   },
-  "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
-  },
-  "scripts": {
-    "lint": "eslint src/",
-    "check-types": "tsc --noEmit",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettier-ignore"
+  "main": "src/index.ts",
+  "dependencies": {
+    "fs-extra": "11.1.1",
+    "js-yaml": "4.3.2",
+    "json5": "2.2.3",
+    "ts-jest": "29.4.11",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@7.0.2"
   },
   "devDependencies": {
-    "@jest/globals": "^29.7.0",
-    "@turbo/eslint-config": "workspace:*",
+    "@jest/globals": "30.3.0",
     "@turbo/tsconfig": "workspace:*",
-    "@types/fs-extra": "^9.0.13",
-    "@types/js-yaml": "^4.0.5",
-    "@types/node": "^18.17.2",
-    "jest": "^29.7.0",
-    "jest-mock": "^29.7.0",
-    "ts-jest": "^29.2.5",
-    "typescript": "5.5.4"
-  },
-  "dependencies": {
-    "fs-extra": "^11.1.0",
-    "js-yaml": "^4.1.0",
-    "json5": "^2.2.3"
+    "@types/fs-extra": "9.0.13",
+    "@types/js-yaml": "4.0.5",
+    "@types/node": "18.17.4",
+    "jest": "30.3.0",
+    "jest-mock": "30.2.0"
   }
 }

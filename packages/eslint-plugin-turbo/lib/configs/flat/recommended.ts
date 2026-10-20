@@ -8,13 +8,13 @@ const cacheKey = project.valid() ? project.key() : Math.random();
 const config = {
   name: "turbo/recommended",
   rules: {
-    [`turbo/${RULES.noUndeclaredEnvVars}`]: "error",
+    [`turbo/${RULES.noUndeclaredEnvVars}`]: "error"
   },
   settings: {
     turbo: {
-      cacheKey,
-    },
-  },
-} satisfies Linter.FlatConfig;
+      cacheKey
+    }
+  }
+} satisfies Linter.Config;
 
 export default config;

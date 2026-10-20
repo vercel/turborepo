@@ -1,12 +1,35 @@
 packages:
-  - ".github/actions/*"
-  - "cli"
-  - "docs/*"
-  - "packages/*"
-  - "turborepo-tests/*"
-  # Intentionally exclude the `npm` `turbo` package from the workspaces.
+  - apps/*
+  - docs/*
+  - packages/*
   - "!packages/turbo"
-  - "crates/*/js"
   - examples
-  # Exclude the non-monorepo example as it should be treated as independent of this repo
   - "!examples/non-monorepo"
+  - lockfile-tests
+
+minimumReleaseAge: 2880
+minimumReleaseAgeExclude:
+  - turbo
+  - "@turbo/*"
+  - next
+  - "@next/*"
+  - "@vercel/geistdocs"
+  # Eve security and correctness releases must be adoptable immediately.
+  - eve
+
+allowBuilds:
+  "@google/genai": true
+  "@swc/core": true
+  "@vercel/speed-insights": true
+  "@vscode/vsce-sign": false
+  core-js-pure: true
+  esbuild: true
+  keytar: false
+  phase: false
+  protobufjs: true
+  sharp: true
+  unrs-resolver: false
+
+overrides:
+  esbuild: 0.28.1
+  handlebars: 4.7.10

@@ -1,0 +1,85 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": [
+        "TINYBIRD_TIME_SAVED_TOKEN",
+        "ENABLE_EXPERIMENTAL_COREPACK",
+        "OG_IMAGE_SECRET"
+      ],
+      "inputs": ["$TURBO_DEFAULT$", "content/**"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"],
+      "dependsOn": ["^build", "schema", "collect-examples-data"]
+    },
+    "dev": {
+      "dependsOn": ["schema", "collect-examples-data"],
+      "persistent": true,
+      "cache": false
+    },
+    "schema": {
+      "dependsOn": ["@turbo/types#build"],
+      "inputs": ["scripts/copy-json-schema.ts"],
+      "outputs": ["public/schema*.json"],
+      "env": [],
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/copy-json-schema.ts"
+      ]
+    },
+
+    "collect-examples-data": {
+      "cache": false,
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/collect-examples-data.ts"
+      ]
+    },
+    "check-links": {
+      "inputs": [
+        "content/**/*.mdx",
+        "$TURBO_ROOT$/docs/link-checker/src/**"
+      ],
+      "cache": false
+    },
+    "check-types": {
+      "dependsOn": ["collect-examples-data", "check-types:mdx"],
+      "command": ["pnpm", "exec", "tsc", "--noEmit"]
+    },
+    "check-types:next": {
+      "cache": false,
+      "command": ["pnpm", "exec", "next", "typegen"]
+    },
+    "check-types:mdx": {
+      "cache": false,
+      "dependsOn": ["check-types:next"],
+      "command": ["pnpm", "exec", "fumadocs-mdx"]
+    },
+    "lint": {
+      "dependsOn": ["check-types:mdx"]
+    },
+    "check-openapi": {
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/generate-openapi-docs.ts",
+        "--check"
+      ]
+    },
+    "generate:openapi": {
+      "cache": false,
+      "command": [
+        "node",
+        "--experimental-strip-types",
+        "scripts/generate-openapi-docs.ts"
+      ]
+    },
+    "translate": {
+      "cache": false,
+      "interactive": true,
+      "command": ["npx", "@vercel/geistdocs", "translate"]
+    }
+  }
+}

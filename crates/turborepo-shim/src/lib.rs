@@ -1,0 +1,221 @@
+//! Shim for invoking the correct turbo binary version.
+//!
+//! This crate handles the logic for finding and executing the correct version
+//! of turbo based on the repository configuration. It supports:
+//!
+//! - Finding locally installed turbo in node_modules
+//! - Handing off to the correct local turbo version
+//! - Falling back to the global turbo when no local version is found
+//! - Running update checks for new turbo versions
+//!
+//! The crate uses trait-based dependency injection to avoid circular
+//! dependencies with `turborepo-cli`.
+
+pub mod capabilities;
+mod local_turbo_config;
+mod local_turbo_state;
+pub mod managed_run;
+mod parser;
+pub mod run;
+mod turbo_state;
+
+use std::process::ExitStatus;
+
+// Re-exports
+pub use local_turbo_state::turbo_version_has_shim;
+pub use parser::ShimArgs;
+pub use run::{
+    Error, GLOBAL_WARNING_ENV_VAR, INVOCATION_CWD_ENV_VAR, INVOCATION_DIR_ENV_VAR, ShimResult,
+    ShimRuntime, run, run_with_args,
+};
+pub use turbo_state::TurboState;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_repository::inference::RepoState;
+use turborepo_ui::ColorConfig;
+
+/// Trait for running the turbo CLI when shim determines current binary should
+/// execute.
+///
+/// This trait is used by the shim to call back into the main turbo CLI
+/// implementation when it determines that the currently running binary is the
+/// correct one to use (either because it's the local installation, or because
+/// no local installation was found).
+///
+/// # Example Implementation
+///
+/// ```ignore
+/// struct TurboCliRunner;
+///
+/// impl TurboRunner for TurboCliRunner {
+///     type Error = cli::Error;
+///     
+///     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
+///         cli::run(repo_state, ui)
+///     }
+/// }
+/// ```
+pub trait TurboRunner: Send + Sync {
+    /// The error type returned by the runner.
+    type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Whether this invocation belongs to the global CLI without repository
+    /// inference, update checks, or local binary selection. The CLI owns its
+    /// command grammar; existing runners retain the normal shim behavior.
+    fn is_global_command(&self) -> bool {
+        false
+    }
+
+    /// The CLI grammar/config owner validates managed setup before any local
+    /// handoff, update check, or implicit download, and reports what a
+    /// repository-local CLI must support to run it. No managed policy by
+    /// default.
+    fn managed_run_requirement(
+        &self,
+        _root: &AbsoluteSystemPath,
+        _ui: ColorConfig,
+    ) -> Result<Option<capabilities::Requirement>, Self::Error> {
+        Ok(None)
+    }
+
+    /// Run the turbo CLI with the given repository state and UI configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_state` - Optional repository state if inference succeeded
+    /// * `ui` - Color configuration for terminal output
+    ///
+    /// # Returns
+    ///
+    /// The exit code from the CLI execution, or an error if execution failed.
+    fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error>;
+}
+
+/// Trait for handing an invocation off to another turbo, such as the
+/// repository's local CLI.
+///
+/// Killing the invoked turbo must kill the turbo it hands off to, and that
+/// turbo's exit status, including a signal death, is the invocation's own.
+/// turbo's own implementation, `turborepo_process::hand_off`, replaces this
+/// process with `command` on Unix and contains it in a job object on Windows.
+pub trait ChildSpawner: Send + Sync {
+    /// Runs `command` in this invocation's place and returns its exit status.
+    /// An implementation may replace this process with `command` (`execve`)
+    /// instead, returning only if `command` cannot start.
+    fn hand_off(&self, command: std::process::Command) -> std::io::Result<ExitStatus>;
+}
+
+/// Runs `command` as a plain child process and waits for it.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DefaultChildSpawner;
+
+impl ChildSpawner for DefaultChildSpawner {
+    fn hand_off(&self, mut command: std::process::Command) -> std::io::Result<ExitStatus> {
+        command.status()
+    }
+}
+
+/// Trait for getting turbo configuration options.
+///
+/// This trait abstracts over the configuration loading mechanism, allowing
+/// the shim to access configuration without directly depending on the full
+/// configuration infrastructure in `turborepo-cli`.
+pub trait ConfigProvider: Send + Sync {
+    /// Get configuration options for the given repository root.
+    ///
+    /// # Arguments
+    ///
+    /// * `root` - The repository root path
+    /// * `root_turbo_json` - Optional path to a custom root turbo.json
+    ///
+    /// # Returns
+    ///
+    /// Configuration options that can be used to check settings like
+    /// `no_update_notifier`.
+    fn get_config(
+        &self,
+        root: &AbsoluteSystemPath,
+        root_turbo_json: Option<&AbsoluteSystemPathBuf>,
+    ) -> ShimConfigurationOptions;
+}
+
+/// Minimal configuration options needed by the shim.
+///
+/// This struct contains only the configuration fields that the shim needs,
+/// avoiding a dependency on the full `ConfigurationOptions` from
+/// `turborepo-cli`.
+#[derive(Debug, Default, Clone)]
+pub struct ShimConfigurationOptions {
+    no_update_notifier: Option<bool>,
+}
+
+impl ShimConfigurationOptions {
+    /// Create a new configuration with the given options.
+    pub fn new(no_update_notifier: Option<bool>) -> Self {
+        Self { no_update_notifier }
+    }
+
+    /// Returns whether the update notifier should be disabled.
+    ///
+    /// Returns `true` if updates should not be checked, `false` otherwise.
+    pub fn no_update_notifier(&self) -> bool {
+        self.no_update_notifier.unwrap_or(false)
+    }
+}
+
+/// Default configuration provider that returns default options.
+///
+/// This can be used when no configuration infrastructure is available,
+/// or for testing purposes.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DefaultConfigProvider;
+
+impl ConfigProvider for DefaultConfigProvider {
+    fn get_config(
+        &self,
+        _root: &AbsoluteSystemPath,
+        _root_turbo_json: Option<&AbsoluteSystemPathBuf>,
+    ) -> ShimConfigurationOptions {
+        ShimConfigurationOptions::default()
+    }
+}
+
+/// Trait for getting the current turbo version.
+///
+/// This is used to decouple version detection from the shim logic.
+pub trait VersionProvider: Send + Sync {
+    /// Get the version of the currently running turbo binary.
+    fn get_version(&self) -> &'static str;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shim_configuration_options_default() {
+        let opts = ShimConfigurationOptions::default();
+        assert!(!opts.no_update_notifier());
+    }
+
+    #[test]
+    fn test_shim_configuration_options_with_no_update_notifier() {
+        let opts = ShimConfigurationOptions::new(Some(true));
+        assert!(opts.no_update_notifier());
+
+        let opts = ShimConfigurationOptions::new(Some(false));
+        assert!(!opts.no_update_notifier());
+
+        let opts = ShimConfigurationOptions::new(None);
+        assert!(!opts.no_update_notifier());
+    }
+
+    #[test]
+    fn test_default_config_provider() -> Result<(), Box<dyn std::error::Error>> {
+        let provider = DefaultConfigProvider;
+        let fake_root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { "C:\\repo" } else { "/repo" })?;
+        let config = provider.get_config(&fake_root, None);
+        assert!(!config.no_update_notifier());
+        Ok(())
+    }
+}

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import childProcess from "node:child_process";
 import picocolors from "picocolors";
 import { setupTestFixtures, spyConsole, spyExit } from "@turbo/test-utils";
@@ -10,18 +11,19 @@ import { CreateTurboTelemetry, TelemetryConfig } from "@turbo/telemetry";
 import * as turboUtils from "@turbo/utils";
 import { describe, it, expect, jest } from "@jest/globals";
 import type { CreateCommandArgument } from "../src/commands/create/types";
+import * as gitUtils from "../src/utils/git";
 import { create } from "../src/commands/create";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
-  ...jest.requireActual("@turbo/workspaces"),
+  ...jest.requireActual("@turbo/workspaces")
 }));
 
 describe("create-turbo", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
-    options: { emptyFixture: true },
+    options: { emptyFixture: true }
   });
 
   const mockConsole = spyConsole();
@@ -30,16 +32,29 @@ describe("create-turbo", () => {
     api: "https://example.com",
     packageInfo: {
       name: "create-turbo",
-      version: "1.0.0",
+      version: "1.0.0"
     },
     config: new TelemetryConfig({
       configPath: "test-config-path",
       config: {
         telemetry_enabled: false,
         telemetry_id: "telemetry-test-id",
-        telemetry_salt: "telemetry-salt",
-      },
-    }),
+        telemetry_salt: "telemetry-salt"
+      }
+    })
+  });
+
+  it("includes managed agent guidance in the default starter", () => {
+    const agentsPath = path.resolve(
+      __dirname,
+      "../../../examples/basic/AGENTS.md"
+    );
+    const agents = readFileSync(agentsPath, "utf8");
+
+    expect(agents).toContain("<!-- BEGIN:turborepo-agent-rules -->");
+    expect(agents).toContain("# This is NOT the Turborepo you know");
+    expect(agents).toContain("docs/README.md");
+    expect(agents).toContain('"agentGuidance": true');
   });
 
   it.each<{ packageManager: PackageManager }>([
@@ -47,6 +62,7 @@ describe("create-turbo", () => {
     { packageManager: "npm" },
     { packageManager: "pnpm" },
     { packageManager: "bun" },
+    { packageManager: "nub" }
   ])(
     "outputs expected console messages when using $packageManager (option)",
     async ({ packageManager }) => {
@@ -61,6 +77,8 @@ describe("create-turbo", () => {
           yarn: "1.22.10",
           pnpm: "7.22.2",
           bun: "1.0.1",
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -68,7 +86,7 @@ describe("create-turbo", () => {
         .mockResolvedValue({
           cdPath: "",
           hasPackageJson: true,
-          availableScripts,
+          availableScripts
         });
 
       const mockGetWorkspaceDetails = jest
@@ -76,21 +94,26 @@ describe("create-turbo", () => {
         .mockResolvedValue(
           getWorkspaceDetailsMockReturnValue({
             root,
-            packageManager,
+            packageManager
           })
         );
 
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation(() => {
-          return "success";
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValue({
+          pid: 1,
+          output: [],
+          stdout: Buffer.from(""),
+          stderr: Buffer.from(""),
+          status: 0,
+          signal: null
         });
 
       await create(root as CreateCommandArgument, {
         packageManager,
         skipInstall: true,
         example: "default",
-        telemetry,
+        telemetry
       });
 
       const expected = `${picocolors.bold(
@@ -112,22 +135,25 @@ describe("create-turbo", () => {
         "- Run commands with Turborepo:"
       );
 
-      availableScripts.forEach((script) => {
+      for (const script of availableScripts) {
         expect(mockConsole.log).toHaveBeenCalledWith(
           expect.stringContaining(
             picocolors.cyan(`${packageManager} run ${script}`)
           )
         );
-      });
+      }
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run a command twice to hit cache"
       );
 
+      // Package-manager detection is shared between the create flow and the
+      // package-manager prompt, so the version checks run exactly once.
+      expect(mockAvailablePackageManagers).toHaveBeenCalledTimes(1);
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     }
   );
 
@@ -136,6 +162,8 @@ describe("create-turbo", () => {
     { packageManager: "npm" },
     { packageManager: "pnpm" },
     { packageManager: "bun" },
+    { packageManager: "nub" },
+    { packageManager: "aube" }
   ])(
     "outputs expected console messages when using $packageManager (arg)",
     async ({ packageManager }) => {
@@ -150,6 +178,8 @@ describe("create-turbo", () => {
           yarn: "1.22.10",
           pnpm: "7.22.2",
           bun: "1.0.1",
+          nub: "0.1.0",
+          aube: "0.1.0"
         });
 
       const mockCreateProject = jest
@@ -157,7 +187,7 @@ describe("create-turbo", () => {
         .mockResolvedValue({
           cdPath: "",
           hasPackageJson: true,
-          availableScripts,
+          availableScripts
         });
 
       const mockGetWorkspaceDetails = jest
@@ -165,21 +195,26 @@ describe("create-turbo", () => {
         .mockResolvedValue(
           getWorkspaceDetailsMockReturnValue({
             root,
-            packageManager,
+            packageManager
           })
         );
 
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation(() => {
-          return "success";
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValue({
+          pid: 1,
+          output: [],
+          stdout: Buffer.from(""),
+          stderr: Buffer.from(""),
+          status: 0,
+          signal: null
         });
 
       await create(root as CreateCommandArgument, {
         packageManager,
         skipInstall: true,
         example: "default",
-        telemetry,
+        telemetry
       });
 
       const expected = `${picocolors.bold(
@@ -201,21 +236,24 @@ describe("create-turbo", () => {
         "- Run commands with Turborepo:"
       );
 
-      availableScripts.forEach((script) => {
+      for (const script of availableScripts) {
         expect(mockConsole.log).toHaveBeenCalledWith(
           expect.stringContaining(
             picocolors.cyan(`${packageManager} run ${script}`)
           )
         );
-      });
+      }
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run a command twice to hit cache"
       );
+      // Package-manager detection is shared between the create flow and the
+      // package-manager prompt, so the version checks run exactly once.
+      expect(mockAvailablePackageManagers).toHaveBeenCalledTimes(1);
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     }
   );
 
@@ -229,6 +267,8 @@ describe("create-turbo", () => {
         yarn: "1.22.10",
         pnpm: "7.22.2",
         bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
       });
 
     const mockCreateProject = jest
@@ -240,21 +280,26 @@ describe("create-turbo", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
-    const mockExecSync = jest
-      .spyOn(childProcess, "execSync")
-      .mockImplementation(() => {
-        return "success";
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
       });
 
     await create(root as CreateCommandArgument, {
       packageManager,
       skipInstall: true,
       example: "default",
-      telemetry,
+      telemetry
     });
 
     expect(mockConsole.error).toHaveBeenCalledTimes(2);
@@ -273,6 +318,133 @@ describe("create-turbo", () => {
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
-    mockExecSync.mockRestore();
+    mockSpawnSync.mockRestore();
+  });
+
+  it("does not initialize git or remove .git directory when --no-git flag is used", async () => {
+    const { root } = useFixture({ fixture: "create-turbo-no-git" });
+    const packageManager = "npm";
+
+    const mockAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        npm: "8.19.2",
+        yarn: "1.22.10",
+        pnpm: "7.22.2",
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
+      });
+
+    const mockCreateProject = jest
+      .spyOn(turboUtils, "createProject")
+      .mockResolvedValue({
+        cdPath: "",
+        hasPackageJson: true,
+        availableScripts: ["build", "test", "dev"]
+      });
+
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager
+        })
+      );
+
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
+      });
+
+    const mockTryGitInit = jest.spyOn(gitUtils, "tryGitInit");
+
+    await create(root as CreateCommandArgument, {
+      packageManager,
+      skipInstall: true,
+      example: "default",
+      git: false,
+      telemetry
+    });
+
+    expect(mockTryGitInit).not.toHaveBeenCalled();
+    expect(mockSpawnSync).not.toHaveBeenCalled();
+
+    mockAvailablePackageManagers.mockRestore();
+    mockCreateProject.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
+    mockSpawnSync.mockRestore();
+    mockTryGitInit.mockRestore();
+  });
+
+  it("initializes git when --no-git flag is not used", async () => {
+    const { root } = useFixture({ fixture: "create-turbo-with-git" });
+    const packageManager = "npm";
+
+    const mockAvailablePackageManagers = jest
+      .spyOn(turboUtils, "getAvailablePackageManagers")
+      .mockResolvedValue({
+        npm: "8.19.2",
+        yarn: "1.22.10",
+        pnpm: "7.22.2",
+        bun: "1.0.1",
+        nub: "0.1.0",
+        aube: "0.1.0"
+      });
+
+    const mockCreateProject = jest
+      .spyOn(turboUtils, "createProject")
+      .mockResolvedValue({
+        cdPath: "",
+        hasPackageJson: true,
+        availableScripts: ["build", "test", "dev"]
+      });
+
+    const mockGetWorkspaceDetails = jest
+      .spyOn(turboWorkspaces, "getWorkspaceDetails")
+      .mockResolvedValue(
+        getWorkspaceDetailsMockReturnValue({
+          root,
+          packageManager
+        })
+      );
+
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
+      });
+
+    const mockTryGitInit = jest
+      .spyOn(gitUtils, "tryGitInit")
+      .mockReturnValue(true);
+
+    await create(root as CreateCommandArgument, {
+      packageManager,
+      skipInstall: true,
+      example: "default",
+      git: true,
+      telemetry
+    });
+
+    expect(mockTryGitInit).toHaveBeenCalledWith(root);
+
+    mockAvailablePackageManagers.mockRestore();
+    mockCreateProject.mockRestore();
+    mockGetWorkspaceDetails.mockRestore();
+    mockSpawnSync.mockRestore();
+    mockTryGitInit.mockRestore();
   });
 });

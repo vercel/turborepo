@@ -1,18 +1,25 @@
 import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import * as path from "node:path";
+import { cp, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { Workspace, Package } from "../js/dist/index.js";
+
+const MONOREPO_PATH = path.resolve(__dirname, "./fixtures/monorepo");
+const POLYGLOT_MONOREPO_PATH = path.resolve(
+  __dirname,
+  "./fixtures/polyglot-monorepo"
+);
 
 describe("findPackages", () => {
   it("enumerates packages", async () => {
-    const workspace = await Workspace.find("./fixtures/monorepo");
+    const workspace = await Workspace.find(MONOREPO_PATH);
     const packages: Package[] = await workspace.findPackages();
     assert.notEqual(packages.length, 0);
   });
 
   it("returns a package graph", async () => {
-    const dir = path.resolve(__dirname, "./fixtures/monorepo");
-    const workspace = await Workspace.find(dir);
+    const workspace = await Workspace.find(MONOREPO_PATH);
     const packages = await workspace.findPackagesWithGraph();
 
     assert.equal(Object.keys(packages).length, 2);
@@ -25,5 +32,119 @@ describe("findPackages", () => {
 
     assert.deepEqual(pkg2.dependencies, []);
     assert.deepEqual(pkg2.dependents, ["apps/app"]);
+  });
+
+  it("returns packages and dependencies across toolchains", async () => {
+    const workspace = await Workspace.find(POLYGLOT_MONOREPO_PATH);
+    const packages = await workspace.findPackagesWithGraph();
+
+    assert.deepEqual(Object.keys(packages).sort(), [
+      "apps/web",
+      "crates/core",
+      "python/api",
+      "python/shared"
+    ]);
+    assert.deepEqual(packages["python/api"].dependencies, ["python/shared"]);
+    assert.deepEqual(packages["python/shared"].dependents, ["python/api"]);
+  });
+
+  it("excludes toolchains that are not active", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "turbo-repository-"));
+    await cp(POLYGLOT_MONOREPO_PATH, dir, { recursive: true });
+    await writeFile(path.join(dir, "turbo.json"), '{"tasks": {}}\n');
+
+    const workspace = await Workspace.find(dir);
+    const packages = await workspace.findPackagesWithGraph();
+
+    assert.deepEqual(Object.keys(packages), ["apps/web"]);
+  });
+
+  for (const javascriptName of ["aaa-js", "zzz-js"]) {
+    it(`preserves singular lookup and all affected owners with ${javascriptName}`, async () => {
+      // Native toolchains canonicalize macOS's /var -> /private/var alias.
+      const dir = await realpath(
+        await mkdtemp(path.join(tmpdir(), "turbo-repository-colocated-"))
+      );
+      try {
+        await cp(POLYGLOT_MONOREPO_PATH, dir, { recursive: true });
+        await writeFile(
+          path.join(dir, "pnpm-workspace.yaml"),
+          'packages:\n  - "apps/*"\n  - "crates/*"\n'
+        );
+        await writeFile(
+          path.join(dir, "crates/core/package.json"),
+          JSON.stringify({ name: javascriptName })
+        );
+        const workspace = await Workspace.find(dir);
+        const file = path.join("crates", "core", "src", "lib.rs");
+        const names = [javascriptName, "core"].sort();
+
+        const pkg = await workspace.findPackageByPath(file);
+        assert.equal(pkg.name, names[0]);
+        assert.equal(pkg.relativePath, path.join("crates", "core"));
+
+        const affected = await workspace.affectedPackages([file]);
+        assert.deepEqual(affected.map(({ name }) => name).sort(), names);
+        assert.ok(
+          affected.every(
+            ({ relativePath }) => relativePath === path.join("crates", "core")
+          )
+        );
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+  }
+
+  it("returns the package for a given path", async () => {
+    const workspace = await Workspace.find(MONOREPO_PATH);
+
+    for (const [filePath, result] of [
+      ["apps/app/src/util/useful-file.ts", "app-a"],
+      [
+        "apps/app/src/very/deeply/nested/file/that/is/deep/as/can/be/with/a/package.ts",
+        "app-a"
+      ],
+      ["apps/app/src/util/non-typescript-file.txt", "app-a"],
+      ["apps/app/src/a-directory", "app-a"],
+      ["apps/app/package.json", "app-a"],
+      ["apps/app/tsconfig.json", "app-a"],
+      ["apps/app", "app-a"], // The root of a package is still "within" a package!
+      ["apps/app/", "app-a"], // Trailing-slash should be ignored
+      ["packages/ui/pretty-stuff.css", "ui"],
+      // This may be unintentional - I expected `findPackages` to return a nameless-package for `packages/blank` (whose
+      // `package.json` is missing a `name` field), but instead there is no such package returned.
+      ["packages/blank/nothing.null", undefined],
+      ["packages/not-in-a-package", undefined],
+      ["packages/not-in-a-package/but/very/deep/within/nothingness", undefined],
+      ["", undefined],
+      [".", undefined],
+      ["..", undefined],
+      ["apps/../apps/app/src", "app-a"],
+      ["apps/app/src/util/../../../../apps/app", "app-a"],
+      ["not a legal ^&(^) path", undefined],
+      ["package.json", undefined],
+      ["tsconfig.json", undefined]
+    ]) {
+      if (result === undefined) {
+        await assert.rejects(
+          () => workspace.findPackageByPath(filePath!),
+          `Expected rejection for ${filePath}`
+        );
+      } else {
+        await workspace
+          .findPackageByPath(filePath!)
+          .then((pkg) => {
+            assert.equal(
+              pkg.name,
+              result,
+              `Expected ${result} for ${filePath}`
+            );
+          })
+          .catch((reason) => {
+            assert.fail(`Expected success for ${filePath}, but got ${reason}`);
+          });
+      }
+    }
   });
 });

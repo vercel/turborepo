@@ -1,25 +1,43 @@
-const { resolve } = require('node:path');
+import eslintConfigPrettier from "eslint-config-prettier";
+import pluginReactHooks from "eslint-plugin-react-hooks";
+import globals from "globals";
+import pluginNext from "@next/eslint-plugin-next";
+import { config as baseConfig } from "./base.js";
 
-const project = resolve(process.cwd(), 'tsconfig.json');
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ['./base.js', require.resolve('@vercel/style-guide/eslint/next')],
-  globals: {
-    React: true,
-    JSX: true,
+/**
+ * A custom ESLint configuration for applications that use Next.js.
+ *
+ * @type {import("eslint").Linter.Config[]}
+ * */
+export const nextJsConfig = [
+  ...baseConfig,
+  eslintConfigPrettier,
+  {
+    ignores: [".next/**"],
   },
-  env: {
-    node: true,
-    browser: true,
-  },
-  plugins: ['only-warn'],
-  settings: {
-    'import/resolver': {
-      typescript: {
-        project,
+  {
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.serviceworker,
       },
     },
   },
-  overrides: [{ files: ['*.js?(x)', '*.ts?(x)'] }],
-};
+  {
+    plugins: {
+      "@next/next": pluginNext,
+    },
+    rules: {
+      ...pluginNext.configs.recommended.rules,
+      ...pluginNext.configs["core-web-vitals"].rules,
+    },
+  },
+  {
+    plugins: {
+      "react-hooks": pluginReactHooks,
+    },
+    rules: {
+      ...pluginReactHooks.configs.recommended.rules,
+    },
+  },
+];

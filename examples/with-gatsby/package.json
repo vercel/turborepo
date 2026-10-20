@@ -6,14 +6,15 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "prettier": "^3.2.5",
-    "turbo": "^2.0.3"
+    "prettier": "3.9.10",
+    "turbo": "2.11.8"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=26.11.1"
   },
-  "packageManager": "pnpm@8.15.6"
+  "packageManager": "pnpm@12.11.2"
 }

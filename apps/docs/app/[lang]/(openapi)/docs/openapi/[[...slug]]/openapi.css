@@ -1,0 +1,39 @@
+/* Custom overrides for OpenAPI page button colors */
+#nd-page
+  > article
+  > div.prose
+  > div
+  > div
+  > div.min-w-0.flex-1
+  > form
+  > div.flex.flex-row.items-center.gap-2.text-sm
+  > button {
+  color: white !important;
+}
+
+.dark,
+.dark-theme {
+  #nd-page
+    > article
+    > div.prose
+    > div
+    > div
+    > div.min-w-0.flex-1
+    > form
+    > div.flex.flex-row.items-center.gap-2.text-sm
+    > button {
+    color: black !important;
+  }
+}
+
+/*
+ * @vercel/geistdocs caps #nd-page at 780px on wide screens, including
+ * full-width pages. Keep the API reference at the Fumadocs full width so the
+ * request panel and code samples stay side by side.
+ */
+@media (width >= 80rem) {
+  #nd-page[data-full="true"] {
+    max-width: 1200px;
+    transform: none;
+  }
+}

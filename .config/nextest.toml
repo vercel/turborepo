@@ -1,0 +1,9 @@
+# Nextest configuration for Turborepo
+# See https://nexte.st/book/configuration.html
+
+[[profile.default.overrides]]
+# These OTel tests configure an endpoint without a collector. Bound setup and
+# turbo runs to one minute, and do not retry a timed-out test on Windows.
+filter = 'package(turbo) and binary(experimental_otel_test)'
+slow-timeout = { period = "60s", terminate-after = 1 }
+retries = 0

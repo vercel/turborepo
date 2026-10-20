@@ -2,11 +2,22 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "build:embed": {
+      "outputs": ["src/templates/embedded.ts"],
+      "inputs": ["src/templates/simple-ts/**", "src/templates/simple-js/**"],
+      "command": ["node", "scripts/embed-templates.mjs"]
+    },
+    "check-types": {
+      "dependsOn": ["^build", "build:embed"]
+    },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "command": ["pnpm", "exec", "jest"]
     },
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "build:embed"],
+      "outputs": ["dist/**"],
+      "command": ["pnpm", "run", "build"]
     }
   }
 }

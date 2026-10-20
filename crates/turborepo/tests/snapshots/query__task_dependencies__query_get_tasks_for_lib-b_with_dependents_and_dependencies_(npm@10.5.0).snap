@@ -39,6 +39,74 @@ expression: query_output
             }
           },
           {
+            "fullName": "lib-b#build1",
+            "allDependents": {
+              "items": [
+                {
+                  "fullName": "app-a#build1"
+                },
+                {
+                  "fullName": "app-b#build1"
+                },
+                {
+                  "fullName": "lib-a#build1"
+                }
+              ]
+            }
+          },
+          {
+            "fullName": "lib-b#build2",
+            "allDependents": {
+              "items": []
+            }
+          },
+          {
+            "fullName": "lib-b#custom",
+            "allDependents": {
+              "items": []
+            }
+          },
+          {
+            "fullName": "lib-b#prepare",
+            "allDependents": {
+              "items": [
+                {
+                  "fullName": "app-a#build0"
+                },
+                {
+                  "fullName": "app-a#test"
+                },
+                {
+                  "fullName": "app-b#build0"
+                },
+                {
+                  "fullName": "app-b#test"
+                },
+                {
+                  "fullName": "lib-a#build0"
+                },
+                {
+                  "fullName": "lib-a#test"
+                },
+                {
+                  "fullName": "lib-b#build0"
+                },
+                {
+                  "fullName": "lib-b#side-quest"
+                },
+                {
+                  "fullName": "lib-b#test"
+                }
+              ]
+            }
+          },
+          {
+            "fullName": "lib-b#side-quest",
+            "allDependents": {
+              "items": []
+            }
+          },
+          {
             "fullName": "lib-b#test",
             "allDependents": {
               "items": []

@@ -1,0 +1,244 @@
+---
+title: Multi-language support
+description: Run other language toolchains alongside JavaScript packages.
+product: turborepo
+type: guide
+summary: Use package scripts to build JavaScript and .NET projects in one task graph.
+prerequisites:
+  - /docs/crafting-your-repository/structuring-a-repository
+  - /docs/crafting-your-repository/configuring-tasks
+related:
+  - /docs/guides/tools/rust
+  - /docs/guides/tools/python
+  - /docs/guides/tools/go
+  - /docs/guides/migrating-from-nx
+---
+
+Turborepo can run other language toolchains through scripts in `package.json`. Add a package for each independently cacheable project and declare its dependencies so Turborepo can order tasks and invalidate cached results.
+
+For experimental native workspace support, see the [Rust](/docs/guides/tools/rust), [Python](/docs/guides/tools/python), and [Go](/docs/guides/tools/go) guides. Those integrations discover projects and dependencies from their native workspace files.
+
+This example combines a JavaScript package with a .NET console application and a C# library. Start with [Turborepo installed](/docs/getting-started/installation) in your repository, and install the [.NET 10 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/10.0) so `dotnet` is available on `PATH`.
+
+```text
+.
+├── apps/api/
+│   ├── Api.csproj
+│   ├── Program.cs
+│   └── package.json
+├── packages/
+│   ├── lib/
+│   │   ├── Lib.csproj
+│   │   ├── Message.cs
+│   │   └── package.json
+│   └── web/
+│       └── package.json
+├── .gitignore
+├── global.json
+├── package.json
+└── turbo.json
+```
+
+## Add the package-manager workspaces
+
+Include both the application and library directories. Their `package.json` files make the .NET projects visible to Turborepo:
+
+<PackageManagerTabs>
+  <Tab value="pnpm">
+
+```yaml title="./pnpm-workspace.yaml"
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml" text="pnpm workspace documentation" />
+
+  </Tab>
+
+  <Tab value="yarn">
+
+```json title="./package.json"
+{
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}
+```
+
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared" text="Yarn workspace documentation" />
+
+  </Tab>
+
+  <Tab value="npm">
+
+```json title="./package.json"
+{
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}
+```
+
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/using-npm/workspaces" text="npm workspace documentation" />
+
+  </Tab>
+
+  <Tab value="bun">
+
+```json title="./package.json"
+{
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"]
+}
+```
+
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="Bun workspace documentation" />
+
+  </Tab>
+</PackageManagerTabs>
+
+The JavaScript package has a normal package name and script:
+
+```json title="./packages/web/package.json"
+{
+  "name": "web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node -e \"console.log('web build')\""
+  }
+}
+```
+
+## Add the .NET projects
+
+Pin the .NET SDK at the repository root so machines sharing cached builds use the same compiler. Install the version specified here:
+
+```json title="./global.json"
+{
+  "sdk": {
+    "version": "10.0.401",
+    "rollForward": "disable"
+  }
+}
+```
+
+`rollForward: "disable"` requires the exact SDK version. This prevents a compiler upgrade from reusing cached outputs without a corresponding change to `global.json`.
+
+Create the library project and its source file:
+
+```xml title="./packages/lib/Lib.csproj"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <DefaultItemExcludes>$(DefaultItemExcludes);node_modules/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
+```
+
+```csharp title="./packages/lib/Message.cs"
+namespace Acme.Lib;
+
+public static class Message
+{
+    public static string Text() => "API ready";
+}
+```
+
+The application uses a `ProjectReference` to resolve the library in .NET:
+
+```xml title="./apps/api/Api.csproj"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <DefaultItemExcludes>$(DefaultItemExcludes);node_modules/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../packages/lib/Lib.csproj" />
+  </ItemGroup>
+</Project>
+```
+
+```csharp title="./apps/api/Program.cs"
+System.Console.WriteLine(Acme.Lib.Message.Text());
+```
+
+## Connect the projects to Turborepo
+
+Add a `package.json` beside each `.csproj` with a script that invokes the [.NET CLI](https://learn.microsoft.com/en-us/dotnet/core/tools/dotnet-build):
+
+```json title="./packages/lib/package.json"
+{
+  "name": "lib",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "dotnet build Lib.csproj --configuration Release"
+  }
+}
+```
+
+```json title="./apps/api/package.json"
+{
+  "name": "api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "dotnet build Api.csproj --configuration Release"
+  },
+  "dependencies": {
+    "lib": "workspace:*"
+  }
+}
+```
+
+For npm, use `"lib": "*"` instead of `"workspace:*"`. Run your package manager's install command from the repository root to link the workspaces and update its lockfile.
+
+Keep the `package.json` dependency in sync with the `ProjectReference`. .NET uses the project reference to compile the application, while Turborepo uses the package dependency to build `lib` before `api` and invalidate `api`'s cache when the library changes. Turborepo does not read `.csproj` references or manage NuGet dependencies. Review both declarations whenever you add or remove a project reference.
+
+The `DefaultItemExcludes` entries keep .NET from compiling source files reached through workspace links in `node_modules`.
+
+## Configure tasks and caching
+
+Ignore `bin/` and `obj/` to keep generated files out of the default input hash. The `outputs` setting below still lets Turborepo cache and restore `bin/`:
+
+```text title="./.gitignore"
+node_modules/
+.turbo/
+bin/
+obj/
+```
+
+Configure the build task and cache the binaries produced by each .NET project:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "globalDependencies": ["global.json"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["bin/**"]
+    },
+    "web#build": {
+      "outputs": []
+    }
+  }
+}
+```
+
+Output paths are relative to each package. The .NET builds write to `bin/Release/net10.0`; the JavaScript script only prints a message and has no files to cache. `obj/` contains intermediate and restore state and is not cached here. A build that needs it can recreate it through `dotnet build`'s implicit restore.
+
+Adding `global.json` to [`globalDependencies`](/docs/reference/configuration#globaldependencies) makes SDK version changes in that file invalidate cached tasks. Update the pinned version when upgrading the SDK; Turborepo does not detect the installed .NET SDK version automatically. If you add shared files such as `Directory.Build.props`, `Directory.Build.targets`, or `NuGet.Config`, include those in your task inputs or global dependencies too. Keep the build environment consistent between machines that share cached outputs.
+
+Run all builds, or select the .NET application:
+
+```bash title="Terminal"
+turbo run build
+turbo run build --filter=api
+dotnet apps/api/bin/Release/net10.0/Api.dll
+```
+
+The application prints `API ready`. A second unchanged `turbo run build` restores the cached results. Editing `packages/lib/Message.cs` causes both `lib` and its dependent `api` to rebuild, while `web` can still use its cache.
+
+.NET still checks project references during the application's build and normally skips recompilation when they are up to date. The package dependency lets Turborepo schedule and cache each project independently; it does not replace .NET's dependency resolution.

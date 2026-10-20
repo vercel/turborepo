@@ -1,5 +1,5 @@
 {
   "extends": "@repo/typescript-config/gatsby.json",
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules"]
+  "include": ["gatsby-config.ts", "src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", ".cache", "public"]
 }

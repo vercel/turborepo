@@ -1,8 +1,12 @@
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
-    fmt::Display,
     future::IntoFuture,
+    path::PathBuf,
     str::FromStr,
+    sync::{
+        Arc, RwLock,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -10,15 +14,188 @@ use notify::Event;
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tracing::{debug, warn};
-use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPathBuf, PathRelation, RelativeUnixPath};
 use wax::{Any, Glob, Program};
 
 use crate::{
+    NotifyError, OptionalWatch, WatchInterest, WatchScope, WatchSource, WatchSubscription,
     cookies::{CookieError, CookieWatcher, CookieWriter, CookiedRequest},
-    NotifyError, OptionalWatch,
 };
 
 type Hash = String;
+type RegistrationId = u64;
+type SharedGlobState = Arc<RwLock<GlobState>>;
+
+#[derive(Clone, Default)]
+struct RouteNode {
+    children: HashMap<String, RouteNode>,
+    glob_sets: HashSet<usize>,
+}
+
+/// An immutable snapshot of all active and pending glob sets. Literal prefixes
+/// route an event to a small set of possible matches; only those sets pay the
+/// cost of exact include/exclude matching.
+#[derive(Clone, Default)]
+struct GlobRoutingIndex {
+    root: RouteNode,
+    root_only: HashSet<usize>,
+    unprefixed: HashSet<usize>,
+    glob_sets: Vec<Option<GlobSet>>,
+    glob_set_ids: HashMap<GlobSet, usize>,
+    references: Vec<usize>,
+    free_ids: Vec<usize>,
+}
+
+impl GlobRoutingIndex {
+    #[cfg(test)]
+    fn from_glob_sets(glob_sets: impl IntoIterator<Item = GlobSet>) -> Self {
+        let mut index = Self::default();
+        for glob_set in glob_sets {
+            index.insert(glob_set);
+        }
+        index
+    }
+
+    /// Adds one logical registration without rebuilding existing routes. The
+    /// returned count is useful for asserting that registration work is bounded
+    /// by the new glob's size rather than the number of existing registrations.
+    fn insert(&mut self, glob_set: GlobSet) -> usize {
+        if let Some(&id) = self.glob_set_ids.get(&glob_set) {
+            self.references[id] += 1;
+            return 0;
+        }
+
+        let id = self.free_ids.pop().unwrap_or(self.glob_sets.len());
+        if id == self.glob_sets.len() {
+            self.glob_sets.push(None);
+            self.references.push(0);
+        }
+        self.glob_sets[id] = Some(glob_set.clone());
+        self.references[id] = 1;
+        self.glob_set_ids.insert(glob_set.clone(), id);
+
+        let mut work = 0;
+        for raw in glob_set.include.keys() {
+            work += 1;
+            let prefix = literal_prefix(raw);
+            if prefix.as_os_str().is_empty() {
+                // A component glob cannot cross a separator. In contrast, a
+                // leading glob with a separator (notably **/...) can match at
+                // arbitrary depth and must remain a repository-wide fallback.
+                let routes = if raw.contains('/') {
+                    &mut self.unprefixed
+                } else {
+                    &mut self.root_only
+                };
+                routes.insert(id);
+                continue;
+            }
+
+            let mut node = &mut self.root;
+            for component in prefix.iter() {
+                work += 1;
+                node = node
+                    .children
+                    .entry(component.to_string_lossy().into_owned())
+                    .or_default();
+            }
+            node.glob_sets.insert(id);
+        }
+        work
+    }
+
+    fn remove(&mut self, glob_set: &GlobSet) {
+        let Some(&id) = self.glob_set_ids.get(glob_set) else {
+            return;
+        };
+        self.references[id] -= 1;
+        if self.references[id] != 0 {
+            return;
+        }
+
+        for raw in glob_set.include.keys() {
+            let prefix = literal_prefix(raw);
+            if prefix.as_os_str().is_empty() {
+                if raw.contains('/') {
+                    self.unprefixed.remove(&id);
+                } else {
+                    self.root_only.remove(&id);
+                }
+            } else {
+                remove_route(&mut self.root, &mut prefix.iter(), id);
+            }
+        }
+        self.glob_set_ids.remove(glob_set);
+        self.glob_sets[id] = None;
+        self.free_ids.push(id);
+    }
+
+    fn matches(&self, path: &RelativeUnixPath) -> bool {
+        self.candidates(path).into_iter().any(|id| {
+            self.glob_sets[id]
+                .as_ref()
+                .is_some_and(|set| set.matches(path))
+        })
+    }
+
+    fn candidates(&self, path: &RelativeUnixPath) -> Vec<usize> {
+        let mut candidates = self.unprefixed.clone();
+
+        let components = path.as_str().split('/').collect::<Vec<_>>();
+        if components.len() == 1 {
+            for &id in &self.root_only {
+                candidates.insert(id);
+            }
+        }
+
+        let mut node = &self.root;
+        for component in components {
+            let Some(child) = node.children.get(component) else {
+                break;
+            };
+            node = child;
+            for &id in &node.glob_sets {
+                candidates.insert(id);
+            }
+        }
+
+        candidates.into_iter().collect()
+    }
+}
+
+fn remove_route<'a>(
+    node: &mut RouteNode,
+    components: &mut impl Iterator<Item = &'a std::ffi::OsStr>,
+    id: usize,
+) -> bool {
+    if let Some(component) = components.next() {
+        let component = component.to_string_lossy();
+        if let Some(child) = node.children.get_mut(component.as_ref())
+            && remove_route(child, components, id)
+        {
+            node.children.remove(component.as_ref());
+        }
+    } else {
+        node.glob_sets.remove(&id);
+    }
+    node.children.is_empty() && node.glob_sets.is_empty()
+}
+
+fn literal_prefix(raw: &str) -> PathBuf {
+    let mut prefix = PathBuf::new();
+    for component in raw.split('/') {
+        if component
+            .chars()
+            .any(|character| matches!(character, '*' | '?' | '[' | ']' | '{' | '}'))
+        {
+            break;
+        }
+        if !component.is_empty() && component != "." {
+            prefix.push(component.replace("\\:", ":"));
+        }
+    }
+    prefix
+}
 
 #[derive(Clone)]
 pub struct GlobSet {
@@ -31,7 +208,7 @@ pub struct GlobSet {
 impl GlobSet {
     pub fn as_inputs(&self) -> Vec<String> {
         let mut inputs: Vec<String> = self.include.keys().cloned().collect();
-        inputs.extend(self.exclude_raw.iter().map(|s| format!("!{}", s)));
+        inputs.extend(self.exclude_raw.iter().map(|s| format!("!{s}")));
         inputs
     }
 
@@ -66,16 +243,11 @@ impl std::hash::Hash for GlobSet {
 }
 
 #[derive(Debug, Error)]
+#[error("{underlying}: {raw_glob}")]
 pub struct GlobError {
     // Boxed to minimize error size
     underlying: Box<wax::BuildError>,
     raw_glob: String,
-}
-
-impl Display for GlobError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.underlying, self.raw_glob)
-    }
 }
 
 fn compile_glob(raw: &str) -> Result<Glob<'static>, GlobError> {
@@ -148,6 +320,10 @@ impl GlobSet {
                 .iter()
                 .all(|raw_glob| !raw_glob.starts_with("../"))
     }
+
+    pub(crate) fn literal_prefixes(&self) -> impl Iterator<Item = PathBuf> + '_ {
+        self.include.keys().map(|raw| literal_prefix(raw))
+    }
 }
 
 #[derive(Debug, Error)]
@@ -177,6 +353,7 @@ impl From<oneshot::error::RecvError> for Error {
 }
 
 pub struct GlobWatcher {
+    root: AbsoluteSystemPathBuf,
     cookie_writer: CookieWriter,
     // _exit_ch exists to trigger a close on the receiver when an instance
     // of this struct is dropped. The task that is receiving events will exit,
@@ -184,13 +361,46 @@ pub struct GlobWatcher {
     // to be notified of a close.
     _exit_ch: oneshot::Sender<()>,
     query_ch_lazy: OptionalWatch<mpsc::Sender<CookiedRequest<Query>>>,
+    state: SharedGlobState,
+    physical_interest: WatchInterest,
+    next_registration_id: AtomicU64,
+    control_ch: mpsc::UnboundedSender<Control>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Registration {
+    id: RegistrationId,
+    hash: Hash,
+    glob_set: GlobSet,
+    cancelled: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
+struct ActiveRegistration {
+    id: RegistrationId,
+    glob_set: GlobSet,
+}
+
+#[derive(Default)]
+struct GlobState {
+    pending: HashMap<RegistrationId, Registration>,
+    active: HashMap<Hash, ActiveRegistration>,
+    active_ids: HashMap<RegistrationId, Hash>,
+    routing_index: GlobRoutingIndex,
+    physical_prefixes: HashMap<PathBuf, usize>,
+}
+
+enum Control {
+    Cancel {
+        id: RegistrationId,
+        done: oneshot::Sender<()>,
+    },
 }
 
 #[derive(Debug)]
 pub enum Query {
     WatchGlobs {
-        hash: Hash,
-        glob_set: GlobSet,
+        registration: Registration,
         resp: oneshot::Sender<Result<(), Error>>,
     },
     GetChangedGlobs {
@@ -204,7 +414,7 @@ struct GlobTracker {
     root: AbsoluteSystemPathBuf,
 
     /// maintains the list of <GlobSet> to watch for a given hash
-    hash_globs: HashMap<Hash, GlobSet>,
+    state: SharedGlobState,
 
     /// maps a string glob to the compiled glob and the hashes for which this
     /// glob hasn't changed
@@ -212,24 +422,38 @@ struct GlobTracker {
 
     exit_signal: oneshot::Receiver<()>,
 
-    recv: broadcast::Receiver<Result<Event, NotifyError>>,
+    recv: WatchSubscription,
 
     query_recv: mpsc::Receiver<CookiedRequest<Query>>,
 
+    control_recv: mpsc::UnboundedReceiver<Control>,
+
     cookie_watcher: CookieWatcher<Query>,
+
+    physical_interest: WatchInterest,
 }
 
 impl GlobWatcher {
     pub fn new(
         root: AbsoluteSystemPathBuf,
         cookie_writer: CookieWriter,
-        mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+        source: impl Into<WatchSource>,
     ) -> Self {
+        let source = source.into();
         let (exit_ch, exit_signal) = tokio::sync::oneshot::channel();
         let (query_ch_tx, query_ch_lazy) = OptionalWatch::new();
+        let (control_ch, control_recv) = mpsc::unbounded_channel();
         let cookie_root = cookie_writer.root().to_owned();
+        let state = Arc::new(RwLock::new(GlobState::default()));
+        let physical_interest = WatchInterest::new();
+        physical_interest.extend([cookie_root.as_std_path().to_owned()]);
+        let scope = dynamic_watch_scope(root.clone(), cookie_root.clone(), state.clone())
+            .with_physical_interest(physical_interest.clone());
+        let tracker_state = state.clone();
+        let tracker_physical_interest = physical_interest.clone();
+        let watcher_root = root.clone();
         tokio::task::spawn(async move {
-            let Ok(recv) = recv.get().await.map(|r| r.resubscribe()) else {
+            let Ok(recv) = source.subscribe(scope).await else {
                 // if this fails, it means that the filewatcher is not available
                 // so starting the glob tracker is pointless
                 return;
@@ -243,14 +467,26 @@ impl GlobWatcher {
                 return;
             }
 
-            GlobTracker::new(root, cookie_root, exit_signal, recv, query_recv)
-                .watch()
-                .await
+            GlobTracker::new(
+                root,
+                cookie_root,
+                exit_signal,
+                recv,
+                (query_recv, control_recv),
+                (tracker_state, tracker_physical_interest),
+            )
+            .watch()
+            .await
         });
         Self {
+            root: watcher_root,
             cookie_writer,
             _exit_ch: exit_ch,
             query_ch_lazy,
+            state,
+            physical_interest,
+            next_registration_id: AtomicU64::new(0),
+            control_ch,
         }
     }
 
@@ -258,6 +494,7 @@ impl GlobWatcher {
     ///
     /// This function will return `Error::Unavailable` if the globwatcher is not
     /// yet available.
+    #[expect(clippy::result_large_err, reason = "retain watcher error details")]
     pub async fn watch_globs(
         &self,
         hash: Hash,
@@ -265,25 +502,62 @@ impl GlobWatcher {
         timeout: Duration,
     ) -> Result<(), Error> {
         let (tx, rx) = oneshot::channel();
-        let req = Query::WatchGlobs {
+        let registration = Registration {
+            id: self.next_registration_id.fetch_add(1, Ordering::Relaxed),
             hash,
             glob_set: globs,
+            cancelled: Arc::new(AtomicBool::new(false)),
+        };
+        let added_paths = self.add_pending(registration.clone());
+        self.physical_interest.extend(added_paths);
+        self.physical_interest.flush().await;
+        let req = Query::WatchGlobs {
+            registration: registration.clone(),
             resp: tx,
         };
-        self.send_request(req).await?;
-        tokio::time::timeout(timeout, rx).await??
+        if let Err(error) = self.send_request(req).await {
+            registration.cancelled.store(true, Ordering::Release);
+            self.remove_registration_direct(registration.id);
+            return Err(error);
+        }
+
+        match tokio::time::timeout(timeout, rx).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(error)) => {
+                self.cancel_registration(&registration).await;
+                Err(error.into())
+            }
+            Err(error) => {
+                // Mark first, then rendezvous with the single tracker task. If
+                // commit is in progress, the cancellation is processed after it
+                // and removes precisely this generation before Timeout escapes.
+                registration.cancelled.store(true, Ordering::Release);
+                self.cancel_registration(&registration).await;
+                Err(error.into())
+            }
+        }
     }
 
     /// Get the globs that have changed for a given hash.
     ///
     /// This function will return `Error::Unavailable` if the globwatcher is not
     /// yet available.
+    #[expect(clippy::result_large_err, reason = "retain watcher error details")]
     pub async fn get_changed_globs(
         &self,
         hash: Hash,
         candidates: HashSet<String>,
         timeout: Duration,
     ) -> Result<HashSet<String>, Error> {
+        // Without an active or pending registration for this hash, every
+        // candidate is reported as changed no matter which file events are
+        // still in flight: events only ever invalidate registrations, and a
+        // registration requested after this call is ordered after it. The
+        // answer is already known, so skip the cookie round trip.
+        if self.is_available() && !self.has_registration_for(&hash) {
+            return Ok(candidates);
+        }
+
         let (tx, rx) = oneshot::channel();
         let req = Query::GetChangedGlobs {
             hash,
@@ -295,6 +569,24 @@ impl GlobWatcher {
         tokio::time::timeout(timeout, rx).await??
     }
 
+    fn is_available(&self) -> bool {
+        let mut query_ch = self.query_ch_lazy.clone();
+        matches!(query_ch.get_immediate(), Some(Ok(_)))
+    }
+
+    fn has_registration_for(&self, hash: &str) -> bool {
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.active.contains_key(hash)
+            || state
+                .pending
+                .values()
+                .any(|registration| registration.hash == hash)
+    }
+
+    #[expect(clippy::result_large_err, reason = "retain watcher error details")]
     async fn send_request(&self, req: Query) -> Result<(), Error> {
         let cookied_request = self.cookie_writer.cookie_request(req).await?;
         let mut query_ch = self.query_ch_lazy.clone();
@@ -307,6 +599,189 @@ impl GlobWatcher {
         query_ch.send(cookied_request).await?;
         Ok(())
     }
+
+    fn add_pending(&self, registration: Registration) -> Vec<PathBuf> {
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.routing_index.insert(registration.glob_set.clone());
+        let added_paths = add_physical_prefixes(&mut state, &self.root, &registration.glob_set);
+        state.pending.insert(registration.id, registration);
+        added_paths
+    }
+
+    async fn cancel_registration(&self, registration: &Registration) {
+        registration.cancelled.store(true, Ordering::Release);
+        let (done, completed) = oneshot::channel();
+        if self
+            .control_ch
+            .send(Control::Cancel {
+                id: registration.id,
+                done,
+            })
+            .is_ok()
+        {
+            let _ = completed.await;
+        } else {
+            // The tracker is gone, so no commit can race this direct cleanup.
+            self.remove_registration_direct(registration.id);
+        }
+    }
+
+    fn remove_registration_direct(&self, id: RegistrationId) {
+        let removed_paths = {
+            let mut state = self
+                .state
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            remove_registration_state(&mut state, id).is_some_and(|removed| removed.removed_path)
+        };
+        if removed_paths {
+            replace_physical_interest(
+                &self.state,
+                &self.physical_interest,
+                &self.root,
+                self.cookie_writer.root(),
+            );
+        }
+    }
+}
+
+fn add_physical_prefixes(
+    state: &mut GlobState,
+    root: &AbsoluteSystemPathBuf,
+    glob_set: &GlobSet,
+) -> Vec<PathBuf> {
+    let mut added = Vec::new();
+    for prefix in glob_set.literal_prefixes() {
+        let count = state.physical_prefixes.entry(prefix.clone()).or_default();
+        if *count == 0 {
+            added.push(root.as_std_path().join(&prefix));
+        }
+        *count += 1;
+    }
+    added
+}
+
+fn remove_physical_prefixes(state: &mut GlobState, glob_set: &GlobSet) -> bool {
+    let mut removed = false;
+    for prefix in glob_set.literal_prefixes() {
+        let Some(count) = state.physical_prefixes.get_mut(&prefix) else {
+            continue;
+        };
+        *count -= 1;
+        if *count == 0 {
+            state.physical_prefixes.remove(&prefix);
+            removed = true;
+        }
+    }
+    removed
+}
+
+fn replace_physical_interest(
+    state: &SharedGlobState,
+    physical_interest: &WatchInterest,
+    root: &AbsoluteSystemPathBuf,
+    cookie_root: &turbopath::AbsoluteSystemPath,
+) {
+    let paths = state
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .physical_prefixes
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    physical_interest.replace(
+        paths
+            .into_iter()
+            .map(|prefix| root.as_std_path().join(prefix))
+            .chain(std::iter::once(cookie_root.as_std_path().to_owned())),
+    );
+}
+
+struct RemovedRegistration {
+    hash: Option<Hash>,
+    glob_set: GlobSet,
+    removed_path: bool,
+}
+
+fn commit_registration_state(
+    state: &mut GlobState,
+    registration: &Registration,
+) -> Option<(Option<ActiveRegistration>, bool)> {
+    state.pending.remove(&registration.id)?;
+    let previous = state.active.remove(&registration.hash);
+    let removed_path = if let Some(previous) = &previous {
+        state.active_ids.remove(&previous.id);
+        state.routing_index.remove(&previous.glob_set);
+        remove_physical_prefixes(state, &previous.glob_set)
+    } else {
+        false
+    };
+    state.active.insert(
+        registration.hash.clone(),
+        ActiveRegistration {
+            id: registration.id,
+            glob_set: registration.glob_set.clone(),
+        },
+    );
+    state
+        .active_ids
+        .insert(registration.id, registration.hash.clone());
+    Some((previous, removed_path))
+}
+
+fn remove_registration_state(
+    state: &mut GlobState,
+    id: RegistrationId,
+) -> Option<RemovedRegistration> {
+    let registration = state
+        .pending
+        .remove(&id)
+        .map(|pending| (None, pending.glob_set))
+        .or_else(|| {
+            let hash = state.active_ids.remove(&id)?;
+            state
+                .active
+                .remove(&hash)
+                .map(|active| (Some(hash), active.glob_set))
+        });
+    let (hash, glob_set) = registration?;
+    state.routing_index.remove(&glob_set);
+    let removed_path = remove_physical_prefixes(state, &glob_set);
+    Some(RemovedRegistration {
+        hash,
+        glob_set,
+        removed_path,
+    })
+}
+
+fn dynamic_watch_scope(
+    root: AbsoluteSystemPathBuf,
+    cookie_root: AbsoluteSystemPathBuf,
+    state: SharedGlobState,
+) -> WatchScope {
+    WatchScope::predicate(move |path| {
+        let Ok(path) = AbsoluteSystemPathBuf::try_from(path.to_owned()) else {
+            return false;
+        };
+
+        // Queries are ordered by cookie events, so cookies must remain in scope even
+        // when no output globs have been registered yet.
+        if cookie_root.relation_to_path(&path) == PathRelation::Parent {
+            return true;
+        }
+
+        let Ok(relative_path) = root.anchor(&path) else {
+            return false;
+        };
+        let relative_path = relative_path.to_unix();
+        let state = state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.routing_index.matches(&relative_path)
+    })
 }
 
 #[derive(Debug, Error)]
@@ -322,17 +797,25 @@ impl GlobTracker {
         root: AbsoluteSystemPathBuf,
         cookie_root: AbsoluteSystemPathBuf,
         exit_signal: oneshot::Receiver<()>,
-        recv: broadcast::Receiver<Result<Event, NotifyError>>,
-        query_recv: mpsc::Receiver<CookiedRequest<Query>>,
+        recv: WatchSubscription,
+        receivers: (
+            mpsc::Receiver<CookiedRequest<Query>>,
+            mpsc::UnboundedReceiver<Control>,
+        ),
+        shared: (SharedGlobState, WatchInterest),
     ) -> Self {
+        let (query_recv, control_recv) = receivers;
+        let (state, physical_interest) = shared;
         Self {
             root,
-            hash_globs: HashMap::new(),
+            state,
             glob_statuses: HashMap::new(),
             exit_signal,
             recv,
             query_recv,
+            control_recv,
             cookie_watcher: CookieWatcher::new(cookie_root),
+            physical_interest,
         }
     }
 
@@ -344,17 +827,37 @@ impl GlobTracker {
 
     fn handle_query(&mut self, query: Query) {
         match query {
-            Query::WatchGlobs {
-                hash,
-                glob_set,
-                resp,
-            } => {
+            Query::WatchGlobs { registration, resp } => {
+                if resp.is_closed() || registration.cancelled.load(Ordering::Acquire) {
+                    self.remove_registration(registration.id);
+                    return;
+                }
+                let hash = registration.hash.clone();
+                let glob_set = registration.glob_set.clone();
                 debug!("watching globs {:?} for hash {}", glob_set, hash);
                 // Assume cookie handling has happened external to this component.
                 // Other tasks _could_ write to the
                 // same output directories, however we are relying on task
                 // execution dependencies to prevent that.
-                for (glob_str, glob) in glob_set.include.iter() {
+                let Some((previous, removed_path)) = ({
+                    let mut state = self
+                        .state
+                        .write()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    commit_registration_state(&mut state, &registration)
+                }) else {
+                    return;
+                };
+                if let Some(previous) = previous {
+                    for glob_str in previous.glob_set.include.keys() {
+                        if let Some((_, hashes)) = self.glob_statuses.get_mut(glob_str) {
+                            hashes.remove(&hash);
+                        }
+                    }
+                    self.glob_statuses
+                        .retain(|_, (_, hashes)| !hashes.is_empty());
+                }
+                for (glob_str, glob) in &glob_set.include {
                     let glob_str = glob_str.to_owned();
                     let (_, hashes) = self
                         .glob_statuses
@@ -362,7 +865,14 @@ impl GlobTracker {
                         .or_insert_with(|| (glob.clone(), HashSet::new()));
                     hashes.insert(hash.clone());
                 }
-                self.hash_globs.insert(hash.clone(), glob_set);
+                if removed_path {
+                    replace_physical_interest(
+                        &self.state,
+                        &self.physical_interest,
+                        &self.root,
+                        self.cookie_watcher.root(),
+                    );
+                }
                 let _ = resp.send(Ok(()));
             }
             Query::GetChangedGlobs {
@@ -373,17 +883,60 @@ impl GlobTracker {
                 // Assume cookie handling has happened external to this component.
                 // Build a set of candidate globs that *may* have changed.
                 // An empty set translates to all globs have not changed.
-                if let Some(unchanged_globs) = self.hash_globs.get(&hash) {
+                let state = self
+                    .state
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if let Some(active) = state.active.get(&hash) {
                     candidates.retain(|glob_str| {
                         // We are keeping the globs from candidates that
                         // we don't have a record of as unchanged.
                         // If we do have a record, drop it from candidates.
-                        !unchanged_globs.include.contains_key(glob_str)
+                        !active.glob_set.include.contains_key(glob_str)
                     });
                 }
                 // If the client has gone away, we don't care about the error
                 let _ = resp.send(Ok(candidates));
             }
+        }
+    }
+
+    fn handle_control(&mut self, control: Control) {
+        match control {
+            Control::Cancel { id, done } => {
+                self.remove_registration(id);
+                let _ = done.send(());
+            }
+        }
+    }
+
+    fn remove_registration(&mut self, id: RegistrationId) {
+        let removed = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = removed;
+        let removed = remove_registration_state(&mut state, id);
+        drop(state);
+        let Some(removed) = removed else {
+            return;
+        };
+        if let Some(hash) = removed.hash {
+            for glob_str in removed.glob_set.include.keys() {
+                if let Some((_, hashes)) = self.glob_statuses.get_mut(glob_str) {
+                    hashes.remove(&hash);
+                }
+            }
+            self.glob_statuses
+                .retain(|_, (_, hashes)| !hashes.is_empty());
+        }
+        if removed.removed_path {
+            replace_physical_interest(
+                &self.state,
+                &self.physical_interest,
+                &self.root,
+                self.cookie_watcher.root(),
+            );
         }
     }
 
@@ -397,8 +950,9 @@ impl GlobTracker {
             Ok(Err(error)) => self.on_error(error.into()),
             Ok(Ok(file_event)) => {
                 for path in file_event.paths {
-                    let path = AbsoluteSystemPathBuf::try_from(path)
-                        .expect("filewatching should produce absolute paths");
+                    let Ok(path) = AbsoluteSystemPathBuf::try_from(path) else {
+                        continue;
+                    };
                     if let Some(queries) = self
                         .cookie_watcher
                         .pop_ready_requests(file_event.kind, &path)
@@ -421,7 +975,9 @@ impl GlobTracker {
     async fn watch(mut self) {
         loop {
             tokio::select! {
+                biased;
                 _ = &mut self.exit_signal => return,
+                Some(control) = self.control_recv.recv() => self.handle_control(control),
                 Some(query) = self.query_recv.recv().into_future() => self.handle_cookied_query(query),
                 file_event = self.recv.recv().into_future() => self.handle_file_event(file_event)
             }
@@ -435,48 +991,177 @@ impl GlobTracker {
             "encountered filewatching error, flushing all globs: {}",
             err
         );
-        self.hash_globs.clear();
+        {
+            let mut state = self
+                .state
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let active = std::mem::take(&mut state.active);
+            state.active_ids.clear();
+            for registration in active.into_values() {
+                state.routing_index.remove(&registration.glob_set);
+                remove_physical_prefixes(&mut state, &registration.glob_set);
+            }
+        }
         self.glob_statuses.clear();
+        replace_physical_interest(
+            &self.state,
+            &self.physical_interest,
+            &self.root,
+            self.cookie_watcher.root(),
+        );
     }
 
     fn handle_path_change(&mut self, path: &RelativeUnixPath) {
-        self.glob_statuses
-            .retain(|glob_str, (glob, hashes_for_glob)| {
-                // If this is not a match, we aren't modifying this glob, bail early and mark
-                // for retention.
-                if !glob.is_match(path) {
+        let summary = {
+            let mut state = self
+                .state
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            invalidate_path_candidates(&mut state, &mut self.glob_statuses, path, &self.root)
+        };
+        debug!(
+            "file change at {} inspected {} candidate globs across {} registration transitions",
+            path, summary.inspected, summary.transitions
+        );
+        if summary.removed_path {
+            replace_physical_interest(
+                &self.state,
+                &self.physical_interest,
+                &self.root,
+                self.cookie_watcher.root(),
+            );
+        } else {
+            self.physical_interest.extend(summary.added_paths);
+        }
+    }
+}
+
+/// The observable effects of invalidating the candidate globs for one event.
+#[derive(Debug)]
+struct InvalidationSummary {
+    /// The number of candidate globs that were inspected for a match, whether
+    /// or not they matched the event path.
+    inspected: usize,
+    /// The number of registration snapshot transitions applied. Each
+    /// transition removes invalidated includes from an active registration
+    /// and refreshes its routing entries and physical prefixes.
+    transitions: usize,
+    /// Whether a watched physical path may have been removed and the physical
+    /// watch interest needs to be recomputed.
+    removed_path: bool,
+    /// Physical paths that became newly interesting.
+    added_paths: Vec<PathBuf>,
+}
+
+fn invalidate_path_candidates(
+    state: &mut GlobState,
+    glob_statuses: &mut HashMap<String, (Glob<'static>, HashSet<Hash>)>,
+    path: &RelativeUnixPath,
+    root: &AbsoluteSystemPathBuf,
+) -> InvalidationSummary {
+    let candidate_globs = state
+        .routing_index
+        .candidates(path)
+        .into_iter()
+        .flat_map(|id| {
+            state.routing_index.glob_sets[id]
+                .iter()
+                .flat_map(|glob_set| glob_set.include.keys().cloned())
+        })
+        .collect::<HashSet<_>>();
+    let mut inspected = 0;
+    // Invalidated includes are grouped by hash so that each active registration
+    // applies a single snapshot transition. Cloning the registration's GlobSet
+    // (and replaying routing and physical-prefix updates) once per matching
+    // glob made one event quadratic in the number of overlapping includes.
+    let mut invalidations: HashMap<Hash, Vec<String>> = HashMap::new();
+
+    for glob_str in &candidate_globs {
+        let remove_status = {
+            let Some((glob, hashes_for_glob)) = glob_statuses.get_mut(glob_str) else {
+                continue;
+            };
+            inspected += 1;
+            if !glob.is_match(path) {
+                continue;
+            }
+
+            hashes_for_glob.retain(|hash| {
+                let Some(active) = state.active.get(hash) else {
+                    // This shouldn't ever happen, but if we aren't tracking this hash at
+                    // all, we don't need to keep it in the set of hashes that are relevant
+                    // for this glob.
+                    debug_assert!(
+                        false,
+                        "A glob is referencing a hash that we are not tracking. This is most \
+                         likely an internal bookkeeping error in globwatcher.rs"
+                    );
+                    return false;
+                };
+                // If we match an exclusion, don't invalidate this hash.
+                if active.glob_set.exclude.is_match(path) {
                     return true;
                 }
-                // We have a match. Check which hashes need invalidation.
-                hashes_for_glob.retain(|hash| {
-                    let Some(glob_set) = self.hash_globs.get_mut(hash) else {
-                        // This shouldn't ever happen, but if we aren't tracking this hash at
-                        // all, we don't need to keep it in the set of hashes that are relevant
-                        // for this glob.
-                        debug_assert!(
-                            false,
-                            "A glob is referencing a hash that we are not tracking. This is most \
-                             likely an internal bookkeeping error in globwatcher.rs"
-                        );
-                        return false;
-                    };
-                    // If we match an exclusion, don't invalidate this hash
-                    if glob_set.exclude.is_match(path) {
-                        return true;
-                    }
-                    // We didn't match an exclusion, we can remove this glob
-                    debug!("file change at {} invalidated glob {}", path, glob_str);
-                    glob_set.include.remove(glob_str);
 
-                    // We removed the last include, we can stop tracking this hash
-                    if glob_set.include.is_empty() {
-                        self.hash_globs.remove(hash);
-                    }
+                debug!("file change at {} invalidated glob {}", path, glob_str);
+                invalidations
+                    .entry(hash.clone())
+                    .or_default()
+                    .push(glob_str.clone());
 
-                    false
-                });
-                !hashes_for_glob.is_empty()
+                false
             });
+            hashes_for_glob.is_empty()
+        };
+
+        if remove_status {
+            glob_statuses.remove(glob_str);
+        }
+    }
+
+    let mut changes = Vec::new();
+    for (hash, glob_strs) in invalidations {
+        let Some(active) = state.active.get_mut(&hash) else {
+            // Unreachable: the matching loop only records hashes that have an
+            // active registration. If bookkeeping ever drifts, there is
+            // nothing left to transition.
+            debug_assert!(
+                false,
+                "An invalidation is referencing a hash that we are not tracking. This is most \
+                 likely an internal bookkeeping error in globwatcher.rs"
+            );
+            continue;
+        };
+        let previous = active.glob_set.clone();
+        for glob_str in glob_strs {
+            active.glob_set.include.remove(&glob_str);
+        }
+        let next = (!active.glob_set.include.is_empty()).then(|| active.glob_set.clone());
+        changes.push((hash, previous, next));
+    }
+
+    let transitions = changes.len();
+    let mut removed_path = false;
+    let mut added_paths = Vec::new();
+    for (hash, previous, next) in changes {
+        state.routing_index.remove(&previous);
+        removed_path |= remove_physical_prefixes(state, &previous);
+        if let Some(next) = next {
+            state.routing_index.insert(next.clone());
+            added_paths.extend(add_physical_prefixes(state, root, &next));
+        } else {
+            if let Some(active) = state.active.remove(&hash) {
+                state.active_ids.remove(&active.id);
+            }
+        }
+    }
+
+    InvalidationSummary {
+        inspected,
+        transitions,
+        removed_path,
+        added_paths,
     }
 }
 
@@ -485,17 +1170,653 @@ mod test {
     use std::{
         collections::{HashMap, HashSet},
         str::FromStr,
-        time::Duration,
+        sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        },
+        time::{Duration, Instant},
     };
 
-    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-    use wax::{any, Glob};
+    use notify::{Event, EventKind, event::CreateKind};
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
+    use wax::{Glob, Program, any};
 
     use crate::{
+        FileSystemWatcher, WatchSource,
         cookies::CookieWriter,
-        globwatcher::{GlobSet, GlobWatcher},
-        FileSystemWatcher,
+        globwatcher::{
+            ActiveRegistration, GlobRoutingIndex, GlobSet, GlobState, GlobWatcher, Registration,
+            add_physical_prefixes, commit_registration_state, invalidate_path_candidates,
+            remove_registration_state,
+        },
     };
+
+    fn relative(path: &str) -> &RelativeUnixPath {
+        RelativeUnixPath::new(path).unwrap()
+    }
+
+    #[test]
+    fn routing_index_rejects_unrelated_literal_prefixes_without_candidates() {
+        let index = GlobRoutingIndex::from_glob_sets([
+            GlobSet::from_raw(vec!["apps/web/dist/**".to_string()], vec![]).unwrap(),
+            GlobSet::from_raw(vec!["packages/api/generated/**".to_string()], vec![]).unwrap(),
+        ]);
+
+        assert_eq!(index.candidates(relative("docs/unrelated.md")).len(), 0);
+        assert!(!index.matches(relative("docs/unrelated.md")));
+        assert!(index.matches(relative("apps/web/dist/output.js")));
+    }
+
+    #[test]
+    fn routing_index_distinguishes_root_only_and_recursive_wildcards() {
+        let root_only =
+            GlobRoutingIndex::from_glob_sets([
+                GlobSet::from_raw(vec!["*.js".to_string()], vec![]).unwrap()
+            ]);
+        assert!(root_only.matches(relative("output.js")));
+        assert!(
+            root_only
+                .candidates(relative("nested/output.js"))
+                .is_empty()
+        );
+        assert!(!root_only.matches(relative("nested/output.js")));
+
+        let recursive = GlobRoutingIndex::from_glob_sets([GlobSet::from_raw(
+            vec!["**/*.js".to_string()],
+            vec!["vendor/**".to_string()],
+        )
+        .unwrap()]);
+        assert!(recursive.matches(relative("nested/output.js")));
+        assert!(!recursive.matches(relative("vendor/output.js")));
+    }
+
+    fn state_from_globs(hash_globs: HashMap<String, GlobSet>) -> GlobState {
+        let mut state = GlobState::default();
+        for (id, (hash, glob_set)) in hash_globs.into_iter().enumerate() {
+            let id = id as u64;
+            state.routing_index.insert(glob_set.clone());
+            state.active_ids.insert(id, hash.clone());
+            state
+                .active
+                .insert(hash, ActiveRegistration { id, glob_set });
+        }
+        state
+    }
+
+    #[test]
+    fn registration_index_updates_are_linear_at_scale() {
+        let mut index = GlobRoutingIndex::default();
+        let mut work = 0;
+        for registration in 0..5_000 {
+            work += index.insert(
+                GlobSet::from_raw(vec![format!("apps/app-{registration}/dist/**")], vec![])
+                    .unwrap(),
+            );
+        }
+
+        // One include plus three literal components per registration. This is
+        // independent of how many routes were already registered.
+        assert_eq!(work, 20_000);
+        assert_eq!(index.glob_set_ids.len(), 5_000);
+    }
+
+    #[test]
+    fn incremental_state_preserves_shared_routes_and_physical_interests() {
+        let (root, _tmp) = temp_dir();
+        let glob_set = GlobSet::from_raw(vec!["shared/dist/**".to_string()], vec![]).unwrap();
+        let mut state = GlobState::default();
+        for id in [1, 2] {
+            let registration = Registration {
+                id,
+                hash: format!("hash-{id}"),
+                glob_set: glob_set.clone(),
+                cancelled: Arc::new(AtomicBool::new(false)),
+            };
+            state.routing_index.insert(glob_set.clone());
+            add_physical_prefixes(&mut state, &root, &glob_set);
+            state.pending.insert(id, registration);
+        }
+
+        assert!(state.routing_index.matches(relative("shared/dist/file")));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [2]
+        );
+
+        remove_registration_state(&mut state, 1).unwrap();
+        assert!(state.routing_index.matches(relative("shared/dist/file")));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [1]
+        );
+
+        remove_registration_state(&mut state, 2).unwrap();
+        assert!(!state.routing_index.matches(relative("shared/dist/file")));
+        assert!(state.physical_prefixes.is_empty());
+    }
+
+    #[test]
+    fn timeout_at_commit_cancels_exact_registration_generation() {
+        let glob_set = GlobSet::from_raw(vec!["dist/**".to_string()], vec![]).unwrap();
+        let registration = Registration {
+            id: 41,
+            hash: "hash".to_string(),
+            glob_set: glob_set.clone(),
+            cancelled: Arc::new(AtomicBool::new(false)),
+        };
+        let mut state = GlobState::default();
+        state.routing_index.insert(glob_set);
+        state.pending.insert(registration.id, registration.clone());
+
+        // Deterministically model the boundary that used to race: state was
+        // committed, but the response had not yet been observed at the deadline.
+        assert!(commit_registration_state(&mut state, &registration).is_some());
+        registration.cancelled.store(true, Ordering::Release);
+        assert!(remove_registration_state(&mut state, registration.id).is_some());
+        assert!(!state.active.contains_key("hash"));
+
+        // A delayed cancellation for generation 41 must not remove a newer
+        // registration for the same hash.
+        state.active.insert(
+            "hash".to_string(),
+            ActiveRegistration {
+                id: 42,
+                glob_set: registration.glob_set,
+            },
+        );
+        state.active_ids.insert(42, "hash".to_string());
+        assert!(remove_registration_state(&mut state, 41).is_none());
+        assert_eq!(state.active["hash"].id, 42);
+    }
+
+    #[test]
+    fn path_invalidation_inspects_only_routing_candidates_at_scale() {
+        let mut hash_globs = HashMap::new();
+        let mut glob_statuses = HashMap::new();
+
+        for index in 0..1_000 {
+            let hash = format!("hash-{index}");
+            let raw_glob = format!("apps/app-{index}/dist/**");
+            let glob_set = GlobSet::from_raw(vec![raw_glob.clone()], vec![]).unwrap();
+            hash_globs.insert(hash.clone(), glob_set);
+            glob_statuses.insert(
+                raw_glob.clone(),
+                (
+                    Glob::from_str(&raw_glob).unwrap().to_owned(),
+                    HashSet::from([hash]),
+                ),
+            );
+        }
+
+        let (root, _tmp) = temp_dir();
+        let mut state = state_from_globs(hash_globs);
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative("docs/unrelated.md"),
+            &root,
+        );
+        assert_eq!(summary.inspected, 0);
+        assert_eq!(state.active.len(), 1_000);
+        assert_eq!(glob_statuses.len(), 1_000);
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative("apps/app-517/dist/output.js"),
+            &root,
+        );
+        assert_eq!(summary.inspected, 1);
+        assert!(!state.active.contains_key("hash-517"));
+        assert!(!glob_statuses.contains_key("apps/app-517/dist/**"));
+        assert_eq!(state.active.len(), 999);
+        assert_eq!(glob_statuses.len(), 999);
+    }
+
+    #[test]
+    fn candidate_invalidation_preserves_shared_glob_exclusions_and_cleanup() {
+        let raw_glob = "packages/shared/dist/**".to_string();
+        let excluded_hash = "excluded".to_string();
+        let invalidated_hash = "invalidated".to_string();
+        let excluded_set = GlobSet::from_raw(
+            vec![raw_glob.clone()],
+            vec!["packages/shared/dist/cache/**".to_string()],
+        )
+        .unwrap();
+        let invalidated_set = GlobSet::from_raw(vec![raw_glob.clone()], vec![]).unwrap();
+        let hash_globs = HashMap::from([
+            (excluded_hash.clone(), excluded_set.clone()),
+            (invalidated_hash.clone(), invalidated_set.clone()),
+        ]);
+        let mut glob_statuses = HashMap::from([(
+            raw_glob.clone(),
+            (
+                Glob::from_str(&raw_glob).unwrap().to_owned(),
+                HashSet::from([excluded_hash.clone(), invalidated_hash.clone()]),
+            ),
+        )]);
+        let (root, _tmp) = temp_dir();
+        let mut state = state_from_globs(hash_globs);
+
+        assert_eq!(
+            invalidate_path_candidates(
+                &mut state,
+                &mut glob_statuses,
+                relative("packages/shared/dist/cache/item"),
+                &root,
+            )
+            .inspected,
+            1
+        );
+        assert!(state.active.contains_key(&excluded_hash));
+        assert!(!state.active.contains_key(&invalidated_hash));
+        assert_eq!(
+            glob_statuses[&raw_glob].1,
+            HashSet::from([excluded_hash.clone()])
+        );
+
+        assert_eq!(
+            invalidate_path_candidates(
+                &mut state,
+                &mut glob_statuses,
+                relative("packages/shared/dist/output"),
+                &root,
+            )
+            .inspected,
+            1
+        );
+        assert!(state.active.is_empty());
+        assert!(glob_statuses.is_empty());
+    }
+
+    /// The file name that the overlapping include globs all match.
+    const OVERLAPPING_EVENT: &str = "dist/output.js";
+
+    /// Generates `count` distinct include globs that all match `event` by
+    /// wildcarding one, two, or three characters of its file name, mirroring
+    /// overlapping output globs such as `dist/o?tput.js`.
+    fn overlapping_patterns(event: &str, count: usize) -> Vec<String> {
+        let (prefix, name) = event
+            .rsplit_once('/')
+            .expect("event must name a single file");
+        let positions: Vec<usize> = (0..name.len()).collect();
+        let mut patterns = Vec::with_capacity(count);
+        'sizes: for size in 1..=3 {
+            for combination in combinations(&positions, size) {
+                if patterns.len() == count {
+                    break 'sizes;
+                }
+                let mut characters: Vec<char> = name.chars().collect();
+                for &position in &combination {
+                    characters[position] = '?';
+                }
+                patterns.push(format!(
+                    "{prefix}/{}",
+                    characters.into_iter().collect::<String>()
+                ));
+            }
+        }
+        assert_eq!(
+            patterns.len(),
+            count,
+            "not enough distinct overlapping globs for {event}"
+        );
+        assert_eq!(
+            patterns.iter().cloned().collect::<HashSet<_>>().len(),
+            count
+        );
+        for pattern in &patterns {
+            assert!(Glob::from_str(pattern).unwrap().is_match(relative(event)));
+        }
+        patterns
+    }
+
+    fn combinations(items: &[usize], size: usize) -> Vec<Vec<usize>> {
+        if size == 0 {
+            return vec![Vec::new()];
+        }
+        let mut result = Vec::new();
+        for (index, &first) in items.iter().enumerate() {
+            for mut rest in combinations(&items[index + 1..], size - 1) {
+                rest.insert(0, first);
+                result.push(rest);
+            }
+        }
+        result
+    }
+
+    /// Builds a `GlobState` with one active registration per entry, along with
+    /// the unchanged-glob bookkeeping that the tracker maintains.
+    fn watched_state(
+        root: &AbsoluteSystemPathBuf,
+        registrations: Vec<(String, Vec<String>, Vec<String>)>,
+    ) -> (GlobState, HashMap<String, (Glob<'static>, HashSet<String>)>) {
+        let mut state = GlobState::default();
+        let mut glob_statuses = HashMap::new();
+        for (index, (hash, includes, excludes)) in registrations.into_iter().enumerate() {
+            let id = index as u64;
+            let glob_set = GlobSet::from_raw(includes.clone(), excludes).unwrap();
+            state.routing_index.insert(glob_set.clone());
+            add_physical_prefixes(&mut state, root, &glob_set);
+            state.active_ids.insert(id, hash.clone());
+            state
+                .active
+                .insert(hash.clone(), ActiveRegistration { id, glob_set });
+            for raw_glob in includes {
+                let (_, hashes) = glob_statuses.entry(raw_glob.clone()).or_insert_with(|| {
+                    (
+                        Glob::from_str(&raw_glob).unwrap().to_owned(),
+                        HashSet::new(),
+                    )
+                });
+                hashes.insert(hash.clone());
+            }
+        }
+        (state, glob_statuses)
+    }
+
+    #[test]
+    fn overlapping_includes_invalidate_with_single_coalesced_transition() {
+        let includes = overlapping_patterns(OVERLAPPING_EVENT, 8);
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) =
+            watched_state(&root, vec![("hash".to_string(), includes, vec![])]);
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 8);
+        assert!(state.active.is_empty());
+        assert!(state.active_ids.is_empty());
+        assert!(glob_statuses.is_empty());
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert!(state.physical_prefixes.is_empty());
+        assert!(summary.removed_path);
+        // One event must apply one snapshot transition per registration, not
+        // one per matching include glob.
+        assert_eq!(summary.transitions, 1);
+        assert!(summary.added_paths.is_empty());
+    }
+
+    #[test]
+    fn partial_overlap_retains_remaining_includes_with_single_transition() {
+        let matching = overlapping_patterns(OVERLAPPING_EVENT, 3);
+        let unrelated: Vec<String> = (0..5)
+            .map(|index| format!("dist/unrel?ted-{index}.js"))
+            .collect();
+        let mut includes = matching;
+        includes.extend(unrelated.iter().cloned());
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) =
+            watched_state(&root, vec![("hash".to_string(), includes, vec![])]);
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 8);
+        assert!(summary.removed_path);
+        assert_eq!(
+            state.active["hash"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            unrelated.iter().cloned().collect::<HashSet<_>>()
+        );
+        assert_eq!(
+            glob_statuses.keys().cloned().collect::<HashSet<_>>(),
+            unrelated.iter().cloned().collect::<HashSet<_>>()
+        );
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert!(state.routing_index.matches(relative("dist/unrelated-0.js")));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [5]
+        );
+        // The surviving registration is re-registered in a single transition,
+        // so each physical prefix is reported as added at most once.
+        assert_eq!(summary.transitions, 1);
+        assert_eq!(summary.added_paths, vec![root.as_std_path().join("dist")]);
+    }
+
+    #[test]
+    fn shared_glob_sets_transition_once_per_hash() {
+        let includes = overlapping_patterns(OVERLAPPING_EVENT, 4);
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) = watched_state(
+            &root,
+            vec![
+                ("hash-a".to_string(), includes.clone(), vec![]),
+                ("hash-b".to_string(), includes, vec![]),
+            ],
+        );
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 4);
+        assert!(summary.removed_path);
+        assert!(summary.added_paths.is_empty());
+        assert!(state.active.is_empty());
+        assert!(state.active_ids.is_empty());
+        assert!(glob_statuses.is_empty());
+        assert!(state.routing_index.glob_sets.iter().all(Option::is_none));
+        assert!(state.physical_prefixes.is_empty());
+        assert_eq!(summary.transitions, 2);
+    }
+
+    #[test]
+    fn per_registration_exclusions_survive_coalesced_removals() {
+        let includes = overlapping_patterns(OVERLAPPING_EVENT, 4);
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) = watched_state(
+            &root,
+            vec![
+                (
+                    "excluded".to_string(),
+                    includes.clone(),
+                    vec!["dist/o*.js".to_string()],
+                ),
+                ("invalidated".to_string(), includes.clone(), vec![]),
+            ],
+        );
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 4);
+        assert!(!summary.removed_path);
+        assert!(summary.added_paths.is_empty());
+        // The excluded registration keeps every include and its
+        // unchanged-glob bookkeeping.
+        assert_eq!(
+            state.active["excluded"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            includes.iter().cloned().collect::<HashSet<_>>()
+        );
+        assert!(!state.active.contains_key("invalidated"));
+        for glob_str in &includes {
+            assert_eq!(
+                glob_statuses[glob_str].1,
+                HashSet::from(["excluded".to_string()])
+            );
+        }
+        // The surviving set's exclusion still matches the event path.
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [4]
+        );
+        assert_eq!(summary.transitions, 1);
+    }
+
+    #[test]
+    fn multi_hash_invalidation_preserves_per_registration_outcomes() {
+        let shared_match = "dist/o?tput.js".to_string();
+        let second_match = "dist/ou?put.js".to_string();
+        let unrelated = "dist/unrel?ted.js".to_string();
+        let (root, _tmp) = temp_dir();
+        let (mut state, mut glob_statuses) = watched_state(
+            &root,
+            vec![
+                (
+                    "partial".to_string(),
+                    vec![
+                        shared_match.clone(),
+                        second_match.clone(),
+                        unrelated.clone(),
+                    ],
+                    vec![],
+                ),
+                (
+                    "full".to_string(),
+                    vec![shared_match.clone(), second_match.clone()],
+                    vec![],
+                ),
+                (
+                    "excluded".to_string(),
+                    vec![shared_match.clone()],
+                    vec!["dist/o*.js".to_string()],
+                ),
+            ],
+        );
+
+        let summary = invalidate_path_candidates(
+            &mut state,
+            &mut glob_statuses,
+            relative(OVERLAPPING_EVENT),
+            &root,
+        );
+
+        assert_eq!(summary.inspected, 3);
+        assert!(!summary.removed_path);
+        assert!(summary.added_paths.is_empty());
+        // "partial" keeps only its unrelated include, "full" is removed
+        // entirely, and "excluded" is untouched.
+        assert_eq!(
+            state.active["partial"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            HashSet::from([unrelated.clone()])
+        );
+        assert!(!state.active.contains_key("full"));
+        assert_eq!(
+            state.active["excluded"]
+                .glob_set
+                .include
+                .keys()
+                .cloned()
+                .collect::<HashSet<_>>(),
+            HashSet::from([shared_match.clone()])
+        );
+        assert_eq!(state.active_ids.len(), 2);
+        // The shared glob is still unchanged only for the excluded hash, and
+        // the second glob has no remaining hashes.
+        assert_eq!(
+            glob_statuses[&shared_match].1,
+            HashSet::from(["excluded".to_string()])
+        );
+        assert!(!glob_statuses.contains_key(&second_match));
+        assert_eq!(
+            glob_statuses[&unrelated].1,
+            HashSet::from(["partial".to_string()])
+        );
+        // The excluded hash keeps watching the event path's glob, and routing
+        // matches account for its exclusion.
+        assert!(!state.routing_index.matches(relative(OVERLAPPING_EVENT)));
+        assert!(state.routing_index.matches(relative("dist/unrelated.js")));
+        assert_eq!(
+            state
+                .physical_prefixes
+                .values()
+                .copied()
+                .collect::<Vec<_>>(),
+            [2]
+        );
+        assert_eq!(summary.transitions, 2);
+    }
+
+    /// Manual benchmark for the cost of one event that matches many include
+    /// globs in a single registration. Run with:
+    ///
+    /// ```text
+    /// cargo test -p turborepo-filewatch --lib globwatcher_invalidation_bench \
+    ///     --release --ignored --nocapture --test-threads=1
+    /// ```
+    #[test]
+    #[ignore = "manual performance harness"]
+    fn globwatcher_invalidation_bench() {
+        const EVENT: &str = "dist/generated-output-file.js";
+        let (root, _tmp) = temp_dir();
+
+        for &include_count in &[64usize, 256, 1024] {
+            let includes = overlapping_patterns(EVENT, include_count);
+            let mut timings: Vec<Duration> = Vec::new();
+            let mut transitions: Vec<usize> = Vec::new();
+            for _ in 0..7 {
+                let (mut state, mut glob_statuses) =
+                    watched_state(&root, vec![("bench".to_string(), includes.clone(), vec![])]);
+                let start = Instant::now();
+                let summary = invalidate_path_candidates(
+                    &mut state,
+                    &mut glob_statuses,
+                    relative(EVENT),
+                    &root,
+                );
+                timings.push(start.elapsed());
+                transitions.push(summary.transitions);
+                // Sanity: the event invalidates the entire registration.
+                assert!(state.active.is_empty());
+                assert!(glob_statuses.is_empty());
+            }
+            timings.sort();
+            println!(
+                "includes={include_count:>4} transitions={} medtime={:?}",
+                transitions[0],
+                timings[timings.len() / 2]
+            );
+        }
+    }
 
     fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {
         let tmp = tempfile::tempdir().unwrap();
@@ -547,6 +1868,60 @@ mod test {
         next_path.join_component("cache").create_dir_all().unwrap();
     }
 
+    #[tokio::test]
+    async fn timed_out_registration_removes_pending_interest() {
+        let (repo_root, _tmp_dir) = temp_dir();
+        let (event_sender, source) = WatchSource::channel();
+        let cookie_root = repo_root.join_components(&[".turbo", "cookies"]);
+        let cookie_writer = CookieWriter::new(&cookie_root, Duration::from_secs(1), source.clone());
+        let watcher = GlobWatcher::new(repo_root, cookie_writer, source);
+        let globs = GlobSet::from_raw(vec!["dist/**".to_string()], vec![]).unwrap();
+
+        assert!(
+            watcher
+                .watch_globs("hash".to_string(), globs, Duration::from_millis(20))
+                .await
+                .is_err()
+        );
+        assert!(
+            watcher
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .pending
+                .is_empty()
+        );
+        assert!(
+            watcher
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .routing_index
+                .glob_sets
+                .iter()
+                .all(Option::is_none)
+        );
+
+        event_sender
+            .send(Ok(Event::new(EventKind::Create(CreateKind::File))
+                .add_path(
+                    cookie_root
+                        .join_component("1.cookie")
+                        .as_std_path()
+                        .to_owned(),
+                )))
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert!(
+            !watcher
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .active
+                .contains_key("hash")
+        );
+    }
+
     fn make_includes(raw: &[&str]) -> HashMap<String, Glob<'static>> {
         raw.iter()
             .map(|raw_glob| {
@@ -559,16 +1934,65 @@ mod test {
     }
 
     #[tokio::test]
+    async fn unregistered_hash_reports_all_candidates_without_a_cookie() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
+
+        let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
+        let raw_excludes = ["my-pkg/.next/cache/**"];
+        let globs = GlobSet {
+            include: make_includes(raw_includes),
+            exclude: wax::any(raw_excludes).unwrap().to_owned(),
+            exclude_raw: raw_excludes.iter().map(|s| s.to_string()).collect(),
+        };
+        let candidates: HashSet<String> = raw_includes.iter().map(|s| s.to_string()).collect();
+
+        // Registering makes the watcher available and writes cookies.
+        glob_watcher
+            .watch_globs("registered".to_string(), globs, timeout)
+            .await
+            .unwrap();
+        let cookies = || std::fs::read_dir(cookie_dir.as_std_path()).unwrap().count();
+        let cookies_before = cookies();
+
+        let results = glob_watcher
+            .get_changed_globs("unregistered".to_string(), candidates.clone(), timeout)
+            .await
+            .unwrap();
+        assert_eq!(results, candidates);
+        assert_eq!(
+            cookies(),
+            cookies_before,
+            "no cookie for an unregistered hash"
+        );
+
+        // A registered hash still answers after a cookie round trip.
+        let results = glob_watcher
+            .get_changed_globs("registered".to_string(), candidates.clone(), timeout)
+            .await
+            .unwrap();
+        assert!(results.is_empty());
+        assert!(cookies() > cookies_before);
+    }
+
+    #[tokio::test]
     async fn test_track_outputs() {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
-        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes = ["my-pkg/.next/cache/**"];
@@ -646,13 +2070,13 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
 
         let raw_includes = &["my-pkg/dist/**", "my-pkg/.next/**"];
         let raw_excludes: [&str; 0] = [];
@@ -741,13 +2165,13 @@ mod test {
         let timeout = Duration::from_secs(2);
         let (repo_root, _tmp_dir) = temp_dir();
         setup(&repo_root);
-        let cookie_dir = repo_root.join_component(".git");
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
         let recv = watcher.watch();
         let cookie_writer = CookieWriter::new(&cookie_dir, Duration::from_secs(2), recv.clone());
 
-        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
 
         // On windows, we expect different sanitization before the
         // globs are passed in, due to alternative data streams in files.
@@ -790,5 +2214,141 @@ mod test {
             .await
             .unwrap();
         assert_eq!(results, candidates);
+    }
+
+    // -----------------------------------------------------------------------
+    // Regression tests for OutputWatcher trait compatibility
+    //
+    // These tests verify that GlobWatcher's API satisfies the contract
+    // required by the OutputWatcher trait (defined in turborepo-run-cache).
+    // When we replace the daemon with in-process file watching, an
+    // InProcessOutputWatcher will delegate to GlobWatcher. These tests
+    // ensure the delegation is correct.
+    // -----------------------------------------------------------------------
+
+    /// Verifies that watch_globs + get_changed_globs round-trips correctly
+    /// when used with the string-based API that OutputWatcher will use.
+    /// This mirrors what the daemon server does in its NotifyOutputsWritten
+    /// and GetChangedOutputs RPC handlers.
+    #[tokio::test]
+    async fn test_output_watcher_delegation_unchanged() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
+
+        // Simulate notify_outputs_written: construct GlobSet from string slices
+        // (the same conversion InProcessOutputWatcher will do)
+        let include_globs = vec!["my-pkg/dist/**".to_string()];
+        let exclude_globs: Vec<String> = vec![];
+        let glob_set = GlobSet::from_raw(include_globs.clone(), exclude_globs).unwrap();
+        let hash = "test-hash".to_string();
+
+        glob_watcher
+            .watch_globs(hash.clone(), glob_set, timeout)
+            .await
+            .unwrap();
+
+        // Simulate get_changed_outputs: pass include globs as candidates
+        let candidates: HashSet<String> = include_globs.into_iter().collect();
+        let changed = glob_watcher
+            .get_changed_globs(hash.clone(), candidates, timeout)
+            .await
+            .unwrap();
+
+        // No files were modified, so nothing should have changed
+        assert!(
+            changed.is_empty(),
+            "expected no changed outputs when no files were modified, got: {changed:?}"
+        );
+    }
+
+    /// Verifies that after registering globs via watch_globs and then
+    /// modifying a file that matches, get_changed_globs reports the change.
+    #[tokio::test]
+    async fn test_output_watcher_delegation_with_change() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
+
+        let include_globs = vec!["my-pkg/dist/**".to_string()];
+        let exclude_globs: Vec<String> = vec![];
+        let glob_set = GlobSet::from_raw(include_globs.clone(), exclude_globs).unwrap();
+        let hash = "test-hash".to_string();
+
+        glob_watcher
+            .watch_globs(hash.clone(), glob_set, timeout)
+            .await
+            .unwrap();
+
+        // Modify a file matching the glob
+        repo_root
+            .join_components(&["my-pkg", "dist", "new-output"])
+            .create_with_contents("build output")
+            .unwrap();
+
+        let candidates: HashSet<String> = include_globs.into_iter().collect();
+        let changed = glob_watcher
+            .get_changed_globs(hash.clone(), candidates, timeout)
+            .await
+            .unwrap();
+
+        assert!(
+            changed.contains("my-pkg/dist/**"),
+            "expected dist glob to be reported as changed after file write, got: {changed:?}"
+        );
+    }
+
+    /// Verifies that exclusion globs are properly respected when constructing
+    /// a GlobSet from raw strings (the path InProcessOutputWatcher will use).
+    #[tokio::test]
+    async fn test_output_watcher_delegation_exclusions() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let cookie_dir = watcher.cookie_dir().to_owned();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, watcher.source());
+
+        let include_globs = vec!["my-pkg/.next/**".to_string()];
+        let exclude_globs = vec!["my-pkg/.next/cache/**".to_string()];
+        let glob_set = GlobSet::from_raw(include_globs.clone(), exclude_globs).unwrap();
+        let hash = "test-hash".to_string();
+
+        glob_watcher
+            .watch_globs(hash.clone(), glob_set, timeout)
+            .await
+            .unwrap();
+
+        // Write a file that matches the EXCLUSION glob — should not trigger change
+        repo_root
+            .join_components(&["my-pkg", ".next", "cache", "cached-file"])
+            .create_with_contents("cached data")
+            .unwrap();
+
+        let candidates: HashSet<String> = include_globs.into_iter().collect();
+        let changed = glob_watcher
+            .get_changed_globs(hash.clone(), candidates, timeout)
+            .await
+            .unwrap();
+
+        assert!(
+            changed.is_empty(),
+            "files matching exclusion globs should not trigger changes, got: {changed:?}"
+        );
     }
 }

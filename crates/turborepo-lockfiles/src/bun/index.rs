@@ -1,0 +1,476 @@
+//! Package indexing for efficient lockfile lookups.
+
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
+
+use super::{
+    PackageEntry,
+    types::{PackageIdent, PackageKey},
+};
+
+type StringRef = Arc<str>;
+
+#[derive(Debug, Clone)]
+pub struct PackageIndex {
+    /// Direct lookup by lockfile key (e.g., "lodash", "parent/dep")
+    by_key: HashMap<StringRef, PackageEntry>,
+
+    /// Lookup by ident (e.g., "lodash@4.17.21")
+    /// Maps ident -> lockfile key
+    /// Multiple keys may map to the same ident (nested versions)
+    by_ident: HashMap<StringRef, Vec<StringRef>>,
+
+    /// Workspace-scoped lookup for quick resolution
+    /// Maps (workspace_name, package_name) -> lockfile key
+    workspace_scoped: HashMap<(StringRef, StringRef), StringRef>,
+
+    /// Bundled dependency lookup
+    /// Maps (parent_key, dep_name) -> lockfile key
+    /// BTreeMap for deterministic iteration in find_package().
+    bundled_deps: BTreeMap<(StringRef, StringRef), StringRef>,
+
+    /// Nested/aliased entry lookup for version-spec fallback resolution.
+    /// Maps package name (from the entry's ident) -> lockfile keys that
+    /// contain '/' (nested or scoped top-level), excluding bundled deps and
+    /// workspace mappings. Keys within each bucket preserve the packages
+    /// map's sorted iteration order so lookups match a full scan.
+    nested_by_name: HashMap<StringRef, Vec<StringRef>>,
+}
+
+impl PackageIndex {
+    /// Create a new package index from a packages map.
+    pub fn new(packages: &super::Map<String, PackageEntry>) -> Self {
+        use rayon::prelude::*;
+
+        /// Per-entry index inputs. Computing them (the deep entry clone,
+        /// key/ident parsing, string interning) is independent per entry, so
+        /// it runs in parallel; the maps are filled sequentially below in
+        /// `packages` order, so every bucket's order is unchanged.
+        struct Prepared {
+            key_ref: StringRef,
+            entry: PackageEntry,
+            ident_ref: StringRef,
+            // (parent, name) for keys nested under a parent.
+            scoped: Option<(StringRef, StringRef)>,
+            secondary: Secondary,
+        }
+        enum Secondary {
+            None,
+            Bundled,
+            Nested(StringRef),
+        }
+
+        let entries: Vec<(&String, &PackageEntry)> = packages.iter().collect();
+        let prepared: Vec<Prepared> = entries
+            .par_iter()
+            .with_min_len(64)
+            .map(|&(key, entry)| {
+                // Index workspace-scoped packages
+                // Example: "workspace/package" -> ("workspace", "package")
+                let parsed_key = PackageKey::parse(key);
+                let scoped = parsed_key
+                    .parent()
+                    .map(|parent| (Arc::from(parent), Arc::from(parsed_key.name())));
+
+                // Index bundled dependencies and nested/aliased entries
+                let secondary = if key.contains('/') {
+                    let is_bundled = entry
+                        .info
+                        .as_ref()
+                        .and_then(|info| info.other.get("bundled"))
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    if is_bundled {
+                        Secondary::Bundled
+                    } else {
+                        // Index non-bundled entries by their ident's package
+                        // name for find_matching_version's fallback search,
+                        // skipping workspace mappings the way that search does.
+                        let ident = PackageIdent::parse(&entry.ident);
+                        if ident.is_workspace() {
+                            Secondary::None
+                        } else {
+                            Secondary::Nested(Arc::from(ident.name()))
+                        }
+                    }
+                } else {
+                    Secondary::None
+                };
+
+                Prepared {
+                    key_ref: Arc::from(key.as_str()),
+                    entry: entry.clone(),
+                    ident_ref: Arc::from(entry.ident.as_str()),
+                    scoped,
+                    secondary,
+                }
+            })
+            .collect();
+
+        let mut by_key = HashMap::with_capacity(packages.len());
+        let mut by_ident: HashMap<StringRef, Vec<StringRef>> = HashMap::new();
+        let mut workspace_scoped = HashMap::new();
+        let mut bundled_deps = BTreeMap::new();
+        let mut nested_by_name: HashMap<StringRef, Vec<StringRef>> = HashMap::new();
+
+        for prepared in prepared {
+            let Prepared {
+                key_ref,
+                entry,
+                ident_ref,
+                scoped,
+                secondary,
+            } = prepared;
+            by_key.insert(Arc::clone(&key_ref), entry);
+            by_ident
+                .entry(ident_ref)
+                .or_default()
+                .push(Arc::clone(&key_ref));
+            if let Some((parent, name)) = &scoped {
+                workspace_scoped
+                    .insert((Arc::clone(parent), Arc::clone(name)), Arc::clone(&key_ref));
+            }
+            match secondary {
+                Secondary::None => {}
+                Secondary::Bundled => {
+                    if let Some(scoped) = scoped {
+                        bundled_deps.insert(scoped, key_ref);
+                    }
+                }
+                Secondary::Nested(name) => nested_by_name.entry(name).or_default().push(key_ref),
+            }
+        }
+
+        // Sort by_ident vectors for deterministic selection (prefer workspace-scoped)
+        for keys in by_ident.values_mut() {
+            keys.sort();
+        }
+
+        Self {
+            by_key,
+            by_ident,
+            workspace_scoped,
+            bundled_deps,
+            nested_by_name,
+        }
+    }
+
+    /// Get a package entry by lockfile key.
+    #[cfg(test)]
+    pub fn get_by_key(&self, key: &str) -> Option<&PackageEntry> {
+        self.by_key.get(key)
+    }
+
+    /// Returns the number of packages in the index.
+    #[cfg(test)]
+    pub fn len(&self) -> usize {
+        self.by_key.len()
+    }
+
+    /// Get a package entry by ident (e.g., "lodash@4.17.21").
+    ///
+    /// If multiple keys map to the same ident, returns the first one
+    /// (which is typically the workspace-scoped one due to sorting).
+    pub fn get_by_ident(&self, ident: &str) -> Option<(&str, &PackageEntry)> {
+        let keys = self.by_ident.get(ident)?;
+        let key = keys.first()?;
+        let entry = self.by_key.get(key)?;
+        Some((key.as_ref(), entry))
+    }
+
+    /// Get all lockfile keys that map to a given ident.
+    ///
+    /// This is useful when you need to find all aliases for a package.
+    #[cfg(test)]
+    pub fn get_all_keys_for_ident(&self, ident: &str) -> Option<&[StringRef]> {
+        self.by_ident.get(ident).map(|v| v.as_slice())
+    }
+
+    /// Get a workspace-scoped package entry.
+    ///
+    /// For example, get_workspace_scoped("web", "lodash") looks up
+    /// "web/lodash".
+    pub fn get_workspace_scoped(&self, workspace: &str, package: &str) -> Option<&PackageEntry> {
+        // Use a temporary Arc for the lookup key
+        let lookup_key = (Arc::from(workspace), Arc::from(package));
+        let key = self.workspace_scoped.get(&lookup_key)?;
+        self.by_key.get(key)
+    }
+
+    /// Names of packages with a nested entry (`parent/name`) directly under
+    /// any of `parents`. These are the only names for which
+    /// [`Self::get_workspace_scoped`] and [`Self::find_package`] can return a
+    /// parent-specific entry when `parents` are the queried workspaces.
+    pub fn names_scoped_under<'a>(
+        &'a self,
+        parents: &std::collections::HashSet<&str>,
+    ) -> std::collections::HashSet<&'a str> {
+        self.workspace_scoped
+            .keys()
+            .filter(|(parent, _)| parents.contains(parent.as_ref()))
+            .map(|(_, name)| name.as_ref())
+            .collect()
+    }
+
+    /// Get a bundled dependency entry.
+    ///
+    /// For example, get_bundled("parent", "dep") looks up "parent/dep" if it's
+    /// bundled.
+    #[cfg(test)]
+    pub fn get_bundled(&self, parent: &str, dep: &str) -> Option<&PackageEntry> {
+        // Use a temporary Arc for the lookup key
+        let lookup_key = (Arc::from(parent), Arc::from(dep));
+        let key = self.bundled_deps.get(&lookup_key)?;
+        self.by_key.get(key)
+    }
+
+    /// Iterate over nested/aliased entries whose ident's package name matches
+    /// `name`, in lockfile key order.
+    ///
+    /// Covers entries whose lockfile key contains '/' (nested or scoped
+    /// top-level), excluding bundled dependencies and workspace mappings —
+    /// the same set find_matching_version's fallback previously discovered by
+    /// scanning every package.
+    pub fn nested_candidates(&self, name: &str) -> impl Iterator<Item = (&str, &PackageEntry)> {
+        self.nested_by_name
+            .get(name)
+            .into_iter()
+            .flatten()
+            .filter_map(|key| self.by_key.get(key).map(|entry| (key.as_ref(), entry)))
+    }
+
+    /// Find a package entry by name, searching in order:
+    /// 1. Workspace-scoped (if workspace provided)
+    /// 2. Top-level / hoisted
+    /// 3. Bundled dependencies
+    pub fn find_package<'a>(
+        &'a self,
+        workspace: Option<&str>,
+        name: &'a str,
+    ) -> Option<(&'a str, &'a PackageEntry)> {
+        // Try workspace-scoped first
+        if let Some(ws) = workspace {
+            let lookup_key = (Arc::from(ws), Arc::from(name));
+            if let Some(key) = self.workspace_scoped.get(&lookup_key)
+                && let Some(entry) = self.by_key.get(key)
+            {
+                return Some((key.as_ref(), entry));
+            }
+        }
+
+        // Try top-level
+        if let Some(entry) = self.by_key.get(name) {
+            return Some((name, entry));
+        }
+
+        // Try bundled (search all parents)
+        for ((_parent, dep_name), key) in &self.bundled_deps {
+            if dep_name.as_ref() == name
+                && let Some(entry) = self.by_key.get(key)
+            {
+                return Some((key.as_ref(), entry));
+            }
+        }
+
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::bun::{Map, PackageInfo};
+
+    fn create_test_entry(ident: &str) -> PackageEntry {
+        PackageEntry {
+            ident: ident.to_string(),
+            registry: Some("".to_string()),
+            info: Some(PackageInfo::default()),
+            checksum: Some("sha512".to_string()),
+            integrity: None,
+            root: None,
+        }
+    }
+
+    fn create_bundled_entry(ident: &str) -> PackageEntry {
+        let mut info = PackageInfo::default();
+        info.other.insert("bundled".to_string(), json!(true));
+        PackageEntry {
+            ident: ident.to_string(),
+            registry: Some("".to_string()),
+            info: Some(info),
+            checksum: Some("sha512".to_string()),
+            integrity: None,
+            root: None,
+        }
+    }
+
+    #[test]
+    fn test_package_index_basic_lookup() {
+        let mut packages = Map::new();
+        packages.insert("lodash".to_string(), create_test_entry("lodash@4.17.21"));
+        packages.insert("react".to_string(), create_test_entry("react@18.0.0"));
+
+        let index = PackageIndex::new(&packages);
+
+        assert_eq!(index.len(), 2);
+        assert!(index.get_by_key("lodash").is_some());
+        assert!(index.get_by_key("react").is_some());
+        assert!(index.get_by_key("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_package_index_by_ident() {
+        let mut packages = Map::new();
+        packages.insert("lodash".to_string(), create_test_entry("lodash@4.17.21"));
+        packages.insert(
+            "web/lodash".to_string(),
+            create_test_entry("lodash@4.17.21"),
+        );
+
+        let index = PackageIndex::new(&packages);
+
+        // Should find the entry
+        let (_key, entry) = index.get_by_ident("lodash@4.17.21").unwrap();
+        assert_eq!(entry.ident, "lodash@4.17.21");
+
+        // Should have both keys indexed
+        let all_keys = index.get_all_keys_for_ident("lodash@4.17.21").unwrap();
+        assert_eq!(all_keys.len(), 2);
+        assert!(all_keys.iter().any(|k| k.as_ref() == "lodash"));
+        assert!(all_keys.iter().any(|k| k.as_ref() == "web/lodash"));
+    }
+
+    #[test]
+    fn test_package_index_workspace_scoped() {
+        let mut packages = Map::new();
+        packages.insert(
+            "web/lodash".to_string(),
+            create_test_entry("lodash@4.17.21"),
+        );
+        packages.insert(
+            "@repo/ui/react".to_string(),
+            create_test_entry("react@18.0.0"),
+        );
+
+        let index = PackageIndex::new(&packages);
+
+        // Workspace-scoped lookup
+        let entry = index.get_workspace_scoped("web", "lodash").unwrap();
+        assert_eq!(entry.ident, "lodash@4.17.21");
+
+        let entry = index.get_workspace_scoped("@repo/ui", "react").unwrap();
+        assert_eq!(entry.ident, "react@18.0.0");
+
+        // Non-existent workspace
+        assert!(
+            index
+                .get_workspace_scoped("nonexistent", "lodash")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_package_index_bundled() {
+        let mut packages = Map::new();
+        packages.insert("parent".to_string(), create_test_entry("parent@1.0.0"));
+        packages.insert(
+            "parent/bundled-dep".to_string(),
+            create_bundled_entry("bundled-dep@2.0.0"),
+        );
+
+        let index = PackageIndex::new(&packages);
+
+        // Bundled lookup
+        let entry = index.get_bundled("parent", "bundled-dep").unwrap();
+        assert_eq!(entry.ident, "bundled-dep@2.0.0");
+
+        // Non-existent bundled
+        assert!(index.get_bundled("parent", "nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_package_index_nested_candidates() {
+        let mut packages = Map::new();
+        // Top-level entry: not a nested candidate
+        packages.insert("lodash".to_string(), create_test_entry("lodash@4.17.21"));
+        // Scoped top-level entry: key contains '/', so it is a candidate
+        packages.insert("@babel/core".to_string(), create_test_entry("core@7.0.0"));
+        // Nested entries for the same name under different parents
+        packages.insert(
+            "web/lodash".to_string(),
+            create_test_entry("lodash@4.17.20"),
+        );
+        packages.insert("app/lodash".to_string(), create_test_entry("lodash@3.0.0"));
+        // Bundled entry: excluded
+        packages.insert(
+            "parent/lodash".to_string(),
+            create_bundled_entry("lodash@2.0.0"),
+        );
+        // Workspace mapping: excluded
+        packages.insert(
+            "ws/lodash".to_string(),
+            create_test_entry("lodash@workspace:packages/lodash"),
+        );
+
+        let index = PackageIndex::new(&packages);
+
+        // Candidates come back in sorted lockfile-key order, matching a scan
+        // of the BTreeMap-backed packages section.
+        let candidates: Vec<(&str, &str)> = index
+            .nested_candidates("lodash")
+            .map(|(key, entry)| (key, entry.ident.as_str()))
+            .collect();
+        assert_eq!(
+            candidates,
+            vec![
+                ("app/lodash", "lodash@3.0.0"),
+                ("web/lodash", "lodash@4.17.20"),
+            ]
+        );
+
+        // Scoped top-level entries are indexed by their ident's name
+        let candidates: Vec<&str> = index
+            .nested_candidates("core")
+            .map(|(key, _)| key)
+            .collect();
+        assert_eq!(candidates, vec!["@babel/core"]);
+
+        assert_eq!(index.nested_candidates("nonexistent").count(), 0);
+    }
+
+    #[test]
+    fn test_package_index_find_package() {
+        let mut packages = Map::new();
+        packages.insert("lodash".to_string(), create_test_entry("lodash@4.17.21"));
+        packages.insert(
+            "web/lodash".to_string(),
+            create_test_entry("lodash@4.17.20"),
+        );
+        packages.insert(
+            "parent/bundled".to_string(),
+            create_bundled_entry("bundled@1.0.0"),
+        );
+
+        let index = PackageIndex::new(&packages);
+
+        // Workspace-scoped takes priority
+        let (key, entry) = index.find_package(Some("web"), "lodash").unwrap();
+        assert_eq!(key, "web/lodash");
+        assert_eq!(entry.ident, "lodash@4.17.20");
+
+        // Falls back to top-level if workspace not found
+        let (key, entry) = index.find_package(Some("other"), "lodash").unwrap();
+        assert_eq!(key, "lodash");
+        assert_eq!(entry.ident, "lodash@4.17.21");
+
+        // Finds bundled dependencies
+        let (key, entry) = index.find_package(None, "bundled").unwrap();
+        assert_eq!(key, "parent/bundled");
+        assert_eq!(entry.ident, "bundled@1.0.0");
+    }
+}

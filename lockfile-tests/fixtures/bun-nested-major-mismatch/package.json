@@ -1,0 +1,15 @@
+{
+  "name": "turbo-prune-bun-nested-major-mismatch",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "dependencies": {
+    "bs58": "5.0.0"
+  },
+  "devDependencies": {
+    "turbo": "canary"
+  },
+  "packageManager": "bun@1.3.14"
+}

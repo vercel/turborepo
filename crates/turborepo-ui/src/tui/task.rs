@@ -1,7 +1,6 @@
-#![allow(dead_code)]
 use std::{collections::HashSet, mem, time::Instant};
 
-use super::{event::TaskResult, Error};
+use super::{Error, event::TaskResult};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Planned;
@@ -22,12 +21,6 @@ pub struct Finished {
 pub struct Task<S> {
     name: String,
     state: S,
-}
-
-pub enum TaskType {
-    Planned,
-    Running,
-    Finished,
 }
 
 impl<S> Task<S> {
@@ -101,13 +94,6 @@ impl Task<Finished> {
             state: Planned,
         }
     }
-}
-
-#[derive(Default)]
-pub struct TaskNamesByStatus {
-    pub running: Vec<String>,
-    pub planned: Vec<String>,
-    pub finished: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default)]

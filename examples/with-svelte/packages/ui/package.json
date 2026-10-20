@@ -1,21 +1,43 @@
 {
   "name": "@repo/ui",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
-  "module": "index.ts",
-  "main": "index.ts",
+  "scripts": {
+    "dev": "svelte-kit sync --watch",
+    "build": "svelte-kit sync && tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "check-types": "svelte-kit sync && tsc --noEmit",
+    "test:unit": "vitest run"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
-      "types": "./index.ts",
-      "svelte": "./index.ts"
+      "types": "./src/index.ts",
+      "svelte": "./src/index.ts",
+      "default": "./src/index.ts"
     }
   },
-  "scripts": {
-    "lint": "eslint ."
+  "peerDependencies": {
+    "svelte": "5.56.9"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
-    "svelte": "^5.22.6",
-    "eslint": "^9.22.0"
+    "@repo/typescript-config": "workspace:*",
+    "@sveltejs/kit": "catalog:sveltejs",
+    "@sveltejs/vite-plugin-svelte": "catalog:sveltejs",
+    "@types/node": "26.2.0",
+    "@vitest/browser-playwright": "4.1.10",
+    "eslint": "10.8.1",
+    "globals": "17.11.0",
+    "playwright": "1.62.1",
+    "svelte": "catalog:sveltejs",
+    "typescript": "7.0.2",
+    "vite": "8.2.1",
+    "vitest": "4.1.10",
+    "vitest-browser-svelte": "3.0.0"
   }
 }

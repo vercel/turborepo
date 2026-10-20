@@ -3,7 +3,7 @@ mod de;
 mod dep_path;
 mod ser;
 
-pub use data::{pnpm_global_change, PnpmLockfile};
+pub use data::{PnpmLockfile, pnpm_global_change};
 
 use crate::Lockfile;
 
@@ -15,6 +15,15 @@ pub enum Error {
     MissingInjectedPackage(String),
     #[error("Unsupported lockfile version: {0}")]
     UnsupportedVersion(String),
+    #[error(
+        "Root `{section}.{name}` entry does not match the dependency format of lockfileVersion \
+         {version}"
+    )]
+    RootDependencyShape {
+        section: &'static str,
+        name: String,
+        version: String,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -29,9 +38,10 @@ enum VersionFormat {
     Float,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum SupportedLockfileVersion {
     V5,
+    #[default]
     V6,
     // As of pnpm@9.0.0-rc.0 the lockfile version will now match the pnpm version
     // Lockfile version 7.0 and 9.0 are both the same version

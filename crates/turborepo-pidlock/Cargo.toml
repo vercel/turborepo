@@ -3,7 +3,7 @@ name = "pidlock"
 version = "0.1.4"
 authors = ["Paul Hummer <paul@eventuallyanyway.com>"]
 license = "MIT"
-edition = "2024"
+edition = { workspace = true }
 description = "A library for using pidfiles as resource locks"
 repository = "https://github.com/rockstar/pidlock"
 keywords = ["pidfile", "file", "filelock", "server", "lock"]
@@ -36,5 +36,5 @@ windows-sys = { version = "0.45.0", features = [
 ] }
 
 [dev-dependencies]
-rand = "0.8.2"
+rand = { workspace = true }
 tempfile = { workspace = true }

@@ -1,9 +1,8 @@
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
-    app::FRAMERATE,
-    event::{CacheResult, OutputLogs, PaneSize},
     Error, Event, TaskResult,
+    event::{CacheResult, OutputLogs, PaneSize},
 };
 use crate::sender::{TaskSender, UISender};
 
@@ -24,29 +23,23 @@ impl TuiSender {
     /// AppSender is meant to be held by the actual task runner
     /// AppReceiver should be passed to `crate::tui::run_app`
     pub fn new() -> (Self, AppReceiver) {
-        let (primary_tx, primary_rx) = mpsc::unbounded_channel();
-        let tick_sender = primary_tx.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(FRAMERATE);
-            loop {
-                interval.tick().await;
-                if tick_sender.send(Event::Tick).is_err() {
-                    break;
-                }
-            }
-        });
-        (
-            Self {
-                primary: primary_tx,
-            },
-            AppReceiver {
-                primary: primary_rx,
-            },
-        )
+        let (primary, receiver) = mpsc::unbounded_channel();
+        (Self { primary }, AppReceiver { primary: receiver })
     }
 }
 
 impl TuiSender {
+    /// Test-only constructor that wraps an existing channel sender
+    /// without spawning a tick task.
+    #[cfg(test)]
+    pub(crate) fn new_for_test(sender: mpsc::UnboundedSender<Event>) -> Self {
+        Self { primary: sender }
+    }
+
+    pub fn log_event(&self, event: turborepo_log::LogEvent) {
+        self.primary.send(Event::LogEvent(event)).ok();
+    }
+
     pub fn start_task(&self, task: String, output_logs: OutputLogs) {
         self.primary
             .send(Event::StartTask { task, output_logs })
@@ -57,12 +50,19 @@ impl TuiSender {
         self.primary.send(Event::EndTask { task, result }).ok();
     }
 
-    pub fn status(&self, task: String, status: String, result: CacheResult) {
+    pub fn status(
+        &self,
+        task: String,
+        status: String,
+        result: CacheResult,
+        output_logs: OutputLogs,
+    ) {
         self.primary
             .send(Event::Status {
                 task,
                 status,
                 result,
+                output_logs,
             })
             .ok();
     }
@@ -124,6 +124,10 @@ impl TuiSender {
 }
 
 impl AppReceiver {
+    pub fn close(&mut self) {
+        self.primary.close();
+    }
+
     /// Receive an event, producing a tick event if no events are rec eived by
     /// the deadline.
     pub async fn recv(&mut self) -> Option<Event> {

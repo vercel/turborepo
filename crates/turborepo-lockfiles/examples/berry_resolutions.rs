@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use turborepo_lockfiles::{BerryLockfile, BerryManifest, Lockfile, LockfileData};
 
 fn main() {
@@ -6,13 +8,10 @@ fn main() {
     let data = LockfileData::from_bytes(lockfile_bytes.as_slice()).unwrap();
     let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
     let key = "debug@npm:3.2.7";
+    let deps = lockfile.all_dependencies(key).unwrap().unwrap();
     println!(
         "Dependencies of {key}: {}",
-        lockfile
-            .all_dependencies(key)
-            .unwrap()
-            .unwrap()
-            .into_iter()
+        deps.iter()
             .map(|(k, v)| format!("{k}@{v}"))
             .collect::<Vec<_>>()
             .join(", ")

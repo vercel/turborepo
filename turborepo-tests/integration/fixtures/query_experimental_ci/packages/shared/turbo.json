@@ -1,0 +1,17 @@
+{
+  "extends": [
+    "//"
+  ],
+  "tasks": {
+    "check": {
+      "experimentalCI": {
+        "jobs": [
+          "test"
+        ],
+        "nested": {
+          "enabled": false
+        }
+      }
+    }
+  }
+}

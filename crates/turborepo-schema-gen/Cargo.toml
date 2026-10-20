@@ -1,0 +1,28 @@
+[package]
+name = "turborepo-schema-gen"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "JSON Schema and TypeScript type generator for turbo.json configuration"
+
+[[bin]]
+name = "turbo-schema-gen"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Schema generation
+schemars = { workspace = true }
+ts-rs = { workspace = true }
+
+# Serialization
+serde_json = { workspace = true }
+
+# CLI
+usage = { package = "usage-rs", version = "=6.5.0" }
+
+# Turborepo types
+turborepo-turbo-json = { path = "../turborepo-turbo-json" }
+turborepo-types = { path = "../turborepo-types" }

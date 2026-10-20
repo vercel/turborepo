@@ -1,0 +1,180 @@
+---
+source: crates/turborepo/tests/query_test.rs
+expression: "json[\"data\"]"
+---
+{
+  "packages": {
+    "items": [
+      {
+        "tasks": {
+          "items": []
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "app-a#build"
+            },
+            {
+              "fullName": "app-a#build0"
+            },
+            {
+              "fullName": "app-a#build1"
+            },
+            {
+              "fullName": "app-a#build2"
+            },
+            {
+              "fullName": "app-a#custom"
+            },
+            {
+              "fullName": "app-a#prepare"
+            },
+            {
+              "fullName": "app-a#side-quest"
+            },
+            {
+              "fullName": "app-a#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "app-b#build"
+            },
+            {
+              "fullName": "app-b#build0"
+            },
+            {
+              "fullName": "app-b#build1"
+            },
+            {
+              "fullName": "app-b#build2"
+            },
+            {
+              "fullName": "app-b#prepare"
+            },
+            {
+              "fullName": "app-b#side-quest"
+            },
+            {
+              "fullName": "app-b#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-a#build"
+            },
+            {
+              "fullName": "lib-a#build0"
+            },
+            {
+              "fullName": "lib-a#build1"
+            },
+            {
+              "fullName": "lib-a#build2"
+            },
+            {
+              "fullName": "lib-a#prepare"
+            },
+            {
+              "fullName": "lib-a#side-quest"
+            },
+            {
+              "fullName": "lib-a#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-b#build"
+            },
+            {
+              "fullName": "lib-b#build0"
+            },
+            {
+              "fullName": "lib-b#build1"
+            },
+            {
+              "fullName": "lib-b#build2"
+            },
+            {
+              "fullName": "lib-b#prepare"
+            },
+            {
+              "fullName": "lib-b#side-quest"
+            },
+            {
+              "fullName": "lib-b#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-c#build"
+            },
+            {
+              "fullName": "lib-c#build0"
+            },
+            {
+              "fullName": "lib-c#build1"
+            },
+            {
+              "fullName": "lib-c#build2"
+            },
+            {
+              "fullName": "lib-c#prepare"
+            },
+            {
+              "fullName": "lib-c#side-quest"
+            },
+            {
+              "fullName": "lib-c#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-d#build"
+            },
+            {
+              "fullName": "lib-d#build0"
+            },
+            {
+              "fullName": "lib-d#build1"
+            },
+            {
+              "fullName": "lib-d#build2"
+            },
+            {
+              "fullName": "lib-d#prepare"
+            },
+            {
+              "fullName": "lib-d#side-quest"
+            },
+            {
+              "fullName": "lib-d#test"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

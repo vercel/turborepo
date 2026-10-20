@@ -22,7 +22,7 @@ npm install eslint-config-turbo --save-dev
 import turboConfig from "eslint-config-turbo/flat";
 
 export default [
-  ...turboConfig,
+  ...turboConfig
   // Other configuration
 ];
 ```
@@ -40,11 +40,11 @@ export default [
       "turbo/no-undeclared-env-vars": [
         "error",
         {
-          allowList: ["^ENV_[A-Z]+$"],
-        },
-      ],
-    },
-  },
+          allowList: ["^ENV_[A-Z]+$"]
+        }
+      ]
+    }
+  }
 ];
 ```
 
@@ -62,7 +62,7 @@ You can also configure rules available in the configuration:
 
 ```json
 {
-  "plugins": ["turbo"],
+  "extends": ["turbo"],
   "rules": {
     "turbo/no-undeclared-env-vars": [
       "error",

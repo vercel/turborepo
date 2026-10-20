@@ -1,0 +1,186 @@
+use std::sync::Arc;
+
+use async_graphql::{Object, SimpleObject};
+use itertools::Itertools;
+use turborepo_repository::package_graph::{DependencyKind, PackageName, PackageNode};
+
+use crate::{Array, Error, PackagePredicate, QueryRun, package::Package};
+
+pub struct PackageGraph {
+    run: Arc<dyn QueryRun>,
+    center: Option<PackageNode>,
+    filter: Option<PackagePredicate>,
+}
+
+impl PackageGraph {
+    pub fn new(
+        run: Arc<dyn QueryRun>,
+        center: Option<String>,
+        filter: Option<PackagePredicate>,
+    ) -> Self {
+        let center = center.map(|center| PackageNode::Workspace(PackageName::from(center)));
+
+        Self {
+            run,
+            center,
+            filter,
+        }
+    }
+}
+
+#[derive(Debug, Clone, SimpleObject, Hash, PartialEq, Eq)]
+pub(crate) struct Edge {
+    source: String,
+    target: String,
+    kind: DependencyKindGraphQL,
+}
+
+#[derive(Debug, Clone, SimpleObject, Hash, PartialEq, Eq)]
+pub(crate) struct DependencyKindGraphQL {
+    kind: String,
+}
+
+impl From<DependencyKind> for DependencyKindGraphQL {
+    fn from(kind: DependencyKind) -> Self {
+        Self {
+            kind: match kind {
+                DependencyKind::Production | DependencyKind::Optional => "production".to_string(),
+                DependencyKind::Development => "development".to_string(),
+                DependencyKind::Peer { optional } => {
+                    if optional {
+                        "optionalPeer".to_string()
+                    } else {
+                        "peer".to_string()
+                    }
+                }
+            },
+        }
+    }
+}
+
+#[Object]
+impl PackageGraph {
+    async fn nodes(&self) -> Result<Array<Package>, Error> {
+        let direct_dependencies = self.center.as_ref().and_then(|center| {
+            self.run
+                .repo_context()
+                .pkg_dep_graph()
+                .immediate_dependencies(center)
+        });
+
+        let mut nodes = self
+            .run
+            .repo_context()
+            .pkg_dep_graph()
+            .node_indices()
+            .filter_map(|idx| {
+                let package_node = self
+                    .run
+                    .repo_context()
+                    .pkg_dep_graph()
+                    .get_package_by_index(idx)?;
+                if let Some(center) = &self.center
+                    && center == package_node
+                {
+                    return Some(Package::new(
+                        self.run.clone(),
+                        package_node.as_package_name().clone(),
+                    ));
+                }
+
+                if matches!(package_node, PackageNode::Root)
+                    || matches!(package_node, PackageNode::Workspace(PackageName::Root))
+                {
+                    return None;
+                }
+                if let Some(dependencies) = direct_dependencies.as_ref()
+                    && !dependencies.contains(package_node)
+                {
+                    return None;
+                }
+
+                let package =
+                    match Package::new(self.run.clone(), package_node.as_package_name().clone()) {
+                        Ok(package) => package,
+                        Err(err) => {
+                            return Some(Err(err));
+                        }
+                    };
+
+                if let Some(filter) = &self.filter
+                    && !filter.check(&package)
+                {
+                    return None;
+                }
+
+                Some(Ok(package))
+            })
+            .collect::<Result<Array<_>, _>>()?;
+
+        nodes.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+
+        Ok(nodes)
+    }
+
+    async fn edges(&self) -> Array<Edge> {
+        let direct_dependencies = self.center.as_ref().and_then(|center| {
+            self.run
+                .repo_context()
+                .pkg_dep_graph()
+                .immediate_dependencies(center)
+        });
+        self.run
+            .repo_context()
+            .pkg_dep_graph()
+            .edges()
+            .iter()
+            .filter_map(|edge| {
+                if edge.source() == edge.target() {
+                    return None;
+                }
+                let source_node = self
+                    .run
+                    .repo_context()
+                    .pkg_dep_graph()
+                    .get_package_by_index(edge.source())?;
+                let target_node = self
+                    .run
+                    .repo_context()
+                    .pkg_dep_graph()
+                    .get_package_by_index(edge.target())?;
+
+                if matches!(
+                    source_node,
+                    PackageNode::Root | PackageNode::Workspace(PackageName::Root)
+                ) || matches!(
+                    target_node,
+                    PackageNode::Root | PackageNode::Workspace(PackageName::Root)
+                ) {
+                    return None;
+                }
+
+                if let Some(center) = &self.center
+                    && (center == source_node || center == target_node)
+                {
+                    return Some(Edge {
+                        source: source_node.as_package_name().to_string(),
+                        target: target_node.as_package_name().to_string(),
+                        kind: edge.weight.into(),
+                    });
+                }
+                if let Some(dependencies) = direct_dependencies.as_ref()
+                    && (!dependencies.contains(source_node) || !dependencies.contains(target_node))
+                {
+                    return None;
+                }
+
+                Some(Edge {
+                    source: source_node.as_package_name().to_string(),
+                    target: target_node.as_package_name().to_string(),
+                    kind: edge.weight.into(),
+                })
+            })
+            .dedup()
+            .collect()
+    }
+}

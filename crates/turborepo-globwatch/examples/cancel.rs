@@ -1,6 +1,8 @@
+#![allow(clippy::unwrap_used)]
+
 use std::{path::PathBuf, time::Duration};
 
-use futures::{join, StreamExt};
+use futures::{StreamExt, join};
 use globwatch::GlobWatcher;
 use tracing::{info, info_span};
 use turbopath::AbsoluteSystemPathBuf;

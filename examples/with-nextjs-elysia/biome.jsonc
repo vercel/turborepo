@@ -1,0 +1,101 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["ultracite/core", "ultracite/react"],
+  "files": {
+    "ignoreUnknown": false,
+    "includes": [
+      "!node_modules",
+      "!.vercel",
+      "!dist",
+      "!**/components.d.ts",
+      "!**/auto-imports.d.ts",
+      "!**/volt",
+      "!**/*.vue"
+    ]
+  },
+  "linter": {
+    "rules": {
+      //  性能规则
+      "performance": {
+        "noBarrelFile": "off",
+        "noNamespaceImport": "off",
+        //  正则表达式规则
+        "useTopLevelRegex": "off"
+      },
+      "a11y": "off",
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "off",
+        "noStaticOnlyClass": "off",
+        "noForEach": "off",
+        "noBannedTypes": "off"
+      },
+      //   可疑规则
+      "suspicious": {
+        "noConsole": "off",
+        "noExplicitAny": "off",
+        "noEvolvingTypes": "off",
+        "noImplicitAnyLet": "off",
+        "useIterableCallbackReturn": "off",
+        "noConfusingVoidType": "off",
+        "noAlert": "off",
+        "noArrayIndexKey": "off"
+      },
+      //  新特性规则
+      "nursery": {
+      
+        "noShadow": "off",
+        "noIncrementDecrement": "off",
+        "noSyncScripts": "off",
+        "noLeakedRender": "off",
+        "noUndeclaredEnvVars": "off"
+      },
+      "style": {
+        "noMagicNumbers": "off",
+        "useFilenamingConvention": "off",
+        "noNonNullAssertion": "off",
+        "useBlockStatements": "off",
+        "noNestedTernary": "off",
+        "useConsistentTypeDefinitions": "off",
+        "noParameterProperties": "off",
+        "useConsistentMemberAccessibility": "off",
+        "useImportType": "off",
+        "useCollapsedElseIf": "off"
+      },
+      // 正确性规则
+      "correctness": {
+        "noUnusedVariables": "off",
+        "noUndeclaredVariables": "off",
+        "noUnknownPseudoClass": "off",
+        "noUnusedFunctionParameters": "off",
+        "noUnusedPrivateClassMembers": "off",
+        "useImageSize": "off"
+      }
+    }
+  },
+  "json": {
+    "parser": {
+      "allowComments": true, // 确保这是开启的
+      "allowTrailingCommas": true
+    },
+    "formatter": {
+      "enabled": true
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.svelte", "**/*.astro", "**/*.vue"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useConst": "off",
+            "useImportType": "off"
+          },
+          "correctness": {
+            "noUnusedVariables": "off",
+            "noUnusedImports": "off"
+          }
+        }
+      }
+    }
+  ]
+}

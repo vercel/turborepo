@@ -7,24 +7,24 @@ use std::{
     collections::VecDeque,
     mem,
     ops::Deref,
-    path::{PathBuf, MAIN_SEPARATOR},
-    slice, str,
+    path::{MAIN_SEPARATOR, PathBuf},
+    slice,
 };
 
 use itertools::Itertools as _;
 
 pub use crate::token::{
-    parse::{parse, Annotation, ParseError, ROOT_SEPARATOR_EXPRESSION},
+    parse::{Annotation, ParseError, ROOT_SEPARATOR_EXPRESSION, parse},
     variance::{
-        invariant_text_prefix, is_exhaustive, Boundedness, InvariantSize, InvariantText, Variance,
+        Boundedness, InvariantSize, InvariantText, Variance, invariant_text_prefix, is_exhaustive,
     },
 };
 use crate::{
+    PATHS_ARE_CASE_INSENSITIVE, StrExt as _,
     token::variance::{
         CompositeBreadth, CompositeDepth, ConjunctiveVariance, DisjunctiveVariance,
         IntoInvariantText, Invariance, UnitBreadth, UnitDepth, UnitVariance,
     },
-    StrExt as _, PATHS_ARE_CASE_INSENSITIVE,
 };
 
 pub trait TokenTree<'t>: Sized {
@@ -71,8 +71,13 @@ impl<'t> Tokenized<'t, Annotation> {
     pub fn partition(self) -> (PathBuf, Self) {
         fn pop_expression_bytes(expression: &str, n: usize) -> &str {
             let n = cmp::min(expression.len(), n);
-            str::from_utf8(&expression.as_bytes()[n..])
-                .expect("span offset split UTF-8 byte sequence")
+            expression.get(n..).unwrap_or_else(|| {
+                match ((n + 1)..=expression.len()).find(|index| expression.is_char_boundary(*index))
+                {
+                    Some(index) => &expression[index..],
+                    None => "",
+                }
+            })
         }
 
         let Tokenized {
@@ -919,14 +924,9 @@ impl<'i, 't> LiteralSequence<'i, 't> {
     }
 
     pub fn text(&self) -> Cow<'t, str> {
-        if self.literals().len() == 1 {
-            self.literals().first().unwrap().text.clone()
-        } else {
-            self.literals()
-                .iter()
-                .map(|literal| &literal.text)
-                .join("")
-                .into()
+        match self.literals() {
+            [literal] => literal.text.clone(),
+            literals => literals.iter().map(|literal| &literal.text).join("").into(),
         }
     }
 

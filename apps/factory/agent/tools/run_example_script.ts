@@ -1,0 +1,61 @@
+import path from "node:path/posix";
+
+import { defineTool } from "eve/tools";
+import { z } from "zod";
+
+import {
+  getExamplePath,
+  packageManagerName,
+  pickJsonObject,
+  readJsonFile,
+  resolveAutomatedExample,
+  runCommandOrThrow
+} from "../lib/repo.js";
+
+export default defineTool({
+  description:
+    "Run a package.json script in one example with its declared package manager for validation.",
+  inputSchema: z.object({
+    example: z
+      .string()
+      .min(1)
+      .describe("Directory name under examples/, for example 'basic'."),
+    script: z
+      .string()
+      .min(1)
+      .describe(
+        "package.json script name to run, for example 'build' or 'lint'."
+      ),
+    timeoutSeconds: z.number().int().positive().max(600).default(120)
+  }),
+  async execute({ example, script, timeoutSeconds }, ctx) {
+    const sandbox = await ctx.getSandbox();
+    const effectiveExample =
+      (await resolveAutomatedExample(
+        sandbox,
+        ctx.session.auth.current,
+        ctx.session.id,
+        example
+      )) ?? example;
+    const examplePath = await getExamplePath(sandbox, effectiveExample);
+    const packageJson = await readJsonFile(
+      sandbox,
+      path.join(examplePath, "package.json")
+    );
+    const scripts = pickJsonObject(packageJson.scripts);
+    if (!scripts || typeof scripts[script] !== "string") {
+      throw new Error(
+        `Example '${effectiveExample}' does not define a '${script}' script.`
+      );
+    }
+
+    const manager = packageManagerName(packageJson.packageManager) ?? "pnpm";
+    return runCommandOrThrow(
+      sandbox,
+      manager,
+      ["run", script],
+      examplePath,
+      timeoutSeconds * 1_000
+    );
+  }
+});

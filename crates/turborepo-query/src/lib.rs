@@ -1,0 +1,1232 @@
+pub mod affected_query;
+pub mod affected_tasks;
+mod boundaries;
+mod external_package;
+mod file;
+mod package;
+mod package_graph;
+mod server;
+mod task;
+
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
+
+use async_graphql::*;
+use axum::{response, response::IntoResponse};
+use external_package::ExternalPackage;
+use itertools::Itertools;
+use package::Package;
+use package_graph::{Edge, PackageGraph};
+pub use server::run_server;
+use tokio::select;
+use turbo_trace::TraceError;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+pub use turborepo_query_api::{
+    AffectedPackagesError, BoundariesFuture, QueryErrorLocation, QueryResult, QueryRun,
+    QueryTaskId, SCHEMA_QUERY,
+};
+use turborepo_repository::{
+    change_mapper::{AllPackageChangeReason, PackageInclusionReason},
+    package_graph::PackageName,
+};
+use turborepo_signals::SignalHandler;
+
+#[derive(thiserror::Error, Debug, miette::Diagnostic)]
+pub enum Error {
+    /// Errors that have a direct equivalent in `turborepo_query_api::Error`.
+    /// Using `#[from]` on the API error avoids duplicating variants.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Api(#[from] turborepo_query_api::Error),
+    #[error("Failed to get file dependencies")]
+    Trace(#[related] Vec<TraceError>),
+    #[error("No signal handler.")]
+    NoSignalHandler,
+    #[error("File `{0}` not found.")]
+    FileNotFound(String),
+    #[error("File `{0}` is outside the repository root.")]
+    FileOutsideRepository(String),
+    #[error("Package not found: {0}")]
+    PackageNotFound(PackageName),
+    #[error("Failed to serialize result: {0}")]
+    Serde(#[from] serde_json::Error),
+    #[error("Failed to parse file: {0}")]
+    Parse(String),
+    #[error("Failed to determine affected tasks.")]
+    AffectedTasks,
+}
+
+// Conversions from constituent error types into Error via the Api variant.
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<turbopath::PathError> for Error {
+    fn from(e: turbopath::PathError) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<AffectedPackagesError> for Error {
+    fn from(e: AffectedPackagesError) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<turborepo_signals::listeners::Error> for Error {
+    fn from(e: turborepo_signals::listeners::Error) -> Self {
+        Error::Api(e.into())
+    }
+}
+
+impl From<Error> for turborepo_query_api::Error {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::Api(e) => e,
+            other => turborepo_query_api::Error::Query(Box::new(other)),
+        }
+    }
+}
+
+pub struct RepositoryQuery {
+    run: Arc<dyn QueryRun>,
+}
+
+impl RepositoryQuery {
+    pub fn new(run: Arc<dyn QueryRun>) -> Self {
+        Self { run }
+    }
+
+    fn convert_change_reason(&self, reason: PackageInclusionReason) -> PackageChangeReason {
+        match reason {
+            PackageInclusionReason::All(AllPackageChangeReason::GlobalDepsChanged { file }) => {
+                PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            PackageInclusionReason::All(AllPackageChangeReason::DefaultGlobalFileChanged {
+                file,
+            }) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                file_path: file.to_string(),
+            }),
+            PackageInclusionReason::All(AllPackageChangeReason::LockfileChangeDetectionFailed) => {
+                PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
+                    empty: false,
+                })
+            }
+            PackageInclusionReason::All(AllPackageChangeReason::LockfileChangedWithoutDetails) => {
+                PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
+                    empty: false,
+                })
+            }
+            PackageInclusionReason::All(AllPackageChangeReason::RootInternalDepChanged {
+                root_internal_dep,
+            }) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+                root_internal_dep: root_internal_dep.to_string(),
+            }),
+            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
+                from_ref,
+                to_ref,
+            }) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
+            PackageInclusionReason::All(AllPackageChangeReason::ScmError { error }) => {
+                PackageChangeReason::ScmError(ScmError { error })
+            }
+            PackageInclusionReason::All(AllPackageChangeReason::ConservativeFallback) => {
+                PackageChangeReason::AllPackagesChanged(AllPackagesChanged { empty: false })
+            }
+            PackageInclusionReason::RootTask { task } => PackageChangeReason::RootTask(RootTask {
+                task_name: task.to_string(),
+            }),
+            PackageInclusionReason::ConservativeRootLockfileChanged => {
+                PackageChangeReason::ConservativeRootLockfileChanged(
+                    ConservativeRootLockfileChanged { empty: false },
+                )
+            }
+            PackageInclusionReason::LockfileChanged { removed, added } => {
+                let removed = removed
+                    .into_iter()
+                    .map(|package| ExternalPackage::new(self.run.clone(), package))
+                    .collect::<Array<_>>();
+                let added = added
+                    .into_iter()
+                    .map(|package| ExternalPackage::new(self.run.clone(), package))
+                    .collect::<Array<_>>();
+                PackageChangeReason::LockfileChanged(LockfileChanged {
+                    empty: false,
+                    removed,
+                    added,
+                })
+            }
+            PackageInclusionReason::DependencyChanged { dependency } => {
+                PackageChangeReason::DependencyChanged(DependencyChanged {
+                    dependency_name: dependency.to_string(),
+                })
+            }
+            PackageInclusionReason::DependentChanged { dependent } => {
+                PackageChangeReason::DependentChanged(DependentChanged {
+                    dependent_name: dependent.to_string(),
+                })
+            }
+            PackageInclusionReason::FileChanged { file } => {
+                PackageChangeReason::FileChanged(FileChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            PackageInclusionReason::InFilteredDirectory { directory } => {
+                PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
+                    directory_path: directory.to_string(),
+                })
+            }
+            PackageInclusionReason::IncludedByFilter { filters } => {
+                PackageChangeReason::IncludedByFilter(IncludedByFilter { filters })
+            }
+        }
+    }
+}
+
+#[derive(Debug, SimpleObject)]
+#[graphql(concrete(name = "RepositoryTasks", params(task::RepositoryTask)))]
+#[graphql(concrete(name = "Packages", params(Package)))]
+#[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
+#[graphql(concrete(name = "Files", params(file::File)))]
+#[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
+#[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
+#[graphql(concrete(name = "Edges", params(Edge)))]
+pub struct Array<T: OutputType> {
+    items: Vec<T>,
+    length: usize,
+}
+
+impl<T: ObjectType> From<Vec<T>> for Array<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self {
+            length: value.len(),
+            items: value,
+        }
+    }
+}
+
+impl<T: OutputType> Deref for Array<T> {
+    type Target = [T];
+    fn deref(&self) -> &Self::Target {
+        &self.items
+    }
+}
+
+impl<T: OutputType> DerefMut for Array<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.items
+    }
+}
+
+impl<T: OutputType> FromIterator<T> for Array<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        let items: Vec<_> = iter.into_iter().collect();
+        let length = items.len();
+        Self { items, length }
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
+enum PackageFields {
+    Name,
+    TaskName,
+    /// A package label (does not include labels on its tasks).
+    Tag,
+    DirectDependencyCount,
+    DirectDependentCount,
+    IndirectDependentCount,
+    IndirectDependencyCount,
+    AllDependentCount,
+    AllDependencyCount,
+}
+
+#[derive(InputObject)]
+struct FieldValuePair {
+    field: PackageFields,
+    value: Any,
+}
+
+/// Predicates are used to filter packages. If you include multiple predicates,
+/// they are combined using AND. To combine predicates using OR, use the `or`
+/// field.
+///
+/// For pairs that do not obey type safety, e.g. `NAME` `greater_than` `10`, we
+/// default to `false`.
+#[derive(InputObject)]
+struct PackagePredicate {
+    and: Option<Vec<PackagePredicate>>,
+    or: Option<Vec<PackagePredicate>>,
+    equal: Option<FieldValuePair>,
+    not_equal: Option<FieldValuePair>,
+    greater_than: Option<FieldValuePair>,
+    less_than: Option<FieldValuePair>,
+    not: Option<Box<PackagePredicate>>,
+    has: Option<FieldValuePair>,
+}
+
+impl PackagePredicate {
+    fn check_equals(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
+        match (field, &value.0) {
+            (PackageFields::Name, Value::String(name)) => pkg.get_name().as_ref() == name,
+            (PackageFields::DirectDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.direct_dependencies_count() == n as usize
+            }
+            (PackageFields::DirectDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.direct_dependents_count() == n as usize
+            }
+            (PackageFields::IndirectDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.indirect_dependents_count() == n as usize
+            }
+            (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.indirect_dependencies_count() == n as usize
+            }
+            (PackageFields::AllDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependents_count() == n as usize
+            }
+            (PackageFields::AllDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else {
+                    return false;
+                };
+                pkg.all_dependencies_count() == n as usize
+            }
+            _ => false,
+        }
+    }
+
+    fn check_greater_than(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
+        match (field, &value.0) {
+            (PackageFields::DirectDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.direct_dependencies_count() > n as usize
+            }
+            (PackageFields::DirectDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.direct_dependents_count() > n as usize
+            }
+            (PackageFields::IndirectDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.indirect_dependents_count() > n as usize
+            }
+            (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.indirect_dependencies_count() > n as usize
+            }
+            (PackageFields::AllDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.all_dependents_count() > n as usize
+            }
+            (PackageFields::AllDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.all_dependencies_count() > n as usize
+            }
+            _ => false,
+        }
+    }
+
+    fn check_less_than(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
+        match (field, &value.0) {
+            (PackageFields::DirectDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.direct_dependencies_count() < n as usize
+            }
+            (PackageFields::DirectDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.direct_dependents_count() < n as usize
+            }
+            (PackageFields::IndirectDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.indirect_dependents_count() < n as usize
+            }
+            (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.indirect_dependencies_count() < n as usize
+            }
+            (PackageFields::AllDependentCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.all_dependents_count() < n as usize
+            }
+            (PackageFields::AllDependencyCount, Value::Number(n)) => {
+                let Some(n) = n.as_u64() else { return false };
+                pkg.all_dependencies_count() < n as usize
+            }
+            _ => false,
+        }
+    }
+
+    fn check_has(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
+        match (field, &value.0) {
+            (PackageFields::Name, Value::String(name)) => pkg.get_name().as_str() == name,
+            (PackageFields::TaskName, Value::String(name)) => pkg.get_task_names().contains(name),
+            (PackageFields::Tag, Value::String(tag)) => pkg.get_tags().contains(tag),
+            _ => false,
+        }
+    }
+
+    fn check(&self, pkg: &Package) -> bool {
+        let and = self
+            .and
+            .as_ref()
+            .map(|predicates| predicates.iter().all(|p| p.check(pkg)));
+        let or = self
+            .or
+            .as_ref()
+            .map(|predicates| predicates.iter().any(|p| p.check(pkg)));
+        let equal = self
+            .equal
+            .as_ref()
+            .map(|pair| Self::check_equals(pkg, &pair.field, &pair.value));
+        let not_equal = self
+            .not_equal
+            .as_ref()
+            .map(|pair| !Self::check_equals(pkg, &pair.field, &pair.value));
+        let greater_than = self
+            .greater_than
+            .as_ref()
+            .map(|pair| Self::check_greater_than(pkg, &pair.field, &pair.value));
+        let less_than = self
+            .less_than
+            .as_ref()
+            .map(|pair| Self::check_less_than(pkg, &pair.field, &pair.value));
+        let not = self.not.as_ref().map(|predicate| !predicate.check(pkg));
+        let has = self
+            .has
+            .as_ref()
+            .map(|pair| Self::check_has(pkg, &pair.field, &pair.value));
+
+        and.into_iter()
+            .chain(or)
+            .chain(equal)
+            .chain(not_equal)
+            .chain(greater_than)
+            .chain(less_than)
+            .chain(not)
+            .chain(has)
+            .all(|p| p)
+    }
+}
+
+#[derive(SimpleObject)]
+struct GlobalDepsChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct DefaultGlobalFileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct LockfileChangeDetectionFailed {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
+struct LockfileChangedWithoutDetails {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
+struct RootInternalDepChanged {
+    root_internal_dep: String,
+}
+
+#[derive(SimpleObject)]
+struct NonPackageFileChanged {
+    file: String,
+}
+
+#[derive(SimpleObject)]
+struct GitRefNotFound {
+    from_ref: Option<String>,
+    to_ref: Option<String>,
+}
+
+#[derive(SimpleObject)]
+struct ScmError {
+    error: String,
+}
+
+#[derive(SimpleObject)]
+struct AllPackagesChanged {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
+struct IncludedByFilter {
+    filters: Vec<String>,
+}
+
+#[derive(SimpleObject)]
+struct RootTask {
+    task_name: String,
+}
+
+#[derive(SimpleObject)]
+struct ConservativeRootLockfileChanged {
+    /// This is a nothing field
+    empty: bool,
+}
+
+#[derive(SimpleObject)]
+struct LockfileChanged {
+    /// This is a nothing field
+    empty: bool,
+    removed: Array<ExternalPackage>,
+    added: Array<ExternalPackage>,
+}
+
+#[derive(SimpleObject)]
+struct DependencyChanged {
+    dependency_name: String,
+}
+
+#[derive(SimpleObject)]
+struct DependentChanged {
+    dependent_name: String,
+}
+
+#[derive(SimpleObject)]
+struct FileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct InFilteredDirectory {
+    directory_path: String,
+}
+
+#[derive(Union)]
+enum PackageChangeReason {
+    GlobalDepsChanged(GlobalDepsChanged),
+    DefaultGlobalFileChanged(DefaultGlobalFileChanged),
+    LockfileChangeDetectionFailed(LockfileChangeDetectionFailed),
+    LockfileChangedWithoutDetails(LockfileChangedWithoutDetails),
+    RootInternalDepChanged(RootInternalDepChanged),
+    NonPackageFileChanged(NonPackageFileChanged),
+    GitRefNotFound(GitRefNotFound),
+    ScmError(ScmError),
+    AllPackagesChanged(AllPackagesChanged),
+    IncludedByFilter(IncludedByFilter),
+    RootTask(RootTask),
+    ConservativeRootLockfileChanged(ConservativeRootLockfileChanged),
+    LockfileChanged(LockfileChanged),
+    DependencyChanged(DependencyChanged),
+    DependentChanged(DependentChanged),
+    FileChanged(FileChanged),
+    InFilteredDirectory(InFilteredDirectory),
+}
+
+/// Collapse task owners without changing the ChangedPackage reason union. The
+/// lexicographically first affected task in each package supplies its reason,
+/// independent of the raw calculator's hash-map iteration order.
+fn project_affected_task_packages(
+    mut tasks: Vec<affected_tasks::AffectedTask>,
+    legacy_packages: &HashMap<PackageName, PackageInclusionReason>,
+    convert_reason: impl Fn(PackageInclusionReason) -> PackageChangeReason,
+) -> HashMap<PackageName, PackageChangeReason> {
+    use affected_tasks::TaskChangeReason;
+
+    let global_reason = legacy_packages
+        .values()
+        .find(|reason| matches!(reason, PackageInclusionReason::All(_)));
+    tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+    let mut packages = HashMap::new();
+    for task in tasks {
+        packages
+            .entry(PackageName::from(task.task_id.package.as_str()))
+            .or_insert_with(|| match task.reason {
+                TaskChangeReason::FileChanged { file_path } => {
+                    PackageChangeReason::FileChanged(FileChanged { file_path })
+                }
+                TaskChangeReason::DependencyTaskChanged { package_name, .. } => {
+                    PackageChangeReason::DependencyChanged(DependencyChanged {
+                        dependency_name: package_name,
+                    })
+                }
+                TaskChangeReason::PackageDependencyChanged { package_name } => {
+                    // This seeds the owner's own tasks from a lockfile change,
+                    // not from a dependency on itself. Retain added/removed
+                    // external packages (or the conservative lockfile reason).
+                    legacy_packages
+                        .get(&PackageName::from(package_name))
+                        .cloned()
+                        .map(&convert_reason)
+                        .unwrap_or_else(|| {
+                            PackageChangeReason::AllPackagesChanged(AllPackagesChanged {
+                                empty: false,
+                            })
+                        })
+                }
+                TaskChangeReason::GlobalFileChanged { file_path } => {
+                    PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
+                        file_path,
+                    })
+                }
+                TaskChangeReason::GlobalDepsChanged { file_path } => {
+                    PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged { file_path })
+                }
+                TaskChangeReason::AllTasksChanged { .. } => {
+                    // The raw calculator uses a description for global changes.
+                    // Keep the original structured reason, even for task owners
+                    // absent from the legacy package map. With no global reason,
+                    // this is the input matcher's conservative fallback.
+                    global_reason
+                        .cloned()
+                        .map(&convert_reason)
+                        .unwrap_or_else(|| {
+                            PackageChangeReason::AllPackagesChanged(AllPackagesChanged {
+                                empty: false,
+                            })
+                        })
+                }
+            });
+    }
+    packages
+}
+
+#[derive(SimpleObject)]
+struct ChangedPackage {
+    reason: PackageChangeReason,
+    #[graphql(flatten)]
+    package: Package,
+}
+
+#[derive(SimpleObject)]
+struct TaskFileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskDependencyTaskChanged {
+    task_name: String,
+    package_name: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskGlobalFileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskGlobalDepsChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskAllChanged {
+    description: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskPackageDependencyChanged {
+    package_name: String,
+}
+
+#[derive(Union)]
+#[allow(clippy::enum_variant_names)]
+enum TaskChangeReason {
+    TaskFileChanged(TaskFileChanged),
+    TaskDependencyTaskChanged(TaskDependencyTaskChanged),
+    TaskPackageDependencyChanged(TaskPackageDependencyChanged),
+    TaskGlobalFileChanged(TaskGlobalFileChanged),
+    TaskGlobalDepsChanged(TaskGlobalDepsChanged),
+    TaskAllChanged(TaskAllChanged),
+}
+
+#[derive(SimpleObject)]
+struct ChangedTask {
+    reason: TaskChangeReason,
+    #[graphql(flatten)]
+    task: task::RepositoryTask,
+}
+
+#[derive(SimpleObject)]
+#[graphql(complex)]
+struct ChangedTasks {
+    items: Vec<ChangedTask>,
+    length: usize,
+}
+
+#[ComplexObject]
+impl ChangedTasks {
+    /// The collection and all its transitive dependencies, with each task once.
+    /// Includes non-executable task nodes and sorts by package name, then task
+    /// name. The optional filter applies after expansion and does not prune
+    /// traversal through non-matching tasks.
+    async fn with_dependencies(
+        &self,
+        filter: Option<task::TaskPredicate>,
+    ) -> Result<Array<task::RepositoryTask>, Error> {
+        let Some(first) = self.items.first() else {
+            return Ok(Vec::new().into());
+        };
+        let run = first.task.package.run();
+        let mut task_ids: HashSet<_> = self
+            .items
+            .iter()
+            .map(|item| {
+                QueryTaskId::new(
+                    item.task.package.get_name().to_string(),
+                    item.task.name.clone(),
+                )
+            })
+            .collect();
+        task_ids.extend(run.collect_task_dependencies(&task_ids));
+        let mut tasks = task_ids
+            .into_iter()
+            .map(|task_id| task::RepositoryTask::new(&task_id, run))
+            .filter(|task| {
+                task.as_ref().map_or(true, |task| {
+                    filter
+                        .as_ref()
+                        .is_none_or(|predicate| predicate.check(task))
+                })
+            })
+            .collect::<Result<Array<_>, _>>()?;
+        tasks.sort_by(|a, b| {
+            a.package
+                .get_name()
+                .cmp(b.package.get_name())
+                .then_with(|| a.name.cmp(&b.name))
+        });
+        Ok(tasks)
+    }
+}
+
+fn resolve_file_path(
+    repo_root: &AbsoluteSystemPath,
+    path: String,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    let abs_path = AbsoluteSystemPathBuf::from_unknown(repo_root, path);
+
+    confine_file_path(repo_root, abs_path)
+}
+
+pub(crate) fn confine_file_path(
+    repo_root: &AbsoluteSystemPath,
+    abs_path: AbsoluteSystemPathBuf,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    if !abs_path.exists() {
+        return Err(Error::FileNotFound(abs_path.to_string()));
+    }
+
+    let real_repo_root = repo_root.to_realpath()?;
+    let real_path = abs_path.to_realpath()?;
+
+    if !real_repo_root.contains(&real_path) {
+        return Err(Error::FileOutsideRepository(abs_path.to_string()));
+    }
+
+    Ok(real_path)
+}
+
+#[Object]
+impl RepositoryQuery {
+    async fn affected_packages(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+        filter: Option<PackagePredicate>,
+    ) -> Result<Array<ChangedPackage>, Error> {
+        let affected_packages = if self
+            .run
+            .repo_context()
+            .root_turbo_json()
+            .future_flags
+            .affected_using_task_inputs
+        {
+            // Project raw affectedness, not the affectedTasks resolver's scheduled
+            // tasks: unchanged prerequisites are not affected packages. Keep the
+            // QueryRun method legacy, since the raw calculator calls it itself.
+            let legacy_packages = self
+                .run
+                .calculate_affected_packages(base.clone(), head.clone())?;
+            let tasks = affected_tasks::calculate_affected_tasks_with_packages(
+                &self.run,
+                base,
+                head,
+                &legacy_packages,
+            )?;
+            project_affected_task_packages(tasks, &legacy_packages, |reason| {
+                self.convert_change_reason(reason)
+            })
+        } else {
+            self.run
+                .calculate_affected_packages(base, head)?
+                .into_iter()
+                .map(|(package, reason)| (package, self.convert_change_reason(reason)))
+                .collect()
+        };
+        let mut packages = affected_packages
+            .into_iter()
+            .filter(|(package, _)| {
+                package != &PackageName::Root
+                    || self
+                        .run
+                        .repo_context()
+                        .pkg_dep_graph()
+                        .package_view(package)
+                        .is_some()
+            })
+            .map(|(package, reason)| {
+                Ok(ChangedPackage {
+                    package: Package::new(self.run.clone(), package)?,
+                    reason,
+                })
+            })
+            .filter(|package: &Result<ChangedPackage, Error>| {
+                let Ok(package) = package.as_ref() else {
+                    return true;
+                };
+                filter.as_ref().is_none_or(|f| f.check(&package.package))
+            })
+            .collect::<Result<Array<_>, _>>()?;
+
+        packages.sort_by(|a, b| a.package.get_name().cmp(b.package.get_name()));
+        Ok(packages)
+    }
+
+    /// Gets a list of tasks that are affected by changes between two git refs.
+    ///
+    /// Unlike `affectedPackages` which operates at the package level,
+    /// `affectedTasks` checks each task's specific `inputs` configuration
+    /// against the changed files and walks the task dependency graph.
+    /// A task is only reported as affected if its inputs actually changed,
+    /// or if an upstream task dependency is affected.
+    ///
+    /// Use the `tasks` parameter to filter to specific task names (e.g.
+    /// `["test", "typecheck"]`). Use `filter` to filter by package (same
+    /// predicates as `affectedPackages`). `taskFilter` applies task predicates,
+    /// with TAG matching either task or package labels. All provided filters
+    /// intersect when selecting affected tasks, before adding prerequisites;
+    /// required prerequisites need not match the filters.
+    async fn affected_tasks(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+        #[graphql(desc = "Filter to specific task names (e.g. [\"test\", \"typecheck\"])")]
+        tasks: Option<Vec<String>>,
+        filter: Option<PackagePredicate>,
+        #[graphql(
+            desc = "Task predicates applied before prerequisite expansion. TAG matches task or \
+                    package labels."
+        )]
+        task_filter: Option<task::TaskPredicate>,
+    ) -> Result<ChangedTasks, Error> {
+        let task_level_results =
+            affected_tasks::calculate_affected_tasks(&self.run, base.clone(), head.clone())?;
+        let mut reasons: HashMap<_, _> = task_level_results
+            .into_iter()
+            .map(|affected| (affected.task_id, affected.reason))
+            .collect();
+        let task_level_affected = self
+            .run
+            .repo_context()
+            .root_turbo_json()
+            .future_flags
+            .affected_using_task_inputs
+            || self
+                .run
+                .repo_context()
+                .root_turbo_json()
+                .future_flags
+                .filter_using_tasks;
+        if !task_level_affected {
+            let affected_packages: HashSet<_> = self
+                .run
+                .calculate_affected_packages(base, head)?
+                .into_keys()
+                .collect();
+            for task_id in self.run.task_ids().into_iter().filter(|task_id| {
+                affected_packages.contains(&PackageName::from(task_id.package.as_str()))
+            }) {
+                reasons.entry(task_id).or_insert_with(|| {
+                    affected_tasks::TaskChangeReason::AllTasksChanged {
+                        description: "package is affected".to_string(),
+                    }
+                });
+            }
+        }
+
+        let selected: HashSet<_> = reasons
+            .keys()
+            .filter(|task_id| {
+                tasks.as_ref().is_none_or(|names| {
+                    names.is_empty()
+                        || names
+                            .iter()
+                            .any(|name| name == &task_id.task || name == &task_id.full_name())
+                })
+            })
+            .filter_map(|task_id| {
+                let task = task::RepositoryTask::new(task_id, &self.run).ok()?;
+                (filter
+                    .as_ref()
+                    .is_none_or(|predicate| predicate.check(&task.package))
+                    && task_filter
+                        .as_ref()
+                        .is_none_or(|predicate| predicate.check(&task)))
+                .then(|| task_id.clone())
+            })
+            .collect();
+
+        let mut scheduled = selected.clone();
+        scheduled.extend(self.run.collect_task_dependencies(&selected));
+
+        let mut changed_tasks: Vec<ChangedTask> = scheduled
+            .into_iter()
+            .map(|task_id| {
+                let task = task::RepositoryTask::new(&task_id, &self.run).map_err(|error| {
+                    tracing::error!(?error, task = %task_id, "failed to represent affected task");
+                    Error::AffectedTasks
+                });
+                let reason = reasons.remove(&task_id).unwrap_or_else(|| {
+                    affected_tasks::TaskChangeReason::AllTasksChanged {
+                        description: "required by an affected task".to_string(),
+                    }
+                });
+                task.map(|task| ChangedTask {
+                    reason: convert_task_change_reason(reason),
+                    task,
+                })
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .filter(|changed| changed.task.participates_in_run())
+            .collect();
+
+        changed_tasks.sort_by(|a, b| {
+            a.task
+                .package
+                .get_name()
+                .cmp(b.task.package.get_name())
+                .then_with(|| a.task.name.cmp(&b.task.name))
+        });
+        Ok(ChangedTasks {
+            length: changed_tasks.len(),
+            items: changed_tasks,
+        })
+    }
+
+    /// Configured global environment patterns, without expanding names or
+    /// values.
+    async fn global_environment(&self) -> task::Environment {
+        let config = self.run.repo_context().root_turbo_json();
+        task::Environment {
+            env: config.global_env.clone(),
+            pass_through_env: config.global_pass_through_env.clone().unwrap_or_default(),
+        }
+    }
+
+    /// Gets a single package by name
+    async fn package(&self, name: String) -> Result<Package, Error> {
+        let name = PackageName::from(name);
+        Package::new(self.run.clone(), name)
+    }
+
+    async fn version(&self) -> &'static str {
+        self.run.repo_context().version()
+    }
+
+    /// Check boundaries for all packages.
+    async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
+        match self.run.check_boundaries(false).await {
+            Ok(diagnostics) => Ok(diagnostics
+                .into_iter()
+                .map(Diagnostic::from)
+                .sorted_by(|a, b| {
+                    a.message
+                        .cmp(&b.message)
+                        .then_with(|| a.import.cmp(&b.import))
+                })
+                .collect()),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    async fn package_graph(
+        &self,
+        center: Option<String>,
+        filter: Option<PackagePredicate>,
+    ) -> PackageGraph {
+        PackageGraph::new(self.run.clone(), center, filter)
+    }
+
+    async fn file(&self, path: String) -> Result<file::File, Error> {
+        let abs_path = resolve_file_path(self.run.repo_context().repo_root(), path)?;
+
+        file::File::new(self.run.clone(), abs_path)
+    }
+
+    /// Gets a list of packages that match the given filter
+    async fn packages(&self, filter: Option<PackagePredicate>) -> Result<Array<Package>, Error> {
+        let Some(filter) = filter else {
+            let mut packages = self
+                .run
+                .repo_context()
+                .pkg_dep_graph()
+                .package_scope_directories()
+                .map(|(name, _)| Package::new(self.run.clone(), name))
+                .collect::<Result<Array<_>, _>>()?;
+            packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+            return Ok(packages);
+        };
+
+        let mut packages = self
+            .run
+            .repo_context()
+            .pkg_dep_graph()
+            .package_scope_directories()
+            .map(|(name, _)| Package::new(self.run.clone(), name))
+            .filter(|pkg| pkg.as_ref().is_ok_and(|pkg| filter.check(pkg)))
+            .collect::<Result<Array<_>, _>>()?;
+        packages.sort_by(|a, b| a.get_name().cmp(b.get_name()));
+
+        Ok(packages)
+    }
+
+    async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
+        let mut packages = self
+            .run
+            .repo_context()
+            .pkg_dep_graph()
+            .external_package_identities()
+            .iter()
+            .cloned()
+            .map(|identity| ExternalPackage::from_identity(self.run.clone(), identity))
+            .collect::<Array<_>>();
+        packages.sort_by_key(|pkg| pkg.human_name());
+        Ok(packages)
+    }
+}
+
+fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskChangeReason {
+    match reason {
+        affected_tasks::TaskChangeReason::FileChanged { file_path } => {
+            TaskChangeReason::TaskFileChanged(TaskFileChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::DependencyTaskChanged {
+            task_name,
+            package_name,
+        } => TaskChangeReason::TaskDependencyTaskChanged(TaskDependencyTaskChanged {
+            task_name,
+            package_name,
+        }),
+        affected_tasks::TaskChangeReason::PackageDependencyChanged { package_name } => {
+            TaskChangeReason::TaskPackageDependencyChanged(TaskPackageDependencyChanged {
+                package_name,
+            })
+        }
+        affected_tasks::TaskChangeReason::GlobalFileChanged { file_path } => {
+            TaskChangeReason::TaskGlobalFileChanged(TaskGlobalFileChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::GlobalDepsChanged { file_path } => {
+            TaskChangeReason::TaskGlobalDepsChanged(TaskGlobalDepsChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::AllTasksChanged { description } => {
+            TaskChangeReason::TaskAllChanged(TaskAllChanged { description })
+        }
+    }
+}
+
+pub async fn graphiql() -> impl IntoResponse {
+    // GraphiQLSource always rendered the same HTML for this fixed version and
+    // endpoint; embedding that output avoids compiling its template per request.
+    response::Html(include_str!("query_ide.html"))
+}
+
+pub async fn run_query_server(run: Arc<dyn QueryRun>, signal: SignalHandler) -> Result<(), Error> {
+    let subscriber = signal.subscribe().ok_or(Error::NoSignalHandler)?;
+    println!("GraphiQL IDE: http://localhost:8000");
+    webbrowser::open("http://localhost:8000")?;
+    select! {
+        biased;
+        _ = subscriber.listen() => {
+            println!("Shutting down GraphQL server");
+            return Ok(());
+        }
+        result = server::run_server(run) => {
+            result?;
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(SimpleObject, Debug, Default)]
+pub struct Diagnostic {
+    pub message: String,
+    pub reason: Option<String>,
+    pub path: Option<String>,
+    pub import: Option<String>,
+    pub start: Option<usize>,
+    pub end: Option<usize>,
+}
+
+pub async fn execute_query(
+    run: Arc<dyn QueryRun>,
+    query: &str,
+    variables_json: Option<&str>,
+) -> Result<QueryResult, Error> {
+    let schema = Schema::new(RepositoryQuery::new(run), EmptyMutation, EmptySubscription);
+
+    let variables: Variables = variables_json
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(Error::Serde)?
+        .unwrap_or_default();
+
+    let request = Request::new(query).variables(variables);
+    let result = schema.execute(request).await;
+
+    let result_json = serde_json::to_string_pretty(&result).map_err(Error::Serde)?;
+
+    let errors = result
+        .errors
+        .into_iter()
+        .filter_map(|e| {
+            let loc = e.locations.first()?;
+            Some(QueryErrorLocation {
+                message: e.message,
+                line: loc.line,
+                column: loc.column,
+            })
+        })
+        .collect();
+
+    Ok(QueryResult {
+        result_json,
+        errors,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use turbopath::AbsoluteSystemPath;
+
+    use super::{Error, resolve_file_path};
+
+    #[test]
+    fn affected_package_projection_chooses_first_task_reason_regardless_of_order() {
+        use super::{
+            PackageChangeReason, PackageName, QueryTaskId,
+            affected_tasks::{AffectedTask, TaskChangeReason},
+            project_affected_task_packages,
+        };
+
+        for reverse in [false, true] {
+            let mut tasks = vec![
+                AffectedTask {
+                    task_id: QueryTaskId::new("app", "build"),
+                    reason: TaskChangeReason::DependencyTaskChanged {
+                        package_name: "lib".to_string(),
+                        task_name: "build".to_string(),
+                    },
+                },
+                AffectedTask {
+                    task_id: QueryTaskId::new("app", "test"),
+                    reason: TaskChangeReason::FileChanged {
+                        file_path: "app/test.ts".to_string(),
+                    },
+                },
+            ];
+            if reverse {
+                tasks.reverse();
+            }
+            let packages = project_affected_task_packages(tasks, &Default::default(), |_| {
+                unreachable!("task dependency reasons do not use legacy package reasons")
+            });
+            assert_eq!(packages.len(), 1);
+            assert!(matches!(
+                packages.get(&PackageName::from("app")),
+                Some(PackageChangeReason::DependencyChanged(reason))
+                    if reason.dependency_name == "lib"
+            ));
+        }
+    }
+
+    #[test]
+    fn resolve_file_path_allows_repo_relative_files() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let file = tmp.path().join("package.json");
+        fs::write(&file, "{}").unwrap();
+
+        let resolved = resolve_file_path(root, "package.json".to_string()).unwrap();
+        let expected = AbsoluteSystemPath::from_std_path(&file)
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        assert_eq!(resolved, expected);
+    }
+
+    #[test]
+    fn resolve_file_path_rejects_absolute_files_outside_repo() {
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+
+        let err = resolve_file_path(root, outside_file.to_string_lossy().to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
+
+    #[test]
+    fn resolve_file_path_rejects_relative_traversal_outside_repo() {
+        let parent = tempfile::tempdir().unwrap();
+        let repo = parent.path().join("repo");
+        fs::create_dir(&repo).unwrap();
+        let outside_file = parent.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(&repo).unwrap();
+
+        let err = resolve_file_path(root, "../secret.txt".to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn resolve_file_path_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        let link = tmp.path().join("link.txt");
+        fs::write(&outside_file, "secret").unwrap();
+        symlink(&outside_file, &link).unwrap();
+
+        let err = resolve_file_path(root, "link.txt".to_string()).unwrap_err();
+
+        assert!(matches!(err, Error::FileOutsideRepository(_)));
+    }
+}

@@ -1,39 +1,82 @@
 [package]
 name = "turbo"
 version = "0.1.0"
-edition = "2024"
+edition = { workspace = true }
 license = "MIT"
 
 [features]
 # By default, we enable rustls-tls for reqwest via downstream transitive features.
 # This is for the convenience of running daily dev workflows, i.e running
-# `cargo xxx` without explicitly specifying features, not that we want to
-# promote this as default backend.
-default = ["rustls-tls", "turborepo-lib/daemon-package-discovery"]
-native-tls = ["turborepo-lib/native-tls"]
-rustls-tls = ["turborepo-lib/rustls-tls"]
-pprof = ["turborepo-lib/pprof"]
+# `cargo xxx` without explicitly specifying features.
+default = ["rustls-tls"]
+native-tls = ["turborepo-cli/native-tls", "turborepo-lsp/native-tls"]
+rustls-tls = ["turborepo-cli/rustls-tls", "turborepo-lsp/rustls-tls"]
+pprof = ["turborepo-cli/pprof"]
+heap-dhat = ["dep:dhat", "turborepo-cli/heap-dhat"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[build-dependencies]
-build-target = "0.4.0"
-
 [dev-dependencies]
 assert_cmd = { workspace = true }
-camino = { workspace = true }
-insta = { version = "1.40.0", features = ["json", "filters"] }
-itertools = { workspace = true }
-pretty_assertions = { workspace = true }
+flate2 = "1.1.9"
+insta = { version = "1.40.0", features = ["json", "filters", "redactions"] }
+nix = { workspace = true, features = ["signal"] }
+portable-pty = "0.9.0"
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+tar = { version = "0.4.45", default-features = false }
 tempfile = { workspace = true }
+tokio = { workspace = true }
 turbopath = { workspace = true }
+turborepo-cli = { workspace = true, default-features = false, features = [
+  "test-support",
+] }
+turborepo-platform = { workspace = true }
+turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
+turborepo-shim = { workspace = true }
+turborepo-tool-install = { path = "../turborepo-tool-install" }
 which = { workspace = true }
 
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
+base64 = "0.22.1"
+flate2 = "1.1.9"
+libghostty-vt = { workspace = true }
+rustls = { version = "0.23.36", default-features = false, features = [
+  "ring",
+  "std",
+] }
+tar = { version = "0.4.45", default-features = false }
+
+[target.'cfg(target_os = "windows")'.dev-dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Console",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Threading",
+] }
 
 [lints]
 workspace = true
 
 [dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+dhat = { workspace = true, optional = true }
 miette.workspace = true
-turborepo-lib = { workspace = true, default-features = false }
+turborepo-cli = { workspace = true, default-features = false }
+turborepo-lsp = { workspace = true, default-features = false }
+turborepo-query = { workspace = true }
+turborepo-query-api = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-signals = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_System_Console",
+] }
+
+# Not enabled on Windows: libmimalloc-sys compiles against the dynamic CRT
+# (the workspace default) while libghostty-vt-sys ships static-CRT objects,
+# and MSVC's /failifmismatch rejects linking both. Revisit if the Windows
+# CRT choice is ever unified.
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+mimalloc = { workspace = true }

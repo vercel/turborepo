@@ -1,0 +1,22 @@
+{
+  "applications": {
+    "a": {
+      "development": {
+        "local": 3000
+      }
+    },
+    "b": {
+      "development": {
+        "local": 3001
+      },
+      "routing": [
+        {
+          "paths": ["/b", "/b/:path*"]
+        }
+      ]
+    }
+  },
+  "options": {
+    "localProxyPort": 3000
+  }
+}

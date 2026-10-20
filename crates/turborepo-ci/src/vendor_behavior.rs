@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 pub type GroupPrefixFn = Arc<dyn Fn(DateTime<Utc>) -> String + Send + Sync>;
 type GroupPrefixFnFactory = fn(group_name: String) -> GroupPrefixFn;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct VendorBehavior {
     pub group_prefix: GroupPrefixFnFactory,
     pub group_suffix: GroupPrefixFnFactory,

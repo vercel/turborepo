@@ -9,7 +9,6 @@
 //! watch for a full round trip through the filesystem to ensure the watcher is
 //! up to date.
 
-#![allow(clippy::all)]
 #![deny(
     missing_docs,
     missing_debug_implementations,
@@ -18,7 +17,6 @@
     unused_must_use,
     unsafe_code
 )]
-#![feature(extract_if)]
 
 use std::{
     collections::HashMap,
@@ -26,29 +24,28 @@ use std::{
     io,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
     },
 };
 
-use futures::{channel::oneshot, future::Either, FutureExt, Stream, StreamExt as _};
+use futures::{FutureExt, Stream, StreamExt as _, channel::oneshot, future::Either};
 use itertools::Itertools;
 use merge_streams::MergeStreams;
 pub use notify::{Event, Watcher};
-pub use stop_token::{stream::StreamExt, StopSource, StopToken, TimedOutError};
+pub use stop_token::{StopSource, StopToken, TimedOutError, stream::StreamExt};
 use thiserror::Error;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
     watch,
 };
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{error, event, span, trace, warn, Level};
+use tracing::{Level, error, event, span, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 /// WatchError wraps errors produced by GlobWatcher
 #[derive(Debug, Error)]
 pub enum WatchError {
-    // TODO: find a generic way to include the path in these errors
     /// PathError wraps errors encountered dealing with paths while filewatching
     #[error("Filewatching encountered a path error: {0}")]
     PathError(#[from] PathError),
@@ -59,6 +56,24 @@ pub enum WatchError {
     /// implementation.
     #[error("Filewatching backend error: {0}")]
     Backend(#[from] notify::Error),
+    /// Adds the path being operated on to an underlying filewatching error.
+    #[error("Filewatching failed for {path:?}: {source}")]
+    PathContext {
+        /// Filesystem path associated with the error.
+        path: PathBuf,
+        /// Underlying error returned while operating on the path.
+        #[source]
+        source: Box<WatchError>,
+    },
+}
+
+impl WatchError {
+    fn with_path(path: &Path, error: impl Into<Self>) -> Self {
+        Self::PathContext {
+            path: path.to_owned(),
+            source: Box::new(error.into()),
+        }
+    }
 }
 
 /// A wrapper around notify that allows for glob-based watching.
@@ -82,8 +97,12 @@ impl GlobWatcher {
         let (send_event, receive_event) = tokio::sync::mpsc::unbounded_channel();
         let (send_config, receive_config) = tokio::sync::mpsc::unbounded_channel();
 
-        flush_dir.create_dir_all()?;
-        let flush_dir = flush_dir.to_realpath()?;
+        flush_dir
+            .create_dir_all()
+            .map_err(|error| WatchError::with_path(flush_dir.as_std_path(), error))?;
+        let flush_dir = flush_dir
+            .to_realpath()
+            .map_err(|error| WatchError::with_path(flush_dir.as_std_path(), error))?;
 
         let watcher = notify::recommended_watcher(move |event: Result<Event, notify::Error>| {
             let span = span!(tracing::Level::TRACE, "watcher");
@@ -115,7 +134,15 @@ impl GlobWatcher {
         let flush_watch_path = flush_dir.clone();
         let (setup_broadcaster, setup_receiver) = watch::channel(None);
         let setup_handle = tokio::task::spawn_blocking(move || {
-            if let Err(e) = flush.lock().expect("only fails if poisoned").watch(
+            let mut flush = match flush.lock() {
+                Ok(flush) => flush,
+                Err(poisoned) => {
+                    warn!("watcher lock poisoned while watching flush dir");
+                    poisoned.into_inner()
+                }
+            };
+
+            if let Err(e) = flush.watch(
                 flush_watch_path.as_std_path(),
                 notify::RecursiveMode::Recursive,
             ) {
@@ -160,10 +187,10 @@ impl GlobWatcher {
         self,
         token: stop_token::StopToken,
     ) -> impl Stream<Item = Result<Result<Event, ConfigError>, TimedOutError>>
-           + Send
-           + Sync
-           + 'static
-           + Unpin {
+    + Send
+    + Sync
+    + 'static
+    + Unpin {
         let Self {
             setup_handle,
             flush_dir,
@@ -177,15 +204,19 @@ impl GlobWatcher {
         // events
 
         // we need to map this to the correct error type
-        let setup_stream = setup_handle.into_stream().map(|setup_result| {
-            match setup_result.expect("globwatch setup thread panicked") {
-                Ok(()) => Ok(WatcherCommand::Start),
-                Err(e) => {
+        let setup_stream = setup_handle
+            .into_stream()
+            .map(|setup_result| match setup_result {
+                Ok(Ok(())) => Ok(WatcherCommand::Start),
+                Ok(Err(e)) => {
                     error!("failed to start server: {}", e);
                     Err(ConfigError::ServerFailedToStart)
                 }
-            }
-        });
+                Err(e) => {
+                    error!("globwatch setup thread panicked: {}", e);
+                    Err(ConfigError::ServerFailedToStart)
+                }
+            });
 
         Box::pin(
             (
@@ -215,19 +246,23 @@ impl GlobWatcher {
                                 for flush_id in e
                                     .paths
                                     .extract_if(.., |p| p.starts_with(flush_dir.as_path()))
-                                    .filter_map(|p| {
-                                        get_flush_id(
-                                            p.strip_prefix(flush_dir.as_path())
-                                                .expect("confirmed above"),
-                                        )
+                                    .filter_map(|p| match p.strip_prefix(flush_dir.as_path()) {
+                                        Ok(p) => get_flush_id(p),
+                                        Err(e) => {
+                                            trace!("failed to strip flush dir prefix: {}", e);
+                                            None
+                                        }
                                     })
                                 {
                                     trace!("flushing {:?}", flush);
-                                    if let Some(tx) = flush
-                                        .lock()
-                                        .expect("only fails if holder panics")
-                                        .remove(&flush_id)
-                                    {
+                                    let mut flush = match flush.lock() {
+                                        Ok(flush) => flush,
+                                        Err(poisoned) => {
+                                            warn!("flush lock poisoned while completing flush");
+                                            poisoned.into_inner()
+                                        }
+                                    };
+                                    if let Some(tx) = flush.remove(&flush_id) {
                                         // if this fails, it just means the requester has gone away
                                         // and we can ignore it
                                         tx.send(()).ok();
@@ -253,10 +288,14 @@ impl GlobWatcher {
                                 if let Err(e) = File::create(flush_file) {
                                     warn!("failed to create flush file: {}", e);
                                 } else {
-                                    flush
-                                        .lock()
-                                        .expect("only fails if holder panics")
-                                        .insert(flush_id, tx);
+                                    let mut flush = match flush.lock() {
+                                        Ok(flush) => flush,
+                                        Err(poisoned) => {
+                                            warn!("flush lock poisoned while registering flush");
+                                            poisoned.into_inner()
+                                        }
+                                    };
+                                    flush.insert(flush_id, tx);
                                 }
                                 None
                             }
@@ -308,6 +347,10 @@ pub enum ConfigError {
 
 impl<T: Watcher> WatchConfig<T> {
     /// Register a glob to be included by the watcher.
+    #[expect(
+        clippy::manual_try_fold,
+        reason = "try_fold stops early; include must attempt every path and collect all errors"
+    )]
     #[tracing::instrument(skip(self))]
     pub async fn include(&self, relative_to: &Path, glob: &str) -> Result<(), ConfigError> {
         trace!("including {:?}", glob);
@@ -317,10 +360,14 @@ impl<T: Watcher> WatchConfig<T> {
             .map(|p| relative_to.join(p))
             .map(|p| {
                 trace!("watching {:?}", p);
-                self.watcher
-                    .lock()
-                    .expect("only fails if poisoned")
-                    .watch(&p, notify::RecursiveMode::Recursive)
+                let mut watcher = match self.watcher.lock() {
+                    Ok(watcher) => watcher,
+                    Err(poisoned) => {
+                        warn!("watcher lock poisoned while registering glob");
+                        poisoned.into_inner()
+                    }
+                };
+                watcher.watch(&p, notify::RecursiveMode::Recursive)
             })
             .map(|r| match r {
                 Ok(()) => Ok(()),
@@ -356,24 +403,6 @@ impl<T: Watcher> WatchConfig<T> {
             .map_err(ConfigError::WatchError)
     }
 
-    /// Register a single path to be included by the watcher.
-    pub async fn include_path(&self, path: &Path) -> Result<(), ConfigError> {
-        trace!("watching {:?}", path);
-        // Windows doesn't create an event when a watched directory itself is deleted
-        // we watch the parent directory instead.
-        // More information at https://github.com/notify-rs/notify/issues/403
-        #[cfg(windows)]
-        let watched_path = path.parent().expect("turbo is unusable at filesystem root");
-        #[cfg(not(windows))]
-        let watched_path = path;
-
-        self.watcher
-            .lock()
-            .expect("watcher lock poisoned")
-            .watch(watched_path, notify::RecursiveMode::NonRecursive)
-            .map_err(|e| ConfigError::WatchError(vec![e]))
-    }
-
     /// Register a glob to be excluded by the watcher.
     #[tracing::instrument(skip(self))]
     pub async fn exclude(&self, relative_to: &Path, glob: &str) {
@@ -381,11 +410,14 @@ impl<T: Watcher> WatchConfig<T> {
 
         for p in glob_to_paths(glob).iter().map(|p| relative_to.join(p)) {
             // we don't care if this fails, it's just a best-effort
-            self.watcher
-                .lock()
-                .expect("only fails if poisoned")
-                .unwatch(&p)
-                .ok();
+            let mut watcher = match self.watcher.lock() {
+                Ok(watcher) => watcher,
+                Err(poisoned) => {
+                    warn!("watcher lock poisoned while excluding glob");
+                    poisoned.into_inner()
+                }
+            };
+            watcher.unwatch(&p).ok();
         }
     }
 }
@@ -394,14 +426,11 @@ impl<T> WatchConfig<T> {
     /// Await a full filesystem flush from the watcher.
     pub async fn flush(&self) -> Result<(), ConfigError> {
         let mut setup_rx = self.setup_receiver.clone();
-        // TODO once upgraded to tokio 1.27 use wait_until
-        while (*setup_rx.borrow()).is_none() {
-            // If this fails that means the channel was closed forcefully by the sender
-            if setup_rx.changed().await.is_err() {
-                return Err(ConfigError::ServerFailedToStart);
-            }
-        }
-        if *setup_rx.borrow() == Some(false) {
+        let setup = *setup_rx
+            .wait_for(Option::is_some)
+            .await
+            .map_err(|_| ConfigError::ServerFailedToStart)?;
+        if setup == Some(false) {
             return Err(ConfigError::ServerFailedToStart);
         }
 
@@ -457,12 +486,12 @@ enum GlobSymbol<'a> {
 /// and `?`. any other case watches the entire directory.
 fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     // get all the symbols and chunk them by path separator
-    let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeparator);
+    let chunks = glob_to_symbols(glob).chunk_by(|s| s != &GlobSymbol::PathSeparator);
     let chunks = chunks
         .into_iter()
         .filter_map(|(not_sep, chunk)| (not_sep).then_some(chunk));
 
-    // multi cartisian product allows us to get all the possible combinations
+    // multi cartesian product allows us to get all the possible combinations
     // of path components for each chunk. for example, if we have a glob
     // `{a,b}/1/{c,d}`, it will lazily yield the following sets of segments:
     //   ["a", "1", "c"]
@@ -493,12 +522,12 @@ fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
 fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
     symbols: T,
 ) -> Option<impl Iterator<Item = String> + Clone> {
-    let mut bytes = Vec::new();
+    let mut value = String::new();
 
     for symbol in symbols {
         match symbol {
             GlobSymbol::Char(c) => {
-                bytes.extend_from_slice(c);
+                value.push_str(std::str::from_utf8(c).ok()?);
             }
             GlobSymbol::OpenBracket => return None, // todo handle brackets
             GlobSymbol::CloseBracket => return None,
@@ -512,70 +541,70 @@ fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
         }
     }
 
-    Some(std::iter::once(
-        String::from_utf8(bytes).expect("char is always valid utf8"),
-    ))
+    Some(std::iter::once(value))
 }
 
 /// parses and escapes a glob, returning an iterator over the symbols
-fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol> {
+fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol<'_>> {
     let glob_bytes = glob.as_bytes();
     let mut escaped = false;
-    let mut cursor = unic_segment::GraphemeCursor::new(0, glob.len());
+    let mut cursor = unicode_segmentation::GraphemeCursor::new(0, glob.len(), true);
 
-    std::iter::from_fn(move || loop {
-        let start = cursor.cur_cursor();
-        if start == glob.len() {
-            return None;
-        }
+    std::iter::from_fn(move || {
+        loop {
+            let start = cursor.cur_cursor();
+            if start == glob.len() {
+                return None;
+            }
 
-        let end = match cursor.next_boundary(glob, 0) {
-            Ok(Some(end)) => end,
-            _ => return None,
-        };
+            let end = match cursor.next_boundary(glob, 0) {
+                Ok(Some(end)) => end,
+                _ => return None,
+            };
 
-        if escaped {
-            escaped = false;
+            if escaped {
+                escaped = false;
+                return if end - start == 1 {
+                    Some(GlobSymbol::Char(match glob_bytes[start] {
+                        b'a' => b"\x61",
+                        b'b' => b"\x08",
+                        b'n' => b"\n",
+                        b'r' => b"\r",
+                        b't' => b"\t",
+                        _ => &glob_bytes[start..end],
+                    }))
+                } else {
+                    return Some(GlobSymbol::Char(&glob_bytes[start..end]));
+                };
+            }
+
             return if end - start == 1 {
-                Some(GlobSymbol::Char(match glob_bytes[start] {
-                    b'a' => &[b'\x61'],
-                    b'b' => &[b'\x08'],
-                    b'n' => &[b'\n'],
-                    b'r' => &[b'\r'],
-                    b't' => &[b'\t'],
-                    _ => &glob_bytes[start..end],
-                }))
+                match glob_bytes[start] {
+                    b'\\' => {
+                        escaped = true;
+                        continue;
+                    }
+                    b'[' => Some(GlobSymbol::OpenBracket),
+                    b']' => Some(GlobSymbol::CloseBracket),
+                    b'{' => Some(GlobSymbol::OpenBrace),
+                    b'}' => Some(GlobSymbol::CloseBrace),
+                    b'*' => {
+                        if glob_bytes.get(end) == Some(&b'*') {
+                            cursor.set_cursor(end + 1);
+                            Some(GlobSymbol::DoubleStar)
+                        } else {
+                            Some(GlobSymbol::Star)
+                        }
+                    }
+                    b'?' => Some(GlobSymbol::Question),
+                    b'!' => Some(GlobSymbol::Negation),
+                    b'/' => Some(GlobSymbol::PathSeparator),
+                    _ => Some(GlobSymbol::Char(&glob_bytes[start..end])),
+                }
             } else {
-                return Some(GlobSymbol::Char(&glob_bytes[start..end]));
+                Some(GlobSymbol::Char(&glob_bytes[start..end]))
             };
         }
-
-        return if end - start == 1 {
-            match glob_bytes[start] {
-                b'\\' => {
-                    escaped = true;
-                    continue;
-                }
-                b'[' => Some(GlobSymbol::OpenBracket),
-                b']' => Some(GlobSymbol::CloseBracket),
-                b'{' => Some(GlobSymbol::OpenBrace),
-                b'}' => Some(GlobSymbol::CloseBrace),
-                b'*' => {
-                    if glob_bytes.get(end) == Some(&b'*') {
-                        cursor.set_cursor(end + 1);
-                        Some(GlobSymbol::DoubleStar)
-                    } else {
-                        Some(GlobSymbol::Star)
-                    }
-                }
-                b'?' => Some(GlobSymbol::Question),
-                b'!' => Some(GlobSymbol::Negation),
-                b'/' => Some(GlobSymbol::PathSeparator),
-                _ => Some(GlobSymbol::Char(&glob_bytes[start..end])),
-            }
-        } else {
-            Some(GlobSymbol::Char(&glob_bytes[start..end]))
-        };
     })
 }
 
@@ -633,9 +662,7 @@ mod test {
             // Flush doesn't depend on watcher so we create a watcher for the unit type
             watcher: Arc::new(Mutex::new(())),
         };
-        setup_tx
-            .send(Some(false))
-            .expect("setup channel closed during testing");
+        assert!(setup_tx.send(Some(false)).is_ok());
         match tokio::time::timeout(Duration::from_millis(10), config.flush()).await {
             Err(_) => panic!("flush test timed out"),
             Ok(result) => {
@@ -644,5 +671,41 @@ mod test {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    async fn test_flush_waits_for_setup() {
+        let (setup_tx, setup_rx) = watch::channel(None);
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let config = WatchConfig {
+            flush: tx,
+            setup_receiver: setup_rx,
+            watcher: Arc::new(Mutex::new(())),
+        };
+        let flush = tokio::spawn(async move { config.flush().await });
+        assert!(setup_tx.send(Some(true)).is_ok());
+
+        let result = tokio::time::timeout(Duration::from_secs(1), async {
+            let Some(super::WatcherCommand::Flush(response)) = rx.recv().await else {
+                panic!("expected flush command");
+            };
+            response.send(()).unwrap();
+            flush.await.unwrap()
+        })
+        .await
+        .expect("flush should complete after setup succeeds");
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_watch_error_context_includes_path() {
+        let error = super::WatchError::with_path(
+            std::path::Path::new("packages/app"),
+            std::io::Error::other("permission denied"),
+        );
+
+        assert!(error.to_string().contains("packages/app"));
+        assert!(error.to_string().contains("permission denied"));
     }
 }

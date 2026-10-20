@@ -1,0 +1,929 @@
+//! Module for summarizing and tracking a run.
+//! We have two separate types of structs here: Trackers and Summaries.
+//! A tracker tracks the live data and then gets turned into a summary for
+//! displaying it. We have this split because the tracker representation is not
+//! exactly what we want to display to the user.
+
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+    io::Write,
+};
+
+use chrono::{DateTime, Local};
+use itertools::Itertools;
+use serde::Serialize;
+use svix_ksuid::{Ksuid, KsuidLike};
+use tabwriter::TabWriter;
+use thiserror::Error;
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_env::EnvironmentVariableMap;
+use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
+use turborepo_types::{DryRunMode, EngineInfo, EnvMode, HashTrackerInfo, RunOptsInfo};
+use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cwriteln};
+
+use crate::{
+    GlobalHashSummary, SCMState, TaskTracker,
+    execution::{ExecutionSummary, ExecutionTracker, TaskState},
+    observability::Handle as ObservabilityHandle,
+    task::{SinglePackageTaskSummary, TaskSummary},
+    task_factory::TaskSummaryFactory,
+};
+
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("Failed to write run summary. Reason: {0}")]
+    IO(#[from] io::Error),
+    #[error("Failed to serialize run summary to JSON.")]
+    Serde(#[from] serde_json::Error),
+    #[error("Missing workspace: {0}")]
+    MissingWorkspace(PackageName),
+    #[error("Failed to close state thread.")]
+    StateThread(#[from] tokio::task::JoinError),
+    #[error("Request took too long to resolve: {0}")]
+    Timeout(#[from] tokio::time::error::Elapsed),
+    #[error("Failed to parse environment variables.")]
+    Env(#[source] turborepo_env::Error),
+    #[error("Failed to construct task summary: {0}")]
+    TaskSummary(#[from] crate::task_factory::Error),
+}
+
+// NOTE: When changing this, please ensure that the server side is updated to
+// handle the new version on vercel.com this is required to ensure safe handling
+// of env vars (unknown run summary versions will be ignored on the server)
+const RUN_SUMMARY_SCHEMA_VERSION: &str = "1";
+
+#[derive(Debug)]
+enum RunType {
+    Real,
+    DryText,
+    DryJson,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunSummary<'a> {
+    id: Ksuid,
+    version: String,
+    turbo_version: &'static str,
+    monorepo: bool,
+    #[serde(rename = "globalCacheInputs")]
+    global_hash_summary: GlobalHashSummary<'a>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution: Option<ExecutionSummary<'a>>,
+    packages: Vec<&'a PackageName>,
+    env_mode: EnvMode,
+    framework_inference: bool,
+    tasks: Vec<TaskSummary>,
+    user: String,
+    scm: SCMState,
+    #[serde(skip)]
+    repo_root: &'a AbsoluteSystemPath,
+    #[serde(skip)]
+    should_save: bool,
+    #[serde(skip)]
+    run_type: RunType,
+    #[serde(skip)]
+    observability_handle: Option<ObservabilityHandle>,
+}
+
+/// We use this to track the run, so it's constructed before the run.
+#[derive(Debug)]
+pub struct RunTracker {
+    version: &'static str,
+    started_at: DateTime<Local>,
+    execution_tracker: ExecutionTracker,
+    user: Option<String>,
+    synthesized_command: String,
+    observability_handle: Option<ObservabilityHandle>,
+    scm_state: Option<ScmStatePrefetch>,
+}
+
+/// The run summary's SCM state, resolved in the background. See
+/// [`RunTracker::with_scm_state_prefetch`].
+#[derive(Debug)]
+pub struct ScmStatePrefetch(tokio::task::JoinHandle<SCMState>);
+
+impl ScmStatePrefetch {
+    /// Starts resolving [`SCMState`] (a git subprocess outside CI) on a
+    /// blocking thread. Only use this when nothing can move `HEAD` before the
+    /// summary is built, i.e. dry runs: a real run's summary reflects the
+    /// repository state after its tasks finished.
+    pub fn spawn(env_vars: &EnvironmentVariableMap, scm: &SCM, dir: &AbsoluteSystemPath) -> Self {
+        let env_vars = env_vars.clone();
+        let scm = scm.clone();
+        let dir = dir.to_owned();
+        Self(tokio::task::spawn_blocking(move || {
+            SCMState::get(&env_vars, &scm, &dir)
+        }))
+    }
+}
+
+impl RunTracker {
+    pub fn new(
+        started_at: DateTime<Local>,
+        synthesized_command: String,
+        version: &'static str,
+        user: Option<String>,
+        observability_handle: Option<ObservabilityHandle>,
+    ) -> Self {
+        RunTracker {
+            version,
+            started_at,
+            execution_tracker: ExecutionTracker::new(),
+            user,
+            synthesized_command,
+            observability_handle,
+            scm_state: None,
+        }
+    }
+
+    /// Use an SCM state resolved ahead of time instead of resolving it when
+    /// the summary is built.
+    pub fn with_scm_state_prefetch(mut self, prefetch: Option<ScmStatePrefetch>) -> Self {
+        self.scm_state = prefetch;
+        self
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(
+        repo_root,
+        package_inference_root,
+        run_opts,
+        packages,
+        global_hash_summary,
+        task_factory,
+    ))]
+    pub async fn to_summary<'a, E, H, R>(
+        self,
+        repo_root: &'a AbsoluteSystemPath,
+        package_inference_root: Option<&'a AnchoredSystemPath>,
+        exit_code: i32,
+        end_time: DateTime<Local>,
+        run_opts: &'a R,
+        packages: &'a HashSet<PackageName>,
+        global_hash_summary: GlobalHashSummary<'a>,
+        global_env_mode: EnvMode,
+        task_factory: TaskSummaryFactory<'a, E, H, R>,
+        env_at_execution_start: &EnvironmentVariableMap,
+        scm: &SCM,
+    ) -> Result<RunSummary<'a>, Error>
+    where
+        E: EngineInfo + Sync,
+        H: HashTrackerInfo + Sync,
+        R: RunOptsInfo + Sync,
+    {
+        let single_package = run_opts.single_package();
+        let should_save = run_opts.summarize().is_some();
+
+        let run_type = match run_opts.dry_run() {
+            None => RunType::Real,
+            Some(DryRunMode::Json) => RunType::DryJson,
+            Some(DryRunMode::Text) => RunType::DryText,
+        };
+
+        // Deferred to summary time so we don't pay the cost of git subprocess
+        // calls (branch + sha) during the critical path of task execution.
+        let scm_state = match self.scm_state {
+            Some(ScmStatePrefetch(handle)) => match handle.await {
+                Ok(state) => state,
+                Err(_) => SCMState::get(env_at_execution_start, scm, repo_root),
+            },
+            None => SCMState::get(env_at_execution_start, scm, repo_root),
+        };
+
+        let summary_state = self.execution_tracker.finish().await?;
+
+        // Build task summaries in parallel — each task_summary call is read-only
+        // on the engine, hash tracker, and package graph.
+        let tasks = turborepo_rayon_compat::block_in_place(|| {
+            use rayon::prelude::*;
+            let results: Vec<Result<TaskSummary, crate::task_factory::Error>> = summary_state
+                .tasks
+                .par_iter()
+                .map(|task_state| {
+                    task_factory
+                        .task_summary(task_state.task_id.clone(), task_state.execution.clone())
+                })
+                .collect();
+            results
+                .into_iter()
+                .collect::<Result<Vec<_>, crate::task_factory::Error>>()
+        })?;
+        let execution_summary = ExecutionSummary::new(
+            self.synthesized_command.clone(),
+            summary_state,
+            package_inference_root,
+            exit_code,
+            self.started_at,
+            end_time,
+        );
+
+        Ok(RunSummary {
+            id: Ksuid::new(None, None),
+            version: RUN_SUMMARY_SCHEMA_VERSION.to_string(),
+            turbo_version: self.version,
+            packages: packages.iter().sorted().collect(),
+            execution: Some(execution_summary),
+            env_mode: global_env_mode,
+            framework_inference: run_opts.framework_inference(),
+            tasks,
+            global_hash_summary,
+            scm: scm_state,
+            user: self.user.unwrap_or_default(),
+            monorepo: !single_package,
+            repo_root,
+            should_save,
+            run_type,
+            observability_handle: self.observability_handle.clone(),
+        })
+    }
+
+    #[tracing::instrument(skip(
+        pkg_dep_graph,
+        ui,
+        run_opts,
+        packages,
+        global_hash_summary,
+        engine,
+        hash_tracker,
+        env_at_execution_start,
+        scm,
+    ))]
+    #[expect(clippy::too_many_arguments)]
+    pub async fn finish<'a, E, H, R>(
+        self,
+        exit_code: i32,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+        repo_root: &'a AbsoluteSystemPath,
+        package_inference_root: Option<&AnchoredSystemPath>,
+        run_opts: &'a R,
+        packages: &'a HashSet<PackageName>,
+        global_hash_summary: GlobalHashSummary<'a>,
+        global_env_mode: EnvMode,
+        engine: &'a E,
+        hash_tracker: &'a H,
+        env_at_execution_start: &'a EnvironmentVariableMap,
+        scm: &SCM,
+        is_watch: bool,
+        external_deps_hashes: Option<&HashMap<String, String>>,
+    ) -> Result<(), Error>
+    where
+        E: EngineInfo + Sync,
+        H: HashTrackerInfo + Sync,
+        R: RunOptsInfo + Sync,
+    {
+        let end_time = Local::now();
+
+        // For the common case (no --dry, no --summarize, no observability),
+        // skip the expensive TaskSummary construction, SCMState::get (a git
+        // subprocess), and full RunSummary assembly. We only need execution
+        // stats and failed task identification for terminal output.
+        if run_opts.dry_run().is_none()
+            && run_opts.summarize().is_none()
+            && self.observability_handle.is_none()
+        {
+            let summary_state = self.execution_tracker.finish().await?;
+
+            if !is_watch {
+                // Extract failed tasks before moving summary_state into
+                // ExecutionSummary. SummaryState derives Clone, but we only
+                // need the task list for failure identification.
+                let failed_tasks: Vec<TaskState> = summary_state
+                    .tasks
+                    .iter()
+                    .filter(|t| t.execution.as_ref().is_some_and(|e| e.is_failure()))
+                    .cloned()
+                    .collect();
+
+                let execution = ExecutionSummary::new(
+                    self.synthesized_command.clone(),
+                    summary_state,
+                    package_inference_root,
+                    exit_code,
+                    self.started_at,
+                    end_time,
+                );
+
+                let path = repo_root.join_components(&[".turbo", "runs", "dummy.json"]);
+                execution.print(ui, path, failed_tasks.iter().collect());
+            }
+
+            return Ok(());
+        }
+
+        let task_factory = TaskSummaryFactory::new(
+            pkg_dep_graph,
+            engine,
+            hash_tracker,
+            env_at_execution_start,
+            run_opts,
+            global_env_mode,
+            external_deps_hashes,
+        );
+
+        let run_summary: RunSummary = self
+            .to_summary(
+                repo_root,
+                package_inference_root,
+                exit_code,
+                end_time,
+                run_opts,
+                packages,
+                global_hash_summary,
+                global_env_mode,
+                task_factory,
+                env_at_execution_start,
+                scm,
+            )
+            .await?;
+
+        run_summary
+            .finish(end_time, exit_code, pkg_dep_graph, ui, is_watch)
+            .await
+    }
+
+    pub fn track_task(&self, task_id: TaskId<'static>) -> TaskTracker<()> {
+        self.execution_tracker.task_tracker(task_id)
+    }
+}
+
+// This is an exact copy of RunSummary, but the JSON tags are structured
+// for rendering a single-package run of turbo. Notably, we want to always omit
+// packages since there is no concept of packages in a single-workspace repo.
+// This struct exists solely for the purpose of serializing to JSON and should
+// not be used anywhere else.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SinglePackageRunSummary<'a> {
+    id: Ksuid,
+    version: &'a str,
+    turbo_version: &'a str,
+    monorepo: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    execution: Option<&'a ExecutionSummary<'a>>,
+    #[serde(rename = "globalCacheInputs")]
+    global_hash_summary: &'a GlobalHashSummary<'a>,
+    env_mode: EnvMode,
+    framework_inference: bool,
+    tasks: Vec<SinglePackageTaskSummary>,
+    user: &'a str,
+    pub scm: &'a SCMState,
+}
+
+impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
+    fn from(run_summary: &'a RunSummary<'a>) -> Self {
+        let mut tasks = run_summary
+            .tasks
+            .iter()
+            .cloned()
+            .map(SinglePackageTaskSummary::from)
+            .collect::<Vec<_>>();
+        tasks.sort_by(|t1, t2| t1.task_id.cmp(&t2.task_id));
+        SinglePackageRunSummary {
+            id: run_summary.id,
+            version: &run_summary.version,
+            turbo_version: run_summary.turbo_version,
+            monorepo: run_summary.monorepo,
+            execution: run_summary.execution.as_ref(),
+            global_hash_summary: &run_summary.global_hash_summary,
+            env_mode: run_summary.env_mode,
+            framework_inference: run_summary.framework_inference,
+            tasks,
+            user: &run_summary.user,
+            scm: &run_summary.scm,
+        }
+    }
+}
+
+impl<'a> RunSummary<'a> {
+    // Used in observability/otel.rs to populate RunMetricsPayload.run_id
+    pub(crate) fn id(&self) -> &Ksuid {
+        &self.id
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.turbo_version
+    pub(crate) fn turbo_version(&self) -> &'static str {
+        self.turbo_version
+    }
+
+    // Used in observability/otel.rs to access execution summary for metrics
+    pub(crate) fn execution_summary(&self) -> Option<&ExecutionSummary<'a>> {
+        self.execution.as_ref()
+    }
+
+    // Used in observability/otel.rs to iterate over tasks for TaskMetricsPayload
+    pub(crate) fn tasks(&self) -> &[TaskSummary] {
+        &self.tasks
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload SCM fields
+    pub(crate) fn scm_state(&self) -> &SCMState {
+        &self.scm
+    }
+
+    #[tracing::instrument(skip(self, pkg_dep_graph, ui))]
+    async fn finish(
+        mut self,
+        end_time: DateTime<Local>,
+        exit_code: i32,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+        is_watch: bool,
+    ) -> Result<(), Error> {
+        // Handle observability shutdown before the dry run check to ensure graceful
+        // cleanup even when metrics are not being emitted.
+        // Note: shutdown respects the configured timeout_ms (default 10s) to prevent
+        // hanging indefinitely on network issues.
+        if let Some(handle) = self.observability_handle.take() {
+            // Only record metrics for actual runs, not dry runs
+            if !matches!(self.run_type, RunType::DryJson | RunType::DryText) {
+                handle.record(&self);
+            }
+            handle.shutdown();
+        }
+
+        if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
+            return self.close_dry_run(pkg_dep_graph, ui);
+        }
+
+        if self.should_save
+            && let Err(err) = self.save().await
+        {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!("Error writing run summary: {err}"),
+            )
+            .emit()
+        }
+
+        if !is_watch && let Some(execution) = &self.execution {
+            let path = self.get_path();
+            let failed_tasks = self.get_failed_tasks();
+            execution.print(ui, path, failed_tasks);
+        }
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn print_errors(errors: &[Error]) {
+        if errors.is_empty() {
+            return;
+        }
+
+        for error in errors {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!("{error}"),
+            )
+            .emit();
+        }
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn close_dry_run(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
+        if matches!(self.run_type, RunType::DryJson) {
+            self.normalize();
+
+            let stdout = io::stdout();
+            let mut writer = io::BufWriter::new(stdout.lock());
+            if self.monorepo {
+                write_pretty_json(&mut writer, &*self)?;
+            } else {
+                let summary = SinglePackageRunSummary::from(&*self);
+                write_pretty_json(&mut writer, &summary)?;
+            }
+            writer.flush()?;
+            return Ok(());
+        }
+
+        self.format_and_print_text(pkg_dep_graph, ui)
+    }
+
+    #[tracing::instrument(skip_all)]
+    fn format_and_print_text(
+        &mut self,
+        pkg_dep_graph: &PackageGraph,
+        ui: ColorConfig,
+    ) -> Result<(), Error> {
+        self.normalize();
+
+        // Render everything into one buffered handle on stdout. Writing
+        // through `io::stdout()` directly made every line its own write.
+        let stdout = io::stdout();
+        let mut out = io::BufWriter::with_capacity(TEXT_OUTPUT_BUFFER_BYTES, stdout.lock());
+
+        if self.monorepo {
+            writeln!(out, "\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"))?;
+            let mut tab_writer = TabWriter::new(&mut out).minwidth(0).padding(1);
+            writeln!(tab_writer, "Name\tPath\t")?;
+            for pkg in &self.packages {
+                if matches!(pkg, PackageName::Root) {
+                    continue;
+                }
+                let dir = pkg_dep_graph
+                    .package_task_context(pkg)
+                    .ok_or_else(|| Error::MissingWorkspace((*pkg).to_owned()))?
+                    .directory();
+
+                writeln!(tab_writer, "{pkg}\t{dir}")?;
+            }
+            tab_writer.flush()?;
+        }
+
+        let file_count = self.global_hash_summary.files.len();
+
+        cwriteln!(out, ui, BOLD_CYAN, "\nGlobal Hash Inputs")?;
+        let mut tab_writer = TabWriter::new(&mut out).minwidth(0).padding(1);
+        cwriteln!(tab_writer, ui, GREY, "  Global Files\t=\t{}", file_count)?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  External Dependencies Hash\t=\t{}",
+            self.global_hash_summary.hash_of_external_dependencies
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Cache Key\t=\t{}",
+            self.global_hash_summary.root_key
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Env Vars\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .specified
+                .env
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Env Vars Values\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .configured
+                .as_deref()
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Inferred Global Env Vars Values\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .inferred
+                .as_deref()
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .specified
+                .pass_through_env
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Global Passed Through Env Vars Values\t=\t{}",
+            self.global_hash_summary
+                .environment_variables
+                .pass_through
+                .as_deref()
+                .unwrap_or_default()
+                .join(", ")
+        )?;
+        cwriteln!(
+            tab_writer,
+            ui,
+            GREY,
+            "  Engines Values\t=\t{}",
+            self.global_hash_summary
+                .engines
+                .as_ref()
+                .map(|engines| engines
+                    .iter()
+                    .map(|(key, value)| format!("{key}={value}"))
+                    .join(", "))
+                .unwrap_or_default()
+        )?;
+
+        tab_writer.flush()?;
+        writeln!(out)?;
+        cwriteln!(out, ui, BOLD_CYAN, "Tasks to Run")?;
+
+        for task in &self.tasks {
+            if self.monorepo {
+                cwriteln!(out, ui, BOLD, "{}", task.task_id)?;
+            } else {
+                cwriteln!(out, ui, BOLD, "{}", task.task_id.task())?;
+            };
+
+            let mut tab_writer = TabWriter::new(&mut out).padding(1).minwidth(0);
+            cwriteln!(tab_writer, ui, GREY, "  Task\t=\t{}", task.task)?;
+            if self.monorepo {
+                cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", &task.package)?;
+            }
+            let hash = task
+                .shared
+                .hash
+                .as_deref()
+                .or(task.shared.hash_reason.as_deref())
+                .unwrap_or("<unknown>");
+            cwriteln!(tab_writer, ui, GREY, "  Hash\t=\t{}", hash)?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Cached (Local)\t=\t{}",
+                &task.shared.cache.local
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Cached (Remote)\t=\t{}",
+                &task.shared.cache.remote
+            )?;
+
+            if self.monorepo
+                && let Some(directory) = &task.shared.directory
+            {
+                cwriteln!(tab_writer, ui, GREY, "  Directory\t=\t{}", directory)?;
+            }
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Command\t=\t{}",
+                task.shared.command
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Outputs\t=\t{}",
+                task.shared
+                    .outputs
+                    .as_ref()
+                    .map_or_else(String::new, |outputs| outputs.join(", "))
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Log File\t=\t{}",
+                task.shared.log_file.as_deref().unwrap_or_default()
+            )?;
+
+            let dependencies = if !self.monorepo {
+                task.shared
+                    .dependencies
+                    .iter()
+                    .map(|dep| dep.task())
+                    .join(", ")
+            } else {
+                task.shared.dependencies.iter().join(", ")
+            };
+
+            cwriteln!(tab_writer, ui, GREY, "  Dependencies\t=\t{}", dependencies)?;
+
+            let dependents = if !self.monorepo {
+                task.shared
+                    .dependents
+                    .iter()
+                    .map(|dep| dep.task())
+                    .join(", ")
+            } else {
+                task.shared.dependents.iter().join(", ")
+            };
+
+            cwriteln!(tab_writer, ui, GREY, "  Dependents\t=\t{}", dependents)?;
+
+            let with = task.shared.with.iter().join(", ");
+            cwriteln!(tab_writer, ui, GREY, "  With\t=\t{}", with)?;
+
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Inputs Files Considered\t=\t{}",
+                task.shared.inputs.len()
+            )?;
+
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Env Vars\t=\t{}",
+                task.shared.environment_variables.specified.env.join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Env Vars Values\t=\t{}",
+                task.shared.environment_variables.configured.join(", ")
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Inferred Env Vars Values\t=\t{}",
+                task.shared.environment_variables.inferred.join(", ")
+            )?;
+
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Passed Through Env Vars\t=\t{}",
+                task.shared
+                    .environment_variables
+                    .specified
+                    .pass_through_env
+                    .as_ref()
+                    .map_or_else(String::new, |pass_through_env| pass_through_env.join(", "))
+            )?;
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Passed Through Env Vars Values\t=\t{}",
+                task.shared
+                    .environment_variables
+                    .pass_through
+                    .as_ref()
+                    .map_or_else(String::new, |vars| vars.join(", "))
+            )?;
+
+            // If there's an error, we can silently ignore it, we don't need to block the
+            // entire print.
+            if let Ok(task_definition_json) =
+                serde_json::to_string(&task.shared.resolved_task_definition)
+            {
+                cwriteln!(
+                    tab_writer,
+                    ui,
+                    GREY,
+                    "  Resolved Task Definition\t=\t{}",
+                    task_definition_json
+                )?;
+            }
+
+            cwriteln!(
+                tab_writer,
+                ui,
+                GREY,
+                "  Framework\t=\t{}",
+                task.shared.framework
+            )?;
+
+            tab_writer.flush()?;
+        }
+
+        out.flush()?;
+        Ok(())
+    }
+
+    fn format_json(&mut self) -> Result<String, Error> {
+        self.normalize();
+
+        let mut rendered_json = if self.monorepo {
+            serde_json::to_string_pretty(&self)
+        } else {
+            // Deref coercion used to get an immutable reference from the mutable reference.
+            let monorepo_rsm = SinglePackageRunSummary::from(&*self);
+            serde_json::to_string_pretty(&monorepo_rsm)
+        }?;
+        // Go produces an extra newline at the end of the JSON
+        rendered_json.push('\n');
+        Ok(rendered_json)
+    }
+
+    fn normalize(&mut self) {
+        // Remove execution summary for dry runs
+        if matches!(self.run_type, RunType::DryJson) {
+            self.execution = None;
+        }
+
+        // For single packages, we don't need the packages
+        // and each task summary needs some cleaning
+        if !self.monorepo {
+            self.packages.clear();
+        }
+
+        self.tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
+
+        // Sort dependencies
+        for task in &mut self.tasks {
+            task.shared.dependencies.sort();
+            task.shared.dependents.sort();
+        }
+    }
+
+    fn get_path(&self) -> AbsoluteSystemPathBuf {
+        let filename = format!("{}.json", self.id);
+
+        self.repo_root
+            .join_components(&[".turbo", "runs", &filename])
+    }
+
+    fn get_failed_tasks(&self) -> Vec<&TaskSummary> {
+        self.tasks
+            .iter()
+            .filter(|task| {
+                task.shared
+                    .execution
+                    .as_ref()
+                    .is_some_and(|e| e.is_failure())
+            })
+            .collect()
+    }
+
+    /// Saves the run summary to disk asynchronously.
+    ///
+    /// Uses `tokio::task::spawn_blocking` to perform the file I/O on a
+    /// blocking thread pool, avoiding blocking the async runtime.
+    async fn save(&mut self) -> Result<(), Error> {
+        let json = self.format_json()?;
+        let summary_path = self.get_path();
+
+        // Perform file I/O in a blocking task to avoid blocking the async runtime
+        tokio::task::spawn_blocking(move || -> Result<(), Error> {
+            summary_path.ensure_dir()?;
+            summary_path.create_with_contents(json)?;
+            Ok(())
+        })
+        .await
+        .map_err(Error::StateThread)??;
+
+        Ok(())
+    }
+}
+
+/// Buffer size for the `--dry` text rendering. Its output is a few lines per
+/// task, so a large monorepo's dry run prints megabytes.
+const TEXT_OUTPUT_BUFFER_BYTES: usize = 64 * 1024;
+
+fn write_pretty_json(writer: &mut impl Write, value: &impl Serialize) -> Result<(), Error> {
+    serde_json::to_writer_pretty(&mut *writer, value)?;
+    // Match the two trailing newlines produced by `println!` and `format_json`.
+    writer.write_all(b"\n\n")?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pretty_json_preserves_terminator_bytes() {
+        let mut output = Vec::new();
+        write_pretty_json(&mut output, &serde_json::json!({ "key": "value" })).unwrap();
+
+        assert_eq!(output, b"{\n  \"key\": \"value\"\n}\n\n");
+    }
+
+    #[test]
+    fn pretty_json_propagates_write_errors() {
+        struct BrokenWriter;
+
+        impl Write for BrokenWriter {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed stdout"))
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let error = write_pretty_json(&mut BrokenWriter, &serde_json::json!({})).unwrap_err();
+        assert!(matches!(error, Error::Serde(_)));
+    }
+}

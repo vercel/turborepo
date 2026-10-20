@@ -3,9 +3,9 @@ export { transform } from "./transform";
 
 export type {
   TransformCommandArgument,
-  TransformCommandOptions,
+  TransformCommandOptions
 } from "./transform/types";
 export type {
   MigrateCommandArgument,
-  MigrateCommandOptions,
+  MigrateCommandOptions
 } from "./migrate/types";

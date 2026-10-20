@@ -1,0 +1,27 @@
+{
+  "name": "with-vite-module-federation",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "workspaces": [
+    "host",
+    "remote",
+    "shared-ui"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:filter": "turbo run dev --filter",
+    "build": "turbo run build",
+    "build:filter": "turbo run build --filter",
+    "preview": "turbo run preview",
+    "preview:filter": "turbo run preview --filter",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "pnpm": "12.8.1",
+    "turbo": "2.11.5"
+  }
+}

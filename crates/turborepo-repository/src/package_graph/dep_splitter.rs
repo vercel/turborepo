@@ -5,33 +5,127 @@ use turbopath::{
     RelativeUnixPathBuf,
 };
 
-use super::{PackageInfo, PackageName};
-use crate::package_manager::PackageManager;
+use super::PackageName;
+use crate::{
+    knowledge::RepositoryKnowledge, package_json::PackageJson, package_manager::pnpm::PnpmCatalogs,
+};
+
+/// Reverse index from package path to package name, built once and shared
+/// across all `DependencySplitter` instances.
+///
+/// Non-package.json scopes are excluded: JS `workspace:`/`file:` path
+/// specifiers can never target them, and a Cargo aggregate at the repo root
+/// would otherwise collide with the Root package's path.
+pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, PackageName>);
+
+impl<'a> WorkspacePathIndex<'a> {
+    /// Builds the production index from authoritative package definitions
+    /// rather than transient descriptors or contributor identity.
+    pub(crate) fn from_knowledge(knowledge: &'a RepositoryKnowledge) -> Self {
+        Self::from_directories(
+            knowledge
+                .package_json_packages()
+                .map(|(identity, directory)| (directory, PackageName::from(identity))),
+        )
+    }
+
+    /// Builds the index from explicit package directories, for callers that
+    /// resolve manifests without constructing repository knowledge.
+    pub(crate) fn from_directories(
+        directories: impl IntoIterator<Item = (&'a AnchoredSystemPath, PackageName)>,
+    ) -> Self {
+        Self(directories.into_iter().collect())
+    }
+}
+
+/// Reverse index from package name to its entry in the workspaces map, built
+/// once and shared across all `DependencySplitter` instances so alias
+/// dependency lookups borrow the entry instead of allocating an owned
+/// `PackageName` for every query.
+///
+/// The root sentinel is excluded: its `//` key is an internal encoding detail,
+/// not a name that a dependency specifier can target.
+pub struct WorkspaceNameIndex<'a>(HashMap<&'a str, (&'a PackageName, &'a PackageJson)>);
+
+impl<'a> WorkspaceNameIndex<'a> {
+    /// Native package names must not capture npm dependencies with the same
+    /// name. Like the path index, only authored package.json scopes participate
+    /// in JavaScript dependency resolution.
+    pub(crate) fn from_knowledge(
+        knowledge: &RepositoryKnowledge,
+        workspaces: &'a HashMap<PackageName, PackageJson>,
+    ) -> Self {
+        Self::from_entries(
+            knowledge
+                .package_json_packages()
+                .filter_map(|(identity, _)| workspaces.get_key_value(&PackageName::from(identity))),
+        )
+    }
+
+    /// For callers whose manifests are already restricted to package.json, or
+    /// custom contributors using legacy non-package.json descriptor
+    /// classification.
+    pub(crate) fn from_workspaces(workspaces: &'a HashMap<PackageName, PackageJson>) -> Self {
+        Self::from_entries(workspaces.iter())
+    }
+
+    fn from_entries(entries: impl Iterator<Item = (&'a PackageName, &'a PackageJson)>) -> Self {
+        Self(
+            entries
+                .filter_map(|(name, package_json)| match name {
+                    PackageName::Other(_) => Some((name.as_str(), (name, package_json))),
+                    PackageName::Root => None,
+                })
+                .collect(),
+        )
+    }
+}
 
 pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
     workspace_dir: &'a AbsoluteSystemPath,
-    workspaces: &'a HashMap<PackageName, PackageInfo>,
+    workspaces: &'a HashMap<PackageName, PackageJson>,
+    path_index: &'a WorkspacePathIndex<'a>,
+    name_index: &'a WorkspaceNameIndex<'a>,
     link_workspace_packages: bool,
+    catalogs: Option<&'a PnpmCatalogs>,
 }
 
 impl<'a> DependencySplitter<'a> {
     pub fn new(
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
-        workspaces: &'a HashMap<PackageName, PackageInfo>,
-        package_manager: &PackageManager,
+        workspaces: &'a HashMap<PackageName, PackageJson>,
+        link_workspace_packages: bool,
+        path_index: &'a WorkspacePathIndex<'a>,
+        name_index: &'a WorkspaceNameIndex<'a>,
+        catalogs: Option<&'a PnpmCatalogs>,
     ) -> Self {
-        let link_workspace_packages = package_manager.link_workspace_packages(repo_root);
         Self {
             repo_root,
             workspace_dir,
             workspaces,
+            path_index,
+            name_index,
             link_workspace_packages,
+            catalogs,
         }
     }
 
-    pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
+    pub fn is_internal(&self, name: &str, version: &str) -> Option<&'a PackageName> {
+        // Resolve catalog: specifiers to their actual version strings
+        let resolved;
+        let version = if version.starts_with("catalog:") {
+            if let Some(catalogs) = self.catalogs {
+                resolved = catalogs.resolve(name, version);
+                resolved.unwrap_or(version)
+            } else {
+                version
+            }
+        } else {
+            version
+        };
+
         // If link_workspace_packages isn't set any version without workspace protocol
         // is considered external.
         if !self.link_workspace_packages && !version.starts_with("workspace:") {
@@ -43,7 +137,7 @@ impl<'a> DependencySplitter<'a> {
         let is_internal = DependencyVersion::new(version).matches_workspace_package(
             // This is the current Go behavior, in the future we might not want to paper over a
             // missing version
-            info.package_json.version.as_deref().unwrap_or_default(),
+            info.version.as_deref().unwrap_or_default(),
             self.workspace_dir,
             self.repo_root,
         );
@@ -58,12 +152,10 @@ impl<'a> DependencySplitter<'a> {
     fn find_package(
         &self,
         specifier: WorkspacePackageSpecifier,
-    ) -> Option<(PackageName, &PackageInfo)> {
+    ) -> Option<(&'a PackageName, &'a PackageJson)> {
         match specifier {
             WorkspacePackageSpecifier::Alias(name) => {
-                // TODO implement borrowing for workspaces to allow for zero copy queries
-                let package_name = PackageName::Other(name.to_string());
-                let info = self.workspaces.get(&package_name)?;
+                let (package_name, info) = *self.name_index.0.get(name)?;
                 Some((package_name, info))
             }
             WorkspacePackageSpecifier::Path(path) => {
@@ -73,22 +165,24 @@ impl<'a> DependencySplitter<'a> {
                 // Pnpm also doesn't support this so we defer to them to provide the error
                 // message.
                 let package_path = AnchoredSystemPathBuf::new(self.repo_root, package_path).ok()?;
-                let (name, info) = self.workspace(&package_path).or_else(|| {
+                self.workspace(&package_path).or_else(|| {
                     // Yarn4 allows for workspace root relative paths
                     let package_path = self.repo_root.join_unix_path(path);
                     let package_path =
                         AnchoredSystemPathBuf::new(self.repo_root, package_path).ok()?;
                     self.workspace(&package_path)
-                })?;
-                Some((name.clone(), info))
+                })
             }
         }
     }
 
-    fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&PackageName, &PackageInfo)> {
-        self.workspaces
-            .iter()
-            .find(|(_, info)| info.package_path() == path)
+    fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&'a PackageName, &'a PackageJson)> {
+        let name = self.path_index.0.get(path)?;
+        // `get_key_value` borrows the workspace's own key, so the returned
+        // name lives as long as the workspaces map instead of the local
+        // lookup key cloned from the path index.
+        let (name, info) = self.workspaces.get_key_value(name)?;
+        Some((name, info))
     }
 }
 
@@ -135,6 +229,28 @@ impl<'a> DependencyVersion<'a> {
         )
     }
 
+    /// Returns true if this dependency uses an npm alias (`npm:pkg@version`).
+    /// This is distinct from a plain npm range (`npm:^1.0.0`). When a package
+    /// name is present in the specifier, the user is explicitly requesting an
+    /// npm registry package, which should never resolve to a workspace.
+    fn is_npm_alias(&self) -> bool {
+        if self.protocol != Some("npm") {
+            return false;
+        }
+        // npm alias format: `npm:<package-name>@<version>`
+        // A scoped package looks like `npm:@scope/pkg@version`, so we need to
+        // handle the leading `@` carefully.
+        let name_and_version = if let Some(rest) = self.version.strip_prefix('@') {
+            // Scoped: skip past scope to find the `@version` separator
+            rest.find('@').map(|i| i + 1)
+        } else {
+            self.version.find('@')
+        };
+        // If there's an `@` separating a package name from a version, and the
+        // part before it isn't empty, this is an alias.
+        name_and_version.is_some_and(|i| i > 0)
+    }
+
     fn is_external(&self) -> bool {
         // The npm protocol for yarn by default still uses the workspace package if the
         // workspace version is in a compatible semver range. See https://github.com/yarnpkg/berry/discussions/4015
@@ -142,7 +258,6 @@ impl<'a> DependencyVersion<'a> {
         // version matches its an internal dependency which matches the existing
         // behavior before this additional logic was added.
 
-        // TODO: extend this to support the `enableTransparentWorkspaces` yarn option
         self.protocol.is_some_and(|p| p != "npm")
     }
 
@@ -169,6 +284,9 @@ impl<'a> DependencyVersion<'a> {
                 // Other protocols are assumed to be external references ("github:", etc)
                 false
             }
+            // npm: alias syntax (e.g. `npm:buffer@6.0.3` or `npm:@scope/pkg@^1.0.0`)
+            // means the user explicitly wants the npm registry package, not a workspace.
+            Some("npm") if self.is_npm_alias() => false,
             _ if self.version == "*" => true,
             _ if package_version.is_empty() => {
                 // The workspace version of this package does not contain a version, no version
@@ -212,7 +330,82 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::package_json::PackageJson;
+    use crate::{
+        knowledge::{
+            PackageScopeObservation, RepositoryKnowledge, ScopeKind, WorkspaceRootObservation,
+        },
+        package_json::PackageJson,
+        toolchain::{ToolchainId, WorkspaceRoot},
+    };
+
+    fn path_index() -> WorkspacePathIndex<'static> {
+        let foo = if cfg!(windows) {
+            r"packages\@scope\foo"
+        } else {
+            "packages/@scope/foo"
+        };
+        let baz = if cfg!(windows) {
+            r"packages\baz"
+        } else {
+            "packages/baz"
+        };
+        WorkspacePathIndex(HashMap::from([
+            (
+                AnchoredSystemPath::new(foo).unwrap(),
+                PackageName::from("@scope/foo"),
+            ),
+            (
+                AnchoredSystemPath::new(baz).unwrap(),
+                PackageName::from("baz"),
+            ),
+        ]))
+    }
+
+    #[test]
+    fn workspace_path_index_uses_authoritative_package_json_definitions() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let custom = ToolchainId::new("custom");
+        let knowledge = RepositoryKnowledge::build(
+            &root,
+            None,
+            &[
+                PackageScopeObservation {
+                    identity: Some("web".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["apps", "web", "package.json"]),
+                    toolchain: custom.clone(),
+                    scope_kind: ScopeKind::Package,
+                },
+                PackageScopeObservation {
+                    identity: Some("rust".to_string()),
+                    name_source: None,
+                    definition_path: root.join_components(&["crates", "rust", "Cargo.toml"]),
+                    toolchain: ToolchainId::JAVASCRIPT,
+                    scope_kind: ScopeKind::Package,
+                },
+            ],
+            &[
+                WorkspaceRootObservation::new(WorkspaceRoot::new("custom", root.clone()), custom),
+                WorkspaceRootObservation::new(
+                    WorkspaceRoot::new("javascript", root.clone()),
+                    ToolchainId::JAVASCRIPT,
+                ),
+            ],
+        )
+        .unwrap();
+
+        let index = WorkspacePathIndex::from_knowledge(&knowledge);
+        assert_eq!(
+            index.0.get(AnchoredSystemPath::new("apps/web").unwrap()),
+            Some(&PackageName::from("web"))
+        );
+        assert!(
+            !index
+                .0
+                .contains_key(AnchoredSystemPath::new("crates/rust").unwrap())
+        );
+    }
 
     #[test_case("1.2.3", None, "1.2.3", Some("@scope/foo"), true ; "handles exact match")]
     #[test_case("1.2.3", None, "^1.0.0", Some("@scope/foo"), true ; "handles semver range satisfied")]
@@ -224,6 +417,7 @@ mod test {
     #[test_case("1.2.3", Some("bar"), "workspace:../baz", Some("baz"), true ; "handles workspace protocol with path to differing package")]
     #[test_case("1.2.3", None, "npm:^1.2.3", Some("@scope/foo"), true ; "handles npm protocol with satisfied semver range")]
     #[test_case("2.3.4", None, "npm:^1.2.3", None, true ; "handles npm protocol with not satisfied semver range")]
+    #[test_case("1.2.3", None, "npm:^1.2.3", None, false ; "transparent workspaces disabled")]
     #[test_case("1.2.3", None, "1.2.2-alpha-123abcd.0", None, true ; "handles pre-release versions")]
     // for backwards compatibility with the code before versions were verified
     #[test_case("sometag", None, "1.2.3", Some("@scope/foo"), true ; "handles non-semver package version")]
@@ -237,6 +431,9 @@ mod test {
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo"), true ; "handles pnpm alias star")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo"), true ; "handles pnpm alias tilde")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo"), true ; "handles pnpm alias caret")]
+    #[test_case("6.0.3", Some("buffer"), "npm:buffer@6.0.3", None, true ; "handles npm alias with matching workspace name")]
+    #[test_case("1.2.3", None, "npm:other-pkg@^1.0.0", None, true ; "handles npm alias with different package name")]
+    #[test_case("1.2.3", None, "npm:@scope/foo@^1.0.0", None, true ; "handles npm alias with scoped package")]
     #[test_case("1.2.3", None, "1.2.3", None, false ; "no workspace linking")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), false ; "no workspace linking with protocol")]
     #[test_case("", None, "1.2.3", None, true ; "no workspace package version")]
@@ -258,64 +455,63 @@ mod test {
             let mut map = HashMap::new();
             map.insert(
                 PackageName::Other("@scope/foo".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some(package_version.to_string()),
-                        ..Default::default()
-                    },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "@scope", "foo", "package.json"]
-                            .join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
+                PackageJson {
+                    version: Some(package_version.to_string()),
+                    ..Default::default()
                 },
             );
             map.insert(
                 PackageName::Other("bar".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "bar", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
                 },
             );
             map.insert(
                 PackageName::Other("baz".to_string()),
-                PackageInfo {
-                    package_json: PackageJson {
-                        version: Some("1.0.0".to_string()),
-                        ..Default::default()
-                    },
-                    package_json_path: AnchoredSystemPathBuf::from_raw(
-                        ["packages", "baz", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
-                    )
-                    .unwrap(),
-                    unresolved_external_dependencies: None,
-                    transitive_dependencies: None,
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            map.insert(
+                PackageName::Other("buffer".to_string()),
+                PackageJson {
+                    version: Some("6.0.3".to_string()),
+                    ..Default::default()
                 },
             );
             map
         };
 
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
             link_workspace_packages,
+            catalogs: None,
         };
 
+        let expected = expected.map(PackageName::from);
         assert_eq!(
             splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
-            expected.map(PackageName::from)
+            expected.as_ref()
         );
+    }
+
+    #[test_case("npm:buffer@6.0.3", true ; "npm alias unscoped")]
+    #[test_case("npm:@scope/pkg@^1.0.0", true ; "npm alias scoped")]
+    #[test_case("npm:^1.2.3", false ; "npm range")]
+    #[test_case("npm:*", false ; "npm wildcard")]
+    #[test_case("workspace:*", false ; "workspace protocol")]
+    #[test_case("^1.0.0", false ; "bare range")]
+    fn test_is_npm_alias(version: &str, expected: bool) {
+        let dep = DependencyVersion::new(version);
+        assert_eq!(dep.is_npm_alias(), expected, "is_npm_alias({version})");
     }
 
     #[test_case("1.2.3", None ; "non-workspace")]
@@ -330,5 +526,277 @@ mod test {
     #[test_case("workspace:../@scope/foo", Some(WorkspacePackageSpecifier::Path(RelativeUnixPath::new("../@scope/foo").unwrap())) ; "scope in path")]
     fn test_workspace_specifier(input: &str, expected: Option<WorkspacePackageSpecifier>) {
         assert_eq!(WorkspacePackageSpecifier::new(input), expected);
+    }
+
+    fn make_catalogs(default: &[(&str, &str)], named: &[(&str, &[(&str, &str)])]) -> PnpmCatalogs {
+        PnpmCatalogs {
+            default: default
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            named: named
+                .iter()
+                .map(|(name, entries)| {
+                    (
+                        name.to_string(),
+                        entries
+                            .iter()
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .collect(),
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn catalog_default_resolves_to_workspace() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            map
+        };
+        let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:"),
+            Some(&PackageName::Other("pkg-b".to_string()))
+        );
+    }
+
+    #[test]
+    fn catalog_named_resolves_to_workspace() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            map
+        };
+        let catalogs = make_catalogs(&[], &[("internal", &[("pkg-b", "workspace:*")])]);
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:internal"),
+            Some(&PackageName::Other("pkg-b".to_string()))
+        );
+    }
+
+    #[test]
+    fn catalog_resolves_to_matching_semver() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageJson {
+                    version: Some("1.2.3".to_string()),
+                    ..Default::default()
+                },
+            );
+            map
+        };
+        // catalog resolves to a semver range that matches the workspace package version
+        let catalogs = make_catalogs(&[("pkg-b", "^1.0.0")], &[]);
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: true,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:"),
+            Some(&PackageName::Other("pkg-b".to_string()))
+        );
+    }
+
+    #[test]
+    fn catalog_resolves_to_external_package() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = HashMap::new();
+        // "react" is not a workspace package
+        let catalogs = make_catalogs(&[("react", "^18.2.0")], &[]);
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(splitter.is_internal("react", "catalog:"), None);
+    }
+
+    #[test]
+    fn catalog_without_catalogs_configured() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            map
+        };
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        // No catalogs - catalog: specifier can't be resolved, treated as external
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: false,
+            catalogs: None,
+        };
+        assert_eq!(splitter.is_internal("pkg-b", "catalog:internal"), None);
+    }
+
+    #[test]
+    fn catalog_default_keyword() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            map
+        };
+        // "catalog:default" should resolve to the default catalog
+        let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:default"),
+            Some(&PackageName::Other("pkg-b".to_string()))
+        );
+    }
+
+    #[test]
+    fn alias_lookup_never_resolves_the_root_sentinel() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Root,
+                PackageJson {
+                    version: Some("1.0.0".to_string()),
+                    ..Default::default()
+                },
+            );
+            map
+        };
+        let path_index = path_index();
+        let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            name_index: &name_index,
+            link_workspace_packages: true,
+            catalogs: None,
+        };
+        // `//` is the internal root sentinel, not a name that a dependency
+        // specifier can target, so it must never resolve to the root package.
+        assert_eq!(splitter.is_internal("//", "workspace:*"), None);
     }
 }

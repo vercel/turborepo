@@ -15,7 +15,6 @@ console.log("platform", platform);
 
 (async function () {
   try {
-    // TODO: version
     let version = JSON.parse(
       await fs.readFile(path.join(cwd, "js", "package.json"))
     ).version;
@@ -43,7 +42,7 @@ console.log("platform", platform);
         `npm`,
         [`pack`, `${path.join(nativePackagesDir, platform)}`],
         {
-          stdio: "inherit",
+          stdio: "inherit"
         }
       );
     } catch (err) {

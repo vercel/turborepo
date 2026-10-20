@@ -1,3 +1,13 @@
+//! Diagnostic utilities to preserve source for more actionable error messages
+//! Used in conjunction with `miette` to include source snippets in errors.
+//! Any parsing of files should attempt to produce value of `Spanned<T>` so if
+//! we need to reference where T came from the span is available.
+
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
+
+pub mod json;
+
 use std::{
     fmt::Display,
     iter,
@@ -8,8 +18,10 @@ use std::{
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
 use miette::{Diagnostic, NamedSource, SourceSpan};
+use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use ts_rs::TS;
 
 /// Base URL for links supplied in error messages. You can use the TURBO_SITE
 /// environment variable at compile time to set a base URL for easier debugging.
@@ -18,7 +30,7 @@ use thiserror::Error;
 /// used.
 pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
     Some(url) => url,
-    None => "https://turbo.build",
+    None => "https://turborepo.dev",
 };
 
 /// A little helper to convert from biome's syntax errors to miette.
@@ -30,6 +42,16 @@ pub struct ParseDiagnostic {
     source_code: NamedSource<String>,
     #[label]
     label: Option<SourceSpan>,
+}
+
+impl ParseDiagnostic {
+    pub fn new(message: String, path: &str, source: String, span: Option<Range<usize>>) -> Self {
+        Self {
+            message,
+            source_code: NamedSource::new(path, source),
+            label: span.map(|span| (span.start, span.len()).into()),
+        }
+    }
 }
 
 struct BiomeMessage<'a, T: ?Sized>(&'a T);
@@ -78,6 +100,50 @@ pub struct Spanned<T> {
     pub text: Option<Arc<str>>,
 }
 
+/// `Spanned<T>` is transparent for JSON Schema - it generates the same schema
+/// as `T`. This is because `Spanned` is marked `#[serde(transparent)]` and only
+/// adds source location metadata that is not serialized.
+impl<T: JsonSchema> JsonSchema for Spanned<T> {
+    fn schema_name() -> String {
+        T::schema_name()
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        T::json_schema(generator)
+    }
+}
+
+/// `Spanned<T>` is transparent for TypeScript - it generates the same type as
+/// `T`.
+impl<T: TS + 'static> TS for Spanned<T> {
+    type WithoutGenerics = T::WithoutGenerics;
+    type OptionInnerType = Self;
+
+    fn name() -> String {
+        T::name()
+    }
+
+    fn decl() -> String {
+        T::decl()
+    }
+
+    fn decl_concrete() -> String {
+        T::decl_concrete()
+    }
+
+    fn inline() -> String {
+        T::inline()
+    }
+
+    fn inline_flattened() -> String {
+        T::inline_flattened()
+    }
+
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        T::dependencies()
+    }
+}
+
 impl<T> IntoIterator for Spanned<T> {
     type Item = T;
     type IntoIter = Once<T>;
@@ -110,6 +176,12 @@ impl<T: Deserializable> Deserializable for Spanned<T> {
             path: None,
             text: None,
         })
+    }
+}
+
+impl Spanned<String> {
+    pub fn as_str(&self) -> &str {
+        self.value.as_str()
     }
 }
 
@@ -208,12 +280,6 @@ impl<T> Spanned<T> {
     /// Gets a mutable ref to the inner value
     pub fn as_inner_mut(&mut self) -> &mut T {
         &mut self.value
-    }
-}
-
-impl<T> Spanned<Option<T>> {
-    pub fn is_none(&self) -> bool {
-        self.value.is_none()
     }
 }
 

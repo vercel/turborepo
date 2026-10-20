@@ -1,33 +1,119 @@
-# See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/go/.devcontainer/base.Dockerfile
-
-# [Choice] Go version (use -bullseye variants on local arm64/Apple Silicon): 1, 1.16, 1.17, 1-bullseye, 1.16-bullseye, 1.17-bullseye, 1-buster, 1.16-buster, 1.17-buster
-ARG VARIANT="1.18-bullseye"
-FROM mcr.microsoft.com/vscode/devcontainers/go:0-${VARIANT}
-
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-  && apt-get -y install --no-install-recommends \
-  # Chromium for running Turbopack benchmarks
-  chromium \
-  # Used for plotters graph visualizations in turbopack benchmarks
-  libfontconfig1-dev
-
-# Add hyperfine, a useful benchmarking tool
-RUN dpkgArch="$(dpkg --print-architecture)"; \
-  wget "https://github.com/sharkdp/hyperfine/releases/download/v1.12.0/hyperfine_1.12.0_${dpkgArch}.deb" && dpkg -i "hyperfine_1.12.0_${dpkgArch}.deb"
-
+# Local development image for Turborepo.
 #
-# Everything below is run as the vscode user. If superuser permissions are necessary,
-# run it before this. Otherwise, prefer running as the vscode user.
-#
+# The pinned versions below match the factory image the agents run on
+# (apps/factory/agent/lib/factory-image.ts) and the CI setup actions
+# (.github/actions/setup-*). `apps/factory` has a test that fails when
+# this file drifts from that specification, so update them together.
+FROM mcr.microsoft.com/vscode/devcontainers/base:ubuntu-22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV CARGO_HOME=/usr/local/cargo
+ENV PATH=/usr/local/cargo/bin:$PATH
+ENV RUST_VERSION=nightly-2026-05-22
+ENV NODE_MAJOR=24
+ENV PNPM_VERSION=10.28.0
+ENV PROTOC_VERSION=26.1
+ENV ZIG_VERSION=0.17.0
+ENV ZIG_GLOBAL_CACHE_DIR=/usr/local/zig-cache
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    # Build essentials
+    build-essential \
+    pkg-config \
+    # LLD linker (.cargo/config.toml links with -fuse-ld=lld on Linux)
+    lld \
+    # Cap'n Proto
+    capnproto \
+    libcapnp-dev \
+    # Testing utilities (optional but useful)
+    jq \
+    zstd \
+    # SSL development libraries
+    libssl-dev \
+    # Additional utilities
+    curl \
+    wget \
+    git \
+    unzip \
+    xz-utils \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/* \
+    && (command -v ld.lld > /dev/null \
+    || ln -sf "$(command -v lld)" /usr/local/bin/ld.lld)
+
+# Install Node.js (using NodeSource repository for exact version control)
+RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm globally (the version in the root package.json)
+RUN npm install -g "pnpm@${PNPM_VERSION}"
+
+# Install protoc, pinned to the version CI installs
+RUN arch="$(uname -m)" \
+    && case "$arch" in \
+    x86_64 | amd64) asset="x86_64" ;; \
+    aarch64 | arm64) asset="aarch_64" ;; \
+    *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac \
+    && curl --fail --show-error --silent --location --output /tmp/protoc.zip \
+    "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${asset}.zip" \
+    && unzip -o -q /tmp/protoc.zip -d /usr/local 'bin/protoc' 'include/*' \
+    && chmod 0755 /usr/local/bin/protoc \
+    && rm /tmp/protoc.zip
+
+# Install Zig, required to build libghostty-vt for the terminal UI
+RUN arch="$(uname -m)" \
+    && case "$arch" in \
+    x86_64 | amd64) zig_arch="x86_64" ;; \
+    aarch64 | arm64) zig_arch="aarch64" ;; \
+    *) echo "unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac \
+    && curl --fail --show-error --silent --location --output /tmp/zig.tar.xz \
+    "https://ziglang.org/download/${ZIG_VERSION}/zig-${zig_arch}-linux-${ZIG_VERSION}.tar.xz" \
+    && mkdir -p /usr/local/zig \
+    && tar -xJf /tmp/zig.tar.xz -C /usr/local/zig --strip-components 1 \
+    && ln -sf /usr/local/zig/zig /usr/local/bin/zig \
+    && mkdir -p "$ZIG_GLOBAL_CACHE_DIR" \
+    && chmod -R a+rwX "$ZIG_GLOBAL_CACHE_DIR" \
+    && rm /tmp/zig.tar.xz
+
+# Install Rust with the repository toolchain and components
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
+    --default-toolchain ${RUST_VERSION} \
+    --profile minimal \
+    --component rustfmt,clippy \
+    -y \
+    && chmod -R a+w $RUSTUP_HOME $CARGO_HOME
+
+# Install the performance tooling the agent skills reach for
+RUN cargo install --locked hyperfine cargo-bloat twiggy \
+    && chmod -R a+w $CARGO_HOME
+
+# Create cache directories for better performance
+RUN mkdir -p /home/vscode/.cache /usr/local/cargo \
+    && chown -R vscode:vscode /home/vscode/.cache /usr/local/cargo
+
+# Set the default user to vscode
 USER vscode
 
-# [Choice] Node.js version: none, lts/*, 16, 14, 12, 10
-ARG NODE_VERSION="none"
-RUN if [ "${NODE_VERSION}" != "none" ]; then umask 0002 && sh -c ". /usr/local/share/nvm/nvm.sh && nvm install ${NODE_VERSION}" 2>&1; fi
+# Verify installations
+RUN node --version \
+    && npm --version \
+    && pnpm --version \
+    && rustc --version \
+    && cargo --version \
+    && protoc --version \
+    && capnp --version \
+    && zig version \
+    && jq --version \
+    && zstd --version \
+    && hyperfine --version \
+    && which ld.lld
 
-RUN sh -c ". /usr/local/share/nvm/nvm.sh && npm install -g vercel yarn yalc pnpm nodemon" 2>&1
-
-# The installer from https://rustup.rs/ homepage, with the following changes:
-#   * `-y` to accept without interactivity
-#   * `--default-toolchain none` to avoid installing stable rust. Our specific toolchain is installed post-create.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+WORKDIR /workspace

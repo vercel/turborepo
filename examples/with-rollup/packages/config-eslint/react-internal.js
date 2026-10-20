@@ -1,40 +1,28 @@
-const { resolve } = require("node:path");
+import pluginReact from "eslint-plugin-react";
+import pluginReactHooks from "eslint-plugin-react-hooks";
+import globals from "globals";
+import { config as baseConfig } from "./base.js";
 
-const project = resolve(process.cwd(), "tsconfig.json");
-
-/*
- * This is a custom ESLint configuration for use with
- * internal (bundled by their consumer) libraries
- * that utilize React.
- */
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ["eslint:recommended", "prettier", "turbo"],
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
-  },
-  env: {
-    browser: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
+/**
+ * A custom ESLint configuration for libraries that use React.
+ *
+ * @type {import("eslint").Linter.Config[]}
+ * */
+export const config = [
+  ...baseConfig,
+  pluginReactHooks.configs.flat.recommended,
+  {
+    plugins: { react: pluginReact },
+    languageOptions: {
+      globals: {
+        ...globals.browser,
       },
     },
+    rules: {
+      // Marks JSX identifiers as used so no-unused-vars works with the
+      // Babel parser. The plugin's component rules are not enabled because
+      // they are not compatible with ESLint 10 yet.
+      "react/jsx-uses-vars": "error",
+    },
   },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    ".*.cjs",
-    "node_modules/",
-    "dist/",
-  ],
-  overrides: [
-    // Force ESLint to detect .tsx files
-    { files: ["*.js?(x)", "*.ts?(x)"] },
-  ],
-};
+];

@@ -33,15 +33,21 @@ struct ColorSelectorInner {
 }
 
 impl ColorSelector {
+    #[allow(clippy::let_and_return)]
     pub fn color_for_key(&self, key: &str) -> &'static Style {
-        if let Some(style) = self.inner.read().expect("lock poisoned").color(key) {
+        let inner = self
+            .inner
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(style) = inner.color(key) {
             return style;
         }
+        drop(inner);
 
         let color = {
             self.inner
                 .write()
-                .expect("lock poisoned")
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .insert_color(key.to_string())
         };
 
@@ -54,7 +60,7 @@ impl ColorSelector {
         }
 
         let style = self.color_for_key(cache_key);
-        style.apply_to(format!("{}: ", prefix))
+        style.apply_to(format!("{prefix}: "))
     }
 }
 

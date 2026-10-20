@@ -1,12 +1,15 @@
-use std::env;
+use std::{env, io::Read};
 
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use hmac::{Hmac, Mac};
 use os_str_bytes::OsStringBytes;
 use sha2::Sha256;
 use thiserror::Error;
 
 type HmacSha256 = Hmac<Sha256>;
+
+pub const MIN_SIGNATURE_KEY_LENGTH: usize = 32;
+const SIGNATURE_MESSAGE_PREFIX: &[u8] = b"artifact-signature:v2";
 
 #[derive(Debug, Error)]
 pub enum SignatureError {
@@ -15,12 +18,23 @@ pub enum SignatureError {
          TURBO_REMOTE_CACHE_SIGNATURE_KEY environment variable"
     )]
     NoSignatureSecretKey,
+    #[error(
+        "TURBO_REMOTE_CACHE_SIGNATURE_KEY is too short ({got} {got_unit}). A minimum of {min} \
+         bytes is required for cryptographic strength."
+    )]
+    SignatureKeyTooShort {
+        got: usize,
+        got_unit: &'static str,
+        min: usize,
+    },
     #[error("serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
     #[error("base64 encoding error: {0}")]
     Base64EncodingError(#[from] base64::DecodeError),
     #[error(transparent)]
     Hmac(#[from] hmac::digest::InvalidLength),
+    #[error("I/O error while reading artifact body for signing: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 #[derive(Debug)]
@@ -38,6 +52,19 @@ impl ArtifactSignatureAuthenticator {
         }
     }
 
+    pub fn validate_key_length(&self) -> Result<(), SignatureError> {
+        let key = self.secret_key()?;
+        if key.len() < MIN_SIGNATURE_KEY_LENGTH {
+            let len = key.len();
+            return Err(SignatureError::SignatureKeyTooShort {
+                got: len,
+                got_unit: if len == 1 { "byte" } else { "bytes" },
+                min: MIN_SIGNATURE_KEY_LENGTH,
+            });
+        }
+        Ok(())
+    }
+
     // Gets secret key from either secret key override or environment variable.
     // HMAC_SHA256 has no key length limit, although it's generally recommended
     // to keep key length under 64 bytes since anything longer is hashed using
@@ -52,20 +79,74 @@ impl ArtifactSignatureAuthenticator {
             .into_raw_vec())
     }
 
-    fn construct_metadata(&self, hash: &[u8]) -> Result<Vec<u8>, SignatureError> {
-        let mut metadata = hash.to_vec();
-        metadata.extend_from_slice(&self.team_id);
-
-        Ok(metadata)
-    }
-
-    fn get_tag_generator(&self, hash: &[u8]) -> Result<HmacSha256, SignatureError> {
+    /// Writes every field that precedes the artifact body. The body is the
+    /// final length-prefixed field, so knowing `body_len` up front lets
+    /// callers stream the body in bounded chunks instead of holding the whole
+    /// artifact in memory.
+    fn start_tag_generator(
+        &self,
+        hash: &[u8],
+        body_len: u64,
+    ) -> Result<HmacSha256, SignatureError> {
         let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
-        let metadata = self.construct_metadata(hash)?;
-
-        mac.update(&metadata);
+        update_message_field(&mut mac, SIGNATURE_MESSAGE_PREFIX);
+        update_message_field(&mut mac, hash);
+        update_message_field(&mut mac, &self.team_id);
+        mac.update(&body_len.to_le_bytes());
 
         Ok(mac)
+    }
+
+    fn get_tag_generator(
+        &self,
+        hash: &[u8],
+        artifact_body: &[u8],
+    ) -> Result<HmacSha256, SignatureError> {
+        let mut mac = self.start_tag_generator(hash, artifact_body.len() as u64)?;
+        mac.update(artifact_body);
+
+        Ok(mac)
+    }
+
+    /// Starts an incremental tag computation for a body that will be fed in
+    /// chunks, e.g. while a download streams to disk.
+    pub fn start_streaming_tag(
+        &self,
+        hash: &[u8],
+        body_len: u64,
+    ) -> Result<StreamingTag, SignatureError> {
+        Ok(StreamingTag {
+            mac: self.start_tag_generator(hash, body_len)?,
+        })
+    }
+
+    /// Computes the tag for a body that is read in bounded chunks rather than
+    /// held in memory all at once.
+    #[tracing::instrument(skip_all)]
+    pub fn generate_tag_reader(
+        &self,
+        hash: &[u8],
+        mut artifact_body: impl Read,
+        body_len: u64,
+    ) -> Result<String, SignatureError> {
+        let tag = self.start_streaming_tag(hash, body_len)?;
+        let tag = tag.update_from_reader(&mut artifact_body)?;
+        Ok(tag.finalize_tag())
+    }
+
+    /// Validates a body that is read in bounded chunks rather than held in
+    /// memory all at once.
+    #[tracing::instrument(skip_all)]
+    pub fn validate_reader(
+        &self,
+        hash: &[u8],
+        mut artifact_body: impl Read,
+        body_len: u64,
+        expected_tag: &str,
+    ) -> Result<bool, SignatureError> {
+        let tag = self.start_streaming_tag(hash, body_len)?;
+        let tag = tag.update_from_reader(&mut artifact_body)?;
+        tag.verify(expected_tag)
     }
 
     #[tracing::instrument(skip_all)]
@@ -74,9 +155,7 @@ impl ArtifactSignatureAuthenticator {
         hash: &[u8],
         artifact_body: &[u8],
     ) -> Result<Vec<u8>, SignatureError> {
-        let mut mac = self.get_tag_generator(hash)?;
-
-        mac.update(artifact_body);
+        let mac = self.get_tag_generator(hash, artifact_body)?;
         let hmac_output = mac.finalize();
         Ok(hmac_output.into_bytes().to_vec())
     }
@@ -87,9 +166,7 @@ impl ArtifactSignatureAuthenticator {
         hash: &[u8],
         artifact_body: &[u8],
     ) -> Result<String, SignatureError> {
-        let mut hmac_ctx = self.get_tag_generator(hash)?;
-
-        hmac_ctx.update(artifact_body);
+        let hmac_ctx = self.get_tag_generator(hash, artifact_body)?;
         let hmac_output = hmac_ctx.finalize();
         Ok(BASE64_STANDARD.encode(hmac_output.into_bytes()))
     }
@@ -101,13 +178,51 @@ impl ArtifactSignatureAuthenticator {
         artifact_body: &[u8],
         expected_tag: &str,
     ) -> Result<bool, SignatureError> {
-        let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
-        let message = self.construct_metadata(hash)?;
-        mac.update(&message);
-        mac.update(artifact_body);
+        let mac = self.get_tag_generator(hash, artifact_body)?;
 
         let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
         Ok(mac.verify_slice(&expected_bytes).is_ok())
+    }
+}
+
+fn update_message_field(mac: &mut HmacSha256, field: &[u8]) {
+    mac.update(&(field.len() as u64).to_le_bytes());
+    mac.update(field);
+}
+
+/// An in-progress tag computation over an artifact body that arrives in
+/// bounded chunks. Produced by
+/// [`ArtifactSignatureAuthenticator::start_streaming_tag`], which has already
+/// absorbed the fixed message fields and the body's length prefix.
+pub struct StreamingTag {
+    mac: HmacSha256,
+}
+
+impl StreamingTag {
+    pub fn update(&mut self, chunk: &[u8]) {
+        self.mac.update(chunk);
+    }
+
+    pub fn update_from_reader(mut self, mut reader: impl Read) -> Result<Self, SignatureError> {
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let n = reader.read(&mut buffer)?;
+            if n == 0 {
+                break;
+            }
+            self.mac.update(&buffer[..n]);
+        }
+        Ok(self)
+    }
+
+    pub fn finalize_tag(self) -> String {
+        let output = self.mac.finalize();
+        BASE64_STANDARD.encode(output.into_bytes())
+    }
+
+    pub fn verify(self, expected_tag: &str) -> Result<bool, SignatureError> {
+        let expected_bytes = BASE64_STANDARD.decode(expected_tag)?;
+        Ok(self.mac.verify_slice(&expected_bytes).is_ok())
     }
 }
 
@@ -124,10 +239,7 @@ mod tests {
             artifact_body: &[u8],
             expected_tag: &[u8],
         ) -> Result<bool, SignatureError> {
-            let mut mac = HmacSha256::new_from_slice(&self.secret_key()?)?;
-            let message = self.construct_metadata(hash)?;
-            mac.update(&message);
-            mac.update(artifact_body);
+            let mac = self.get_tag_generator(hash, artifact_body)?;
 
             Ok(mac.verify_slice(expected_tag).is_ok())
         }
@@ -243,11 +355,76 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn test_streaming_tag_matches_in_memory_tag() -> Result<()> {
+        let signature = ArtifactSignatureAuthenticator {
+            team_id: b"team-stream".to_vec(),
+            secret_key_override: Some(b"streaming-secret-key-that-is-long-enough".to_vec()),
+        };
+
+        // A body larger than the reader's internal chunk size, with bytes
+        // that do not repeat so chunk boundaries cannot mask ordering bugs.
+        let mut body = Vec::with_capacity(300_000);
+        let mut state: u64 = 0x853c49e6748fea9b;
+        for _ in 0..300_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            body.push((state >> 32) as u8);
+        }
+
+        let expected = signature.generate_tag(b"stream-hash", &body)?;
+        let streamed =
+            signature.generate_tag_reader(b"stream-hash", &body[..], body.len() as u64)?;
+        assert_eq!(expected, streamed);
+
+        assert!(signature.validate_reader(
+            b"stream-hash",
+            &body[..],
+            body.len() as u64,
+            &expected
+        )?);
+
+        // An incremental tag fed with irregular chunk sizes must agree too.
+        let mut tag = signature.start_streaming_tag(b"stream-hash", body.len() as u64)?;
+        for chunk in body.chunks(7_777) {
+            tag.update(chunk);
+        }
+        assert!(tag.verify(&expected)?);
+
+        // Tampering with a single byte must fail validation.
+        let mut tampered = body.clone();
+        tampered[150_000] ^= 0xFF;
+        assert!(!signature.validate_reader(
+            b"stream-hash",
+            &tampered[..],
+            tampered.len() as u64,
+            &expected
+        )?);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_streaming_tag_empty_body_matches_in_memory() -> Result<()> {
+        let signature = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"key".to_vec()),
+        };
+        let expected = signature.generate_tag(b"hash", b"")?;
+        assert_eq!(
+            signature.generate_tag_reader(b"hash", &b""[..], 0)?,
+            expected
+        );
+        assert!(signature.validate_reader(b"hash", &b""[..], 0, &expected)?);
+        Ok(())
+    }
+
     fn test_signature(test_case: TestCase) -> Result<()> {
-        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", test_case.secret_key) };
+        let secret_key = test_case.secret_key.as_bytes().to_vec();
         let signature = ArtifactSignatureAuthenticator {
             team_id: test_case.team_id.to_vec(),
-            secret_key_override: None,
+            secret_key_override: Some(secret_key),
         };
 
         let hash = test_case.artifact_hash;
@@ -260,17 +437,95 @@ mod tests {
         let bad_tag = BASE64_STANDARD.encode(b"bad tag");
         assert!(!signature.validate(hash, artifact_body, &bad_tag)?);
 
-        // Change the key
-        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "some other key") };
+        // Use a different key and confirm the original tag is no longer valid
+        let different_signature = ArtifactSignatureAuthenticator {
+            team_id: test_case.team_id.to_vec(),
+            secret_key_override: Some(b"some other key".to_vec()),
+        };
 
-        // Confirm that the tag is no longer valid
-        assert!(!signature.validate_tag(hash, artifact_body, tag.as_ref())?);
+        assert!(!different_signature.validate_tag(hash, artifact_body, tag.as_ref())?);
 
-        // Generate new tag
-        let tag = signature.generate_tag(hash, artifact_body)?;
+        // Generate new tag with the different key
+        let tag = different_signature.generate_tag(hash, artifact_body)?;
 
-        // Confirm it's valid
-        assert!(signature.validate(hash, artifact_body, &tag)?);
+        // Confirm it's valid with the same key
+        assert!(different_signature.validate(hash, artifact_body, &tag)?);
         Ok(())
+    }
+
+    #[test]
+    fn test_key_too_short_rejected() {
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"only31bytes_padded_to_31_bytes!".to_vec()),
+        };
+        assert_eq!(auth.secret_key().unwrap().len(), 31);
+
+        let err = auth.validate_key_length().unwrap_err();
+        assert!(
+            matches!(
+                err,
+                SignatureError::SignatureKeyTooShort {
+                    got: 31,
+                    got_unit: "bytes",
+                    min: 32
+                }
+            ),
+            "expected SignatureKeyTooShort, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_key_exactly_32_bytes_accepted() {
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"exactly_32_bytes_long_key_value!".to_vec()),
+        };
+        assert_eq!(auth.secret_key().unwrap().len(), 32);
+        auth.validate_key_length().unwrap();
+    }
+
+    #[test]
+    fn test_key_longer_than_32_bytes_accepted() {
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(
+                b"this_key_is_definitely_longer_than_32_bytes_total".to_vec(),
+            ),
+        };
+        assert!(auth.secret_key().unwrap().len() > 32);
+        auth.validate_key_length().unwrap();
+    }
+
+    #[test]
+    fn test_short_key_still_works_for_signing() {
+        // Without the future flag, short keys must still work (backward compat)
+        let auth = ArtifactSignatureAuthenticator {
+            team_id: b"team".to_vec(),
+            secret_key_override: Some(b"short".to_vec()),
+        };
+        let tag = auth.generate_tag(b"hash", b"body").unwrap();
+        assert!(auth.validate(b"hash", b"body", &tag).unwrap());
+    }
+
+    #[test]
+    fn test_signature_fields_are_separated() {
+        let secret_key = b"shared signing key".to_vec();
+        let attacker = ArtifactSignatureAuthenticator {
+            team_id: b"team_abc".to_vec(),
+            secret_key_override: Some(secret_key.clone()),
+        };
+        let victim = ArtifactSignatureAuthenticator {
+            team_id: b"team_ab".to_vec(),
+            secret_key_override: Some(secret_key),
+        };
+
+        let tag = attacker.generate_tag(b"0123456789abcdef", b"body").unwrap();
+
+        assert!(
+            !victim
+                .validate(b"0123456789abcdef", b"cbody", &tag)
+                .unwrap()
+        );
     }
 }

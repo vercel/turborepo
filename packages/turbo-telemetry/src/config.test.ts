@@ -13,8 +13,8 @@ describe("TelemetryConfig", () => {
       config: {
         telemetry_enabled: true,
         telemetry_id: "123456",
-        telemetry_salt: "private-salt",
-      },
+        telemetry_salt: "private-salt"
+      }
     });
   });
 
@@ -33,7 +33,7 @@ describe("TelemetryConfig", () => {
       const mockFileContent = JSON.stringify({
         telemetry_enabled: true,
         telemetry_id: "654321",
-        telemetry_salt: "default-salt",
+        telemetry_salt: "default-salt"
       });
 
       const mockDefaultConfigPath = mock.fn(() => mockConfigPath);
@@ -47,7 +47,7 @@ describe("TelemetryConfig", () => {
       assert.equal(mockDefaultConfigPath.mock.calls.length > 0, true);
       assert.deepEqual(mockReadFileSync.mock.calls[0].arguments, [
         mockConfigPath,
-        "utf-8",
+        "utf-8"
       ]);
       assert.equal(result instanceof TelemetryConfig, true);
       assert.equal(result?.id, "654321");
@@ -72,14 +72,14 @@ describe("TelemetryConfig", () => {
       assert.equal(mockDefaultConfigPath.mock.calls.length > 0, true);
       assert.deepEqual(mockReadFileSync.mock.calls[0].arguments, [
         mockConfigPath,
-        "utf-8",
+        "utf-8"
       ]);
       assert.equal(mockRmSync.mock.calls.length, 1);
       assert.deepEqual(mockRmSync.mock.calls[0].arguments, [
         mockConfigPath,
         {
-          force: true,
-        },
+          force: true
+        }
       ]);
 
       assert.equal(mockWriteFileSync.mock.calls.length, 1);
@@ -108,7 +108,7 @@ describe("TelemetryConfig", () => {
       const mockFileContent = JSON.stringify({
         // missing telemetry_enabled
         telemetry_id: id,
-        telemetry_salt: "default-salt",
+        telemetry_salt: "default-salt"
       });
       const mockRmSync = mock.fn();
       const mockWriteFileSync = mock.fn();
@@ -126,14 +126,14 @@ describe("TelemetryConfig", () => {
       assert.equal(mockDefaultConfigPath.mock.calls.length, 1);
       assert.deepEqual(mockReadFileSync.mock.calls[0].arguments, [
         mockConfigPath,
-        "utf-8",
+        "utf-8"
       ]);
       assert.equal(mockRmSync.mock.calls.length, 1);
       assert.deepEqual(mockRmSync.mock.calls[0].arguments, [
         mockConfigPath,
         {
-          force: true,
-        },
+          force: true
+        }
       ]);
       assert.equal(mockWriteFileSync.mock.calls.length, 1);
       assert.deepEqual(
@@ -159,7 +159,7 @@ describe("TelemetryConfig", () => {
         telemetry_enabled: true,
         // telemetry_id should be a string
         telemetry_id: true,
-        telemetry_salt: salt,
+        telemetry_salt: salt
       });
       const mockRmSync = mock.fn();
       const mockWriteFileSync = mock.fn();
@@ -177,14 +177,14 @@ describe("TelemetryConfig", () => {
       assert.equal(mockDefaultConfigPath.mock.calls.length, 1);
       assert.deepEqual(mockReadFileSync.mock.calls[0].arguments, [
         mockConfigPath,
-        "utf-8",
+        "utf-8"
       ]);
       assert.equal(mockRmSync.mock.calls.length, 1);
       assert.deepEqual(mockRmSync.mock.calls[0].arguments, [
         mockConfigPath,
         {
-          force: true,
-        },
+          force: true
+        }
       ]);
       assert.equal(mockWriteFileSync.mock.calls.length, 1);
       assert.equal(
@@ -213,7 +213,7 @@ describe("TelemetryConfig", () => {
 
       assert.deepEqual(mockWriteFileSync.mock.calls[0].arguments, [
         "/path/to/config.json",
-        mockJson,
+        mockJson
       ]);
     });
 
@@ -227,7 +227,7 @@ describe("TelemetryConfig", () => {
       telemetryConfig.tryWrite();
       assert.deepStrictEqual(mockWriteFileSync.mock.calls[0].arguments, [
         "/path/to/config.json",
-        mockJson,
+        mockJson
       ]);
     });
   });
@@ -240,8 +240,8 @@ describe("TelemetryConfig", () => {
           telemetry_enabled: true,
           telemetry_id: "123456",
           telemetry_salt: "private-salt",
-          telemetry_alerted: new Date().toISOString(),
-        },
+          telemetry_alerted: new Date().toISOString()
+        }
       });
 
       const result = telemetryConfig.hasSeenAlert();
@@ -256,8 +256,8 @@ describe("TelemetryConfig", () => {
           telemetry_enabled: true,
           telemetry_id: "123456",
           telemetry_salt: "private-salt",
-          telemetry_alerted: undefined,
-        },
+          telemetry_alerted: undefined
+        }
       });
       const result = telemetryConfig.hasSeenAlert();
 
@@ -279,9 +279,9 @@ describe("TelemetryConfig", () => {
       {
         envVar: "TURBO_TELEMETRY_DISABLED",
         value: "true",
-        expectedResult: false,
+        expectedResult: false
       },
-      { envVar: null, value: null, expectedResult: true },
+      { envVar: null, value: null, expectedResult: true }
     ];
     for (const { envVar, value, expectedResult } of testCases) {
       it(`should return ${expectedResult} when ${envVar} is set to '${value}'`, () => {
@@ -290,8 +290,8 @@ describe("TelemetryConfig", () => {
           config: {
             telemetry_enabled: true,
             telemetry_id: "123456",
-            telemetry_salt: "private-salt",
-          },
+            telemetry_salt: "private-salt"
+          }
         });
 
         if (envVar) {
@@ -343,8 +343,8 @@ describe("TelemetryConfig", () => {
         config: {
           telemetry_enabled: false,
           telemetry_id: "123456",
-          telemetry_salt: "private-salt",
-        },
+          telemetry_salt: "private-salt"
+        }
       });
 
       telemetryConfig.showAlert();
@@ -362,7 +362,7 @@ describe("TelemetryConfig", () => {
       assert.equal(mockWriteFileSync.mock.calls.length, 1);
       assert.deepStrictEqual(mockWriteFileSync.mock.calls[0].arguments, [
         "/path/to/config.json",
-        JSON.stringify(telemetryConfig.config, null, 2),
+        JSON.stringify(telemetryConfig.config, null, 2)
       ]);
     });
   });
@@ -376,7 +376,7 @@ describe("TelemetryConfig", () => {
       assert.equal(mockWriteFileSync.mock.calls.length, 1);
       assert.deepStrictEqual(mockWriteFileSync.mock.calls[0].arguments, [
         "/path/to/config.json",
-        JSON.stringify(telemetryConfig.config, null, 2),
+        JSON.stringify(telemetryConfig.config, null, 2)
       ]);
     });
   });
@@ -389,8 +389,8 @@ describe("TelemetryConfig", () => {
           telemetry_enabled: true,
           telemetry_id: "123456",
           telemetry_salt: "private-salt",
-          telemetry_alerted: new Date().toISOString(),
-        },
+          telemetry_alerted: new Date().toISOString()
+        }
       });
 
       const result = telemetryConfig.alertShown();
@@ -408,7 +408,7 @@ describe("TelemetryConfig", () => {
       assert.equal(mockWriteFileSync.mock.calls.length, 1);
       assert.deepEqual(mockWriteFileSync.mock.calls[0].arguments, [
         "/path/to/config.json",
-        JSON.stringify(telemetryConfig.config, null, 2),
+        JSON.stringify(telemetryConfig.config, null, 2)
       ]);
     });
   });
@@ -422,8 +422,8 @@ describe("TelemetryConfig", () => {
       assert.deepEqual(mockOneWayHashWithSalt.mock.calls[0].arguments, [
         {
           input: "input-value",
-          salt: "private-salt",
-        },
+          salt: "private-salt"
+        }
       ]);
       assert.equal(result, "hashed-value");
     });

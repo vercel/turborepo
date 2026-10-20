@@ -8,10 +8,10 @@ import flatRecommended from "./configs/flat/recommended";
 export type { RuleContextWithOptions } from "./rules/no-undeclared-env-vars";
 export type { ProjectKey } from "./utils/calculate-inputs";
 
-const plugin = {
+const plugin: ESLint.Plugin = {
   meta: { name, version },
   rules: {
-    [RULES.noUndeclaredEnvVars]: noUndeclaredEnvVars,
+    [RULES.noUndeclaredEnvVars]: noUndeclaredEnvVars
   },
   configs: {
     recommended,
@@ -20,12 +20,13 @@ const plugin = {
       plugins: {
         get turbo(): ESLint.Plugin {
           return plugin;
-        },
-      },
-    },
-  },
-} satisfies ESLint.Plugin;
+        }
+      }
+    }
+  }
+};
 
-export const { rules, configs } = plugin;
+export const rules: ESLint.Plugin["rules"] = plugin.rules;
+export const configs: ESLint.Plugin["configs"] = plugin.configs;
 
 export default plugin;

@@ -1,11 +1,12 @@
 [package]
 name = "turborepo-signals"
 version = "0.1.0"
-edition = "2024"
+edition = { workspace = true }
 license = "MIT"
 
 [dependencies]
 futures = { workspace = true }
+libc = "0.2"
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 

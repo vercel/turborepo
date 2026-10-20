@@ -1,13 +1,13 @@
-import { cn } from "../../utils/index";
-import { ButtonElement, PrimitveButtonProps } from "@Configs/primitives";
-import { Component, JSX, splitProps } from "solid-js";
+import { Component, JSX, splitProps, ValidComponent } from "solid-js";
 import { Dynamic } from "solid-js/web";
+import { ButtonElement, PrimitiveButtonProps } from "../../config/primitives";
+import { cn } from "../../utils/index";
 
 // Button props
 interface ButtonWrapperProps
-  extends PrimitveButtonProps,
+  extends PrimitiveButtonProps,
     JSX.ButtonHTMLAttributes<HTMLButtonElement> {
-  asChild?: keyof JSX.IntrinsicElements | Component<any>;
+  asChild?: ValidComponent;
   children?: JSX.Element;
   ref?: (el: ButtonElement) => void;
   class?: string;

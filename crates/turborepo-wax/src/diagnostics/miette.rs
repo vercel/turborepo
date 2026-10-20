@@ -9,10 +9,10 @@ use tardar::{
 use thiserror::Error;
 
 use crate::{
+    Checked, Glob,
     diagnostics::SpanExt as _,
     rule,
     token::{self, TokenKind, TokenTree, Tokenized},
-    Checked, Glob,
 };
 
 /// APIs for diagnosing globs.
@@ -106,18 +106,19 @@ fn diagnose<'i, 't>(
         .chain(
             token::literals(tokenized.tokens())
                 .filter(|(_, literal)| literal.is_semantic_literal())
-                .map(|(component, literal)| {
-                    Box::new(SemanticLiteralWarning {
+                .filter_map(|(component, literal)| {
+                    let span = component
+                        .tokens()
+                        .iter()
+                        .map(|token| *token.annotation())
+                        .reduce(|left, right| left.union(&right))
+                        .map(SourceSpan::from)?;
+
+                    Some(Box::new(SemanticLiteralWarning {
                         expression: tokenized.expression().clone(),
                         literal: literal.text().clone(),
-                        span: component
-                            .tokens()
-                            .iter()
-                            .map(|token| *token.annotation())
-                            .reduce(|left, right| left.union(&right))
-                            .map(SourceSpan::from)
-                            .expect("no tokens in component"),
-                    }) as BoxedDiagnostic
+                        span,
+                    }) as BoxedDiagnostic)
                 }),
         )
         .chain(
@@ -150,9 +151,11 @@ mod tests {
         let glob = Glob::new("../foo").unwrap();
         let diagnostics: Vec<_> = glob.diagnose().collect();
 
-        assert!(diagnostics.iter().any(|diagnostic| diagnostic
-            .code()
-            .map_or(false, |code| code.to_string() == CODE_SEMANTIC_LITERAL)));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .code()
+                .map_or(false, |code| code.to_string() == CODE_SEMANTIC_LITERAL)
+        }));
     }
 
     #[test]
@@ -160,8 +163,10 @@ mod tests {
         let glob = Glob::new("**/foo/").unwrap();
         let diagnostics: Vec<_> = glob.diagnose().collect();
 
-        assert!(diagnostics.iter().any(|diagnostic| diagnostic
-            .code()
-            .map_or(false, |code| code.to_string() == CODE_TERMINATING_SEPARATOR)));
+        assert!(diagnostics.iter().any(|diagnostic| {
+            diagnostic
+                .code()
+                .map_or(false, |code| code.to_string() == CODE_TERMINATING_SEPARATOR)
+        }));
     }
 }

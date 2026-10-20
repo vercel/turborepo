@@ -1,0 +1,17 @@
+{
+  "name": "my-app",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo build my-app"
+  },
+  "dependencies": {
+    "@repo/shared": "workspace:*",
+    "react": "17.0.2"
+  },
+  "dependenciesMeta": {
+    "@repo/shared": {
+      "injected": true
+    }
+  }
+}

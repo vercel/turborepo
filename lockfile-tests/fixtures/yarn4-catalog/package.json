@@ -1,0 +1,16 @@
+{
+  "name": "my-turborepo",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "dependencies": {
+    "turbo": "npm:^2.6.1"
+  },
+  "packageManager": "yarn@4.12.0",
+  "catalog": {
+    "lodash": "^4.17.21"
+  }
+}

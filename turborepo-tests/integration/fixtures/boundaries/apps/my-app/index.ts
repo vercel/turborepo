@@ -22,3 +22,20 @@ import { walkThePlank } from "module-package";
 // @boundaries-ignore one more reason
 
 import { walkThePlank } from "module-package";
+
+// Allow importing own package
+import { walkThePlank } from "my-app";
+
+// Subpath import from a declared dependency should be allowed
+import { anchor } from "another/helpers";
+
+// Subpath import from a package that is NOT a dependency should fail
+import { data } from "utils/data";
+
+// Bun runtime imports should not be flagged even with @types/bun in devDependencies
+import { $, which } from "bun";
+import { test } from "bun:test";
+
+// Relative imports resolving into node_modules (e.g. SvelteKit generated code)
+// should not be flagged as leaving the package
+import { error } from "../../node_modules/some-pkg/dist/error.js";

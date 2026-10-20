@@ -1,4 +1,4 @@
-import fs from "fs/promises";
+import fs from "node:fs/promises";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
@@ -35,18 +35,35 @@ export type LinkError = {
 
 /** where to look for docs (.mdx files) */
 const DOCS_PATH = ".";
-const EXCLUDED_HASHES = ["top"];
+const EXCLUDED_HASHES: string[] = [
+  // Start: hashlinks created by Fumadocs
+  "create-turbo-config",
+  "add-package-manager",
+  "set-default-outputs"
+  // End: hashlinks created by Fumadocs
+];
 
 /** These paths exist, just not in our Markdown files */
-const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/repo"];
+const EXCLUDED_PATHS = ["/api/remote-cache-spec", "/discord", "/docs/openapi"];
 
 const slugger = new GitHubSlugger();
 
 /** Collect the paths of all .mdx files we care about */
 const getAllMdxFilePaths = async (): Promise<string[]> => {
   const allFiles = await fs.readdir(DOCS_PATH, { recursive: true });
-  return allFiles.filter((file) => file.endsWith(".mdx"));
+  return allFiles.filter(
+    (file) => file.endsWith(".mdx") && !file.startsWith("openapi/")
+  );
 };
+
+// Strips JSX components from heading text so slugs match the rendered output.
+// The link checker parses raw markdown (not MDX), so JSX tags like
+// <ExperimentalBadge>Experimental</ExperimentalBadge> appear as text.
+const stripJsxComponents = (text: string): string =>
+  text
+    .replace(/<[A-Z]\w*(?:\s[^>]*)?>[\s\S]*?<\/[A-Z]\w*>/g, "")
+    .replace(/<[A-Z]\w*(?:\s[^>]*)?\/>/g, "")
+    .trim();
 
 // Returns the slugs of all headings in a tree
 const getHeadingsFromMarkdownTree = (
@@ -57,13 +74,12 @@ const getHeadingsFromMarkdownTree = (
 
   visit(tree, "heading", (node) => {
     let headingText = "";
-    // Account for headings with inline code blocks by concatenating the
-    // text values of all children of a heading node.
     visit(node, (innerNode: any) => {
       if (innerNode.value) {
         headingText += innerNode.value;
       }
     });
+    headingText = stripJsxComponents(headingText);
     const slugified = slugger.slug(headingText);
     headings.push(slugified);
   });
@@ -86,7 +102,8 @@ const markdownProcessor = unified()
   });
 
 const filePathToUrl = (filePath: string): string =>
-  filePath.replace("repo-docs", "/repo/docs").replace(".mdx", "");
+  // "/" prefix makes it easier to compare internal links
+  "/" + filePath.replace(".mdx", "");
 
 const validateFrontmatter = (path: string, data: Record<string, unknown>) => {
   if (!data.title) {
@@ -139,6 +156,9 @@ const prepareDocumentMapEntry = async (
   }
 };
 
+const hashExistsInHeadings = (headings: string[], hash: string): boolean =>
+  headings.includes(hash);
+
 /** Checks if the links point to existing documents */
 const validateInternalLink =
   (documentMap: Map<string, Document>) => (doc: Document, href: string) => {
@@ -155,23 +175,23 @@ const validateInternalLink =
       foundPage = documentMap.get(`${link}/index`);
     }
 
-    let errors: LinkError[] = [];
+    const errors: LinkError[] = [];
 
     if (!foundPage) {
       errors.push({
         type: "link",
         href,
-        doc,
+        doc
       });
     } else if (hash && !EXCLUDED_HASHES.includes(hash)) {
       // Check if the hash link points to an existing section within the document
-      const hashFound = foundPage.headings.includes(hash);
+      const hashFound = hashExistsInHeadings(foundPage.headings, hash);
 
       if (!hashFound) {
         errors.push({
           type: "hash",
           href,
-          doc,
+          doc
         });
       }
     }
@@ -190,12 +210,11 @@ const validateHashLink = (doc: Document, href: string) => {
     return [];
   }
 
-  let linkError: LinkError = {
+  const linkError: LinkError = {
     type: "hash",
     href,
-    doc,
+    doc
   };
-  const { content, ...docWithoutContent } = doc;
   return [linkError];
 };
 
@@ -205,7 +224,7 @@ const traverseTreeAndValidateLinks = (
   tree: unknown,
   doc: Document
 ): LinkError[] => {
-  let errors: LinkError[] = [];
+  const errors: LinkError[] = [];
 
   try {
     visit(tree, (node: any) => {
@@ -235,6 +254,9 @@ const traverseTreeAndValidateLinks = (
  */
 export const collectLinkErrors = async (): Promise<LinkError[]> => {
   const allMdxFilePaths = await getAllMdxFilePaths();
+  if (allMdxFilePaths.length === 0) {
+    throw new Error("No files were found for processing.");
+  }
 
   const documentMap = new Map(
     await Promise.all(allMdxFilePaths.map(prepareDocumentMapEntry))

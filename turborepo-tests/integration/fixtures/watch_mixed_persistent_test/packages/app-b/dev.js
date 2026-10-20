@@ -1,0 +1,13 @@
+const fs = require('fs');
+const path = require('path');
+
+const markerDir = path.join(__dirname, '.markers');
+fs.mkdirSync(markerDir, { recursive: true });
+
+const count = fs.readdirSync(markerDir).filter(f => f.startsWith('dev-')).length;
+const markerFile = path.join(markerDir, `dev-${count}`);
+fs.writeFileSync(markerFile, `${Date.now()}\n`);
+console.log(`app-b dev #${count}`);
+
+// Stay alive — this is a persistent task
+setInterval(() => {}, 60000);
