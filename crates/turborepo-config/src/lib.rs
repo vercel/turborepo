@@ -454,10 +454,10 @@ impl ConfigurationOptions {
         non_empty_str(self.api_url.as_deref()).unwrap_or(DEFAULT_API_URL)
     }
 
-    /// Warn when repository files select where credentials may be sent. Check
-    /// the final merged configuration so explicit CLI, environment, and global
-    /// URL selections remain supported without a warning.
-    fn api_token_destination_warning(&self) -> Option<&'static str> {
+    /// Returns a warning when repository files select where credentials may be
+    /// sent. Callers should emit it only after applying all command overrides,
+    /// never during preliminary configuration loading such as shim inference.
+    pub fn api_token_destination_warning(&self) -> Option<&'static str> {
         if self.token().is_none() || self.api_url() == DEFAULT_API_URL {
             return None;
         }
@@ -886,14 +886,14 @@ impl TurborepoConfigBuilder {
                 let current_source_config = current_source.get_configuration_options(&acc)?;
                 let current_source_config = current_source_config.with_url_sources(source);
                 acc.merge(current_source_config);
-                Ok::<_, Error>(acc)
+                Ok(acc)
             },
-        )?;
+        );
 
-        if let Some(warning) = config.api_token_destination_warning() {
-            tracing::warn!("{warning}");
-        }
-        Ok(config)
+        // We explicitly do a let and return to help the Rust compiler see that there
+        // are no references still held by the folding.
+        #[allow(clippy::let_and_return)]
+        config
     }
 }
 

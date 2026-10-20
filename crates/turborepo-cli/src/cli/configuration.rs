@@ -66,7 +66,14 @@ pub(crate) fn resolve_configuration_from_args(
 ) -> Result<ConfigurationOptions, ConfigError> {
     let overrides = cli_overrides_from_args(args)?;
     let (environment, file_inputs) = crate::cli::configuration_inputs_from_process()?;
-    resolve_configuration_with_overrides(repo_root, overrides, environment, file_inputs)
+    let config =
+        resolve_configuration_with_overrides(repo_root, overrides, environment, file_inputs)?;
+    // The shim also resolves configuration, but without CLI URL overrides.
+    // Emit this warning only for the command's final destination.
+    if let Some(warning) = config.api_token_destination_warning() {
+        tracing::warn!("{warning}");
+    }
+    Ok(config)
 }
 
 #[cfg(test)]
