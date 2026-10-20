@@ -944,29 +944,65 @@ fn watch_edit_during_build_triggers_rebuild() {
 #[test]
 fn watch_rapid_edits_produce_single_rebuild() {
     let (_tempdir, test_dir) = setup_slow_build_test();
-    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    let build_file = test_dir.join("packages/a/build.js");
+    let build_script = fs::read_to_string(&build_file).unwrap();
+    fs::write(
+        &build_file,
+        format!(
+            "const source = require('fs').readFileSync(require('path').join(__dirname, 'src.js'), \
+             'utf8');\n{build_script}\nfs.writeFileSync(path.join(markerDir, 'complete'), \
+             source);\n"
+        ),
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add build completion markers", "--quiet"],
+    );
 
-    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
-    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
-    std::thread::sleep(Duration::from_secs(4));
-
-    let a_before = marker_count(&test_dir, "a");
-
-    let num_edits = 5;
+    let completed_file = test_dir.join("packages/a/.markers/complete");
+    let wait_for_source = |source: &str| {
+        let started = Instant::now();
+        while fs::read_to_string(&completed_file).ok().as_deref() != Some(source) {
+            assert!(
+                started.elapsed() < Duration::from_secs(30),
+                "a build must complete having consumed {source:?}"
+            );
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    };
     let src_file = test_dir.join("packages/a/src.js");
+    let initial_source = fs::read_to_string(&src_file).unwrap();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    wait_for_source(&initial_source);
+    assert_eq!(
+        wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30)),
+        1,
+        "package b's initial build must start"
+    );
+
+    let a_before = prefixed_marker_count(&test_dir, "a", "run-");
+
+    // Wall-clock write spacing does not bound package-event spacing after
+    // filesystem delivery and async hashing. The paused-time
+    // pending_changes_coalesce_five_edits_until_quiet test covers 100ms events.
+    let num_edits = 5;
     for i in 0..num_edits {
         fs::write(
             &src_file,
             format!("module.exports = {{ a: 'rapid-{i}' }};\n"),
         )
         .unwrap();
-        std::thread::sleep(Duration::from_millis(100));
     }
 
-    wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30));
+    wait_for_source(&format!(
+        "module.exports = {{ a: 'rapid-{}' }};\n",
+        num_edits - 1
+    ));
     std::thread::sleep(Duration::from_secs(5));
 
-    let a_after = marker_count(&test_dir, "a");
+    let a_after = prefixed_marker_count(&test_dir, "a", "run-");
 
     drop(guard);
 
