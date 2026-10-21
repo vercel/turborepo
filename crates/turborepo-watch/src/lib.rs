@@ -697,8 +697,8 @@ impl WatchClient {
 
         let run_fut = async {
             loop {
-                notify_run.notified().await;
-                let some_changed_packages = Self::take_pending_changes(&pending_changes);
+                let some_changed_packages =
+                    Self::wait_for_pending_changes(&pending_changes, &notify_run).await;
 
                 if let Some(mut changed_packages) = some_changed_packages {
                     // Stop impacted tasks and wait for prior runs to finish
@@ -780,6 +780,39 @@ impl WatchClient {
                     Self::handle_change_event(&pending, PackageChangeEvent::Rediscover);
                     notify.notify_one();
                 }
+            }
+        }
+    }
+
+    async fn wait_for_pending_changes(
+        pending: &Mutex<ChangedPackages>,
+        notify: &Notify,
+    ) -> Option<ChangedPackages> {
+        const QUIET: Duration = Duration::from_millis(200);
+        const MAXIMUM: Duration = Duration::from_secs(1);
+
+        notify.notified().await;
+        let maximum = tokio::time::Instant::now() + MAXIMUM;
+        loop {
+            {
+                let mut guard = pending
+                    .lock()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                if guard.is_empty() {
+                    return None;
+                }
+                if matches!(*guard, ChangedPackages::All) {
+                    return Some(std::mem::take(guard.deref_mut()));
+                }
+            }
+
+            let now = tokio::time::Instant::now();
+            if now >= maximum
+                || tokio::time::timeout_at((now + QUIET).min(maximum), notify.notified())
+                    .await
+                    .is_err()
+            {
+                return Self::take_pending_changes(pending);
             }
         }
     }
@@ -1080,6 +1113,9 @@ impl WatchClient {
 }
 
 #[cfg(test)]
+mod coordinator_tests;
+
+#[cfg(test)]
 mod impacted_selection_tests;
 
 #[cfg(test)]
@@ -1087,6 +1123,7 @@ mod test {
     use std::{
         collections::HashSet,
         sync::{Arc, Mutex},
+        time::Duration,
     };
 
     use tokio::sync::{Notify, broadcast, oneshot};
@@ -1301,6 +1338,176 @@ mod test {
                 ]
             );
         }
+    }
+
+    async fn assert_pending(mut future: std::pin::Pin<&mut impl Future>) {
+        assert!(
+            std::future::poll_fn(|cx| std::task::Poll::Ready(future.as_mut().poll(cx)))
+                .await
+                .is_pending()
+        );
+    }
+
+    fn notify_change(pending: &Mutex<ChangedPackages>, notify: &Notify, event: PackageChangeEvent) {
+        WatchClient::handle_change_event(pending, event);
+        notify.notify_one();
+    }
+
+    fn assert_batch(batch: Option<ChangedPackages>, expected_packages: &[&str], paths: &[&str]) {
+        let Some(ChangedPackages::Some {
+            packages,
+            changed_files,
+        }) = batch
+        else {
+            panic!("expected a partial change batch");
+        };
+        assert_eq!(
+            packages,
+            expected_packages
+                .iter()
+                .copied()
+                .map(PackageName::from)
+                .collect()
+        );
+        assert_eq!(changed_files, files(paths));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_changes_coalesce_five_edits_until_quiet() {
+        let pending = Mutex::new(ChangedPackages::default());
+        let notify = Notify::new();
+        let batch = WatchClient::wait_for_pending_changes(&pending, &notify);
+        tokio::pin!(batch);
+
+        for edit in 0..5 {
+            notify_change(
+                &pending,
+                &notify,
+                make_package_changed_with_files("web", &[&format!("apps/web/{edit}.ts")]),
+            );
+            assert_pending(batch.as_mut()).await;
+            tokio::time::advance(Duration::from_millis(100)).await;
+        }
+        assert_pending(batch.as_mut()).await;
+        tokio::time::advance(Duration::from_millis(99)).await;
+        assert_pending(batch.as_mut()).await;
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert_batch(
+            batch.await,
+            &["web"],
+            &[
+                "apps/web/0.ts",
+                "apps/web/1.ts",
+                "apps/web/2.ts",
+                "apps/web/3.ts",
+                "apps/web/4.ts",
+            ],
+        );
+        assert!(WatchClient::take_pending_changes(&pending).is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_changes_flush_continuous_edits_at_maximum() {
+        let started = tokio::time::Instant::now();
+        let pending = Mutex::new(ChangedPackages::default());
+        let notify = Notify::new();
+        let batch = WatchClient::wait_for_pending_changes(&pending, &notify);
+        tokio::pin!(batch);
+
+        for _ in 0..10 {
+            notify_change(&pending, &notify, make_package_changed("web"));
+            assert_pending(batch.as_mut()).await;
+            tokio::time::advance(Duration::from_millis(100)).await;
+        }
+        notify_change(&pending, &notify, make_package_changed("ui"));
+        assert_batch(batch.await, &["web", "ui"], &[]);
+        assert_eq!(started.elapsed(), Duration::from_secs(1));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_changes_rediscover_is_immediate() {
+        let pending = Mutex::new(ChangedPackages::default());
+        let notify = Notify::new();
+        notify_change(&pending, &notify, make_rediscover());
+        let started = tokio::time::Instant::now();
+        assert!(matches!(
+            WatchClient::wait_for_pending_changes(&pending, &notify).await,
+            Some(ChangedPackages::All)
+        ));
+        assert_eq!(tokio::time::Instant::now(), started);
+
+        notify_change(&pending, &notify, make_package_changed("web"));
+        let batch = WatchClient::wait_for_pending_changes(&pending, &notify);
+        tokio::pin!(batch);
+        assert_pending(batch.as_mut()).await;
+        tokio::time::advance(Duration::from_millis(100)).await;
+        notify_change(&pending, &notify, make_rediscover());
+        let started = tokio::time::Instant::now();
+        assert!(matches!(batch.await, Some(ChangedPackages::All)));
+        assert_eq!(tokio::time::Instant::now(), started);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_changes_union_packages_and_files_and_retain_later_edits() {
+        let pending = Mutex::new(ChangedPackages::default());
+        let notify = Notify::new();
+        for (package, paths) in [
+            ("web", vec!["apps/web/a.ts"]),
+            ("ui", vec!["packages/ui/b.ts"]),
+            ("web", vec!["apps/web/a.ts", "apps/web/c.ts"]),
+        ] {
+            notify_change(
+                &pending,
+                &notify,
+                make_package_changed_with_files(package, &paths),
+            );
+        }
+        assert_batch(
+            WatchClient::wait_for_pending_changes(&pending, &notify).await,
+            &["web", "ui"],
+            &["apps/web/a.ts", "apps/web/c.ts", "packages/ui/b.ts"],
+        );
+
+        notify_change(
+            &pending,
+            &notify,
+            make_package_changed_with_files("web", &["apps/web/a.ts"]),
+        );
+        notify_change(
+            &pending,
+            &notify,
+            make_package_changed_with_files("ui", &["packages/ui/d.ts"]),
+        );
+        assert_batch(
+            WatchClient::wait_for_pending_changes(&pending, &notify).await,
+            &["web", "ui"],
+            &["apps/web/a.ts", "packages/ui/d.ts"],
+        );
+        assert!(WatchClient::take_pending_changes(&pending).is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_changes_ignore_empty_stale_notifications() {
+        let pending = Mutex::new(ChangedPackages::default());
+        let notify = Notify::new();
+        notify.notify_one();
+        let started = tokio::time::Instant::now();
+        assert!(
+            WatchClient::wait_for_pending_changes(&pending, &notify)
+                .await
+                .is_none()
+        );
+        assert_eq!(tokio::time::Instant::now(), started);
+
+        let batch = WatchClient::wait_for_pending_changes(&pending, &notify);
+        tokio::pin!(batch);
+        assert_pending(batch.as_mut()).await;
+        tokio::time::advance(Duration::from_secs(2)).await;
+        assert_pending(batch.as_mut()).await;
+        notify_change(&pending, &notify, make_package_changed("web"));
+        assert_pending(batch.as_mut()).await;
+        tokio::time::advance(Duration::from_millis(200)).await;
+        assert_batch(batch.await, &["web"], &[]);
     }
 
     #[tokio::test]
