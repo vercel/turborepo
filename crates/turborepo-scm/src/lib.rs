@@ -41,6 +41,8 @@ pub mod worktree;
 mod git_index_regression_tests;
 mod git_path;
 #[cfg(test)]
+mod symlink_inputs_tests;
+#[cfg(test)]
 mod test_utils;
 
 pub use file_hash_mode::FileHashMode;

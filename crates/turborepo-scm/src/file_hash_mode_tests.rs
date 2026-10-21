@@ -287,7 +287,7 @@ fn exact_inputs_hash_executable_permissions_without_package_defaults() {
 
 #[cfg(unix)]
 #[test]
-fn symlink_hashes_ignore_target_permissions() {
+fn symlink_hashes_follow_target_permissions() {
     let (_tmp, root) = test_utils::tmp_dir();
     test_utils::init_repo(&root);
     root.join_component("target")
@@ -296,26 +296,29 @@ fn symlink_hashes_ignore_target_permissions() {
     std::os::unix::fs::symlink("target", root.join_component("link")).unwrap();
     test_utils::commit_all(&root);
     let link = AnchoredSystemPathBuf::from_raw("link").unwrap();
-    let mut previous = None;
-    for mode in [0o644, 0o755] {
-        chmod(&root, "target", mode);
-        for scm in [SCM::new(&root), SCM::Manual(FileHashMode::ContentOnly)] {
-            let scm = scm.with_file_hash_mode(FileHashMode::ExecutableBit);
-            let hash = scm.hash_files(&root, [&link].into_iter()).unwrap();
-            assert_eq!(
-                hash,
-                scm.hash_discovered_files(&root, [&link].into_iter())
-                    .unwrap()
-            );
-            assert_eq!(
-                hash,
-                scm.get_hashes_for_files(&root, &[&link], false).unwrap()
-            );
-            if let Some(previous) = &previous {
-                assert_eq!(&hash, previous);
+    for mode in [FileHashMode::ContentOnly, FileHashMode::ExecutableBit] {
+        let mut states = Vec::new();
+        for permissions in [0o644, 0o755] {
+            chmod(&root, "target", permissions);
+            let mut backends = Vec::new();
+            for scm in [SCM::new(&root), SCM::Manual(FileHashMode::ContentOnly)] {
+                let scm = scm.with_file_hash_mode(mode);
+                let hash = scm.hash_files(&root, [&link].into_iter()).unwrap();
+                assert_eq!(
+                    hash,
+                    scm.hash_discovered_files(&root, [&link].into_iter())
+                        .unwrap()
+                );
+                assert_eq!(
+                    hash,
+                    scm.get_hashes_for_files(&root, &[&link], false).unwrap()
+                );
+                backends.push(hash);
             }
-            previous = Some(hash);
+            assert_eq!(backends[0], backends[1]);
+            states.push(backends.remove(0));
         }
+        assert_eq!(states[0] == states[1], mode == FileHashMode::ContentOnly);
     }
 }
 

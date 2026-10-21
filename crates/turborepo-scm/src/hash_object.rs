@@ -57,6 +57,7 @@ pub(crate) fn hash_objects(
 ) -> Result<(), Error> {
     hash_objects_inner(
         git_root,
+        git_root,
         pkg_path,
         to_hash,
         hashes,
@@ -67,6 +68,7 @@ pub(crate) fn hash_objects(
 }
 
 pub(crate) fn hash_discovered_objects(
+    root: &AbsoluteSystemPath,
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
@@ -75,6 +77,7 @@ pub(crate) fn hash_discovered_objects(
     slowest_files: Option<&std::sync::Arc<crate::SlowestFiles>>,
 ) -> Result<(), Error> {
     hash_objects_inner(
+        root,
         git_root,
         pkg_path,
         to_hash,
@@ -85,7 +88,9 @@ pub(crate) fn hash_discovered_objects(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn hash_objects_inner(
+    root: &AbsoluteSystemPath,
     git_root: &AbsoluteSystemPath,
     pkg_path: &AbsoluteSystemPath,
     to_hash: Vec<RelativeUnixPathBuf>,
@@ -117,7 +122,7 @@ fn hash_objects_inner(
 
                 let _guard = slowest_files.map(|sf| sf.start(filename.clone()));
                 let hash_result = with_emfile_retry(|| {
-                    crate::crlf::hash_file_as_git_blob(&full_file_path, text_attr)
+                    crate::crlf::hash_file_as_git_blob(root, &full_file_path, text_attr)
                 });
                 drop(_guard);
 
@@ -162,6 +167,21 @@ fn hash_objects_inner(
         }
     }
     Ok(())
+}
+
+/// Whether an input's logical path crosses a symlink below the trusted root.
+pub(crate) fn has_symlink(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) -> bool {
+    let mut current = Some(path);
+    while let Some(path) = current.filter(|path| *path != root) {
+        if path
+            .symlink_metadata()
+            .is_ok_and(|meta| meta.file_type().is_symlink())
+        {
+            return true;
+        }
+        current = path.parent();
+    }
+    false
 }
 
 #[cfg(test)]
@@ -239,7 +259,16 @@ mod test {
         candidate.remove().unwrap();
 
         let mut hashes = GitHashes::new();
-        hash_discovered_objects(&git_root, &git_root, to_hash, &mut hashes, None, None).unwrap();
+        hash_discovered_objects(
+            &git_root,
+            &git_root,
+            &git_root,
+            to_hash,
+            &mut hashes,
+            None,
+            None,
+        )
+        .unwrap();
         assert!(hashes.is_empty());
     }
 

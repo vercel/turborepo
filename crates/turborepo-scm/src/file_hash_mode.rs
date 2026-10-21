@@ -27,7 +27,7 @@ impl FileHashMode {
             .into_iter()
             .filter_map(|(path, content_hash)| {
                 let full_path = root.join_unix_path(&path);
-                let metadata = match std::fs::symlink_metadata(&full_path) {
+                let metadata = match std::fs::metadata(&full_path) {
                     Ok(metadata) => metadata,
                     Err(error) if allow_missing && error.kind() == ErrorKind::NotFound => {
                         return None;

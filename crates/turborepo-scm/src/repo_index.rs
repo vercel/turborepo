@@ -20,11 +20,8 @@ pub struct RepoGitIndex {
     /// Sorted by path so per-package filtering can use binary-search range
     /// queries instead of linear scans.
     status_entries: Vec<RepoStatusEntry>,
-    /// Untracked symlinks discovered by the working-tree walk. Kept out of
-    /// `status_entries` so per-package hashing never attempts to hash them,
-    /// while dirty-hash provenance still reflects them (git tracks symlinks).
-    /// Only populated by [`Self::populate_untracked_for_prefixes`] /
-    /// [`Self::populate_all_untracked`].
+    /// Untracked symlink paths used by package hashing and dirty-hash
+    /// provenance.
     untracked_symlinks: Vec<RelativeUnixPathBuf>,
     unsupported_paths: Vec<UnsupportedGitPath>,
     untracked_entries_populated: bool,
@@ -695,6 +692,13 @@ impl RepoGitIndex {
             }
         }
 
+        to_hash.extend(
+            self.untracked_symlinks
+                .iter()
+                .filter(|path| prefix_is_empty || path.as_str().starts_with(&range_start))
+                .cloned(),
+        );
+
         trace!(
             "filtered repo index for package: pkg_prefix={:?}, ls_tree_matched={}, \
              to_hash_count={}",
@@ -761,9 +765,7 @@ impl RepoGitIndex {
 
 struct WalkedPaths {
     paths: Vec<RelativeUnixPathBuf>,
-    /// Untracked symlinks. Kept separate from `paths` because per-package
-    /// hashing intentionally ignores symlinks, while dirty-hash provenance
-    /// must still account for them (git treats symlinks as trackable).
+    /// Symlinks discovered without following their referents.
     symlink_paths: Vec<RelativeUnixPathBuf>,
     unsupported_paths: Vec<UnsupportedGitPath>,
 }
