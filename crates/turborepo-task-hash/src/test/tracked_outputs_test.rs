@@ -71,6 +71,84 @@ fn inputs(
     .unwrap()
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn tracked_outputs_preserve_executable_hashes_before_union() {
+    use std::os::unix::fs::PermissionsExt;
+
+    use turborepo_scm::FileHashMode;
+
+    let (_tmp, root, graph) = repository().await;
+    let file = root.join_components(&["packages", "app", "dist", "LICENSE"]);
+    let package = AnchoredSystemPathBuf::from_raw("packages/app").unwrap();
+    let output = RelativeUnixPathBuf::new("dist/LICENSE").unwrap();
+    for mode in [FileHashMode::ContentOnly, FileHashMode::ExecutableBit] {
+        for backend in ["git", "index", "subprocess-index", "manual"] {
+            let scm = if backend == "manual" {
+                SCM::Manual(mode)
+            } else {
+                SCM::new(&root).with_file_hash_mode(mode)
+            };
+            let task = TaskId::new("app", "build").into_owned();
+            for overlap in [false, true] {
+                let mut definition = definition(&["dist/**"]);
+                if overlap {
+                    definition.inputs = TaskInputs::new(vec!["dist/LICENSE".to_owned()]);
+                }
+                let definitions = HashMap::from([(task.clone(), definition)]);
+                let tasks = [TaskNode::Task(task.clone())];
+                let mut observed = Vec::new();
+                for permissions in [0o644, 0o755, 0o644] {
+                    std::fs::set_permissions(&file, std::fs::Permissions::from_mode(permissions))
+                        .unwrap();
+                    let index = match backend {
+                        "index" => Some(scm.build_repo_index_eager().unwrap()),
+                        "subprocess-index" => Some(
+                            scm.build_repo_index_from_subprocesses(&[package.to_unix()])
+                                .unwrap(),
+                        ),
+                        _ => None,
+                    };
+                    let hashes = PackageInputsHashes::calculate_file_hashes(
+                        &scm,
+                        tasks.iter(),
+                        &graph,
+                        &definitions,
+                        &root,
+                        index.as_ref(),
+                        true,
+                    )
+                    .unwrap();
+                    let actual = hashes.expanded_hashes[&task]
+                        .0
+                        .iter()
+                        .find(|(path, _)| path == &output)
+                        .map(|(_, hash)| *hash);
+                    let selected = overlap || backend != "manual";
+                    let expected = scm
+                        .hash_files(
+                            &root.resolve(&package),
+                            [AnchoredSystemPathBuf::from_raw(output.as_str()).unwrap()].into_iter(),
+                        )
+                        .unwrap();
+                    assert_eq!(
+                        actual,
+                        selected.then_some(expected[&output]),
+                        "{mode:?}, {backend}, overlap={overlap}, permissions={permissions:o}"
+                    );
+                    observed.push(hashes.hashes[&task].clone());
+                }
+                assert_eq!(observed[0], observed[2]);
+                assert_eq!(
+                    observed[0] != observed[1],
+                    mode == FileHashMode::ExecutableBit && (overlap || backend != "manual"),
+                    "{mode:?}, {backend}, overlap={overlap}"
+                );
+            }
+        }
+    }
+}
+
 #[tokio::test]
 async fn tracked_outputs_invalidate_explicit_inputs_without_hashing_generated_outputs() {
     for indexed in [false, true] {
