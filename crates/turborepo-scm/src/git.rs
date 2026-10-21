@@ -879,7 +879,11 @@ impl GitRepo {
             });
             // Include any files that have been staged, but not committed
             let staged = scope.spawn(|| {
-                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)
+                // Both sides of a rename can affect different packages.
+                self.execute_git_command(
+                    &["diff", "--name-only", "--cached", "--no-renames", "-z"],
+                    pathspec,
+                )
             });
             let join = |handle: std::thread::ScopedJoinHandle<'_, Result<Vec<u8>, Error>>| {
                 handle
@@ -1380,6 +1384,60 @@ mod tests {
         );
         Ok(())
     }
+    #[test_case("", "index.js", "moved.js"; "repository_root")]
+    #[test_case("nested repo", "file with spaces.txt", "renamed file.txt"; "nested_root_with_spaces")]
+    fn test_staged_rename_includes_both_paths(
+        prefix: &str,
+        source_name: &str,
+        destination_name: &str,
+    ) -> Result<(), Error> {
+        let (_repo, repo_path) = setup_repository(None)?;
+        let turbo_root = repo_path.join(prefix);
+        fs::create_dir_all(turbo_root.join("packages/util"))?;
+        fs::create_dir_all(turbo_root.join("packages/another"))?;
+        let source = Path::new(prefix).join("packages/util").join(source_name);
+        let destination = Path::new(prefix)
+            .join("packages/another")
+            .join(destination_name);
+        fs::write(repo_path.join(&source), "module.exports = 42;\n")?;
+        commit_file(&repo_path, &source, None);
+        run_git(&repo_path, &["config", "diff.renames", "true"]);
+        run_git(
+            &repo_path,
+            &[
+                "mv",
+                &source.to_string_lossy(),
+                &destination.to_string_lossy(),
+            ],
+        );
+        assert!(run_git(&repo_path, &["diff", "--cached", "--name-status"]).starts_with("R100"));
+
+        let files = changed_files(
+            repo_path.clone(),
+            turbo_root.clone(),
+            Some("HEAD"),
+            None,
+            true,
+        )?;
+        assert_eq!(
+            files,
+            HashSet::from([
+                Path::new("packages")
+                    .join("util")
+                    .join(source_name)
+                    .to_string_lossy()
+                    .into_owned(),
+                Path::new("packages")
+                    .join("another")
+                    .join(destination_name)
+                    .to_string_lossy()
+                    .into_owned(),
+            ])
+        );
+        assert!(changed_files(repo_path, turbo_root, Some("HEAD"), None, false)?.is_empty());
+        Ok(())
+    }
+
     #[test]
     fn test_merge_base() -> Result<(), Error> {
         let (repo_root, repo_path) = setup_repository(None)?;
