@@ -7117,6 +7117,7 @@ dependencies = [
  "base64 0.22.1",
  "dhat",
  "flate2",
+ "httpmock",
  "insta",
  "libghostty-vt",
  "miette",
@@ -7476,12 +7477,14 @@ name = "turborepo-config"
 version = "0.1.0"
 dependencies = [
  "camino",
+ "httpmock",
  "miette",
  "serde",
  "serde_json",
  "tempfile",
  "test-case",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
  "turbopath",
  "turborepo-api-client",
@@ -7920,14 +7923,21 @@ dependencies = [
 name = "turborepo-otel"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "httpmock",
  "opentelemetry",
+ "opentelemetry-http",
  "opentelemetry-otlp",
  "opentelemetry-semantic-conventions",
  "opentelemetry_sdk",
+ "reqwest",
  "serde",
  "thiserror 2.0.18",
+ "tokio",
  "tonic",
  "tracing",
+ "turborepo-api-client",
+ "turborepo-types",
 ]
 
 [[package]]

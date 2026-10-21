@@ -14,6 +14,8 @@
 //! - [`HashTrackerInfo`]: Provides access to task hash information
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
+mod credential;
+pub use credential::Credential;
 pub mod secret;
 pub mod task_input_matching;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
@@ -363,10 +365,10 @@ pub struct APIClientOpts {
     /// Upload-specific timeout in seconds
     pub upload_timeout: u64,
     /// Authentication token (if authenticated).
-    /// Wrapped in `SecretString` to prevent accidental exposure in logs.
+    /// Keeps the secret and its runtime destination restriction together.
     /// Skipped during serialization.
     #[serde(skip)]
-    pub token: Option<SecretString>,
+    pub token: Option<Credential>,
     /// Team ID for the remote cache
     pub team_id: Option<String>,
     /// Team slug for the remote cache

@@ -12,7 +12,7 @@ pub(crate) fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOption
         api_url: args.api.clone(),
         login_url: args.login.clone(),
         team_slug: args.team.clone(),
-        token: args.token.clone(),
+        token: args.token.clone().map(Into::into),
         timeout: args.remote_cache_timeout,
         preflight: args.preflight.then_some(true),
         ui: args.ui.map(Into::into),
@@ -68,11 +68,6 @@ pub(crate) fn resolve_configuration_from_args(
     let (environment, file_inputs) = crate::cli::configuration_inputs_from_process()?;
     let config =
         resolve_configuration_with_overrides(repo_root, overrides, environment, file_inputs)?;
-    // The shim also resolves configuration, but without CLI URL overrides.
-    // Emit this warning only for the command's final destination.
-    if let Some(warning) = config.api_token_destination_warning() {
-        tracing::warn!("{warning}");
-    }
     Ok(config)
 }
 

@@ -135,7 +135,7 @@ fn config_rejects_malformed_root_manifest_with_cargo_enabled() {
 }
 
 #[test]
-fn config_warns_only_for_the_final_api_destination() {
+fn config_does_not_offer_api_overrides_as_credential_authorization() {
     const REPOSITORY_API: &str = "https://cache.example.test";
     const CLI_API: &str = "https://explicit-cache.example.test";
     const WARNING: &str = "Repository configuration selects a custom API URL";
@@ -196,11 +196,7 @@ fn config_warns_only_for_the_final_api_destination() {
                 cli_api.or(env_api).unwrap_or(REPOSITORY_API),
                 "{context}"
             );
-            assert_eq!(
-                combined.matches(WARNING).count(),
-                usize::from(cli_api.is_none() && env_api.is_none()),
-                "{context}"
-            );
+            assert_eq!(combined.matches(WARNING).count(), 0, "{context}");
             assert!(!combined.contains("sentinel-api-token"), "{context}");
         }
     }

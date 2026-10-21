@@ -84,6 +84,7 @@ pub fn should_print_version() -> bool {
 /// that runs concurrently with graph building.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RemoteCacheUnavailableReason {
+    SavedVercelCredentialDestination,
     CouldNotConnect,
     UsageLimitExceeded,
     SpendingPaused,
@@ -226,6 +227,9 @@ fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (Str
         }
         RemoteCacheStatus::Unavailable(reason) => {
             let msg = match reason {
+                RemoteCacheUnavailableReason::SavedVercelCredentialDestination => {
+                    turborepo_api_client::Error::SavedVercelCredentialDestination.to_string()
+                }
                 RemoteCacheUnavailableReason::CouldNotConnect => {
                     format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
                 }

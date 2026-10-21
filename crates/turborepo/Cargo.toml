@@ -16,6 +16,7 @@ heap-dhat = ["dep:dhat", "turborepo-cli/heap-dhat"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
+httpmock = { workspace = true }
 assert_cmd = { workspace = true }
 flate2 = "1.1.9"
 insta = { version = "1.40.0", features = ["json", "filters", "redactions"] }
