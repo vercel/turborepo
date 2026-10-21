@@ -308,6 +308,24 @@ Enable experimental features that will become the default behavior in future ver
   cache](/docs/crafting-your-repository/caching).
 </Callout>
 
+#### `hashFilePermissions`
+
+Default: `false`
+
+Include executable permissions in file hashes for task inputs and global dependencies. With this flag enabled, changing an input file from non-executable to executable, or back, changes the task hash even when its contents stay the same.
+
+On Unix, a regular file is executable if any owner, group, or other executable bit is set. On Windows, regular files are treated as non-executable. Symlink permissions and read or write permission bits do not affect hashes.
+
+Enabling this flag changes all task hashes. Existing cache entries are not reused. With the flag disabled, Turborepo preserves content-only file hashing.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "hashFilePermissions": true,
+  },
+}
+```
+
 #### `errorsOnlyShowHash`
 
 Default: `false`
