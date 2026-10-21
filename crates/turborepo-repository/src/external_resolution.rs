@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
@@ -296,6 +296,8 @@ impl ResolutionFingerprint {
     }
 }
 
+pub(crate) type ExternalFileHashes = BTreeMap<RelativeUnixPathBuf, [u8; 8]>;
+
 /// Exact external identities attributed to one authoritative package.
 ///
 /// The identity list is immutable once constructed (`new` sorts and
@@ -307,6 +309,7 @@ impl ResolutionFingerprint {
 pub struct PackageResolution {
     package: String,
     identities: Arc<[ExternalPackageIdentity]>,
+    file_inputs: Option<Arc<ExternalFileHashes>>,
     fingerprint: Option<ResolutionFingerprint>,
 }
 
@@ -318,6 +321,7 @@ impl PackageResolution {
         Self {
             package: package.into(),
             identities: Self::shared_identity_list(identities),
+            file_inputs: None,
             fingerprint: None,
         }
     }
@@ -344,8 +348,43 @@ impl PackageResolution {
         Self {
             package: package.into(),
             identities,
+            file_inputs: None,
             fingerprint: None,
         }
+    }
+
+    pub(crate) fn with_file_inputs(mut self, files: Arc<ExternalFileHashes>) -> Self {
+        if !files.is_empty() {
+            self.file_inputs = Some(files);
+        }
+        self
+    }
+
+    fn compute_fingerprint(&self) -> Result<ResolutionFingerprint, ExternalResolutionError> {
+        let base = turborepo_lockfile_hash::hash(
+            self.identities
+                .iter()
+                .map(|identity| (identity.key(), identity.version())),
+        )
+        .map_err(ExternalResolutionError::Fingerprint)?;
+        let Some(files) = &self.file_inputs else {
+            return Ok(ResolutionFingerprint::new(base));
+        };
+
+        let mut hash = xxhash_rust::xxh64::Xxh64::new(0);
+        hash.update(b"turborepo:external-files:v1\0");
+        hash.update(&(base.len() as u64).to_le_bytes());
+        hash.update(base.as_bytes());
+        hash.update(&(files.len() as u64).to_le_bytes());
+        for (path, digest) in files.iter() {
+            hash.update(&(path.as_str().len() as u64).to_le_bytes());
+            hash.update(path.as_str().as_bytes());
+            hash.update(digest);
+        }
+        Ok(ResolutionFingerprint::new(format!(
+            "{:016x}",
+            hash.digest()
+        )))
     }
 
     pub fn package(&self) -> &str {
@@ -608,50 +647,31 @@ impl ExternalResolutionGeneration {
             domain.fallback_inputs.sort();
             domain.fallback_inputs.dedup();
             if let ExternalResolutionData::Resolved { packages, .. } = &mut domain.data {
-                // Identity lists are sorted and deduped at construction
-                // (`PackageResolution::new`) and immutable afterward, and
-                // packages sharing one list (via `from_shared`) share its
-                // `Arc`. Fingerprint each *distinct* list exactly once —
-                // keyed by slice address — and hash those distinct lists in
-                // parallel, since each is an independent Cap'n Proto
-                // canonicalization plus xxHash. On a monorepo with thousands
-                // of workspaces this is the dominant cost of building a
-                // generation. Output is unchanged: the canonical bytes are
-                // deterministic per input, and packages are re-sorted
-                // deterministically below.
                 use rayon::prelude::*;
 
-                // First-seen distinct lists, and each package's index into
-                // them. Raw pointers stay on this sequential side; only the
-                // borrowed slices cross into the parallel hash.
-                let mut index_of: HashMap<*const [ExternalPackageIdentity], usize> = HashMap::new();
-                let mut distinct: Vec<&[ExternalPackageIdentity]> = Vec::new();
+                let input_key = |package: &PackageResolution| {
+                    (
+                        Arc::as_ptr(&package.identities),
+                        package.file_inputs.as_ref().map(Arc::as_ptr),
+                    )
+                };
+                let mut index_of = HashMap::new();
+                let mut distinct = Vec::new();
                 for package in packages.iter() {
-                    let slice_ptr = Arc::as_ptr(&package.identities);
-                    index_of.entry(slice_ptr).or_insert_with(|| {
-                        distinct.push(&package.identities);
+                    index_of.entry(input_key(package)).or_insert_with(|| {
+                        distinct.push(package);
                         distinct.len() - 1
                     });
                 }
 
                 let fingerprints = distinct
                     .par_iter()
-                    .map(|identities| {
-                        Ok(ResolutionFingerprint::new(
-                            turborepo_lockfile_hash::hash(
-                                identities
-                                    .iter()
-                                    .map(|identity| (identity.key(), identity.version())),
-                            )
-                            .map_err(ExternalResolutionError::Fingerprint)?,
-                        ))
-                    })
+                    .map(|package| package.compute_fingerprint())
                     .collect::<Result<Vec<_>, ExternalResolutionError>>()?;
                 drop(distinct);
 
                 for package in packages.iter_mut() {
-                    let slice_ptr = Arc::as_ptr(&package.identities);
-                    package.set_fingerprint(fingerprints[index_of[&slice_ptr]].clone());
+                    package.set_fingerprint(fingerprints[index_of[&input_key(package)]].clone());
                 }
                 packages.sort_by(|left, right| left.package.cmp(&right.package));
             }
@@ -1268,6 +1288,89 @@ mod tests {
             panic!("expected resolved data")
         };
         assert_eq!(packages[0].identities(), &[identity_a, identity_z]);
+    }
+
+    #[test]
+    fn no_file_fingerprints_match_the_existing_lockfile_hash() {
+        for identities in [
+            Vec::new(),
+            vec![
+                ExternalPackageIdentity::new("z", "2"),
+                ExternalPackageIdentity::new("a", "1"),
+                ExternalPackageIdentity::new("a", "1"),
+            ],
+        ] {
+            let package = PackageResolution::new("app", identities);
+            let expected = turborepo_lockfile_hash::hash(
+                package
+                    .identities()
+                    .iter()
+                    .map(|identity| (identity.key(), identity.version())),
+            )
+            .unwrap();
+            let with_empty_files = package
+                .clone()
+                .with_file_inputs(Arc::new(ExternalFileHashes::new()));
+            assert_eq!(package.compute_fingerprint().unwrap().as_str(), expected);
+            assert_eq!(
+                with_empty_files.compute_fingerprint().unwrap().as_str(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn fingerprint_memoization_includes_files_with_shared_identities() {
+        let identities =
+            PackageResolution::shared_identity_list([ExternalPackageIdentity::new("foo", "1")]);
+        let package = |name: &str, path: &str, digest| {
+            PackageResolution::from_shared(name, Arc::clone(&identities)).with_file_inputs(
+                Arc::new(BTreeMap::from([(
+                    RelativeUnixPathBuf::new(path).unwrap(),
+                    digest,
+                )])),
+            )
+        };
+        let root = package("//", "foo.patch", [1; 8]);
+        let expected = root.compute_fingerprint().unwrap();
+        for app in [
+            package("app", "foo.patch", [2; 8]),
+            package("app", "renamed.patch", [1; 8]),
+            PackageResolution::from_shared("app", Arc::clone(&identities)),
+        ] {
+            let previous = resolved(vec![
+                PackageResolution::new("//", identities.iter().cloned()),
+                PackageResolution::new("app", identities.iter().cloned()),
+            ]);
+            let generation = ExternalResolutionGeneration::build(
+                &repository(),
+                vec![ExternalResolutionDomain::new(
+                    JAVASCRIPT_RESOLUTION_DOMAIN.clone(),
+                    ToolchainId::JAVASCRIPT,
+                    AnchoredSystemPathBuf::default(),
+                    vec!["//".to_string(), "app".to_string()],
+                    Vec::new(),
+                    resolved(vec![root.clone(), app]),
+                )],
+            )
+            .unwrap();
+            let data = generation
+                .domain(&JAVASCRIPT_RESOLUTION_DOMAIN)
+                .unwrap()
+                .data();
+            assert_eq!(
+                data.package_resolution("//").unwrap().fingerprint(),
+                Some(&expected)
+            );
+            assert_ne!(
+                data.package_resolution("//").unwrap().fingerprint(),
+                data.package_resolution("app").unwrap().fingerprint()
+            );
+            assert_eq!(
+                compare_resolution_data(data, &previous, false, "//").unwrap(),
+                ExternalResolutionChanges::Packages(Vec::new())
+            );
+        }
     }
 
     #[test]
