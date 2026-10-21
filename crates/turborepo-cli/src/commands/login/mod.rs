@@ -272,15 +272,16 @@ mod tests {
                     .build_with_inputs(Default::default(), inputs.clone())
                     .unwrap();
                 assert_eq!(config.api_url(), "https://custom.example");
+                assert_eq!(config.token(), Some(secret));
+                assert_eq!(config.credential().unwrap().is_saved_vercel(), vercel_flow);
                 assert_eq!(
-                    config.token(),
-                    Some(if vercel_flow {
-                        "existing-custom"
-                    } else {
-                        secret
-                    })
+                    turborepo_api_client::validate_credential_destination(
+                        config.credential().unwrap(),
+                        &config.api_url().parse().unwrap()
+                    )
+                    .is_ok(),
+                    !vercel_flow
                 );
-                assert!(!config.credential().unwrap().is_saved_vercel());
                 let vercel = TurborepoConfigBuilder::new(&root)
                     .with_api_url(Some(crate::config::DEFAULT_API_URL.into()))
                     .build_with_inputs(Default::default(), inputs)

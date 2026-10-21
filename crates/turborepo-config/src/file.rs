@@ -112,19 +112,8 @@ impl AuthFile {
 impl ResolvedConfigurationOptions for AuthFile {
     fn get_configuration_options(
         &self,
-        existing_config: &ConfigurationOptions,
+        _existing_config: &ConfigurationOptions,
     ) -> Result<ConfigurationOptions, Error> {
-        let approved = existing_config
-            .api_url()
-            .parse()
-            .is_ok_and(|url| turborepo_api_client::is_approved_vercel_destination(&url));
-        if !approved && let Some(token) = self.fallback.as_ref() {
-            return Ok(ConfigurationOptions {
-                token: Some(token.clone()),
-                ..Default::default()
-            });
-        }
-
         let load_token =
             |path: &AbsoluteSystemPath| -> Result<Option<turborepo_auth::Token>, Error> {
                 let contents =

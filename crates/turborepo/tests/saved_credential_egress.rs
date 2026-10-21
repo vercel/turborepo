@@ -5,7 +5,7 @@ mod common;
 #[tokio::test(flavor = "multi_thread")]
 async fn standard_cli_protects_saved_vercel_credentials_but_preserves_generic_cache_tokens() {
     for source in ["auth", "legacy", "global", "env", "cli", "coexisting"] {
-        for api_source in ["repo", "cli", "env"] {
+        for api_source in ["repo", "cli", "env", "global"] {
             let server = httpmock::MockServer::start_async().await;
             let status = server
                 .mock_async(|when, then| {
@@ -47,16 +47,32 @@ async fn standard_cli_protects_saved_vercel_credentials_but_preserves_generic_ca
                 "global" => {
                     std::fs::write(config.path().join("turborepo/config.json"), document).unwrap()
                 }
-                "coexisting" => {
-                    std::fs::write(config.path().join("turborepo/config.json"), document).unwrap();
+                "coexisting" | "env" | "cli" => {
+                    std::fs::write(
+                        config.path().join("turborepo/config.json"),
+                        r#"{"token":"synthetic-retained-sentinel"}"#,
+                    )
+                    .unwrap();
                     std::fs::write(
                         config.path().join("turborepo/auth.json"),
                         r#"{"token":"synthetic-protected-sentinel"}"#,
                     )
                     .unwrap();
                 }
-                "env" | "cli" => {}
                 _ => unreachable!(),
+            }
+            if api_source == "global" {
+                let path = config.path().join("turborepo/config.json");
+                let mut global = if path.exists() {
+                    serde_json::from_str::<serde_json::Value>(
+                        &std::fs::read_to_string(&path).unwrap(),
+                    )
+                    .unwrap()
+                } else {
+                    serde_json::json!({})
+                };
+                global["apiUrl"] = server.base_url().into();
+                std::fs::write(path, global.to_string()).unwrap();
             }
             let mut command = common::turbo_command(repo.path());
             command
@@ -88,7 +104,7 @@ async fn standard_cli_protects_saved_vercel_credentials_but_preserves_generic_ca
             );
             unexpected.assert_calls_async(0).await;
             let calls = status.calls_async().await + artifacts.calls_async().await;
-            if matches!(source, "auth" | "legacy") {
+            if matches!(source, "auth" | "legacy" | "coexisting") {
                 assert_eq!(calls, 0, "{source}, api_source={api_source}: {text}");
                 assert!(
                     text.contains("Refusing to send saved Vercel credentials"),
@@ -102,6 +118,7 @@ async fn standard_cli_protects_saved_vercel_credentials_but_preserves_generic_ca
             }
             assert!(!text.contains("synthetic-cli-sentinel"), "{text}");
             assert!(!text.contains("synthetic-protected-sentinel"), "{text}");
+            assert!(!text.contains("synthetic-retained-sentinel"), "{text}");
         }
     }
 }

@@ -828,7 +828,7 @@ impl TurborepoConfigBuilder {
         //   2. environment variables (TURBO_*)
         //   3. override env vars (VERCEL_ARTIFACTS_*)
         //   4. local configuration (<REPO_ROOT>/.turbo/config.json)
-        //   5. global credentials selected for the final API URL
+        //   5. global credentials (dedicated auth, global token, legacy auth)
         //   6. global configuration (~/.turbo/config.json)
         //   7. shared configuration (turbo.json)
         //
@@ -1631,7 +1631,7 @@ mod test {
     #[test_case::test_case("cli_vercel")]
     #[test_case::test_case("env_vercel")]
     #[test_case::test_case("default_vercel")]
-    fn coexisting_credentials_follow_final_destination(url_source: &str) {
+    fn coexisting_credentials_follow_source_precedence(url_source: &str) {
         use turborepo_types::Credential;
 
         const CUSTOM: &str = "http://127.0.0.1:9099";
@@ -1746,9 +1746,7 @@ mod test {
                 assert_eq!(config.api_url(), api, "{url_source}");
                 let expected = if explicit_token != "none" {
                     Credential::from(format!("explicit-{explicit_token}"))
-                } else if matches!(stores, "generic_only" | "generic_legacy")
-                    || (custom && stores == "both")
-                {
+                } else if matches!(stores, "generic_only" | "generic_legacy") {
                     Credential::from("generic-global")
                 } else if matches!(stores, "both" | "auth_only") {
                     Credential::saved_vercel("dedicated-vercel".into())
