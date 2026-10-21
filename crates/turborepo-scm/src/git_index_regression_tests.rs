@@ -1185,7 +1185,7 @@ fn oidc_hashes_across_scm_paths(
     include_default_files: bool,
 ) -> GitHashes {
     let git = repo.scm();
-    let manual = SCM::Manual;
+    let manual = SCM::Manual(crate::FileHashMode::ContentOnly);
     let package = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
     let index = repo.build_repo_index();
     let indexed = git

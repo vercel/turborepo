@@ -277,7 +277,7 @@ async fn eager_hash_dedup_preserves_input_provenance() {
     let tasks: Vec<_> = definitions.keys().cloned().map(TaskNode::Task).collect();
     let calculate = || {
         PackageInputsHashes::calculate_file_hashes(
-            &SCM::Manual,
+            &SCM::Manual(turborepo_scm::FileHashMode::ContentOnly),
             tasks.iter(),
             &graph,
             &definitions,

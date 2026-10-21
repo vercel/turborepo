@@ -26,7 +26,7 @@ impl SCM {
     pub fn get_current_sha(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
         match self {
             Self::Git(git) => git.get_current_sha(),
-            Self::Manual => Err(Error::GitRequired(path.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(path.to_owned())),
         }
     }
 
@@ -39,7 +39,7 @@ impl SCM {
                 // Preserve partial results for unusual states such as an unborn branch.
                 (git.get_current_branch().ok(), git.get_current_sha().ok())
             }),
-            Self::Manual => (None, None),
+            Self::Manual(_) => (None, None),
         }
     }
 
@@ -50,7 +50,7 @@ impl SCM {
     pub fn get_dirty_hash(&self) -> Option<String> {
         match self {
             Self::Git(git) => git.get_dirty_hash(),
-            Self::Manual => None,
+            Self::Manual(_) => None,
         }
     }
 
@@ -61,7 +61,7 @@ impl SCM {
     pub fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
         match self {
             Self::Git(git) => git.get_dirty_hash_from_repo_index(repo_index),
-            Self::Manual => None,
+            Self::Manual(_) => None,
         }
     }
 
@@ -127,7 +127,7 @@ impl SCM {
                     Err(e) => Err(e),
                 }
             }
-            Self::Manual => Err(Error::GitRequired(turbo_root.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(turbo_root.to_owned())),
         }
     }
 
@@ -150,7 +150,7 @@ impl SCM {
                 )?;
                 Ok(!output.is_empty())
             }
-            Self::Manual => Ok(false),
+            Self::Manual(_) => Ok(false),
         }
     }
 
@@ -164,7 +164,7 @@ impl SCM {
                 .change_prefetch
                 .take_previous_content(from_commit, file_path)
                 .unwrap_or_else(|| git.previous_content(from_commit, file_path)),
-            Self::Manual => Err(Error::GitRequired(file_path.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(file_path.to_owned())),
         }
     }
 
@@ -1091,7 +1091,11 @@ mod tests {
             &["-c", "commit.gpgsign=false", "commit", "-m", "Lock"],
         );
         assert!(scm.is_path_committed(&lock).unwrap());
-        assert!(!SCM::Manual.is_path_committed(&lock).unwrap());
+        assert!(
+            !SCM::Manual(crate::FileHashMode::ContentOnly)
+                .is_path_committed(&lock)
+                .unwrap()
+        );
 
         let blob = run_git(&repo, &["rev-parse", "HEAD:nested[repo]/turbo.lock"]);
         fs::remove_file(&lock).unwrap();
@@ -2397,7 +2401,10 @@ mod tests {
 
     #[test]
     fn test_dirty_hash_manual_scm_returns_none() {
-        assert_eq!(SCM::Manual.get_dirty_hash(), None);
+        assert_eq!(
+            SCM::Manual(crate::FileHashMode::ContentOnly).get_dirty_hash(),
+            None
+        );
     }
 
     /// Differential matrix: the repo-index dirty hash must agree with the
@@ -2955,6 +2962,7 @@ mod tests {
             bin,
             attrs: std::sync::OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
+            file_hash_mode: crate::FileHashMode::ContentOnly,
             slowest_files: None,
             change_prefetch: Default::default(),
         }
