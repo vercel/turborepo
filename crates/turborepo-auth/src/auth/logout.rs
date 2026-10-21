@@ -396,6 +396,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn failed_revocation_preserves_local_token() {
+        let tmp_dir = tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tmp_dir.path().join("config.json")).unwrap();
+        let content = r#"{"token":"vca_synthetic-sentinel"}"#;
+        path.create_with_contents(content).unwrap();
+        let options = LogoutOptions {
+            color_config: ColorConfig::new(false),
+            api_client: MockApiClient {
+                succeed_delete_request: false,
+            },
+            path: Some(path.clone()),
+            invalidate: true,
+        };
+
+        assert!(logout(&options).await.is_err());
+        assert_eq!(path.read_to_string().unwrap(), content);
+    }
+
+    #[tokio::test]
     async fn test_remove_token_with_malformed_file() {
         let tmp_dir = tempdir().unwrap();
         let path = AbsoluteSystemPathBuf::try_from(tmp_dir.path().join("config.json"))

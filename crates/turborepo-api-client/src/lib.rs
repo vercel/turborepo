@@ -1312,10 +1312,14 @@ impl APIClient {
             .header("User-Agent", self.user_agent.clone())
             .form(&[("token", token.expose()), ("client_id", &client_id)]);
 
-        retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
-            .await?
-            .into_response()
-            .error_for_status()?;
+        let response =
+            retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
+                .await?
+                .into_response();
+        let status = response.status();
+        if !status.is_success() {
+            return Err(response_error(response, status));
+        }
 
         Ok(())
     }
@@ -1669,6 +1673,57 @@ mod test {
             "an unhandled upload redirect must not count as a cache write"
         );
         redirect.assert_calls_async(1).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn oauth_revocation_requires_success_status() -> anyhow::Result<()> {
+        for status in [200, 204, 302, 307, 308, 400, 501] {
+            let server = httpmock::MockServer::start_async().await;
+            let introspection = server
+                .mock_async(|when, then| {
+                    when.method(httpmock::Method::POST)
+                        .path("/login/oauth/token/introspect");
+                    then.status(200).json_body(
+                        serde_json::json!({ "active": true, "client_id": "test-client" }),
+                    );
+                })
+                .await;
+            let revocation = server
+                .mock_async(|when, then| {
+                    when.method(httpmock::Method::POST)
+                        .path("/login/oauth/token/revoke");
+                    then.status(status)
+                        .header("location", server.url("/redirected"));
+                })
+                .await;
+            let destination = server
+                .mock_async(|when, then| {
+                    when.path("/redirected");
+                    then.status(200);
+                })
+                .await;
+            let mut transport = APIClient::build_http_client(None)?;
+            // Exercise saved credentials' redirect policy with a generic test token
+            // so the loopback server does not need an exception to the origin allowlist.
+            transport.normal = transport.no_redirect.clone();
+            let client =
+                APIClient::new_with_client(transport, server.base_url(), None, None, "test", false);
+            let result = client
+                .delete_token(&Credential::generic("vca_synthetic-sentinel".into()))
+                .await;
+            assert_eq!(
+                result.is_ok(),
+                (200..300).contains(&status),
+                "HTTP {status}"
+            );
+            if let Err(error) = result {
+                assert!(!error.to_string().contains("vca_synthetic-sentinel"));
+            }
+            introspection.assert_calls_async(1).await;
+            revocation.assert_calls_async(1).await;
+            destination.assert_calls_async(0).await;
+        }
         Ok(())
     }
 
