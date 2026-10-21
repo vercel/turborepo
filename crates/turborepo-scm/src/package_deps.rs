@@ -175,6 +175,83 @@ impl SCM {
             .apply(&turbo_root.resolve(package_path), hashes, true)
     }
 
+    /// Hash tracked files selected by task outputs, without feeding generated
+    /// (untracked) outputs back into the task's cache key. Paths are returned
+    /// relative to the package, just like `get_package_file_hashes`.
+    pub fn get_tracked_output_hashes(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inclusions: &[String],
+        exclusions: &[String],
+        repo_index: Option<&RepoGitIndex>,
+    ) -> Result<GitHashes, Error> {
+        let SCM::Git(git) = self else {
+            return Ok(GitHashes::new());
+        };
+        if inclusions.is_empty() {
+            return Ok(GitHashes::new());
+        }
+        let package_unix_path = package_path.to_unix();
+        let resolve = |glob: &String| {
+            let glob = if package_unix_path.as_str().is_empty() {
+                glob.clone()
+            } else {
+                format!("{package_unix_path}/{glob}")
+            };
+            glob.parse::<ValidatedGlob>()
+        };
+        let inclusions = inclusions
+            .iter()
+            .map(resolve)
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusions = exclusions
+            .iter()
+            .map(resolve)
+            .collect::<Result<Vec<_>, _>>()?;
+        let files = globwalk::globwalk(
+            turbo_root,
+            &inclusions,
+            &exclusions,
+            globwalk::WalkType::Files,
+        )?;
+        if files.is_empty() {
+            return Ok(GitHashes::new());
+        }
+        let tracked = if repo_index.is_none() {
+            // The output walk already validated selected paths. Unsupported
+            // tracked paths elsewhere in the repository must not fail this query.
+            git.git_ls_files_cached_with_unsupported()?
+                .paths
+                .into_iter()
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+        let mut candidates = Vec::new();
+        for file in files {
+            let path = git.root.anchor(&file)?.to_unix();
+            let is_tracked = match repo_index {
+                Some(index) => index.is_tracked(&path),
+                None => tracked.contains(&path),
+            };
+            if is_tracked {
+                candidates.push(path);
+            }
+        }
+        let full_pkg_path = turbo_root.resolve(package_path);
+        let pkg_prefix = git.root.anchor(&full_pkg_path)?.to_unix();
+        let mut hashes = GitHashes::new();
+        git.extend_hashes_from_candidates(
+            &full_pkg_path,
+            &pkg_prefix,
+            repo_index,
+            candidates,
+            &mut hashes,
+        )?;
+        self.file_hash_mode().apply(&full_pkg_path, hashes, true)
+    }
+
     pub fn hash_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -695,6 +772,92 @@ mod tests {
         for cmd in cmds {
             require_git_cmd(repo_root, cmd);
         }
+    }
+
+    #[test]
+    fn test_tracked_outputs_with_nested_turbo_root_and_no_git_index() {
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        let turbo_root = root.join_component("project");
+        let package_path = AnchoredSystemPath::new("packages/app").unwrap();
+        let license = turbo_root.join_components(&["packages", "app", "dist", "LICENSE"]);
+        license.ensure_dir().unwrap();
+        license.create_with_contents("license v1").unwrap();
+        let inclusions = vec!["dist/**".to_owned()];
+        let scm = SCM::new(&turbo_root);
+        // An unborn repository may have no index yet; generated outputs are not inputs.
+        assert!(
+            scm.get_tracked_output_hashes(&turbo_root, package_path, &inclusions, &[], None)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            SCM::Manual(crate::FileHashMode::ContentOnly)
+                .get_tracked_output_hashes(&turbo_root, package_path, &inclusions, &[], None)
+                .unwrap()
+                .is_empty()
+        );
+        require_git_cmd(&root, &["add", "."]);
+        for indexed in [false, true] {
+            let index = indexed.then(|| scm.build_repo_index_eager().unwrap());
+            let hashes = scm
+                .get_tracked_output_hashes(
+                    &turbo_root,
+                    package_path,
+                    &inclusions,
+                    &[],
+                    index.as_ref(),
+                )
+                .unwrap();
+            assert_eq!(hashes.len(), 1);
+            assert!(hashes.contains_key(&RelativeUnixPathBuf::new("dist/LICENSE").unwrap()));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_tracked_outputs_ignore_unrelated_non_utf8_paths() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        let license = root.join_components(&["dist", "LICENSE"]);
+        license.ensure_dir().unwrap();
+        license.create_with_contents("license").unwrap();
+        commit_all(&root);
+        let blob = Command::new("git")
+            .args(["rev-parse", "HEAD:dist/LICENSE"])
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(blob.status.success());
+        let blob = String::from_utf8(blob.stdout).unwrap();
+        let output = Command::new("git")
+            .args([
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                "100644",
+                blob.trim(),
+            ])
+            .arg(OsString::from_vec(b"unrelated-\xff".to_vec()))
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        require_git_cmd(&root, &["commit", "-m", "track non-UTF-8 path"]);
+        let scm = SCM::new(&root);
+        let index = scm.build_repo_index_eager().unwrap();
+        let package = AnchoredSystemPath::new("").unwrap();
+        let outputs = vec!["dist/**".to_owned()];
+        let fallback = scm
+            .get_tracked_output_hashes(&root, package, &outputs, &[], None)
+            .unwrap();
+        let indexed = scm
+            .get_tracked_output_hashes(&root, package, &outputs, &[], Some(&index))
+            .unwrap();
+        assert_eq!(fallback, indexed);
+        assert_eq!(fallback.len(), 1);
     }
 
     #[test]

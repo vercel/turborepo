@@ -33,8 +33,8 @@ use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::task::PackageTaskEventBuilder;
 use turborepo_types::{
-    EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
-    TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
+    EffectiveTaskInputs, EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap,
+    HashTrackerInfo, RunOptsHashInfo, TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
 };
 
 fn env_var_names_for_debug_log(env_vars: &EnvironmentVariableMap) -> Vec<String> {
@@ -160,13 +160,10 @@ impl PackageInputsHashes {
             }
         };
 
-        // Phase 1: Collect task metadata and group by (package_path, inputs) for dedup.
-        // Multiple tasks in the same package with identical inputs produce the same
-        // file hashes — no need to globwalk and hash the same files repeatedly.
         struct TaskInfo<'b> {
             task_id: TaskId<'static>,
             package_path: &'b AnchoredSystemPath,
-            inputs: &'b TaskInputs,
+            inputs: EffectiveTaskInputs<'b>,
         }
 
         let collect_span = tracing::info_span!("collect_task_hash_keys").entered();
@@ -183,27 +180,23 @@ impl PackageInputsHashes {
                 .package_task_context(&workspace_name)
                 .map(|context| context.directory())
                 .ok_or_else(|| Error::MissingPackageContext(workspace_name.to_string()))?;
-            let inputs = task_definition.inputs();
             task_infos.push(TaskInfo {
                 task_id: task_id.clone(),
                 package_path,
-                inputs,
+                inputs: EffectiveTaskInputs {
+                    declared: task_definition.inputs(),
+                    tracked_outputs: task_definition.outputs(),
+                },
             });
         }
 
-        type HashKey = (AnchoredSystemPathBuf, Vec<String>, Vec<String>, bool, bool);
-        let mut unique_keys: Vec<HashKey> = Vec::new();
-        let mut key_indices: HashMap<HashKey, usize> = HashMap::new();
+        type HashKey<'a> = (AnchoredSystemPathBuf, EffectiveTaskInputs<'a>);
+        let mut unique_keys: Vec<HashKey<'_>> = Vec::new();
+        let mut key_indices: HashMap<HashKey<'_>, usize> = HashMap::new();
         let mut task_key_map: Vec<usize> = Vec::with_capacity(task_infos.len());
 
         for info in &task_infos {
-            let key: HashKey = (
-                info.package_path.to_owned(),
-                info.inputs.globs.clone(),
-                info.inputs.derived_globs.clone(),
-                info.inputs.default,
-                info.inputs.eager,
-            );
+            let key = (info.package_path.to_owned(), info.inputs);
             let idx = match key_indices.entry(key) {
                 std::collections::hash_map::Entry::Occupied(e) => *e.get(),
                 std::collections::hash_map::Entry::Vacant(e) => {
@@ -233,22 +226,17 @@ impl PackageInputsHashes {
         let hash_span = tracing::info_span!("hash_unique_inputs").entered();
         let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
-            .map(|(package_path, globs, derived_globs, default, eager)| {
-                let file_hashes = if !eager {
+            .map(|(package_path, effective_inputs)| {
+                let inputs = effective_inputs.declared;
+                let mut file_hashes = if !inputs.eager {
                     Arc::new(FileHashes(Vec::new()))
                 } else {
-                    let inputs = TaskInputs {
-                        globs,
-                        derived_globs,
-                        default,
-                        ..TaskInputs::default()
-                    };
                     let all_globs: Vec<_> = inputs.all_globs().collect();
                     let mut hashes = scm.get_package_file_hashes(
                         repo_root,
                         &package_path,
                         &all_globs,
-                        default,
+                        inputs.default,
                         None,
                         repo_index,
                     )?;
@@ -264,6 +252,19 @@ impl PackageInputsHashes {
                     hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
                     Arc::new(FileHashes(hashes))
                 };
+                let tracked_outputs = scm.get_tracked_output_hashes(
+                    repo_root,
+                    &package_path,
+                    &effective_inputs.tracked_outputs.inclusions,
+                    &effective_inputs.tracked_outputs.exclusions,
+                    repo_index,
+                )?;
+                if !tracked_outputs.is_empty() {
+                    file_hashes = combine_file_hashes(
+                        &file_hashes,
+                        &FileHashes(tracked_outputs.into_iter().collect()),
+                    );
+                }
                 let hash = file_hashes.as_ref().hash();
                 Ok((file_hashes, hash))
             })
@@ -288,7 +289,7 @@ impl PackageInputsHashes {
             let (file_hashes, hash) = &file_hash_results[key_idx];
 
             hashes.insert(info.task_id.clone(), hash.clone());
-            if needs_expanded_hashes || info.inputs.has_deferred_inputs() {
+            if needs_expanded_hashes || info.inputs.declared.has_deferred_inputs() {
                 expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
             }
         }
@@ -1165,6 +1166,8 @@ mod test {
     mod jit_inputs;
     #[path = "structured_inputs_test.rs"]
     mod structured_inputs;
+    #[path = "tracked_outputs_test.rs"]
+    mod tracked_outputs;
 
     struct TestRunOpts {
         single_package: bool,

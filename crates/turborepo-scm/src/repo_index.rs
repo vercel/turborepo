@@ -706,6 +706,19 @@ impl RepoGitIndex {
         Ok((hashes, to_hash))
     }
 
+    pub(crate) fn is_tracked(&self, path: &RelativeUnixPathBuf) -> bool {
+        if let Ok(idx) = self
+            .status_entries
+            .binary_search_by(|entry| entry.path.cmp(path))
+        {
+            let entry = &self.status_entries[idx];
+            return !entry.is_untracked && !entry.is_delete;
+        }
+        self.ls_tree_hashes
+            .binary_search_by(|(entry_path, _)| entry_path.cmp(path))
+            .is_ok()
+    }
+
     /// Partition a set of existing git-root-relative file paths into:
     /// - clean tracked files whose blob OIDs can be reused immediately
     /// - files that still need content hashing because they are dirty,

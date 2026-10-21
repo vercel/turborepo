@@ -511,10 +511,35 @@ impl<'a> TaskArgs<'a> {
 
 /// TaskOutputs represents the patterns for including and excluding files from
 /// outputs.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TaskOutputs {
     pub inclusions: Vec<String>,
     pub exclusions: Vec<String>,
+}
+
+/// File selections that feed a task hash. Output exclusions apply only to
+/// tracked outputs, independently of authored and derived input selections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct EffectiveTaskInputs<'a> {
+    pub declared: &'a TaskInputs,
+    pub tracked_outputs: &'a TaskOutputs,
+}
+
+/// Changed paths and the subset originating from tracked files. Keeping the
+/// provenance separate prevents generated outputs from becoming task inputs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TaskInputChanges {
+    pub files: std::collections::HashSet<AnchoredSystemPathBuf>,
+    pub tracked: std::collections::HashSet<AnchoredSystemPathBuf>,
+}
+
+impl TaskInputChanges {
+    pub fn from_tracked(files: std::collections::HashSet<AnchoredSystemPathBuf>) -> Self {
+        Self {
+            tracked: files.clone(),
+            files,
+        }
+    }
 }
 
 /// TaskInputs represents the input file patterns for a task.

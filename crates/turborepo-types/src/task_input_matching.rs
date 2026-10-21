@@ -33,7 +33,37 @@ use globwalk::PackageInput;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use wax::Program;
 
-use crate::TaskInputs;
+use crate::{EffectiveTaskInputs, TaskInputs, TaskOutputs};
+
+/// Compiled declared inputs and the independent tracked-output selection.
+pub struct CompiledEffectiveInputs {
+    declared: CompiledGlobs,
+    tracked_outputs: ModeGlobs,
+}
+
+impl CompiledEffectiveInputs {
+    pub fn compile(
+        inputs: EffectiveTaskInputs<'_>,
+        package_unix_path: &str,
+    ) -> Result<Self, InvalidTaskInputGlob> {
+        Ok(Self {
+            declared: compile_globs(inputs.declared, package_unix_path)?,
+            tracked_outputs: ModeGlobs::outputs(inputs.tracked_outputs, package_unix_path)?,
+        })
+    }
+
+    /// `tracked_change` includes tracked deletions, but not generated outputs.
+    pub fn matches(
+        &self,
+        file: &str,
+        package: &str,
+        package_prefix: &str,
+        tracked_change: bool,
+    ) -> bool {
+        file_matches_compiled_inputs(file, package, package_prefix, &self.declared)
+            || (tracked_change && self.tracked_outputs.walk_matches(file))
+    }
+}
 
 /// Pre-compiled glob patterns for efficient matching against many files.
 ///
@@ -169,6 +199,48 @@ fn resolve_input(package_unix_path: &str, raw: &str) -> Result<PackageInput, Inv
 }
 
 impl ModeGlobs {
+    fn outputs(
+        outputs: &TaskOutputs,
+        package_unix_path: &str,
+    ) -> Result<Self, InvalidTaskInputGlob> {
+        let mut mode = Self::default();
+        if outputs.inclusions.is_empty() {
+            return Ok(mode);
+        }
+        for (patterns, exclusion) in [(&outputs.inclusions, false), (&outputs.exclusions, true)] {
+            for raw in patterns {
+                let resolved = if package_unix_path.is_empty() {
+                    raw.clone()
+                } else {
+                    format!("{package_unix_path}/{raw}")
+                };
+                let resolved = resolved
+                    .parse::<globwalk::ValidatedGlob>()
+                    .map_err(|error| InvalidTaskInputGlob {
+                        glob: raw.clone(),
+                        error: Box::new(error),
+                    })?;
+                let resolved = globwalk::fix_glob_pattern(resolved.as_str());
+                let glob = compile_glob(raw, &resolved)?;
+                if exclusion {
+                    for pattern in globwalk::walk_exclusion_patterns(&resolved) {
+                        mode.walk_exclusions.push(compile_glob(raw, &pattern)?);
+                    }
+                } else {
+                    if let Some(tree) = globwalk::directory_inclusion_tree(&resolved) {
+                        mode.walked.push(compile_glob(raw, &tree)?);
+                    }
+                    if glob.variance().is_invariant() {
+                        mode.stat_inclusions.push(glob);
+                    } else {
+                        mode.walked.push(glob);
+                    }
+                }
+            }
+        }
+        Ok(mode)
+    }
+
     fn startup(inputs: &TaskInputs, package_unix_path: &str) -> Result<Self, InvalidTaskInputGlob> {
         let mut mode = Self::compile(inputs.all_globs(), inputs.default, package_unix_path)?;
         if inputs.eager
@@ -366,6 +438,49 @@ mod tests {
             expected,
             "file={file}, pkg={pkg}, expected={expected}, inputs={inputs:?}"
         );
+    }
+
+    #[test]
+    fn effective_inputs_preserve_selection_provenance() {
+        let inputs = TaskInputs {
+            globs: vec!["src/**".into(), "node_modules/data/schema.json".into()],
+            derived_globs: vec!["!node_modules/**".into(), "!dist/**".into()],
+            ..Default::default()
+        };
+        for output in ["dist/**", "dist", "dist/**/**"] {
+            let outputs = TaskOutputs {
+                inclusions: vec![output.into()],
+                exclusions: vec!["dist/excluded".into()],
+            };
+            let compiled = CompiledEffectiveInputs::compile(
+                EffectiveTaskInputs {
+                    declared: &inputs,
+                    tracked_outputs: &outputs,
+                },
+                "packages/app",
+            )
+            .unwrap();
+            for (file, tracked, expected) in [
+                ("src/index.ts", false, true),
+                ("node_modules/data/schema.json", true, true),
+                ("node_modules/data/unrelated.json", true, false),
+                ("dist/LICENSE", true, true),
+                ("dist/generated.js", false, false),
+                ("dist/excluded/nested.txt", true, false),
+                ("dist/excluded", true, false),
+            ] {
+                assert_eq!(
+                    compiled.matches(
+                        &format!("packages/app/{file}"),
+                        "packages/app",
+                        "packages/app/",
+                        tracked
+                    ),
+                    expected,
+                    "{file}, outputs={output}"
+                );
+            }
+        }
     }
 
     #[test]

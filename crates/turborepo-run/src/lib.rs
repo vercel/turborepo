@@ -1780,10 +1780,7 @@ impl turborepo_query_api::QueryRun for Run {
         &self,
         base: Option<&str>,
         head: Option<&str>,
-    ) -> Result<
-        std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
-        turborepo_query_api::AffectedPackagesError,
-    > {
+    ) -> Result<turborepo_types::TaskInputChanges, turborepo_query_api::AffectedPackagesError> {
         match builder::changed_files_for_affected_range(self.scm(), self.repo_root(), base, head)
             .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
         {
@@ -1791,14 +1788,14 @@ impl turborepo_query_api::QueryRun for Run {
             Err(_invalid_range) => {
                 // If git range is invalid, return empty set — the affected packages
                 // computation will handle reporting all-packages-changed separately.
-                Ok(std::collections::HashSet::new())
+                Ok(turborepo_types::TaskInputChanges::default())
             }
         }
     }
 
     fn match_tasks_against_changed_files(
         &self,
-        changed_files: &std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        changed_files: &turborepo_types::TaskInputChanges,
     ) -> Result<
         std::collections::HashMap<turborepo_query_api::QueryTaskId, String>,
         turborepo_query_api::AffectedPackagesError,

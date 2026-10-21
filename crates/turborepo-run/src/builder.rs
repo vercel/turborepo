@@ -9,8 +9,7 @@ use std::{
 use chrono::Local;
 use tracing::Instrument;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-    RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
 };
 use turborepo_analytics::{AnalyticsHandle, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
@@ -193,10 +192,10 @@ pub(crate) fn changed_files_for_affected_range<D: ChangedFilesDetector>(
     from_ref: Option<&str>,
     to_ref: Option<&str>,
 ) -> Result<
-    Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>,
+    Result<turborepo_types::TaskInputChanges, turborepo_scm::git::InvalidRange>,
     turborepo_scm::Error,
 > {
-    detector.changed_files(repo_root, from_ref, to_ref, true, true, true)
+    detector.task_input_changes(repo_root, from_ref, to_ref, true, true, true)
 }
 
 trait CacheStatusProbe: Send + Sync + 'static {
@@ -2500,7 +2499,7 @@ impl RunBuilder {
                 tracing::info!(
                     total_tasks,
                     affected_tasks = affected_tasks.len(),
-                    changed_files = changed_files.len(),
+                    changed_files = changed_files.files.len(),
                     "task-level affected detection complete"
                 );
                 // Scope affected entrypoints before retaining their execution
@@ -3633,6 +3632,29 @@ mod origins_match_tests {
             ));
             Ok(Ok(self.files.clone()))
         }
+
+        fn task_input_changes(
+            &self,
+            root: &AbsoluteSystemPath,
+            from: Option<&str>,
+            to: Option<&str>,
+            include_uncommitted: bool,
+            allow_unknown_objects: bool,
+            merge_base: bool,
+        ) -> Result<
+            Result<turborepo_types::TaskInputChanges, turborepo_scm::git::InvalidRange>,
+            turborepo_scm::Error,
+        > {
+            self.changed_files(
+                root,
+                from,
+                to,
+                include_uncommitted,
+                allow_unknown_objects,
+                merge_base,
+            )
+            .map(|files| files.map(turborepo_types::TaskInputChanges::from_tracked))
+        }
     }
 
     #[test]
@@ -3654,7 +3676,10 @@ mod origins_match_tests {
         .unwrap()
         .unwrap();
 
-        assert_eq!(detected, files);
+        assert_eq!(
+            detected,
+            turborepo_types::TaskInputChanges::from_tracked(files)
+        );
         assert_eq!(
             *calls.lock().unwrap(),
             [(
