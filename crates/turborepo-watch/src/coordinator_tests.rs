@@ -75,6 +75,13 @@ async fn completed_source(path: &std::path::Path, source: &str) -> Result<(), St
     .map_err(|_| format!("no task completed with source {source:?}"))
 }
 
+fn counted_none<T, E>(calls: Arc<AtomicUsize>) -> impl Fn() -> Result<Option<T>, E> {
+    move || {
+        calls.fetch_add(1, Ordering::SeqCst);
+        Ok(None)
+    }
+}
+
 #[tokio::test]
 async fn coordinator_coalesces_classified_events_before_starting_real_tasks() {
     let settled = Arc::new(AtomicUsize::new(0));
@@ -124,7 +131,6 @@ async fn coordinator_coalesces_classified_events_before_starting_real_tasks() {
     .unwrap();
     opts.run_opts.ui_mode = turborepo_types::UIMode::Stream;
     let dispatches = Arc::new(AtomicUsize::new(0));
-    let selected = dispatches.clone();
     let mut client = WatchClient::new(
         RunBuilderInput {
             repo_root: root,
@@ -134,10 +140,7 @@ async fn coordinator_coalesces_classified_events_before_starting_real_tasks() {
             api_auth: None,
             managed_environment: None,
         },
-        Box::new(move || {
-            selected.fetch_add(1, Ordering::SeqCst);
-            Ok(None)
-        }),
+        Box::new(counted_none(dispatches.clone())),
         false,
         CommandEventBuilder::new("watch"),
         None,
@@ -181,7 +184,7 @@ async fn coordinator_coalesces_classified_events_before_starting_real_tasks() {
             // Poll the real collector and coordinator without letting idle time
             // advance the clock or waiting for filesystem classification.
             let polled = poll_fn(|cx| Poll::Ready(start.as_mut().poll(cx))).await;
-            if polled.is_ready() || events.len() != 0 {
+            if polled.is_ready() || !events.is_empty() {
                 tokio::time::resume();
                 return Err(format!("classified event was not consumed by a live coordinator: {polled:?}"));
             }
