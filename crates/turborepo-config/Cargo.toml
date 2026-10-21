@@ -24,9 +24,9 @@ turborepo-types = { workspace = true }
 
 [dev-dependencies]
 httpmock = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true
