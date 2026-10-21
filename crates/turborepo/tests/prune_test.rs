@@ -1359,6 +1359,7 @@ fn test_prune_composable_config() {
         true,
     )
     .unwrap();
+    fs::write(tempdir.path().join(".gitignore"), "node_modules/\n").unwrap();
 
     let output = run_turbo(tempdir.path(), &["prune", "docs"]);
     assert!(output.status.success(), "{}", combined_output(&output));
