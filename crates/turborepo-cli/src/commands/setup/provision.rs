@@ -243,7 +243,7 @@ pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error
     Ok(())
 }
 
-pub(super) fn storage(root: &Path, git: &dyn turborepo_setup::git::Git) -> Result<(), Error> {
+pub(super) fn storage(root: &Path) -> Result<(), Error> {
     for path in [
         root.join(".turbo"),
         root.join(".turbo/tools"),
@@ -257,32 +257,6 @@ pub(super) fn storage(root: &Path, git: &dyn turborepo_setup::git::Git) -> Resul
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
         }
-    }
-    // Nothing can be committed without a repository, so there is nothing to
-    // check. Any `.git` at or above the root keeps the strict checks below.
-    if turborepo_setup::writer_storage::outside_git_repository(root)? {
-        return Ok(());
-    }
-    let ignored = git.check_ignore(root, &[".turbo/"])?;
-    // Exit 128 is a Git failure (for example, a broken or untrusted `.git`), not
-    // a missing ignore rule; editing .gitignore would not help.
-    if ignored.code == Some(128) {
-        return Err(io::Error::other(format!(
-            "Git could not check whether .turbo/ is ignored ({}); run turbo setup inside the \
-             repository's Git checkout",
-            String::from_utf8_lossy(&ignored.stderr).trim()
-        ))
-        .into());
-    }
-    let tracked = git.ls_files(root, &[".turbo/"])?;
-    if !ignored.success()
-        || ignored.stdout != b".turbo/\n"
-        || !tracked.success()
-        || !tracked.stdout.is_empty()
-    {
-        return Err(Error::Unsupported(
-            "storage must be untracked and Git-ignored; add /.turbo/ to .gitignore",
-        ));
     }
     Ok(())
 }
@@ -629,7 +603,7 @@ pub(super) fn run(
         // user state; none of these checks creates a writer or downloads tools.
         preflight()?;
         revalidate(discovery)?;
-        storage(root, discovery.git())?;
+        storage(root)?;
         let base = trust_base
             .clone()
             .or_else(dirs_next::data_local_dir)
@@ -647,7 +621,7 @@ pub(super) fn run(
             trust.preflight()?;
             preflight()?;
             revalidate(discovery)?;
-            storage(root, discovery.git())?;
+            storage(root)?;
             Ok::<_, Error>(())
         };
         check()?;
@@ -771,14 +745,14 @@ pub(super) fn run(
         }
     });
     revalidate(discovery)?;
-    storage(root, discovery.git())?;
+    storage(root)?;
     snapshot.ensure_current()?;
     // Fixed acquisition order: writer, then Store. Both remain held through the
     // final precondition and manifest selection, including unchanged results.
     let guard = snapshot.guard()?;
-    storage(root, discovery.git())?;
+    storage(root)?;
     let mut store = Store::open(root)?;
-    storage(root, discovery.git())?;
+    storage(root)?;
     // Locks may have waited behind another transaction: recheck before traffic.
     preflight()?;
     revalidate(discovery)?;
@@ -1091,7 +1065,7 @@ pub(super) fn run(
     };
     let before_publish = || {
         trust.preflight()?;
-        storage(root, discovery.git()).map_err(io::Error::other)?;
+        storage(root).map_err(io::Error::other)?;
         preflight().map_err(io::Error::other)?;
         revalidate(discovery).map_err(io::Error::other)?;
         snapshot.check_guard(&guard).map_err(io::Error::other)?;
@@ -1189,9 +1163,6 @@ pub(super) fn run(
     for line in super::cleanup::after_provisioning(&mut store, transports.node.cache(), lock, host)
     {
         println!("{line}");
-    }
-    if turborepo_setup::writer_storage::outside_git_repository(root)? {
-        println!("No Git repository found; skipped checking that .turbo/ is Git-ignored.");
     }
     Ok(provisioned)
 }

@@ -2173,8 +2173,8 @@ impl UvTaskContract {
                                     path_to_root,
                                     dependency.directory().to_unix().as_str(),
                                 );
-                                std::iter::once(format!("{directory}/**"))
-                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                toolchain::directory_source_globs(&directory)
+                                    .into_iter()
                                     .chain(
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
@@ -2223,8 +2223,8 @@ impl UvTaskContract {
                                     .map(|glob| join_prefix(path_to_root, &glob))
                                     .collect();
                                 let directory = join_prefix(path_to_root, directory);
-                                std::iter::once(format!("{directory}/**"))
-                                    .chain(std::iter::once(format!("!{directory}/.turbo/**")))
+                                toolchain::directory_source_globs(&directory)
+                                    .into_iter()
                                     .chain(
                                         PYTHON_CACHE_GLOBS
                                             .map(|cache| format!("!{directory}/{cache}")),
@@ -2297,21 +2297,13 @@ fn bundled_uv_build_matches(requirement: &str, uv_version: &node_semver::Version
     node_semver::Range::parse(range.join(" ")).is_ok_and(|range| range.satisfies(uv_version))
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", windows))]
 fn host_compatibility_identity() -> Option<String> {
-    let kernel = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok()?;
-    let os_release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
-    let runtime = ["/usr/bin/ldd", "/bin/ldd"].into_iter().find_map(|path| {
-        let path = std::path::Path::new(path);
-        path.exists().then(|| {
-            let output = Command::new(path).arg("--version").output().ok()?;
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let value = format!("{stdout}{stderr}");
-            (!value.trim().is_empty()).then(|| value.trim().to_string())
-        })?
-    })?;
-    Some(format!("{kernel}\n{os_release}\n{runtime}"))
+    Some(format!(
+        "{}-{}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    ))
 }
 
 #[cfg(target_os = "macos")]
@@ -2319,15 +2311,6 @@ fn host_compatibility_identity() -> Option<String> {
     let mut command = Command::new("/usr/bin/sw_vers");
     command.arg("-productVersion");
     successful_stdout(command)
-}
-
-#[cfg(windows)]
-fn host_compatibility_identity() -> Option<String> {
-    Some(format!(
-        "{}-{}",
-        std::env::consts::OS,
-        std::env::consts::ARCH
-    ))
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
@@ -4918,6 +4901,19 @@ version = "0.1.0"
         );
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn test_host_compatibility_identity_contains_only_platform() {
+        assert_eq!(
+            host_compatibility_identity(),
+            Some(format!(
+                "{}-{}",
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            ))
+        );
+    }
+
     #[test]
     fn test_bundled_uv_build_version_compatibility() {
         let version = node_semver::Version::parse("0.12.1").unwrap();
@@ -5647,6 +5643,10 @@ version = "0.1.0"
             io.input_globs
                 .contains(&"!../../packages/lib/**/.mypy_cache/**".to_string())
         );
+        assert!(
+            io.input_globs
+                .contains(&"!../../packages/lib/**/node_modules/**".to_string())
+        );
         assert!(io.input_globs.contains(&"!**/__pycache__/**".to_string()));
         assert!(io.input_globs.contains(&"!**/.pytest_cache/**".to_string()));
         assert!(io.input_globs.contains(&"!**/.ruff_cache/**".to_string()));
@@ -5930,6 +5930,11 @@ version = "0.1.0"
             workspace_lint
                 .input_globs
                 .contains(&"packages/lib/**".to_string())
+        );
+        assert!(
+            workspace_lint
+                .input_globs
+                .contains(&"!packages/lib/**/node_modules/**".to_string())
         );
     }
 

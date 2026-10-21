@@ -31,9 +31,15 @@ pub fn restore_regular(
     let resolved_path = anchor.resolve(&processed_name);
 
     // Check if the file on disk already matches the manifest entry.
-    // If so, skip the write and just advance the tar stream.
+    // If so, skip the write and just advance the tar stream. Only a regular
+    // file entry can vouch for a regular file in the archive.
+    let key = processed_name.to_unix();
     if let Some(manifest) = manifest
-        && manifest.file_matches(processed_name.as_str(), &resolved_path)
+        && manifest
+            .files
+            .get(key.as_str())
+            .is_some_and(|expected| !expected.is_dir && !expected.is_symlink)
+        && manifest.file_matches(key.as_str(), &resolved_path)
     {
         io::copy(entry, &mut io::sink())?;
         return Ok((processed_name, RegularRestore::Skipped));

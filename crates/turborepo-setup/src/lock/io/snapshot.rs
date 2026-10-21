@@ -11,7 +11,6 @@ use super::{
     read_optional, records, rust_toolchain,
 };
 use crate::{
-    git::{Git, GitCli},
     go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT},
     lock::{Tool, additional},
     python_discovery::PythonRequirement,
@@ -43,7 +42,6 @@ pub struct Snapshot {
     native: DeclarationMap,
     ecosystems: Ecosystems,
     additional: BTreeMap<String, Tool>,
-    git: Arc<dyn Git>,
 }
 
 // Raw manifests may contain unrelated secrets. Never print snapshot contents.
@@ -101,15 +99,6 @@ impl Snapshot {
     /// No storage initialization, resolver, network, or binary execution.
     /// Rust files remain covered when disabled; Python files are not read.
     pub fn capture_with(root: &Path, ecosystems: Ecosystems) -> Result<Self, StorageError> {
-        Self::capture_with_git(root, ecosystems, Arc::new(GitCli))
-    }
-
-    /// `capture_with`, answering the writer guard's Git questions with `git`.
-    pub fn capture_with_git(
-        root: &Path,
-        ecosystems: Ecosystems,
-        git: Arc<dyn Git>,
-    ) -> Result<Self, StorageError> {
         let root = root.canonicalize()?;
         let root_identity = Arc::new(same_file::Handle::from_path(&root)?);
         let bytes = read_optional(&root, LOCK_NAME, MAX_LOCK_BYTES)?;
@@ -147,7 +136,6 @@ impl Snapshot {
             native,
             ecosystems,
             additional,
-            git,
         })
     }
 
@@ -294,7 +282,7 @@ impl Snapshot {
     /// Hold this writer guard through frozen preparation and inventory
     /// selection.
     pub fn guard(&self) -> Result<WriterStorage, StorageError> {
-        let guard = WriterStorage::acquire(&self.root, &*self.git)?;
+        let guard = WriterStorage::acquire(&self.root)?;
         self.check_guard(&guard)?;
         Ok(guard)
     }
@@ -388,7 +376,7 @@ impl Snapshot {
         let bytes = candidate.canonical_bytes()?;
         self.ensure_current()?;
         before_check()?;
-        let mut guard = WriterStorage::acquire(&self.root, &*self.git)?;
+        let mut guard = WriterStorage::acquire(&self.root)?;
         before_check()?;
         if !self.matches(&guard)? {
             return Err(StorageError::Conflict);

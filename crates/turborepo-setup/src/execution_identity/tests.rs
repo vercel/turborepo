@@ -30,7 +30,7 @@ fn fixture() -> Value {
                 "format":"tar-gz", "rootPrefix":"package", "destination":"npm", "executables":{"npm":"bin/npm-cli.js"}}}}}},
         "pnpm":{"adapter":"pnpm","version":"10.9.0",
             "declarations":[{"file":"turbo.json","field":"/setup","request":"10.9.0"}],
-            "installation":{"kind":"verify-system","executables":["pnpm"]}}
+            "installation":{"kind":"managed","artifacts":{"any":{"distribution":part("pnpm","e")}}}}
     }})
 }
 
@@ -134,7 +134,7 @@ fn inactive_platforms_and_unselected_open_ids_do_not_change_identity() {
     changed["tools"]["javascript"]["installation"]["artifacts"]["windows-x64"]["runtime"]
         ["sha256"] = json!("f".repeat(64));
     changed["tools"]["future"] = json!({"adapter":"future-adapter","version":"release@1",
-        "declarations":[{"file":"turbo.json"}],"installation":{"kind":"verify-system","executables":["future"]}});
+        "declarations":[{"file":"turbo.json"}],"installation":{"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/future.tgz","sha256":"f".repeat(64),"format":"tar-gz","executables":{"future":"bin/future"}}}}}});
     assert_eq!(
         snapshot(&original, context()).fingerprint(),
         snapshot(&changed, context()).fingerprint()
@@ -172,8 +172,8 @@ fn every_active_semantic_field_invalidates_the_golden() {
         ("/tools/npm/version".to_string(), json!("11.0.1")),
         ("/tools/pnpm/version".to_string(), json!("10.9.1")),
         (
-            "/tools/pnpm/installation/executables".to_string(),
-            json!(["pnpm", "pnpx"]),
+            "/tools/pnpm/installation/artifacts/any/distribution/executables".to_string(),
+            json!({"pnpm":"bin/pnpm", "pnpx":"bin/pnpx"}),
         ),
     ] {
         let mut changed = original.clone();
@@ -283,22 +283,19 @@ fn any_payload_never_erases_execution_isolation() {
 }
 
 #[test]
-fn system_requirements_are_exact_distinct_and_order_independent() {
+fn managed_exports_affect_identity_independently_of_map_order() {
     let mut value = fixture();
-    value["tools"]["pnpm"]["installation"]["executables"] = json!(["pnpm", "pnpx"]);
+    value["tools"]["pnpm"]["installation"]["artifacts"]["any"]["distribution"]["executables"] =
+        json!({"pnpm":"bin/pnpm", "pnpx":"bin/pnpx"});
     let selected = snapshot(&value, context());
-    let projected: Value = serde_json::from_slice(selected.canonical_identity()).unwrap();
-    assert_eq!(
-        projected["tools"]["pnpm"]["installation"],
-        json!({"kind":"verify-system", "executables":["pnpm","pnpx"]})
-    );
-    value["tools"]["pnpm"]["installation"]["executables"] = json!(["pnpx", "pnpm"]);
+    value["tools"]["pnpm"]["installation"]["artifacts"]["any"]["distribution"]["executables"] =
+        json!({"pnpx":"bin/pnpx", "pnpm":"bin/pnpm"});
     assert_eq!(
         snapshot(&value, context()).fingerprint(),
         selected.fingerprint()
     );
-    value["tools"]["pnpm"]["installation"] = json!({"kind":"managed", "artifacts":{"any":{"runtime":{
-        "url":"https://downloads.example.test/pnpm", "sha256":"a".repeat(64), "format":"binary", "executables":{"pnpm":"pnpm"}}}}});
+    value["tools"]["pnpm"]["installation"]["artifacts"]["any"]["distribution"]["executables"] =
+        json!({"pnpm":"bin/pnpm"});
     assert_ne!(
         snapshot(&value, context()).fingerprint(),
         selected.fingerprint()

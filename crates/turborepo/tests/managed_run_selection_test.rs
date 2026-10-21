@@ -202,9 +202,7 @@ fn native_self_case_meets_the_same_contract_as_copied_peers() {
         select(&need(), &capable_global(), Some(&binary)).unwrap(),
         local
     );
-    // The same build is compatible on every claimed platform, including
-    // `turbo setup --no-lock` clones and verify-system tools.
-    let every = Requirement::new(0, ["clone-local", "go", "node", "verify-system"]);
+    let every = Requirement::new(0, ["clone-local", "go", "node"]);
     let current = Capabilities::current("current");
     if cfg!(any(
         target_os = "macos",

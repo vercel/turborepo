@@ -276,7 +276,7 @@ impl Dependencies {
                     "{} dependency setup is not supported yet",
                     id.as_str()
                 )),
-                _ => Step::Skip("not supported yet with verify-system tools".into()),
+                ToolPolicy::Skip => Step::Skip("tools are skipped".into()),
             };
             steps.push((id.clone(), step));
         }
@@ -360,19 +360,17 @@ impl Dependencies {
     pub fn check(&self, root: &Path, lock: &Lock) -> Result<Vec<String>, Error> {
         if self.skipped() {
             return Ok(vec![format!(
-                "Dependencies skipped ({}); dependency readiness was not checked. No tasks run.",
+                "Dependencies skipped ({}); dependency readiness was not checked.",
                 self.reasons()
             )]);
         }
-        let mut lines = self.describe(root, lock, |run, lockfile| {
+        self.describe(root, lock, |run, lockfile| {
             format!(
                 "not checked; turbo setup reruns {} from {lockfile}, because dependency readiness \
                  is not tracked",
                 run.display()
             )
-        })?;
-        lines.push("No tasks run.".into());
-        Ok(lines)
+        })
     }
 
     fn describe(
@@ -415,7 +413,7 @@ impl Dependencies {
         trust_base: Option<PathBuf>,
     ) -> Result<i32, Error> {
         if self.skipped() {
-            println!("Dependencies skipped ({}). No tasks run.", self.reasons());
+            println!("Dependencies skipped ({}).", self.reasons());
             return Ok(0);
         }
         let trust_base = trust_base
@@ -460,8 +458,7 @@ impl Dependencies {
                 }
                 eprintln!(
                     "{id} dependency setup failed: `{command}` exited with status {code}. \
-                     {lockfile} is unchanged; fix the reported problem and rerun turbo setup. No \
-                     Turborepo tasks run."
+                     {lockfile} is unchanged; fix the reported problem and rerun turbo setup."
                 );
                 return Ok(code);
             }
@@ -474,16 +471,12 @@ impl Dependencies {
                 "Offline dependency setup failed, so dependencies are not ready. These installers \
                  could not finish from their local caches; the output above names what each one \
                  is missing:\n{}\nRun turbo setup without --offline to download them, then \
-                 offline setup can reuse them. Committed lockfiles are unchanged. No Turborepo \
-                 tasks run.",
+                 offline setup can reuse them. Committed lockfiles are unchanged.",
                 lines.collect::<Vec<_>>().join("\n")
             );
             return Ok(*code);
         }
-        println!(
-            "Dependencies: {}. No Turborepo tasks run.",
-            summary.join("; ")
-        );
+        println!("Dependencies: {}.", summary.join("; "));
         Ok(0)
     }
 }
@@ -560,11 +553,7 @@ impl Environment {
         let mut vars = plan.runtime_env().clone();
         let path = plan.path(std::env::var_os("PATH").as_deref())?;
         vars.insert("PATH".into(), path);
-        // Dependency setup runs only with managed tools, never verify-system.
-        let bin = plan
-            .path_prepend()
-            .ok_or(Error::NotInstalled("package manager"))?
-            .to_owned();
+        let bin = plan.path_prepend().to_owned();
         Ok(Self { bin, vars })
     }
 

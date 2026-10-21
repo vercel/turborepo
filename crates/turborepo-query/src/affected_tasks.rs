@@ -439,17 +439,19 @@ mod tests {
             &self,
             base: Option<&str>,
             head: Option<&str>,
-        ) -> Result<HashSet<AnchoredSystemPathBuf>, AffectedPackagesError> {
+        ) -> Result<turborepo_types::TaskInputChanges, AffectedPackagesError> {
             self.recorded_calls
                 .lock()
                 .unwrap()
                 .push(format!("changed_files:{base:?}:{head:?}"));
-            Ok(self.changed_files.clone())
+            Ok(turborepo_types::TaskInputChanges::from_tracked(
+                self.changed_files.clone(),
+            ))
         }
 
         fn match_tasks_against_changed_files(
             &self,
-            changed_files: &HashSet<AnchoredSystemPathBuf>,
+            changed_files: &turborepo_types::TaskInputChanges,
         ) -> Result<HashMap<QueryTaskId, String>, AffectedPackagesError> {
             turborepo_engine::match_tasks_against_changed_files(
                 &self.engine,

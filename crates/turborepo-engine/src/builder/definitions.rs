@@ -970,7 +970,7 @@ fn apply_derived_task_io(
         }
     }
     pass_through_env.sort();
-    task_def.inputs.globs.extend(derived.input_globs);
+    task_def.inputs.derived_globs.extend(derived.input_globs);
     if let Some(default) = derived.package_default_inputs {
         task_def.inputs.default = default;
     }
@@ -1138,6 +1138,27 @@ mod derived_io_tests {
     use turborepo_types::TaskDefinition;
 
     use super::{apply_derived_task_io, validate_forbidden_outputs};
+
+    #[test]
+    fn derived_inputs_preserve_authored_provenance() {
+        let mut task = TaskDefinition::default();
+        task.inputs.globs.push("../lib/schema.json".into());
+        apply_derived_task_io(
+            &mut task,
+            DerivedTaskIO {
+                input_globs: vec!["../lib/**".into(), "!../lib/node_modules/**".into()],
+                ..Default::default()
+            },
+            &[],
+            false,
+            false,
+        );
+        assert_eq!(task.inputs.globs, ["../lib/schema.json"]);
+        assert_eq!(
+            task.inputs.derived_globs,
+            ["../lib/**", "!../lib/node_modules/**"]
+        );
+    }
 
     #[test]
     fn unavailable_outputs_disable_only_implicit_caching() {

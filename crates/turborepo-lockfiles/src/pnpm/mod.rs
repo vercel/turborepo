@@ -15,6 +15,15 @@ pub enum Error {
     MissingInjectedPackage(String),
     #[error("Unsupported lockfile version: {0}")]
     UnsupportedVersion(String),
+    #[error(
+        "Root `{section}.{name}` entry does not match the dependency format of lockfileVersion \
+         {version}"
+    )]
+    RootDependencyShape {
+        section: &'static str,
+        name: String,
+        version: String,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

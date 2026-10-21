@@ -79,7 +79,7 @@ fn inspect_with(
     ))?;
     // Share frozen provisioning's native request, artifact and integrity gates.
     provision::plans(&sources, lock)?;
-    provision::storage(discovery.snapshot_root()?.as_std_path(), discovery.git())?;
+    provision::storage(discovery.snapshot_root()?.as_std_path())?;
     let action = match ActivationPlan::inspect_captured(&sources, context) {
         Ok(_) => "reuse (healthy installation)",
         Err(ReadinessError::MissingInventory) => "install (missing installation)",
@@ -100,7 +100,7 @@ fn inspect_with(
     }
     lines.extend(dependencies.plan(root, lock)?);
     recheck(discovery, &sources, &preflight)?;
-    lines.push("Tracked changes: none. No downloads, probes, or tasks run.".into());
+    lines.push("Tracked changes: none. No downloads or probes run.".into());
     Ok(lines.join("\n"))
 }
 
@@ -119,7 +119,7 @@ fn propose(
     let check = || {
         preflight()?;
         revalidate(discovery)?;
-        provision::storage(root, discovery.git())
+        provision::storage(root)
     };
     check()?;
     let policy = preflight()?;
@@ -233,9 +233,9 @@ fn propose(
         if resolved.get() {
             // Package-manager resolution verifies archive bytes to lock them.
             "Resolution read upstream metadata and verified archives; nothing was installed, and \
-             no probes or tasks run."
+             no probes run."
         } else {
-            "No downloads, probes, or tasks run."
+            "No downloads or probes run."
         }
     ));
     Ok(lines.join("\n"))
@@ -287,5 +287,5 @@ fn recheck(
     preflight()?;
     revalidate(discovery)?;
     sources.ensure_current()?;
-    provision::storage(discovery.snapshot_root()?.as_std_path(), discovery.git())
+    provision::storage(discovery.snapshot_root()?.as_std_path())
 }
