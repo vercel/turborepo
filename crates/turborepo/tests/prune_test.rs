@@ -1361,11 +1361,11 @@ fn test_prune_composable_config() {
     .unwrap();
 
     let output = run_turbo(tempdir.path(), &["prune", "docs"]);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", combined_output(&output));
 
     // Run turbo inside pruned output
     let output = run_turbo(&tempdir.path().join("out"), &["run", "new-task"]);
-    assert!(output.status.success());
+    assert!(output.status.success(), "{}", combined_output(&output));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("docs:new-task:"));
     assert!(stdout.contains("building"));
