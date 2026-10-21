@@ -231,6 +231,42 @@ mod tests {
     )]
     #[test_case(
         PackageJson {
+                dependencies: deps(&[("@remix-run/dev", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix with @remix-run/dev)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@remix-run/serve", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix with @remix-run/serve)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@remix-run/dev", "*"), ("@remix-run/react", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("remix")),
+        true;
+        "match some strategy works (remix with @remix-run/dev and @remix-run/react)"
+    )]
+    #[test_case(
+        PackageJson {
+                dependencies: deps(&[("@react-router/dev", "*"), ("vite", "*")]),
+                ..Default::default()
+        },
+        Some(get_framework_by_slug("vite")),
+        true;
+        "react router with vite matches vite"
+    )]
+    #[test_case(
+        PackageJson {
                 dependencies: deps(&[("react-scripts", "*")]),
                 ..Default::default()
         },
@@ -618,5 +654,14 @@ mod tests {
         for framework in get_frameworks().expect("framework JSON failed to parse") {
             assert_eq!(Some(framework), framework.slug().framework());
         }
+    }
+
+    #[test]
+    fn test_remix_and_react_router_env_wildcards() {
+        let remix = get_framework_by_slug("remix");
+        assert_eq!(remix.env(&HashMap::new()), vec!["REMIX_*".to_string()]);
+
+        let vite = get_framework_by_slug("vite");
+        assert_eq!(vite.env(&HashMap::new()), vec!["VITE_*".to_string()]);
     }
 }

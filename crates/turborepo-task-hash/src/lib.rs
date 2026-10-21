@@ -33,8 +33,8 @@ use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::task::PackageTaskEventBuilder;
 use turborepo_types::{
-    EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
-    TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
+    EffectiveTaskInputs, EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap,
+    HashTrackerInfo, RunOptsHashInfo, TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
 };
 
 fn env_var_names_for_debug_log(env_vars: &EnvironmentVariableMap) -> Vec<String> {
@@ -160,13 +160,10 @@ impl PackageInputsHashes {
             }
         };
 
-        // Phase 1: Collect task metadata and group by (package_path, inputs) for dedup.
-        // Multiple tasks in the same package with identical inputs produce the same
-        // file hashes — no need to globwalk and hash the same files repeatedly.
         struct TaskInfo<'b> {
             task_id: TaskId<'static>,
             package_path: &'b AnchoredSystemPath,
-            inputs: &'b TaskInputs,
+            inputs: EffectiveTaskInputs<'b>,
         }
 
         let collect_span = tracing::info_span!("collect_task_hash_keys").entered();
@@ -183,27 +180,23 @@ impl PackageInputsHashes {
                 .package_task_context(&workspace_name)
                 .map(|context| context.directory())
                 .ok_or_else(|| Error::MissingPackageContext(workspace_name.to_string()))?;
-            let inputs = task_definition.inputs();
             task_infos.push(TaskInfo {
                 task_id: task_id.clone(),
                 package_path,
-                inputs,
+                inputs: EffectiveTaskInputs {
+                    declared: task_definition.inputs(),
+                    tracked_outputs: task_definition.outputs(),
+                },
             });
         }
 
-        // Build dedup key: (package_path_str, globs, default, eager)
-        type HashKey = (AnchoredSystemPathBuf, Vec<String>, bool, bool);
-        let mut unique_keys: Vec<HashKey> = Vec::new();
-        let mut key_indices: HashMap<HashKey, usize> = HashMap::new();
+        type HashKey<'a> = (AnchoredSystemPathBuf, EffectiveTaskInputs<'a>);
+        let mut unique_keys: Vec<HashKey<'_>> = Vec::new();
+        let mut key_indices: HashMap<HashKey<'_>, usize> = HashMap::new();
         let mut task_key_map: Vec<usize> = Vec::with_capacity(task_infos.len());
 
         for info in &task_infos {
-            let key: HashKey = (
-                info.package_path.to_owned(),
-                info.inputs.globs.clone(),
-                info.inputs.default,
-                info.inputs.eager,
-            );
+            let key = (info.package_path.to_owned(), info.inputs);
             let idx = match key_indices.entry(key) {
                 std::collections::hash_map::Entry::Occupied(e) => *e.get(),
                 std::collections::hash_map::Entry::Vacant(e) => {
@@ -233,19 +226,45 @@ impl PackageInputsHashes {
         let hash_span = tracing::info_span!("hash_unique_inputs").entered();
         let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
-            .map(|(package_path, globs, default, eager)| {
-                let file_hashes = if !eager {
+            .map(|(package_path, effective_inputs)| {
+                let inputs = effective_inputs.declared;
+                let mut file_hashes = if !inputs.eager {
                     Arc::new(FileHashes(Vec::new()))
                 } else {
-                    file_hashes_for_inputs(
-                        scm,
+                    let all_globs: Vec<_> = inputs.all_globs().collect();
+                    let mut hashes = scm.get_package_file_hashes(
                         repo_root,
                         &package_path,
-                        &globs,
-                        default,
+                        &all_globs,
+                        inputs.default,
+                        None,
                         repo_index,
-                    )?
+                    )?;
+                    if let Some(authored) = inputs.explicit_override_globs() {
+                        hashes.extend(scm.get_explicit_input_file_hashes(
+                            repo_root,
+                            &package_path,
+                            authored,
+                            repo_index,
+                        )?);
+                    }
+                    let mut hashes: Vec<_> = hashes.into_iter().collect();
+                    hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+                    Arc::new(FileHashes(hashes))
                 };
+                let tracked_outputs = scm.get_tracked_output_hashes(
+                    repo_root,
+                    &package_path,
+                    &effective_inputs.tracked_outputs.inclusions,
+                    &effective_inputs.tracked_outputs.exclusions,
+                    repo_index,
+                )?;
+                if !tracked_outputs.is_empty() {
+                    file_hashes = combine_file_hashes(
+                        &file_hashes,
+                        &FileHashes(tracked_outputs.into_iter().collect()),
+                    );
+                }
                 let hash = file_hashes.as_ref().hash();
                 Ok((file_hashes, hash))
             })
@@ -270,7 +289,7 @@ impl PackageInputsHashes {
             let (file_hashes, hash) = &file_hash_results[key_idx];
 
             hashes.insert(info.task_id.clone(), hash.clone());
-            if needs_expanded_hashes || info.inputs.has_deferred_inputs() {
+            if needs_expanded_hashes || info.inputs.declared.has_deferred_inputs() {
                 expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
             }
         }
@@ -721,16 +740,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 }
             }
 
-            let combined_env_patterns: Vec<String> = task_definition
-                .env()
-                .iter()
-                .chain(
-                    self.global_env_patterns
-                        .iter()
-                        .filter(|p| p.starts_with('!')),
-                )
-                .cloned()
-                .collect();
+            // `globalEnv` exclusions opt every package out of the inferred
+            // variables they match. They only filter inference: a variable the
+            // task lists in its own `env` stays in its hash, as it does in a
+            // package without a detected framework.
+            computed_wildcards.extend(
+                self.global_env_patterns
+                    .iter()
+                    .filter(|p| p.starts_with('!'))
+                    .cloned(),
+            );
 
             let inference = self
                 .wildcard_cache
@@ -741,7 +760,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 })?;
             let user_env_var_set = self
                 .wildcard_cache
-                .get_or_compute(self.env_at_execution_start, &combined_env_patterns)
+                .get_or_compute(self.env_at_execution_start, task_definition.env())
                 .map_err(|err| Error::EnvPattern {
                     task_id: task_id.clone().into_owned(),
                     err,
@@ -1147,6 +1166,8 @@ mod test {
     mod jit_inputs;
     #[path = "structured_inputs_test.rs"]
     mod structured_inputs;
+    #[path = "tracked_outputs_test.rs"]
+    mod tracked_outputs;
 
     struct TestRunOpts {
         single_package: bool,
@@ -1475,6 +1496,102 @@ mod test {
         );
         assert!(other_framework.is_none());
         assert!(other_env_vars.all.is_empty());
+    }
+
+    #[tokio::test]
+    async fn global_env_exclusions_opt_out_of_inference_but_keep_task_env() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = nextjs_graph_at(&repo_root).await;
+        let external_hashes = compute_external_deps_hashes(&graph).unwrap();
+
+        let task_id = TaskId::new("web", "build").into_owned();
+        let other_task_id = TaskId::new("other", "build").into_owned();
+        // Opt out of inferred NEXT_PUBLIC_* globally, but declare one of them
+        // explicitly on the task.
+        let global_env_patterns = vec!["!NEXT_PUBLIC_*".to_string()];
+        let definition = TaskDefinition {
+            env: vec!["NEXT_PUBLIC_API_URL".to_string()],
+            ..Default::default()
+        };
+        let file_hash = FileHashes(Vec::new()).hash();
+
+        let calculate = |api_url: &str, deferred: bool| {
+            let opts = InferenceOpts(true);
+            let env = EnvironmentVariableMap::from(HashMap::from([
+                ("NEXT_PUBLIC_API_URL".to_string(), api_url.to_string()),
+                ("NEXT_PUBLIC_INFERRED".to_string(), "inferred".to_string()),
+            ]));
+            let mut hasher = TaskHasher::new(
+                PackageInputsHashes {
+                    hashes: HashMap::from([
+                        (task_id.clone(), file_hash.clone()),
+                        (other_task_id.clone(), file_hash.clone()),
+                    ]),
+                    expanded_hashes: HashMap::new(),
+                },
+                &opts,
+                &env,
+                "global-hash",
+                &repo_root,
+                EnvironmentVariableMap::default(),
+                &global_env_patterns,
+            );
+            hasher.set_external_deps_hash_cache(external_hashes.clone());
+            let mut hashes = HashMap::new();
+            for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
+                let context = graph
+                    .package_task_context(&PackageName::from(package))
+                    .unwrap();
+                if deferred {
+                    hasher
+                        .insert_deferred_hash(id, &definition, EnvMode::Strict, &context)
+                        .unwrap();
+                } else {
+                    let hash = hasher
+                        .calculate_task_hash(
+                            id,
+                            &definition,
+                            EnvMode::Strict,
+                            &context,
+                            &[],
+                            PackageTaskEventBuilder::new(package, "build"),
+                        )
+                        .unwrap();
+                    hashes.insert(package, hash);
+                }
+            }
+            let tracker = hasher.task_hash_tracker();
+            (
+                hashes,
+                tracker.framework(&task_id),
+                tracker.env_vars(&task_id).unwrap(),
+                tracker.env_vars(&other_task_id).unwrap(),
+            )
+        };
+
+        let (first, framework, env_vars, other_env_vars) = calculate("preview", false);
+        let (second, _, _, _) = calculate("production", false);
+        let (_, _, deferred_env_vars, _) = calculate("preview", true);
+
+        assert_eq!(framework.unwrap().as_str(), "nextjs");
+        // The global exclusion still opts the package out of inference...
+        assert!(env_vars.by_source.matching.is_empty());
+        // ...but the variable the task declares stays in its hash, exactly as
+        // it does in a package without a detected framework.
+        for projection in [&env_vars, &other_env_vars, &deferred_env_vars] {
+            assert_eq!(
+                projection.all.to_hashable(),
+                ["NEXT_PUBLIC_API_URL=preview"]
+            );
+            assert_eq!(
+                projection.by_source.explicit.names(),
+                ["NEXT_PUBLIC_API_URL"]
+            );
+        }
+        assert_ne!(first["web"], second["web"]);
+        assert_ne!(first["other"], second["other"]);
     }
 
     const FIXTURE_RUSTC_VERSION: &str = concat!(

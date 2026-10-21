@@ -1,5 +1,4 @@
 import * as React from "react";
-import type { HeadProps, PageProps } from "gatsby";
 import { Link } from "gatsby";
 
 const pageStyles = {
@@ -24,12 +23,12 @@ const codeStyles = {
   borderRadius: 4,
 };
 
-function NotFoundPage(_: PageProps): JSX.Element {
+export default function NotFoundPage() {
   return (
     <main style={pageStyles}>
       <h1 style={headingStyles}>Page not found</h1>
       <p style={paragraphStyles}>
-        Sorry 😔, we couldn’t find what you were looking for.
+        Sorry, we couldn’t find what you were looking for.
         <br />
         {process.env.NODE_ENV === "development" ? (
           <>
@@ -45,8 +44,6 @@ function NotFoundPage(_: PageProps): JSX.Element {
   );
 }
 
-export default NotFoundPage;
-
-export function Head(_: HeadProps): JSX.Element {
-  return <title>Home Page</title>;
+export function Head() {
+  return <title>Page not found</title>;
 }

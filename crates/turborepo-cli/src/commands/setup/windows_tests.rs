@@ -297,7 +297,7 @@ fn frozen_setup_installs_pathext_exports_that_activate_and_repeat_reuses() {
         [NODE_ZIP, "/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"]
     );
     let plan = f.plan();
-    let bin = plan.path_prepend().unwrap().to_path_buf();
+    let bin = plan.path_prepend().to_path_buf();
     let mut names: Vec<_> = fs::read_dir(&bin)
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -393,7 +393,7 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
     assert!(!f.owned.root().join(".turbo/setup-lock/staged").exists());
 
     // A damaged selected export is repaired by a complete new generation.
-    let bin = f.plan().path_prepend().unwrap().to_path_buf();
+    let bin = f.plan().path_prepend().to_path_buf();
     fs::remove_file(bin.join("pnpm.cmd")).unwrap();
     assert!(f.run(&u, CHECK).is_err());
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);

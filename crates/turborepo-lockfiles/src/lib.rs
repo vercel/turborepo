@@ -188,6 +188,12 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
         Ok(Vec::new())
     }
 
+    /// Files contributing to a resolved package, relative to the lockfile root.
+    /// This only looks up declarations; callers own reading and hashing files.
+    fn external_file_inputs(&self, _package: &Package) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        Ok(Vec::new())
+    }
+
     /// Package identifiers that have patches in the lockfile.
     ///
     /// Some package managers store patch paths outside of the lockfile, so

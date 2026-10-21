@@ -36,7 +36,6 @@ mod provision;
 mod root;
 mod telemetry;
 pub(crate) mod trust;
-mod verify_system;
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -60,7 +59,7 @@ pub enum Error {
         code(turbo::setup::not_implemented),
         help(
             "Use the repository's documented toolchain and dependency installation steps for now. \
-             No tools, dependencies, or locks were changed and no tasks were run."
+             No tools, dependencies, or locks were changed."
         )
     )]
     NotImplemented,
@@ -69,10 +68,7 @@ pub enum Error {
     #[error("managed tools are not supported on musl Linux hosts such as Alpine")]
     #[diagnostic(
         code(turbo::setup::musl_host),
-        help(
-            "Managed setup installs official glibc builds. On musl hosts, install the \
-             repository's tools in the image and use verify-system for them."
-        )
+        help("Managed setup requires a supported macOS, GNU Linux or Windows x64 host.")
     )]
     MuslHost,
     #[error("cannot classify this Linux host's C library: {0}")]
@@ -81,8 +77,7 @@ pub enum Error {
         help(
             "turbo reads the ELF interpreter of /bin/sh, then the libc.so.6 beside a glibc loader \
              or the release a musl loader embeds, without running them. Managed setup requires a \
-             glibc host with those files; otherwise install the tools yourself and use \
-             verify-system."
+             glibc host with those files."
         )
     )]
     UnclassifiedLibc(turborepo_platform::LibcError),
@@ -160,8 +155,6 @@ pub enum Error {
     GoResolution(#[from] turborepo_setup::go_resolution::Error),
     #[error(transparent)]
     Bun(#[from] turborepo_setup::bun_provision::Error),
-    #[error(transparent)]
-    SystemTool(#[from] turborepo_setup::system_tool::Error),
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
     #[error(transparent)]
@@ -356,9 +349,6 @@ fn run_reporting(
     // Rust, Python and Go have managed setup adapters; a skip policy ignores
     // their declarations. Managed run derives the same ecosystems.
     let ecosystems = effective::ecosystems(&discovery.flags(), discovery.policy());
-    if plan.unsupported() {
-        return Err(Error::Unsupported("verify-system non-JavaScript tools"));
-    }
     let skipped = |id: &ToolchainId| {
         plan.toolchain(id)
             .is_some_and(|t| t.tools.0 == ToolPolicy::Skip)
@@ -368,12 +358,11 @@ fn run_reporting(
         .map_or(ToolPolicy::Skip, |t| t.tools.0);
     // Preserve current workspace gating, with explicit policy skips disabling
     // interpretation of that ecosystem's declarations.
-    let snapshot = turborepo_setup::lock::Snapshot::capture_with_git(
+    let snapshot = turborepo_setup::lock::Snapshot::capture_with(
         discovery.snapshot_root()?.as_std_path(),
         // Python declarations are captured only when experimentalPythonWorkspaces
         // is on; otherwise uv.toml/pyproject.toml are neither read nor locked.
         ecosystems,
-        discovery.shared_git(),
     )?;
     if snapshot.previous_lock().is_some_and(|lock| {
         lock.tools().values().any(|tool| {
@@ -418,7 +407,7 @@ fn run_reporting(
                      locked tools",
                 ));
             }
-            println!("Nothing to prepare: every toolchain is skipped. No tasks run.");
+            println!("Nothing to prepare: every toolchain is skipped.");
             return Ok(0);
         }
         if snapshot
@@ -441,28 +430,10 @@ fn run_reporting(
     // Decided before any download, so a missing ecosystem lockfile fails first.
     let dependencies = dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request)?;
     let ecosystems = snapshot.ecosystems();
-    let resolution = if request.update_lock {
-        turborepo_setup::lock::reconcile::Mode::Refresh
-    } else {
-        turborepo_setup::lock::reconcile::Mode::Local
-    };
     let trust_base = transports
         .as_ref()
         .map(provision::Transports::trust_base)
         .transpose()?;
-    if javascript == ToolPolicy::VerifySystem {
-        return match request.mode {
-            Mode::Check => verify_system::check(&discovery, snapshot),
-            Mode::Plan => Err(Error::Unsupported("verify-system setup plans")),
-            Mode::Provision => verify_system::provision(
-                &discovery,
-                snapshot,
-                request.lock,
-                resolution,
-                request.force,
-            ),
-        };
-    }
     if request.mode == Mode::Check {
         return check::run(&discovery, snapshot, &dependencies, preflight);
     }
@@ -659,38 +630,6 @@ mod tests {
 
     use super::*;
     use crate::cli::Command;
-
-    #[test]
-    fn storage_distinguishes_git_failures_from_missing_ignore_rules() {
-        use turborepo_setup::git::{Failure, FakeGit, fake_repository};
-        let root = tempfile::tempdir().unwrap();
-        fake_repository(root.path()).unwrap();
-        let git = FakeGit::new();
-        let message = |git: &FakeGit| {
-            provision::storage(root.path(), git)
-                .unwrap_err()
-                .to_string()
-        };
-        assert!(message(&git).contains("add /.turbo/ to .gitignore"));
-        std::fs::write(root.path().join(".gitignore"), "/.turbo/\n").unwrap();
-        provision::storage(root.path(), &git).unwrap();
-        git.track(".turbo/tools/manifest.json");
-        assert!(message(&git).contains("add /.turbo/ to .gitignore"));
-        git.fail(Some(Failure::Fatal("fatal: not a git repository\n".into())));
-        assert_eq!(
-            message(&git),
-            "Git could not check whether .turbo/ is ignored (fatal: not a git repository); run \
-             turbo setup inside the repository's Git checkout"
-        );
-        git.fail(Some(Failure::Spawn));
-        assert!(message(&git).contains("`git`: it was not found on PATH"));
-        // Outside any repository nothing can be committed, so Git is not asked.
-        let outside = tempfile::tempdir().unwrap();
-        provision::storage(outside.path(), &git).unwrap();
-        let queries = git.queries();
-        provision::storage(outside.path(), &git).unwrap();
-        assert_eq!(git.queries(), queries);
-    }
 
     fn request(flags: &[&str], ci: bool) -> Result<SetupRequest, Error> {
         let words = ["turbo", "setup"].into_iter().chain(flags.iter().copied());

@@ -55,6 +55,25 @@ pub fn file_realpath(file: &File) -> io::Result<PathBuf> {
     }
 }
 
+#[cfg(all(test, any(target_os = "linux", target_os = "macos", windows)))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolves_the_opened_file_after_path_replacement() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(tmp.path()).unwrap();
+        let original = root.join("original");
+        let moved = root.join("moved");
+        std::fs::write(&original, "opened").unwrap();
+        let file = File::open(&original).unwrap();
+        std::fs::rename(&original, &moved).unwrap();
+        std::fs::write(&original, "replacement").unwrap();
+        assert_eq!(file_realpath(&file).unwrap(), moved);
+        assert_ne!(file_realpath(&file).unwrap(), original);
+    }
+}
+
 #[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 pub fn file_realpath(_: &File) -> io::Result<PathBuf> {
     Err(io::Error::new(

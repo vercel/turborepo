@@ -21,9 +21,37 @@ fn excluded_link(
     };
     let relative = relative.to_unix();
     excludes.iter().any(|input| {
-        wax::Glob::new(input.as_str())
-            .is_ok_and(|glob| wax::Program::is_match(&glob, relative.as_str()))
+        globwalk::walk_exclusion_patterns(input.as_str())
+            .iter()
+            .any(|pattern| {
+                wax::Glob::new(pattern)
+                    .is_ok_and(|glob| wax::Program::is_match(&glob, relative.as_str()))
+            })
     })
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum InputSelection {
+    Package { include_default_files: bool },
+    Exact,
+}
+
+pub(crate) fn exact_input_exclusions<S: AsRef<str>>(
+    package_path: &str,
+    inputs: &[S],
+) -> Result<Vec<wax::Glob<'static>>, Error> {
+    let mut exclusions = Vec::new();
+    for input in inputs
+        .iter()
+        .filter(|input| input.as_ref().starts_with('!'))
+    {
+        let input = PackageInput::resolve(package_path, input.as_ref())?;
+        exclusions.push(wax::Glob::new(input.as_str())?.into_owned());
+        if let Some(tree) = globwalk::exact_input_tree(input.as_str()) {
+            exclusions.push(wax::Glob::new(&tree)?.into_owned());
+        }
+    }
+    Ok(exclusions)
 }
 
 impl SCM {
@@ -50,28 +78,79 @@ impl SCM {
         telemetry: Option<PackageTaskEventBuilder>,
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        let mut hashes = match self {
-            SCM::Manual => {
+        self.get_input_file_hashes(
+            turbo_root,
+            package_path,
+            inputs,
+            InputSelection::Package {
+                include_default_files,
+            },
+            telemetry,
+            repo_index,
+        )
+    }
+
+    /// Hash only the selected inputs, without package defaults or mandatory
+    /// config files.
+    pub fn get_explicit_input_file_hashes<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        repo_index: Option<&RepoGitIndex>,
+    ) -> Result<GitHashes, Error> {
+        self.get_input_file_hashes(
+            turbo_root,
+            package_path,
+            inputs,
+            InputSelection::Exact,
+            None,
+            repo_index,
+        )
+    }
+
+    fn get_input_file_hashes<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        selection: InputSelection,
+        telemetry: Option<PackageTaskEventBuilder>,
+        repo_index: Option<&RepoGitIndex>,
+    ) -> Result<GitHashes, Error> {
+        let hashes = match self {
+            SCM::Manual(_) => {
                 if let Some(telemetry) = telemetry {
                     telemetry.track_file_hash_method(FileHashMethod::Manual);
                 }
-                crate::manual::get_package_file_hashes_without_git(
+                crate::manual::get_input_file_hashes_without_git(
                     turbo_root,
                     package_path,
                     inputs,
-                    include_default_files,
+                    selection,
                     None,
                     None,
                 )
             }
             SCM::Git(git) => {
-                let result = git.get_package_file_hashes(
-                    turbo_root,
-                    package_path,
-                    inputs,
-                    include_default_files,
-                    repo_index,
-                );
+                let result = match selection {
+                    InputSelection::Package {
+                        include_default_files,
+                    } => git.get_package_file_hashes(
+                        turbo_root,
+                        package_path,
+                        inputs,
+                        include_default_files,
+                        repo_index,
+                    ),
+                    InputSelection::Exact => git.get_package_file_hashes_from_inputs(
+                        turbo_root,
+                        package_path,
+                        inputs,
+                        false,
+                        repo_index,
+                    ),
+                };
                 match result {
                     Ok(hashes) => {
                         if let Some(telemetry) = telemetry {
@@ -102,11 +181,11 @@ impl SCM {
                         if let Some(telemetry) = telemetry {
                             telemetry.track_file_hash_method(FileHashMethod::Manual);
                         }
-                        crate::manual::get_package_file_hashes_without_git(
+                        crate::manual::get_input_file_hashes_without_git(
                             turbo_root,
                             package_path,
                             inputs,
-                            include_default_files,
+                            selection,
                             Some(&git.root),
                             git.git_attrs(),
                         )
@@ -114,42 +193,102 @@ impl SCM {
                 }
             }
         }?;
-        if let SCM::Git(git) = self {
-            let package_dir = turbo_root.resolve(package_path);
-            let defaults = inputs.is_empty() || include_default_files;
-            let mut link_inputs: Vec<String> = inputs
-                .iter()
-                .map(|input| input.as_ref().to_owned())
-                .collect();
-            // Explicitly retain tracked links even when an ignore rule hides them.
-            if defaults {
-                link_inputs.extend(
-                    hashes
-                        .keys()
-                        .filter(|path| {
-                            crate::hash_object::has_symlink(
-                                turbo_root,
-                                &package_dir.join_unix_path(path),
-                            )
-                        })
-                        .map(ToString::to_string),
-                );
-            }
-            let linked = crate::manual::get_package_file_hashes(
-                turbo_root,
-                package_path,
-                &link_inputs,
-                defaults,
-                Some(&git.root),
-                git.git_attrs(),
-                true,
-            )?;
-            hashes.retain(|path, _| {
-                !crate::hash_object::has_symlink(turbo_root, &package_dir.join_unix_path(path))
-            });
-            hashes.extend(linked);
+        self.file_hash_mode()
+            .apply(&turbo_root.resolve(package_path), hashes, true)
+    }
+
+    /// Hash tracked files selected by task outputs, without feeding generated
+    /// (untracked) outputs back into the task's cache key. Paths are returned
+    /// relative to the package, just like `get_package_file_hashes`.
+    pub fn get_tracked_output_hashes(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inclusions: &[String],
+        exclusions: &[String],
+        repo_index: Option<&RepoGitIndex>,
+    ) -> Result<GitHashes, Error> {
+        let SCM::Git(git) = self else {
+            return Ok(GitHashes::new());
+        };
+        if inclusions.is_empty() {
+            return Ok(GitHashes::new());
         }
-        Ok(hashes)
+        let package_unix_path = package_path.to_unix();
+        let resolve = |glob: &String| {
+            let glob = if package_unix_path.as_str().is_empty() {
+                glob.clone()
+            } else {
+                format!("{package_unix_path}/{glob}")
+            };
+            glob.parse::<ValidatedGlob>()
+        };
+        let inclusions = inclusions
+            .iter()
+            .map(resolve)
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusions = exclusions
+            .iter()
+            .map(resolve)
+            .collect::<Result<Vec<_>, _>>()?;
+        let files = globwalk::globwalk_with_settings(
+            turbo_root,
+            &inclusions,
+            &exclusions,
+            globwalk::WalkType::Files,
+            globwalk::Settings::default().follow_links(),
+        )?;
+        if files.is_empty() {
+            return Ok(GitHashes::new());
+        }
+        let tracked = if repo_index.is_none() {
+            // The output walk already validated selected paths. Unsupported
+            // tracked paths elsewhere in the repository must not fail this query.
+            git.git_ls_files_cached_with_unsupported()?
+                .paths
+                .into_iter()
+                .collect()
+        } else {
+            std::collections::HashSet::new()
+        };
+        let mut candidates = Vec::new();
+        for file in files {
+            let path = git.root.anchor(&file)?.to_unix();
+            let mut logical: Option<&AbsoluteSystemPath> = Some(&file);
+            let mut is_tracked = false;
+            while let Some(current) = logical.filter(|current| *current != &*git.root) {
+                let relative = git.root.anchor(current)?.to_unix();
+                let tracked_entry = match repo_index {
+                    Some(index) => index.is_tracked(&relative),
+                    None => tracked.contains(&relative),
+                };
+                if tracked_entry
+                    && (relative == path
+                        || current
+                            .symlink_metadata()
+                            .is_ok_and(|meta| meta.file_type().is_symlink()))
+                {
+                    is_tracked = true;
+                    break;
+                }
+                logical = current.parent();
+            }
+            if is_tracked {
+                candidates.push(path);
+            }
+        }
+        let full_pkg_path = turbo_root.resolve(package_path);
+        let pkg_prefix = git.root.anchor(&full_pkg_path)?.to_unix();
+        let mut hashes = GitHashes::new();
+        git.extend_hashes_from_candidates(
+            turbo_root,
+            &full_pkg_path,
+            &pkg_prefix,
+            repo_index,
+            candidates,
+            &mut hashes,
+        )?;
+        self.file_hash_mode().apply(&full_pkg_path, hashes, true)
     }
 
     pub fn hash_files(
@@ -157,10 +296,11 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
-        match self {
-            SCM::Manual => crate::manual::hash_files(turbo_root, files, false, None, None),
+        let hashes = match self {
+            SCM::Manual(_) => crate::manual::hash_files(turbo_root, files, false, None, None),
             SCM::Git(git) => git.hash_files(turbo_root, files),
-        }
+        }?;
+        self.file_hash_mode().apply(turbo_root, hashes, false)
     }
 
     // hash_existing_of takes a list of files to hash and returns the hashes for the
@@ -179,10 +319,11 @@ impl SCM {
         turbo_root: &AbsoluteSystemPath,
         files: impl Iterator<Item = impl AsRef<AnchoredSystemPath>>,
     ) -> Result<GitHashes, Error> {
-        match self {
-            SCM::Manual => crate::manual::hash_discovered_files(turbo_root, files, None, None),
+        let hashes = match self {
+            SCM::Manual(_) => crate::manual::hash_discovered_files(turbo_root, files, None, None),
             SCM::Git(git) => git.hash_discovered_files(turbo_root, files),
-        }
+        }?;
+        self.file_hash_mode().apply(turbo_root, hashes, true)
     }
 }
 
@@ -242,8 +383,55 @@ impl GitRepo {
             (hashes, to_hash)
         };
 
+        let linked = hashes
+            .keys()
+            .filter(|path| {
+                crate::hash_object::has_symlink(turbo_root, &full_pkg_path.join_unix_path(path))
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        for path in linked {
+            hashes.remove(&path);
+            let repo_relative = self
+                .root
+                .anchor(full_pkg_path.join_unix_path(&path))?
+                .to_unix();
+            if !to_hash.contains(&repo_relative) {
+                to_hash.push(repo_relative);
+            }
+        }
         to_hash
             .retain(|path| !excluded_link(turbo_root, &self.root.join_unix_path(path), excludes));
+        let linked_directories = to_hash
+            .iter()
+            .filter(|path| {
+                std::fs::metadata(self.root.join_unix_path(path))
+                    .is_ok_and(|metadata| metadata.is_dir())
+            })
+            .map(|path| {
+                let absolute = self.root.join_unix_path(path);
+                let relative = turbo_root.anchor(&absolute)?.to_unix();
+                relative
+                    .as_str()
+                    .parse::<ValidatedGlob>()
+                    .map_err(Error::from)
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        if !linked_directories.is_empty() {
+            let exclusions = excludes
+                .iter()
+                .map(|input| input.glob().clone())
+                .collect::<Vec<_>>();
+            for file in globwalk::globwalk_with_settings(
+                turbo_root,
+                &linked_directories,
+                &exclusions,
+                globwalk::WalkType::Files,
+                globwalk::Settings::default().follow_links(),
+            )? {
+                to_hash.push(self.root.anchor(&file)?.to_unix());
+            }
+        }
 
         // Git blob IDs cannot represent the cache-only OIDC normalization.
         // Re-read matching tracked files, even when Git considers them clean.
@@ -366,7 +554,12 @@ impl GitRepo {
 
         hashes.reserve(known_hashes.len() + to_hash.len());
         for (git_relative, oid) in known_hashes {
-            if crate::crlf::is_env_local(git_relative.as_str()) {
+            if crate::crlf::is_env_local(git_relative.as_str())
+                || crate::hash_object::has_symlink(
+                    turbo_root,
+                    &self.root.join_unix_path(&git_relative),
+                )
+            {
                 to_hash.push(git_relative);
                 continue;
             }
@@ -406,8 +599,11 @@ impl GitRepo {
         let pkg_prefix = self.root.anchor(&full_pkg_path)?.to_unix();
         let package_unix_path = package_unix_path_buf.as_str();
 
-        static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
-        let extra_inputs = if include_configs { CONFIG_FILES } else { &[] };
+        let extra_inputs: &[&str] = if include_configs {
+            &globwalk::PACKAGE_CONFIG_INPUTS
+        } else {
+            &[]
+        };
         let total_inputs = inputs.len() + extra_inputs.len();
 
         let mut inclusions = Vec::with_capacity(total_inputs);
@@ -425,14 +621,30 @@ impl GitRepo {
                 inclusions.push(input.into_glob());
             }
         }
-        let files = globwalk::globwalk(
+        let files = globwalk::globwalk_with_settings(
             turbo_root,
             &inclusions,
             &exclusions,
             globwalk::WalkType::Files,
+            globwalk::Settings::default().follow_links(),
         )?;
+        let exact_exclusions = if include_configs {
+            Vec::new()
+        } else {
+            exact_input_exclusions(package_unix_path, inputs)?
+        };
         let mut candidate_paths = Vec::with_capacity(files.len());
         for entry in &files {
+            if !exact_exclusions.is_empty() {
+                let repo_relative =
+                    AnchoredSystemPathBuf::relative_path_between(turbo_root, entry).to_unix();
+                if exact_exclusions
+                    .iter()
+                    .any(|glob| wax::Program::is_match(glob, repo_relative.as_str()))
+                {
+                    continue;
+                }
+            }
             candidate_paths.push(self.root.anchor(entry)?.to_unix());
         }
         let mut hashes = GitHashes::with_capacity(files.len());
@@ -487,8 +699,6 @@ impl GitRepo {
         if !includes.is_empty() {
             let full_pkg_path = turbo_root.resolve(package_path);
 
-            static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
-
             let mut glob_inclusions = Vec::new();
             let mut literal_to_hash = Vec::new();
 
@@ -498,14 +708,17 @@ impl GitRepo {
             let glob_exclusions: Vec<ValidatedGlob> =
                 excludes.iter().map(|input| input.glob().clone()).collect();
 
-            let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
+            let all = includes
+                .iter()
+                .copied()
+                .chain(globwalk::PACKAGE_CONFIG_INPUTS);
             for raw_glob in all {
                 if !globwalk::is_glob_pattern(raw_glob) {
                     // Literal file path — resolve directly via stat instead of
                     // compiling a glob and walking directories.
                     let resolved =
                         full_pkg_path.join_unix_path(turbopath::RelativeUnixPath::new(raw_glob)?);
-                    match resolved.symlink_metadata() {
+                    match std::fs::metadata(&resolved) {
                         Ok(meta) if meta.is_dir() => {
                             // Directory literal — fall through to the glob
                             // walker which will expand it via
@@ -551,11 +764,12 @@ impl GitRepo {
 
             // Only do the expensive glob walk for patterns that are actual globs.
             if !glob_inclusions.is_empty() {
-                let files = globwalk::globwalk(
+                let files = globwalk::globwalk_with_settings(
                     turbo_root,
                     &glob_inclusions,
                     &glob_exclusions,
                     globwalk::WalkType::Files,
+                    globwalk::Settings::default().follow_links(),
                 )?;
 
                 let mut to_hash = Vec::new();
@@ -673,6 +887,159 @@ mod tests {
     }
 
     #[test]
+    fn test_tracked_outputs_with_nested_turbo_root_and_no_git_index() {
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        let turbo_root = root.join_component("project");
+        let package_path = AnchoredSystemPath::new("packages/app").unwrap();
+        let license = turbo_root.join_components(&["packages", "app", "dist", "LICENSE"]);
+        license.ensure_dir().unwrap();
+        license.create_with_contents("license v1").unwrap();
+        let inclusions = vec!["dist/**".to_owned()];
+        let scm = SCM::new(&turbo_root);
+        // An unborn repository may have no index yet; generated outputs are not inputs.
+        assert!(
+            scm.get_tracked_output_hashes(&turbo_root, package_path, &inclusions, &[], None)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            SCM::Manual(crate::FileHashMode::ContentOnly)
+                .get_tracked_output_hashes(&turbo_root, package_path, &inclusions, &[], None)
+                .unwrap()
+                .is_empty()
+        );
+        require_git_cmd(&root, &["add", "."]);
+        for indexed in [false, true] {
+            let index = indexed.then(|| scm.build_repo_index_eager().unwrap());
+            let hashes = scm
+                .get_tracked_output_hashes(
+                    &turbo_root,
+                    package_path,
+                    &inclusions,
+                    &[],
+                    index.as_ref(),
+                )
+                .unwrap();
+            assert_eq!(hashes.len(), 1);
+            assert!(hashes.contains_key(&RelativeUnixPathBuf::new("dist/LICENSE").unwrap()));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_tracked_outputs_ignore_unrelated_non_utf8_paths() {
+        use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        let license = root.join_components(&["dist", "LICENSE"]);
+        license.ensure_dir().unwrap();
+        license.create_with_contents("license").unwrap();
+        commit_all(&root);
+        let blob = Command::new("git")
+            .args(["rev-parse", "HEAD:dist/LICENSE"])
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(blob.status.success());
+        let blob = String::from_utf8(blob.stdout).unwrap();
+        let output = Command::new("git")
+            .args([
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                "100644",
+                blob.trim(),
+            ])
+            .arg(OsString::from_vec(b"unrelated-\xff".to_vec()))
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        require_git_cmd(&root, &["commit", "-m", "track non-UTF-8 path"]);
+        let scm = SCM::new(&root);
+        let index = scm.build_repo_index_eager().unwrap();
+        let package = AnchoredSystemPath::new("").unwrap();
+        let outputs = vec!["dist/**".to_owned()];
+        let fallback = scm
+            .get_tracked_output_hashes(&root, package, &outputs, &[], None)
+            .unwrap();
+        let indexed = scm
+            .get_tracked_output_hashes(&root, package, &outputs, &[], Some(&index))
+            .unwrap();
+        assert_eq!(fallback, indexed);
+        assert_eq!(fallback.len(), 1);
+    }
+
+    #[test]
+    fn exact_inputs_do_not_inject_configs_or_defaults() {
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        for path in [
+            "pkg/package.json",
+            "pkg/turbo.json",
+            "pkg/turbo.jsonc",
+            "pkg/source.rs",
+            "pkg/node_modules/data/schema.json",
+            "pkg/node_modules/data/nested/other.json",
+            "pkg/node_modules/data/skip.json",
+            "pkg/node_modules/database/junk.json",
+            "shared/schema.json",
+        ] {
+            let file = root.join_unix_path(turbopath::RelativeUnixPath::new(path).unwrap());
+            file.ensure_dir().unwrap();
+            file.create_with_contents("{}\n").unwrap();
+        }
+        root.join_component(".gitignore")
+            .create_with_contents("node_modules/\n")
+            .unwrap();
+        commit_all(&root);
+        let package = AnchoredSystemPathBuf::from_raw("pkg").unwrap();
+        let git = SCM::new(&root);
+        assert!(!git.is_manual());
+        for scm in [git, SCM::Manual(crate::FileHashMode::ContentOnly)] {
+            for (patterns, expected) in [
+                (vec![], vec![]),
+                (vec!["!source.rs"], vec![]),
+                (
+                    vec!["node_modules/data/schema.json"],
+                    vec!["node_modules/data/schema.json"],
+                ),
+                (
+                    vec!["node_modules/data", "!**/skip.json"],
+                    vec![
+                        "node_modules/data/schema.json",
+                        "node_modules/data/nested/other.json",
+                    ],
+                ),
+                (
+                    vec![
+                        "node_modules/**/*.json",
+                        "!node_modules/database/**",
+                        "!**/skip.json",
+                        "!**/nested",
+                    ],
+                    vec!["node_modules/data/schema.json"],
+                ),
+                (vec!["../shared"], vec!["../shared/schema.json"]),
+                (vec!["../shared/*.json", "!../shared/schema.json"], vec![]),
+                (vec!["package.json", "!package.json"], vec![]),
+                (vec!["turbo.jsonc"], vec!["turbo.jsonc"]),
+            ] {
+                let hashes = scm
+                    .get_explicit_input_file_hashes(&root, &package, &patterns, None)
+                    .unwrap();
+                let mut actual: Vec<_> = hashes.keys().map(|path| path.as_str()).collect();
+                let mut expected = expected;
+                actual.sort();
+                expected.sort();
+                assert_eq!(actual, expected, "scm={scm:?}, inputs={patterns:?}");
+            }
+        }
+    }
+
+    #[test]
     fn test_hash_symlink() {
         let (_, tmp_root) = tmp_dir();
         let git_root = tmp_root.join_component("actual_repo");
@@ -721,7 +1088,7 @@ mod tests {
 
         let directory = AnchoredSystemPathBuf::from_raw("directory").unwrap();
         repo_root.resolve(&directory).create_dir_all().unwrap();
-        let hashes = SCM::Manual
+        let hashes = SCM::Manual(crate::FileHashMode::ContentOnly)
             .hash_discovered_files(&repo_root, [missing, directory].iter())
             .unwrap();
         assert!(hashes.is_empty());
@@ -1729,6 +2096,92 @@ mod tests {
             committed, dirty,
             "dirty CRLF file hash should match committed hash when content is identical. \
              committed={committed}, dirty={dirty}"
+        );
+    }
+
+    /// Under `text=auto`, git stores content it classifies as binary (here: a
+    /// lone CR) without eol conversion. Hashing must agree, through the
+    /// repo-index path that verifies stat-stale entries:
+    /// - an edit that only adds CRs before LFs is a different blob to git, so
+    ///   it must not reuse the committed hash (that would be a stale cache
+    ///   hit);
+    /// - rewriting committed bytes without changing them must keep the index
+    ///   hash.
+    #[test]
+    fn test_text_auto_binary_content_hashes_like_git() {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all().unwrap();
+        std::fs::write(
+            repo_root.as_std_path().join(".gitattributes"),
+            "* text=auto\n",
+        )
+        .unwrap();
+        std::fs::write(
+            pkg_dir.as_std_path().join("package.json"),
+            "{\"name\": \"my-pkg\"}\n",
+        )
+        .unwrap();
+        let data_path = pkg_dir.join_component("data.txt");
+        std::fs::write(data_path.as_std_path(), b"a\nb\rc\n").unwrap();
+
+        setup_repository(&repo_root);
+        require_git_cmd(&repo_root, &["config", "--local", "core.autocrlf", "false"]);
+        commit_all(&repo_root);
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let key = RelativeUnixPathBuf::new("data.txt").unwrap();
+        let scm = SCM::new(&repo_root);
+        let SCM::Git(git) = &scm else {
+            panic!("expected a git SCM");
+        };
+        let turbo_hash = || {
+            let repo_index = RepoGitIndex::new(git).unwrap();
+            scm.get_package_file_hashes::<&str>(
+                &repo_root,
+                &pkg_path,
+                &[],
+                false,
+                None,
+                Some(&repo_index),
+            )
+            .unwrap()
+            .remove(&key)
+            .expect("data.txt hashed")
+        };
+        let git_blob = || {
+            let output = Command::new("git")
+                .args([
+                    "hash-object",
+                    "--path",
+                    "my-pkg/data.txt",
+                    "my-pkg/data.txt",
+                ])
+                .current_dir(&repo_root)
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+
+        let committed = turbo_hash();
+        assert_eq!(&*committed, git_blob());
+
+        std::fs::write(data_path.as_std_path(), b"a\r\nb\rc\r\n").unwrap();
+        let edited = turbo_hash();
+        assert_eq!(&*edited, git_blob(), "edited hash must match git's blob");
+        assert_ne!(
+            edited, committed,
+            "a CRLF edit of binary-classified content must not reuse the committed hash"
+        );
+
+        commit_all(&repo_root);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        std::fs::write(data_path.as_std_path(), b"a\r\nb\rc\r\n").unwrap();
+        assert_eq!(
+            turbo_hash(),
+            edited,
+            "rewriting committed bytes must keep the index hash"
         );
     }
 

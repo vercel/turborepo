@@ -30,7 +30,7 @@ fn reject(mutator: impl FnOnce(&mut Value)) {
 }
 
 #[test]
-fn portable_artifact_sets_and_external_requirements() {
+fn portable_artifact_sets_round_trip() {
     let mut value = fixture();
     value["tools"]["node"] = tool("node", "macos-arm64");
     value["tools"]["node"]["adapter"] = json!("node");
@@ -46,13 +46,42 @@ fn portable_artifact_sets_and_external_requirements() {
     component["destination"] = json!("components/rustfmt");
     value["tools"]["rust"]["installation"]["artifacts"]["linux-x64-gnu"]["rustfmt"] = component;
     value["tools"]["go"] = tool("go", "any");
-    value["tools"]["go"]["installation"] = json!({"kind":"verify-system", "executables":["go"]});
     let lock = parse(&value).unwrap();
     assert_eq!(lock.tools().len(), 4);
     assert_eq!(
         parse(&serde_json::to_value(lock.document()).unwrap()).unwrap(),
         lock
     );
+}
+
+#[test]
+fn removed_installations_fail_with_fixed_migration_guidance() {
+    for mixed in [false, true] {
+        let mut value = fixture();
+        let mut obsolete = tool("node", "any");
+        obsolete["installation"] = json!({"kind":"verify-system", "executables":["secret-probe"]});
+        if !mixed {
+            value["tools"] = json!({});
+        }
+        value["tools"]["node"] = obsolete;
+        let error = parse(&value).unwrap_err();
+        assert_eq!(error, Error::RemovedInstallation);
+        let message = error.to_string();
+        assert!(message.contains("Back up and remove turbo.lock"));
+        assert!(message.contains("--update-lock cannot read this legacy lock"));
+        assert!(!message.contains("secret-probe"));
+        assert!(serde_json::from_value::<Document>(value.clone()).is_err());
+        let bytes = value
+            .to_string()
+            .replace("\"kind\":", "\"kind\":\"managed\",\"kind\":");
+        assert_eq!(Lock::parse(bytes.as_bytes()), Err(Error::Json));
+    }
+    let mut value = fixture();
+    value["tools"]["fixture"]["installation"]["kind"] = json!("future-kind");
+    assert_eq!(parse(&value), Err(Error::Json));
+    let mut value = fixture();
+    value["tools"]["fixture"]["declarations"][0]["request"] = json!("verify-system");
+    assert!(parse(&value).is_ok());
 }
 
 #[test]
@@ -91,11 +120,10 @@ fn strict_json_schema_and_duplicate_keys_at_every_depth() {
     reject(|v| v["schemaVersion"] = json!(1));
     reject(|v| v["schemaVersion"] = json!(-1));
     reject(|v| v["tools"]["fixture"]["installation"]["artifacts"]["linux-x64"] = json!({}));
-    for unknown in ["artifacts", "executablesExtra", "unknown"] {
-        reject(|v| {
-            v["tools"]["fixture"]["installation"] =
-                json!({"kind":"verify-system", "executables":["fixture"], unknown:{}})
-        });
+    for unknown in ["executablesExtra", "unknown"] {
+        reject(
+            |v| v["tools"]["fixture"]["installation"] = json!({"kind":"managed", "artifacts":{"any":{"distribution":artifact("fixture")}}, unknown:{}}),
+        );
     }
 }
 
@@ -123,7 +151,8 @@ fn bounds_and_recursion_remain_enforced() {
     reject(|v| v["tools"]["fixture"]["options"] = json!({"components":["rustfmt", "clippy"]}));
     reject(|v| v["tools"]["fixture"]["options"] = json!({"components":["clippy", "clippy"]}));
     reject(|v| {
-        v["tools"]["fixture"]["installation"] = json!({"kind":"verify-system", "executables":[]})
+        v["tools"]["fixture"]["installation"]["artifacts"]["any"]["distribution"]["executables"] =
+            json!({})
     });
 }
 
@@ -215,7 +244,7 @@ fn transport_digest_and_layout_are_strict_without_secret_diagnostics() {
 }
 
 #[test]
-fn collision_scope_includes_any_system_and_windows_aliases_not_inactive_platforms() {
+fn collision_scope_includes_any_and_windows_aliases_not_inactive_platforms() {
     let mut value = fixture();
     value["tools"]["other"] = tool("fixture", "macos-x64");
     assert!(parse(&value).is_err());
@@ -224,8 +253,7 @@ fn collision_scope_includes_any_system_and_windows_aliases_not_inactive_platform
     value["tools"]["other"] = tool("FIXTURE.exe", "windows-x64");
     value["tools"]["fixture"] = tool("fixture", "windows-x64");
     assert!(parse(&value).is_err());
-    value["tools"]["other"]["installation"] =
-        json!({"kind":"verify-system", "executables":["fixture"]});
+    value["tools"]["other"] = tool("fixture.cmd", "windows-x64");
     assert!(parse(&value).is_err());
     reject(|v| {
         v["tools"]["fixture"]["installation"]["artifacts"]["macos-x64"] =
@@ -239,9 +267,7 @@ fn collection_and_path_boundaries_and_resource_only_components() {
     let template = document.tools.remove("fixture").unwrap();
     for i in 0..MAX_TOOLS {
         let mut tool = template.clone();
-        tool.installation = Installation::VerifySystem {
-            executables: vec![format!("tool-{i}")],
-        };
+        tool.installation = serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{format!("tool-{i}"):"bin/tool"}}}}})).unwrap();
         document.tools.insert(format!("tool-{i}"), tool);
     }
     assert!(Lock::new(document.clone()).is_ok());
@@ -285,8 +311,8 @@ fn collection_and_path_boundaries_and_resource_only_components() {
     value["tools"]["fixture"]["installation"]["artifacts"]["any"]["extra"] = resource;
     assert!(parse(&value).is_err());
     reject(|v| {
-        v["tools"]["fixture"]["installation"] =
-            json!({"kind":"verify-system", "executables":["fixture","fixture.cmd"]})
+        v["tools"]["fixture"]["installation"]["artifacts"]["any"]["distribution"]["executables"] =
+            json!({"fixture":"bin/fixture","fixture.cmd":"bin/fixture.cmd"})
     });
     reject(|v| {
         v["tools"]["fixture"]["installation"]["artifacts"]["any"]["second"] = artifact("fixture")

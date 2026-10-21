@@ -1332,8 +1332,8 @@ mod test {
     use url::Url;
 
     use crate::{
-        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString, TokenClient,
-        telemetry::TelemetryClient,
+        APIAuth, APIClient, AnonAPIClient, CacheClient, CachingStatus, Client, Error, SecretString,
+        TokenClient, telemetry::TelemetryClient,
     };
 
     #[test]
@@ -1584,6 +1584,26 @@ mod test {
         );
         let err = APIClient::handle_403(response).await;
         assert_snapshot!(err.to_string(), @"Unknown status forbidden: Not authorized");
+    }
+
+    #[tokio::test]
+    async fn test_handle_403_maps_remote_caching_status() {
+        let response = reqwest::Response::from(
+            http::Response::builder()
+                .body(r#"{"error": {"code": "remote_caching_paused", "message": "Paused"}}"#)
+                .unwrap(),
+        );
+        let err = APIClient::handle_403(response).await;
+        assert!(
+            matches!(
+                err,
+                Error::CacheDisabled {
+                    status: CachingStatus::Paused,
+                    ..
+                }
+            ),
+            "{err:?}"
+        );
     }
 
     #[tokio::test]

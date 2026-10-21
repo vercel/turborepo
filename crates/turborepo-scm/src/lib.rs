@@ -24,6 +24,9 @@ use turbopath::{
 
 pub(crate) mod crlf;
 mod env_local;
+mod file_hash_mode;
+#[cfg(test)]
+mod file_hash_mode_tests;
 pub mod git;
 mod hash_object;
 mod ls_tree;
@@ -42,6 +45,7 @@ mod symlink_inputs_tests;
 #[cfg(test)]
 mod test_utils;
 
+pub use file_hash_mode::FileHashMode;
 pub use repo_index::{RepoGitIndex, walk_candidate_files};
 pub use slowest_files::{SlowestFile, SlowestFiles};
 pub use turborepo_hash::OidHash;
@@ -255,6 +259,7 @@ pub struct GitRepo {
     bin: AbsoluteSystemPathBuf,
     attrs: OnceLock<Option<crlf::GitAttrs>>,
     github_actions_remote_base_ref_fallback: bool,
+    file_hash_mode: FileHashMode,
     /// Optional recorder for the slowest-to-hash files. Set by long-running
     /// consumers (the file watcher) so they can diagnose a stalled startup.
     slowest_files: Option<std::sync::Arc<SlowestFiles>>,
@@ -279,6 +284,7 @@ impl Clone for GitRepo {
             bin: self.bin.clone(),
             attrs: OnceLock::new(),
             github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
+            file_hash_mode: self.file_hash_mode,
             slowest_files: self.slowest_files.clone(),
             change_prefetch: self.change_prefetch.clone(),
         }
@@ -319,6 +325,7 @@ impl GitRepo {
             bin,
             attrs: OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
+            file_hash_mode: FileHashMode::ContentOnly,
             slowest_files: None,
             change_prefetch: Default::default(),
         })
@@ -364,7 +371,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
 #[derive(Debug, Clone)]
 pub enum SCM {
     Git(GitRepo),
-    Manual,
+    Manual(FileHashMode),
 }
 
 impl SCM {
@@ -374,7 +381,7 @@ impl SCM {
             .map(SCM::Git)
             .unwrap_or_else(|e| {
                 debug!("{}, continuing with manual hashing", e);
-                SCM::Manual
+                SCM::Manual(FileHashMode::ContentOnly)
             })
     }
 
@@ -392,6 +399,7 @@ impl SCM {
                 bin,
                 attrs: OnceLock::new(),
                 github_actions_remote_base_ref_fallback: false,
+                file_hash_mode: FileHashMode::ContentOnly,
                 slowest_files: None,
                 change_prefetch: Default::default(),
             }),
@@ -400,8 +408,23 @@ impl SCM {
                     "git binary not found: {}, continuing with manual hashing",
                     e
                 );
-                SCM::Manual
+                SCM::Manual(FileHashMode::ContentOnly)
             }
+        }
+    }
+
+    pub fn with_file_hash_mode(mut self, mode: FileHashMode) -> Self {
+        match &mut self {
+            SCM::Git(git) => git.file_hash_mode = mode,
+            SCM::Manual(file_hash_mode) => *file_hash_mode = mode,
+        }
+        self
+    }
+
+    pub fn file_hash_mode(&self) -> FileHashMode {
+        match self {
+            SCM::Git(git) => git.file_hash_mode,
+            SCM::Manual(mode) => *mode,
         }
     }
 
@@ -423,13 +446,13 @@ impl SCM {
     }
 
     pub fn is_manual(&self) -> bool {
-        matches!(self, SCM::Manual)
+        matches!(self, SCM::Manual(_))
     }
 
     pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
         match self {
             SCM::Git(git) => Some(&git.root),
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -471,7 +494,7 @@ impl SCM {
                 }
                 Some(index)
             }
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -505,7 +528,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -530,7 +553,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -555,7 +578,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -583,7 +606,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -594,7 +617,7 @@ impl SCM {
     ) -> Result<(), Error> {
         match self {
             SCM::Git(git) => repo_index.populate_untracked_for_prefixes(git, prefixes),
-            SCM::Manual => Ok(()),
+            SCM::Manual(_) => Ok(()),
         }
     }
 }

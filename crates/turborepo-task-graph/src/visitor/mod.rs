@@ -1334,6 +1334,16 @@ mod recursive_script_tests {
                 ("something".into(), Spanned::new("turbo run build".into())),
                 ("safe".into(), Spanned::new("echo building".into())),
                 ("similar".into(), Spanned::new("turbopack build".into())),
+                ("boundaries".into(), Spanned::new("turbo boundaries".into())),
+                ("echo-turbo".into(), Spanned::new("echo turbo".into())),
+                (
+                    "wrapped".into(),
+                    Spanned::new("pnpm exec turbo boundaries".into()),
+                ),
+                (
+                    "compound".into(),
+                    Spanned::new("echo ready&&turbo run build".into()),
+                ),
             ]),
             ..Default::default()
         };
@@ -1362,12 +1372,15 @@ mod recursive_script_tests {
             miette::Diagnostic::code(&error).unwrap().to_string(),
             "recursive_turbo_invocations"
         );
-        for task in ["safe", "similar"] {
+        for task in ["safe", "similar", "boundaries", "echo-turbo", "wrapped"] {
             assert!(
                 recursive_root_script(&TaskId::new(ROOT_PKG_NAME, task), &root_context).is_none(),
                 "{task} must not be mistaken for a recursive invocation"
             );
         }
+        assert!(
+            recursive_root_script(&TaskId::new(ROOT_PKG_NAME, "compound"), &root_context).is_some()
+        );
         let member_context = graph
             .package_task_context(&PackageName::from("util"))
             .unwrap();

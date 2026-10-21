@@ -6,7 +6,7 @@ use tracing::info;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix};
 use wax::{Glob, Program, any};
 
-use crate::{Error, GitHashes, OidHash};
+use crate::{Error, GitHashes, OidHash, package_deps::InputSelection};
 
 fn to_glob(input: &str) -> Result<Glob<'static>, Error> {
     let glob = fix_glob_pattern(input).into_unix();
@@ -121,6 +121,7 @@ pub(crate) fn hash_discovered_files(
     Ok(hashes)
 }
 
+#[cfg(test)]
 pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
@@ -129,29 +130,41 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     git_root: Option<&AbsoluteSystemPath>,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
-    get_package_file_hashes(
+    get_input_file_hashes_without_git(
         turbo_root,
         package_path,
         inputs,
-        include_default_files,
+        InputSelection::Package {
+            include_default_files,
+        },
         git_root,
         cached_attrs,
-        false,
     )
 }
 
-pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
+pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
     inputs: &[S],
-    include_default_files: bool,
+    selection: InputSelection,
     git_root: Option<&AbsoluteSystemPath>,
     cached_attrs: Option<&crate::crlf::GitAttrs>,
-    symlinks_only: bool,
 ) -> Result<GitHashes, Error> {
+    let include_configs = matches!(selection, InputSelection::Package { .. });
+    let include_default_files = matches!(
+        selection,
+        InputSelection::Package {
+            include_default_files: true
+        }
+    );
     let full_package_path = turbo_root.resolve(package_path);
     let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
+    let exact_exclusions = if include_configs {
+        Vec::new()
+    } else {
+        crate::package_deps::exact_input_exclusions(package_unix_path.as_str(), inputs)?
+    };
 
     let effective_attrs_root = git_root.unwrap_or(turbo_root);
     let git_metadata_path = effective_attrs_root.join_component(".git");
@@ -160,11 +173,6 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
     let mut default_file_hashes = GitHashes::new();
     let mut excluded_file_paths = HashSet::new();
 
-    // Inputs that resolve outside the package directory can't be found by the
-    // WalkBuilder since it only walks within the package directory. Handle
-    // these separately using globwalk rooted at turbo_root, matching the git
-    // path's behavior. Inputs inside the package are matched against walked
-    // paths using their normalized package-relative form.
     let mut local_inclusions: Vec<String> = Vec::new();
     let mut local_exclusions: Vec<String> = Vec::new();
     let mut external_inclusions = Vec::new();
@@ -193,7 +201,10 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
     }
     let has_inclusions = !external_inclusions.is_empty();
     if has_inclusions {
-        for name in ["package.json", "turbo.json", "turbo.jsonc"] {
+        for name in globwalk::PACKAGE_CONFIG_INPUTS
+            .iter()
+            .filter(|_| include_configs)
+        {
             external_inclusions
                 .push(PackageInput::resolve(package_unix_path.as_str(), name)?.into_glob());
         }
@@ -205,8 +216,15 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
             globwalk::Settings::default().follow_links(),
         )?;
         for file_path in &files {
-            if symlinks_only && !crate::hash_object::has_symlink(turbo_root, file_path) {
-                continue;
+            if !exact_exclusions.is_empty() {
+                let repo_relative =
+                    AnchoredSystemPathBuf::relative_path_between(turbo_root, file_path).to_unix();
+                if exact_exclusions
+                    .iter()
+                    .any(|glob| glob.is_match(repo_relative.as_str()))
+                {
+                    continue;
+                }
             }
             let relative_path =
                 AnchoredSystemPathBuf::relative_path_between(&full_package_path, file_path)
@@ -223,11 +241,18 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
         }
     }
 
+    if !include_configs && local_inclusions.is_empty() {
+        return Ok(hashes);
+    }
+
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut excludes = Vec::new();
     for exclusion in &local_exclusions {
-        excludes.push(to_glob(exclusion)?);
+        for pattern in globwalk::walk_exclusion_patterns(exclusion) {
+            excludes.push(to_glob(&pattern)?);
+        }
     }
+
     let exclude_pattern = if excludes.is_empty() {
         None
     } else {
@@ -272,6 +297,16 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
         }
 
         let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
+        if !exact_exclusions.is_empty() {
+            let repo_relative =
+                AnchoredSystemPathBuf::relative_path_between(turbo_root, path).to_unix();
+            if exact_exclusions
+                .iter()
+                .any(|glob| glob.is_match(repo_relative.as_str()))
+            {
+                continue;
+            }
+        }
         let relative_path = full_package_path.anchor(path)?;
         let relative_path = relative_path.to_unix();
 
@@ -282,9 +317,6 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
             continue;
         }
 
-        if symlinks_only && !crate::hash_object::has_symlink(turbo_root, path) {
-            continue;
-        }
         let attr_path = effective_attrs_root.anchor(path)?.to_unix();
         if let Some(hash) = hash_discovered_file(turbo_root, path, attr_path.as_str(), attrs)? {
             hashes.insert(relative_path, hash);
@@ -341,9 +373,6 @@ pub(crate) fn get_package_file_hashes<S: AsRef<str>>(
                 continue;
             }
 
-            if symlinks_only && !crate::hash_object::has_symlink(turbo_root, path) {
-                continue;
-            }
             let attr_path = effective_attrs_root.anchor(path)?.to_unix();
             if let Some(hash) = hash_discovered_file(turbo_root, path, attr_path.as_str(), attrs)? {
                 default_file_hashes.insert(relative_path, hash);

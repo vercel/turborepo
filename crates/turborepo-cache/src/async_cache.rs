@@ -195,6 +195,11 @@ impl AsyncCache {
         }
     }
 
+    /// See [`CacheMultiplexer::disable_remote_writes`].
+    pub fn disable_remote_writes(&self) {
+        self.real_cache.disable_remote_writes();
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.real_cache.exists(key).await
@@ -352,6 +357,86 @@ mod tests {
         );
         query.assert_calls_async(1).await;
         head.assert_calls_async(1).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn dry_run_fallback_does_not_serialize_remote_heads() -> Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let query = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::POST).path("/v8/artifacts");
+                then.status(404);
+            })
+            .await;
+        // More keys than the concurrency limit exercises refilling the buffer.
+        // Distinct metadata and staggered responses expose result reordering.
+        let keys: Vec<_> = (0..40).map(|index| format!("key-{index}")).collect();
+        let mut heads = Vec::new();
+        for (index, key) in keys.iter().enumerate() {
+            let head = server
+                .mock_async(|when, then| {
+                    when.method(httpmock::Method::HEAD)
+                        .path(format!("/v8/artifacts/{key}"));
+                    then.status(if index % 7 == 0 { 404 } else { 200 })
+                        .header("x-artifact-duration", (index + 1).to_string())
+                        .header("x-artifact-sha", format!("sha-{index}"))
+                        .header("x-artifact-dirty-hash", format!("dirty-{index}"))
+                        .delay(Duration::from_millis(20 * (16 - index % 16) as u64));
+                })
+                .await;
+            heads.push(head);
+        }
+        let root = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root.path())?;
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: CacheConfig::remote_only(),
+            workers: 1,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+        let cache = AsyncCache::new(
+            &opts,
+            &root,
+            Some(APIClient::new(
+                server.base_url(),
+                None,
+                None,
+                "2.0.0",
+                false,
+            )?),
+            Some(APIAuth {
+                team_id: None,
+                team_slug: None,
+                token: SecretString::new("test-token".into()),
+            }),
+            None,
+            LazyScmState::resolved(None),
+        )?;
+
+        let hits = tokio::time::timeout(
+            Duration::from_secs(3),
+            try_join_all(keys.iter().map(|key| cache.dry_run_exists(key))),
+        )
+        .await??;
+        assert_eq!(hits.len(), keys.len());
+        for (index, hit) in hits.into_iter().enumerate() {
+            let expected = (index % 7 != 0).then(|| CacheHitMetadata {
+                source: CacheSource::Remote,
+                time_saved: (index + 1) as u64,
+                sha: Some(format!("sha-{index}")),
+                dirty_hash: Some(format!("dirty-{index}")),
+            });
+            assert_eq!(hit, expected, "incorrect result for {}", keys[index]);
+        }
+        // Batch collection may split on a busy runner; every key must still
+        // receive exactly one fallback HEAD.
+        assert!(query.calls_async().await >= 1);
+        for head in heads {
+            head.assert_calls_async(1).await;
+        }
         Ok(())
     }
 

@@ -264,7 +264,7 @@ fn npm_proposed_refresh_reuses_independent_npm_when_resolutions_are_unchanged() 
     assert!(
         report.ends_with(
             "Tracked changes: none. Resolution read upstream metadata and verified archives; \
-             nothing was installed, and no probes or tasks run."
+             nothing was installed, and no probes run."
         ),
         "{report}"
     );
@@ -303,7 +303,7 @@ fn npm_proposed_refresh_reuses_bundled_npm_when_resolutions_are_unchanged() {
     assert!(
         report.ends_with(
             "Tracked changes: none. Resolution read upstream metadata and verified archives; \
-             nothing was installed, and no probes or tasks run."
+             nothing was installed, and no probes run."
         ),
         "{report}"
     );
@@ -881,11 +881,12 @@ fn npm_plans_and_checks_report_the_install_without_running_it() {
     );
     let check = n.f.dependencies(&["--check"]).check(root, &lock).unwrap();
     assert_eq!(
-        check[0],
-        "javascript dependencies: not checked; turbo setup reruns npm ci from package-lock.json, \
-         because dependency readiness is not tracked"
+        check,
+        [
+            "javascript dependencies: not checked; turbo setup reruns npm ci from \
+             package-lock.json, because dependency readiness is not tracked"
+        ]
     );
-    assert_eq!(check.last().unwrap(), "No tasks run.");
     assert_eq!(
         n.f.dependencies(&["--plan", "--tools-only"])
             .plan(root, &lock)

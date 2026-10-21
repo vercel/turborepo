@@ -1941,6 +1941,7 @@ impl<T: PackageDiscovery + Send + Sync> BuildState<'_, ResolvedLockfile, T> {
                     Ok(external_dependencies) => {
                         let mut snapshot = turborepo_rayon_compat::block_in_place(|| {
                             javascript::resolve_dependencies(
+                                self.repo_root,
                                 &knowledge,
                                 std::mem::take(&mut native_external_resolutions),
                                 lockfile.as_ref(),
@@ -2290,6 +2291,42 @@ mod test {
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             self.discover_packages().await
         }
+    }
+
+    #[tokio::test]
+    async fn missing_bun_patch_fails_with_external_resolution_error() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let manifest = root.join_component("package.json");
+        std::fs::write(
+            &manifest,
+            r#"{"name":"root","dependencies":{"foo":"1.0.0"}}"#,
+        )
+        .unwrap();
+        let lockfile: turborepo_lockfiles::BunLockfile = r#"{
+            "lockfileVersion": 1,
+            "workspaces": { "": { "name": "root" } },
+            "packages": { "foo": ["foo@1.0.0", "", {}, "sha512-foo"] },
+            "patchedDependencies": { "foo@1.0.0": "missing.patch" }
+        }"#
+        .parse()
+        .unwrap();
+        let error = PackageGraph::builder(root, PackageJson::load(&manifest).unwrap())
+            .with_package_manager(PackageManager::Bun)
+            .with_package_discovery(ManagerDiscovery(PackageManager::Bun))
+            .with_package_jsons(Some(HashMap::new()))
+            .with_lockfile(Some(Box::new(lockfile)))
+            .build()
+            .await
+            .unwrap_err();
+        let Error::Discovery(discovery::Error::Failed(source)) = &error else {
+            panic!("expected a discovery failure, got {error}");
+        };
+        assert!(
+            matches!(source.downcast_ref::<Error>(), Some(Error::ExternalResolution(message))
+                if message.contains("missing.patch") && message.contains("foo@1.0.0")),
+            "{error}"
+        );
     }
 
     struct RootObservingContributor {

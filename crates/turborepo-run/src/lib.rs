@@ -97,6 +97,9 @@ pub(crate) enum RemoteCacheUnavailableReason {
 pub(crate) enum RemoteCacheStatus {
     Disabled(RemoteCacheDisabledReason),
     Enabled,
+    /// Remote reads are enabled but uploads are skipped, either by the
+    /// server (read-only token) or by configuration.
+    EnabledReadOnly,
     Unavailable(RemoteCacheUnavailableReason),
 }
 
@@ -198,6 +201,9 @@ const SLOW_SHUTDOWN_STATUS_INTERVAL: Duration = Duration::from_secs(2);
 fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (String, bool) {
     match status {
         RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+        RemoteCacheStatus::EnabledReadOnly => {
+            ("Remote caching enabled (read-only)".to_string(), false)
+        }
         RemoteCacheStatus::Disabled(reason) => {
             let msg = match reason {
                 RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
@@ -491,20 +497,6 @@ impl Run {
                         "packages"
                     }
                 ),
-            )
-            .emit();
-        }
-
-        // Honest about tools turbo did not install, such as verify-system ones.
-        for notice in self
-            .execution
-            .managed_environment
-            .iter()
-            .flat_map(|tools| tools.notices())
-        {
-            turborepo_log::info(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
-                format!("{pad}• Using {notice}"),
             )
             .emit();
         }
@@ -1788,10 +1780,7 @@ impl turborepo_query_api::QueryRun for Run {
         &self,
         base: Option<&str>,
         head: Option<&str>,
-    ) -> Result<
-        std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
-        turborepo_query_api::AffectedPackagesError,
-    > {
+    ) -> Result<turborepo_types::TaskInputChanges, turborepo_query_api::AffectedPackagesError> {
         match builder::changed_files_for_affected_range(self.scm(), self.repo_root(), base, head)
             .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
         {
@@ -1799,14 +1788,14 @@ impl turborepo_query_api::QueryRun for Run {
             Err(_invalid_range) => {
                 // If git range is invalid, return empty set — the affected packages
                 // computation will handle reporting all-packages-changed separately.
-                Ok(std::collections::HashSet::new())
+                Ok(turborepo_types::TaskInputChanges::default())
             }
         }
     }
 
     fn match_tasks_against_changed_files(
         &self,
-        changed_files: &std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        changed_files: &turborepo_types::TaskInputChanges,
     ) -> Result<
         std::collections::HashMap<turborepo_query_api::QueryTaskId, String>,
         turborepo_query_api::AffectedPackagesError,
@@ -1882,6 +1871,13 @@ mod tests {
         assert_eq!(
             remote_cache_status_message(RemoteCacheStatus::Enabled, "https://cache.example.com"),
             ("Remote caching enabled".to_string(), false)
+        );
+        assert_eq!(
+            remote_cache_status_message(
+                RemoteCacheStatus::EnabledReadOnly,
+                "https://cache.example.com"
+            ),
+            ("Remote caching enabled (read-only)".to_string(), false)
         );
         assert_eq!(
             remote_cache_status_message(

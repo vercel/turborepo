@@ -11,6 +11,9 @@
 //!   `.gitattributes` files are not supported.
 //! - The `eol=` attribute is not handled; only `text`, `text=auto`, `-text`,
 //!   and `binary` are recognized.
+//! - git skips `text=auto` conversion for a path whose indexed blob already
+//!   contains CRLF (`has_crlf_in_index()` in convert.c). That rule needs the
+//!   index blob and is not replicated here.
 
 use std::io::{Read, Seek, SeekFrom};
 
@@ -43,10 +46,6 @@ pub(crate) struct GitAttrs {
     collection: MetadataCollection,
 }
 
-/// Matches git's `FIRST_FEW_BYTES` (8KB) used by `buffer_is_binary()` to
-/// detect binary content. A file is considered binary if a NUL byte appears
-/// in the first 8KB. Do not change without verifying against git's behavior.
-const GIT_BINARY_DETECT_LEN: usize = 8 * 1024;
 const BUF_SIZE: usize = 64 * 1024;
 
 impl GitAttrs {
@@ -192,13 +191,78 @@ struct ScanResult {
     byte_count: u64,
     /// Number of \r\n pairs found.
     crlf_count: u64,
-    /// Whether a NUL byte was found in the first 8KB (only meaningful when
-    /// `detect_binary` was true).
+    /// Whether git's `text=auto` heuristic classifies the content as binary
+    /// (only meaningful when `detect_binary` was true). See [`BinaryStats`].
     is_binary: bool,
 }
 
-/// Scan a file to count CRLF pairs, total byte length, and optionally detect
-/// binary content (NUL in first 8KB).
+/// Mirrors git's `gather_stats()` + `convert_is_binary()` (convert.c), which
+/// decide whether `text=auto` content is eol-converted on checkin. Content is
+/// binary if it has a lone CR (one not followed by LF), any NUL byte, or
+/// more than one non-printable byte per 128 printable ones. All of these are
+/// counted over the whole file: the 8KB `buffer_is_binary()` probe is what
+/// git uses for diffs, not for checkin conversion.
+#[derive(Default)]
+struct BinaryStats {
+    /// Byte counts indexed by [`BYTE_CLASS`]. Printable bytes are not counted
+    /// directly (bumping one counter for nearly every byte serializes the
+    /// scan loop); [`BinaryStats::is_binary`] derives them from the total.
+    class_counts: [u64; 5],
+    last_byte: Option<u8>,
+}
+
+const CLASS_PRINTABLE: u8 = 0;
+const CLASS_NONPRINTABLE: u8 = 1;
+const CLASS_NUL: u8 = 2;
+const CLASS_CR: u8 = 3;
+const CLASS_LF: u8 = 4;
+
+/// git's per-byte classification: BS, HT, ESC and FF are printable; other
+/// control bytes and DEL are not; bytes >= 0x80 are printable. CR and LF are
+/// tracked separately (git never counts them as (non)printable).
+const BYTE_CLASS: [u8; 256] = {
+    let mut table = [CLASS_PRINTABLE; 256];
+    let mut b = 0;
+    while b < 0x20 {
+        table[b] = CLASS_NONPRINTABLE;
+        b += 1;
+    }
+    table[0x7f] = CLASS_NONPRINTABLE;
+    table[0x08] = CLASS_PRINTABLE;
+    table[b'\t' as usize] = CLASS_PRINTABLE;
+    table[0x1b] = CLASS_PRINTABLE;
+    table[0x0c] = CLASS_PRINTABLE;
+    table[0] = CLASS_NUL;
+    table[b'\r' as usize] = CLASS_CR;
+    table[b'\n' as usize] = CLASS_LF;
+    table
+};
+
+impl BinaryStats {
+    fn has_nul(&self) -> bool {
+        self.class_counts[CLASS_NUL as usize] > 0
+    }
+
+    /// `crlf_count` is the number of CR bytes immediately followed by LF;
+    /// every other CR is a lone CR. Once a NUL is seen the scan stops
+    /// classifying, so the other counts are only complete without one.
+    fn is_binary(&self, byte_count: u64, crlf_count: u64) -> bool {
+        if self.has_nul() {
+            return true;
+        }
+        let cr = self.class_counts[CLASS_CR as usize];
+        let mut nonprintable = self.class_counts[CLASS_NONPRINTABLE as usize];
+        let printable = byte_count - cr - nonprintable - self.class_counts[CLASS_LF as usize];
+        // git doesn't count a trailing ^Z (DOS end-of-file marker).
+        if self.last_byte == Some(0x1a) {
+            nonprintable -= 1;
+        }
+        cr > crlf_count || (printable >> 7) < nonprintable
+    }
+}
+
+/// Scan a file to count CRLF pairs, total byte length, and optionally
+/// classify it as binary the way git's `text=auto` does.
 #[cfg(test)]
 fn scan_file(reader: &mut impl Read, detect_binary: bool) -> std::io::Result<ScanResult> {
     scan_file_and_feed(reader, detect_binary, |_| {})
@@ -214,7 +278,7 @@ fn scan_file_and_feed(
 ) -> std::io::Result<ScanResult> {
     let mut byte_count: u64 = 0;
     let mut crlf_count: u64 = 0;
-    let mut is_binary = false;
+    let mut binary_stats = BinaryStats::default();
     let mut prev_was_cr = false;
     let mut buf = [0u8; BUF_SIZE];
 
@@ -224,18 +288,27 @@ fn scan_file_and_feed(
             break;
         }
 
-        if detect_binary && !is_binary && byte_count < GIT_BINARY_DETECT_LEN as u64 {
-            let check_end = n.min(GIT_BINARY_DETECT_LEN.saturating_sub(byte_count as usize));
-            if buf[..check_end].contains(&0) {
-                is_binary = true;
+        // A NUL settles the classification, so skip it for the rest of the
+        // file (binary files usually have one early).
+        if detect_binary && !binary_stats.has_nul() {
+            for &b in &buf[..n] {
+                if b == b'\n' && prev_was_cr {
+                    crlf_count += 1;
+                }
+                prev_was_cr = b == b'\r';
+                let class = BYTE_CLASS[b as usize];
+                if class != CLASS_PRINTABLE {
+                    binary_stats.class_counts[class as usize] += 1;
+                }
             }
-        }
-
-        for &b in &buf[..n] {
-            if b == b'\n' && prev_was_cr {
-                crlf_count += 1;
+            binary_stats.last_byte = Some(buf[n - 1]);
+        } else {
+            for &b in &buf[..n] {
+                if b == b'\n' && prev_was_cr {
+                    crlf_count += 1;
+                }
+                prev_was_cr = b == b'\r';
             }
-            prev_was_cr = b == b'\r';
         }
 
         on_data(&buf[..n]);
@@ -245,7 +318,7 @@ fn scan_file_and_feed(
     Ok(ScanResult {
         byte_count,
         crlf_count,
-        is_binary,
+        is_binary: detect_binary && binary_stats.is_binary(byte_count, crlf_count),
     })
 }
 
@@ -341,8 +414,8 @@ fn validate_file_type(
 /// Hash a file as a git blob, applying CRLF→LF normalization when the
 /// `text` attribute requires it.
 ///
-/// For `TextAttr::Auto`, binary detection (NUL in first 8KB) is performed
-/// during the fused scan+hash pass — no separate file open.
+/// For `TextAttr::Auto`, binary classification (see [`BinaryStats`]) is
+/// performed during the fused scan+hash pass — no separate file open.
 ///
 /// Single-pass for the common case (no normalization needed):
 /// 1. Get file length from metadata
@@ -377,10 +450,9 @@ fn hash_file_normalized(
     // discard this hash and do a second pass with the normalized length.
     let mut raw_hasher = BlobHasher::new();
     raw_hasher.write_blob_header(file_len);
-    // Binary detection only matters for `text=auto` (`should_normalize`),
-    // but the NUL scan over the first 8KB is negligible next to hashing, so
-    // it stays unconditional for simplicity.
-    let scan = scan_file_and_feed(file, true, |data| {
+    // Binary classification only matters for `text=auto` (`should_normalize`)
+    // and walks every byte, so skip it for other attributes.
+    let scan = scan_file_and_feed(file, attr == TextAttr::Auto, |data| {
         raw_hasher.update(data);
     })?;
 
@@ -445,7 +517,7 @@ fn hash_file_for_cache(
             && let Some(normalized) = crate::env_local::normalize_oidc_token(&bytes)
         {
             let mut reader = std::io::Cursor::new(&normalized);
-            let scan = scan_file_and_feed(&mut reader, true, |_| {})?;
+            let scan = scan_file_and_feed(&mut reader, attr == TextAttr::Auto, |_| {})?;
             let normalize_crlf = should_normalize(attr, &scan);
             // Domain separation prevents transformed hashes from reusing an
             // older cache entry that happened to contain the placeholder.
@@ -730,18 +802,19 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_binary_detect_nul_after_8kb_is_text() {
+    fn test_scan_binary_detect_nul_after_first_chunk() {
         let (_tmp, root) = tmp_dir();
         let path = root.join_component("late-nul.bin");
-        // 8KB of text followed by NUL — should be classified as text
-        let mut content = vec![b'x'; GIT_BINARY_DETECT_LEN];
+        // git classifies the whole file for checkin conversion (the 8KB probe
+        // is only used for diffs), so a NUL in a later read chunk counts.
+        let mut content = vec![b'x'; BUF_SIZE + 10];
         content.push(0x00);
         std::fs::write(path.as_std_path(), &content).unwrap();
         let mut f = std::fs::File::open(path.as_std_path()).unwrap();
         let scan = scan_file(&mut f, true).unwrap();
         assert!(
-            !scan.is_binary,
-            "NUL after the first 8KB should not trigger binary detection"
+            scan.is_binary,
+            "NUL anywhere in the file must classify it as binary"
         );
     }
 
@@ -1008,6 +1081,96 @@ mod tests {
                 fast_result, manual_result,
                 "git-path and manual-path hashing must agree for {name} (attr={attr:?})"
             );
+        }
+    }
+
+    /// `text=auto` only converts content git's `convert_is_binary()` treats
+    /// as text: no lone CR, no NUL anywhere, and at most one non-printable
+    /// byte per 128 printable ones (a trailing ^Z excepted). Verified against
+    /// `git hash-object --path`, including read-chunk boundaries.
+    #[test]
+    fn test_text_auto_binary_classification_matches_git() {
+        let (_tmp, root) = tmp_dir();
+
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "--local", "core.autocrlf", "false"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        std::fs::write(root.as_std_path().join(".gitattributes"), "* text=auto\n").unwrap();
+
+        let with_ratio = |printable: usize| {
+            let mut v = vec![b'p'; printable];
+            v.push(0x01);
+            v.extend_from_slice(b"\r\n");
+            v
+        };
+        let around_boundary = |cr_follower: &[u8]| {
+            let mut v = vec![b'x'; BUF_SIZE - 1];
+            v.push(b'\r');
+            v.extend_from_slice(cr_follower);
+            v.extend_from_slice(b"tail\r\n");
+            v
+        };
+        let mut nul_after_chunk = b"a\r\n".to_vec();
+        nul_after_chunk.extend(vec![b'x'; BUF_SIZE + 100]);
+        nul_after_chunk.extend_from_slice(b"\x00\r\n");
+        let mut nul_after_8kb = b"a\r\n".to_vec();
+        nul_after_8kb.extend(vec![b'x'; 9000]);
+        nul_after_8kb.extend_from_slice(b"\x00\r\n");
+
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("crlf", b"a\r\nb\r\n".to_vec()),
+            ("lone-cr", b"a\r\nb\rc\r\n".to_vec()),
+            ("trailing-cr", b"a\r\nb\r".to_vec()),
+            ("cr-cr-lf", b"a\r\r\nb\r\n".to_vec()),
+            ("nul-after-8kb", nul_after_8kb),
+            ("nul-after-chunk", nul_after_chunk),
+            ("control", b"a\x01\r\nb\r\n".to_vec()),
+            ("del", b"\x7f\x7f\r\nb\r\n".to_vec()),
+            ("printable-controls", b"\x08\t\x1b\x0c\r\n".to_vec()),
+            ("ratio-text", with_ratio(128)),
+            ("ratio-binary", with_ratio(127)),
+            ("trailing-ctrl-z", b"a\r\nb\r\n\x1a".to_vec()),
+            ("inner-ctrl-z", b"a\x1a\r\nb\r\n".to_vec()),
+            ("high-bytes", b"\xef\xbb\xbfa\r\nb\r\n".to_vec()),
+            ("boundary-crlf", around_boundary(b"\n")),
+            ("boundary-lone-cr", around_boundary(b"y")),
+        ];
+
+        for (name, content) in &cases {
+            let path = root.join_component(name);
+            std::fs::write(path.as_std_path(), content).unwrap();
+
+            let output = std::process::Command::new("git")
+                .args(["hash-object", "--path", name, "--stdin"])
+                .stdin(std::process::Stdio::from(
+                    std::fs::File::open(path.as_std_path()).unwrap(),
+                ))
+                .current_dir(root.as_std_path())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git hash-object --path failed for {name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let expected = String::from_utf8(output.stdout).unwrap();
+            let expected = expected.trim();
+
+            let cache_hash = hash_file_as_git_blob(&path, TextAttr::Auto)
+                .unwrap()
+                .unwrap();
+            let manual_hash = manual_hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
+            let (verify_hash, _) = hash_file_for_verification(&path, TextAttr::Auto).unwrap();
+            assert_eq!(&*cache_hash, expected, "cache hash for {name}");
+            assert_eq!(&*manual_hash, expected, "manual hash for {name}");
+            assert_eq!(&*verify_hash, expected, "verification hash for {name}");
         }
     }
 

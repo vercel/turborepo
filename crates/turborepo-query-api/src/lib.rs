@@ -23,7 +23,6 @@ use std::{
 };
 
 use thiserror::Error;
-use turbopath::AnchoredSystemPathBuf;
 use turborepo_repository::{change_mapper::PackageInclusionReason, package_graph::PackageName};
 use turborepo_run_context::RepoContext;
 use turborepo_types::TaskDefinition;
@@ -102,12 +101,12 @@ pub trait QueryRun: Send + Sync + 'static {
         &self,
         base: Option<&str>,
         head: Option<&str>,
-    ) -> Result<HashSet<AnchoredSystemPathBuf>, AffectedPackagesError>;
+    ) -> Result<turborepo_types::TaskInputChanges, AffectedPackagesError>;
 
     /// Matches changed files against task inputs without exposing the engine.
     fn match_tasks_against_changed_files(
         &self,
-        changed_files: &HashSet<AnchoredSystemPathBuf>,
+        changed_files: &turborepo_types::TaskInputChanges,
     ) -> Result<HashMap<QueryTaskId, String>, AffectedPackagesError>;
 
     fn check_boundaries(&self, show_progress: bool) -> BoundariesFuture<'_>;

@@ -52,6 +52,17 @@ pub trait ChangedFilesDetector {
         allow_unknown_objects: bool,
         merge_base: bool,
     ) -> Result<Result<HashSet<AnchoredSystemPathBuf>, InvalidRange>, ScmError>;
+
+    /// Resolves task input changes without losing tracked-file provenance.
+    fn task_input_changes(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
+        merge_base: bool,
+    ) -> Result<Result<turborepo_types::TaskInputChanges, InvalidRange>, ScmError>;
 }
 
 impl ChangedFilesDetector for SCM {
@@ -73,6 +84,44 @@ impl ChangedFilesDetector for SCM {
             allow_unknown_objects,
             merge_base,
         )
+    }
+
+    fn task_input_changes(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        include_uncommitted: bool,
+        allow_unknown_objects: bool,
+        merge_base: bool,
+    ) -> Result<Result<turborepo_types::TaskInputChanges, InvalidRange>, ScmError> {
+        let files = match self.changed_files(
+            turbo_root,
+            from_ref,
+            to_ref,
+            include_uncommitted,
+            allow_unknown_objects,
+            merge_base,
+        )? {
+            Ok(files) => files,
+            Err(range) => return Ok(Err(range)),
+        };
+        if !include_uncommitted || files.is_empty() {
+            return Ok(Ok(turborepo_types::TaskInputChanges::from_tracked(files)));
+        }
+        let mut tracked = match self.changed_files(
+            turbo_root,
+            from_ref,
+            to_ref,
+            false,
+            allow_unknown_objects,
+            merge_base,
+        )? {
+            Ok(files) => files,
+            Err(range) => return Ok(Err(range)),
+        };
+        tracked.extend(self.tracked_changed_files(turbo_root, &files)?);
+        Ok(Ok(turborepo_types::TaskInputChanges { files, tracked }))
     }
 }
 

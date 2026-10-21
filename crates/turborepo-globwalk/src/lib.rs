@@ -28,7 +28,7 @@ use wax::{
 
 mod package_input;
 
-pub use package_input::{PackageInput, resolve_package_path};
+pub use package_input::{PACKAGE_CONFIG_INPUTS, PackageInput, resolve_package_path};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -232,6 +232,9 @@ fn collapse_path(path: &str) -> Option<(Cow<'_, str>, usize)> {
     }
 }
 
+/// Adds the patterns the walker matches for the exclusion `glob`. Unless it
+/// already ends in `/**`, an exclusion also excludes everything under the
+/// paths it matches (`X` becomes `X` and `X/**`).
 fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
     if let Some(stripped) = glob.strip_suffix('/') {
         if stripped.ends_with("**") {
@@ -249,12 +252,54 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
     }
 }
 
-fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String, follow_links: bool) {
-    // If the glob has a glob literal in it e.g. *
-    // then skip trying to read it as a file path.
-    if regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(&*glob) {
-        return;
+/// The repo-relative patterns the walker excludes for the resolved exclusion
+/// `glob`: the paths it matches and everything under them. The walker applies
+/// exclusions to absolute paths, so the repository root (`""` or `"."`) and
+/// `**` both exclude `**`. Expanding a relative `**` would produce `**/**`,
+/// which `wax` rejects.
+pub fn walk_exclusion_patterns(glob: &str) -> Vec<String> {
+    let mut patterns = Vec::with_capacity(2);
+    match glob {
+        "" | "." | "**" => patterns.push("**".to_owned()),
+        _ => add_trailing_double_star(&mut patterns, glob),
     }
+    patterns
+}
+
+/// The pattern the walker uses in place of the inclusion `glob` when `glob`
+/// names a directory. `None` when `glob` contains a character `wax` may treat
+/// as syntax, since the walker never reads those as a file path. The
+/// repository root (`""` or `"."`) becomes `**`.
+pub fn directory_inclusion_tree(glob: &str) -> Option<String> {
+    if regex!(r"(?<literal>[\?\*\$:<>\(\)\[\]{},])").is_match(glob) {
+        return None;
+    }
+    Some(match glob.strip_suffix('/').unwrap_or(glob) {
+        "" | "." => "**".to_owned(),
+        directory => format!("{directory}/**"),
+    })
+}
+
+/// The subtree that an exact input selection also removes for the resolved
+/// exclusion `glob`, or covers for a literal inclusion: `X/**` for `X`.
+/// `None` when `glob` already ends in `**`. Unlike the walker, the repository
+/// root `"."` keeps its dot, which matches nothing in `wax`.
+pub fn exact_input_tree(glob: &str) -> Option<String> {
+    let path = glob.trim_end_matches('/');
+    if path == "**" || path.ends_with("/**") {
+        return None;
+    }
+    Some(if path.is_empty() {
+        "**".to_owned()
+    } else {
+        format!("{path}/**")
+    })
+}
+
+fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String, follow_links: bool) {
+    let Some(tree) = directory_inclusion_tree(glob) else {
+        return;
+    };
 
     // Globs are given in unix style
     let Ok(glob_path) = RelativeUnixPath::new(&*glob) else {
@@ -282,10 +327,7 @@ fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String, follow_li
     debug!("'{path}' is a directory");
 
     // Glob points to a dir, must add **
-    if !glob.ends_with('/') {
-        glob.push('/');
-    }
-    glob.push_str("**");
+    *glob = tree;
 }
 
 fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, WalkError> {
@@ -1866,8 +1908,8 @@ mod test {
 
     use crate::{
         Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
-        deduplicate_recursive_all_prefixes, escape_glob_literals, fix_glob_pattern, globwalk,
-        needs_path_cleaning,
+        deduplicate_recursive_all_prefixes, directory_inclusion_tree, escape_glob_literals,
+        exact_input_tree, fix_glob_pattern, globwalk, needs_path_cleaning, walk_exclusion_patterns,
     };
 
     #[cfg(unix)]
@@ -3263,6 +3305,65 @@ mod test {
         add_doublestar_to_dir(base, &mut glob, false);
 
         assert_eq!(glob, expected);
+    }
+
+    #[test_case("pkg/dir", Some("pkg/dir/**") ; "directory")]
+    #[test_case("pkg/dir/", Some("pkg/dir/**") ; "trailing slash")]
+    #[test_case("", Some("**") ; "root")]
+    #[test_case(".", Some("**") ; "dot root")]
+    #[test_case("./", Some("**") ; "dot root slash")]
+    #[test_case("pkg/*.ts", None ; "wildcard")]
+    #[test_case("pkg/[ab]", None ; "class")]
+    #[test_case("pkg/{a,b}", None ; "alternative")]
+    #[test_case("pkg/$x", None ; "dollar")]
+    #[test_case(r"pkg/a\:b", None ; "escaped colon")]
+    fn test_directory_inclusion_tree(glob: &str, expected: Option<&str>) {
+        assert_eq!(directory_inclusion_tree(glob).as_deref(), expected);
+    }
+
+    #[test_case("", "." ; "empty and dot")]
+    #[test_case("", "./" ; "empty and dot slash")]
+    fn test_root_directory_inclusions_walk_the_whole_base(a: &str, b: &str) {
+        let tmpdir = TempDir::with_prefix("root-inclusion").unwrap();
+        let base = AbsoluteSystemPath::new(tmpdir.path().to_str().unwrap()).unwrap();
+        base.join_component("top.txt")
+            .create_with_contents(b"top")
+            .unwrap();
+        let nested = base.join_components(&["dir", "nested.txt"]);
+        nested.ensure_dir().unwrap();
+        nested.create_with_contents(b"nested").unwrap();
+
+        let walk = |include: &str| {
+            let include = ValidatedGlob::from_str(include).unwrap();
+            globwalk(base, &[include], &[], WalkType::Files).unwrap()
+        };
+        let expected = HashSet::from([base.join_component("top.txt"), nested]);
+        assert_eq!(walk(a), expected);
+        assert_eq!(walk(b), expected);
+    }
+
+    #[test_case("pkg/dist", &["pkg/dist/**", "pkg/dist"] ; "path")]
+    #[test_case("pkg/dist/", &["pkg/dist/**"] ; "trailing slash")]
+    #[test_case("pkg/**", &["pkg/**"] ; "already a tree")]
+    #[test_case("pkg/**/", &["pkg/**"] ; "tree with trailing slash")]
+    #[test_case("**/*.log", &["**/*.log/**", "**/*.log"] ; "glob")]
+    #[test_case("", &["**"] ; "root")]
+    #[test_case(".", &["**"] ; "dot root")]
+    #[test_case("**", &["**"] ; "everything")]
+    fn test_walk_exclusion_patterns(glob: &str, expected: &[&str]) {
+        assert_eq!(walk_exclusion_patterns(glob), expected);
+    }
+
+    #[test_case("pkg/x", Some("pkg/x/**") ; "path")]
+    #[test_case("pkg/x/", Some("pkg/x/**") ; "trailing slash")]
+    #[test_case("**/nested", Some("**/nested/**") ; "glob")]
+    #[test_case("", Some("**") ; "root")]
+    #[test_case(".", Some("./**") ; "dot root keeps its dot")]
+    #[test_case("**", None ; "everything")]
+    #[test_case("**/", None ; "everything with trailing slash")]
+    #[test_case("pkg/**", None ; "already a tree")]
+    fn test_exact_input_tree(glob: &str, expected: Option<&str>) {
+        assert_eq!(exact_input_tree(glob).as_deref(), expected);
     }
 
     // Regression tests for https://github.com/vercel/turborepo/issues/2517

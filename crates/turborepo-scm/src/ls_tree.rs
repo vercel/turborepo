@@ -180,9 +180,18 @@ impl GitRepo {
         Ok(state.paths)
     }
 
+    pub(crate) fn git_ls_files_cached_with_unsupported(&self) -> Result<GitPathList, Error> {
+        self.git_ls_files(&["--cached"])
+    }
+
     pub(crate) fn git_ls_files_untracked_with_unsupported(&self) -> Result<GitPathList, Error> {
+        self.git_ls_files(&["--others", "--exclude-standard"])
+    }
+
+    fn git_ls_files(&self, args: &[&str]) -> Result<GitPathList, Error> {
         let mut git = Command::new(self.bin.as_std_path())
-            .args(["ls-files", "--others", "--exclude-standard", "-z"])
+            .args(["ls-files", "-z"])
+            .args(args)
             .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(&self.root)
             .stdout(Stdio::piped())

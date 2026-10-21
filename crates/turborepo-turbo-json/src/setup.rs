@@ -28,16 +28,13 @@ mod additional_tools;
 mod mirrors;
 
 /// How `turbo setup` prepares a toolchain's tools. `managed` provisions the
-/// locked version for this repository. `verify-system` uses an installed tool
-/// after verifying that it matches the locked version. `skip` neither
+/// locked version for this repository. `skip` neither
 /// provisions nor verifies the tool, which also skips the toolchain's
 /// dependencies.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserializable, JsonSchema, TS)]
 pub enum ToolPolicy {
     #[serde(rename = "managed")]
     Managed,
-    #[serde(rename = "verify-system")]
-    VerifySystem,
     #[serde(rename = "skip")]
     Skip,
 }
@@ -234,7 +231,6 @@ fn missing_flag(toolchain: &ToolchainId, flags: &FutureFlags) -> Option<&'static
     }
 }
 
-/// Locked dependencies need a managed or verified tool to install them.
 fn check_dependencies(
     tools: Option<ToolPolicy>,
     dependencies: Option<&Spanned<DependencyPolicy>>,

@@ -102,8 +102,7 @@ impl ExecutionContext {
         self.artifact_platform
     }
 
-    /// musl Linux, which has no official managed artifacts: only
-    /// verify-system tools activate there.
+    /// musl Linux, which has no official managed artifacts.
     pub fn musl(&self) -> bool {
         matches!(self.libc, Libc::Musl { .. })
     }
@@ -155,11 +154,6 @@ pub enum SelectedInstallation {
     },
     Bundled {
         owner: String,
-    },
-    // Requirements only: adapters must verify exact version, semantic options
-    // and these executable names before activation. No invented artifact hash.
-    VerifySystem {
-        executables: BTreeSet<String>,
     },
 }
 
@@ -252,9 +246,6 @@ impl ExecutionSnapshot {
                         owner: owner.clone(),
                     }
                 }
-                Installation::VerifySystem { executables } => SelectedInstallation::VerifySystem {
-                    executables: executables.iter().cloned().collect(),
-                },
             };
             tools.insert(
                 id.clone(),
@@ -331,9 +322,6 @@ enum InstallationIdentity<'a> {
     Bundled {
         owner: &'a str,
     },
-    VerifySystem {
-        executables: &'a BTreeSet<String>,
-    },
 }
 
 impl<'a> From<&'a SelectedTool> for ToolIdentity<'a> {
@@ -344,9 +332,6 @@ impl<'a> From<&'a SelectedTool> for ToolIdentity<'a> {
             // explicit execution context, regardless of the selector key.
             SelectedInstallation::Managed { parts, .. } => InstallationIdentity::Managed { parts },
             SelectedInstallation::Bundled { owner } => InstallationIdentity::Bundled { owner },
-            SelectedInstallation::VerifySystem { executables } => {
-                InstallationIdentity::VerifySystem { executables }
-            }
         };
         Self {
             adapter: &tool.adapter,

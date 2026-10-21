@@ -233,3 +233,94 @@ async fn jit_inputs_hash_turbo_root_globs_after_dependencies_complete() {
         "the normalized package-relative JIT root glob must hash the root file"
     );
 }
+
+#[tokio::test]
+async fn eager_hash_dedup_preserves_input_provenance() {
+    let tmp = tempdir().unwrap();
+    let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+    let graph = javascript_graph(&root).await;
+    write_app_file(&root, "node_modules/data/schema.json", "schema-v1");
+    write_app_file(&root, "node_modules/data/junk.json", "junk-v1");
+    write_app_file(&root, "source.rs", "source-v1");
+    let authored = vec!["node_modules/data/schema.json".to_owned()];
+    let derived = vec!["!node_modules/**".to_owned(), "!package.json".to_owned()];
+    let rescued = TaskInputs {
+        globs: authored.clone(),
+        derived_globs: derived.clone(),
+        default: true,
+        ..TaskInputs::default()
+    };
+    let flattened = TaskInputs {
+        globs: rescued.all_globs().map(str::to_owned).collect(),
+        default: true,
+        ..TaskInputs::default()
+    };
+    let no_exclusions = TaskInputs {
+        globs: authored,
+        default: true,
+        ..TaskInputs::default()
+    };
+    let definitions: HashMap<_, _> = [
+        ("rescued", rescued.clone()),
+        ("flattened", flattened),
+        ("no-exclusions", no_exclusions),
+        ("rescued-copy", rescued),
+    ]
+    .into_iter()
+    .map(|(name, inputs)| {
+        (
+            TaskId::new("app", name).into_owned(),
+            task_definition_with_inputs(inputs),
+        )
+    })
+    .collect();
+    let tasks: Vec<_> = definitions.keys().cloned().map(TaskNode::Task).collect();
+    let calculate = || {
+        PackageInputsHashes::calculate_file_hashes(
+            &SCM::Manual(turborepo_scm::FileHashMode::ContentOnly),
+            tasks.iter(),
+            &graph,
+            &definitions,
+            &root,
+            None,
+            true,
+        )
+        .unwrap()
+    };
+    let hashes = calculate();
+    let id = |name| TaskId::new("app", name).into_owned();
+    assert_ne!(
+        hashes.hashes[&id("rescued")],
+        hashes.hashes[&id("flattened")]
+    );
+    assert_ne!(
+        hashes.hashes[&id("rescued")],
+        hashes.hashes[&id("no-exclusions")]
+    );
+    assert!(Arc::ptr_eq(
+        &hashes.expanded_hashes[&id("rescued")],
+        &hashes.expanded_hashes[&id("rescued-copy")]
+    ));
+    let expanded = &hashes.expanded_hashes[&id("rescued")].0;
+    assert!(
+        expanded
+            .iter()
+            .any(|(path, _)| path.as_str() == "node_modules/data/schema.json")
+    );
+    assert!(
+        !expanded
+            .iter()
+            .any(|(path, _)| path.as_str() == "package.json"
+                || path.as_str() == "node_modules/data/junk.json")
+    );
+    write_app_file(&root, "node_modules/data/junk.json", "junk-v2");
+    assert_eq!(
+        hashes.hashes[&id("rescued")],
+        calculate().hashes[&id("rescued")]
+    );
+    write_app_file(&root, "node_modules/data/schema.json", "schema-v2");
+    assert_ne!(
+        hashes.hashes[&id("rescued")],
+        calculate().hashes[&id("rescued")]
+    );
+}
