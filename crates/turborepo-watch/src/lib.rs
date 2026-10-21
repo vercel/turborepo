@@ -503,7 +503,13 @@ impl WatchClient {
             )
             .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
         );
-        let scm = SCM::new(&base.repo_root);
+        let scm = SCM::new(&base.repo_root).with_file_hash_mode(
+            if base.opts.future_flags.hash_file_permissions {
+                turborepo_scm::FileHashMode::ExecutableBit
+            } else {
+                turborepo_scm::FileHashMode::ContentOnly
+            },
+        );
         let hash_watcher = Arc::new(HashWatcher::new(
             base.repo_root.clone(),
             package_watcher.watch_discovery(),
