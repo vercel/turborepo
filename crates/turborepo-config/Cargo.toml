@@ -23,8 +23,10 @@ turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { workspace = true }
 
 [dev-dependencies]
+httpmock = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

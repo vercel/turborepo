@@ -15,7 +15,7 @@ use turborepo_api_client::{
     APIAuth, APIClient, CacheClient, Response,
     analytics::{self, AnalyticsEvent},
 };
-use turborepo_types::SecretString;
+use turborepo_types::Credential;
 
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource, LazyScmState,
@@ -78,8 +78,8 @@ struct PrefetchSlot {
     result: tokio::sync::oneshot::Receiver<(DownloadResult, tokio::sync::OwnedSemaphorePermit)>,
 }
 
-fn replace_api_auth_token(api_auth: &mut APIAuth, token: SecretString) -> bool {
-    if api_auth.token.expose() == token.expose() {
+fn replace_api_auth_token(api_auth: &mut APIAuth, token: Credential) -> bool {
+    if api_auth.token == token {
         return false;
     }
 
@@ -240,12 +240,12 @@ impl HTTPCache {
     async fn try_refresh_token<F, Fut, E>(
         &self,
         access: RemoteAccess,
-        rejected_token: &SecretString,
+        rejected_token: &Credential,
         recover: F,
     ) -> bool
     where
-        F: FnOnce(SecretString) -> Fut,
-        Fut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        F: FnOnce(Credential) -> Fut,
+        Fut: std::future::Future<Output = Result<Option<Credential>, E>>,
         E: std::fmt::Debug,
     {
         let _recovery_guard = self.recovery_lock.lock().await;
@@ -261,7 +261,7 @@ impl HTTPCache {
                 .token
                 .clone()
         };
-        if current_token.expose() != rejected_token.expose() {
+        if current_token != *rejected_token {
             return true;
         }
 
@@ -322,8 +322,8 @@ impl HTTPCache {
     where
         F: Fn(APIAuth) -> Fut,
         Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
-        R: FnOnce(SecretString) -> RecoveryFut,
-        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        R: FnOnce(Credential) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<Credential>, E>>,
         E: std::fmt::Debug,
     {
         self.execute_with_access_and_recovery(RemoteAccess::Read, hash, operation, recover)
@@ -340,8 +340,8 @@ impl HTTPCache {
     where
         F: Fn(APIAuth) -> Fut,
         Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
-        R: FnOnce(SecretString) -> RecoveryFut,
-        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        R: FnOnce(Credential) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<Credential>, E>>,
         E: std::fmt::Debug,
     {
         if self.is_disabled_for(access) {
@@ -368,8 +368,8 @@ impl HTTPCache {
     where
         F: Fn(APIAuth) -> Fut,
         Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
-        R: FnOnce(SecretString) -> RecoveryFut,
-        RecoveryFut: std::future::Future<Output = Result<Option<SecretString>, E>>,
+        R: FnOnce(Credential) -> RecoveryFut,
+        RecoveryFut: std::future::Future<Output = Result<Option<Credential>, E>>,
         E: std::fmt::Debug,
     {
         if self.is_disabled_for(access) {
@@ -892,7 +892,7 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_analytics::start_analytics;
     use turborepo_api_client::{APIClient, CacheClient, analytics};
-    use turborepo_types::SecretString;
+    use turborepo_types::Credential;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
@@ -922,7 +922,7 @@ mod test {
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new(token.to_string()),
+            token: Credential::from(token.to_string()),
             team_slug: None,
         };
 
@@ -1008,7 +1008,7 @@ mod test {
             repo_root_path.clone(),
             APIAuth {
                 team_id: Some("my-team".to_string()),
-                token: SecretString::new("my-token".to_string()),
+                token: Credential::from("my-token".to_string()),
                 team_slug: None,
             },
             None,
@@ -1055,9 +1055,7 @@ mod test {
                             }
                         },
                         |_| async move {
-                            Ok::<_, ()>(
-                                replace_token.then(|| SecretString::new("replacement".into())),
-                            )
+                            Ok::<_, ()>(replace_token.then(|| Credential::from("replacement")))
                         },
                     )
                     .await;
@@ -1130,7 +1128,7 @@ mod test {
                             .await
                     }
                 },
-                |_| async { Ok::<Option<SecretString>, ()>(None) },
+                |_| async { Ok::<Option<Credential>, ()>(None) },
             )
             .await;
         assert!(matches!(
@@ -1215,7 +1213,7 @@ mod test {
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
         let (analytics_recorder, analytics_handle) =
@@ -1296,7 +1294,7 @@ mod test {
         let duration = 42;
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
         let opts = CacheOpts {
@@ -1386,7 +1384,7 @@ mod test {
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
 
@@ -1464,7 +1462,7 @@ mod test {
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
 
@@ -1598,7 +1596,7 @@ mod test {
                                     started.send(()).unwrap();
                                     release.await.unwrap();
                                 }
-                                Ok::<_, ()>(Some(SecretString::new("refreshed-token".into())))
+                                Ok::<_, ()>(Some(Credential::from("refreshed-token")))
                             },
                         )
                         .await
@@ -1650,7 +1648,7 @@ mod test {
                             |_| async move {
                                 recoveries.fetch_add(1, Ordering::SeqCst);
                                 tokio::task::yield_now().await;
-                                Err::<Option<SecretString>, _>("recovery failed")
+                                Err::<Option<Credential>, _>("recovery failed")
                             },
                         )
                         .await
@@ -1700,7 +1698,7 @@ mod test {
             |_| async {
                 panic!("stale 403 must not recover the replacement token");
                 #[allow(unreachable_code)]
-                Ok::<Option<SecretString>, ()>(None)
+                Ok::<Option<Credential>, ()>(None)
             },
         );
         tokio::pin!(operation);
@@ -1710,7 +1708,7 @@ mod test {
         }
         super::replace_api_auth_token(
             &mut cache.api_auth.lock().unwrap(),
-            SecretString::new("new-token".into()),
+            Credential::from("new-token"),
         );
         release.send(()).unwrap();
         assert_eq!(operation.await.unwrap(), "retried");
@@ -1740,7 +1738,7 @@ mod test {
                     |token| {
                         recoveries.fetch_add(1, Ordering::SeqCst);
                         assert_eq!(token.expose(), rejected);
-                        async move { Ok::<_, ()>(Some(SecretString::new(replacement.into()))) }
+                        async move { Ok::<_, ()>(Some(Credential::from(replacement))) }
                     },
                 )
                 .await
@@ -1781,7 +1779,7 @@ mod test {
                 },
                 |current_token| async move {
                     assert_eq!(current_token.expose(), "expired-token");
-                    Ok::<_, ()>(Some(SecretString::new("refreshed-token".to_string())))
+                    Ok::<_, ()>(Some(Credential::from("refreshed-token".to_string())))
                 },
             )
             .await
@@ -1878,7 +1876,7 @@ mod test {
                         backtrace: Backtrace::capture(),
                     })
                 },
-                |_| async { Err::<Option<SecretString>, _>("recovery failed") },
+                |_| async { Err::<Option<Credential>, _>("recovery failed") },
             )
             .await;
         assert!(matches!(
@@ -1905,7 +1903,7 @@ mod test {
                         })
                     }
                 },
-                |_| async { Ok::<_, ()>(Some(SecretString::new("new-token".into()))) },
+                |_| async { Ok::<_, ()>(Some(Credential::from("new-token"))) },
             )
             .await;
         assert!(matches!(
@@ -1925,7 +1923,7 @@ mod test {
                 |_| async {
                     panic!("successful reads must not recover");
                     #[allow(unreachable_code)]
-                    Ok::<Option<SecretString>, ()>(None)
+                    Ok::<Option<Credential>, ()>(None)
                 },
             )
             .await
@@ -1949,7 +1947,7 @@ mod test {
                 |_| async {
                     panic!("skipped uploads must not recover");
                     #[allow(unreachable_code)]
-                    Ok::<Option<SecretString>, ()>(None)
+                    Ok::<Option<Credential>, ()>(None)
                 },
             )
             .await;
@@ -1976,7 +1974,7 @@ mod test {
                 |_| async { Err::<(), _>(forbidden()) },
                 |_| {
                     recoveries.fetch_add(1, Ordering::SeqCst);
-                    async { Ok::<Option<SecretString>, ()>(None) }
+                    async { Ok::<Option<Credential>, ()>(None) }
                 },
             )
             .await;
@@ -2001,7 +1999,7 @@ mod test {
                 super::RemoteAccess::Write,
                 "hash",
                 |_| async { Err::<(), _>(forbidden()) },
-                |_| async { Ok::<_, ()>(Some(SecretString::new("refreshed-token".into()))) },
+                |_| async { Ok::<_, ()>(Some(Credential::from("refreshed-token"))) },
             )
             .await;
         assert!(matches!(
@@ -2202,7 +2200,7 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("thread-test-token".to_string()),
+            token: Credential::from("thread-test-token".to_string()),
             team_slug: None,
         };
 
@@ -2244,19 +2242,19 @@ mod test {
     fn test_replace_api_auth_token_requires_a_new_token() {
         let mut api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("initial-token".to_string()),
+            token: Credential::from("initial-token".to_string()),
             team_slug: None,
         };
 
         assert!(!super::replace_api_auth_token(
             &mut api_auth,
-            SecretString::new("initial-token".to_string())
+            Credential::from("initial-token".to_string())
         ));
         assert_eq!(api_auth.token.expose(), "initial-token");
 
         assert!(super::replace_api_auth_token(
             &mut api_auth,
-            SecretString::new("replacement-token".to_string())
+            Credential::from("replacement-token".to_string())
         ));
         assert_eq!(api_auth.token.expose(), "replacement-token");
     }
@@ -2289,7 +2287,7 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
 
@@ -2348,7 +2346,7 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
 
@@ -2399,7 +2397,7 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
 
@@ -2453,7 +2451,7 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
 

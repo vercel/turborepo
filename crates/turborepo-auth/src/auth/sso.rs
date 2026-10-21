@@ -6,7 +6,7 @@ use std::{
 
 use tracing::warn;
 use turborepo_api_client::{Client, TokenClient};
-use turborepo_types::SecretString;
+use turborepo_types::Credential;
 use turborepo_ui::{ColorConfig, start_spinner};
 use url::Url;
 
@@ -178,7 +178,11 @@ pub async fn sso_login<T: Client + TokenClient>(
     // For Vercel logins, --force is silently ignored.
     if !force || is_vercel_login {
         if let Some(token) = existing_token {
-            let token_source = classify_existing_vercel_token(token)?;
+            let token_source = if token.is_saved_vercel() {
+                classify_existing_vercel_token(token.expose())?
+            } else {
+                ExistingTokenSource::Other
+            };
             let skip_existing_token = should_skip_existing_token_for_login(
                 token_source,
                 is_vercel_login,
@@ -215,7 +219,7 @@ pub async fn sso_login<T: Client + TokenClient>(
             } else if !skip_existing_token && token_source != ExistingTokenSource::LegacyAuth {
                 let token_action = if is_vercel_login {
                     classify_existing_sso_token_with_recovery(
-                        Token::existing(token.to_string()),
+                        Token::existing_secret(token.clone()),
                         api_client,
                         sso_team,
                         "Using existing Vercel login.",
@@ -224,7 +228,7 @@ pub async fn sso_login<T: Client + TokenClient>(
                     .await?
                 } else {
                     classify_existing_sso_token(
-                        Token::existing(token.to_string()),
+                        Token::existing_secret(token.clone()),
                         api_client,
                         sso_team,
                         Some(valid_token_callback("Using existing login.", color_config)),
@@ -291,7 +295,7 @@ pub async fn sso_login<T: Client + TokenClient>(
     .await?;
 
     // Verify the SSO token with the API
-    let secret_verification_token = SecretString::new(verification_token.clone());
+    let secret_verification_token = Credential::from(verification_token.clone());
 
     let token_name = make_token_name()?;
 
@@ -300,14 +304,15 @@ pub async fn sso_login<T: Client + TokenClient>(
         .await
         .map_err(Error::FailedToValidateSSOToken)?;
 
+    let verified_token = Credential::generic(verified_user.token);
     let user_response = api_client
-        .get_user(&verified_user.token)
+        .get_user(&verified_token)
         .await
         .map_err(Error::FailedToFetchUser)?;
 
     ui::print_cli_authorized(&user_response.user.email, color_config);
 
-    Ok((Token::New(verified_user.token), None))
+    Ok((Token::New(verified_token), None))
 }
 
 /// Non-Vercel SSO: open browser to `{login_url}/api/auth/sso` with
@@ -524,10 +529,7 @@ mod tests {
     }
 
     impl Client for MockApiClient {
-        async fn get_user(
-            &self,
-            token: &SecretString,
-        ) -> turborepo_api_client::Result<UserResponse> {
+        async fn get_user(&self, token: &Credential) -> turborepo_api_client::Result<UserResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
@@ -543,7 +545,7 @@ mod tests {
         }
         async fn get_teams(
             &self,
-            token: &SecretString,
+            token: &Credential,
         ) -> turborepo_api_client::Result<TeamsResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
@@ -562,7 +564,7 @@ mod tests {
         }
         async fn get_team(
             &self,
-            token: &SecretString,
+            token: &Credential,
             team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             if token.expose() == "needs-sso-token" || team_id == "needs-sso-team" {
@@ -583,11 +585,11 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &SecretString,
+            token: &Credential,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
-                token: token.clone(),
+                token: token.expose().into(),
                 team_id: Some("team_id".to_string()),
             })
         }
@@ -604,7 +606,7 @@ mod tests {
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
-            token: &SecretString,
+            token: &Credential,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if token.expose() == "stale-token" {
                 return Err(turborepo_api_client::Error::InvalidToken {
@@ -624,7 +626,7 @@ mod tests {
                 client_id: None,
             })
         }
-        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &Credential) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }
@@ -663,7 +665,7 @@ mod tests {
             login_url_source: None,
             api_url_source: None,
             api_client: &api_client,
-            existing_token: Some("existing-token"),
+            existing_token: Some(&Credential::from("existing-token")),
             sso_team: Some("my-team"),
             force: false,
             linked_team_id: None,
@@ -687,7 +689,7 @@ mod tests {
             login_url_source: None,
             api_url_source: None,
             api_client: &api_client,
-            existing_token: Some("existing-token"),
+            existing_token: Some(&Credential::from("existing-token")),
             sso_team: Some("my-team"),
             force: false,
             linked_team_id: None,
