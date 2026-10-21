@@ -249,7 +249,7 @@ impl SCM {
             candidates,
             &mut hashes,
         )?;
-        Ok(hashes)
+        self.file_hash_mode().apply(&full_pkg_path, hashes, true)
     }
 
     pub fn hash_files(
