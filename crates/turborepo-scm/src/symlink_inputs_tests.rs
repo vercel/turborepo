@@ -45,6 +45,10 @@ fn linked_tracked_outputs_use_referent_contents_and_permissions() {
     dir.join_component("generated.sh")
         .create_with_contents("generated")
         .unwrap();
+    shared
+        .join_component("generated.sh")
+        .create_with_contents("generated referent")
+        .unwrap();
     for indexed in [false, true] {
         for mode in [
             crate::FileHashMode::ContentOnly,

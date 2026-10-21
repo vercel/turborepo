@@ -262,14 +262,26 @@ impl SCM {
                     Some(index) => index.is_tracked(&relative),
                     None => tracked.contains(&relative),
                 };
-                if tracked_entry
-                    && (relative == path
-                        || current
-                            .symlink_metadata()
-                            .is_ok_and(|meta| meta.file_type().is_symlink()))
-                {
-                    is_tracked = true;
-                    break;
+                if tracked_entry {
+                    if relative == path {
+                        is_tracked = true;
+                        break;
+                    }
+                    if current
+                        .symlink_metadata()
+                        .is_ok_and(|meta| meta.file_type().is_symlink())
+                    {
+                        let target = file.to_realpath()?;
+                        let real_root = git.root.to_realpath()?;
+                        if let Ok(relative) = real_root.anchor(&target) {
+                            let relative = relative.to_unix();
+                            is_tracked = match repo_index {
+                                Some(index) => index.is_tracked(&relative),
+                                None => tracked.contains(&relative),
+                            };
+                        }
+                        break;
+                    }
                 }
                 logical = current.parent();
             }
