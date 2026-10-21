@@ -1833,6 +1833,7 @@ mod tests {
             bin: root,
             attrs: OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
+            file_hash_mode: crate::FileHashMode::ContentOnly,
             slowest_files: None,
             change_prefetch: Default::default(),
         }

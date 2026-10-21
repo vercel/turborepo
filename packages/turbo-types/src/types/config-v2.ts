@@ -263,6 +263,15 @@ export interface RootSchema extends BaseSchema {
 
 export interface FutureFlags {
   /**
+   * Include file executable permissions in task hashes. Disabled by default.
+   * Enabling this flag changes all task hashes. On Unix, any executable bit
+   * marks a regular file as executable. On Windows, files are non-executable.
+   * Symlink permissions and other permission bits do not affect hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashFilePermissions?: boolean;
+  /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
    * running without showing full output logs.

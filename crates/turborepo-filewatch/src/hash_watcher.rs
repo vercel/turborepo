@@ -1649,7 +1649,12 @@ mod tests {
         let (query_tx, query_rx) = tokio::sync::mpsc::channel(1);
         let (exit_tx, exit_rx) = tokio::sync::oneshot::channel();
         let (file_event_tx, file_events) = WatchSource::channel();
-        let subscriber = Subscriber::new(repo_root, package_discovery_rx, SCM::Manual, query_rx);
+        let subscriber = Subscriber::new(
+            repo_root,
+            package_discovery_rx,
+            SCM::Manual(turborepo_scm::FileHashMode::ContentOnly),
+            query_rx,
+        );
         let handle = tokio::spawn(subscriber.watch(exit_rx, file_events));
 
         tokio::time::timeout(Duration::from_secs(1), async {
@@ -1697,7 +1702,7 @@ mod tests {
         let subscriber = Subscriber::new(
             repo_root.clone(),
             package_discovery_rx,
-            SCM::Manual,
+            SCM::Manual(turborepo_scm::FileHashMode::ContentOnly),
             query_rx,
         );
 
