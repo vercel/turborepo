@@ -1,17 +1,22 @@
-use std::{env, path::Path, process};
+use std::{
+    env,
+    io::{self, Write},
+    path::Path,
+    process,
+};
 
 use sysinfo::{RefreshKind, System, SystemExt};
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
-use super::CommandBase;
-use crate::{DaemonConnector, DaemonConnectorError};
+use super::{CommandBase, ignore_broken_pipe};
+use crate::{DaemonConnector, DaemonConnectorError, cli};
 
 // https://superuser.com/questions/1749781/how-can-i-check-if-the-environment-is-wsl-from-a-shell-script/1749811#1749811
 fn is_wsl() -> bool {
     Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
 }
 
-pub async fn run(base: CommandBase) {
+pub async fn run(base: CommandBase) -> Result<(), cli::Error> {
     // Only available memory is reported. Refreshing everything would also
     // enumerate every process, disk, network interface, and sensor.
     let system = System::new_with_specifics(RefreshKind::new().with_memory());
@@ -32,34 +37,55 @@ pub async fn run(base: CommandBase) {
         })
         .unwrap_or_else(|| "Not found".to_owned());
 
-    println!("CLI:");
-    println!("   Version: {}", base.version);
+    ignore_broken_pipe(
+        print_info(
+            &mut io::stdout().lock(),
+            &base,
+            &system,
+            daemon_status,
+            &package_manager,
+        )
+        .map_err(Into::into),
+    )
+}
+
+fn print_info(
+    out: &mut impl Write,
+    base: &CommandBase,
+    system: &System,
+    daemon_status: &str,
+    package_manager: &str,
+) -> io::Result<()> {
+    writeln!(out, "CLI:")?;
+    writeln!(out, "   Version: {}", base.version)?;
 
     let exe_path = std::env::current_exe().map_or_else(
         |e| format!("Cannot determine current binary: {e}").to_owned(),
         |path| path.to_string_lossy().into_owned(),
     );
 
-    println!("   Path to executable: {exe_path}");
-    println!("   Daemon status: {daemon_status}");
-    println!("   Package manager: {package_manager}");
-    println!();
+    writeln!(out, "   Path to executable: {exe_path}")?;
+    writeln!(out, "   Daemon status: {daemon_status}")?;
+    writeln!(out, "   Package manager: {package_manager}")?;
+    writeln!(out)?;
 
-    println!("Platform:");
-    println!("   Architecture: {}", std::env::consts::ARCH);
-    println!("   Operating system: {}", std::env::consts::OS);
-    println!("   WSL: {}", is_wsl());
-    println!(
+    writeln!(out, "Platform:")?;
+    writeln!(out, "   Architecture: {}", std::env::consts::ARCH)?;
+    writeln!(out, "   Operating system: {}", std::env::consts::OS)?;
+    writeln!(out, "   WSL: {}", is_wsl())?;
+    writeln!(
+        out,
         "   Available memory (MB): {}",
         system.available_memory() / 1024 / 1024
-    );
-    println!(
+    )?;
+    writeln!(
+        out,
         "   Available CPU cores: {}",
         std::thread::available_parallelism()
             .map(|n| n.get())
             .unwrap_or(1)
-    );
-    println!();
+    )?;
+    writeln!(out)?;
 
     let node_version = process::Command::new("node")
         .arg("--version")
@@ -75,30 +101,35 @@ pub async fn run(base: CommandBase) {
         })
         .unwrap_or_else(|| "Not found".to_owned());
 
-    println!("Environment:");
-    println!("   CI: {:#?}", turborepo_ci::Vendor::get_name());
-    println!(
+    writeln!(out, "Environment:")?;
+    writeln!(out, "   CI: {:#?}", turborepo_ci::Vendor::get_name())?;
+    writeln!(
+        out,
         "   AI agent: {}",
         turborepo_ai_agents::get_agent().unwrap_or("None")
-    );
-    println!(
+    )?;
+    writeln!(
+        out,
         "   Terminal (TERM): {}",
         env::var("TERM").unwrap_or_else(|_| "unknown".to_owned())
-    );
+    )?;
 
-    println!(
+    writeln!(
+        out,
         "   Terminal program (TERM_PROGRAM): {}",
         env::var("TERM_PROGRAM").unwrap_or_else(|_| "unknown".to_owned())
-    );
-    println!(
+    )?;
+    writeln!(
+        out,
         "   Terminal program version (TERM_PROGRAM_VERSION): {}",
         env::var("TERM_PROGRAM_VERSION").unwrap_or_else(|_| "unknown".to_owned())
-    );
-    println!(
+    )?;
+    writeln!(
+        out,
         "   Shell (SHELL): {}",
         env::var("SHELL").unwrap_or_else(|_| "unknown".to_owned())
-    );
-    println!("   stdin: {}", turborepo_ci::is_ci());
-    println!("   Node.js version: {node_version}");
-    println!();
+    )?;
+    writeln!(out, "   stdin: {}", turborepo_ci::is_ci())?;
+    writeln!(out, "   Node.js version: {node_version}")?;
+    writeln!(out)
 }

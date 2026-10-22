@@ -633,7 +633,7 @@ async fn run_main(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            info::run(base).await;
+            info::run(base).await?;
             Ok(0)
         }
         Command::Telemetry { command } => {
